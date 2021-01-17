@@ -28,10 +28,11 @@ func main() {
 	app := fiber.New()
 
 	// Configure CORS
-	app.Use(cors.New(cors.Config{
-		AllowOrigins: "http://localhost, https://www.pennyvault.com",
-		AllowHeaders: "Origin, Content-Type, Accept",
-	}))
+	// cors.Config{
+	// 	 AllowOrigins: "http://localhost, https://www.pennyvault.com",
+	//	 AllowHeaders: "Origin, Content-Type, Accept",
+	// }
+	app.Use(cors.New())
 
 	// Create new GET route
 	app.Get("/v1/strategies", getStrategies)
