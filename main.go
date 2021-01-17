@@ -14,6 +14,7 @@ import (
 	"os"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 )
 
 type testResponse struct {
@@ -25,6 +26,12 @@ type testResponse struct {
 func main() {
 	// Create new Fiber instance
 	app := fiber.New()
+
+	// Configure CORS
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "http://localhost, https://www.pennyvault.com",
+		AllowHeaders: "Origin, Content-Type, Accept",
+	}))
 
 	// Create new GET route
 	app.Get("/v1/strategies", getStrategies)
