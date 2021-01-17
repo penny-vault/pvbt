@@ -11,17 +11,14 @@ package main
 
 import (
 	"log"
+	"main/jwks"
+	"main/middleware"
+	"main/router"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 )
-
-type testResponse struct {
-	Field1 string `json:"field_1"`
-	Field2 string `json:"field_2"`
-	Field3 string `json:"field_3"`
-}
 
 func main() {
 	// Create new Fiber instance
@@ -34,8 +31,12 @@ func main() {
 	// }
 	app.Use(cors.New())
 
-	// Create new GET route
-	app.Get("/v1/strategies", getStrategies)
+	// Configure authentication
+	signingKeys := jwks.LoadJWKS()
+	app.Use(middleware.JWT(signingKeys))
+
+	// Setup routes
+	router.SetupRoutes(app)
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")
@@ -47,9 +48,4 @@ func main() {
 
 	// Start server on http://${heroku-url}:${port}
 	log.Fatal(app.Listen(":" + port))
-}
-
-func getStrategies(ctx *fiber.Ctx) error {
-	tr := testResponse{"11111111111111", "22222222222222222", "3333333333333333"}
-	return ctx.JSON(tr)
 }
