@@ -16,14 +16,18 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
+type testResponse struct {
+	Field1 string `json:"field_1"`
+	Field2 string `json:"field_2"`
+	Field3 string `json:"field_3"`
+}
+
 func main() {
 	// Create new Fiber instance
 	app := fiber.New()
 
 	// Create new GET route
-	app.Get("/v1", func(ctx *fiber.Ctx) error {
-		return ctx.SendString("Hello Heroku")
-	})
+	app.Get("/v1/strategies", getStrategies)
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")
@@ -35,4 +39,9 @@ func main() {
 
 	// Start server on http://${heroku-url}:${port}
 	log.Fatal(app.Listen(":" + port))
+}
+
+func getStrategies(ctx *fiber.Ctx) error {
+	tr := testResponse{"11111111111111", "22222222222222222", "3333333333333333"}
+	return ctx.JSON(tr)
 }
