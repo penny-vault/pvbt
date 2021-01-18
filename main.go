@@ -11,6 +11,7 @@ package main
 
 import (
 	"log"
+	"main/handler"
 	"main/jwks"
 	"main/middleware"
 	"main/router"
@@ -37,6 +38,9 @@ func main() {
 
 	// Setup routes
 	router.SetupRoutes(app)
+
+	// initialize strategies
+	handler.IntializeStrategyMap()
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")
