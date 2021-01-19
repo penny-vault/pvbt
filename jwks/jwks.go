@@ -25,7 +25,7 @@ func LoadJWKS() map[string]interface{} {
 		log.Fatal(err)
 	}
 
-	fmt.Println("Successfully opened auth.json")
+	log.Println("Successfully opened auth.json")
 	// defer the closing of our jsonFile so that we can parse it later on
 	defer jsonFile.Close()
 
@@ -35,7 +35,7 @@ func LoadJWKS() map[string]interface{} {
 
 	// read remote JWKS
 	jwksURL := fmt.Sprintf("https://%s/.well-known/jwks.json", config.Domain)
-	fmt.Printf("Reading JWKS from %s\n", jwksURL)
+	log.Printf("Reading JWKS from %s\n", jwksURL)
 
 	set, err := jwk.FetchHTTP(jwksURL)
 	if err != nil {
