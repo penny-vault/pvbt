@@ -11,10 +11,13 @@ package main
 
 import (
 	"log"
+	"main/data"
 	"main/handler"
 	"main/jwks"
 	"main/router"
+	"main/util"
 	"os"
+	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -47,6 +50,9 @@ func main() {
 	if os.Getenv("PORT") == "" {
 		port = "3000"
 	}
+
+	// Download tiingo tickers every 30 seconds
+	go util.DoEvery(25*time.Hour, data.SyncTickers)
 
 	// Start server on http://${heroku-url}:${port}
 	log.Fatal(app.Listen(":" + port))
