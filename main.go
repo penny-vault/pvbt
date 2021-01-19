@@ -13,7 +13,6 @@ import (
 	"log"
 	"main/handler"
 	"main/jwks"
-	"main/middleware"
 	"main/router"
 	"os"
 
@@ -34,10 +33,9 @@ func main() {
 
 	// Configure authentication
 	signingKeys := jwks.LoadJWKS()
-	app.Use(middleware.JWT(signingKeys))
 
 	// Setup routes
-	router.SetupRoutes(app)
+	router.SetupRoutes(app, signingKeys)
 
 	// initialize strategies
 	handler.IntializeStrategyMap()

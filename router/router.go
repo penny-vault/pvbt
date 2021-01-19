@@ -2,27 +2,28 @@ package router
 
 import (
 	"main/handler"
+	"main/middleware"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 // SetupRoutes setup router api
-func SetupRoutes(app *fiber.App) {
+func SetupRoutes(app *fiber.App, jwks map[string]interface{}) {
 	// Middleware
 	api := app.Group("/v1", logger.New())
 	api.Get("/", handler.Hello)
 
 	// Strategy
 	strategy := api.Group("/strategy")
-	strategy.Get("/:id", handler.GetStrategy)
-	strategy.Get("/", handler.ListStrategies)
+	strategy.Get("/:id", middleware.JWTAuth(jwks), handler.GetStrategy)
+	strategy.Get("/", middleware.JWTAuth(jwks), handler.ListStrategies)
 
 	// Portfolio
 	portfolio := api.Group("/portfolio")
-	portfolio.Get("/:id", handler.GetPortfolio)
-	portfolio.Get("/", handler.ListPortfolios)
-	portfolio.Post("/", handler.CreatePortfolio)
-	portfolio.Patch("/:id", handler.UpdatePortfolio)
-	portfolio.Delete("/:id", handler.DeletePortfolio)
+	portfolio.Get("/:id", middleware.JWTAuth(jwks), handler.GetPortfolio)
+	portfolio.Get("/", middleware.JWTAuth(jwks), handler.ListPortfolios)
+	portfolio.Post("/", middleware.JWTAuth(jwks), handler.CreatePortfolio)
+	portfolio.Patch("/:id", middleware.JWTAuth(jwks), handler.UpdatePortfolio)
+	portfolio.Delete("/:id", middleware.JWTAuth(jwks), handler.DeletePortfolio)
 }
