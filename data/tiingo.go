@@ -37,7 +37,13 @@ func (t tiingo) DataType() string {
 
 func (t tiingo) GetDataForPeriod(symbol string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	// build URL to get data
-	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency)
+	var url string
+	nullTime := time.Time{}
+	if begin == nullTime || end == nullTime {
+		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, frequency, t.apikey)
+	} else {
+		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency, t.apikey)
+	}
 	log.Printf("Download from Tiingo: %s\n", url)
 
 	resp, err := http.Get(url)
@@ -51,6 +57,8 @@ func (t tiingo) GetDataForPeriod(symbol string, frequency string, begin time.Tim
 	if err != nil {
 		return nil, err
 	}
+
+	log.Println(string(body[:]))
 
 	floatConverter := imports.Converter{
 		ConcreteType: float64(0),

@@ -1,5 +1,12 @@
 package strategies
 
+import (
+	"encoding/json"
+	"main/data"
+)
+
+type StrategyFactory func(map[string]json.RawMessage) (Strategy, error)
+
 type Argument struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -16,6 +23,7 @@ type StrategyInfo struct {
 	Version     string              `json:"version"`
 	YTDGain     float64             `json:"ytd_gain"`
 	Arguments   map[string]Argument `json:"arguments"`
+	Factory     StrategyFactory     `json:"-"`
 }
 
 type PerformanceMeasurement struct {
@@ -32,5 +40,5 @@ type StrategyPerformance struct {
 
 type Strategy interface {
 	GetInfo() StrategyInfo
-	Compute() StrategyPerformance
+	Compute(manager data.Manager) (StrategyPerformance, error)
 }

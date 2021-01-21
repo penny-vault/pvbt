@@ -18,6 +18,7 @@ func SetupRoutes(app *fiber.App, jwks map[string]interface{}) {
 	strategy := api.Group("/strategy")
 	strategy.Get("/:id", middleware.JWTAuth(jwks), handler.GetStrategy)
 	strategy.Get("/", middleware.JWTAuth(jwks), handler.ListStrategies)
+	strategy.Post("/:id", middleware.JWTAuth(jwks), handler.RunStrategy)
 
 	// Portfolio
 	portfolio := api.Group("/portfolio")
