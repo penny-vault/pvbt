@@ -1,21 +1,24 @@
 package data
 
 import (
-	"archive/zip"
 	"bytes"
-	"encoding/csv"
-	"errors"
+	"context"
+	"fmt"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
+	"strconv"
 	"time"
+
+	dataframe "github.com/rocketlaunchr/dataframe-go"
+	imports "github.com/rocketlaunchr/dataframe-go/imports"
 )
 
 type tiingo struct {
 	apikey string
 }
 
-var tiingoSymbols = map[string]Asset{}
 var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
 var tiingoAPI = "https://api.tiingo.com"
 
@@ -26,105 +29,60 @@ func NewTiingo(key string) tiingo {
 	}
 }
 
-// Parse tickers
+// Interface functions
 
-// SyncTickers Download tickers from Tiingo
-func SyncTickers() {
-	log.Printf("[tiingo] Downloading %s\n", tiingoTickersURL)
-	csvData, err := downloadZipFile(tiingoTickersURL)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-
-	log.Println("[tiingo] Parsing tickers CSV")
-	err = parseCSV(csvData)
-	if err != nil {
-		log.Println(err)
-	}
-	log.Printf("[tiingo] Found %d tickers\n", len(tiingoSymbols))
+func (t tiingo) DataType() string {
+	return "security"
 }
 
-func parseCSV(data []byte) error {
-	r := csv.NewReader(bytes.NewReader(data))
+func (t tiingo) GetDataForPeriod(symbol string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	// build URL to get data
+	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency)
+	log.Printf("Download from Tiingo: %s\n", url)
 
-	records, err := r.ReadAll()
-	if err != nil {
-		return err
-	}
-
-	// each record consists of [ticker, exchange, kind, currency, startDate, endDate]
-	for ii := 1; ii < len(records); ii++ {
-		record := records[ii]
-		var startDate time.Time
-		if record[4] != "" {
-			startDate, err = time.Parse("2006-01-02", record[4])
-			if err != nil {
-				log.Printf("[tiingo] Could not parse date: '%s'\n", record[4])
-			}
-		}
-
-		asset := Asset{
-			Ticker:    record[0],
-			Exchange:  record[1],
-			Kind:      record[2],
-			Currency:  record[3],
-			StartDate: startDate,
-		}
-
-		tiingoSymbols[asset.Ticker] = asset
-	}
-
-	return nil
-}
-
-func downloadZipFile(url string) (data []byte, err error) {
 	resp, err := http.Get(url)
+
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
 
+	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
 
-	zipReader, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
-	if err != nil {
-		return nil, err
+	floatConverter := imports.Converter{
+		ConcreteType: float64(0),
+		ConverterFunc: func(in interface{}) (interface{}, error) {
+			v, err := strconv.ParseFloat(in.(string), 64)
+			if err != nil {
+				return math.NaN(), nil
+			}
+			return v, nil
+		},
 	}
 
-	// Read all the files from zip archive - and return the first
-	for _, zipFile := range zipReader.File {
-		unzippedFileBytes, err := readZipFile(zipFile)
-		if err != nil {
-			return nil, err
-		}
+	res, err := imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
+		DictateDataType: map[string]interface{}{
+			"date": imports.Converter{
+				ConcreteType: time.Time{},
+				ConverterFunc: func(in interface{}) (interface{}, error) {
+					return time.Parse("2006-01-02", in.(string))
+				},
+			},
+			"open":      floatConverter,
+			"high":      floatConverter,
+			"low":       floatConverter,
+			"close":     floatConverter,
+			"volume":    floatConverter,
+			"adjOpen":   floatConverter,
+			"adjHigh":   floatConverter,
+			"adjLow":    floatConverter,
+			"adjClose":  floatConverter,
+			"adjVolume": floatConverter,
+		},
+	})
 
-		return unzippedFileBytes, nil
-	}
-
-	return nil, errors.New("no files in downloaded zip")
+	return res, err
 }
-
-func readZipFile(zf *zip.File) ([]byte, error) {
-	f, err := zf.Open()
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return ioutil.ReadAll(f)
-}
-
-// Interface functions
-
-func (t tiingo) HasKey(symbol string) bool {
-	return false
-}
-
-/*
-func (t tiingo) GetDataForPeriod(symbols []string, frequency string, begin time.Time, end time.Time) qframe.QFrame {
-	return qframe.New(map[string]interface{})
-}
-*/
