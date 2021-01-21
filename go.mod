@@ -8,5 +8,5 @@ require (
 	github.com/gofiber/fiber/v2 v2.0.0
 	github.com/gofiber/jwt/v2 v2.0.0
 	github.com/lestrrat-go/jwx v1.0.8
-	github.com/tobgu/qframe v0.3.5
+	github.com/rocketlaunchr/dataframe-go v0.0.0-20201007021539-67b046771f0b
 )
