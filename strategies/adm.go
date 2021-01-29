@@ -1,11 +1,18 @@
 package strategies
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
 	"main/data"
+	"main/dfextras"
+	"strings"
+	"time"
 
 	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 )
 
 // AcceleratingDualMomentumInfo information describing this strategy
@@ -36,9 +43,15 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 }
 
 type acceleratingDualMomentum struct {
-	info      StrategyInfo
-	inTickers []string
-	outTicker string
+	info          StrategyInfo
+	inTickers     []string
+	inPrices      *dataframe.DataFrame
+	outTicker     string
+	outPrices     *dataframe.DataFrame
+	riskFreeRate  *dataframe.DataFrame
+	momentum      *dataframe.DataFrame
+	dataStartTime time.Time
+	dataEndTime   time.Time
 }
 
 // New Construct a new Accelerating Dual Momentum strategy
@@ -66,46 +79,204 @@ func (adm acceleratingDualMomentum) GetInfo() StrategyInfo {
 	return adm.info
 }
 
-func (adm acceleratingDualMomentum) Compute(manager data.Manager) (StrategyPerformance, error) {
+func (adm *acceleratingDualMomentum) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
-	manager.Frequency = "monthly"
-	var eod = make(map[string]*dataframe.DataFrame)
+	manager.Frequency = data.FrequencyMonthly
+
+	tickers := []string{}
+	tickers = append(tickers, adm.inTickers...)
+	riskFreeSymbol := "$RATE.TB3MS"
+	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
+	data, errs := manager.GetMultipleData(tickers...)
+
+	if len(errs) > 0 {
+		return errors.New("Failed to download data for tickers")
+	}
+
+	var eod = []*dataframe.DataFrame{}
 	for ii := range adm.inTickers {
 		ticker := adm.inTickers[ii]
-		tickerEod, err := manager.GetData(ticker)
-		if err != nil {
-			log.Printf("failed to load ticker: %s\n", ticker)
-		}
-		eod[ticker] = tickerEod
+		eod = append(eod, data[ticker])
 	}
+
+	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), "DATE", eod...)
+	adm.inPrices = mergedEod
+
+	if err != nil {
+		return err
+	}
+
+	// Get aligned start and end times
+	timeColumn, err := mergedEod.NameToColumn("DATE", dataframe.Options{})
+	if err != nil {
+		return err
+	}
+
+	timeSeries := mergedEod.Series[timeColumn]
+	nrows := timeSeries.NRows(dataframe.Options{})
+	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
+	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
+	adm.dataStartTime = startTime
+	adm.dataEndTime = endTime
 
 	// Get out-of-market EOD
-	outOfMarketEod, err := manager.GetData(adm.outTicker)
+	outOfMarketEod := data[adm.outTicker]
+	timeSeriesIdx, err := outOfMarketEod.NameToColumn("DATE")
 	if err != nil {
-		log.Printf("failed to load out of market ticker: %s\n", adm.outTicker)
-		return StrategyPerformance{}, err
+		return err
 	}
 
-	log.Println(outOfMarketEod)
+	outOfMarketEod, err = dfextras.TimeAlign(context.TODO(), outOfMarketEod, timeSeriesIdx, startTime, endTime)
+	if err != nil {
+		return err
+	}
+
+	adm.outPrices = outOfMarketEod
 
 	// Get risk free rate (3-mo T-bill secondary rate)
-	riskFreeSymbol := "$RATE.MTB3"
-	riskFreeRate, err := manager.GetData(riskFreeSymbol)
+	riskFreeRate := data[riskFreeSymbol]
+
+	// duplicate last row if it doesn't match endTime
+	valueIdx, err := riskFreeRate.NameToColumn("TB3MS")
+	timeSeriesIdx, err = riskFreeRate.NameToColumn("DATE")
+	rr := riskFreeRate.Series[valueIdx]
+	nrows = rr.NRows(dataframe.Options{})
+	val := rr.Value(nrows-1, dataframe.Options{}).(float64)
+	timeSeries = riskFreeRate.Series[timeSeriesIdx]
+	timeVal := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
+	if endTime.After(timeVal) {
+		riskFreeRate.Append(&dataframe.Options{}, endTime, val)
+	}
+
 	if err != nil {
-		log.Printf("failed to load risk free rate: %s\n", riskFreeSymbol)
+		return err
+	}
+
+	// Align the risk-free rate to match the mergedEod
+	_, err = dfextras.TimeTrim(context.TODO(), riskFreeRate, timeSeriesIdx, startTime, endTime, true)
+	if err != nil {
+		return err
+	}
+
+	timeVal = timeSeries.Value(0, dataframe.Options{}).(time.Time)
+	val = rr.Value(0, dataframe.Options{}).(float64)
+	if startTime.Before(timeVal) {
+		riskFreeRate.Insert(0, &dataframe.Options{}, startTime, val)
+	}
+
+	adm.riskFreeRate = riskFreeRate
+
+	return nil
+}
+
+func (adm *acceleratingDualMomentum) computeScores() error {
+	nrows := adm.inPrices.NRows(dataframe.Options{})
+	periods := []int{1, 3, 6}
+	series := []dataframe.Series{}
+
+	rfr := adm.riskFreeRate.Series[1]
+
+	aggFn := dfextras.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (interface{}, error) {
+		var sum float64
+		for _, val := range vals {
+			if v, ok := val.(float64); ok {
+				sum += v
+			}
+		}
+
+		return sum, nil
+	})
+
+	dateSeriesIdx, err := adm.inPrices.NameToColumn("DATE")
+	if err != nil {
+		return err
+	}
+
+	series = append(series, adm.inPrices.Series[dateSeriesIdx].Copy())
+
+	for ii := range adm.inPrices.Series {
+		name := adm.inPrices.Series[ii].Name(dataframe.Options{})
+		if strings.Compare(name, "DATE") != 0 {
+			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
+			series = append(series, adm.inPrices.Series[ii].Copy(), score)
+		}
+	}
+
+	for _, ii := range periods {
+		lag := dfextras.Lag(ii, adm.inPrices)
+		roll, err := dfextras.Rolling(context.TODO(), ii, rfr.Copy(), aggFn)
+
+		if err != nil {
+			return err
+		}
+		roll.Rename(fmt.Sprintf("RISKFREE%d", ii))
+		series = append(series, roll)
+		for jj := range lag.Series {
+			s := lag.Series[jj]
+			symbol := s.Name(dataframe.Options{})
+			if strings.Compare(symbol, "DATE") != 0 {
+				name := fmt.Sprintf("%sLAG%d", symbol, ii)
+				s.Rename(name)
+
+				mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", symbol, ii), &dataframe.SeriesInit{Size: nrows})
+				series = append(series, s, mom)
+			}
+		}
+	}
+
+	adm.momentum = dataframe.NewDataFrame(series...)
+
+	for ii := range adm.inTickers {
+		ticker := adm.inTickers[ii]
+		for _, jj := range periods {
+			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
+			funcs.Evaluate(context.TODO(), adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
+		}
+	}
+
+	// compute average scores
+	for ii := range adm.inTickers {
+		ticker := adm.inTickers[ii]
+		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
+		funcs.Evaluate(context.TODO(), adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker))
+	}
+
+	return nil
+}
+
+func (adm acceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPerformance, error) {
+	// Ensure time range is valid (need at least 6 months)
+	nullTime := time.Time{}
+	if manager.End == nullTime {
+		manager.End = time.Now()
+	}
+	if manager.Begin == nullTime {
+		//dur, _ := time.ParseDuration("-8760h")
+		//manager.Begin = manager.End.Add(dur)
+		manager.Begin = manager.End.AddDate(-35, 0, 0)
+	}
+
+	err := adm.downloadPriceData(manager)
+	if err != nil {
 		return StrategyPerformance{}, err
 	}
 
-	log.Println(riskFreeRate)
+	// Compute momentum scores
+	adm.computeScores()
+
+	scores := []dataframe.Series{}
+	timeIdx, _ := adm.momentum.NameToColumn("DATE")
+	scores = append(scores, adm.momentum.Series[timeIdx])
+	for _, ticker := range adm.inTickers {
+		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", ticker))
+		series := adm.momentum.Series[ii]
+		scores = append(scores, series)
+	}
+
+	scoresDf := dataframe.NewDataFrame(scores...)
+	log.Println(scoresDf.Table())
 
 	/*
-
-		// Compute 1-month momentum
-		mom1 := inEod/inEod.lag(1) - riskFreeRate
-		// Compute 3-month momentum
-		mom3 := inEod/inEod.lag(3) - riskFreeRate.rolling(3).sum()
-		// Compute 6-month momentum
-		mom6 := inEod/inEod.lag(6) - riskFreeRate.rolling(6).sum()
 		// Calculate adm score (mom1 + mom3 + mom6) / 3
 		score := (mom1 + mom3 + mom6).average()
 		score = score.dropna()

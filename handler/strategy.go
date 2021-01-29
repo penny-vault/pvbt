@@ -65,7 +65,7 @@ func RunStrategy(c *fiber.Ctx) error {
 			return fiber.ErrBadRequest
 		}
 
-		performance, err := stratObject.Compute(manager)
+		performance, err := stratObject.Compute(&manager)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest

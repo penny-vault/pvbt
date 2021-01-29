@@ -40,5 +40,5 @@ type StrategyPerformance struct {
 
 type Strategy interface {
 	GetInfo() StrategyInfo
-	Compute(manager data.Manager) (StrategyPerformance, error)
+	Compute(manager *data.Manager) (StrategyPerformance, error)
 }
