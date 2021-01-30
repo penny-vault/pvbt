@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -45,7 +44,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	} else {
 		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency, t.apikey)
 	}
-	log.Printf("Download from Tiingo: %s\n", url)
+	//log.Printf("Download from Tiingo: %s\n", url)
 
 	resp, err := http.Get(url)
 

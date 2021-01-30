@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -35,7 +34,7 @@ func (f fred) GetDataForPeriod(symbol string, frequency string,
 	end time.Time) (data *dataframe.DataFrame, err error) {
 	// build URL to get data
 	url := fmt.Sprintf("%s/graph/fredgraph.csv?mode=fred&id=%s&cosd=%s&coed=%s&fq=%s&fam=avg", fredURL, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency)
-	log.Printf("Download from FRED: %s\n", url)
+	//log.Printf("Download from FRED: %s\n", url)
 
 	resp, err := http.Get(url)
 
