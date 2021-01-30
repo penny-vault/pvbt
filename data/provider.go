@@ -9,15 +9,6 @@ import (
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 )
 
-// Asset A struct storing information about a financial asset
-type Asset struct {
-	Ticker    string
-	Exchange  string
-	Kind      string
-	Currency  string
-	StartDate time.Time
-}
-
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string

@@ -28,6 +28,9 @@ func DropNA(ctx context.Context, sdf interface{}, opts ...dataframe.FilterOption
 	case *dataframe.DataFrame:
 		filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 			for _, val := range vals {
+				if val == nil {
+					return dataframe.DROP, nil
+				}
 				if v, ok := val.(float64); ok {
 					if math.IsNaN(v) {
 						return dataframe.DROP, nil
@@ -192,38 +195,7 @@ func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*datafra
 }
 
 // AggregateSeriesFn function
-type AggregateSeriesFn func(vals []interface{}, firstRow int, finalRow int) (interface{}, error)
-
-// AggregateDataFrameFn function
-type AggregateDataFrameFn func(vals []map[interface{}]interface{}, firstRow int, finalRow int) ([]interface{}, error)
-
-// Rolling aggregate function
-/*
-func Rolling(ctx context.Context, n int, sdf interface{}, fn interface{}) (interface{}, error) {
-	switch typ := sdf.(type) {
-	case dataframe.Series:
-		var x AggregateSeriesFn
-		switch v := fn.(type) {
-		case func(vals []interface{}, firstRow int, finalRow int) (interface{}, error):
-			x = AggregateSeriesFn(v)
-		default:
-			x = fn.(AggregateSeriesFn)
-		}
-		return rollSeries(ctx, n, sdf.(dataframe.SeriesFloat64), x)
-	case *dataframe.DataFrame:
-		var x AggregateDataFrameFn
-		switch v := fn.(type) {
-		case func(vals []map[interface{}]interface{}, firstRow int, finalRow int) ([]interface{}, error):
-			x = AggregateDataFrameFn(v)
-		default:
-			x = fn.(AggregateDataFrameFn)
-		}
-		return rollDataFrame(ctx, n, typ, x)
-	default:
-		return nil, errors.New("sdf must be a Series or DataFrame")
-	}
-}
-*/
+type AggregateSeriesFn func(vals []interface{}, firstRow int, finalRow int) (float64, error)
 
 // Rolling aggregate function
 func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesFn) (dataframe.Series, error) {
@@ -273,67 +245,6 @@ func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesF
 	return ns, nil
 }
 
-/*
-func rollDataFrame(ctx context.Context, n int, df *dataframe.DataFrame, fn AggregateDataFrameFn) (*dataframe.DataFrame, error) {
-	if fn == nil {
-		return nil, errors.New("fn is required")
-	}
-
-	for _, s := range df.Series {
-		_, ok := s.(dataframe.NewSerieser)
-		if !ok {
-			return nil, errors.New("all Series in DataFrame must implement NewSerieser")
-		}
-	}
-
-	df.Lock()
-	defer df.Unlock()
-
-	dontLock := dataframe.Options{DontLock: true}
-
-	// Create all series
-	seriess := []dataframe.Series{}
-	for i := range df.Series {
-		seriess = append(seriess, (df.Series[i].(dataframe.NewSerieser)).NewSeries(df.Series[i].Name(dontLock), &dataframe.SeriesInit{Capacity: df.NRows(dontLock)}))
-	}
-
-	// Create a new dataframe
-	ndf := dataframe.NewDataFrame(seriess...)
-
-	iterator := df.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
-
-	var groupedVals []map[interface{}]interface{}
-	nVals := 0
-	firstRow := 0
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		row, val, _ := iterator()
-		if row == nil {
-			break
-		}
-
-		groupedVals = append(groupedVals, val)
-		nVals++
-
-		if nVals == n {
-			v, err := fn(groupedVals, firstRow, *row)
-			if err != nil {
-				return nil, err
-			}
-			ndf.Append(&dontLock, v...)
-			groupedVals = groupedVals[1:]
-			firstRow++
-		}
-	}
-
-	return ndf, nil
-}
-*/
-
 // ArgMax select float64 series with largest value for each row
 func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, error) {
 	// only apply to float64 Series
@@ -361,7 +272,7 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 			return nil, err
 		}
 
-		row, val, _ := iterator()
+		row, val, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
