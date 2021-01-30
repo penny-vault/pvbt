@@ -11,6 +11,58 @@ import (
 
 // Collection of helpers make it easier to work on dataframes
 
+// AggregateSeriesFn function
+type AggregateSeriesFn func(vals []interface{}, firstRow int, finalRow int) (float64, error)
+
+// ArgMax select float64 series with largest value for each row
+func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, error) {
+	// only apply to float64 Series
+	keepSeries := []dataframe.Series{}
+	for ii := range df.Series {
+		if df.Series[ii].Type() == "float64" {
+			keepSeries = append(keepSeries, df.Series[ii])
+		}
+	}
+
+	if len(keepSeries) < 2 {
+		return nil, errors.New("DataFrame must contain at-least 2 float64 series")
+	}
+
+	df1 := dataframe.NewDataFrame(keepSeries...)
+	series := dataframe.NewSeriesString("argmax", nil)
+
+	df1.Lock()
+	defer df1.Unlock()
+
+	iterator := df1.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
+
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		maxK := ""
+		var maxV float64
+
+		for k, v := range val {
+			vf := v.(float64)
+			if vf > maxV {
+				maxK = k.(string)
+				maxV = vf
+			}
+		}
+
+		series.Append(maxK)
+	}
+
+	return series, nil
+}
+
 // DropNA remove rows in the series or dataframe that have NA's
 func DropNA(ctx context.Context, sdf interface{}, opts ...dataframe.FilterOptions) (interface{}, error) {
 	switch sdf.(type) {
@@ -82,49 +134,25 @@ func IndexOf(ctx context.Context, searchVal time.Time, series dataframe.Series, 
 	return -1
 }
 
-// TimeTrim trim dataframe to rows within the startTime and endTime range
-func TimeTrim(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time, inPlace bool) (*dataframe.DataFrame, error) {
-	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
-		for _, val := range vals {
-			if v, ok := val.(time.Time); ok {
-				if (startTime.Before(v) || startTime.Equal(v)) && (endTime.After(v) || endTime.Equal(v)) {
-					return dataframe.KEEP, nil
-				}
-			}
-		}
-		return dataframe.DROP, nil
-	})
-	opts := dataframe.FilterOptions{
-		InPlace: inPlace,
-	}
-	res, err := dataframe.Filter(ctx, df, filterFn, opts)
-	if res != nil {
-		df2 := res.(*dataframe.DataFrame)
-		return df2, err
-	}
-
-	return nil, err
-}
-
-// TimeAlign truncate df to match specified time range
-func TimeAlign(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time) (*dataframe.DataFrame, error) {
-	timeSeries := df.Series[timeAxisColumn]
-	startIdx := IndexOf(ctx, startTime, timeSeries, false)
-	endIdx := IndexOf(ctx, endTime, timeSeries, true)
-
-	if startIdx == -1 || endIdx == -1 {
-		return nil, errors.New("dataframes do not overlap")
-	}
-
-	r := dataframe.Range{
-		Start: &startIdx,
-		End:   &endIdx,
-	}
+// Lag return a copy of the dataframe offset by
+func Lag(n int, df *dataframe.DataFrame) *dataframe.DataFrame {
+	series := []dataframe.Series{}
 
 	df.Lock()
 	defer df.Unlock()
 
-	return df.Copy(r), nil
+	dontLock := dataframe.Options{DontLock: true}
+
+	for ii := range df.Series {
+		s := df.Series[ii].Copy()
+		for x := 0; x < n; x++ {
+			s.Prepend(nil)
+			s.Remove(s.NRows(dontLock)-1, dontLock)
+		}
+		series = append(series, s)
+	}
+
+	return dataframe.NewDataFrame(series...)
 }
 
 // MergeAndTimeAlign merge multiple dataframes on their time axis
@@ -194,9 +222,6 @@ func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*datafra
 	return finalDf, nil
 }
 
-// AggregateSeriesFn function
-type AggregateSeriesFn func(vals []interface{}, firstRow int, finalRow int) (float64, error)
-
 // Rolling aggregate function
 func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesFn) (dataframe.Series, error) {
 	if fn == nil {
@@ -245,72 +270,47 @@ func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesF
 	return ns, nil
 }
 
-// ArgMax select float64 series with largest value for each row
-func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, error) {
-	// only apply to float64 Series
-	keepSeries := []dataframe.Series{}
-	for ii := range df.Series {
-		if df.Series[ii].Type() == "float64" {
-			keepSeries = append(keepSeries, df.Series[ii])
-		}
+// TimeAlign truncate df to match specified time range
+func TimeAlign(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time) (*dataframe.DataFrame, error) {
+	timeSeries := df.Series[timeAxisColumn]
+	startIdx := IndexOf(ctx, startTime, timeSeries, false)
+	endIdx := IndexOf(ctx, endTime, timeSeries, true)
+
+	if startIdx == -1 || endIdx == -1 {
+		return nil, errors.New("dataframes do not overlap")
 	}
 
-	if len(keepSeries) < 2 {
-		return nil, errors.New("DataFrame must contain at-least 2 float64 series")
+	r := dataframe.Range{
+		Start: &startIdx,
+		End:   &endIdx,
 	}
-
-	df1 := dataframe.NewDataFrame(keepSeries...)
-	series := dataframe.NewSeriesString("argmax", nil)
-
-	df1.Lock()
-	defer df1.Unlock()
-
-	iterator := df1.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
-
-	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
-		row, val, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-
-		maxK := ""
-		var maxV float64
-
-		for k, v := range val {
-			vf := v.(float64)
-			if vf > maxV {
-				maxK = k.(string)
-				maxV = vf
-			}
-		}
-
-		series.Append(maxK)
-	}
-
-	return series, nil
-}
-
-// Lag return a copy of the dataframe offset by
-func Lag(n int, df *dataframe.DataFrame) *dataframe.DataFrame {
-	series := []dataframe.Series{}
 
 	df.Lock()
 	defer df.Unlock()
 
-	dontLock := dataframe.Options{DontLock: true}
+	return df.Copy(r), nil
+}
 
-	for ii := range df.Series {
-		s := df.Series[ii].Copy()
-		for x := 0; x < n; x++ {
-			s.Prepend(nil)
-			s.Remove(s.NRows(dontLock)-1, dontLock)
+// TimeTrim trim dataframe to rows within the startTime and endTime range
+func TimeTrim(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time, inPlace bool) (*dataframe.DataFrame, error) {
+	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
+		for _, val := range vals {
+			if v, ok := val.(time.Time); ok {
+				if (startTime.Before(v) || startTime.Equal(v)) && (endTime.After(v) || endTime.Equal(v)) {
+					return dataframe.KEEP, nil
+				}
+			}
 		}
-		series = append(series, s)
+		return dataframe.DROP, nil
+	})
+	opts := dataframe.FilterOptions{
+		InPlace: inPlace,
+	}
+	res, err := dataframe.Filter(ctx, df, filterFn, opts)
+	if res != nil {
+		df2 := res.(*dataframe.DataFrame)
+		return df2, err
 	}
 
-	return dataframe.NewDataFrame(series...)
+	return nil, err
 }
