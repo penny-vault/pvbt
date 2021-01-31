@@ -90,7 +90,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	tickers = append(tickers, adm.inTickers...)
 	riskFreeSymbol := "$RATE.TB3MS"
 	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
-	data, errs := manager.GetMultipleData(tickers...)
+	prices, errs := manager.GetMultipleData(tickers...)
 
 	if len(errs) > 0 {
 		return errors.New("Failed to download data for tickers")
@@ -99,19 +99,19 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	var eod = []*dataframe.DataFrame{}
 	for ii := range adm.inTickers {
 		ticker := adm.inTickers[ii]
-		eod = append(eod, data[ticker])
+		eod = append(eod, prices[ticker])
 	}
 
-	eod = append(eod, data[adm.outTicker])
+	eod = append(eod, prices[adm.outTicker])
 
-	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), "DATE", eod...)
+	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), data.DateIdx, eod...)
 	adm.prices = mergedEod
 	if err != nil {
 		return err
 	}
 
 	// Get aligned start and end times
-	timeColumn, err := mergedEod.NameToColumn("DATE", dataframe.Options{})
+	timeColumn, err := mergedEod.NameToColumn(data.DateIdx, dataframe.Options{})
 	if err != nil {
 		return err
 	}
@@ -124,11 +124,11 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	adm.dataEndTime = endTime
 
 	// Get risk free rate (3-mo T-bill secondary rate)
-	riskFreeRate := data[riskFreeSymbol]
+	riskFreeRate := prices[riskFreeSymbol]
 
 	// duplicate last row if it doesn't match endTime
 	valueIdx, err := riskFreeRate.NameToColumn("TB3MS")
-	timeSeriesIdx, err := riskFreeRate.NameToColumn("DATE")
+	timeSeriesIdx, err := riskFreeRate.NameToColumn(data.DateIdx)
 	rr := riskFreeRate.Series[valueIdx]
 	nrows = rr.NRows(dataframe.Options{})
 	val := rr.Value(nrows-1, dataframe.Options{}).(float64)
@@ -177,7 +177,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 		return sum, nil
 	})
 
-	dateSeriesIdx, err := adm.prices.NameToColumn("DATE")
+	dateSeriesIdx, err := adm.prices.NameToColumn(data.DateIdx)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 
 	for ii := range adm.prices.Series {
 		name := adm.prices.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, "DATE") != 0 {
+		if strings.Compare(name, data.DateIdx) != 0 {
 			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
 			series = append(series, adm.prices.Series[ii].Copy(), score)
 		}
@@ -257,7 +257,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPer
 	adm.computeScores()
 
 	scores := []dataframe.Series{}
-	timeIdx, _ := adm.momentum.NameToColumn("DATE")
+	timeIdx, _ := adm.momentum.NameToColumn(data.DateIdx)
 	scores = append(scores, adm.momentum.Series[timeIdx])
 	for _, ticker := range adm.inTickers {
 		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", ticker))
@@ -276,7 +276,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPer
 		return StrategyPerformance{}, nil
 	}
 
-	dateIdx, err := scoresDf.NameToColumn("DATE")
+	dateIdx, err := scoresDf.NameToColumn(data.DateIdx)
 	if err != nil {
 		return StrategyPerformance{}, nil
 	}
