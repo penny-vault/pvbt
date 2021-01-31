@@ -35,7 +35,6 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 	defer df1.Unlock()
 
 	iterator := df1.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
-
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -47,7 +46,7 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 		}
 
 		maxK := ""
-		var maxV float64
+		maxV := math.MaxFloat64 * -1
 
 		for k, v := range val {
 			vf := v.(float64)
