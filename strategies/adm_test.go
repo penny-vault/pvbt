@@ -62,7 +62,7 @@ var _ = Describe("Adm", func() {
 	})
 
 	Describe("Compute momentum scores", func() {
-		Context("With full stock history", func() {
+		Context("with full stock history", func() {
 			It("should be invested in PRIDX", func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
