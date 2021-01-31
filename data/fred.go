@@ -42,6 +42,10 @@ func (f fred) GetDataForPeriod(symbol string, frequency string,
 		return nil, err
 	}
 
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
+	}
+
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
