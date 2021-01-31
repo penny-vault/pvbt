@@ -104,7 +104,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	}
 
 	timeSeries = res.Series[timeSeriesIdx]
-	timeSeries.Rename("DATE")
+	timeSeries.Rename(DateIdx)
 
 	switch metric {
 	case MetricOpen:

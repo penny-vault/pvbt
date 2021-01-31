@@ -23,6 +23,10 @@ const (
 )
 
 const (
+	DateIdx = "DATE"
+)
+
+const (
 	MetricOpen          = "Open"
 	MetricLow           = "Low"
 	MetricHigh          = "High"
@@ -104,6 +108,7 @@ func (m Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.DataF
 		if v.Err == nil {
 			res[v.Ticker] = v.Data
 		} else {
+			log.Println(v.Err)
 			errs = append(errs, v.Err)
 		}
 	}

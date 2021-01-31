@@ -54,7 +54,7 @@ func (f fred) GetDataForPeriod(symbol string, frequency string,
 
 	res, err := imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
 		DictateDataType: map[string]interface{}{
-			"DATE": imports.Converter{
+			DateIdx: imports.Converter{
 				ConcreteType: time.Time{},
 				ConverterFunc: func(in interface{}) (interface{}, error) {
 					return time.Parse("2006-01-02", in.(string))
