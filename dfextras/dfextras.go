@@ -175,6 +175,116 @@ func Lag(n int, df *dataframe.DataFrame) *dataframe.DataFrame {
 	return dataframe.NewDataFrame(series...)
 }
 
+// Merge merge multiple dataframes
+func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+	unixToInternal := int64((1969*365 + 1969/4 - 1969/100 + 1969/400) * 24 * 60 * 60)
+	startTime := time.Unix(1<<63-1-unixToInternal, 999999999)
+	endTime := time.Time{}
+
+	dontLock := dataframe.Options{DontLock: true}
+	var startTimeAxis dataframe.Series
+	var endTimeAxis dataframe.Series
+
+	// find earliest start and latest end in all dataframes
+	timeAxisMap := make(map[int]int)
+	for ii := range dfs {
+		jj, err := dfs[ii].NameToColumn(timeAxisName, dontLock)
+		if err != nil {
+			return nil, errors.New("All dataframes must contain the time axis")
+		}
+
+		timeSeries := dfs[ii].Series[jj]
+		timeAxisMap[ii] = jj
+		// Check if this is a later startTime
+		val := timeSeries.Value(0, dontLock)
+		if v, ok := val.(time.Time); ok {
+			if v.Before(startTime) {
+				startTime = v
+				startTimeAxis = timeSeries
+			}
+		} else {
+			return nil, errors.New("timeAxis must refer to a time column")
+		}
+
+		// Check if this is an earlier endTime
+		val = timeSeries.Value(timeSeries.NRows(dontLock)-1, dontLock)
+		if v, ok := val.(time.Time); ok {
+			if v.After(endTime) {
+				endTime = v
+				endTimeAxis = timeSeries
+			}
+		} else {
+			return nil, errors.New("timeAxis must refer to a time column")
+		}
+	}
+
+	// create time axis
+	newTimeAxis := startTimeAxis.Copy()
+	lastTimeInStart := startTimeAxis.Value(startTimeAxis.NRows() - 1).(time.Time)
+	iterator := endTimeAxis.ValuesIterator()
+	for {
+		row, val, _ := iterator()
+		if row == nil {
+			break
+		}
+
+		if t, ok := val.(time.Time); ok {
+			if lastTimeInStart.Before(t) {
+				newTimeAxis.Append(t)
+			}
+		}
+	}
+
+	// build series, using math.NaN to fill non-value areas
+	series := []dataframe.Series{newTimeAxis}
+	for ii := range dfs {
+		timeAxisColumn, err := dfs[ii].NameToColumn(timeAxisName)
+		timeSeries := dfs[ii].Series[timeAxisColumn]
+		// calculate num to add to beginning and end of df
+		iterator := newTimeAxis.ValuesIterator()
+		nStartAdd := 0
+		nEndAdd := 0
+
+		dfStart := timeSeries.Value(0).(time.Time)
+		dfEnd := timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
+
+		for {
+			row, val, _ := iterator()
+			if row == nil {
+				break
+			}
+			t := val.(time.Time)
+			if t.Before(dfStart) {
+				nStartAdd++
+			}
+			if t.After(dfEnd) {
+				nEndAdd++
+			}
+		}
+
+		newDf := dfs[ii].Copy()
+		blankRow := make([]interface{}, len(newDf.Series))
+
+		for ii := 0; ii < nStartAdd; ii++ {
+			newDf.Insert(0, &dataframe.Options{}, blankRow...)
+		}
+
+		for ii := 0; ii < nEndAdd; ii++ {
+			newDf.Append(&dataframe.Options{}, blankRow...)
+		}
+
+		err = newDf.RemoveSeries(timeAxisName)
+		if err != nil {
+			return nil, err
+		}
+
+		series = append(series, newDf.Series...)
+	}
+
+	finalDf := dataframe.NewDataFrame(series...)
+	return finalDf, nil
+}
+
 // MergeAndTimeAlign merge multiple dataframes on their time axis
 // Assumptions:
 //     1) timeAxisName is in all dataframes and refers to a TimeSeries
