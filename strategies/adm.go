@@ -237,16 +237,15 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 }
 
 // Compute signal
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.PortfolioPerformance, error) {
+func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.Performance, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
 		manager.End = time.Now()
 	}
 	if manager.Begin == nullTime {
-		//dur, _ := time.ParseDuration("-8760h")
-		//manager.Begin = manager.End.Add(dur)
-		manager.Begin = manager.End.AddDate(-35, 0, 0)
+		// Default computes things 50 years into the past
+		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	}
 
 	err := adm.downloadPriceData(manager)
@@ -259,20 +258,31 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.P
 
 	scores := []dataframe.Series{}
 	timeIdx, _ := adm.momentum.NameToColumn(data.DateIdx)
-	scores = append(scores, adm.momentum.Series[timeIdx])
+
+	// create out-of-market series
+	dfSize := adm.momentum.Series[timeIdx].NRows()
+	zeroes := make([]interface{}, dfSize)
+	for ii := 0; ii < dfSize; ii++ {
+		zeroes[ii] = 0.0
+	}
+	outOfMarketSeries := dataframe.NewSeriesFloat64(adm.outTicker, &dataframe.SeriesInit{
+		Capacity: dfSize,
+	}, zeroes...)
+
+	scores = append(scores, adm.momentum.Series[timeIdx], outOfMarketSeries)
 	for _, ticker := range adm.inTickers {
 		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", ticker))
 		series := adm.momentum.Series[ii].Copy()
 		series.Rename(ticker)
 		scores = append(scores, series)
 	}
-
 	scoresDf := dataframe.NewDataFrame(scores...)
 
 	tmp, err := dfextras.DropNA(context.TODO(), scoresDf)
 	scoresDf = tmp.(*dataframe.DataFrame)
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
+	argmax.Rename(portfolio.TickerName)
 	if err != nil {
 		return portfolio.Performance{}, nil
 	}
@@ -287,6 +297,10 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.P
 	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
 
 	p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager)
+	err = p.TargetPortfolio(10000, targetPortfolio)
+	if err != nil {
+		return portfolio.Performance{}, err
+	}
 
-	return p.Performance()
+	return p.Performance(manager.End)
 }
