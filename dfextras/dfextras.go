@@ -98,6 +98,26 @@ func DropNA(ctx context.Context, sdf interface{}, opts ...dataframe.FilterOption
 	}
 }
 
+// Find row with value
+func FindTime(ctx context.Context, df *dataframe.DataFrame, searchVal time.Time, col string) (map[interface{}]interface{}, error) {
+	iterator := df.ValuesIterator()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		if val[col].(time.Time).Equal(searchVal) {
+			return val, nil
+		}
+	}
+	return nil, nil
+}
+
 // IndexOf value v in series
 func IndexOf(ctx context.Context, searchVal time.Time, series dataframe.Series, reverse bool) int {
 	var opts dataframe.ValuesOptions
