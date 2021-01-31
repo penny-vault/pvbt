@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"main/data"
 	"main/dfextras"
+	"main/portfolio"
 	"strings"
 	"time"
 
@@ -236,7 +237,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 }
 
 // Compute signal
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPerformance, error) {
+func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.PortfolioPerformance, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -250,7 +251,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPer
 
 	err := adm.downloadPriceData(manager)
 	if err != nil {
-		return StrategyPerformance{}, err
+		return portfolio.Performance{}, err
 	}
 
 	// Compute momentum scores
@@ -273,33 +274,19 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (StrategyPer
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
 	if err != nil {
-		return StrategyPerformance{}, nil
+		return portfolio.Performance{}, nil
 	}
 
 	dateIdx, err := scoresDf.NameToColumn(data.DateIdx)
 	if err != nil {
-		return StrategyPerformance{}, nil
+		return portfolio.Performance{}, nil
 	}
 	timeSeries := scoresDf.Series[dateIdx].Copy()
 
 	targetPortfolio := dataframe.NewDataFrame(timeSeries, argmax)
 	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
 
-	/*
-		// Calculate adm score (mom1 + mom3 + mom6) / 3
-		score := (mom1 + mom3 + mom6).average()
-		score = score.dropna()
+	p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager)
 
-		// If all scores > 0 then invest in max(score) else outOfMarketAsset
-		score.argmax(ROWS)
-		holdings := score.gt(0) || score.lte(0, adm.outTicker)
-
-		portfolio := portfolio.New()
-		portfolio.SetTargetHoldings(holdings)
-
-		performance := portfolio.evaluatePerformance()
-		performance.StrategyInformation = adm.info
-		return performance
-	*/
-	return StrategyPerformance{}, nil
+	return p.Performance()
 }

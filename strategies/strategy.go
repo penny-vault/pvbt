@@ -3,6 +3,7 @@ package strategies
 import (
 	"encoding/json"
 	"main/data"
+	"main/portfolio"
 )
 
 type StrategyFactory func(map[string]json.RawMessage) (Strategy, error)
@@ -26,19 +27,7 @@ type StrategyInfo struct {
 	Factory     StrategyFactory     `json:"-"`
 }
 
-type PerformanceMeasurement struct {
-	Time   int64   `json:"time"`
-	Return float64 `json:"return"`
-}
-
-type StrategyPerformance struct {
-	StrategyInformation StrategyInfo             `json:"strategy"`
-	PeriodStart         int64                    `json:"period.start"`
-	PeriodEnd           int64                    `json:"period.end"`
-	Return              []PerformanceMeasurement `json:"return"`
-}
-
 type Strategy interface {
 	GetInfo() StrategyInfo
-	Compute(manager *data.Manager) (StrategyPerformance, error)
+	Compute(manager *data.Manager) (portfolio.Performance, error)
 }
