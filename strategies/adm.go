@@ -29,7 +29,7 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 				Name:        "Tickers",
 				Description: "List of ETF, Mutual Fund, or Stock tickers to invest in",
 				Typecode:    "[]string",
-				DefaultVal:  "[\"VFINX\", \"PRIDX\"]",
+				DefaultVal:  `["VFINX", "PRIDX"]`,
 			},
 			"outTicker": Argument{
 				Name:        "Out-of-Market Ticker",
