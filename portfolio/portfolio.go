@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"main/data"
 	"main/dfextras"
+	"strings"
 	"time"
 
 	"github.com/rocketlaunchr/dataframe-go"
@@ -40,6 +41,14 @@ type Portfolio struct {
 	securities   map[string]bool
 }
 
+type Holding struct {
+	Time          int64   `json:"date"`
+	Ticker        string  `json:"ticker"`
+	MonthlyReturn float64 `json:"monthlyReturn"`
+	Score         float64 `json:"score"`
+	OtherScore    float64 `json:"otherScore"`
+}
+
 type PerformanceMeasurement struct {
 	Time  int64   `json:"time"`
 	Value float64 `json:"value"`
@@ -47,9 +56,10 @@ type PerformanceMeasurement struct {
 
 // Performance of portfolio
 type Performance struct {
-	PeriodStart int64                    `json:"period.start"`
-	PeriodEnd   int64                    `json:"period.end"`
-	Value       []PerformanceMeasurement `json:"value"`
+	PeriodStart    int64                    `json:"periodStart"`
+	PeriodEnd      int64                    `json:"periodEnd"`
+	Value          []PerformanceMeasurement `json:"value"`
+	HoldingByMonth []Holding                `json:"holdingByMonth"`
 }
 
 // NewPortfolio create a portfolio
@@ -102,13 +112,32 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
 	holdings := make(map[string]float64)
+	monthHolding := []Holding{}
 	valueOverTime := []PerformanceMeasurement{}
+	lastMonth := -1
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 		date := quotes[data.DateIdx].(time.Time)
+		if int(date.Month()) != lastMonth {
+			var tickers string
+			for k, v := range holdings {
+				if v > 0 {
+					tickers += k + " "
+				}
+			}
+			tickers = strings.Trim(tickers, " ")
+			if tickers != "" {
+				monthHolding = append(monthHolding, Holding{
+					Time:   date.Unix(),
+					Ticker: tickers,
+				})
+			}
+		}
+		lastMonth = int(date.Month())
+
 		// update holdings?
 		for ; trxIdx < numTrxs; trxIdx++ {
 			trx := p.Transactions[trxIdx]
@@ -151,6 +180,9 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 	}
 
 	perf.Value = valueOverTime
+
+	// populate holding by month
+	perf.HoldingByMonth = monthHolding
 
 	return perf, nil
 }
