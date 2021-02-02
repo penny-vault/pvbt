@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"main/data"
 	"main/strategies"
+	"runtime/debug"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
@@ -45,6 +46,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Error(err)
+			debug.PrintStack()
 			resp = fiber.ErrInternalServerError
 		}
 	}()
