@@ -2,12 +2,12 @@ package handler
 
 import (
 	"encoding/json"
-	"log"
 	"main/data"
 	"main/strategies"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
+	log "github.com/sirupsen/logrus"
 )
 
 var strategyList = [1]strategies.StrategyInfo{
@@ -39,8 +39,15 @@ func GetStrategy(c *fiber.Ctx) error {
 }
 
 // RunStrategy execute strategy
-func RunStrategy(c *fiber.Ctx) error {
+func RunStrategy(c *fiber.Ctx) (resp error) {
 	shortcode := c.Params("id")
+
+	defer func() {
+		if err := recover(); err != nil {
+			log.Error(err)
+			resp = fiber.ErrInternalServerError
+		}
+	}()
 
 	if strat, ok := strategyMap[shortcode]; ok {
 		credentials := make(map[string]string)
