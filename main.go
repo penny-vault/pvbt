@@ -26,7 +26,7 @@ func main() {
 
 	// Configure CORS
 	corsConfig := cors.Config{
-		AllowOrigins: "http://localhost, https://www.pennyvault.com",
+		AllowOrigins: "http://localhost:8080, https://www.pennyvault.com",
 		AllowHeaders: "*",
 		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH",
 	}
