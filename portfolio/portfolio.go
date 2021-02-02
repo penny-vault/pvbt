@@ -94,6 +94,10 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 		return perf, err
 	}
 
+	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
+		InPlace: true,
+	})
+
 	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
