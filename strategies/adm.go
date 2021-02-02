@@ -135,12 +135,8 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	val := rr.Value(nrows-1, dataframe.Options{}).(float64)
 	timeSeries = riskFreeRate.Series[timeSeriesIdx]
 	timeVal := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	if endTime.After(timeVal) {
+	if (endTime.Month() != timeVal.Month()) && (endTime.Year() != timeVal.Year()) {
 		riskFreeRate.Append(&dataframe.Options{}, endTime, val)
-	}
-
-	if err != nil {
-		return err
 	}
 
 	// Align the risk-free rate to match the mergedEod
