@@ -25,11 +25,11 @@ func main() {
 	app := fiber.New()
 
 	// Configure CORS
-	// cors.Config{
-	// 	 AllowOrigins: "http://localhost, https://www.pennyvault.com",
-	//	 AllowHeaders: "Origin, Content-Type, Accept",
-	// }
-	app.Use(cors.New())
+	corsConfig := cors.Config{
+		AllowOrigins: "http://localhost, https://www.pennyvault.com",
+		AllowHeaders: "*",
+	}
+	app.Use(cors.New(corsConfig))
 
 	// Configure authentication
 	signingKeys := jwks.LoadJWKS()
