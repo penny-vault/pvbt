@@ -41,25 +41,17 @@ type Portfolio struct {
 	securities   map[string]bool
 }
 
-type Holding struct {
-	Time          int64   `json:"date"`
-	Ticker        string  `json:"ticker"`
-	MonthlyReturn float64 `json:"monthlyReturn"`
-	Score         float64 `json:"score"`
-	OtherScore    float64 `json:"otherScore"`
-}
-
 type PerformanceMeasurement struct {
-	Time  int64   `json:"time"`
-	Value float64 `json:"value"`
+	Time     int64   `json:"time"`
+	Value    float64 `json:"value"`
+	Holdings string  `json:"holdings"`
 }
 
 // Performance of portfolio
 type Performance struct {
-	PeriodStart    int64                    `json:"periodStart"`
-	PeriodEnd      int64                    `json:"periodEnd"`
-	Value          []PerformanceMeasurement `json:"value"`
-	HoldingByMonth []Holding                `json:"holdingByMonth"`
+	PeriodStart int64                    `json:"periodStart"`
+	PeriodEnd   int64                    `json:"periodEnd"`
+	Value       []PerformanceMeasurement `json:"value"`
 }
 
 // NewPortfolio create a portfolio
@@ -112,31 +104,13 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
 	holdings := make(map[string]float64)
-	monthHolding := []Holding{}
 	valueOverTime := []PerformanceMeasurement{}
-	lastMonth := -1
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 		date := quotes[data.DateIdx].(time.Time)
-		if int(date.Month()) != lastMonth {
-			var tickers string
-			for k, v := range holdings {
-				if v > 0 {
-					tickers += k + " "
-				}
-			}
-			tickers = strings.Trim(tickers, " ")
-			if tickers != "" {
-				monthHolding = append(monthHolding, Holding{
-					Time:   date.Unix(),
-					Ticker: tickers,
-				})
-			}
-		}
-		lastMonth = int(date.Month())
 
 		// update holdings?
 		for ; trxIdx < numTrxs; trxIdx++ {
@@ -165,24 +139,27 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 
 		// iterate through each holding and add value to get total return
 		totalVal := 0.0
+		var tickers string
 		for symbol, qty := range holdings {
 			if val, ok := quotes[symbol]; ok {
 				price := val.(float64)
 				totalVal += price * qty
+				if qty > 0 {
+					tickers += symbol + " "
+				}
 			} else {
 				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
 			}
 		}
+		tickers = strings.Trim(tickers, " ")
 		valueOverTime = append(valueOverTime, PerformanceMeasurement{
-			Time:  date.Unix(),
-			Value: totalVal,
+			Time:     date.Unix(),
+			Value:    totalVal,
+			Holdings: tickers,
 		})
 	}
 
 	perf.Value = valueOverTime
-
-	// populate holding by month
-	perf.HoldingByMonth = monthHolding
 
 	return perf, nil
 }
