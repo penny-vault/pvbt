@@ -131,18 +131,21 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).To(BeNil())
 				Expect(perf.Value).Should(HaveLen(35))
 				Expect(perf.Value[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1517356800,
-					Value: 10000,
+					Time:     1517356800,
+					Value:    10000,
+					Holdings: "VFINX",
 				}))
 
 				Expect(perf.Value[24]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1580428800,
-					Value: 11126.332313770672,
+					Time:     1580428800,
+					Value:    11126.332313770672,
+					Holdings: "VFINX",
 				}))
 
 				Expect(perf.Value[34]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1606694400,
-					Value: 12676.603580175803,
+					Time:     1606694400,
+					Value:    12676.603580175803,
+					Holdings: "VFINX",
 				}))
 			})
 		})

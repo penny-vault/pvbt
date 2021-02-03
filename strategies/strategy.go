@@ -6,8 +6,10 @@ import (
 	"main/portfolio"
 )
 
+// StrategyFactory factory method to create strategy
 type StrategyFactory func(map[string]json.RawMessage) (Strategy, error)
 
+// Argument an argument to a strategy
 type Argument struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
@@ -16,6 +18,7 @@ type Argument struct {
 	Options     []string `json:"options"`
 }
 
+// StrategyInfo information about a strategy
 type StrategyInfo struct {
 	Name        string              `json:"name"`
 	Shortcode   string              `json:"shortcode"`
@@ -27,7 +30,8 @@ type StrategyInfo struct {
 	Factory     StrategyFactory     `json:"-"`
 }
 
+// Strategy an investing strategy
 type Strategy interface {
 	GetInfo() StrategyInfo
-	Compute(manager *data.Manager) (portfolio.Performance, error)
+	Compute(manager *data.Manager) (*portfolio.Portfolio, error)
 }

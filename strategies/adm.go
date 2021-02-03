@@ -233,7 +233,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 }
 
 // Compute signal
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.Performance, error) {
+func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*portfolio.Portfolio, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -246,7 +246,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.P
 
 	err := adm.downloadPriceData(manager)
 	if err != nil {
-		return portfolio.Performance{}, err
+		return nil, err
 	}
 
 	// Compute momentum scores
@@ -280,12 +280,12 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.P
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
 	argmax.Rename(portfolio.TickerName)
 	if err != nil {
-		return portfolio.Performance{}, nil
+		return nil, err
 	}
 
 	dateIdx, err := scoresDf.NameToColumn(data.DateIdx)
 	if err != nil {
-		return portfolio.Performance{}, nil
+		return nil, err
 	}
 	timeSeries := scoresDf.Series[dateIdx].Copy()
 
@@ -295,8 +295,8 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (portfolio.P
 	p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager)
 	err = p.TargetPortfolio(10000, targetPortfolio)
 	if err != nil {
-		return portfolio.Performance{}, err
+		return nil, err
 	}
 
-	return p.Performance(manager.End)
+	return &p, nil
 }
