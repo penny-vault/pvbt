@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"main/data"
 	"main/dfextras"
+	"math"
 	"strings"
 	"time"
 
@@ -42,16 +43,20 @@ type Portfolio struct {
 }
 
 type PerformanceMeasurement struct {
-	Time     int64   `json:"time"`
-	Value    float64 `json:"value"`
-	Holdings string  `json:"holdings"`
+	Time          int64   `json:"time"`
+	Value         float64 `json:"value"`
+	Holdings      string  `json:"holdings"`
+	PercentReturn float64 `json:"percentReturn"`
 }
 
 // Performance of portfolio
 type Performance struct {
-	PeriodStart int64                    `json:"periodStart"`
-	PeriodEnd   int64                    `json:"periodEnd"`
-	Value       []PerformanceMeasurement `json:"value"`
+	PeriodStart        int64                    `json:"periodStart"`
+	PeriodEnd          int64                    `json:"periodEnd"`
+	Value              []PerformanceMeasurement `json:"value"`
+	CagrSinceInception float64                  `json:"cagrSinceInception"`
+	YTDReturn          float64                  `json:"ytdReturn"`
+	CurrentAsset       string                   `json:"currentAsset"`
 }
 
 // NewPortfolio create a portfolio
@@ -104,13 +109,25 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
 	holdings := make(map[string]float64)
+	var startVal float64 = 0
+	var cagrSinceInception float64 = 0
 	valueOverTime := []PerformanceMeasurement{}
+	var prevVal float64 = -1
+	today := time.Now()
+	currYear := today.Year()
+	var totalVal float64
+	var currYearStartValue float64 = -1.0
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 		date := quotes[data.DateIdx].(time.Time)
+
+		// check if this is the current year
+		if date.Year() == currYear && currYearStartValue == -1.0 {
+			currYearStartValue = prevVal
+		}
 
 		// update holdings?
 		for ; trxIdx < numTrxs; trxIdx++ {
@@ -138,7 +155,7 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 		}
 
 		// iterate through each holding and add value to get total return
-		totalVal := 0.0
+		totalVal = 0.0
 		var tickers string
 		for symbol, qty := range holdings {
 			if val, ok := quotes[symbol]; ok {
@@ -151,15 +168,33 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
 			}
 		}
+
+		if prevVal == -1 {
+			prevVal = totalVal
+			startVal = totalVal
+		}
+
 		tickers = strings.Trim(tickers, " ")
+		ret := totalVal/prevVal - 1
+		duration := date.Sub(p.StartTime).Hours() / (24 * 365.25)
+		cagrSinceInception = math.Pow(totalVal/startVal, 1.0/duration) - 1
+		prevVal = totalVal
+
 		valueOverTime = append(valueOverTime, PerformanceMeasurement{
-			Time:     date.Unix(),
-			Value:    totalVal,
-			Holdings: tickers,
+			Time:          date.Unix(),
+			Value:         totalVal,
+			Holdings:      tickers,
+			PercentReturn: ret,
 		})
+
+		if date.Before(today) || date.Equal(today) {
+			perf.CurrentAsset = tickers
+		}
 	}
 
 	perf.Value = valueOverTime
+	perf.CagrSinceInception = cagrSinceInception
+	perf.YTDReturn = totalVal/currYearStartValue - 1.0
 
 	return perf, nil
 }
