@@ -11,7 +11,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var strategyList = [1]strategies.StrategyInfo{
+var StrategyList = [1]strategies.StrategyInfo{
 	strategies.AcceleratingDualMomentumInfo(),
 }
 
@@ -19,15 +19,15 @@ var strategyMap = make(map[string]strategies.StrategyInfo)
 
 // IntializeStrategyMap configure the strategy map
 func IntializeStrategyMap() {
-	for ii := range strategyList {
-		strat := strategyList[ii]
+	for ii := range StrategyList {
+		strat := StrategyList[ii]
 		strategyMap[strat.Shortcode] = strat
 	}
 }
 
 // ListStrategies get a list of all strategies
 func ListStrategies(c *fiber.Ctx) error {
-	return c.JSON(strategyList)
+	return c.JSON(StrategyList)
 }
 
 // GetStrategy get configuration for a specific strategy

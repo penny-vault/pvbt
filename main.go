@@ -10,7 +10,7 @@
 package main
 
 import (
-	"log"
+	"main/database"
 	"main/handler"
 	"main/jwks"
 	"main/router"
@@ -18,9 +18,24 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/github"
+
+	log "github.com/sirupsen/logrus"
 )
 
 func main() {
+	// setup database
+	err := database.SetupDatabaseMigrations()
+	if err != nil {
+		log.Fatal(err)
+	}
+	err = database.Connect()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	// Create new Fiber instance
 	app := fiber.New()
 

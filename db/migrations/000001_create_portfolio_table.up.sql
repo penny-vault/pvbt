@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS portfolio (
     ytd_return FLOAT,
     cagr_since_inception FLOAT,
     credentials JSONB NOT NULL,
-    notifications INT NOT NULL DEFAULT 0,
+    notifications INT NOT NULL DEFAULT 1,
     created TIMESTAMP NOT NULL DEFAULT now(),
     lastchanged TIMESTAMP NOT NULL DEFAULT now()
 );

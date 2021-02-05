@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 
 	"github.com/lestrrat-go/jwx/jwk"
+	log "github.com/sirupsen/logrus"
 )
 
 // AuthConfig stores configuration related to JWKS
