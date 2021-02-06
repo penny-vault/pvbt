@@ -29,6 +29,10 @@ type portfolio struct {
 }
 
 // GetPortfolio get a portfolio
+// @Description Retrieve a portfolio saved on the server
+// @Id GetPortfolio
+// @Produce json
+// @Param id path string true "id of porfolio to retrieve"
 func GetPortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	user := c.Locals("user").(*jwt.Token)
