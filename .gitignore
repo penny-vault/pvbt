@@ -15,3 +15,7 @@ coverage.txt
 # Dependency directories (remove the comment below to include it)
 # vendor/
 bin/
+
+# env development files
+sendgrid.env
+auth0.env
