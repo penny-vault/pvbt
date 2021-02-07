@@ -143,10 +143,6 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		params.Name = p.Name
 	}
 
-	if params.Notifications == 0 {
-		params.Notifications = p.Notifications
-	}
-
 	updateSQL := `UPDATE Portfolio SET name=$1, notifications=$2 WHERE id=$3 AND userid=$4`
 	_, err = database.Conn.Exec(updateSQL, params.Name, params.Notifications, portfolioID, userID)
 	if err != nil {
