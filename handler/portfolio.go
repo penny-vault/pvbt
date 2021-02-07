@@ -12,10 +12,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type portfolioCredentials struct {
-	Tiingo string `json:"tiingo"`
-}
-
 type portfolio struct {
 	ID                 uuid.UUID       `json:"id"`
 	Name               string          `json:"name"`
@@ -88,12 +84,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	// get tiingo token and userID from jwt claims
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
-	tiingoToken := claims["https://pennyvault.com/tiingo_token"].(string)
 	userID := claims["sub"].(string)
-	credentials := portfolioCredentials{
-		Tiingo: tiingoToken,
-	}
-	credentialsJSON, _ := json.Marshal(credentials)
 
 	params := portfolio{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -103,8 +94,8 @@ func CreatePortfolio(c *fiber.Ctx) error {
 
 	// Save to database
 	portfolioID := uuid.New()
-	portfolioSQL := `INSERT INTO Portfolio ("id", "userid", "name", "strategy_shortcode", "arguments", "credentials") VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err := database.Conn.Exec(portfolioSQL, portfolioID, userID, params.Name, params.Strategy, params.Arguments, credentialsJSON)
+	portfolioSQL := `INSERT INTO Portfolio ("id", "userid", "name", "strategy_shortcode", "arguments") VALUES ($1, $2, $3, $4, $5)`
+	_, err := database.Conn.Exec(portfolioSQL, portfolioID, userID, params.Name, params.Strategy, params.Arguments)
 	if err != nil {
 		log.Warnf("Failed to create portfolio for %s: %s", params.Strategy, err)
 		return fiber.ErrBadRequest
