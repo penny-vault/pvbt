@@ -11,29 +11,15 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var StrategyList = [1]strategies.StrategyInfo{
-	strategies.AcceleratingDualMomentumInfo(),
-}
-
-var strategyMap = make(map[string]strategies.StrategyInfo)
-
-// IntializeStrategyMap configure the strategy map
-func IntializeStrategyMap() {
-	for ii := range StrategyList {
-		strat := StrategyList[ii]
-		strategyMap[strat.Shortcode] = strat
-	}
-}
-
 // ListStrategies get a list of all strategies
 func ListStrategies(c *fiber.Ctx) error {
-	return c.JSON(StrategyList)
+	return c.JSON(strategies.StrategyList)
 }
 
 // GetStrategy get configuration for a specific strategy
 func GetStrategy(c *fiber.Ctx) error {
 	shortcode := c.Params("id")
-	if strategy, ok := strategyMap[shortcode]; ok {
+	if strategy, ok := strategies.StrategyMap[shortcode]; ok {
 		return c.JSON(strategy)
 	}
 	return fiber.ErrNotFound
@@ -51,7 +37,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	if strat, ok := strategyMap[shortcode]; ok {
+	if strat, ok := strategies.StrategyMap[shortcode]; ok {
 		credentials := make(map[string]string)
 
 		// get tiingo token from jwt claims

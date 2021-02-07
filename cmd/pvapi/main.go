@@ -11,9 +11,9 @@ package main
 
 import (
 	"main/database"
-	"main/handler"
 	"main/jwks"
 	"main/router"
+	"main/strategies"
 	"os"
 
 	"github.com/gofiber/fiber/v2"
@@ -59,7 +59,7 @@ func main() {
 	router.SetupRoutes(app, signingKeys)
 
 	// initialize strategies
-	handler.IntializeStrategyMap()
+	strategies.InitializeStrategyMap()
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")
