@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"main/database"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
@@ -17,11 +18,12 @@ type portfolio struct {
 	Name               string          `json:"name"`
 	Strategy           string          `json:"strategy"`
 	Arguments          types.JSONText  `json:"arguments"`
+	StartDate          int64           `json:"start_date"`
 	YTDReturn          sql.NullFloat64 `json:"ytd_return"`
 	CAGRSinceInception sql.NullFloat64 `json:"cagr_since_inception"`
 	Notifications      int             `json:"notifications"`
-	Created            float64         `json:"created"`
-	LastChanged        float64         `json:"lastchanged"`
+	Created            int64           `json:"created"`
+	LastChanged        int64           `json:"lastchanged"`
 }
 
 // GetPortfolio get a portfolio
@@ -35,10 +37,10 @@ func GetPortfolio(c *fiber.Ctx) error {
 	claims := user.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, ytd_return, cagr_since_inception, notifications, extract(epoch from created) as created, extract(epoch from lastchanged) as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
 	row := database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
 	p := portfolio{}
-	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("GetPortfolio %s failed: %s", portfolioID, err)
 		return fiber.ErrNotFound
@@ -53,7 +55,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 	claims := user.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, ytd_return, cagr_since_inception, notifications, extract(epoch from created) as created, extract(epoch from lastchanged) as lastchanged FROM portfolio WHERE userid=$1 ORDER BY name, created`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE userid=$1 ORDER BY name, created`
 	rows, err := database.Conn.Query(portfolioSQL, userID)
 	if err != nil {
 		log.Warnf("ListPortfolio failed: %s", err)
@@ -63,7 +65,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 	portfolios := []portfolio{}
 	for rows.Next() {
 		p := portfolio{}
-		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 		if err != nil {
 			log.Warnf("ListPortfolio failed %s", err)
 		}
@@ -94,8 +96,8 @@ func CreatePortfolio(c *fiber.Ctx) error {
 
 	// Save to database
 	portfolioID := uuid.New()
-	portfolioSQL := `INSERT INTO Portfolio ("id", "userid", "name", "strategy_shortcode", "arguments") VALUES ($1, $2, $3, $4, $5)`
-	_, err := database.Conn.Exec(portfolioSQL, portfolioID, userID, params.Name, params.Strategy, params.Arguments)
+	portfolioSQL := `INSERT INTO Portfolio ("id", "userid", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := database.Conn.Exec(portfolioSQL, portfolioID, userID, params.Name, params.Strategy, params.Arguments, time.Unix(params.StartDate, 0))
 	if err != nil {
 		log.Warnf("Failed to create portfolio for %s: %s", params.Strategy, err)
 		return fiber.ErrBadRequest
@@ -121,10 +123,10 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, ytd_return, cagr_since_inception, notifications, extract(epoch from created) as created, extract(epoch from lastchanged) as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
 	row := database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
 	p := portfolio{}
-	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("UpdatePortfolio %s failed: %s", portfolioID, err)
 		return fiber.ErrNotFound
@@ -132,6 +134,10 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	if params.Name == "" {
 		params.Name = p.Name
+	}
+
+	if params.Notifications == 0 {
+		params.Notifications = p.Notifications
 	}
 
 	updateSQL := `UPDATE Portfolio SET name=$1, notifications=$2 WHERE id=$3 AND userid=$4`
@@ -143,7 +149,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	row = database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
 	p = portfolio{}
-	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("UpdatePortfolio %s failed: %s", portfolioID, err)
 		return fiber.ErrInternalServerError
