@@ -38,7 +38,7 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1980-01-01&coed=2021-01-01&fq=AdjustedClose&fam=avg",
+		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=AdjustedClose&fam=avg",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("testdata/VUSTX.csv")
@@ -46,7 +46,7 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1980-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
+		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("testdata/VUSTX_2.csv")
@@ -62,7 +62,7 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1980-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
+		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("testdata/VFINX_2.csv")
@@ -78,7 +78,7 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1980-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
+		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("testdata/PRIDX_2.csv")

@@ -242,6 +242,9 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*portfolio.
 	if manager.Begin == nullTime {
 		// Default computes things 50 years into the past
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
+	} else {
+		// Set Begin 6 months in the past so we actually get the requested time range
+		manager.Begin = manager.Begin.AddDate(0, -6, 0)
 	}
 
 	err := adm.downloadPriceData(manager)
