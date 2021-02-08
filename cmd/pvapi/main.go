@@ -59,7 +59,7 @@ func main() {
 	router.SetupRoutes(app, signingKeys)
 
 	// initialize strategies
-	strategies.InitializeStrategyMap()
+	strategies.IntializeStrategyMap()
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")
