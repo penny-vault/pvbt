@@ -10,10 +10,12 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	imports "github.com/rocketlaunchr/dataframe-go/imports"
+	log "github.com/sirupsen/logrus"
 )
 
 type tiingo struct {
@@ -21,19 +23,19 @@ type tiingo struct {
 }
 
 type tiingoJSONResponse struct {
-	date        string
-	close       float64
-	high        float64
-	low         float64
-	open        float64
-	volume      int64
-	adjClose    float64
-	adjHigh     float64
-	adjLow      float64
-	adjOpen     float64
-	adjVolume   int64
-	divCash     float64
-	splitFactor float64
+	Date        string  `json:"date"`
+	Close       float64 `json:"close"`
+	High        float64 `json:"high"`
+	Low         float64 `json:"low"`
+	Open        float64 `json:"open"`
+	Volume      int64   `json:"volume"`
+	AdjClose    float64 `json:"adjClose"`
+	AdjHigh     float64 `json:"adjHigh"`
+	AdjLow      float64 `json:"adjLow"`
+	AdjOpen     float64 `json:"adjOpen"`
+	AdjVolume   int64   `json:"adjVolume"`
+	DivCash     float64 `json:"divCash"`
+	SplitFactor float64 `json:"splitFactor"`
 }
 
 var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
@@ -54,30 +56,74 @@ func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, 
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
 
 	resp, err := http.Get(url)
-
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Function":  "data/tiingo.go:LastTradingDay",
+			"ForDate":   forDate,
+			"Frequency": frequency,
+			"Error":     err,
+		}).Error("HTTP error response")
 		return time.Time{}, err
 	}
 
 	if resp.StatusCode >= 400 {
+		log.WithFields(log.Fields{
+			"Function":   "data/tiingo.go:LastTradingDay",
+			"ForDate":    forDate,
+			"Frequency":  frequency,
+			"StatusCode": resp.StatusCode,
+			"Error":      err,
+		}).Error("HTTP error response")
 		return time.Time{}, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Function":  "data/tiingo.go:LastTradingDay",
+			"ForDate":   forDate,
+			"Frequency": frequency,
+			"Body":      string(body),
+			"Error":     err,
+		}).Error("Failed to read HTTP body")
 		return time.Time{}, err
 	}
 
 	jsonResp := []tiingoJSONResponse{}
 	err = json.Unmarshal(body, &jsonResp)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Function":  "data/tiingo.go:LastTradingDay",
+			"ForDate":   forDate,
+			"Frequency": frequency,
+			"Body":      string(body),
+			"Error":     err,
+		}).Error("Failed to parse JSON")
 		return time.Time{}, err
 	}
 
 	if len(jsonResp) > 0 {
-		lastDay, err := time.Parse("2006-01-02", jsonResp[0].date)
+		dtParts := strings.Split(jsonResp[0].Date, "T")
+		if len(dtParts) == 0 {
+			log.WithFields(log.Fields{
+				"Function":  "data/tiingo.go:LastTradingDay",
+				"ForDate":   forDate,
+				"Frequency": frequency,
+				"DateStr":   jsonResp[0].Date,
+				"Error":     err,
+			}).Error("Invalid date format")
+			return time.Time{}, errors.New("Invalid date format")
+		}
+		lastDay, err := time.Parse("2006-01-02", dtParts[0])
 		if err != nil {
+			log.WithFields(log.Fields{
+				"Function":   "data/tiingo.go:LastTradingDay",
+				"ForDate":    forDate,
+				"Frequency":  frequency,
+				"StatusCode": resp.StatusCode,
+				"Error":      err,
+			}).Error("Cannot parse date")
 			return time.Time{}, err
 		}
 

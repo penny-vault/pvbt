@@ -239,7 +239,6 @@ func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Port
 	}
 
 	toSend := []string{}
-	today := time.Now()
 
 	manager := data.NewManager(map[string]string{
 		"tiingo": u.TiingoToken,
@@ -251,17 +250,17 @@ func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Port
 	}
 	if (s.Notifications & weekly) == weekly {
 		// only send on Friday
-		if lastTradingDayOfWeek(today, &manager) {
+		if lastTradingDayOfWeek(forDate, &manager) {
 			toSend = append(toSend, "Weekly")
 		}
 	}
 	if (s.Notifications & monthly) == monthly {
-		if lastTradingDayOfMonth(today, &manager) {
+		if lastTradingDayOfMonth(forDate, &manager) {
 			toSend = append(toSend, "Monthly")
 		}
 	}
 	if (s.Notifications & annually) == annually {
-		if lastTradingDayOfYear(today, &manager) {
+		if lastTradingDayOfYear(forDate, &manager) {
 			toSend = append(toSend, "Annually")
 		}
 	}
@@ -285,7 +284,7 @@ func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Port
 			"Portfolio":  s.ID,
 			"UserId":     u.ID,
 			"UserEmail":  u.Email,
-		}).Infof("sent %s email to %s", freq, u.Email)
+		}).Infof("Sent %s email to %s", freq, u.Email)
 	}
 }
 
