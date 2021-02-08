@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS portfolio (
     name VARCHAR(32) NOT NULL,
     strategy_shortcode VARCHAR(8) NOT NULL,
     arguments JSONB NOT NULL,
+    start_date TIMESTAMP NOT NULL DEFAULT now(),
     ytd_return FLOAT,
     cagr_since_inception FLOAT,
     notifications INT NOT NULL DEFAULT 1,
