@@ -19,6 +19,8 @@ require (
 	github.com/onsi/gomega v1.10.4
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20201007021539-67b046771f0b
+	github.com/sendgrid/rest v2.6.2+incompatible // indirect
+	github.com/sendgrid/sendgrid-go v3.7.2+incompatible
 	github.com/sirupsen/logrus v1.7.0
 	github.com/valyala/fasthttp v1.19.0 // indirect
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
