@@ -15,6 +15,12 @@ type Provider interface {
 	GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
 }
 
+type DateProvider interface {
+	LastTradingDayOfWeek(t time.Time) (time.Time, error)
+	LastTradingDayOfMonth(t time.Time) (time.Time, error)
+	LastTradingDayOfYear(t time.Time) (time.Time, error)
+}
+
 const (
 	FrequencyDaily   = "Daily"
 	FrequencyWeekly  = "Weekly"
@@ -40,12 +46,13 @@ const (
 
 // Manager data manager type
 type Manager struct {
-	Begin       time.Time
-	End         time.Time
-	Frequency   string
-	Metric      string
-	credentials map[string]string
-	providers   map[string]Provider
+	Begin        time.Time
+	End          time.Time
+	Frequency    string
+	Metric       string
+	credentials  map[string]string
+	providers    map[string]Provider
+	dateProvider DateProvider
 }
 
 // NewManager create a new data manager
@@ -60,6 +67,7 @@ func NewManager(credentials map[string]string) Manager {
 	if val, ok := credentials["tiingo"]; ok {
 		tiingo := NewTiingo(val)
 		m.RegisterDataProvider(tiingo)
+		m.dateProvider = tiingo
 	} else {
 		log.Println("No tiingo API key provided")
 	}
@@ -72,8 +80,23 @@ func NewManager(credentials map[string]string) Manager {
 }
 
 // RegisterDataProvider add a data provider to the system
-func (m Manager) RegisterDataProvider(p Provider) {
+func (m *Manager) RegisterDataProvider(p Provider) {
 	m.providers[p.DataType()] = p
+}
+
+// LastTradingDayOfWeek Get the last trading day of the specified month
+func (m *Manager) LastTradingDayOfWeek(t time.Time) (time.Time, error) {
+	return m.dateProvider.LastTradingDayOfWeek(t)
+}
+
+// LastTradingDayOfMonth Get the last trading day of the specified month
+func (m *Manager) LastTradingDayOfMonth(t time.Time) (time.Time, error) {
+	return m.dateProvider.LastTradingDayOfMonth(t)
+}
+
+// LastTradingDayOfYear Get the last trading day of the specified year
+func (m *Manager) LastTradingDayOfYear(t time.Time) (time.Time, error) {
+	return m.dateProvider.LastTradingDayOfYear(t)
 }
 
 // GetData get a dataframe for the requested symbol

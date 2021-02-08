@@ -3,6 +3,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +20,22 @@ type tiingo struct {
 	apikey string
 }
 
+type tiingoJSONResponse struct {
+	date        string
+	close       float64
+	high        float64
+	low         float64
+	open        float64
+	volume      int64
+	adjClose    float64
+	adjHigh     float64
+	adjLow      float64
+	adjOpen     float64
+	adjVolume   int64
+	divCash     float64
+	splitFactor float64
+}
+
 var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
 var tiingoAPI = "https://api.tiingo.com"
 
@@ -29,7 +46,63 @@ func NewTiingo(key string) tiingo {
 	}
 }
 
-// Interface functions
+// Date provider functions
+
+// LastTradingDayOfWeek return the last trading day of the week
+func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, error) {
+	symbol := "SPY"
+	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
+
+	resp, err := http.Get(url)
+
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if resp.StatusCode >= 400 {
+		return time.Time{}, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
+	}
+
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	jsonResp := []tiingoJSONResponse{}
+	err = json.Unmarshal(body, &jsonResp)
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	if len(jsonResp) > 0 {
+		lastDay, err := time.Parse("2006-01-02", jsonResp[0].date)
+		if err != nil {
+			return time.Time{}, err
+		}
+
+		return lastDay, nil
+	}
+
+	return time.Time{}, errors.New("No data returned")
+}
+
+// LastTradingDayOfWeek return the last trading day of the week
+func (t tiingo) LastTradingDayOfWeek(forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(forDate, "weekly")
+}
+
+// LastTradingDayOfMonth return the last trading day of the month
+func (t tiingo) LastTradingDayOfMonth(forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(forDate, "monthly")
+}
+
+// LastTradingDayOfYear return the last trading day of the year
+func (t tiingo) LastTradingDayOfYear(forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(forDate, "annually")
+}
+
+// Provider functions
 
 func (t tiingo) DataType() string {
 	return "security"
@@ -44,7 +117,6 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	} else {
 		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency, t.apikey)
 	}
-	//log.Printf("Download from Tiingo: %s\n", url)
 
 	resp, err := http.Get(url)
 
