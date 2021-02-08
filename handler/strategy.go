@@ -5,6 +5,7 @@ import (
 	"main/data"
 	"main/strategies"
 	"runtime/debug"
+	"time"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
@@ -28,6 +29,42 @@ func GetStrategy(c *fiber.Ctx) error {
 // RunStrategy execute strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
 	shortcode := c.Params("id")
+	startDateStr := c.Query("startDate", "1980-01-01")
+	endDateStr := c.Query("endDate", "now")
+
+	var startDate time.Time
+	var endDate time.Time
+
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Function":     "handler/strategy.go:RunStrategy",
+			"Strategy":     shortcode,
+			"StartDateStr": startDateStr,
+			"EndDateStr":   endDateStr,
+			"Error":        err,
+		}).Error("Cannoy parse start date query parameter")
+		return fiber.ErrNotAcceptable
+	}
+
+	if endDateStr == "now" {
+		endDate = time.Now()
+		year, month, day := endDate.Date()
+		endDate = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	} else {
+		var err error
+		endDate, err = time.Parse("2006-01-02", endDateStr)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Function":     "handler/strategy.go:RunStrategy",
+				"Strategy":     shortcode,
+				"StartDateStr": startDateStr,
+				"EndDateStr":   endDateStr,
+				"Error":        err,
+			}).Error("Cannoy parse end date query parameter")
+			return fiber.ErrNotAcceptable
+		}
+	}
 
 	defer func() {
 		if err := recover(); err != nil {
@@ -47,6 +84,8 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 		credentials["tiingo"] = tiingoToken
 		manager := data.NewManager(credentials)
+		manager.Begin = startDate
+		manager.End = endDate
 
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal(c.Body(), &params); err != nil {
