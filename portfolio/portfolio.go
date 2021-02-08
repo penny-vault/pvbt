@@ -32,6 +32,12 @@ type Transaction struct {
 	TotalValue    float64
 }
 
+type Holding struct {
+	Date   time.Time
+	Ticker string
+	Shares float64
+}
+
 // Portfolio manage a portfolio
 type Portfolio struct {
 	Name         string
@@ -67,6 +73,156 @@ func NewPortfolio(name string, manager *data.Manager) Portfolio {
 	}
 }
 
+// ValueAsOf return the value of the portfolio for the given date
+func (p *Portfolio) ValueAsOf(d time.Time) (float64, error) {
+	// Get last 7 days of values, in case 'd' isn't a market day
+	s := d.AddDate(0, 0, -7)
+	value, err := p.valueOverPeriod(s, d)
+	sz := len(value)
+	if sz <= 0 {
+		return 0, errors.New("Failed to compute value for date")
+	}
+	return value[sz-1].Value, err
+}
+
+func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMeasurement, error) {
+	if len(p.Transactions) == 0 {
+		return nil, errors.New("Cannot calculate performance for portfolio with no transactions")
+	}
+
+	p.dataProxy.Begin = s
+	p.dataProxy.End = e
+	p.dataProxy.Frequency = data.FrequencyDaily
+
+	// Get holdings over period
+	holdings, err := p.holdingsOverPeriod(s, e)
+	if err != nil {
+		log.Error(err)
+		return nil, err
+	}
+
+	// Get a list of all tickers
+	tickerSet := map[string]bool{}
+	for _, v := range holdings {
+		for _, h := range v {
+			tickerSet[h.Ticker] = true
+		}
+	}
+
+	symbols := []string{}
+	for k := range tickerSet {
+		symbols = append(symbols, k)
+	}
+
+	// get quote data
+	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
+	if len(errs) > 0 {
+		return nil, errors.New("Failed to download data for tickers")
+	}
+
+	var eod = []*dataframe.DataFrame{}
+	for _, val := range quotes {
+		eod = append(eod, val)
+	}
+
+	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
+	if err != nil {
+		return nil, err
+	}
+
+	// compute value over period
+	values := []*PerformanceMeasurement{}
+	currHoldings := holdings[s]
+	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
+	for {
+		row, quotes, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+		date := quotes[data.DateIdx].(time.Time)
+		year, month, day := date.Date()
+		date = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+
+		if v, ok := holdings[date]; ok {
+			currHoldings = v
+		}
+
+		// iterate through each holding and add value to get total return
+		totalVal := 0.0
+		for _, holding := range currHoldings {
+			if val, ok := quotes[holding.Ticker]; ok {
+				price := val.(float64)
+				totalVal += price * holding.Shares
+			} else {
+				return nil, fmt.Errorf("no quote for symbol: %s", holding.Ticker)
+			}
+		}
+		values = append(values, &PerformanceMeasurement{
+			Time:  date.Unix(),
+			Value: totalVal,
+		})
+	}
+
+	return values, nil
+}
+
+func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time][]Holding, error) {
+	currHoldings := map[string]Holding{}
+	periodHoldings := map[time.Time][]Holding{}
+
+	for _, t := range p.Transactions {
+		if t.Date.After(e) && len(periodHoldings) == 0 {
+			holdings := make([]Holding, 0, len(currHoldings))
+			for _, v := range currHoldings {
+				holdings = append(holdings, v)
+			}
+			periodHoldings[s] = holdings
+			return periodHoldings, nil
+		}
+
+		if t.Date.After(e) {
+			return periodHoldings, nil
+		}
+
+		if h, ok := currHoldings[t.Ticker]; ok {
+			switch t.Kind {
+			case BuyTransaction:
+				h.Shares += t.Shares
+			case SellTransaction:
+				h.Shares -= t.Shares
+			}
+			if h.Shares <= 0 {
+				delete(currHoldings, h.Ticker)
+			}
+		} else {
+			if t.Kind != BuyTransaction {
+				log.Error("Transactions are out of order")
+				return nil, errors.New("Transactions are out of order")
+			}
+			currHoldings[t.Ticker] = Holding{
+				Ticker: t.Ticker,
+				Shares: t.Shares,
+			}
+		}
+
+		if (t.Date.After(s) || t.Date.Equal(s)) && (t.Date.Before(e) || t.Date.Equal(e)) {
+			holdings := make([]Holding, 0, len(currHoldings))
+			for _, v := range currHoldings {
+				holdings = append(holdings, v)
+			}
+			periodHoldings[t.Date] = holdings
+		}
+	}
+
+	holdings := make([]Holding, 0, len(currHoldings))
+	for _, v := range currHoldings {
+		holdings = append(holdings, v)
+	}
+	periodHoldings[s] = holdings
+
+	return periodHoldings, nil
+}
+
 // Performance calculate performance of portfolio
 func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 	if len(p.Transactions) == 0 {
@@ -86,6 +242,8 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 
 	p.dataProxy.Begin = p.StartTime
 	p.dataProxy.End = through
+	p.dataProxy.Frequency = data.FrequencyMonthly
+
 	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) > 0 {
 		return Performance{}, errors.New("Failed to download data for tickers")

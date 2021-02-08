@@ -10,7 +10,7 @@ pvapi:
 	$(GOBUILD) -o bin/pvapi -v cmd/pvapi/main.go
 
 notifier:
-	$(GOBUILD) -o bin/notifier -v cmd/notifier/main.go
+	$(GOBUILD) -o bin/notifier -v cmd/notifier/main.go cmd/notifier/auth0.go
 
 test:
 	$(GOTEST) -v ./...
