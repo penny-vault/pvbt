@@ -68,6 +68,12 @@ func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (Strategy, err
 		return nil, err
 	}
 
+	for ii := range inTickers {
+		inTickers[ii] = strings.ToUpper(inTickers[ii])
+	}
+
+	outTicker = strings.ToUpper(outTicker)
+
 	var adm Strategy
 	adm = &AcceleratingDualMomentum{
 		info:      AcceleratingDualMomentumInfo(),

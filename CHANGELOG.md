@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - Use US EST timezone for date selection in notifier
+- Fixed ADM computation error when inputs were not in all uppercase
 
 ## [0.1.0] - 2021-02-08
 ### Added

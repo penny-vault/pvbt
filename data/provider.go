@@ -122,7 +122,7 @@ func (m Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.DataF
 	res := make(map[string]*dataframe.DataFrame)
 	ch := make(chan quoteResult)
 	for ii := range symbols {
-		go downloadWorker(ch, symbols[ii], &m)
+		go downloadWorker(ch, strings.ToUpper(symbols[ii]), &m)
 	}
 
 	errs := []error{}
