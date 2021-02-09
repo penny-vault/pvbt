@@ -411,7 +411,7 @@ func main() {
 	var forDate time.Time
 	if *dateFlag == "-1" {
 		tz, _ := time.LoadLocation("America/New_York")
-		forDate = time.Now().In(tz)
+		forDate = time.Now().In(tz).AddDate(0, 0, -1)
 	} else {
 		var err error
 		forDate, err = time.Parse("2006-01-02", *dateFlag)
