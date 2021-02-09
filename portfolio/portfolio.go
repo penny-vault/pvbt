@@ -352,7 +352,12 @@ func (p *Portfolio) Performance(through time.Time) (Performance, error) {
 
 	perf.Value = valueOverTime
 	perf.CagrSinceInception = cagrSinceInception
-	perf.YTDReturn = totalVal/currYearStartValue - 1.0
+
+	if currYearStartValue <= 0 {
+		perf.YTDReturn = 0.0
+	} else {
+		perf.YTDReturn = totalVal/currYearStartValue - 1.0
+	}
 
 	return perf, nil
 }
