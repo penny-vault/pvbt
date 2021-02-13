@@ -15,6 +15,8 @@ require (
 	github.com/klauspost/compress v1.11.7 // indirect
 	github.com/lestrrat-go/jwx v1.0.8
 	github.com/mattn/go-runewidth v0.0.10 // indirect
+	github.com/newrelic/go-agent v3.10.0+incompatible // indirect
+	github.com/newrelic/go-agent/v3 v3.10.0
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.4
 	github.com/rivo/uniseg v0.2.0 // indirect
