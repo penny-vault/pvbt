@@ -98,7 +98,7 @@ var _ = Describe("Adm", func() {
 				p, err := adm.Compute(&manager)
 				Expect(err).To(BeNil())
 
-				perf, err := p.Performance(manager.End)
+				perf, err := p.CalculatePerformance(manager.End)
 				Expect(err).To(BeNil())
 				Expect(adm.CurrentSymbol).To(Equal("PRIDX"))
 

@@ -106,7 +106,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 
 		// calculate the portfolio's performance
-		performance, err := p.Performance(manager.End)
+		performance, err := p.CalculatePerformance(manager.End)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest

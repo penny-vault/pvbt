@@ -223,8 +223,8 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 	return periodHoldings, nil
 }
 
-// Performance calculate performance of portfolio
-func (p *Portfolio) Performance(through time.Time) (Performance, error) {
+// CalculatePerformance calculate performance of portfolio
+func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error) {
 	if len(p.Transactions) == 0 {
 		return Performance{}, errors.New("Cannot calculate performance for portfolio with no transactions")
 	}

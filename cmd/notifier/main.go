@@ -451,7 +451,7 @@ func main() {
 		if err != nil {
 			continue
 		}
-		perf, err := p.Performance(forDate)
+		perf, err := p.CalculatePerformance(forDate)
 		updateSavedPortfolioPerformanceMetrics(s, &perf)
 		processNotifications(forDate, s, p, &perf)
 		if *limitFlag != 0 && *limitFlag >= ii {
