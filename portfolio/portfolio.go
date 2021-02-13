@@ -19,8 +19,10 @@ const (
 )
 
 const (
-	SellTransaction = "SELL"
-	BuyTransaction  = "BUY"
+	SellTransaction     = "SELL"
+	BuyTransaction      = "BUY"
+	DepositTransaction  = "DEPOSIT"
+	WithdrawTransaction = "WITHDRAW"
 )
 
 type Transaction struct {
@@ -63,6 +65,8 @@ type Performance struct {
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
 	YTDReturn          float64                  `json:"ytdReturn"`
 	CurrentAsset       string                   `json:"currentAsset"`
+	TotalDeposited     float64                  `json:"totalDeposited"`
+	TotalWithdrawn     float64                  `json:"totalWithdrawn"`
 }
 
 // NewPortfolio create a portfolio
@@ -171,6 +175,10 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 	periodHoldings := map[time.Time][]Holding{}
 
 	for _, t := range p.Transactions {
+		if t.Kind == DepositTransaction || t.Kind == WithdrawTransaction {
+			continue
+		}
+
 		if t.Date.After(e) && len(periodHoldings) == 0 {
 			holdings := make([]Holding, 0, len(currHoldings))
 			for _, v := range currHoldings {
@@ -275,6 +283,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	currYear := today.Year()
 	var totalVal float64
 	var currYearStartValue float64 = -1.0
+
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
@@ -290,6 +299,17 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		// update holdings?
 		for ; trxIdx < numTrxs; trxIdx++ {
 			trx := p.Transactions[trxIdx]
+
+			if trx.Kind == DepositTransaction || trx.Kind == WithdrawTransaction {
+				switch trx.Kind {
+				case DepositTransaction:
+					perf.TotalDeposited += trx.TotalValue
+				case WithdrawTransaction:
+					perf.TotalWithdrawn += trx.TotalValue
+				}
+				continue
+			}
+
 			// process transactions up to this point in time
 			if date.Equal(trx.Date) || date.After(trx.Date) {
 				shares := 0.0
@@ -403,6 +423,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	value := initial
 	var lastTransaction *Transaction
 	var lastSymbol string
+	var first bool = true
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
 		if row == nil {
@@ -412,6 +433,19 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		// Get next transaction symbol
 		date := val[data.DateIdx].(time.Time)
 		symbol := val[TickerName].(string)
+
+		if first {
+			first = false
+			// Create initial deposit
+			p.Transactions = append(p.Transactions, Transaction{
+				Date:          date,
+				Ticker:        "",
+				Kind:          DepositTransaction,
+				PricePerShare: 0.0,
+				Shares:        0,
+				TotalValue:    initial,
+			})
+		}
 
 		if lastSymbol != symbol {
 			// Sell previous transaction
