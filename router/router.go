@@ -12,7 +12,7 @@ import (
 func SetupRoutes(app *fiber.App, jwks map[string]interface{}) {
 	// Middleware
 	api := app.Group("/v1", logger.New())
-	api.Get("/", handler.Hello)
+	api.Get("/", handler.Ping)
 
 	// Strategy
 	strategy := api.Group("/strategy")
