@@ -1,0 +1,1876 @@
+{
+    "periodStart": 631177200,
+    "periodEnd": 1609484400,
+    "value": [
+      {
+        "time": 631177200,
+        "percentReturn": 0.0214,
+        "value": 10214.0
+      },
+      {
+        "time": 633855600,
+        "percentReturn": -0.0142,
+        "value": 10068.9612
+      },
+      {
+        "time": 636274800,
+        "percentReturn": -0.0209,
+        "value": 9858.51991092
+      },
+      {
+        "time": 638953200,
+        "percentReturn": -0.0323,
+        "value": 9540.08971779728
+      },
+      {
+        "time": 641545200,
+        "percentReturn": 0.1147,
+        "value": 10634.3380084286
+      },
+      {
+        "time": 644223600,
+        "percentReturn": 0.0416,
+        "value": 11076.7264695792
+      },
+      {
+        "time": 646815600,
+        "percentReturn": 0.07,
+        "value": 11829.9438695106
+      },
+      {
+        "time": 649494000,
+        "percentReturn": -0.14,
+        "value": 10185.5816716486
+      },
+      {
+        "time": 652172400,
+        "percentReturn": -0.1515,
+        "value": 8642.46604839384
+      },
+      {
+        "time": 654764400,
+        "percentReturn": 0.01,
+        "value": 8694.3208446842
+      },
+      {
+        "time": 657442800,
+        "percentReturn": 0.01,
+        "value": 8746.48676975231
+      },
+      {
+        "time": 660034800,
+        "percentReturn": 0.0059,
+        "value": 8798.09104169385
+      },
+      {
+        "time": 662713200,
+        "percentReturn": 0.0054,
+        "value": 8845.600733319
+      },
+      {
+        "time": 665391600,
+        "percentReturn": 0.0052,
+        "value": 8891.59785713226
+      },
+      {
+        "time": 667810800,
+        "percentReturn": 0.0241,
+        "value": 9105.88536548915
+      },
+      {
+        "time": 670489200,
+        "percentReturn": 0.0,
+        "value": 9124.09713622013
+      },
+      {
+        "time": 673081200,
+        "percentReturn": 0.0427,
+        "value": 9513.69608393673
+      },
+      {
+        "time": 675759600,
+        "percentReturn": -0.0456,
+        "value": 9079.87154250922
+      },
+      {
+        "time": 678351600,
+        "percentReturn": 0.0463,
+        "value": 9500.2695949274
+      },
+      {
+        "time": 681030000,
+        "percentReturn": 0.0233,
+        "value": 9721.62587648921
+      },
+      {
+        "time": 683708400,
+        "percentReturn": -0.0167,
+        "value": 9559.27472435184
+      },
+      {
+        "time": 686300400,
+        "percentReturn": 0.0133,
+        "value": 9686.41307818572
+      },
+      {
+        "time": 688978800,
+        "percentReturn": -0.0401,
+        "value": 9297.98791375047
+      },
+      {
+        "time": 691570800,
+        "percentReturn": 0.1141,
+        "value": 10358.8883347094
+      },
+      {
+        "time": 694249200,
+        "percentReturn": -0.0188,
+        "value": 10164.1412340169
+      },
+      {
+        "time": 696927600,
+        "percentReturn": 0.0124,
+        "value": 10290.1765853187
+      },
+      {
+        "time": 699433200,
+        "percentReturn": -0.0193,
+        "value": 10091.576177222
+      },
+      {
+        "time": 702111600,
+        "percentReturn": 0.0291,
+        "value": 10385.2410439792
+      },
+      {
+        "time": 704703600,
+        "percentReturn": 0.0048,
+        "value": 10435.0902009903
+      },
+      {
+        "time": 707382000,
+        "percentReturn": -0.0149,
+        "value": 10279.6073569955
+      },
+      {
+        "time": 709974000,
+        "percentReturn": -0.0588,
+        "value": 9675.16644440416
+      },
+      {
+        "time": 712652400,
+        "percentReturn": -0.0207,
+        "value": 9474.89049900499
+      },
+      {
+        "time": 715330800,
+        "percentReturn": 0.0117,
+        "value": 9585.74671784335
+      },
+      {
+        "time": 717922800,
+        "percentReturn": 0.0033,
+        "value": 9617.37968201223
+      },
+      {
+        "time": 720601200,
+        "percentReturn": 0.0025,
+        "value": 9641.42313121726
+      },
+      {
+        "time": 723193200,
+        "percentReturn": 0.0121,
+        "value": 9758.08435110499
+      },
+      {
+        "time": 725871600,
+        "percentReturn": 0.0081,
+        "value": 9837.12483434894
+      },
+      {
+        "time": 728550000,
+        "percentReturn": 0.0136,
+        "value": 9970.90973209609
+      },
+      {
+        "time": 730969200,
+        "percentReturn": 0.0211,
+        "value": 10181.2959274433
+      },
+      {
+        "time": 733647600,
+        "percentReturn": -0.0242,
+        "value": 9934.90856599917
+      },
+      {
+        "time": 736239600,
+        "percentReturn": 0.0265,
+        "value": 10198.1836429981
+      },
+      {
+        "time": 738918000,
+        "percentReturn": -0.0331,
+        "value": 9860.62376441486
+      },
+      {
+        "time": 741510000,
+        "percentReturn": 0.0182,
+        "value": 10040.0871169272
+      },
+      {
+        "time": 744188400,
+        "percentReturn": 0.0693,
+        "value": 10735.8651541303
+      },
+      {
+        "time": 746866800,
+        "percentReturn": 0.0167,
+        "value": 10915.1541022043
+      },
+      {
+        "time": 749458800,
+        "percentReturn": 0.0625,
+        "value": 11597.3512335921
+      },
+      {
+        "time": 752137200,
+        "percentReturn": -0.0198,
+        "value": 11367.723679167
+      },
+      {
+        "time": 754729200,
+        "percentReturn": 0.1049,
+        "value": 12560.1978931116
+      },
+      {
+        "time": 757407600,
+        "percentReturn": 0.0448,
+        "value": 13122.894758723
+      },
+      {
+        "time": 760086000,
+        "percentReturn": 0.0027,
+        "value": 13158.3265745716
+      },
+      {
+        "time": 762505200,
+        "percentReturn": -0.0641,
+        "value": 12314.8778411416
+      },
+      {
+        "time": 765183600,
+        "percentReturn": 0.01,
+        "value": 12438.026619553
+      },
+      {
+        "time": 767775600,
+        "percentReturn": 0.0012,
+        "value": 12452.9522514965
+      },
+      {
+        "time": 770454000,
+        "percentReturn": -0.0156,
+        "value": 12258.6861963732
+      },
+      {
+        "time": 773046000,
+        "percentReturn": 0.0118,
+        "value": 12403.3386934904
+      },
+      {
+        "time": 775724400,
+        "percentReturn": 0.04,
+        "value": 12887.0689025365
+      },
+      {
+        "time": 778402800,
+        "percentReturn": -0.0146,
+        "value": 12698.9176965595
+      },
+      {
+        "time": 780994800,
+        "percentReturn": 0.0017,
+        "value": 12720.5058566437
+      },
+      {
+        "time": 783673200,
+        "percentReturn": -0.0365,
+        "value": 12256.2073928762
+      },
+      {
+        "time": 786265200,
+        "percentReturn": 0.0047,
+        "value": 12313.8115676227
+      },
+      {
+        "time": 788943600,
+        "percentReturn": 0.0047,
+        "value": 12371.6864819905
+      },
+      {
+        "time": 791622000,
+        "percentReturn": 0.0388,
+        "value": 12851.7079174917
+      },
+      {
+        "time": 794041200,
+        "percentReturn": 0.0295,
+        "value": 13230.8333010577
+      },
+      {
+        "time": 796719600,
+        "percentReturn": 0.0294,
+        "value": 13619.8198001088
+      },
+      {
+        "time": 799311600,
+        "percentReturn": 0.0395,
+        "value": 14157.8026822131
+      },
+      {
+        "time": 801990000,
+        "percentReturn": 0.0231,
+        "value": 14484.8479241722
+      },
+      {
+        "time": 804582000,
+        "percentReturn": 0.03,
+        "value": 14962.8479056699
+      },
+      {
+        "time": 807260400,
+        "percentReturn": 0.0025,
+        "value": 15000.2550254341
+      },
+      {
+        "time": 809938800,
+        "percentReturn": 0.0423,
+        "value": 15634.76581301
+      },
+      {
+        "time": 812530800,
+        "percentReturn": -0.0036,
+        "value": 15578.4806560832
+      },
+      {
+        "time": 815209200,
+        "percentReturn": 0.0438,
+        "value": 16260.8181088196
+      },
+      {
+        "time": 817801200,
+        "percentReturn": 0.0193,
+        "value": 16574.6518983198
+      },
+      {
+        "time": 820479600,
+        "percentReturn": 0.0339,
+        "value": 17136.5325976728
+      },
+      {
+        "time": 823158000,
+        "percentReturn": 0.0092,
+        "value": 17294.1886975714
+      },
+      {
+        "time": 825663600,
+        "percentReturn": 0.0098,
+        "value": 17463.6717468076
+      },
+      {
+        "time": 828342000,
+        "percentReturn": 0.0146,
+        "value": 17718.641354311
+      },
+      {
+        "time": 830934000,
+        "percentReturn": 0.0254,
+        "value": 18168.6948447105
+      },
+      {
+        "time": 833612400,
+        "percentReturn": 0.0038,
+        "value": 18237.7358851204
+      },
+      {
+        "time": 836204400,
+        "percentReturn": -0.0442,
+        "value": 17431.6279589981
+      },
+      {
+        "time": 838882800,
+        "percentReturn": 0.02,
+        "value": 17797.6921461371
+      },
+      {
+        "time": 841561200,
+        "percentReturn": 0.0561,
+        "value": 18796.1426755354
+      },
+      {
+        "time": 844153200,
+        "percentReturn": 0.0276,
+        "value": 19314.9162133802
+      },
+      {
+        "time": 846831600,
+        "percentReturn": 0.0756,
+        "value": 20775.1238791117
+      },
+      {
+        "time": 849423600,
+        "percentReturn": -0.0196,
+        "value": 20367.9314510811
+      },
+      {
+        "time": 852102000,
+        "percentReturn": 0.0622,
+        "value": 21634.8167873383
+      },
+      {
+        "time": 854780400,
+        "percentReturn": 0.0079,
+        "value": 21805.7318399583
+      },
+      {
+        "time": 857199600,
+        "percentReturn": -0.0414,
+        "value": 20902.974541784
+      },
+      {
+        "time": 859878000,
+        "percentReturn": 0.0596,
+        "value": 22148.7918244743
+      },
+      {
+        "time": 862470000,
+        "percentReturn": 0.0609,
+        "value": 23497.6532465848
+      },
+      {
+        "time": 865148400,
+        "percentReturn": 0.0445,
+        "value": 24543.2988160578
+      },
+      {
+        "time": 867740400,
+        "percentReturn": 0.0797,
+        "value": 26499.3997316976
+      },
+      {
+        "time": 870418800,
+        "percentReturn": -0.0561,
+        "value": 25012.7834067494
+      },
+      {
+        "time": 873097200,
+        "percentReturn": 0.0547,
+        "value": 26380.9826590986
+      },
+      {
+        "time": 875689200,
+        "percentReturn": -0.0335,
+        "value": 25497.2197400188
+      },
+      {
+        "time": 878367600,
+        "percentReturn": 0.05,
+        "value": 26670.0918480597
+      },
+      {
+        "time": 880959600,
+        "percentReturn": 0.0172,
+        "value": 27128.8174278463
+      },
+      {
+        "time": 883638000,
+        "percentReturn": 0.0111,
+        "value": 27429.9473012954
+      },
+      {
+        "time": 886316400,
+        "percentReturn": 0.0719,
+        "value": 29402.1605122585
+      },
+      {
+        "time": 888735600,
+        "percentReturn": 0.05,
+        "value": 30901.6706983837
+      },
+      {
+        "time": 891414000,
+        "percentReturn": 0.0101,
+        "value": 31213.7775724374
+      },
+      {
+        "time": 894006000,
+        "percentReturn": -0.0174,
+        "value": 30670.657842677
+      },
+      {
+        "time": 896684400,
+        "percentReturn": 0.0407,
+        "value": 31918.953616874
+      },
+      {
+        "time": 899276400,
+        "percentReturn": -0.0105,
+        "value": 31583.8046038968
+      },
+      {
+        "time": 901954800,
+        "percentReturn": -0.1447,
+        "value": 27013.6280777129
+      },
+      {
+        "time": 904633200,
+        "percentReturn": 0.0641,
+        "value": 28745.2016374943
+      },
+      {
+        "time": 907225200,
+        "percentReturn": 0.0816,
+        "value": 31090.8100911138
+      },
+      {
+        "time": 909903600,
+        "percentReturn": 0.0607,
+        "value": 32978.0222636444
+      },
+      {
+        "time": 912495600,
+        "percentReturn": 0.0581,
+        "value": 34894.0453571621
+      },
+      {
+        "time": 915174000,
+        "percentReturn": 0.04,
+        "value": 36359.5952621629
+      },
+      {
+        "time": 917852400,
+        "percentReturn": -0.0312,
+        "value": 35225.1758899834
+      },
+      {
+        "time": 920271600,
+        "percentReturn": 0.04,
+        "value": 36634.1829255827
+      },
+      {
+        "time": 922950000,
+        "percentReturn": 0.0385,
+        "value": 38044.5989682176
+      },
+      {
+        "time": 925542000,
+        "percentReturn": -0.0239,
+        "value": 37135.3330528772
+      },
+      {
+        "time": 928220400,
+        "percentReturn": 0.0556,
+        "value": 39200.0575706172
+      },
+      {
+        "time": 930812400,
+        "percentReturn": -0.0313,
+        "value": 37973.0957686569
+      },
+      {
+        "time": 933490800,
+        "percentReturn": 0.0438,
+        "value": 39636.3173633241
+      },
+      {
+        "time": 936169200,
+        "percentReturn": 0.07,
+        "value": 42212.6779919402
+      },
+      {
+        "time": 938761200,
+        "percentReturn": 0.0536,
+        "value": 44475.2775323082
+      },
+      {
+        "time": 941439600,
+        "percentReturn": 0.2385,
+        "value": 55082.6312237637
+      },
+      {
+        "time": 944031600,
+        "percentReturn": 0.2047,
+        "value": 66358.0458352681
+      },
+      {
+        "time": 946710000,
+        "percentReturn": 0.0435,
+        "value": 69244.6208291023
+      },
+      {
+        "time": 949388400,
+        "percentReturn": 0.1939,
+        "value": 82671.1528078652
+      },
+      {
+        "time": 951894000,
+        "percentReturn": -0.0031,
+        "value": 82414.8722341608
+      },
+      {
+        "time": 954572400,
+        "percentReturn": -0.1377,
+        "value": 71066.3443275169
+      },
+      {
+        "time": 957164400,
+        "percentReturn": -0.0592,
+        "value": 66859.2167433279
+      },
+      {
+        "time": 959842800,
+        "percentReturn": 0.0729,
+        "value": 71733.2536439165
+      },
+      {
+        "time": 962434800,
+        "percentReturn": -0.0372,
+        "value": 69064.7766083628
+      },
+      {
+        "time": 965113200,
+        "percentReturn": 0.0439,
+        "value": 72096.7203014699
+      },
+      {
+        "time": 967791600,
+        "percentReturn": -0.0538,
+        "value": 68217.9167492508
+      },
+      {
+        "time": 970383600,
+        "percentReturn": -0.0868,
+        "value": 62296.6015754158
+      },
+      {
+        "time": 973062000,
+        "percentReturn": 0.0052,
+        "value": 62620.543903608
+      },
+      {
+        "time": 975654000,
+        "percentReturn": 0.0051,
+        "value": 62939.9086775164
+      },
+      {
+        "time": 978332400,
+        "percentReturn": 0.0048,
+        "value": 63242.0202391685
+      },
+      {
+        "time": 981010800,
+        "percentReturn": 0.0041,
+        "value": 63501.3125221491
+      },
+      {
+        "time": 983430000,
+        "percentReturn": 0.0,
+        "value": 63755.3177722377
+      },
+      {
+        "time": 986108400,
+        "percentReturn": 0.0035,
+        "value": 63978.4613844405
+      },
+      {
+        "time": 988700400,
+        "percentReturn": 0.0032,
+        "value": 64183.1924608707
+      },
+      {
+        "time": 991378800,
+        "percentReturn": 0.0,
+        "value": 64375.7420382533
+      },
+      {
+        "time": 993970800,
+        "percentReturn": 0.0,
+        "value": 64568.8692643681
+      },
+      {
+        "time": 996649200,
+        "percentReturn": 0.0029,
+        "value": 64756.1189852348
+      },
+      {
+        "time": 999327600,
+        "percentReturn": 0.0028,
+        "value": 64937.4361183935
+      },
+      {
+        "time": 1001919600,
+        "percentReturn": 0.0,
+        "value": 65067.3109906303
+      },
+      {
+        "time": 1004598000,
+        "percentReturn": 0.0017,
+        "value": 65177.9254193144
+      },
+      {
+        "time": 1007190000,
+        "percentReturn": 0.0015,
+        "value": 65275.6923074434
+      },
+      {
+        "time": 1009868400,
+        "percentReturn": 0.0014,
+        "value": 65367.0782766738
+      },
+      {
+        "time": 1012546800,
+        "percentReturn": 0.0014,
+        "value": 65458.5921862611
+      },
+      {
+        "time": 1014966000,
+        "percentReturn": 0.0015,
+        "value": 65556.7800745405
+      },
+      {
+        "time": 1017644400,
+        "percentReturn": 0.0015,
+        "value": 65655.1152446523
+      },
+      {
+        "time": 1020236400,
+        "percentReturn": 0.0015,
+        "value": 65753.5979175193
+      },
+      {
+        "time": 1022914800,
+        "percentReturn": 0.0014,
+        "value": 65845.6529546038
+      },
+      {
+        "time": 1025506800,
+        "percentReturn": 0.0014,
+        "value": 65937.8368687402
+      },
+      {
+        "time": 1028185200,
+        "percentReturn": 0.0014,
+        "value": 66030.1498403564
+      },
+      {
+        "time": 1030863600,
+        "percentReturn": 0.0014,
+        "value": 66122.5920501329
+      },
+      {
+        "time": 1033455600,
+        "percentReturn": 0.0013,
+        "value": 66208.5514197981
+      },
+      {
+        "time": 1036134000,
+        "percentReturn": 0.0012,
+        "value": 66288.0016815019
+      },
+      {
+        "time": 1038726000,
+        "percentReturn": 0.0,
+        "value": 66354.2896831834
+      },
+      {
+        "time": 1041404400,
+        "percentReturn": 0.0,
+        "value": 66420.6439728666
+      },
+      {
+        "time": 1044082800,
+        "percentReturn": 0.0,
+        "value": 66487.0646168395
+      },
+      {
+        "time": 1046502000,
+        "percentReturn": 0.0,
+        "value": 66553.5516814563
+      },
+      {
+        "time": 1049180400,
+        "percentReturn": 0.0009,
+        "value": 66613.4498779696
+      },
+      {
+        "time": 1051772400,
+        "percentReturn": 0.0009,
+        "value": 66673.4019828598
+      },
+      {
+        "time": 1054450800,
+        "percentReturn": 0.0353,
+        "value": 69026.9730728548
+      },
+      {
+        "time": 1057042800,
+        "percentReturn": 0.0531,
+        "value": 72692.3053430234
+      },
+      {
+        "time": 1059721200,
+        "percentReturn": 0.0544,
+        "value": 76646.7667536839
+      },
+      {
+        "time": 1062399600,
+        "percentReturn": 0.0651,
+        "value": 81636.4712693487
+      },
+      {
+        "time": 1064991600,
+        "percentReturn": 0.0999,
+        "value": 89791.9547491566
+      },
+      {
+        "time": 1067670000,
+        "percentReturn": -0.0063,
+        "value": 89226.2654342369
+      },
+      {
+        "time": 1070262000,
+        "percentReturn": 0.0597,
+        "value": 94553.0734806608
+      },
+      {
+        "time": 1072940400,
+        "percentReturn": 0.0371,
+        "value": 98060.9925067933
+      },
+      {
+        "time": 1075618800,
+        "percentReturn": 0.0215,
+        "value": 100169.303845689
+      },
+      {
+        "time": 1078124400,
+        "percentReturn": 0.03,
+        "value": 102673.536441831
+      },
+      {
+        "time": 1080802800,
+        "percentReturn": -0.0122,
+        "value": 101420.919297241
+      },
+      {
+        "time": 1083394800,
+        "percentReturn": -0.0282,
+        "value": 98560.8493730588
+      },
+      {
+        "time": 1086073200,
+        "percentReturn": 0.05,
+        "value": 103291.770142966
+      },
+      {
+        "time": 1088665200,
+        "percentReturn": -0.0426,
+        "value": 98891.5407348756
+      },
+      {
+        "time": 1091343600,
+        "percentReturn": 0.0018,
+        "value": 99069.5455081984
+      },
+      {
+        "time": 1094022000,
+        "percentReturn": 0.04,
+        "value": 102834.18823751
+      },
+      {
+        "time": 1096614000,
+        "percentReturn": 0.0268,
+        "value": 105590.144482275
+      },
+      {
+        "time": 1099292400,
+        "percentReturn": 0.0628,
+        "value": 112221.205555762
+      },
+      {
+        "time": 1101884400,
+        "percentReturn": 0.0428,
+        "value": 117024.273153549
+      },
+      {
+        "time": 1104562800,
+        "percentReturn": 0.0123,
+        "value": 118463.671713338
+      },
+      {
+        "time": 1107241200,
+        "percentReturn": 0.0406,
+        "value": 123273.2967849
+      },
+      {
+        "time": 1109660400,
+        "percentReturn": -0.0288,
+        "value": 119723.025837495
+      },
+      {
+        "time": 1112338800,
+        "percentReturn": -0.0165,
+        "value": 117747.595911176
+      },
+      {
+        "time": 1114930800,
+        "percentReturn": -0.0024,
+        "value": 117465.001680989
+      },
+      {
+        "time": 1117609200,
+        "percentReturn": 0.0195,
+        "value": 119755.569213768
+      },
+      {
+        "time": 1120201200,
+        "percentReturn": 0.0569,
+        "value": 126569.661102031
+      },
+      {
+        "time": 1122879600,
+        "percentReturn": 0.0408,
+        "value": 131733.703274994
+      },
+      {
+        "time": 1125558000,
+        "percentReturn": 0.06,
+        "value": 139374.258064944
+      },
+      {
+        "time": 1128150000,
+        "percentReturn": -0.0399,
+        "value": 133813.225168153
+      },
+      {
+        "time": 1130828400,
+        "percentReturn": 0.0488,
+        "value": 140343.310556359
+      },
+      {
+        "time": 1133420400,
+        "percentReturn": 0.0664,
+        "value": 149662.106377301
+      },
+      {
+        "time": 1136098800,
+        "percentReturn": 0.0757,
+        "value": 160991.527830063
+      },
+      {
+        "time": 1138777200,
+        "percentReturn": -0.0074,
+        "value": 159800.190524121
+      },
+      {
+        "time": 1141196400,
+        "percentReturn": 0.0693,
+        "value": 170874.343727443
+      },
+      {
+        "time": 1143874800,
+        "percentReturn": 0.0521,
+        "value": 179776.897035643
+      },
+      {
+        "time": 1146466800,
+        "percentReturn": -0.0622,
+        "value": 168594.774040026
+      },
+      {
+        "time": 1149145200,
+        "percentReturn": -0.0258,
+        "value": 164245.028869793
+      },
+      {
+        "time": 1151737200,
+        "percentReturn": -0.0143,
+        "value": 161896.324956955
+      },
+      {
+        "time": 1154415600,
+        "percentReturn": 0.0326,
+        "value": 167174.145150552
+      },
+      {
+        "time": 1157094000,
+        "percentReturn": 0.0203,
+        "value": 170567.780297108
+      },
+      {
+        "time": 1159686000,
+        "percentReturn": 0.0378,
+        "value": 177015.242392339
+      },
+      {
+        "time": 1162364400,
+        "percentReturn": 0.0435,
+        "value": 184715.405436406
+      },
+      {
+        "time": 1164956400,
+        "percentReturn": 0.0342,
+        "value": 191032.672302331
+      },
+      {
+        "time": 1167634800,
+        "percentReturn": 0.0116,
+        "value": 193248.651301038
+      },
+      {
+        "time": 1170313200,
+        "percentReturn": 0.01,
+        "value": 195374.386465349
+      },
+      {
+        "time": 1172732400,
+        "percentReturn": 0.0111,
+        "value": 197543.042155114
+      },
+      {
+        "time": 1175410800,
+        "percentReturn": 0.0437,
+        "value": 206175.673097292
+      },
+      {
+        "time": 1178002800,
+        "percentReturn": 0.0281,
+        "value": 211969.209511326
+      },
+      {
+        "time": 1180681200,
+        "percentReturn": 0.02,
+        "value": 215360.716863507
+      },
+      {
+        "time": 1183273200,
+        "percentReturn": 0.0073,
+        "value": 216932.850096611
+      },
+      {
+        "time": 1185951600,
+        "percentReturn": -0.0323,
+        "value": 209925.91903849
+      },
+      {
+        "time": 1188630000,
+        "percentReturn": 0.0546,
+        "value": 221387.874217992
+      },
+      {
+        "time": 1191222000,
+        "percentReturn": 0.0701,
+        "value": 236907.164200673
+      },
+      {
+        "time": 1193900400,
+        "percentReturn": -0.0717,
+        "value": 219920.920527485
+      },
+      {
+        "time": 1196492400,
+        "percentReturn": -0.0085,
+        "value": 218051.592703001
+      },
+      {
+        "time": 1199170800,
+        "percentReturn": -0.0961,
+        "value": 197096.834644243
+      },
+      {
+        "time": 1201849200,
+        "percentReturn": 0.0016,
+        "value": 197412.189579674
+      },
+      {
+        "time": 1204354800,
+        "percentReturn": 0.0015,
+        "value": 197708.307864044
+      },
+      {
+        "time": 1207033200,
+        "percentReturn": 0.0011,
+        "value": 197925.787002694
+      },
+      {
+        "time": 1209625200,
+        "percentReturn": 0.0012,
+        "value": 198163.297947097
+      },
+      {
+        "time": 1212303600,
+        "percentReturn": 0.0015,
+        "value": 198460.542894018
+      },
+      {
+        "time": 1214895600,
+        "percentReturn": 0.0016,
+        "value": 198778.079762648
+      },
+      {
+        "time": 1217574000,
+        "percentReturn": 0.0014,
+        "value": 199056.369074316
+      },
+      {
+        "time": 1220252400,
+        "percentReturn": 0.0014,
+        "value": 199335.04799102
+      },
+      {
+        "time": 1222844400,
+        "percentReturn": 0.0008,
+        "value": 199494.516029413
+      },
+      {
+        "time": 1225522800,
+        "percentReturn": 0.0004,
+        "value": 199574.313835825
+      },
+      {
+        "time": 1228114800,
+        "percentReturn": 0.0,
+        "value": 199574.313835825
+      },
+      {
+        "time": 1230793200,
+        "percentReturn": 0.0001,
+        "value": 199594.271267209
+      },
+      {
+        "time": 1233471600,
+        "percentReturn": 0.0002,
+        "value": 199634.190121462
+      },
+      {
+        "time": 1235890800,
+        "percentReturn": 0.0002,
+        "value": 199674.116959486
+      },
+      {
+        "time": 1238569200,
+        "percentReturn": 0.0002,
+        "value": 199714.051782878
+      },
+      {
+        "time": 1241161200,
+        "percentReturn": 0.0001,
+        "value": 199734.023188056
+      },
+      {
+        "time": 1243839600,
+        "percentReturn": 0.0001,
+        "value": 199753.996590375
+      },
+      {
+        "time": 1246431600,
+        "percentReturn": 0.0002,
+        "value": 199793.947389693
+      },
+      {
+        "time": 1249110000,
+        "percentReturn": 0.0471,
+        "value": 209204.242311748
+      },
+      {
+        "time": 1251788400,
+        "percentReturn": 0.0662,
+        "value": 223053.563152786
+      },
+      {
+        "time": 1254380400,
+        "percentReturn": -0.0143,
+        "value": 219863.897199701
+      },
+      {
+        "time": 1257058800,
+        "percentReturn": 0.0392,
+        "value": 228482.561969929
+      },
+      {
+        "time": 1259650800,
+        "percentReturn": 0.0094,
+        "value": 230630.298052446
+      },
+      {
+        "time": 1262329200,
+        "percentReturn": -0.0195,
+        "value": 226133.007240423
+      },
+      {
+        "time": 1265007600,
+        "percentReturn": -0.0077,
+        "value": 224391.783084672
+      },
+      {
+        "time": 1267426800,
+        "percentReturn": 0.0604,
+        "value": 237945.046782986
+      },
+      {
+        "time": 1270105200,
+        "percentReturn": 0.0094,
+        "value": 240181.730222746
+      },
+      {
+        "time": 1272697200,
+        "percentReturn": -0.0801,
+        "value": 220943.173631904
+      },
+      {
+        "time": 1275375600,
+        "percentReturn": -0.0524,
+        "value": 209365.751333592
+      },
+      {
+        "time": 1277967600,
+        "percentReturn": 0.0833,
+        "value": 226805.91841968
+      },
+      {
+        "time": 1280646000,
+        "percentReturn": -0.0453,
+        "value": 216531.610315268
+      },
+      {
+        "time": 1283324400,
+        "percentReturn": 0.1142,
+        "value": 241259.520213272
+      },
+      {
+        "time": 1285916400,
+        "percentReturn": 0.04,
+        "value": 251874.939102656
+      },
+      {
+        "time": 1288594800,
+        "percentReturn": -0.0326,
+        "value": 243663.816087909
+      },
+      {
+        "time": 1291186800,
+        "percentReturn": 0.0778,
+        "value": 262620.860979548
+      },
+      {
+        "time": 1293865200,
+        "percentReturn": -0.0059,
+        "value": 261071.397899769
+      },
+      {
+        "time": 1296543600,
+        "percentReturn": 0.0076,
+        "value": 263055.540523807
+      },
+      {
+        "time": 1298962800,
+        "percentReturn": 0.0175,
+        "value": 267659.012482974
+      },
+      {
+        "time": 1301641200,
+        "percentReturn": 0.0606,
+        "value": 283879.148639442
+      },
+      {
+        "time": 1304233200,
+        "percentReturn": -0.0204,
+        "value": 278088.014007197
+      },
+      {
+        "time": 1306911600,
+        "percentReturn": -0.0095,
+        "value": 275446.177874129
+      },
+      {
+        "time": 1309503600,
+        "percentReturn": -0.0205,
+        "value": 269799.531227709
+      },
+      {
+        "time": 1312182000,
+        "percentReturn": -0.0545,
+        "value": 255095.456775799
+      },
+      {
+        "time": 1314860400,
+        "percentReturn": -0.0704,
+        "value": 237136.736618783
+      },
+      {
+        "time": 1317452400,
+        "percentReturn": 0.0,
+        "value": 237136.736618783
+      },
+      {
+        "time": 1320130800,
+        "percentReturn": -0.0023,
+        "value": 236591.32212456
+      },
+      {
+        "time": 1322722800,
+        "percentReturn": 0.0,
+        "value": 236591.32212456
+      },
+      {
+        "time": 1325401200,
+        "percentReturn": 0.0,
+        "value": 236591.32212456
+      },
+      {
+        "time": 1328079600,
+        "percentReturn": 0.0431,
+        "value": 246788.408108129
+      },
+      {
+        "time": 1330585200,
+        "percentReturn": 0.0328,
+        "value": 254883.067894076
+      },
+      {
+        "time": 1333263600,
+        "percentReturn": -0.0064,
+        "value": 253251.816259554
+      },
+      {
+        "time": 1335855600,
+        "percentReturn": -0.0602,
+        "value": 238006.056920729
+      },
+      {
+        "time": 1338534000,
+        "percentReturn": 0.0411,
+        "value": 247788.105860171
+      },
+      {
+        "time": 1341126000,
+        "percentReturn": 0.0137,
+        "value": 251182.802910455
+      },
+      {
+        "time": 1343804400,
+        "percentReturn": 0.0224,
+        "value": 256809.297695649
+      },
+      {
+        "time": 1346482800,
+        "percentReturn": 0.0258,
+        "value": 263434.977576197
+      },
+      {
+        "time": 1349074800,
+        "percentReturn": -0.0186,
+        "value": 258535.08699328
+      },
+      {
+        "time": 1351753200,
+        "percentReturn": 0.0084,
+        "value": 260706.781724024
+      },
+      {
+        "time": 1354345200,
+        "percentReturn": 0.0305,
+        "value": 268658.338566607
+      },
+      {
+        "time": 1357023600,
+        "percentReturn": 0.0347,
+        "value": 277980.782914868
+      },
+      {
+        "time": 1359702000,
+        "percentReturn": 0.0157,
+        "value": 282345.081206631
+      },
+      {
+        "time": 1362121200,
+        "percentReturn": 0.0089,
+        "value": 284857.95242937
+      },
+      {
+        "time": 1364799600,
+        "percentReturn": 0.0291,
+        "value": 293147.318845065
+      },
+      {
+        "time": 1367391600,
+        "percentReturn": -0.01,
+        "value": 290802.140294304
+      },
+      {
+        "time": 1370070000,
+        "percentReturn": -0.0251,
+        "value": 283503.006572917
+      },
+      {
+        "time": 1372662000,
+        "percentReturn": 0.0428,
+        "value": 295636.935254238
+      },
+      {
+        "time": 1375340400,
+        "percentReturn": -0.0291,
+        "value": 287033.90043834
+      },
+      {
+        "time": 1378018800,
+        "percentReturn": 0.0312,
+        "value": 295989.358132016
+      },
+      {
+        "time": 1380610800,
+        "percentReturn": 0.0459,
+        "value": 309575.269670276
+      },
+      {
+        "time": 1383289200,
+        "percentReturn": 0.0303,
+        "value": 318955.400341285
+      },
+      {
+        "time": 1385881200,
+        "percentReturn": 0.0251,
+        "value": 326961.180889851
+      },
+      {
+        "time": 1388559600,
+        "percentReturn": -0.0347,
+        "value": 315615.627912973
+      },
+      {
+        "time": 1391238000,
+        "percentReturn": 0.0488,
+        "value": 331017.670555126
+      },
+      {
+        "time": 1393657200,
+        "percentReturn": 0.0082,
+        "value": 333732.015453678
+      },
+      {
+        "time": 1396335600,
+        "percentReturn": -0.0026,
+        "value": 332864.312213498
+      },
+      {
+        "time": 1398927600,
+        "percentReturn": 0.0154,
+        "value": 337990.422621586
+      },
+      {
+        "time": 1401606000,
+        "percentReturn": 0.0188,
+        "value": 344344.642566872
+      },
+      {
+        "time": 1404198000,
+        "percentReturn": -0.0139,
+        "value": 339558.252035192
+      },
+      {
+        "time": 1406876400,
+        "percentReturn": 0.0398,
+        "value": 353072.670466193
+      },
+      {
+        "time": 1409554800,
+        "percentReturn": -0.0141,
+        "value": 348094.34581262
+      },
+      {
+        "time": 1412146800,
+        "percentReturn": 0.0242,
+        "value": 356518.228981285
+      },
+      {
+        "time": 1414825200,
+        "percentReturn": 0.0268,
+        "value": 366072.917517983
+      },
+      {
+        "time": 1417417200,
+        "percentReturn": -0.0026,
+        "value": 365121.127932436
+      },
+      {
+        "time": 1420095600,
+        "percentReturn": -0.0302,
+        "value": 354094.469868876
+      },
+      {
+        "time": 1422774000,
+        "percentReturn": 0.0574,
+        "value": 374419.492439349
+      },
+      {
+        "time": 1425193200,
+        "percentReturn": -0.0159,
+        "value": 368466.222509563
+      },
+      {
+        "time": 1427871600,
+        "percentReturn": 0.0095,
+        "value": 371966.651623404
+      },
+      {
+        "time": 1430463600,
+        "percentReturn": 0.0127,
+        "value": 376690.628099021
+      },
+      {
+        "time": 1433142000,
+        "percentReturn": -0.0193,
+        "value": 369420.49897671
+      },
+      {
+        "time": 1435734000,
+        "percentReturn": -0.0018,
+        "value": 368755.542078552
+      },
+      {
+        "time": 1438412400,
+        "percentReturn": -0.0532,
+        "value": 349137.747239973
+      },
+      {
+        "time": 1441090800,
+        "percentReturn": -0.0191,
+        "value": 342469.21626769
+      },
+      {
+        "time": 1443682800,
+        "percentReturn": 0.0516,
+        "value": 360140.627827103
+      },
+      {
+        "time": 1446361200,
+        "percentReturn": 0.02,
+        "value": 365902.877872337
+      },
+      {
+        "time": 1448953200,
+        "percentReturn": 0.0033,
+        "value": 367110.357369316
+      },
+      {
+        "time": 1451631600,
+        "percentReturn": -0.0619,
+        "value": 344386.226248155
+      },
+      {
+        "time": 1454310000,
+        "percentReturn": 0.0003,
+        "value": 344489.542116029
+      },
+      {
+        "time": 1456815600,
+        "percentReturn": 0.0003,
+        "value": 344592.888978664
+      },
+      {
+        "time": 1459494000,
+        "percentReturn": 0.0002,
+        "value": 344661.80755646
+      },
+      {
+        "time": 1462086000,
+        "percentReturn": 0.0178,
+        "value": 350796.787730965
+      },
+      {
+        "time": 1464764400,
+        "percentReturn": 0.0025,
+        "value": 351673.779700292
+      },
+      {
+        "time": 1467356400,
+        "percentReturn": 0.0368,
+        "value": 364615.374793263
+      },
+      {
+        "time": 1470034800,
+        "percentReturn": 0.0013,
+        "value": 365089.374780494
+      },
+      {
+        "time": 1472713200,
+        "percentReturn": 0.0001,
+        "value": 365125.883717972
+      },
+      {
+        "time": 1475305200,
+        "percentReturn": -0.0238,
+        "value": 356435.887685484
+      },
+      {
+        "time": 1477983600,
+        "percentReturn": 0.04,
+        "value": 369624.015529847
+      },
+      {
+        "time": 1480575600,
+        "percentReturn": 0.0196,
+        "value": 376868.646234232
+      },
+      {
+        "time": 1483254000,
+        "percentReturn": 0.0188,
+        "value": 383953.776783436
+      },
+      {
+        "time": 1485932400,
+        "percentReturn": 0.0396,
+        "value": 399158.34634406
+      },
+      {
+        "time": 1488351600,
+        "percentReturn": 0.0,
+        "value": 399557.504690404
+      },
+      {
+        "time": 1491030000,
+        "percentReturn": 0.0102,
+        "value": 403632.991238246
+      },
+      {
+        "time": 1493622000,
+        "percentReturn": 0.0426,
+        "value": 420827.756664995
+      },
+      {
+        "time": 1496300400,
+        "percentReturn": 0.0028,
+        "value": 422006.074383657
+      },
+      {
+        "time": 1498892400,
+        "percentReturn": 0.0395,
+        "value": 438675.314321811
+      },
+      {
+        "time": 1501570800,
+        "percentReturn": 0.0201,
+        "value": 447492.688139679
+      },
+      {
+        "time": 1504249200,
+        "percentReturn": 0.0306,
+        "value": 461185.964396753
+      },
+      {
+        "time": 1506841200,
+        "percentReturn": 0.0171,
+        "value": 469072.244387937
+      },
+      {
+        "time": 1509519600,
+        "percentReturn": 0.0164,
+        "value": 476765.029195899
+      },
+      {
+        "time": 1512111600,
+        "percentReturn": 0.03,
+        "value": 489160.919954992
+      },
+      {
+        "time": 1514790000,
+        "percentReturn": 0.0592,
+        "value": 518119.246416328
+      },
+      {
+        "time": 1517468400,
+        "percentReturn": -0.0279,
+        "value": 503663.719441312
+      },
+      {
+        "time": 1519887600,
+        "percentReturn": -0.01,
+        "value": 500641.737124664
+      },
+      {
+        "time": 1522566000,
+        "percentReturn": -0.0034,
+        "value": 498939.55521844
+      },
+      {
+        "time": 1525158000,
+        "percentReturn": 0.0114,
+        "value": 504627.46614793
+      },
+      {
+        "time": 1527836400,
+        "percentReturn": -0.0114,
+        "value": 498874.713033844
+      },
+      {
+        "time": 1530428400,
+        "percentReturn": 0.0371,
+        "value": 517382.9648874
+      },
+      {
+        "time": 1533106800,
+        "percentReturn": 0.0325,
+        "value": 534197.911246241
+      },
+      {
+        "time": 1535785200,
+        "percentReturn": 0.0055,
+        "value": 537135.999758095
+      },
+      {
+        "time": 1538377200,
+        "percentReturn": -0.0685,
+        "value": 500342.183774665
+      },
+      {
+        "time": 1541055600,
+        "percentReturn": 0.0203,
+        "value": 510499.130105291
+      },
+      {
+        "time": 1543647600,
+        "percentReturn": 0.0019,
+        "value": 511469.078452491
+      },
+      {
+        "time": 1546326000,
+        "percentReturn": 0.0,
+        "value": 512492.016609396
+      },
+      {
+        "time": 1549004400,
+        "percentReturn": 0.03,
+        "value": 528891.761140897
+      },
+      {
+        "time": 1551423600,
+        "percentReturn": 0.0194,
+        "value": 539152.26130703
+      },
+      {
+        "time": 1554102000,
+        "percentReturn": 0.0404,
+        "value": 560934.012663834
+      },
+      {
+        "time": 1556694000,
+        "percentReturn": -0.0636,
+        "value": 525258.609458414
+      },
+      {
+        "time": 1559372400,
+        "percentReturn": 0.0019,
+        "value": 526256.600816385
+      },
+      {
+        "time": 1561964400,
+        "percentReturn": 0.0143,
+        "value": 533782.070208059
+      },
+      {
+        "time": 1564642800,
+        "percentReturn": -0.0159,
+        "value": 525294.935291751
+      },
+      {
+        "time": 1567321200,
+        "percentReturn": 0.0186,
+        "value": 535065.421088178
+      },
+      {
+        "time": 1569913200,
+        "percentReturn": 0.0215,
+        "value": 546569.327641574
+      },
+      {
+        "time": 1572591600,
+        "percentReturn": 0.0362,
+        "value": 566355.137302199
+      },
+      {
+        "time": 1575183600,
+        "percentReturn": 0.0301,
+        "value": 583402.426934995
+      },
+      {
+        "time": 1577862000,
+        "percentReturn": -0.0005,
+        "value": 583110.725721528
+      },
+      {
+        "time": 1580540400,
+        "percentReturn": -0.0824,
+        "value": 535062.401922074
+      },
+      {
+        "time": 1583046000,
+        "percentReturn": -0.1237,
+        "value": 468875.182804313
+      },
+      {
+        "time": 1585724400,
+        "percentReturn": 0.0001,
+        "value": 468922.070322593
+      },
+      {
+        "time": 1588316400,
+        "percentReturn": 0.0001,
+        "value": 468968.962529625
+      },
+      {
+        "time": 1590994800,
+        "percentReturn": 0.0423,
+        "value": 488806.349644628
+      },
+      {
+        "time": 1593586800,
+        "percentReturn": 0.0638,
+        "value": 519992.194751955
+      },
+      {
+        "time": 1596265200,
+        "percentReturn": 0.0783,
+        "value": 560707.583601033
+      },
+      {
+        "time": 1598943600,
+        "percentReturn": -0.0075,
+        "value": 556502.276724025
+      },
+      {
+        "time": 1601535600,
+        "percentReturn": -0.0144,
+        "value": 548488.643939199
+      },
+      {
+        "time": 1604214000,
+        "percentReturn": 0.1067,
+        "value": 607012.382247512
+      },
+      {
+        "time": 1606806000,
+        "percentReturn": 0.0756,
+        "value": 652902.518345424
+      },
+      {
+        "time": 1609484400,
+        "percentReturn": 0.0124,
+        "value": 660998.509572907
+      }
+    ],
+    "cagrSinceInception": 0.0,
+    "ytdReturn": 0.0,
+    "currentAsset": "",
+    "totalDeposited": 10000.00,
+    "totalWidthdrawn": 0.00
+  }
