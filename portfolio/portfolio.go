@@ -59,7 +59,7 @@ type PerformanceMeasurement struct {
 type Performance struct {
 	PeriodStart        int64                    `json:"periodStart"`
 	PeriodEnd          int64                    `json:"periodEnd"`
-	Value              []PerformanceMeasurement `json:"value"`
+	Measurement        []PerformanceMeasurement `json:"value"`
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
 	YTDReturn          float64                  `json:"ytdReturn"`
 	CurrentAsset       string                   `json:"currentAsset"`
@@ -350,7 +350,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		}
 	}
 
-	perf.Value = valueOverTime
+	perf.Measurement = valueOverTime
 	perf.CagrSinceInception = cagrSinceInception
 
 	if currYearStartValue <= 0 {

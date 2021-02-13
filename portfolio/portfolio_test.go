@@ -129,21 +129,21 @@ var _ = Describe("Portfolio", func() {
 				err := p.TargetPortfolio(10000, df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
 				Expect(err).To(BeNil())
-				Expect(perf.Value).Should(HaveLen(35))
-				Expect(perf.Value[0]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurement).Should(HaveLen(35))
+				Expect(perf.Measurement[0]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:     1517356800,
 					Value:    10000,
 					Holdings: "VFINX",
 				}))
 
-				Expect(perf.Value[24]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurement[24]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1580428800,
 					Value:         11126.332313770672,
 					Holdings:      "VFINX",
 					PercentReturn: -0.017122786477389185,
 				}))
 
-				Expect(perf.Value[34]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurement[34]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1606694400,
 					Value:         12676.603580175803,
 					Holdings:      "VFINX",
