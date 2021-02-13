@@ -127,7 +127,7 @@ var _ = Describe("Portfolio", func() {
 			})
 			It("should have valid performance", func() {
 				err := p.TargetPortfolio(10000, df1)
-				perf, err := p.Performance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
+				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
 				Expect(err).To(BeNil())
 				Expect(perf.Value).Should(HaveLen(35))
 				Expect(perf.Value[0]).To(Equal(portfolio.PerformanceMeasurement{
