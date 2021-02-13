@@ -19,3 +19,4 @@ bin/
 # env development files
 sendgrid.env
 auth0.env
+newrelic.env
