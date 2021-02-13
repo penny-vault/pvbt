@@ -94,35 +94,41 @@ var _ = Describe("Portfolio", func() {
 			It("should have transactions", func() {
 				err := p.TargetPortfolio(10000, df1)
 				Expect(err).To(BeNil())
-				Expect(p.Transactions).To(HaveLen(5))
+				Expect(p.Transactions).To(HaveLen(6))
 
-				// First transaction should be a buy of VFINX
-				Expect(p.Transactions[0].Kind).To(Equal(portfolio.BuyTransaction))
-				Expect(p.Transactions[0].Ticker).To(Equal("VFINX"))
-				Expect(p.Transactions[0].Shares).Should(BeNumerically("~", 40.47, 1e-2))
+				// First transaction
+				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
+				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
 
-				// Sell transaction should be a Sell of VFINX
-				Expect(p.Transactions[1].Kind).To(Equal(portfolio.SellTransaction))
+				// buy of VFINX
+				Expect(p.Transactions[1].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[1].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[1].Shares).Should(BeNumerically("~", 40.47, 1e-2))
-				Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 9754.36, 1e-2))
+				Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
+
+				// Sell transaction should be a Sell of VFINX
+				Expect(p.Transactions[2].Kind).To(Equal(portfolio.SellTransaction))
+				Expect(p.Transactions[2].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[2].Shares).Should(BeNumerically("~", 40.47, 1e-2))
+				Expect(p.Transactions[2].TotalValue).Should(BeNumerically("~", 9754.36, 1e-2))
 
 				// Buy PRIDX
-				Expect(p.Transactions[2].Kind).To(Equal(portfolio.BuyTransaction))
-				Expect(p.Transactions[2].Ticker).To(Equal("PRIDX"))
-				Expect(p.Transactions[2].Shares).Should(BeNumerically("~", 173.02, 1e-2))
-
-				// Sell PRIDX
-				Expect(p.Transactions[3].Kind).To(Equal(portfolio.SellTransaction))
+				Expect(p.Transactions[3].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[3].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[3].Shares).Should(BeNumerically("~", 173.02, 1e-2))
-				Expect(p.Transactions[3].TotalValue).Should(BeNumerically("~", 11126.33, 1e-2))
+				Expect(p.Transactions[3].TotalValue).Should(BeNumerically("~", 9754.36, 1e-2))
+
+				// Sell PRIDX
+				Expect(p.Transactions[4].Kind).To(Equal(portfolio.SellTransaction))
+				Expect(p.Transactions[4].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[4].Shares).Should(BeNumerically("~", 173.02, 1e-2))
+				Expect(p.Transactions[4].TotalValue).Should(BeNumerically("~", 11126.33, 1e-2))
 
 				// Buy VFINX
-				Expect(p.Transactions[4].Kind).To(Equal(portfolio.BuyTransaction))
-				Expect(p.Transactions[4].Ticker).To(Equal("VFINX"))
-				Expect(p.Transactions[4].Shares).Should(BeNumerically("~", 37.98, 1e-2))
-				Expect(p.Transactions[4].TotalValue).Should(BeNumerically("~", 11126.33, 1e-2))
+				Expect(p.Transactions[5].Kind).To(Equal(portfolio.BuyTransaction))
+				Expect(p.Transactions[5].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[5].Shares).Should(BeNumerically("~", 37.98, 1e-2))
+				Expect(p.Transactions[5].TotalValue).Should(BeNumerically("~", 11126.33, 1e-2))
 
 			})
 			It("should have valid performance", func() {
