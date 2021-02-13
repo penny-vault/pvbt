@@ -86,74 +86,6 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 	}).Info("Calculated portfolio performance")
 }
 
-func oneDayReturn(forDate time.Time, p *portfolio.Portfolio, perf *portfolio.Performance) float64 {
-	// Compute 1-day return
-	value := perf.Value
-	sz := len(value)
-	var todaysValue float64
-	if sz > 0 {
-		todaysValue = value[sz-1].Value
-	}
-
-	yesterdayValue, err := p.ValueAsOf(forDate.AddDate(0, 0, -1))
-	if err != nil {
-		log.WithFields(log.Fields{
-			"TargetDate": forDate.AddDate(0, 0, -1),
-			"Function":   "cmd/notifier/main.go:oneDayReturn",
-			"Error":      err,
-		}).Error("Cannot get value of portfolio for date")
-	}
-
-	if yesterdayValue > 0 {
-		return todaysValue/yesterdayValue - 1.0
-	}
-
-	return 0
-}
-
-func oneWeekReturn(forDate time.Time, p *portfolio.Portfolio, perf *portfolio.Performance) float64 {
-	// Compute 1-day return
-	value := perf.Value
-	sz := len(value)
-	var todaysValue float64
-	if sz > 0 {
-		todaysValue = value[sz-1].Value
-	}
-
-	lastWeekValue, err := p.ValueAsOf(forDate.AddDate(0, 0, -7))
-	if err != nil {
-		log.WithFields(log.Fields{
-			"TargetDate": forDate.AddDate(0, 0, -7),
-			"Function":   "cmd/notifier/main.go:oneDayReturn",
-			"Error":      err,
-		}).Error("Cannot get value of portfolio for date")
-	}
-
-	if lastWeekValue > 0 {
-		return todaysValue/lastWeekValue - 1.0
-	}
-
-	return 0
-}
-
-func oneMonthReturn(forDate time.Time, perf *portfolio.Performance) float64 {
-	value := perf.Value
-	sz := len(value)
-	for ii := sz - 1; ii >= 0; ii-- {
-		dt := time.Unix(value[ii].Time, 0)
-		year, month, day := dt.Date()
-		dt = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-		if forDate.Equal(dt) {
-			return value[ii].PercentReturn
-		}
-	}
-
-	log.WithFields(log.Fields{
-		"Function": "cmd/notifier/main.go:oneMonthReturn",
-	}).Error("Could not find one-month return for requested date")
-	return 0
-}
-
 func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfolio.Portfolio, error) {
 	log.WithFields(log.Fields{
 		"Portfolio": p.ID,
@@ -293,11 +225,11 @@ func periodReturn(forDate time.Time, frequency string, p *portfolio.Portfolio,
 	var ret float64
 	switch frequency {
 	case "Daily":
-		ret = oneDayReturn(forDate, p, perf)
+		ret = perf.OneDayReturn(forDate, p)
 	case "Weekly":
-		ret = oneWeekReturn(forDate, p, perf)
+		ret = perf.OneWeekReturn(forDate, p)
 	case "Monthly":
-		ret = oneMonthReturn(forDate, perf)
+		ret = perf.OneMonthReturn(forDate)
 	case "Annually":
 		ret = perf.YTDReturn
 	}
