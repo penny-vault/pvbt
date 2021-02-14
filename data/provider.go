@@ -150,7 +150,7 @@ func (m *Manager) LastTradingDayOfYear(t time.Time) (time.Time, error) {
 }
 
 // GetData get a dataframe for the requested symbol
-func (m Manager) GetData(symbol string) (*dataframe.DataFrame, error) {
+func (m *Manager) GetData(symbol string) (*dataframe.DataFrame, error) {
 	kind := "security"
 
 	symbol = strings.ToUpper(symbol)
@@ -168,11 +168,11 @@ func (m Manager) GetData(symbol string) (*dataframe.DataFrame, error) {
 }
 
 // GetMultipleData get multiple quotes simultaneously
-func (m Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.DataFrame, []error) {
+func (m *Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.DataFrame, []error) {
 	res := make(map[string]*dataframe.DataFrame)
 	ch := make(chan quoteResult)
 	for ii := range symbols {
-		go downloadWorker(ch, strings.ToUpper(symbols[ii]), &m)
+		go downloadWorker(ch, strings.ToUpper(symbols[ii]), m)
 	}
 
 	errs := []error{}
