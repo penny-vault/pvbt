@@ -86,7 +86,7 @@ func NewManager(credentials map[string]string) Manager {
 		m.RegisterDataProvider(tiingo)
 		m.dateProvider = tiingo
 	} else {
-		log.Println("No tiingo API key provided")
+		log.Warn("No tiingo API key provided")
 	}
 
 	// Create FRED API
