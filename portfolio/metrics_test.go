@@ -12,7 +12,8 @@ import (
 
 var _ = Describe("Metrics", func() {
 	var (
-		perf portfolio.Performance
+		perf  portfolio.Performance
+		perf2 portfolio.Performance
 	)
 
 	BeforeEach(func() {
@@ -24,6 +25,16 @@ var _ = Describe("Metrics", func() {
 		if err != nil {
 			panic(err)
 		}
+
+		jsonBlob, err = ioutil.ReadFile("testdata/adm-vfinx_pridx_vustx.json")
+		if err != nil {
+			panic(err)
+		}
+		err = json.Unmarshal(jsonBlob, &perf2)
+		if err != nil {
+			panic(err)
+		}
+
 	})
 
 	Describe("When given a performance struct", func() {
@@ -124,6 +135,14 @@ var _ = Describe("Metrics", func() {
 			It("should have an avg ulcer index", func() {
 				u := perf.AvgUlcerIndex(14)
 				Expect(u).Should(BeNumerically("~", 12.1664, 1e-3))
+			})
+
+			It("should have a sharpe ratio", func() {
+				Expect(perf2.SharpeRatio()).Should(BeNumerically("~", 1.1199, 1e-3))
+			})
+
+			It("should have a sortino ratio", func() {
+				Expect(perf2.SortinoRatio()).Should(BeNumerically("~", 2.066, 1e-3))
 			})
 		})
 	})

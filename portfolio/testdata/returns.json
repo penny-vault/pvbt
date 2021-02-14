@@ -1,1876 +1,2249 @@
 {
-    "periodStart": 631177200,
-    "periodEnd": 1609484400,
-    "value": [
-      {
-        "time": 631177200,
-        "percentReturn": 0.0214,
-        "value": 10214.0
-      },
-      {
-        "time": 633855600,
-        "percentReturn": -0.0142,
-        "value": 10068.9612
-      },
-      {
-        "time": 636274800,
-        "percentReturn": -0.0209,
-        "value": 9858.51991092
-      },
-      {
-        "time": 638953200,
-        "percentReturn": -0.0323,
-        "value": 9540.08971779728
-      },
-      {
-        "time": 641545200,
-        "percentReturn": 0.1147,
-        "value": 10634.3380084286
-      },
-      {
-        "time": 644223600,
-        "percentReturn": 0.0416,
-        "value": 11076.7264695792
-      },
-      {
-        "time": 646815600,
-        "percentReturn": 0.07,
-        "value": 11829.9438695106
-      },
-      {
-        "time": 649494000,
-        "percentReturn": -0.14,
-        "value": 10185.5816716486
-      },
-      {
-        "time": 652172400,
-        "percentReturn": -0.1515,
-        "value": 8642.46604839384
-      },
-      {
-        "time": 654764400,
-        "percentReturn": 0.01,
-        "value": 8694.3208446842
-      },
-      {
-        "time": 657442800,
-        "percentReturn": 0.01,
-        "value": 8746.48676975231
-      },
-      {
-        "time": 660034800,
-        "percentReturn": 0.0059,
-        "value": 8798.09104169385
-      },
-      {
-        "time": 662713200,
-        "percentReturn": 0.0054,
-        "value": 8845.600733319
-      },
-      {
-        "time": 665391600,
-        "percentReturn": 0.0052,
-        "value": 8891.59785713226
-      },
-      {
-        "time": 667810800,
-        "percentReturn": 0.0241,
-        "value": 9105.88536548915
-      },
-      {
-        "time": 670489200,
-        "percentReturn": 0.0,
-        "value": 9124.09713622013
-      },
-      {
-        "time": 673081200,
-        "percentReturn": 0.0427,
-        "value": 9513.69608393673
-      },
-      {
-        "time": 675759600,
-        "percentReturn": -0.0456,
-        "value": 9079.87154250922
-      },
-      {
-        "time": 678351600,
-        "percentReturn": 0.0463,
-        "value": 9500.2695949274
-      },
-      {
-        "time": 681030000,
-        "percentReturn": 0.0233,
-        "value": 9721.62587648921
-      },
-      {
-        "time": 683708400,
-        "percentReturn": -0.0167,
-        "value": 9559.27472435184
-      },
-      {
-        "time": 686300400,
-        "percentReturn": 0.0133,
-        "value": 9686.41307818572
-      },
-      {
-        "time": 688978800,
-        "percentReturn": -0.0401,
-        "value": 9297.98791375047
-      },
-      {
-        "time": 691570800,
-        "percentReturn": 0.1141,
-        "value": 10358.8883347094
-      },
-      {
-        "time": 694249200,
-        "percentReturn": -0.0188,
-        "value": 10164.1412340169
-      },
-      {
-        "time": 696927600,
-        "percentReturn": 0.0124,
-        "value": 10290.1765853187
-      },
-      {
-        "time": 699433200,
-        "percentReturn": -0.0193,
-        "value": 10091.576177222
-      },
-      {
-        "time": 702111600,
-        "percentReturn": 0.0291,
-        "value": 10385.2410439792
-      },
-      {
-        "time": 704703600,
-        "percentReturn": 0.0048,
-        "value": 10435.0902009903
-      },
-      {
-        "time": 707382000,
-        "percentReturn": -0.0149,
-        "value": 10279.6073569955
-      },
-      {
-        "time": 709974000,
-        "percentReturn": -0.0588,
-        "value": 9675.16644440416
-      },
-      {
-        "time": 712652400,
-        "percentReturn": -0.0207,
-        "value": 9474.89049900499
-      },
-      {
-        "time": 715330800,
-        "percentReturn": 0.0117,
-        "value": 9585.74671784335
-      },
-      {
-        "time": 717922800,
-        "percentReturn": 0.0033,
-        "value": 9617.37968201223
-      },
-      {
-        "time": 720601200,
-        "percentReturn": 0.0025,
-        "value": 9641.42313121726
-      },
-      {
-        "time": 723193200,
-        "percentReturn": 0.0121,
-        "value": 9758.08435110499
-      },
-      {
-        "time": 725871600,
-        "percentReturn": 0.0081,
-        "value": 9837.12483434894
-      },
-      {
-        "time": 728550000,
-        "percentReturn": 0.0136,
-        "value": 9970.90973209609
-      },
-      {
-        "time": 730969200,
-        "percentReturn": 0.0211,
-        "value": 10181.2959274433
-      },
-      {
-        "time": 733647600,
-        "percentReturn": -0.0242,
-        "value": 9934.90856599917
-      },
-      {
-        "time": 736239600,
-        "percentReturn": 0.0265,
-        "value": 10198.1836429981
-      },
-      {
-        "time": 738918000,
-        "percentReturn": -0.0331,
-        "value": 9860.62376441486
-      },
-      {
-        "time": 741510000,
-        "percentReturn": 0.0182,
-        "value": 10040.0871169272
-      },
-      {
-        "time": 744188400,
-        "percentReturn": 0.0693,
-        "value": 10735.8651541303
-      },
-      {
-        "time": 746866800,
-        "percentReturn": 0.0167,
-        "value": 10915.1541022043
-      },
-      {
-        "time": 749458800,
-        "percentReturn": 0.0625,
-        "value": 11597.3512335921
-      },
-      {
-        "time": 752137200,
-        "percentReturn": -0.0198,
-        "value": 11367.723679167
-      },
-      {
-        "time": 754729200,
-        "percentReturn": 0.1049,
-        "value": 12560.1978931116
-      },
-      {
-        "time": 757407600,
-        "percentReturn": 0.0448,
-        "value": 13122.894758723
-      },
-      {
-        "time": 760086000,
-        "percentReturn": 0.0027,
-        "value": 13158.3265745716
-      },
-      {
-        "time": 762505200,
-        "percentReturn": -0.0641,
-        "value": 12314.8778411416
-      },
-      {
-        "time": 765183600,
-        "percentReturn": 0.01,
-        "value": 12438.026619553
-      },
-      {
-        "time": 767775600,
-        "percentReturn": 0.0012,
-        "value": 12452.9522514965
-      },
-      {
-        "time": 770454000,
-        "percentReturn": -0.0156,
-        "value": 12258.6861963732
-      },
-      {
-        "time": 773046000,
-        "percentReturn": 0.0118,
-        "value": 12403.3386934904
-      },
-      {
-        "time": 775724400,
-        "percentReturn": 0.04,
-        "value": 12887.0689025365
-      },
-      {
-        "time": 778402800,
-        "percentReturn": -0.0146,
-        "value": 12698.9176965595
-      },
-      {
-        "time": 780994800,
-        "percentReturn": 0.0017,
-        "value": 12720.5058566437
-      },
-      {
-        "time": 783673200,
-        "percentReturn": -0.0365,
-        "value": 12256.2073928762
-      },
-      {
-        "time": 786265200,
-        "percentReturn": 0.0047,
-        "value": 12313.8115676227
-      },
-      {
-        "time": 788943600,
-        "percentReturn": 0.0047,
-        "value": 12371.6864819905
-      },
-      {
-        "time": 791622000,
-        "percentReturn": 0.0388,
-        "value": 12851.7079174917
-      },
-      {
-        "time": 794041200,
-        "percentReturn": 0.0295,
-        "value": 13230.8333010577
-      },
-      {
-        "time": 796719600,
-        "percentReturn": 0.0294,
-        "value": 13619.8198001088
-      },
-      {
-        "time": 799311600,
-        "percentReturn": 0.0395,
-        "value": 14157.8026822131
-      },
-      {
-        "time": 801990000,
-        "percentReturn": 0.0231,
-        "value": 14484.8479241722
-      },
-      {
-        "time": 804582000,
-        "percentReturn": 0.03,
-        "value": 14962.8479056699
-      },
-      {
-        "time": 807260400,
-        "percentReturn": 0.0025,
-        "value": 15000.2550254341
-      },
-      {
-        "time": 809938800,
-        "percentReturn": 0.0423,
-        "value": 15634.76581301
-      },
-      {
-        "time": 812530800,
-        "percentReturn": -0.0036,
-        "value": 15578.4806560832
-      },
-      {
-        "time": 815209200,
-        "percentReturn": 0.0438,
-        "value": 16260.8181088196
-      },
-      {
-        "time": 817801200,
-        "percentReturn": 0.0193,
-        "value": 16574.6518983198
-      },
-      {
-        "time": 820479600,
-        "percentReturn": 0.0339,
-        "value": 17136.5325976728
-      },
-      {
-        "time": 823158000,
-        "percentReturn": 0.0092,
-        "value": 17294.1886975714
-      },
-      {
-        "time": 825663600,
-        "percentReturn": 0.0098,
-        "value": 17463.6717468076
-      },
-      {
-        "time": 828342000,
-        "percentReturn": 0.0146,
-        "value": 17718.641354311
-      },
-      {
-        "time": 830934000,
-        "percentReturn": 0.0254,
-        "value": 18168.6948447105
-      },
-      {
-        "time": 833612400,
-        "percentReturn": 0.0038,
-        "value": 18237.7358851204
-      },
-      {
-        "time": 836204400,
-        "percentReturn": -0.0442,
-        "value": 17431.6279589981
-      },
-      {
-        "time": 838882800,
-        "percentReturn": 0.02,
-        "value": 17797.6921461371
-      },
-      {
-        "time": 841561200,
-        "percentReturn": 0.0561,
-        "value": 18796.1426755354
-      },
-      {
-        "time": 844153200,
-        "percentReturn": 0.0276,
-        "value": 19314.9162133802
-      },
-      {
-        "time": 846831600,
-        "percentReturn": 0.0756,
-        "value": 20775.1238791117
-      },
-      {
-        "time": 849423600,
-        "percentReturn": -0.0196,
-        "value": 20367.9314510811
-      },
-      {
-        "time": 852102000,
-        "percentReturn": 0.0622,
-        "value": 21634.8167873383
-      },
-      {
-        "time": 854780400,
-        "percentReturn": 0.0079,
-        "value": 21805.7318399583
-      },
-      {
-        "time": 857199600,
-        "percentReturn": -0.0414,
-        "value": 20902.974541784
-      },
-      {
-        "time": 859878000,
-        "percentReturn": 0.0596,
-        "value": 22148.7918244743
-      },
-      {
-        "time": 862470000,
-        "percentReturn": 0.0609,
-        "value": 23497.6532465848
-      },
-      {
-        "time": 865148400,
-        "percentReturn": 0.0445,
-        "value": 24543.2988160578
-      },
-      {
-        "time": 867740400,
-        "percentReturn": 0.0797,
-        "value": 26499.3997316976
-      },
-      {
-        "time": 870418800,
-        "percentReturn": -0.0561,
-        "value": 25012.7834067494
-      },
-      {
-        "time": 873097200,
-        "percentReturn": 0.0547,
-        "value": 26380.9826590986
-      },
-      {
-        "time": 875689200,
-        "percentReturn": -0.0335,
-        "value": 25497.2197400188
-      },
-      {
-        "time": 878367600,
-        "percentReturn": 0.05,
-        "value": 26670.0918480597
-      },
-      {
-        "time": 880959600,
-        "percentReturn": 0.0172,
-        "value": 27128.8174278463
-      },
-      {
-        "time": 883638000,
-        "percentReturn": 0.0111,
-        "value": 27429.9473012954
-      },
-      {
-        "time": 886316400,
-        "percentReturn": 0.0719,
-        "value": 29402.1605122585
-      },
-      {
-        "time": 888735600,
-        "percentReturn": 0.05,
-        "value": 30901.6706983837
-      },
-      {
-        "time": 891414000,
-        "percentReturn": 0.0101,
-        "value": 31213.7775724374
-      },
-      {
-        "time": 894006000,
-        "percentReturn": -0.0174,
-        "value": 30670.657842677
-      },
-      {
-        "time": 896684400,
-        "percentReturn": 0.0407,
-        "value": 31918.953616874
-      },
-      {
-        "time": 899276400,
-        "percentReturn": -0.0105,
-        "value": 31583.8046038968
-      },
-      {
-        "time": 901954800,
-        "percentReturn": -0.1447,
-        "value": 27013.6280777129
-      },
-      {
-        "time": 904633200,
-        "percentReturn": 0.0641,
-        "value": 28745.2016374943
-      },
-      {
-        "time": 907225200,
-        "percentReturn": 0.0816,
-        "value": 31090.8100911138
-      },
-      {
-        "time": 909903600,
-        "percentReturn": 0.0607,
-        "value": 32978.0222636444
-      },
-      {
-        "time": 912495600,
-        "percentReturn": 0.0581,
-        "value": 34894.0453571621
-      },
-      {
-        "time": 915174000,
-        "percentReturn": 0.04,
-        "value": 36359.5952621629
-      },
-      {
-        "time": 917852400,
-        "percentReturn": -0.0312,
-        "value": 35225.1758899834
-      },
-      {
-        "time": 920271600,
-        "percentReturn": 0.04,
-        "value": 36634.1829255827
-      },
-      {
-        "time": 922950000,
-        "percentReturn": 0.0385,
-        "value": 38044.5989682176
-      },
-      {
-        "time": 925542000,
-        "percentReturn": -0.0239,
-        "value": 37135.3330528772
-      },
-      {
-        "time": 928220400,
-        "percentReturn": 0.0556,
-        "value": 39200.0575706172
-      },
-      {
-        "time": 930812400,
-        "percentReturn": -0.0313,
-        "value": 37973.0957686569
-      },
-      {
-        "time": 933490800,
-        "percentReturn": 0.0438,
-        "value": 39636.3173633241
-      },
-      {
-        "time": 936169200,
-        "percentReturn": 0.07,
-        "value": 42212.6779919402
-      },
-      {
-        "time": 938761200,
-        "percentReturn": 0.0536,
-        "value": 44475.2775323082
-      },
-      {
-        "time": 941439600,
-        "percentReturn": 0.2385,
-        "value": 55082.6312237637
-      },
-      {
-        "time": 944031600,
-        "percentReturn": 0.2047,
-        "value": 66358.0458352681
-      },
-      {
-        "time": 946710000,
-        "percentReturn": 0.0435,
-        "value": 69244.6208291023
-      },
-      {
-        "time": 949388400,
-        "percentReturn": 0.1939,
-        "value": 82671.1528078652
-      },
-      {
-        "time": 951894000,
-        "percentReturn": -0.0031,
-        "value": 82414.8722341608
-      },
-      {
-        "time": 954572400,
-        "percentReturn": -0.1377,
-        "value": 71066.3443275169
-      },
-      {
-        "time": 957164400,
-        "percentReturn": -0.0592,
-        "value": 66859.2167433279
-      },
-      {
-        "time": 959842800,
-        "percentReturn": 0.0729,
-        "value": 71733.2536439165
-      },
-      {
-        "time": 962434800,
-        "percentReturn": -0.0372,
-        "value": 69064.7766083628
-      },
-      {
-        "time": 965113200,
-        "percentReturn": 0.0439,
-        "value": 72096.7203014699
-      },
-      {
-        "time": 967791600,
-        "percentReturn": -0.0538,
-        "value": 68217.9167492508
-      },
-      {
-        "time": 970383600,
-        "percentReturn": -0.0868,
-        "value": 62296.6015754158
-      },
-      {
-        "time": 973062000,
-        "percentReturn": 0.0052,
-        "value": 62620.543903608
-      },
-      {
-        "time": 975654000,
-        "percentReturn": 0.0051,
-        "value": 62939.9086775164
-      },
-      {
-        "time": 978332400,
-        "percentReturn": 0.0048,
-        "value": 63242.0202391685
-      },
-      {
-        "time": 981010800,
-        "percentReturn": 0.0041,
-        "value": 63501.3125221491
-      },
-      {
-        "time": 983430000,
-        "percentReturn": 0.0,
-        "value": 63755.3177722377
-      },
-      {
-        "time": 986108400,
-        "percentReturn": 0.0035,
-        "value": 63978.4613844405
-      },
-      {
-        "time": 988700400,
-        "percentReturn": 0.0032,
-        "value": 64183.1924608707
-      },
-      {
-        "time": 991378800,
-        "percentReturn": 0.0,
-        "value": 64375.7420382533
-      },
-      {
-        "time": 993970800,
-        "percentReturn": 0.0,
-        "value": 64568.8692643681
-      },
-      {
-        "time": 996649200,
-        "percentReturn": 0.0029,
-        "value": 64756.1189852348
-      },
-      {
-        "time": 999327600,
-        "percentReturn": 0.0028,
-        "value": 64937.4361183935
-      },
-      {
-        "time": 1001919600,
-        "percentReturn": 0.0,
-        "value": 65067.3109906303
-      },
-      {
-        "time": 1004598000,
-        "percentReturn": 0.0017,
-        "value": 65177.9254193144
-      },
-      {
-        "time": 1007190000,
-        "percentReturn": 0.0015,
-        "value": 65275.6923074434
-      },
-      {
-        "time": 1009868400,
-        "percentReturn": 0.0014,
-        "value": 65367.0782766738
-      },
-      {
-        "time": 1012546800,
-        "percentReturn": 0.0014,
-        "value": 65458.5921862611
-      },
-      {
-        "time": 1014966000,
-        "percentReturn": 0.0015,
-        "value": 65556.7800745405
-      },
-      {
-        "time": 1017644400,
-        "percentReturn": 0.0015,
-        "value": 65655.1152446523
-      },
-      {
-        "time": 1020236400,
-        "percentReturn": 0.0015,
-        "value": 65753.5979175193
-      },
-      {
-        "time": 1022914800,
-        "percentReturn": 0.0014,
-        "value": 65845.6529546038
-      },
-      {
-        "time": 1025506800,
-        "percentReturn": 0.0014,
-        "value": 65937.8368687402
-      },
-      {
-        "time": 1028185200,
-        "percentReturn": 0.0014,
-        "value": 66030.1498403564
-      },
-      {
-        "time": 1030863600,
-        "percentReturn": 0.0014,
-        "value": 66122.5920501329
-      },
-      {
-        "time": 1033455600,
-        "percentReturn": 0.0013,
-        "value": 66208.5514197981
-      },
-      {
-        "time": 1036134000,
-        "percentReturn": 0.0012,
-        "value": 66288.0016815019
-      },
-      {
-        "time": 1038726000,
-        "percentReturn": 0.0,
-        "value": 66354.2896831834
-      },
-      {
-        "time": 1041404400,
-        "percentReturn": 0.0,
-        "value": 66420.6439728666
-      },
-      {
-        "time": 1044082800,
-        "percentReturn": 0.0,
-        "value": 66487.0646168395
-      },
-      {
-        "time": 1046502000,
-        "percentReturn": 0.0,
-        "value": 66553.5516814563
-      },
-      {
-        "time": 1049180400,
-        "percentReturn": 0.0009,
-        "value": 66613.4498779696
-      },
-      {
-        "time": 1051772400,
-        "percentReturn": 0.0009,
-        "value": 66673.4019828598
-      },
-      {
-        "time": 1054450800,
-        "percentReturn": 0.0353,
-        "value": 69026.9730728548
-      },
-      {
-        "time": 1057042800,
-        "percentReturn": 0.0531,
-        "value": 72692.3053430234
-      },
-      {
-        "time": 1059721200,
-        "percentReturn": 0.0544,
-        "value": 76646.7667536839
-      },
-      {
-        "time": 1062399600,
-        "percentReturn": 0.0651,
-        "value": 81636.4712693487
-      },
-      {
-        "time": 1064991600,
-        "percentReturn": 0.0999,
-        "value": 89791.9547491566
-      },
-      {
-        "time": 1067670000,
-        "percentReturn": -0.0063,
-        "value": 89226.2654342369
-      },
-      {
-        "time": 1070262000,
-        "percentReturn": 0.0597,
-        "value": 94553.0734806608
-      },
-      {
-        "time": 1072940400,
-        "percentReturn": 0.0371,
-        "value": 98060.9925067933
-      },
-      {
-        "time": 1075618800,
-        "percentReturn": 0.0215,
-        "value": 100169.303845689
-      },
-      {
-        "time": 1078124400,
-        "percentReturn": 0.03,
-        "value": 102673.536441831
-      },
-      {
-        "time": 1080802800,
-        "percentReturn": -0.0122,
-        "value": 101420.919297241
-      },
-      {
-        "time": 1083394800,
-        "percentReturn": -0.0282,
-        "value": 98560.8493730588
-      },
-      {
-        "time": 1086073200,
-        "percentReturn": 0.05,
-        "value": 103291.770142966
-      },
-      {
-        "time": 1088665200,
-        "percentReturn": -0.0426,
-        "value": 98891.5407348756
-      },
-      {
-        "time": 1091343600,
-        "percentReturn": 0.0018,
-        "value": 99069.5455081984
-      },
-      {
-        "time": 1094022000,
-        "percentReturn": 0.04,
-        "value": 102834.18823751
-      },
-      {
-        "time": 1096614000,
-        "percentReturn": 0.0268,
-        "value": 105590.144482275
-      },
-      {
-        "time": 1099292400,
-        "percentReturn": 0.0628,
-        "value": 112221.205555762
-      },
-      {
-        "time": 1101884400,
-        "percentReturn": 0.0428,
-        "value": 117024.273153549
-      },
-      {
-        "time": 1104562800,
-        "percentReturn": 0.0123,
-        "value": 118463.671713338
-      },
-      {
-        "time": 1107241200,
-        "percentReturn": 0.0406,
-        "value": 123273.2967849
-      },
-      {
-        "time": 1109660400,
-        "percentReturn": -0.0288,
-        "value": 119723.025837495
-      },
-      {
-        "time": 1112338800,
-        "percentReturn": -0.0165,
-        "value": 117747.595911176
-      },
-      {
-        "time": 1114930800,
-        "percentReturn": -0.0024,
-        "value": 117465.001680989
-      },
-      {
-        "time": 1117609200,
-        "percentReturn": 0.0195,
-        "value": 119755.569213768
-      },
-      {
-        "time": 1120201200,
-        "percentReturn": 0.0569,
-        "value": 126569.661102031
-      },
-      {
-        "time": 1122879600,
-        "percentReturn": 0.0408,
-        "value": 131733.703274994
-      },
-      {
-        "time": 1125558000,
-        "percentReturn": 0.06,
-        "value": 139374.258064944
-      },
-      {
-        "time": 1128150000,
-        "percentReturn": -0.0399,
-        "value": 133813.225168153
-      },
-      {
-        "time": 1130828400,
-        "percentReturn": 0.0488,
-        "value": 140343.310556359
-      },
-      {
-        "time": 1133420400,
-        "percentReturn": 0.0664,
-        "value": 149662.106377301
-      },
-      {
-        "time": 1136098800,
-        "percentReturn": 0.0757,
-        "value": 160991.527830063
-      },
-      {
-        "time": 1138777200,
-        "percentReturn": -0.0074,
-        "value": 159800.190524121
-      },
-      {
-        "time": 1141196400,
-        "percentReturn": 0.0693,
-        "value": 170874.343727443
-      },
-      {
-        "time": 1143874800,
-        "percentReturn": 0.0521,
-        "value": 179776.897035643
-      },
-      {
-        "time": 1146466800,
-        "percentReturn": -0.0622,
-        "value": 168594.774040026
-      },
-      {
-        "time": 1149145200,
-        "percentReturn": -0.0258,
-        "value": 164245.028869793
-      },
-      {
-        "time": 1151737200,
-        "percentReturn": -0.0143,
-        "value": 161896.324956955
-      },
-      {
-        "time": 1154415600,
-        "percentReturn": 0.0326,
-        "value": 167174.145150552
-      },
-      {
-        "time": 1157094000,
-        "percentReturn": 0.0203,
-        "value": 170567.780297108
-      },
-      {
-        "time": 1159686000,
-        "percentReturn": 0.0378,
-        "value": 177015.242392339
-      },
-      {
-        "time": 1162364400,
-        "percentReturn": 0.0435,
-        "value": 184715.405436406
-      },
-      {
-        "time": 1164956400,
-        "percentReturn": 0.0342,
-        "value": 191032.672302331
-      },
-      {
-        "time": 1167634800,
-        "percentReturn": 0.0116,
-        "value": 193248.651301038
-      },
-      {
-        "time": 1170313200,
-        "percentReturn": 0.01,
-        "value": 195374.386465349
-      },
-      {
-        "time": 1172732400,
-        "percentReturn": 0.0111,
-        "value": 197543.042155114
-      },
-      {
-        "time": 1175410800,
-        "percentReturn": 0.0437,
-        "value": 206175.673097292
-      },
-      {
-        "time": 1178002800,
-        "percentReturn": 0.0281,
-        "value": 211969.209511326
-      },
-      {
-        "time": 1180681200,
-        "percentReturn": 0.02,
-        "value": 215360.716863507
-      },
-      {
-        "time": 1183273200,
-        "percentReturn": 0.0073,
-        "value": 216932.850096611
-      },
-      {
-        "time": 1185951600,
-        "percentReturn": -0.0323,
-        "value": 209925.91903849
-      },
-      {
-        "time": 1188630000,
-        "percentReturn": 0.0546,
-        "value": 221387.874217992
-      },
-      {
-        "time": 1191222000,
-        "percentReturn": 0.0701,
-        "value": 236907.164200673
-      },
-      {
-        "time": 1193900400,
-        "percentReturn": -0.0717,
-        "value": 219920.920527485
-      },
-      {
-        "time": 1196492400,
-        "percentReturn": -0.0085,
-        "value": 218051.592703001
-      },
-      {
-        "time": 1199170800,
-        "percentReturn": -0.0961,
-        "value": 197096.834644243
-      },
-      {
-        "time": 1201849200,
-        "percentReturn": 0.0016,
-        "value": 197412.189579674
-      },
-      {
-        "time": 1204354800,
-        "percentReturn": 0.0015,
-        "value": 197708.307864044
-      },
-      {
-        "time": 1207033200,
-        "percentReturn": 0.0011,
-        "value": 197925.787002694
-      },
-      {
-        "time": 1209625200,
-        "percentReturn": 0.0012,
-        "value": 198163.297947097
-      },
-      {
-        "time": 1212303600,
-        "percentReturn": 0.0015,
-        "value": 198460.542894018
-      },
-      {
-        "time": 1214895600,
-        "percentReturn": 0.0016,
-        "value": 198778.079762648
-      },
-      {
-        "time": 1217574000,
-        "percentReturn": 0.0014,
-        "value": 199056.369074316
-      },
-      {
-        "time": 1220252400,
-        "percentReturn": 0.0014,
-        "value": 199335.04799102
-      },
-      {
-        "time": 1222844400,
-        "percentReturn": 0.0008,
-        "value": 199494.516029413
-      },
-      {
-        "time": 1225522800,
-        "percentReturn": 0.0004,
-        "value": 199574.313835825
-      },
-      {
-        "time": 1228114800,
-        "percentReturn": 0.0,
-        "value": 199574.313835825
-      },
-      {
-        "time": 1230793200,
-        "percentReturn": 0.0001,
-        "value": 199594.271267209
-      },
-      {
-        "time": 1233471600,
-        "percentReturn": 0.0002,
-        "value": 199634.190121462
-      },
-      {
-        "time": 1235890800,
-        "percentReturn": 0.0002,
-        "value": 199674.116959486
-      },
-      {
-        "time": 1238569200,
-        "percentReturn": 0.0002,
-        "value": 199714.051782878
-      },
-      {
-        "time": 1241161200,
-        "percentReturn": 0.0001,
-        "value": 199734.023188056
-      },
-      {
-        "time": 1243839600,
-        "percentReturn": 0.0001,
-        "value": 199753.996590375
-      },
-      {
-        "time": 1246431600,
-        "percentReturn": 0.0002,
-        "value": 199793.947389693
-      },
-      {
-        "time": 1249110000,
-        "percentReturn": 0.0471,
-        "value": 209204.242311748
-      },
-      {
-        "time": 1251788400,
-        "percentReturn": 0.0662,
-        "value": 223053.563152786
-      },
-      {
-        "time": 1254380400,
-        "percentReturn": -0.0143,
-        "value": 219863.897199701
-      },
-      {
-        "time": 1257058800,
-        "percentReturn": 0.0392,
-        "value": 228482.561969929
-      },
-      {
-        "time": 1259650800,
-        "percentReturn": 0.0094,
-        "value": 230630.298052446
-      },
-      {
-        "time": 1262329200,
-        "percentReturn": -0.0195,
-        "value": 226133.007240423
-      },
-      {
-        "time": 1265007600,
-        "percentReturn": -0.0077,
-        "value": 224391.783084672
-      },
-      {
-        "time": 1267426800,
-        "percentReturn": 0.0604,
-        "value": 237945.046782986
-      },
-      {
-        "time": 1270105200,
-        "percentReturn": 0.0094,
-        "value": 240181.730222746
-      },
-      {
-        "time": 1272697200,
-        "percentReturn": -0.0801,
-        "value": 220943.173631904
-      },
-      {
-        "time": 1275375600,
-        "percentReturn": -0.0524,
-        "value": 209365.751333592
-      },
-      {
-        "time": 1277967600,
-        "percentReturn": 0.0833,
-        "value": 226805.91841968
-      },
-      {
-        "time": 1280646000,
-        "percentReturn": -0.0453,
-        "value": 216531.610315268
-      },
-      {
-        "time": 1283324400,
-        "percentReturn": 0.1142,
-        "value": 241259.520213272
-      },
-      {
-        "time": 1285916400,
-        "percentReturn": 0.04,
-        "value": 251874.939102656
-      },
-      {
-        "time": 1288594800,
-        "percentReturn": -0.0326,
-        "value": 243663.816087909
-      },
-      {
-        "time": 1291186800,
-        "percentReturn": 0.0778,
-        "value": 262620.860979548
-      },
-      {
-        "time": 1293865200,
-        "percentReturn": -0.0059,
-        "value": 261071.397899769
-      },
-      {
-        "time": 1296543600,
-        "percentReturn": 0.0076,
-        "value": 263055.540523807
-      },
-      {
-        "time": 1298962800,
-        "percentReturn": 0.0175,
-        "value": 267659.012482974
-      },
-      {
-        "time": 1301641200,
-        "percentReturn": 0.0606,
-        "value": 283879.148639442
-      },
-      {
-        "time": 1304233200,
-        "percentReturn": -0.0204,
-        "value": 278088.014007197
-      },
-      {
-        "time": 1306911600,
-        "percentReturn": -0.0095,
-        "value": 275446.177874129
-      },
-      {
-        "time": 1309503600,
-        "percentReturn": -0.0205,
-        "value": 269799.531227709
-      },
-      {
-        "time": 1312182000,
-        "percentReturn": -0.0545,
-        "value": 255095.456775799
-      },
-      {
-        "time": 1314860400,
-        "percentReturn": -0.0704,
-        "value": 237136.736618783
-      },
-      {
-        "time": 1317452400,
-        "percentReturn": 0.0,
-        "value": 237136.736618783
-      },
-      {
-        "time": 1320130800,
-        "percentReturn": -0.0023,
-        "value": 236591.32212456
-      },
-      {
-        "time": 1322722800,
-        "percentReturn": 0.0,
-        "value": 236591.32212456
-      },
-      {
-        "time": 1325401200,
-        "percentReturn": 0.0,
-        "value": 236591.32212456
-      },
-      {
-        "time": 1328079600,
-        "percentReturn": 0.0431,
-        "value": 246788.408108129
-      },
-      {
-        "time": 1330585200,
-        "percentReturn": 0.0328,
-        "value": 254883.067894076
-      },
-      {
-        "time": 1333263600,
-        "percentReturn": -0.0064,
-        "value": 253251.816259554
-      },
-      {
-        "time": 1335855600,
-        "percentReturn": -0.0602,
-        "value": 238006.056920729
-      },
-      {
-        "time": 1338534000,
-        "percentReturn": 0.0411,
-        "value": 247788.105860171
-      },
-      {
-        "time": 1341126000,
-        "percentReturn": 0.0137,
-        "value": 251182.802910455
-      },
-      {
-        "time": 1343804400,
-        "percentReturn": 0.0224,
-        "value": 256809.297695649
-      },
-      {
-        "time": 1346482800,
-        "percentReturn": 0.0258,
-        "value": 263434.977576197
-      },
-      {
-        "time": 1349074800,
-        "percentReturn": -0.0186,
-        "value": 258535.08699328
-      },
-      {
-        "time": 1351753200,
-        "percentReturn": 0.0084,
-        "value": 260706.781724024
-      },
-      {
-        "time": 1354345200,
-        "percentReturn": 0.0305,
-        "value": 268658.338566607
-      },
-      {
-        "time": 1357023600,
-        "percentReturn": 0.0347,
-        "value": 277980.782914868
-      },
-      {
-        "time": 1359702000,
-        "percentReturn": 0.0157,
-        "value": 282345.081206631
-      },
-      {
-        "time": 1362121200,
-        "percentReturn": 0.0089,
-        "value": 284857.95242937
-      },
-      {
-        "time": 1364799600,
-        "percentReturn": 0.0291,
-        "value": 293147.318845065
-      },
-      {
-        "time": 1367391600,
-        "percentReturn": -0.01,
-        "value": 290802.140294304
-      },
-      {
-        "time": 1370070000,
-        "percentReturn": -0.0251,
-        "value": 283503.006572917
-      },
-      {
-        "time": 1372662000,
-        "percentReturn": 0.0428,
-        "value": 295636.935254238
-      },
-      {
-        "time": 1375340400,
-        "percentReturn": -0.0291,
-        "value": 287033.90043834
-      },
-      {
-        "time": 1378018800,
-        "percentReturn": 0.0312,
-        "value": 295989.358132016
-      },
-      {
-        "time": 1380610800,
-        "percentReturn": 0.0459,
-        "value": 309575.269670276
-      },
-      {
-        "time": 1383289200,
-        "percentReturn": 0.0303,
-        "value": 318955.400341285
-      },
-      {
-        "time": 1385881200,
-        "percentReturn": 0.0251,
-        "value": 326961.180889851
-      },
-      {
-        "time": 1388559600,
-        "percentReturn": -0.0347,
-        "value": 315615.627912973
-      },
-      {
-        "time": 1391238000,
-        "percentReturn": 0.0488,
-        "value": 331017.670555126
-      },
-      {
-        "time": 1393657200,
-        "percentReturn": 0.0082,
-        "value": 333732.015453678
-      },
-      {
-        "time": 1396335600,
-        "percentReturn": -0.0026,
-        "value": 332864.312213498
-      },
-      {
-        "time": 1398927600,
-        "percentReturn": 0.0154,
-        "value": 337990.422621586
-      },
-      {
-        "time": 1401606000,
-        "percentReturn": 0.0188,
-        "value": 344344.642566872
-      },
-      {
-        "time": 1404198000,
-        "percentReturn": -0.0139,
-        "value": 339558.252035192
-      },
-      {
-        "time": 1406876400,
-        "percentReturn": 0.0398,
-        "value": 353072.670466193
-      },
-      {
-        "time": 1409554800,
-        "percentReturn": -0.0141,
-        "value": 348094.34581262
-      },
-      {
-        "time": 1412146800,
-        "percentReturn": 0.0242,
-        "value": 356518.228981285
-      },
-      {
-        "time": 1414825200,
-        "percentReturn": 0.0268,
-        "value": 366072.917517983
-      },
-      {
-        "time": 1417417200,
-        "percentReturn": -0.0026,
-        "value": 365121.127932436
-      },
-      {
-        "time": 1420095600,
-        "percentReturn": -0.0302,
-        "value": 354094.469868876
-      },
-      {
-        "time": 1422774000,
-        "percentReturn": 0.0574,
-        "value": 374419.492439349
-      },
-      {
-        "time": 1425193200,
-        "percentReturn": -0.0159,
-        "value": 368466.222509563
-      },
-      {
-        "time": 1427871600,
-        "percentReturn": 0.0095,
-        "value": 371966.651623404
-      },
-      {
-        "time": 1430463600,
-        "percentReturn": 0.0127,
-        "value": 376690.628099021
-      },
-      {
-        "time": 1433142000,
-        "percentReturn": -0.0193,
-        "value": 369420.49897671
-      },
-      {
-        "time": 1435734000,
-        "percentReturn": -0.0018,
-        "value": 368755.542078552
-      },
-      {
-        "time": 1438412400,
-        "percentReturn": -0.0532,
-        "value": 349137.747239973
-      },
-      {
-        "time": 1441090800,
-        "percentReturn": -0.0191,
-        "value": 342469.21626769
-      },
-      {
-        "time": 1443682800,
-        "percentReturn": 0.0516,
-        "value": 360140.627827103
-      },
-      {
-        "time": 1446361200,
-        "percentReturn": 0.02,
-        "value": 365902.877872337
-      },
-      {
-        "time": 1448953200,
-        "percentReturn": 0.0033,
-        "value": 367110.357369316
-      },
-      {
-        "time": 1451631600,
-        "percentReturn": -0.0619,
-        "value": 344386.226248155
-      },
-      {
-        "time": 1454310000,
-        "percentReturn": 0.0003,
-        "value": 344489.542116029
-      },
-      {
-        "time": 1456815600,
-        "percentReturn": 0.0003,
-        "value": 344592.888978664
-      },
-      {
-        "time": 1459494000,
-        "percentReturn": 0.0002,
-        "value": 344661.80755646
-      },
-      {
-        "time": 1462086000,
-        "percentReturn": 0.0178,
-        "value": 350796.787730965
-      },
-      {
-        "time": 1464764400,
-        "percentReturn": 0.0025,
-        "value": 351673.779700292
-      },
-      {
-        "time": 1467356400,
-        "percentReturn": 0.0368,
-        "value": 364615.374793263
-      },
-      {
-        "time": 1470034800,
-        "percentReturn": 0.0013,
-        "value": 365089.374780494
-      },
-      {
-        "time": 1472713200,
-        "percentReturn": 0.0001,
-        "value": 365125.883717972
-      },
-      {
-        "time": 1475305200,
-        "percentReturn": -0.0238,
-        "value": 356435.887685484
-      },
-      {
-        "time": 1477983600,
-        "percentReturn": 0.04,
-        "value": 369624.015529847
-      },
-      {
-        "time": 1480575600,
-        "percentReturn": 0.0196,
-        "value": 376868.646234232
-      },
-      {
-        "time": 1483254000,
-        "percentReturn": 0.0188,
-        "value": 383953.776783436
-      },
-      {
-        "time": 1485932400,
-        "percentReturn": 0.0396,
-        "value": 399158.34634406
-      },
-      {
-        "time": 1488351600,
-        "percentReturn": 0.0,
-        "value": 399557.504690404
-      },
-      {
-        "time": 1491030000,
-        "percentReturn": 0.0102,
-        "value": 403632.991238246
-      },
-      {
-        "time": 1493622000,
-        "percentReturn": 0.0426,
-        "value": 420827.756664995
-      },
-      {
-        "time": 1496300400,
-        "percentReturn": 0.0028,
-        "value": 422006.074383657
-      },
-      {
-        "time": 1498892400,
-        "percentReturn": 0.0395,
-        "value": 438675.314321811
-      },
-      {
-        "time": 1501570800,
-        "percentReturn": 0.0201,
-        "value": 447492.688139679
-      },
-      {
-        "time": 1504249200,
-        "percentReturn": 0.0306,
-        "value": 461185.964396753
-      },
-      {
-        "time": 1506841200,
-        "percentReturn": 0.0171,
-        "value": 469072.244387937
-      },
-      {
-        "time": 1509519600,
-        "percentReturn": 0.0164,
-        "value": 476765.029195899
-      },
-      {
-        "time": 1512111600,
-        "percentReturn": 0.03,
-        "value": 489160.919954992
-      },
-      {
-        "time": 1514790000,
-        "percentReturn": 0.0592,
-        "value": 518119.246416328
-      },
-      {
-        "time": 1517468400,
-        "percentReturn": -0.0279,
-        "value": 503663.719441312
-      },
-      {
-        "time": 1519887600,
-        "percentReturn": -0.01,
-        "value": 500641.737124664
-      },
-      {
-        "time": 1522566000,
-        "percentReturn": -0.0034,
-        "value": 498939.55521844
-      },
-      {
-        "time": 1525158000,
-        "percentReturn": 0.0114,
-        "value": 504627.46614793
-      },
-      {
-        "time": 1527836400,
-        "percentReturn": -0.0114,
-        "value": 498874.713033844
-      },
-      {
-        "time": 1530428400,
-        "percentReturn": 0.0371,
-        "value": 517382.9648874
-      },
-      {
-        "time": 1533106800,
-        "percentReturn": 0.0325,
-        "value": 534197.911246241
-      },
-      {
-        "time": 1535785200,
-        "percentReturn": 0.0055,
-        "value": 537135.999758095
-      },
-      {
-        "time": 1538377200,
-        "percentReturn": -0.0685,
-        "value": 500342.183774665
-      },
-      {
-        "time": 1541055600,
-        "percentReturn": 0.0203,
-        "value": 510499.130105291
-      },
-      {
-        "time": 1543647600,
-        "percentReturn": 0.0019,
-        "value": 511469.078452491
-      },
-      {
-        "time": 1546326000,
-        "percentReturn": 0.0,
-        "value": 512492.016609396
-      },
-      {
-        "time": 1549004400,
-        "percentReturn": 0.03,
-        "value": 528891.761140897
-      },
-      {
-        "time": 1551423600,
-        "percentReturn": 0.0194,
-        "value": 539152.26130703
-      },
-      {
-        "time": 1554102000,
-        "percentReturn": 0.0404,
-        "value": 560934.012663834
-      },
-      {
-        "time": 1556694000,
-        "percentReturn": -0.0636,
-        "value": 525258.609458414
-      },
-      {
-        "time": 1559372400,
-        "percentReturn": 0.0019,
-        "value": 526256.600816385
-      },
-      {
-        "time": 1561964400,
-        "percentReturn": 0.0143,
-        "value": 533782.070208059
-      },
-      {
-        "time": 1564642800,
-        "percentReturn": -0.0159,
-        "value": 525294.935291751
-      },
-      {
-        "time": 1567321200,
-        "percentReturn": 0.0186,
-        "value": 535065.421088178
-      },
-      {
-        "time": 1569913200,
-        "percentReturn": 0.0215,
-        "value": 546569.327641574
-      },
-      {
-        "time": 1572591600,
-        "percentReturn": 0.0362,
-        "value": 566355.137302199
-      },
-      {
-        "time": 1575183600,
-        "percentReturn": 0.0301,
-        "value": 583402.426934995
-      },
-      {
-        "time": 1577862000,
-        "percentReturn": -0.0005,
-        "value": 583110.725721528
-      },
-      {
-        "time": 1580540400,
-        "percentReturn": -0.0824,
-        "value": 535062.401922074
-      },
-      {
-        "time": 1583046000,
-        "percentReturn": -0.1237,
-        "value": 468875.182804313
-      },
-      {
-        "time": 1585724400,
-        "percentReturn": 0.0001,
-        "value": 468922.070322593
-      },
-      {
-        "time": 1588316400,
-        "percentReturn": 0.0001,
-        "value": 468968.962529625
-      },
-      {
-        "time": 1590994800,
-        "percentReturn": 0.0423,
-        "value": 488806.349644628
-      },
-      {
-        "time": 1593586800,
-        "percentReturn": 0.0638,
-        "value": 519992.194751955
-      },
-      {
-        "time": 1596265200,
-        "percentReturn": 0.0783,
-        "value": 560707.583601033
-      },
-      {
-        "time": 1598943600,
-        "percentReturn": -0.0075,
-        "value": 556502.276724025
-      },
-      {
-        "time": 1601535600,
-        "percentReturn": -0.0144,
-        "value": 548488.643939199
-      },
-      {
-        "time": 1604214000,
-        "percentReturn": 0.1067,
-        "value": 607012.382247512
-      },
-      {
-        "time": 1606806000,
-        "percentReturn": 0.0756,
-        "value": 652902.518345424
-      },
-      {
-        "time": 1609484400,
-        "percentReturn": 0.0124,
-        "value": 660998.509572907
-      }
-    ],
-    "cagrSinceInception": 0.0,
-    "ytdReturn": 0.0,
-    "currentAsset": "",
-    "totalDeposited": 10000.00,
-    "totalWidthdrawn": 0.00
-  }
+  "periodStart": 631177200,
+  "periodEnd": 1609484400,
+  "cagrSinceInception": 0.0,
+  "ytdReturn": 0.0,
+  "currentAsset": "",
+  "totalDeposited": 10000.0,
+  "totalWidthdrawn": 0.0,
+  "measurements": [
+    {
+      "time": 631177200,
+      "percentReturn": 0.0214,
+      "value": 10214.0,
+      "riskFreeValue": 10062.916666666666
+    },
+    {
+      "time": 633855600,
+      "percentReturn": -0.0142,
+      "value": 10068.9612,
+      "riskFreeValue": 10127.990194444443
+    },
+    {
+      "time": 636274800,
+      "percentReturn": -0.0209,
+      "value": 9858.51991092,
+      "riskFreeValue": 10193.906530626618
+    },
+    {
+      "time": 638953200,
+      "percentReturn": -0.0323,
+      "value": 9540.08971779728,
+      "riskFreeValue": 10260.16692307569
+    },
+    {
+      "time": 641545200,
+      "percentReturn": 0.1147,
+      "value": 10634.3380084286,
+      "riskFreeValue": 10327.88402476799
+    },
+    {
+      "time": 644223600,
+      "percentReturn": 0.0416,
+      "value": 11076.7264695792,
+      "riskFreeValue": 10393.982482526504
+    },
+    {
+      "time": 646815600,
+      "percentReturn": 0.07,
+      "value": 11829.9438695106,
+      "riskFreeValue": 10461.023669538801
+    },
+    {
+      "time": 649494000,
+      "percentReturn": -0.14,
+      "value": 10185.5816716486,
+      "riskFreeValue": 10525.70766589545
+    },
+    {
+      "time": 652172400,
+      "percentReturn": -0.1515,
+      "value": 8642.46604839384,
+      "riskFreeValue": 10590.528482271257
+    },
+    {
+      "time": 654764400,
+      "percentReturn": 0.01,
+      "value": 8694.3208446842,
+      "riskFreeValue": 10653.453872336751
+    },
+    {
+      "time": 657442800,
+      "percentReturn": 0.01,
+      "value": 8746.48676975231,
+      "riskFreeValue": 10716.04291383673
+    },
+    {
+      "time": 660034800,
+      "percentReturn": 0.0059,
+      "value": 8798.09104169385,
+      "riskFreeValue": 10778.731764882674
+    },
+    {
+      "time": 662713200,
+      "percentReturn": 0.0054,
+      "value": 8845.600733319,
+      "riskFreeValue": 10836.577625354212
+    },
+    {
+      "time": 665391600,
+      "percentReturn": 0.0052,
+      "value": 8891.59785713226,
+      "riskFreeValue": 10890.760513480982
+    },
+    {
+      "time": 667810800,
+      "percentReturn": 0.0241,
+      "value": 9105.88536548915,
+      "riskFreeValue": 10946.031123086897
+    },
+    {
+      "time": 670489200,
+      "percentReturn": 0.0,
+      "value": 9124.09713622013,
+      "riskFreeValue": 10998.572072477713
+    },
+    {
+      "time": 673081200,
+      "percentReturn": 0.0427,
+      "value": 9513.69608393673,
+      "riskFreeValue": 11049.348813545652
+    },
+    {
+      "time": 675759600,
+      "percentReturn": -0.0456,
+      "value": 9079.87154250922,
+      "riskFreeValue": 11100.26789599474
+    },
+    {
+      "time": 678351600,
+      "percentReturn": 0.0463,
+      "value": 9500.2695949274,
+      "riskFreeValue": 11151.884141711116
+    },
+    {
+      "time": 681030000,
+      "percentReturn": 0.0233,
+      "value": 9721.62587648921,
+      "riskFreeValue": 11203.46160586653
+    },
+    {
+      "time": 683708400,
+      "percentReturn": -0.0167,
+      "value": 9559.27472435184,
+      "riskFreeValue": 11253.223647832589
+    },
+    {
+      "time": 686300400,
+      "percentReturn": 0.0133,
+      "value": 9686.41307818572,
+      "riskFreeValue": 11301.049848335879
+    },
+    {
+      "time": 688978800,
+      "percentReturn": -0.0401,
+      "value": 9297.98791375047,
+      "riskFreeValue": 11345.783170652208
+    },
+    {
+      "time": 691570800,
+      "percentReturn": 0.1141,
+      "value": 10358.8883347094,
+      "riskFreeValue": 11386.911634645823
+    },
+    {
+      "time": 694249200,
+      "percentReturn": -0.0188,
+      "value": 10164.1412340169,
+      "riskFreeValue": 11423.729315597846
+    },
+    {
+      "time": 696927600,
+      "percentReturn": 0.0124,
+      "value": 10290.1765853187,
+      "riskFreeValue": 11460.28524940776
+    },
+    {
+      "time": 699433200,
+      "percentReturn": -0.0193,
+      "value": 10091.576177222,
+      "riskFreeValue": 11497.81768359957
+    },
+    {
+      "time": 702111600,
+      "percentReturn": 0.0291,
+      "value": 10385.2410439792,
+      "riskFreeValue": 11536.239557692263
+    },
+    {
+      "time": 704703600,
+      "percentReturn": 0.0048,
+      "value": 10435.0902009903,
+      "riskFreeValue": 11571.136682354283
+    },
+    {
+      "time": 707382000,
+      "percentReturn": -0.0149,
+      "value": 10279.6073569955,
+      "riskFreeValue": 11607.29648448664
+    },
+    {
+      "time": 709974000,
+      "percentReturn": -0.0588,
+      "value": 9675.16644440416,
+      "riskFreeValue": 11641.63473658658
+    },
+    {
+      "time": 712652400,
+      "percentReturn": -0.0207,
+      "value": 9474.89049900499,
+      "riskFreeValue": 11672.485068638536
+    },
+    {
+      "time": 715330800,
+      "percentReturn": 0.0117,
+      "value": 9585.74671784335,
+      "riskFreeValue": 11703.125341943714
+    },
+    {
+      "time": 717922800,
+      "percentReturn": 0.0033,
+      "value": 9617.37968201223,
+      "riskFreeValue": 11728.579639562442
+    },
+    {
+      "time": 720601200,
+      "percentReturn": 0.0025,
+      "value": 9641.42313121726,
+      "riskFreeValue": 11757.510136006695
+    },
+    {
+      "time": 723193200,
+      "percentReturn": 0.0121,
+      "value": 9758.08435110499,
+      "riskFreeValue": 11790.137226634113
+    },
+    {
+      "time": 725871600,
+      "percentReturn": 0.0081,
+      "value": 9837.12483434894,
+      "riskFreeValue": 11820.39857884914
+    },
+    {
+      "time": 728550000,
+      "percentReturn": 0.0136,
+      "value": 9970.90973209609,
+      "riskFreeValue": 11848.964542081361
+    },
+    {
+      "time": 730969200,
+      "percentReturn": 0.0211,
+      "value": 10181.2959274433,
+      "riskFreeValue": 11878.093246580644
+    },
+    {
+      "time": 733647600,
+      "percentReturn": -0.0242,
+      "value": 9934.90856599917,
+      "riskFreeValue": 11906.798638593214
+    },
+    {
+      "time": 736239600,
+      "percentReturn": 0.0265,
+      "value": 10198.1836429981,
+      "riskFreeValue": 11935.672625291802
+    },
+    {
+      "time": 738918000,
+      "percentReturn": -0.0331,
+      "value": 9860.62376441486,
+      "riskFreeValue": 11965.909662609207
+    },
+    {
+      "time": 741510000,
+      "percentReturn": 0.0182,
+      "value": 10040.0871169272,
+      "riskFreeValue": 11995.724720851873
+    },
+    {
+      "time": 744188400,
+      "percentReturn": 0.0693,
+      "value": 10735.8651541303,
+      "riskFreeValue": 12026.013925772026
+    },
+    {
+      "time": 746866800,
+      "percentReturn": 0.0167,
+      "value": 10915.1541022043,
+      "riskFreeValue": 12056.179177369171
+    },
+    {
+      "time": 749458800,
+      "percentReturn": 0.0625,
+      "value": 11597.3512335921,
+      "riskFreeValue": 12085.515880034101
+    },
+    {
+      "time": 752137200,
+      "percentReturn": -0.0198,
+      "value": 11367.723679167,
+      "riskFreeValue": 12116.33394552819
+    },
+    {
+      "time": 754729200,
+      "percentReturn": 0.1049,
+      "value": 12560.1978931116,
+      "riskFreeValue": 12147.836413786561
+    },
+    {
+      "time": 757407600,
+      "percentReturn": 0.0448,
+      "value": 13122.894758723,
+      "riskFreeValue": 12178.307236791143
+    },
+    {
+      "time": 760086000,
+      "percentReturn": 0.0027,
+      "value": 13158.3265745716,
+      "riskFreeValue": 12209.057462564042
+    },
+    {
+      "time": 762505200,
+      "percentReturn": -0.0641,
+      "value": 12314.8778411416,
+      "riskFreeValue": 12244.667213496521
+    },
+    {
+      "time": 765183600,
+      "percentReturn": 0.01,
+      "value": 12438.026619553,
+      "riskFreeValue": 12280.176748415659
+    },
+    {
+      "time": 767775600,
+      "percentReturn": 0.0012,
+      "value": 12452.9522514965,
+      "riskFreeValue": 12319.7803184293
+    },
+    {
+      "time": 770454000,
+      "percentReturn": -0.0156,
+      "value": 12258.6861963732,
+      "riskFreeValue": 12362.694219871828
+    },
+    {
+      "time": 773046000,
+      "percentReturn": 0.0118,
+      "value": 12403.3386934904,
+      "riskFreeValue": 12405.96364964138
+    },
+    {
+      "time": 775724400,
+      "percentReturn": 0.04,
+      "value": 12887.0689025365,
+      "riskFreeValue": 12450.211586658435
+    },
+    {
+      "time": 778402800,
+      "percentReturn": -0.0146,
+      "value": 12698.9176965595,
+      "riskFreeValue": 12497.418638924515
+    },
+    {
+      "time": 780994800,
+      "percentReturn": 0.0017,
+      "value": 12720.5058566437,
+      "riskFreeValue": 12546.054426460996
+    },
+    {
+      "time": 783673200,
+      "percentReturn": -0.0365,
+      "value": 12256.2073928762,
+      "riskFreeValue": 12599.166056866348
+    },
+    {
+      "time": 786265200,
+      "percentReturn": 0.0047,
+      "value": 12313.8115676227,
+      "riskFreeValue": 12657.437199879356
+    },
+    {
+      "time": 788943600,
+      "percentReturn": 0.0047,
+      "value": 12371.6864819905,
+      "riskFreeValue": 12715.766889642133
+    },
+    {
+      "time": 791622000,
+      "percentReturn": 0.0388,
+      "value": 12851.7079174917,
+      "riskFreeValue": 12778.28607684954
+    },
+    {
+      "time": 794041200,
+      "percentReturn": 0.0295,
+      "value": 13230.8333010577,
+      "riskFreeValue": 12839.621850018417
+    },
+    {
+      "time": 796719600,
+      "percentReturn": 0.0294,
+      "value": 13619.8198001088,
+      "riskFreeValue": 12900.610053806005
+    },
+    {
+      "time": 799311600,
+      "percentReturn": 0.0395,
+      "value": 14157.8026822131,
+      "riskFreeValue": 12961.995456645367
+    },
+    {
+      "time": 801990000,
+      "percentReturn": 0.0231,
+      "value": 14484.8479241722,
+      "riskFreeValue": 13021.404602488326
+    },
+    {
+      "time": 804582000,
+      "percentReturn": 0.03,
+      "value": 14962.8479056699,
+      "riskFreeValue": 13080.434970019605
+    },
+    {
+      "time": 807260400,
+      "percentReturn": 0.0025,
+      "value": 15000.2550254341,
+      "riskFreeValue": 13139.732941883694
+    },
+    {
+      "time": 809938800,
+      "percentReturn": 0.0423,
+      "value": 15634.76581301,
+      "riskFreeValue": 13197.657264602498
+    },
+    {
+      "time": 812530800,
+      "percentReturn": -0.0036,
+      "value": 15578.4806560832,
+      "riskFreeValue": 13255.287034657928
+    },
+    {
+      "time": 815209200,
+      "percentReturn": 0.0438,
+      "value": 16260.8181088196,
+      "riskFreeValue": 13314.052140511578
+    },
+    {
+      "time": 817801200,
+      "percentReturn": 0.0193,
+      "value": 16574.6518983198,
+      "riskFreeValue": 13372.744920364334
+    },
+    {
+      "time": 820479600,
+      "percentReturn": 0.0339,
+      "value": 17136.5325976728,
+      "riskFreeValue": 13428.01893270184
+    },
+    {
+      "time": 823158000,
+      "percentReturn": 0.0092,
+      "value": 17294.1886975714,
+      "riskFreeValue": 13482.7381098526
+    },
+    {
+      "time": 825663600,
+      "percentReturn": 0.0098,
+      "value": 17463.6717468076,
+      "riskFreeValue": 13537.343199197505
+    },
+    {
+      "time": 828342000,
+      "percentReturn": 0.0146,
+      "value": 17718.641354311,
+      "riskFreeValue": 13594.087229440807
+    },
+    {
+      "time": 830934000,
+      "percentReturn": 0.0254,
+      "value": 18168.6948447105,
+      "riskFreeValue": 13650.502691442987
+    },
+    {
+      "time": 833612400,
+      "percentReturn": 0.0038,
+      "value": 18237.7358851204,
+      "riskFreeValue": 13707.834802747047
+    },
+    {
+      "time": 836204400,
+      "percentReturn": -0.0442,
+      "value": 17431.6279589981,
+      "riskFreeValue": 13765.864636745342
+    },
+    {
+      "time": 838882800,
+      "percentReturn": 0.02,
+      "value": 17797.6921461371,
+      "riskFreeValue": 13824.484276990148
+    },
+    {
+      "time": 841561200,
+      "percentReturn": 0.0561,
+      "value": 18796.1426755354,
+      "riskFreeValue": 13883.814355345563
+    },
+    {
+      "time": 844153200,
+      "percentReturn": 0.0276,
+      "value": 19314.9162133802,
+      "riskFreeValue": 13941.316486467287
+    },
+    {
+      "time": 846831600,
+      "percentReturn": 0.0756,
+      "value": 20775.1238791117,
+      "riskFreeValue": 13999.753838073062
+    },
+    {
+      "time": 849423600,
+      "percentReturn": -0.0196,
+      "value": 20367.9314510811,
+      "riskFreeValue": 14058.0861457317
+    },
+    {
+      "time": 852102000,
+      "percentReturn": 0.0622,
+      "value": 21634.8167873383,
+      "riskFreeValue": 14117.481559697417
+    },
+    {
+      "time": 854780400,
+      "percentReturn": 0.0079,
+      "value": 21805.7318399583,
+      "riskFreeValue": 14176.53969088882
+    },
+    {
+      "time": 857199600,
+      "percentReturn": -0.0414,
+      "value": 20902.974541784,
+      "riskFreeValue": 14236.67184674434
+    },
+    {
+      "time": 859878000,
+      "percentReturn": 0.0596,
+      "value": 22148.7918244743,
+      "riskFreeValue": 14298.126813549456
+    },
+    {
+      "time": 862470000,
+      "percentReturn": 0.0609,
+      "value": 23497.6532465848,
+      "riskFreeValue": 14358.893852507043
+    },
+    {
+      "time": 865148400,
+      "percentReturn": 0.0445,
+      "value": 24543.2988160578,
+      "riskFreeValue": 14416.56874281461
+    },
+    {
+      "time": 867740400,
+      "percentReturn": 0.0797,
+      "value": 26499.3997316976,
+      "riskFreeValue": 14477.118331534431
+    },
+    {
+      "time": 870418800,
+      "percentReturn": -0.0561,
+      "value": 25012.7834067494,
+      "riskFreeValue": 14539.128655054505
+    },
+    {
+      "time": 873097200,
+      "percentReturn": 0.0547,
+      "value": 26380.9826590986,
+      "riskFreeValue": 14600.919951838487
+    },
+    {
+      "time": 875689200,
+      "percentReturn": -0.0335,
+      "value": 25497.2197400188,
+      "riskFreeValue": 14661.392095305686
+    },
+    {
+      "time": 878367600,
+      "percentReturn": 0.05,
+      "value": 26670.0918480597,
+      "riskFreeValue": 14723.336476908351
+    },
+    {
+      "time": 880959600,
+      "percentReturn": 0.0172,
+      "value": 27128.8174278463,
+      "riskFreeValue": 14785.910656935213
+    },
+    {
+      "time": 883638000,
+      "percentReturn": 0.0111,
+      "value": 27429.9473012954,
+      "riskFreeValue": 14850.229368292883
+    },
+    {
+      "time": 886316400,
+      "percentReturn": 0.0719,
+      "value": 29402.1605122585,
+      "riskFreeValue": 14912.847835462519
+    },
+    {
+      "time": 888735600,
+      "percentReturn": 0.05,
+      "value": 30901.6706983837,
+      "riskFreeValue": 14977.221628618932
+    },
+    {
+      "time": 891414000,
+      "percentReturn": 0.0101,
+      "value": 31213.7775724374,
+      "riskFreeValue": 15039.501908557939
+    },
+    {
+      "time": 894006000,
+      "percentReturn": -0.0174,
+      "value": 30670.657842677,
+      "riskFreeValue": 15100.787878835314
+    },
+    {
+      "time": 896684400,
+      "percentReturn": 0.0407,
+      "value": 31918.953616874,
+      "riskFreeValue": 15161.820229845607
+    },
+    {
+      "time": 899276400,
+      "percentReturn": -0.0105,
+      "value": 31583.8046038968,
+      "riskFreeValue": 15224.489086795635
+    },
+    {
+      "time": 901954800,
+      "percentReturn": -0.1447,
+      "value": 27013.6280777129,
+      "riskFreeValue": 15287.543845763446
+    },
+    {
+      "time": 904633200,
+      "percentReturn": 0.0641,
+      "value": 28745.2016374943,
+      "riskFreeValue": 15348.566624947785
+    },
+    {
+      "time": 907225200,
+      "percentReturn": 0.0816,
+      "value": 31090.8100911138,
+      "riskFreeValue": 15401.39127508198
+    },
+    {
+      "time": 909903600,
+      "percentReturn": 0.0607,
+      "value": 32978.0222636444,
+      "riskFreeValue": 15455.681179326644
+    },
+    {
+      "time": 912495600,
+      "percentReturn": 0.0581,
+      "value": 34894.0453571621,
+      "riskFreeValue": 15512.094415631185
+    },
+    {
+      "time": 915174000,
+      "percentReturn": 0.04,
+      "value": 36359.5952621629,
+      "riskFreeValue": 15568.584292794778
+    },
+    {
+      "time": 917852400,
+      "percentReturn": -0.0312,
+      "value": 35225.1758899834,
+      "riskFreeValue": 15625.928578273237
+    },
+    {
+      "time": 920271600,
+      "percentReturn": 0.04,
+      "value": 36634.1829255827,
+      "riskFreeValue": 15685.567539013646
+    },
+    {
+      "time": 922950000,
+      "percentReturn": 0.0385,
+      "value": 38044.5989682176,
+      "riskFreeValue": 15742.035582154096
+    },
+    {
+      "time": 925542000,
+      "percentReturn": -0.0239,
+      "value": 37135.3330528772,
+      "riskFreeValue": 15800.149930178215
+    },
+    {
+      "time": 928220400,
+      "percentReturn": 0.0556,
+      "value": 39200.0575706172,
+      "riskFreeValue": 15860.190499912893
+    },
+    {
+      "time": 930812400,
+      "percentReturn": -0.0313,
+      "value": 37973.0957686569,
+      "riskFreeValue": 15920.327055558395
+    },
+    {
+      "time": 933490800,
+      "percentReturn": 0.0438,
+      "value": 39636.3173633241,
+      "riskFreeValue": 15981.620314722293
+    },
+    {
+      "time": 936169200,
+      "percentReturn": 0.07,
+      "value": 42212.6779919402,
+      "riskFreeValue": 16045.946336489049
+    },
+    {
+      "time": 938761200,
+      "percentReturn": 0.0536,
+      "value": 44475.2775323082,
+      "riskFreeValue": 16109.32782451818
+    },
+    {
+      "time": 941439600,
+      "percentReturn": 0.2385,
+      "value": 55082.6312237637,
+      "riskFreeValue": 16176.181534989932
+    },
+    {
+      "time": 944031600,
+      "percentReturn": 0.2047,
+      "value": 66358.0458352681,
+      "riskFreeValue": 16245.199909539222
+    },
+    {
+      "time": 946710000,
+      "percentReturn": 0.0435,
+      "value": 69244.6208291023,
+      "riskFreeValue": 16315.189645816154
+    },
+    {
+      "time": 949388400,
+      "percentReturn": 0.1939,
+      "value": 82671.1528078652,
+      "riskFreeValue": 16390.51143801434
+    },
+    {
+      "time": 951894000,
+      "percentReturn": -0.0031,
+      "value": 82414.8722341608,
+      "riskFreeValue": 16467.000491391736
+    },
+    {
+      "time": 954572400,
+      "percentReturn": -0.1377,
+      "value": 71066.3443275169,
+      "riskFreeValue": 16545.493193734037
+    },
+    {
+      "time": 957164400,
+      "percentReturn": -0.0592,
+      "value": 66859.2167433279,
+      "riskFreeValue": 16623.670649074433
+    },
+    {
+      "time": 959842800,
+      "percentReturn": 0.0729,
+      "value": 71733.2536439165,
+      "riskFreeValue": 16700.832187003885
+    },
+    {
+      "time": 962434800,
+      "percentReturn": -0.0372,
+      "value": 69064.7766083628,
+      "riskFreeValue": 16780.300313493713
+    },
+    {
+      "time": 965113200,
+      "percentReturn": 0.0439,
+      "value": 72096.7203014699,
+      "riskFreeValue": 16865.180665912805
+    },
+    {
+      "time": 967791600,
+      "percentReturn": -0.0538,
+      "value": 68217.9167492508,
+      "riskFreeValue": 16950.77145779231
+    },
+    {
+      "time": 970383600,
+      "percentReturn": -0.0868,
+      "value": 62296.6015754158,
+      "riskFreeValue": 17036.231597225345
+    },
+    {
+      "time": 973062000,
+      "percentReturn": 0.0052,
+      "value": 62620.543903608,
+      "riskFreeValue": 17123.968189951054
+    },
+    {
+      "time": 975654000,
+      "percentReturn": 0.0051,
+      "value": 62939.9086775164,
+      "riskFreeValue": 17210.30152957539
+    },
+    {
+      "time": 978332400,
+      "percentReturn": 0.0048,
+      "value": 63242.0202391685,
+      "riskFreeValue": 17292.480719379113
+    },
+    {
+      "time": 981010800,
+      "percentReturn": 0.0041,
+      "value": 63501.3125221491,
+      "riskFreeValue": 17362.659370298592
+    },
+    {
+      "time": 983430000,
+      "percentReturn": 0.0,
+      "value": 63755.3177722377,
+      "riskFreeValue": 17430.9524971551
+    },
+    {
+      "time": 986108400,
+      "percentReturn": 0.0035,
+      "value": 63978.4613844405,
+      "riskFreeValue": 17491.960830895143
+    },
+    {
+      "time": 988700400,
+      "percentReturn": 0.0032,
+      "value": 64183.1924608707,
+      "riskFreeValue": 17547.789339213752
+    },
+    {
+      "time": 991378800,
+      "percentReturn": 0.0,
+      "value": 64375.7420382533,
+      "riskFreeValue": 17600.286475653567
+    },
+    {
+      "time": 993970800,
+      "percentReturn": 0.0,
+      "value": 64568.8692643681,
+      "riskFreeValue": 17652.647327918636
+    },
+    {
+      "time": 996649200,
+      "percentReturn": 0.0029,
+      "value": 64756.1189852348,
+      "riskFreeValue": 17703.398688986403
+    },
+    {
+      "time": 999327600,
+      "percentReturn": 0.0028,
+      "value": 64937.4361183935,
+      "riskFreeValue": 17752.083035381114
+    },
+    {
+      "time": 1001919600,
+      "percentReturn": 0.0,
+      "value": 65067.3109906303,
+      "riskFreeValue": 17786.40372924952
+    },
+    {
+      "time": 1004598000,
+      "percentReturn": 0.0017,
+      "value": 65177.9254193144,
+      "riskFreeValue": 17816.344175527087
+    },
+    {
+      "time": 1007190000,
+      "percentReturn": 0.0015,
+      "value": 65275.6923074434,
+      "riskFreeValue": 17842.326344116398
+    },
+    {
+      "time": 1009868400,
+      "percentReturn": 0.0014,
+      "value": 65367.0782766738,
+      "riskFreeValue": 17867.751659156766
+    },
+    {
+      "time": 1012546800,
+      "percentReturn": 0.0014,
+      "value": 65458.5921862611,
+      "riskFreeValue": 17893.511001132047
+    },
+    {
+      "time": 1014966000,
+      "percentReturn": 0.0015,
+      "value": 65556.7800745405,
+      "riskFreeValue": 17919.456592083687
+    },
+    {
+      "time": 1017644400,
+      "percentReturn": 0.0015,
+      "value": 65655.1152446523,
+      "riskFreeValue": 17945.58913294714
+    },
+    {
+      "time": 1020236400,
+      "percentReturn": 0.0015,
+      "value": 65753.5979175193,
+      "riskFreeValue": 17971.610237189914
+    },
+    {
+      "time": 1022914800,
+      "percentReturn": 0.0014,
+      "value": 65845.6529546038,
+      "riskFreeValue": 17997.21978177791
+    },
+    {
+      "time": 1025506800,
+      "percentReturn": 0.0014,
+      "value": 65937.8368687402,
+      "riskFreeValue": 18022.4158894724
+    },
+    {
+      "time": 1028185200,
+      "percentReturn": 0.0014,
+      "value": 66030.1498403564,
+      "riskFreeValue": 18047.196711320423
+    },
+    {
+      "time": 1030863600,
+      "percentReturn": 0.0014,
+      "value": 66122.5920501329,
+      "riskFreeValue": 18072.162000104414
+    },
+    {
+      "time": 1033455600,
+      "percentReturn": 0.0013,
+      "value": 66208.5514197981,
+      "riskFreeValue": 18095.65581070455
+    },
+    {
+      "time": 1036134000,
+      "percentReturn": 0.0012,
+      "value": 66288.0016815019,
+      "riskFreeValue": 18116.918206282127
+    },
+    {
+      "time": 1038726000,
+      "percentReturn": 0.0,
+      "value": 66354.2896831834,
+      "riskFreeValue": 18135.035124488408
+    },
+    {
+      "time": 1041404400,
+      "percentReturn": 0.0,
+      "value": 66420.6439728666,
+      "riskFreeValue": 18153.170159612895
+    },
+    {
+      "time": 1044082800,
+      "percentReturn": 0.0,
+      "value": 66487.0646168395,
+      "riskFreeValue": 18170.718224100518
+    },
+    {
+      "time": 1046502000,
+      "percentReturn": 0.0,
+      "value": 66553.5516814563,
+      "riskFreeValue": 18188.58609702088
+    },
+    {
+      "time": 1049180400,
+      "percentReturn": 0.0009,
+      "value": 66613.4498779696,
+      "riskFreeValue": 18205.258967609818
+    },
+    {
+      "time": 1051772400,
+      "percentReturn": 0.0009,
+      "value": 66673.4019828598,
+      "riskFreeValue": 18221.643700680666
+    },
+    {
+      "time": 1054450800,
+      "percentReturn": 0.0353,
+      "value": 69026.9730728548,
+      "riskFreeValue": 18238.19502704212
+    },
+    {
+      "time": 1057042800,
+      "percentReturn": 0.0531,
+      "value": 72692.3053430234,
+      "riskFreeValue": 18251.417718436725
+    },
+    {
+      "time": 1059721200,
+      "percentReturn": 0.0544,
+      "value": 76646.7667536839,
+      "riskFreeValue": 18265.562567168512
+    },
+    {
+      "time": 1062399600,
+      "percentReturn": 0.0651,
+      "value": 81636.4712693487,
+      "riskFreeValue": 18280.175017222246
+    },
+    {
+      "time": 1064991600,
+      "percentReturn": 0.0999,
+      "value": 89791.9547491566,
+      "riskFreeValue": 18294.34215286059
+    },
+    {
+      "time": 1067670000,
+      "percentReturn": -0.0063,
+      "value": 89226.2654342369,
+      "riskFreeValue": 18308.67272088033
+    },
+    {
+      "time": 1070262000,
+      "percentReturn": 0.0597,
+      "value": 94553.0734806608,
+      "riskFreeValue": 18322.861942239015
+    },
+    {
+      "time": 1072940400,
+      "percentReturn": 0.0371,
+      "value": 98060.9925067933,
+      "riskFreeValue": 18337.062160244248
+    },
+    {
+      "time": 1075618800,
+      "percentReturn": 0.0215,
+      "value": 100169.303845689,
+      "riskFreeValue": 18350.814956864433
+    },
+    {
+      "time": 1078124400,
+      "percentReturn": 0.03,
+      "value": 102673.536441831,
+      "riskFreeValue": 18365.342685371954
+    },
+    {
+      "time": 1080802800,
+      "percentReturn": -0.0122,
+      "value": 101420.919297241,
+      "riskFreeValue": 18379.422781430738
+    },
+    {
+      "time": 1083394800,
+      "percentReturn": -0.0282,
+      "value": 98560.8493730588,
+      "riskFreeValue": 18394.12631965588
+    },
+    {
+      "time": 1086073200,
+      "percentReturn": 0.05,
+      "value": 103291.770142966,
+      "riskFreeValue": 18411.75402404555
+    },
+    {
+      "time": 1088665200,
+      "percentReturn": -0.0426,
+      "value": 98891.5407348756,
+      "riskFreeValue": 18430.165778069593
+    },
+    {
+      "time": 1091343600,
+      "percentReturn": 0.0018,
+      "value": 99069.5455081984,
+      "riskFreeValue": 18451.974807573642
+    },
+    {
+      "time": 1094022000,
+      "percentReturn": 0.04,
+      "value": 102834.18823751,
+      "riskFreeValue": 18475.80860836676
+    },
+    {
+      "time": 1096614000,
+      "percentReturn": 0.0268,
+      "value": 105590.144482275,
+      "riskFreeValue": 18501.520775346737
+    },
+    {
+      "time": 1099292400,
+      "percentReturn": 0.0628,
+      "value": 112221.205555762,
+      "riskFreeValue": 18531.73992594647
+    },
+    {
+      "time": 1101884400,
+      "percentReturn": 0.0428,
+      "value": 117024.273153549,
+      "riskFreeValue": 18565.40592014527
+    },
+    {
+      "time": 1104562800,
+      "percentReturn": 0.0123,
+      "value": 118463.671713338,
+      "riskFreeValue": 18599.13307423353
+    },
+    {
+      "time": 1107241200,
+      "percentReturn": 0.0406,
+      "value": 123273.2967849,
+      "riskFreeValue": 18637.416289811328
+    },
+    {
+      "time": 1109660400,
+      "percentReturn": -0.0288,
+      "value": 119723.025837495,
+      "riskFreeValue": 18679.350476463405
+    },
+    {
+      "time": 1112338800,
+      "percentReturn": -0.0165,
+      "value": 117747.595911176,
+      "riskFreeValue": 18722.00166005133
+    },
+    {
+      "time": 1114930800,
+      "percentReturn": -0.0024,
+      "value": 117465.001680989,
+      "riskFreeValue": 18766.31039731345
+    },
+    {
+      "time": 1117609200,
+      "percentReturn": 0.0195,
+      "value": 119755.569213768,
+      "riskFreeValue": 18811.81870002693
+    },
+    {
+      "time": 1120201200,
+      "percentReturn": 0.0569,
+      "value": 126569.661102031,
+      "riskFreeValue": 18860.415898335337
+    },
+    {
+      "time": 1122879600,
+      "percentReturn": 0.0408,
+      "value": 131733.703274994,
+      "riskFreeValue": 18914.010913513106
+    },
+    {
+      "time": 1125558000,
+      "percentReturn": 0.06,
+      "value": 139374.258064944,
+      "riskFreeValue": 18967.600611101392
+    },
+    {
+      "time": 1128150000,
+      "percentReturn": -0.0399,
+      "value": 133813.225168153,
+      "riskFreeValue": 19022.44858953516
+    },
+    {
+      "time": 1130828400,
+      "percentReturn": 0.0488,
+      "value": 140343.310556359,
+      "riskFreeValue": 19083.79598623641
+    },
+    {
+      "time": 1133420400,
+      "percentReturn": 0.0664,
+      "value": 149662.106377301,
+      "riskFreeValue": 19145.500259925244
+    },
+    {
+      "time": 1136098800,
+      "percentReturn": 0.0757,
+      "value": 160991.527830063,
+      "riskFreeValue": 19209.159048289497
+    },
+    {
+      "time": 1138777200,
+      "percentReturn": -0.0074,
+      "value": 159800.190524121,
+      "riskFreeValue": 19279.112402490355
+    },
+    {
+      "time": 1141196400,
+      "percentReturn": 0.0693,
+      "value": 170874.343727443,
+      "riskFreeValue": 19351.248414729675
+    },
+    {
+      "time": 1143874800,
+      "percentReturn": 0.0521,
+      "value": 179776.897035643,
+      "riskFreeValue": 19424.138117091825
+    },
+    {
+      "time": 1146466800,
+      "percentReturn": -0.0622,
+      "value": 168594.774040026,
+      "riskFreeValue": 19500.215991383768
+    },
+    {
+      "time": 1149145200,
+      "percentReturn": -0.0258,
+      "value": 164245.028869793,
+      "riskFreeValue": 19576.75433914995
+    },
+    {
+      "time": 1151737200,
+      "percentReturn": -0.0143,
+      "value": 161896.324956955,
+      "riskFreeValue": 19656.203333842997
+    },
+    {
+      "time": 1154415600,
+      "percentReturn": 0.0326,
+      "value": 167174.145150552,
+      "riskFreeValue": 19737.940379372892
+    },
+    {
+      "time": 1157094000,
+      "percentReturn": 0.0203,
+      "value": 170567.780297108,
+      "riskFreeValue": 19818.372486418837
+    },
+    {
+      "time": 1159686000,
+      "percentReturn": 0.0378,
+      "value": 177015.242392339,
+      "riskFreeValue": 19897.150517052352
+    },
+    {
+      "time": 1162364400,
+      "percentReturn": 0.0435,
+      "value": 184715.405436406,
+      "riskFreeValue": 19979.060453347553
+    },
+    {
+      "time": 1164956400,
+      "percentReturn": 0.0342,
+      "value": 191032.672302331,
+      "riskFreeValue": 20060.641616865392
+    },
+    {
+      "time": 1167634800,
+      "percentReturn": 0.0116,
+      "value": 193248.651301038,
+      "riskFreeValue": 20142.38873145412
+    },
+    {
+      "time": 1170313200,
+      "percentReturn": 0.01,
+      "value": 195374.386465349,
+      "riskFreeValue": 20226.315351168512
+    },
+    {
+      "time": 1172732400,
+      "percentReturn": 0.0111,
+      "value": 197543.042155114,
+      "riskFreeValue": 20310.591665131713
+    },
+    {
+      "time": 1175410800,
+      "percentReturn": 0.0437,
+      "value": 206175.673097292,
+      "riskFreeValue": 20393.52658109767
+    },
+    {
+      "time": 1178002800,
+      "percentReturn": 0.0281,
+      "value": 211969.209511326,
+      "riskFreeValue": 20474.420903202692
+    },
+    {
+      "time": 1180681200,
+      "percentReturn": 0.02,
+      "value": 215360.716863507,
+      "riskFreeValue": 20553.929904376793
+    },
+    {
+      "time": 1183273200,
+      "percentReturn": 0.0073,
+      "value": 216932.850096611,
+      "riskFreeValue": 20634.090231003862
+    },
+    {
+      "time": 1185951600,
+      "percentReturn": -0.0323,
+      "value": 209925.91903849,
+      "riskFreeValue": 20715.766838168252
+    },
+    {
+      "time": 1188630000,
+      "percentReturn": 0.0546,
+      "value": 221387.874217992,
+      "riskFreeValue": 20783.265711782617
+    },
+    {
+      "time": 1191222000,
+      "percentReturn": 0.0701,
+      "value": 236907.164200673,
+      "riskFreeValue": 20849.59896817939
+    },
+    {
+      "time": 1193900400,
+      "percentReturn": -0.0717,
+      "value": 219920.920527485,
+      "riskFreeValue": 20914.05897832268
+    },
+    {
+      "time": 1196492400,
+      "percentReturn": -0.0085,
+      "value": 218051.592703001,
+      "riskFreeValue": 20967.73839636704
+    },
+    {
+      "time": 1199170800,
+      "percentReturn": -0.0961,
+      "value": 197096.834644243,
+      "riskFreeValue": 21025.224945803744
+    },
+    {
+      "time": 1201849200,
+      "percentReturn": 0.0016,
+      "value": 197412.189579674,
+      "riskFreeValue": 21061.318248627373
+    },
+    {
+      "time": 1204354800,
+      "percentReturn": 0.0015,
+      "value": 197708.307864044,
+      "riskFreeValue": 21093.085736985715
+    },
+    {
+      "time": 1207033200,
+      "percentReturn": 0.0011,
+      "value": 197925.787002694,
+      "riskFreeValue": 21117.34278558325
+    },
+    {
+      "time": 1209625200,
+      "percentReturn": 0.0012,
+      "value": 198163.297947097,
+      "riskFreeValue": 21142.331641212855
+    },
+    {
+      "time": 1212303600,
+      "percentReturn": 0.0015,
+      "value": 198460.542894018,
+      "riskFreeValue": 21174.926069159726
+    },
+    {
+      "time": 1214895600,
+      "percentReturn": 0.0016,
+      "value": 198778.079762648,
+      "riskFreeValue": 21207.39428913244
+    },
+    {
+      "time": 1217574000,
+      "percentReturn": 0.0014,
+      "value": 199056.369074316,
+      "riskFreeValue": 21236.20099970851
+    },
+    {
+      "time": 1220252400,
+      "percentReturn": 0.0014,
+      "value": 199335.04799102,
+      "riskFreeValue": 21266.108649449765
+    },
+    {
+      "time": 1222844400,
+      "percentReturn": 0.0008,
+      "value": 199494.516029413,
+      "riskFreeValue": 21280.99492550438
+    },
+    {
+      "time": 1225522800,
+      "percentReturn": 0.0004,
+      "value": 199574.313835825,
+      "riskFreeValue": 21288.797956977065
+    },
+    {
+      "time": 1228114800,
+      "percentReturn": 0.0,
+      "value": 199574.313835825,
+      "riskFreeValue": 21290.039803524553
+    },
+    {
+      "time": 1230793200,
+      "percentReturn": 0.0001,
+      "value": 199594.271267209,
+      "riskFreeValue": 21291.99139050654
+    },
+    {
+      "time": 1233471600,
+      "percentReturn": 0.0002,
+      "value": 199634.190121462,
+      "riskFreeValue": 21296.24978878464
+    },
+    {
+      "time": 1235890800,
+      "percentReturn": 0.0002,
+      "value": 199674.116959486,
+      "riskFreeValue": 21300.863976238878
+    },
+    {
+      "time": 1238569200,
+      "percentReturn": 0.0002,
+      "value": 199714.051782878,
+      "riskFreeValue": 21304.769134634524
+    },
+    {
+      "time": 1241161200,
+      "percentReturn": 0.0001,
+      "value": 199734.023188056,
+      "riskFreeValue": 21307.43223077635
+    },
+    {
+      "time": 1243839600,
+      "percentReturn": 0.0001,
+      "value": 199753.996590375,
+      "riskFreeValue": 21309.740535934685
+    },
+    {
+      "time": 1246431600,
+      "percentReturn": 0.0002,
+      "value": 199793.947389693,
+      "riskFreeValue": 21312.759415843942
+    },
+    {
+      "time": 1249110000,
+      "percentReturn": 0.0471,
+      "value": 209204.242311748,
+      "riskFreeValue": 21315.95632975632
+    },
+    {
+      "time": 1251788400,
+      "percentReturn": 0.0662,
+      "value": 223053.563152786,
+      "riskFreeValue": 21318.44319132813
+    },
+    {
+      "time": 1254380400,
+      "percentReturn": -0.0143,
+      "value": 219863.897199701,
+      "riskFreeValue": 21320.21972826074
+    },
+    {
+      "time": 1257058800,
+      "percentReturn": 0.0392,
+      "value": 228482.561969929,
+      "riskFreeValue": 21321.10807074942
+    },
+    {
+      "time": 1259650800,
+      "percentReturn": 0.0094,
+      "value": 230630.298052446,
+      "riskFreeValue": 21322.174126152957
+    },
+    {
+      "time": 1262329200,
+      "percentReturn": -0.0195,
+      "value": 226133.007240423,
+      "riskFreeValue": 21323.240234859266
+    },
+    {
+      "time": 1265007600,
+      "percentReturn": -0.0077,
+      "value": 224391.783084672,
+      "riskFreeValue": 21325.017171545507
+    },
+    {
+      "time": 1267426800,
+      "percentReturn": 0.0604,
+      "value": 237945.046782986,
+      "riskFreeValue": 21327.32738173909
+    },
+    {
+      "time": 1270105200,
+      "percentReturn": 0.0094,
+      "value": 240181.730222746,
+      "riskFreeValue": 21330.17102538999
+    },
+    {
+      "time": 1272697200,
+      "percentReturn": -0.0801,
+      "value": 220943.173631904,
+      "riskFreeValue": 21333.015048193374
+    },
+    {
+      "time": 1275375600,
+      "percentReturn": -0.0524,
+      "value": 209365.751333592,
+      "riskFreeValue": 21335.8594501998
+    },
+    {
+      "time": 1277967600,
+      "percentReturn": 0.0833,
+      "value": 226805.91841968,
+      "riskFreeValue": 21338.88203028858
+    },
+    {
+      "time": 1280646000,
+      "percentReturn": -0.0453,
+      "value": 216531.610315268,
+      "riskFreeValue": 21341.549390542365
+    },
+    {
+      "time": 1283324400,
+      "percentReturn": 0.1142,
+      "value": 241259.520213272,
+      "riskFreeValue": 21343.86139172634
+    },
+    {
+      "time": 1285916400,
+      "percentReturn": 0.04,
+      "value": 251874.939102656,
+      "riskFreeValue": 21346.707239911902
+    },
+    {
+      "time": 1288594800,
+      "percentReturn": -0.0326,
+      "value": 243663.816087909,
+      "riskFreeValue": 21349.019799862894
+    },
+    {
+      "time": 1291186800,
+      "percentReturn": 0.0778,
+      "value": 262620.860979548,
+      "riskFreeValue": 21351.86633583621
+    },
+    {
+      "time": 1293865200,
+      "percentReturn": -0.0059,
+      "value": 261071.397899769,
+      "riskFreeValue": 21354.001522469793
+    },
+    {
+      "time": 1296543600,
+      "percentReturn": 0.0076,
+      "value": 263055.540523807,
+      "riskFreeValue": 21356.6707726601
+    },
+    {
+      "time": 1298962800,
+      "percentReturn": 0.0175,
+      "value": 267659.012482974,
+      "riskFreeValue": 21359.16238425025
+    },
+    {
+      "time": 1301641200,
+      "percentReturn": 0.0606,
+      "value": 283879.148639442,
+      "riskFreeValue": 21360.40833538933
+    },
+    {
+      "time": 1304233200,
+      "percentReturn": -0.0204,
+      "value": 278088.014007197,
+      "riskFreeValue": 21361.12034900051
+    },
+    {
+      "time": 1306911600,
+      "percentReturn": -0.0095,
+      "value": 275446.177874129,
+      "riskFreeValue": 21362.01039568172
+    },
+    {
+      "time": 1309503600,
+      "percentReturn": -0.0205,
+      "value": 269799.531227709,
+      "riskFreeValue": 21362.366429188314
+    },
+    {
+      "time": 1312182000,
+      "percentReturn": -0.0545,
+      "value": 255095.456775799,
+      "riskFreeValue": 21364.14662639075
+    },
+    {
+      "time": 1314860400,
+      "percentReturn": -0.0704,
+      "value": 237136.736618783,
+      "riskFreeValue": 21364.502695501193
+    },
+    {
+      "time": 1317452400,
+      "percentReturn": 0.0,
+      "value": 237136.736618783,
+      "riskFreeValue": 21364.85877054612
+    },
+    {
+      "time": 1320130800,
+      "percentReturn": -0.0023,
+      "value": 236591.32212456,
+      "riskFreeValue": 21365.036811035876
+    },
+    {
+      "time": 1322722800,
+      "percentReturn": 0.0,
+      "value": 236591.32212456,
+      "riskFreeValue": 21365.214853009304
+    },
+    {
+      "time": 1325401200,
+      "percentReturn": 0.0,
+      "value": 236591.32212456,
+      "riskFreeValue": 21365.570939923524
+    },
+    {
+      "time": 1328079600,
+      "percentReturn": 0.0431,
+      "value": 246788.408108129,
+      "riskFreeValue": 21366.639218470522
+    },
+    {
+      "time": 1330585200,
+      "percentReturn": 0.0328,
+      "value": 254883.067894076,
+      "riskFreeValue": 21368.063661085085
+    },
+    {
+      "time": 1333263600,
+      "percentReturn": -0.0064,
+      "value": 253251.816259554,
+      "riskFreeValue": 21369.310131465314
+    },
+    {
+      "time": 1335855600,
+      "percentReturn": -0.0602,
+      "value": 238006.056920729,
+      "riskFreeValue": 21370.912829725174
+    },
+    {
+      "time": 1338534000,
+      "percentReturn": 0.0411,
+      "value": 247788.105860171,
+      "riskFreeValue": 21372.159466306905
+    },
+    {
+      "time": 1341126000,
+      "percentReturn": 0.0137,
+      "value": 251182.802910455,
+      "riskFreeValue": 21373.762378266878
+    },
+    {
+      "time": 1343804400,
+      "percentReturn": 0.0224,
+      "value": 256809.297695649,
+      "riskFreeValue": 21375.543525131736
+    },
+    {
+      "time": 1346482800,
+      "percentReturn": 0.0258,
+      "value": 263434.977576197,
+      "riskFreeValue": 21377.146690896123
+    },
+    {
+      "time": 1349074800,
+      "percentReturn": -0.0186,
+      "value": 258535.08699328,
+      "riskFreeValue": 21378.74997689794
+    },
+    {
+      "time": 1351753200,
+      "percentReturn": 0.0084,
+      "value": 260706.781724024,
+      "riskFreeValue": 21380.35338314621
+    },
+    {
+      "time": 1354345200,
+      "percentReturn": 0.0305,
+      "value": 268658.338566607,
+      "riskFreeValue": 21381.77874003842
+    },
+    {
+      "time": 1357023600,
+      "percentReturn": 0.0347,
+      "value": 277980.782914868,
+      "riskFreeValue": 21382.66964748592
+    },
+    {
+      "time": 1359702000,
+      "percentReturn": 0.0157,
+      "value": 282345.081206631,
+      "riskFreeValue": 21383.738780968295
+    },
+    {
+      "time": 1362121200,
+      "percentReturn": 0.0089,
+      "value": 284857.95242937,
+      "riskFreeValue": 21385.698957023214
+    },
+    {
+      "time": 1364799600,
+      "percentReturn": 0.0291,
+      "value": 293147.318845065,
+      "riskFreeValue": 21387.124670287016
+    },
+    {
+      "time": 1367391600,
+      "percentReturn": -0.01,
+      "value": 290802.140294304,
+      "riskFreeValue": 21388.194026520534
+    },
+    {
+      "time": 1370070000,
+      "percentReturn": -0.0251,
+      "value": 283503.006572917,
+      "riskFreeValue": 21388.906966321418
+    },
+    {
+      "time": 1372662000,
+      "percentReturn": 0.0428,
+      "value": 295636.935254238,
+      "riskFreeValue": 21389.61992988696
+    },
+    {
+      "time": 1375340400,
+      "percentReturn": -0.0291,
+      "value": 287033.90043834,
+      "riskFreeValue": 21390.33291721796
+    },
+    {
+      "time": 1378018800,
+      "percentReturn": 0.0312,
+      "value": 295989.358132016,
+      "riskFreeValue": 21390.86767554089
+    },
+    {
+      "time": 1380610800,
+      "percentReturn": 0.0459,
+      "value": 309575.269670276,
+      "riskFreeValue": 21391.22419000215
+    },
+    {
+      "time": 1383289200,
+      "percentReturn": 0.0303,
+      "value": 318955.400341285,
+      "riskFreeValue": 21391.937230808486
+    },
+    {
+      "time": 1385881200,
+      "percentReturn": 0.0251,
+      "value": 326961.180889851,
+      "riskFreeValue": 21393.00682767003
+    },
+    {
+      "time": 1388559600,
+      "percentReturn": -0.0347,
+      "value": 315615.627912973,
+      "riskFreeValue": 21394.254753068308
+    },
+    {
+      "time": 1391238000,
+      "percentReturn": 0.0488,
+      "value": 331017.670555126,
+      "riskFreeValue": 21394.611323980862
+    },
+    {
+      "time": 1393657200,
+      "percentReturn": 0.0082,
+      "value": 333732.015453678,
+      "riskFreeValue": 21395.502766119364
+    },
+    {
+      "time": 1396335600,
+      "percentReturn": -0.0026,
+      "value": 332864.312213498,
+      "riskFreeValue": 21396.2159495449
+    },
+    {
+      "time": 1398927600,
+      "percentReturn": 0.0154,
+      "value": 337990.422621586,
+      "riskFreeValue": 21396.75085494364
+    },
+    {
+      "time": 1401606000,
+      "percentReturn": 0.0188,
+      "value": 344344.642566872,
+      "riskFreeValue": 21397.46407997214
+    },
+    {
+      "time": 1404198000,
+      "percentReturn": -0.0139,
+      "value": 339558.252035192,
+      "riskFreeValue": 21397.820704373473
+    },
+    {
+      "time": 1406876400,
+      "percentReturn": 0.0398,
+      "value": 353072.670466193,
+      "riskFreeValue": 21398.35564989108
+    },
+    {
+      "time": 1409554800,
+      "percentReturn": -0.0141,
+      "value": 348094.34581262,
+      "riskFreeValue": 21398.890608782327
+    },
+    {
+      "time": 1412146800,
+      "percentReturn": 0.0242,
+      "value": 356518.228981285,
+      "riskFreeValue": 21399.24725695914
+    },
+    {
+      "time": 1414825200,
+      "percentReturn": 0.0268,
+      "value": 366072.917517983,
+      "riskFreeValue": 21399.425584019617
+    },
+    {
+      "time": 1417417200,
+      "percentReturn": -0.0026,
+      "value": 365121.127932436,
+      "riskFreeValue": 21399.960569659215
+    },
+    {
+      "time": 1420095600,
+      "percentReturn": -0.0302,
+      "value": 354094.469868876,
+      "riskFreeValue": 21400.673901678205
+    },
+    {
+      "time": 1422774000,
+      "percentReturn": 0.0574,
+      "value": 374419.492439349,
+      "riskFreeValue": 21401.030579576567
+    },
+    {
+      "time": 1425193200,
+      "percentReturn": -0.0159,
+      "value": 368466.222509563,
+      "riskFreeValue": 21401.38726341956
+    },
+    {
+      "time": 1427871600,
+      "percentReturn": 0.0095,
+      "value": 371966.651623404,
+      "riskFreeValue": 21401.922298101144
+    },
+    {
+      "time": 1430463600,
+      "percentReturn": 0.0127,
+      "value": 376690.628099021,
+      "riskFreeValue": 21402.10064745363
+    },
+    {
+      "time": 1433142000,
+      "percentReturn": -0.0193,
+      "value": 369420.49897671,
+      "riskFreeValue": 21402.45734913109
+    },
+    {
+      "time": 1435734000,
+      "percentReturn": -0.0018,
+      "value": 368755.542078552,
+      "riskFreeValue": 21402.635702942334
+    },
+    {
+      "time": 1438412400,
+      "percentReturn": -0.0532,
+      "value": 349137.747239973,
+      "riskFreeValue": 21404.06254532253
+    },
+    {
+      "time": 1441090800,
+      "percentReturn": -0.0191,
+      "value": 342469.21626769,
+      "riskFreeValue": 21404.597646886163
+    },
+    {
+      "time": 1443682800,
+      "percentReturn": 0.0516,
+      "value": 360140.627827103,
+      "riskFreeValue": 21404.240903592046
+    },
+    {
+      "time": 1446361200,
+      "percentReturn": 0.02,
+      "value": 365902.877872337,
+      "riskFreeValue": 21405.667852985618
+    },
+    {
+      "time": 1448953200,
+      "percentReturn": 0.0033,
+      "value": 367110.357369316,
+      "riskFreeValue": 21409.41384485989
+    },
+    {
+      "time": 1451631600,
+      "percentReturn": -0.0619,
+      "value": 344386.226248155,
+      "riskFreeValue": 21412.268433372537
+    },
+    {
+      "time": 1454310000,
+      "percentReturn": 0.0003,
+      "value": 344489.542116029,
+      "riskFreeValue": 21418.51367833227
+    },
+    {
+      "time": 1456815600,
+      "percentReturn": 0.0003,
+      "value": 344592.888978664,
+      "riskFreeValue": 21424.403769593813
+    },
+    {
+      "time": 1459494000,
+      "percentReturn": 0.0002,
+      "value": 344661.80755646,
+      "riskFreeValue": 21428.51011364965
+    },
+    {
+      "time": 1462086000,
+      "percentReturn": 0.0178,
+      "value": 350796.787730965,
+      "riskFreeValue": 21432.438673837154
+    },
+    {
+      "time": 1464764400,
+      "percentReturn": 0.0025,
+      "value": 351673.779700292,
+      "riskFreeValue": 21437.796783505615
+    },
+    {
+      "time": 1467356400,
+      "percentReturn": 0.0368,
+      "value": 364615.374793263,
+      "riskFreeValue": 21442.6202877819
+    },
+    {
+      "time": 1470034800,
+      "percentReturn": 0.0013,
+      "value": 365089.374780494,
+      "riskFreeValue": 21447.80225435145
+    },
+    {
+      "time": 1472713200,
+      "percentReturn": 0.0001,
+      "value": 365125.883717972,
+      "riskFreeValue": 21453.700399971396
+    },
+    {
+      "time": 1475305200,
+      "percentReturn": -0.0238,
+      "value": 356435.887685484,
+      "riskFreeValue": 21458.706263398057
+    },
+    {
+      "time": 1477983600,
+      "percentReturn": 0.04,
+      "value": 369624.015529847,
+      "riskFreeValue": 21464.965052724878
+    },
+    {
+      "time": 1480575600,
+      "percentReturn": 0.0196,
+      "value": 376868.646234232,
+      "riskFreeValue": 21473.37216403719
+    },
+    {
+      "time": 1483254000,
+      "percentReturn": 0.0188,
+      "value": 383953.776783436,
+      "riskFreeValue": 21482.319402438876
+    },
+    {
+      "time": 1485932400,
+      "percentReturn": 0.0396,
+      "value": 399158.34634406,
+      "riskFreeValue": 21491.27036885656
+    },
+    {
+      "time": 1488351600,
+      "percentReturn": 0.0,
+      "value": 399557.504690404,
+      "riskFreeValue": 21502.37419188047
+    },
+    {
+      "time": 1491030000,
+      "percentReturn": 0.0102,
+      "value": 403632.991238246,
+      "riskFreeValue": 21515.813175750398
+    },
+    {
+      "time": 1493622000,
+      "percentReturn": 0.0426,
+      "value": 420827.756664995,
+      "riskFreeValue": 21530.515648087163
+    },
+    {
+      "time": 1496300400,
+      "percentReturn": 0.0028,
+      "value": 422006.074383657,
+      "riskFreeValue": 21547.74006060563
+    },
+    {
+      "time": 1498892400,
+      "percentReturn": 0.0395,
+      "value": 438675.314321811,
+      "riskFreeValue": 21565.876075156637
+    },
+    {
+      "time": 1501570800,
+      "percentReturn": 0.0201,
+      "value": 447492.688139679,
+      "riskFreeValue": 21584.92593235636
+    },
+    {
+      "time": 1504249200,
+      "percentReturn": 0.0306,
+      "value": 461185.964396753,
+      "riskFreeValue": 21602.913370633323
+    },
+    {
+      "time": 1506841200,
+      "percentReturn": 0.0171,
+      "value": 469072.244387937,
+      "riskFreeValue": 21621.635895554537
+    },
+    {
+      "time": 1509519600,
+      "percentReturn": 0.0164,
+      "value": 476765.029195899,
+      "riskFreeValue": 21642.53681025357
+    },
+    {
+      "time": 1512111600,
+      "percentReturn": 0.03,
+      "value": 489160.919954992,
+      "riskFreeValue": 21665.081119430914
+    },
+    {
+      "time": 1514790000,
+      "percentReturn": 0.0592,
+      "value": 518119.246416328,
+      "riskFreeValue": 21689.815420375595
+    },
+    {
+      "time": 1517468400,
+      "percentReturn": -0.0279,
+      "value": 503663.719441312,
+      "riskFreeValue": 21716.204695803717
+    },
+    {
+      "time": 1519887600,
+      "percentReturn": -0.01,
+      "value": 500641.737124664,
+      "riskFreeValue": 21745.159635398122
+    },
+    {
+      "time": 1522566000,
+      "percentReturn": -0.0034,
+      "value": 498939.55521844,
+      "riskFreeValue": 21776.146487878566
+    },
+    {
+      "time": 1525158000,
+      "percentReturn": 0.0114,
+      "value": 504627.46614793,
+      "riskFreeValue": 21809.17364338518
+    },
+    {
+      "time": 1527836400,
+      "percentReturn": -0.0114,
+      "value": 498874.713033844,
+      "riskFreeValue": 21843.34134875982
+    },
+    {
+      "time": 1530428400,
+      "percentReturn": 0.0371,
+      "value": 517382.9648874,
+      "riskFreeValue": 21877.744611384118
+    },
+    {
+      "time": 1533106800,
+      "percentReturn": 0.0325,
+      "value": 534197.911246241,
+      "riskFreeValue": 21914.02520453133
+    },
+    {
+      "time": 1535785200,
+      "percentReturn": 0.0055,
+      "value": 537135.999758095,
+      "riskFreeValue": 21951.826898009145
+    },
+    {
+      "time": 1538377200,
+      "percentReturn": -0.0685,
+      "value": 500342.183774665,
+      "riskFreeValue": 21991.88898209801
+    },
+    {
+      "time": 1541055600,
+      "percentReturn": 0.0203,
+      "value": 510499.130105291,
+      "riskFreeValue": 22033.490305422478
+    },
+    {
+      "time": 1543647600,
+      "percentReturn": 0.0019,
+      "value": 511469.078452491,
+      "riskFreeValue": 22076.08838667963
+    },
+    {
+      "time": 1546326000,
+      "percentReturn": 0.0,
+      "value": 512492.016609396,
+      "riskFreeValue": 22120.240563452986
+    },
+    {
+      "time": 1549004400,
+      "percentReturn": 0.03,
+      "value": 528891.761140897,
+      "riskFreeValue": 22163.559367889746
+    },
+    {
+      "time": 1551423600,
+      "percentReturn": 0.0194,
+      "value": 539152.26130703,
+      "riskFreeValue": 22207.70179029746
+    },
+    {
+      "time": 1554102000,
+      "percentReturn": 0.0404,
+      "value": 560934.012663834,
+      "riskFreeValue": 22251.74706551488
+    },
+    {
+      "time": 1556694000,
+      "percentReturn": -0.0636,
+      "value": 525258.609458414,
+      "riskFreeValue": 22295.879697194814
+    },
+    {
+      "time": 1559372400,
+      "percentReturn": 0.0019,
+      "value": 526256.600816385,
+      "riskFreeValue": 22338.613466614435
+    },
+    {
+      "time": 1561964400,
+      "percentReturn": 0.0143,
+      "value": 533782.070208059,
+      "riskFreeValue": 22378.82297085434
+    },
+    {
+      "time": 1564642800,
+      "percentReturn": -0.0159,
+      "value": 525294.935291751,
+      "riskFreeValue": 22416.68047971337
+    },
+    {
+      "time": 1567321200,
+      "percentReturn": 0.0186,
+      "value": 535065.421088178,
+      "riskFreeValue": 22453.107585492904
+    },
+    {
+      "time": 1569913200,
+      "percentReturn": 0.0215,
+      "value": 546569.327641574,
+      "riskFreeValue": 22486.413028411385
+    },
+    {
+      "time": 1572591600,
+      "percentReturn": 0.0362,
+      "value": 566355.137302199,
+      "riskFreeValue": 22514.33365792166
+    },
+    {
+      "time": 1575183600,
+      "percentReturn": 0.0301,
+      "value": 583402.426934995,
+      "riskFreeValue": 22543.602291676958
+    },
+    {
+      "time": 1577862000,
+      "percentReturn": -0.0005,
+      "value": 583110.725721528,
+      "riskFreeValue": 22572.157521246416
+    },
+    {
+      "time": 1580540400,
+      "percentReturn": -0.0824,
+      "value": 535062.401922074,
+      "riskFreeValue": 22600.74892077333
+    },
+    {
+      "time": 1583046000,
+      "percentReturn": -0.1237,
+      "value": 468875.182804313,
+      "riskFreeValue": 22624.291367565802
+    },
+    {
+      "time": 1585724400,
+      "percentReturn": 0.0001,
+      "value": 468922.070322593,
+      "riskFreeValue": 22625.98818941837
+    },
+    {
+      "time": 1588316400,
+      "percentReturn": 0.0001,
+      "value": 468968.962529625,
+      "riskFreeValue": 22628.250788237314
+    },
+    {
+      "time": 1590994800,
+      "percentReturn": 0.0423,
+      "value": 488806.349644628,
+      "riskFreeValue": 22630.890750829276
+    },
+    {
+      "time": 1593586800,
+      "percentReturn": 0.0638,
+      "value": 519992.194751955,
+      "riskFreeValue": 22633.531021416875
+    },
+    {
+      "time": 1596265200,
+      "percentReturn": 0.0783,
+      "value": 560707.583601033,
+      "riskFreeValue": 22635.22853624348
+    },
+    {
+      "time": 1598943600,
+      "percentReturn": -0.0075,
+      "value": 556502.276724025,
+      "riskFreeValue": 22637.492059097105
+    },
+    {
+      "time": 1601535600,
+      "percentReturn": -0.0144,
+      "value": 548488.643939199,
+      "riskFreeValue": 22639.189871001538
+    },
+    {
+      "time": 1604214000,
+      "percentReturn": 0.1067,
+      "value": 607012.382247512,
+      "riskFreeValue": 22640.887810241864
+    },
+    {
+      "time": 1606806000,
+      "percentReturn": 0.0756,
+      "value": 652902.518345424,
+      "riskFreeValue": 22642.585876827634
+    },
+    {
+      "time": 1609484400,
+      "percentReturn": 0.0124,
+      "value": 660998.509572907,
+      "riskFreeValue": 22644.284070768397
+    }
+  ]
+}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"gonum.org/v1/gonum/stat"
 )
 
 // DrawDown draw down period in portfolio
@@ -116,6 +117,7 @@ func (perf *Performance) OneWeekReturn(forDate time.Time, p *Portfolio) float64 
 	return 0
 }
 
+// OneMonthReturn get one month return from performance measurement
 func (perf *Performance) OneMonthReturn(forDate time.Time) float64 {
 	value := perf.Measurement
 	sz := len(value)
@@ -168,28 +170,6 @@ func (perf *Performance) PeriodCagr(period int) float64 {
 	return math.Pow(final/initial, 1.0/float64(period)) - 1.0
 }
 
-// Std standard deviation of portfolio
-func (perf *Performance) Std() float64 {
-	m := perf.Mean()
-	N := float64(len(perf.Measurement))
-	var stderr float64
-	for _, xx := range perf.Measurement {
-		stderr += math.Pow(xx.Value-m, 2)
-	}
-
-	return math.Sqrt(stderr / N)
-}
-
-// Mean value of array
-func Mean(arr []float64) float64 {
-	var total float64 = 0.0
-	for _, xx := range arr {
-		total += xx
-	}
-
-	return total / float64(len(arr))
-}
-
 // Mean value of portfolio
 func (perf *Performance) Mean() float64 {
 	var total float64 = 0.0
@@ -198,6 +178,17 @@ func (perf *Performance) Mean() float64 {
 	}
 
 	return total / float64(len(perf.Measurement))
+}
+
+// Std standard deviation of portfolio
+func (perf *Performance) Std() float64 {
+	m := perf.Mean()
+	N := float64(len(perf.Measurement))
+	var stderr float64
+	for _, xx := range perf.Measurement {
+		stderr += math.Pow(xx.Value-m, 2)
+	}
+	return math.Sqrt(stderr / N)
 }
 
 // UlcerIndex The Ulcer Index (UI) is a technical indicator that measures downside
@@ -251,28 +242,56 @@ func (perf *Performance) UlcerIndex(period int) []float64 {
 // period is number of days to lookback
 func (perf *Performance) AvgUlcerIndex(period int) float64 {
 	u := perf.UlcerIndex(period)
-	return Mean(u)
+	return stat.Mean(u, nil)
+}
+
+// ExcessReturn compute the rate of return that is in excess of the risk free rate
+func (perf *Performance) ExcessReturn() []float64 {
+	rets := make([]float64, len(perf.Measurement))
+	prev := perf.Measurement[0].RiskFreeValue
+	for ii, xx := range perf.Measurement {
+		riskFreeRate := xx.RiskFreeValue/prev - 1.0
+		prev = xx.RiskFreeValue
+		rets[ii] = xx.PercentReturn - riskFreeRate
+	}
+	return rets
 }
 
 // SharpeRatio The ratio is the average return earned in excess of the risk-free
 // rate per unit of volatility or total risk. Volatility is a measure of the price
 // fluctuations of an asset or portfolio.
+// Sharpe = (Rp - Rf) / std
 func (perf *Performance) SharpeRatio() float64 {
-	return 0.0
+	excessReturn := perf.ExcessReturn()
+	sharpe := stat.Mean(excessReturn, nil) / stat.StdDev(excessReturn, nil)
+	return sharpe * math.Sqrt(12) // annualize rate
 }
 
-// SortinoRatio
+// SortinoRatio a variation of the Sharpe ratio that differentiates harmful
+// volatility from total overall volatility by using the asset's standard deviation
+// of negative portfolio returns—downside deviation—instead of the total standard
+// deviation of portfolio returns. The Sortino ratio takes an asset or portfolio's
+// return and subtracts the risk-free rate, and then divides that amount by the
+// asset's downside deviation.
+//
+// Calculation is based on this paper by Red Rock Capital
+// http://www.redrockcapital.com/Sortino__A__Sharper__Ratio_Red_Rock_Capital.pdf
+func (perf *Performance) SortinoRatio() float64 {
+	// get downside returns
+	var downside float64
+	excessReturn := perf.ExcessReturn()
+	for _, xx := range excessReturn {
+		if xx < 0 {
+			downside += math.Pow(xx, 2)
+		}
+	}
+	downside = downside / float64(len(excessReturn))
+	sortino := stat.Mean(excessReturn, nil) / math.Sqrt(downside)
+	return sortino * math.Sqrt(12) // annualize rate by adjusting by month
+}
 
 // KRatio The K-ratio is a valuation metric that examines the consistency of an equity's return over time.
 // k-ratio = (Slope logVAMI regression line) / n(Standard Error of the Slope)
-
-// ArithmeticMeanMonthly
-
-// ArithmeticMeanAnnualized
-
-// GeometricMeanMonthly
-
-// GeometricMeanAnnualized
 
 // VolatilityMonthly
 

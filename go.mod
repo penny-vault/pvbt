@@ -27,5 +27,6 @@ require (
 	github.com/valyala/fasthttp v1.19.0 // indirect
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
 	golang.org/x/tools v0.1.0 // indirect
+	gonum.org/v1/gonum v0.8.2
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
