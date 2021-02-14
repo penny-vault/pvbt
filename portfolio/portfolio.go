@@ -61,7 +61,7 @@ type PerformanceMeasurement struct {
 type Performance struct {
 	PeriodStart        int64                    `json:"periodStart"`
 	PeriodEnd          int64                    `json:"periodEnd"`
-	Measurement        []PerformanceMeasurement `json:"value"`
+	Measurement        []PerformanceMeasurement `json:"measurements"`
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
 	YTDReturn          float64                  `json:"ytdReturn"`
 	CurrentAsset       string                   `json:"currentAsset"`
