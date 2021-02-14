@@ -10,6 +10,7 @@
 package main
 
 import (
+	"main/data"
 	"main/database"
 	"main/jwks"
 	"main/newrelicapi"
@@ -44,6 +45,9 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	// Initialize data framework
+	data.InitializeDataManager()
 
 	// Create new Fiber instance
 	app := fiber.New()

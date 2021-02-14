@@ -371,6 +371,7 @@ func main() {
 		log.Fatal(err)
 	}
 
+	data.InitializeDataManager()
 	strategies.IntializeStrategyMap()
 
 	// get a list of all portfolios

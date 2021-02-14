@@ -53,6 +53,7 @@ type Portfolio struct {
 type PerformanceMeasurement struct {
 	Time          int64   `json:"time"`
 	Value         float64 `json:"value"`
+	RiskFreeValue float64 `json:"riskFreeValue"`
 	Holdings      string  `json:"holdings"`
 	PercentReturn float64 `json:"percentReturn"`
 }
@@ -283,6 +284,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	currYear := today.Year()
 	var totalVal float64
 	var currYearStartValue float64 = -1.0
+	var riskFreeValue float64 = 0
 
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
@@ -304,8 +306,10 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 				switch trx.Kind {
 				case DepositTransaction:
 					perf.TotalDeposited += trx.TotalValue
+					riskFreeValue += trx.TotalValue
 				case WithdrawTransaction:
 					perf.TotalWithdrawn += trx.TotalValue
+					riskFreeValue -= trx.TotalValue
 				}
 				continue
 			}
@@ -350,6 +354,11 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		if prevVal == -1 {
 			prevVal = totalVal
 			startVal = totalVal
+		} else {
+			// update riskFreeValue
+			rawRate := p.dataProxy.RiskFreeRate(date)
+			riskFreeRate := rawRate / 100.0 / 12.0
+			riskFreeValue *= (1 + riskFreeRate)
 		}
 
 		tickers = strings.Trim(tickers, " ")
@@ -361,6 +370,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		valueOverTime = append(valueOverTime, PerformanceMeasurement{
 			Time:          date.Unix(),
 			Value:         totalVal,
+			RiskFreeValue: riskFreeValue,
 			Holdings:      tickers,
 			PercentReturn: ret,
 		})

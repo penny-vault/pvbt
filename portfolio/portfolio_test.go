@@ -25,6 +25,7 @@ var _ = Describe("Portfolio", func() {
 		if err != nil {
 			panic(err)
 		}
+
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1980-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
@@ -65,9 +66,19 @@ var _ = Describe("Portfolio", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=2018-01-31&endDate=2020-11-30&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
+		content, err = ioutil.ReadFile("testdata/riskfree.csv")
+		if err != nil {
+			panic(err)
+		}
+		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=2021-02-13&fq=Daily&fam=avg",
+			httpmock.NewBytesResponder(200, content))
+
+		data.InitializeDataManager()
+
 		dataProxy = data.NewManager(map[string]string{
 			"tiingo": "TEST",
 		})
+
 		dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 		dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
 		dataProxy.Frequency = data.FrequencyMonthly
@@ -137,14 +148,16 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).To(BeNil())
 				Expect(perf.Measurement).Should(HaveLen(35))
 				Expect(perf.Measurement[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:     1517356800,
-					Value:    10000,
-					Holdings: "VFINX",
+					Time:          1517356800,
+					Value:         10000,
+					RiskFreeValue: 10000,
+					Holdings:      "VFINX",
 				}))
 
 				Expect(perf.Measurement[24]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1580428800,
 					Value:         11126.332313770672,
+					RiskFreeValue: 10407.579998915518,
 					Holdings:      "VFINX",
 					PercentReturn: -0.017122786477389185,
 				}))
@@ -152,6 +165,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(perf.Measurement[34]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1606694400,
 					Value:         12676.603580175803,
+					RiskFreeValue: 10426.84579128732,
 					Holdings:      "VFINX",
 					PercentReturn: 0.10935637663885389,
 				}))

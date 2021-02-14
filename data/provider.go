@@ -2,11 +2,12 @@ package data
 
 import (
 	"errors"
-	"log"
+	"math"
 	"strings"
 	"time"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
+	log "github.com/sirupsen/logrus"
 )
 
 // Provider interface for retrieving quotes
@@ -46,13 +47,29 @@ const (
 
 // Manager data manager type
 type Manager struct {
-	Begin        time.Time
-	End          time.Time
-	Frequency    string
-	Metric       string
-	credentials  map[string]string
-	providers    map[string]Provider
-	dateProvider DateProvider
+	Begin           time.Time
+	End             time.Time
+	Frequency       string
+	Metric          string
+	credentials     map[string]string
+	providers       map[string]Provider
+	dateProvider    DateProvider
+	lastRiskFreeIdx int
+}
+
+var riskFreeRate *dataframe.DataFrame
+
+// InitializeDataManager download risk free data
+func InitializeDataManager() {
+	fred := NewFred()
+	var err error
+	riskFreeRate, err = fred.GetDataForPeriod("DTB3", FrequencyDaily, MetricClose,
+		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Fatal("Cannot load risk free rate")
+	}
 }
 
 // NewManager create a new data manager
@@ -82,6 +99,39 @@ func NewManager(credentials map[string]string) Manager {
 // RegisterDataProvider add a data provider to the system
 func (m *Manager) RegisterDataProvider(p Provider) {
 	m.providers[p.DataType()] = p
+}
+
+// RiskFreeRate Get the risk free rate for given date
+func (m *Manager) RiskFreeRate(t time.Time) float64 {
+	start := m.lastRiskFreeIdx
+	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
+	currDate := row[DateIdx].(time.Time)
+	// check if the requestsed date is before the last requested date
+	if t.Before(currDate) {
+		start = 0
+	}
+
+	var ret float64
+	iterator := riskFreeRate.ValuesIterator(dataframe.ValuesOptions{start, 1, true})
+	for {
+		row, vals, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		if !math.IsNaN(vals["DTB3"].(float64)) {
+			m.lastRiskFreeIdx = *row
+			ret = vals["DTB3"].(float64)
+		}
+
+		dt := vals[DateIdx].(time.Time)
+		if dt.Equal(t) || dt.After(t) {
+			break
+		}
+	}
+
+	log.Debugf("lad idx: %d", m.lastRiskFreeIdx)
+	return ret
 }
 
 // LastTradingDayOfWeek Get the last trading day of the specified month
