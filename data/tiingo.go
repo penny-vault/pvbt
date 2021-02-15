@@ -155,6 +155,24 @@ func (t tiingo) DataType() string {
 }
 
 func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	validFrequencies := map[string]bool{
+		FrequencyDaily:   true,
+		FrequencyWeekly:  true,
+		FrequencyMonthly: true,
+		FrequencyAnnualy: true,
+	}
+
+	if _, ok := validFrequencies[frequency]; !ok {
+		log.WithFields(log.Fields{
+			"Frequency": frequency,
+			"Symbol":    symbol,
+			"Metric":    metric,
+			"StartTime": begin.String(),
+			"EndTime":   end.String(),
+		}).Debug("Invalid frequency provided")
+		return nil, fmt.Errorf("invalid frequency '%s'", frequency)
+	}
+
 	// build URL to get data
 	var url string
 	nullTime := time.Time{}
@@ -167,17 +185,46 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	resp, err := http.Get(url)
 
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Url":       url,
+			"Symbol":    symbol,
+			"Metric":    metric,
+			"Frequency": frequency,
+			"StartTime": begin.String(),
+			"EndTime":   end.String(),
+			"Error":     err,
+		}).Debug("Failed to load eod prices")
 		return nil, err
-	}
-
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 	}
 
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		log.WithFields(log.Fields{
+			"Url":        url,
+			"Symbol":     symbol,
+			"Metric":     metric,
+			"Frequency":  frequency,
+			"StartTime":  begin.String(),
+			"EndTime":    end.String(),
+			"Error":      err,
+			"StatusCode": resp.StatusCode,
+		}).Debug("Failed to load eod prices -- reading body failed")
 		return nil, err
+	}
+
+	if resp.StatusCode >= 400 {
+		log.WithFields(log.Fields{
+			"Url":        url,
+			"Symbol":     symbol,
+			"Metric":     metric,
+			"Frequency":  frequency,
+			"StartTime":  begin.String(),
+			"EndTime":    end.String(),
+			"Body":       string(body),
+			"StatusCode": resp.StatusCode,
+		}).Debug("Failed to load eod prices")
+		return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 	}
 
 	floatConverter := imports.Converter{
