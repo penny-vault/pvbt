@@ -13,6 +13,7 @@ func SetupRoutes(app *fiber.App, jwks map[string]interface{}) {
 	// Middleware
 	api := app.Group("/v1", logger.New())
 	api.Get("/", handler.Ping)
+	api.Post("/benchmark", middleware.JWTAuth(jwks), handler.Benchmark)
 
 	// Strategy
 	strategy := api.Group("/strategy")

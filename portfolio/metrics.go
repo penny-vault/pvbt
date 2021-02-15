@@ -17,11 +17,47 @@ type DrawDown struct {
 	LossPercent float64 `json:"lossPercent"`
 }
 
+type CAGR struct {
+	OneYear   float64 `json:"1-yr"`
+	ThreeYear float64 `json:"3-yr"`
+	FiveYear  float64 `json:"5-yr"`
+	TenYear   float64 `json:"10-yr"`
+}
+
+// MetricsBundle collection of statistics for a portfolio
+type MetricsBundle struct {
+	CAGRS        CAGR        `json:"cagrs"`
+	DrawDowns    []*DrawDown `json:"drawDowns"`
+	SharpeRatio  float64     `json:"sharpeRatio"`
+	SortinoRatio float64     `json:"sortinoRatio"`
+	StdDev       float64     `json:"stdDev"`
+}
+
 func min(x, y int) int {
 	if x > y {
 		return y
 	}
 	return x
+}
+
+// BuildMetricsBundle calculate standard package of metrics
+func (perf *Performance) BuildMetricsBundle() {
+	cagrs := CAGR{
+		OneYear:   perf.PeriodCagr(1),
+		ThreeYear: perf.PeriodCagr(3),
+		FiveYear:  perf.PeriodCagr(5),
+		TenYear:   perf.PeriodCagr(10),
+	}
+
+	bundle := MetricsBundle{
+		CAGRS:        cagrs,
+		DrawDowns:    perf.DrawDowns(),
+		SharpeRatio:  perf.SharpeRatio(),
+		SortinoRatio: perf.SortinoRatio(),
+		StdDev:       perf.StdDev(),
+	}
+
+	perf.MetricsBundle = bundle
 }
 
 // DrawDowns compute top 10 draw downs

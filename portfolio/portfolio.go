@@ -68,6 +68,7 @@ type Performance struct {
 	CurrentAsset       string                   `json:"currentAsset"`
 	TotalDeposited     float64                  `json:"totalDeposited"`
 	TotalWithdrawn     float64                  `json:"totalWithdrawn"`
+	MetricsBundle      MetricsBundle            `json:"metrics"`
 }
 
 // NewPortfolio create a portfolio
@@ -425,6 +426,13 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 
 	prices, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) != 0 {
+		errorMsgs := make([]string, len(errs))
+		for ii, xx := range errs {
+			errorMsgs[ii] = xx.Error()
+		}
+		log.WithFields(log.Fields{
+			"Error": strings.Join(errorMsgs, ", "),
+		}).Warn("Failed to load data for tickers")
 		return errors.New("Failed loading data for tickers")
 	}
 
@@ -484,7 +492,17 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 			if err != nil {
 				return err
 			}
-			price := res[symbol].(float64)
+			var price float64
+			if tmp, ok := res[symbol]; ok {
+				price = tmp.(float64)
+			} else {
+				log.WithFields(log.Fields{
+					"Symbol": symbol,
+					"Date":   date,
+				}).Debug("Security purchased before security price was available")
+				return fmt.Errorf("Security %s price data not available for date %s", symbol, date.String())
+			}
+
 			shares := value / price
 
 			t := Transaction{

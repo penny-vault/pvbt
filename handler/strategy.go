@@ -121,6 +121,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 			log.Println(err)
 			return fiber.ErrBadRequest
 		}
+		performance.BuildMetricsBundle()
 
 		return c.JSON(performance)
 	}
