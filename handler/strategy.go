@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"main/data"
+	"main/newrelicapi"
 	"main/strategies"
 	"runtime/debug"
 	"time"
@@ -14,11 +15,17 @@ import (
 
 // ListStrategies get a list of all strategies
 func ListStrategies(c *fiber.Ctx) error {
+	txn := newrelicapi.StartTransaction(c)
+	defer txn.End()
+
 	return c.JSON(strategies.StrategyList)
 }
 
 // GetStrategy get configuration for a specific strategy
 func GetStrategy(c *fiber.Ctx) error {
+	txn := newrelicapi.StartTransaction(c)
+	defer txn.End()
+
 	shortcode := c.Params("id")
 	if strategy, ok := strategies.StrategyMap[shortcode]; ok {
 		return c.JSON(strategy)
@@ -28,6 +35,9 @@ func GetStrategy(c *fiber.Ctx) error {
 
 // RunStrategy execute strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
+	txn := newrelicapi.StartTransaction(c)
+	defer txn.End()
+
 	shortcode := c.Params("id")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
