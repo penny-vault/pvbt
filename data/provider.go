@@ -181,7 +181,6 @@ func (m *Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.Data
 		if v.Err == nil {
 			res[v.Ticker] = v.Data
 		} else {
-			log.Println(v.Err)
 			errs = append(errs, v.Err)
 		}
 	}
