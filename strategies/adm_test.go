@@ -2,6 +2,7 @@ package strategies_test
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"main/data"
 	"main/portfolio"
@@ -93,7 +94,10 @@ var _ = Describe("Adm", func() {
 		if err != nil {
 			panic(err)
 		}
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=2021-02-13&fq=Daily&fam=avg",
+
+		today := time.Now()
+		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
+		httpmock.RegisterResponder("GET", url,
 			httpmock.NewBytesResponder(200, content))
 
 		data.InitializeDataManager()
