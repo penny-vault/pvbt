@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"main/data"
-	"main/newrelicapi"
 	"main/portfolio"
 	"runtime"
 	"strings"
@@ -16,16 +15,10 @@ import (
 )
 
 func Ping(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	return c.JSON(fiber.Map{"status": "success", "message": "API is alive"})
 }
 
 func Benchmark(c *fiber.Ctx) (resp error) {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	// Parse date strings
 	startDateStr := c.Query("startDate", "1990-01-01")
 	endDateStr := c.Query("endDate", "now")

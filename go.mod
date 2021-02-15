@@ -15,8 +15,6 @@ require (
 	github.com/klauspost/compress v1.11.7 // indirect
 	github.com/lestrrat-go/jwx v1.0.8
 	github.com/mattn/go-runewidth v0.0.10 // indirect
-	github.com/newrelic/go-agent v3.10.0+incompatible // indirect
-	github.com/newrelic/go-agent/v3 v3.10.0
 	github.com/onsi/ginkgo v1.14.2
 	github.com/onsi/gomega v1.10.4
 	github.com/rivo/uniseg v0.2.0 // indirect
@@ -25,8 +23,8 @@ require (
 	github.com/sendgrid/sendgrid-go v3.7.2+incompatible
 	github.com/sirupsen/logrus v1.7.0
 	github.com/valyala/fasthttp v1.19.0 // indirect
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9 // indirect
 	golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c // indirect
-	golang.org/x/tools v0.1.0 // indirect
 	gonum.org/v1/gonum v0.8.2
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )

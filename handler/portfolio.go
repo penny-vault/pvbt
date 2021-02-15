@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"main/database"
-	"main/newrelicapi"
 	"time"
 
 	"github.com/dgrijalva/jwt-go"
@@ -33,9 +32,6 @@ type PortfolioResponse struct {
 // @Produce json
 // @Param id path string true "id of porfolio to retrieve"
 func GetPortfolio(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	portfolioID := c.Params("id")
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
@@ -55,9 +51,6 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 // ListPortfolios list all portfolios for logged in user
 func ListPortfolios(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
@@ -90,9 +83,6 @@ func ListPortfolios(c *fiber.Ctx) error {
 
 // CreatePortfolio new portfolio
 func CreatePortfolio(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	// get tiingo token and userID from jwt claims
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
@@ -122,9 +112,6 @@ func CreatePortfolio(c *fiber.Ctx) error {
 
 // UpdatePortfolio update portfolio
 func UpdatePortfolio(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	portfolioID := c.Params("id")
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)
@@ -173,9 +160,6 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 // DeletePortfolio delete portfolio
 func DeletePortfolio(c *fiber.Ctx) error {
-	txn := newrelicapi.StartTransaction(c)
-	defer txn.End()
-
 	portfolioID := c.Params("id")
 	user := c.Locals("user").(*jwt.Token)
 	claims := user.Claims.(jwt.MapClaims)

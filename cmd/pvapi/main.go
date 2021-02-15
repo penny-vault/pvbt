@@ -13,7 +13,6 @@ import (
 	"main/data"
 	"main/database"
 	"main/jwks"
-	"main/newrelicapi"
 	"main/router"
 	"main/strategies"
 	"os"
@@ -33,9 +32,6 @@ import (
 // @license.name Commercial
 // @BasePath /
 func main() {
-	// setup NewRelic
-	newrelicapi.InitializeNewRelic()
-
 	// setup database
 	err := database.SetupDatabaseMigrations()
 	if err != nil {
