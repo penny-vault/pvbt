@@ -116,12 +116,8 @@ var _ = Describe("Metrics", func() {
 				Expect(perf.PeriodCagr(5)).Should(BeNumerically("~", 0.1393, 1e-2))
 			})
 
-			It("should have a mean", func() {
-				Expect(perf.Mean()).Should(BeNumerically("~", 182253.1385, 1e-3))
-			})
-
 			It("should have a standard deviation", func() {
-				Expect(perf.Std()).Should(BeNumerically("~", 170251.7574, 1e-3))
+				Expect(perf.StdDev()).Should(BeNumerically("~", .1483, 1e-3))
 			})
 
 			It("should have an ulcer index", func() {

@@ -170,25 +170,21 @@ func (perf *Performance) PeriodCagr(period int) float64 {
 	return math.Pow(final/initial, 1.0/float64(period)) - 1.0
 }
 
-// Mean value of portfolio
-func (perf *Performance) Mean() float64 {
-	var total float64 = 0.0
-	for _, xx := range perf.Measurement {
-		total += xx.Value
-	}
-
-	return total / float64(len(perf.Measurement))
-}
-
 // Std standard deviation of portfolio
-func (perf *Performance) Std() float64 {
-	m := perf.Mean()
-	N := float64(len(perf.Measurement))
+func (perf *Performance) StdDev() float64 {
+	N := len(perf.Measurement)
+	rets := make([]float64, N)
+	for ii, xx := range perf.Measurement {
+		rets[ii] = xx.PercentReturn
+	}
+	m := stat.Mean(rets, nil)
+
 	var stderr float64
 	for _, xx := range perf.Measurement {
-		stderr += math.Pow(xx.Value-m, 2)
+		stderr += math.Pow(xx.PercentReturn-m, 2)
 	}
-	return math.Sqrt(stderr / N)
+
+	return math.Sqrt(stderr/float64(N)) * math.Sqrt(12)
 }
 
 // UlcerIndex The Ulcer Index (UI) is a technical indicator that measures downside
