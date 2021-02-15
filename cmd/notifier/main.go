@@ -372,7 +372,10 @@ func main() {
 	}
 
 	data.InitializeDataManager()
+	log.Info("Initialized data framework")
+
 	strategies.IntializeStrategyMap()
+	log.Info("Initialized strategy map")
 
 	// get a list of all portfolios
 	savedPortfolios := getSavedPortfolios(forDate)
