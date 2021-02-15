@@ -48,6 +48,7 @@ func main() {
 
 	// Initialize data framework
 	data.InitializeDataManager()
+	log.Info("Initialized data framework")
 
 	// Create new Fiber instance
 	app := fiber.New()
