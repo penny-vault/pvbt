@@ -14,7 +14,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-type portfolio struct {
+type PortfolioResponse struct {
 	ID                 uuid.UUID       `json:"id"`
 	Name               string          `json:"name"`
 	Strategy           string          `json:"strategy"`
@@ -43,7 +43,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
 	row := database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
-	p := portfolio{}
+	p := PortfolioResponse{}
 	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("GetPortfolio %s failed: %s", portfolioID, err)
@@ -69,9 +69,9 @@ func ListPortfolios(c *fiber.Ctx) error {
 		return fiber.ErrNotFound
 	}
 
-	portfolios := []portfolio{}
+	portfolios := []PortfolioResponse{}
 	for rows.Next() {
-		p := portfolio{}
+		p := PortfolioResponse{}
 		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 		if err != nil {
 			log.Warnf("ListPortfolio failed %s", err)
@@ -98,7 +98,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	claims := user.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
 
-	params := portfolio{}
+	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
 		log.Warnf("Bad request: %s", err)
 		return fiber.ErrBadRequest
@@ -113,7 +113,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	return c.JSON(portfolio{
+	return c.JSON(PortfolioResponse{
 		ID:       portfolioID,
 		Name:     params.Name,
 		Strategy: params.Strategy,
@@ -130,7 +130,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	claims := user.Claims.(jwt.MapClaims)
 	userID := claims["sub"].(string)
 
-	params := portfolio{}
+	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
 		log.Warnf("UpdatePortfolio bad request: %s, for portfolio: %s", err, portfolioID)
 		return fiber.ErrBadRequest
@@ -138,7 +138,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
 	row := database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
-	p := portfolio{}
+	p := PortfolioResponse{}
 	err := row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("UpdatePortfolio %s failed: %s", portfolioID, err)
@@ -161,7 +161,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	}
 
 	row = database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
-	p = portfolio{}
+	p = PortfolioResponse{}
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		log.Warnf("UpdatePortfolio %s failed: %s", portfolioID, err)
