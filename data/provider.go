@@ -75,6 +75,7 @@ func InitializeDataManager() {
 // NewManager create a new data manager
 func NewManager(credentials map[string]string) Manager {
 	var m = Manager{
+		Frequency:   FrequencyMonthly,
 		credentials: credentials,
 		providers:   map[string]Provider{},
 		Metric:      MetricAdjustedClose,
