@@ -12,7 +12,7 @@ var Conn *sqlx.DB
 
 func SetupDatabaseMigrations() error {
 	m, err := migrate.New(
-		"github://jdfergason/pv-api/db/migrations",
+		"github://jdfergason/pv-api/database/migrations",
 		os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Fatal(err)
