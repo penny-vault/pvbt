@@ -13,6 +13,8 @@ import (
 	"main/data"
 	"main/database"
 	"main/jwks"
+	"main/loki"
+	"main/middleware"
 	"main/router"
 	"main/strategies"
 	"os"
@@ -26,12 +28,25 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+func setupLogging() {
+	log.SetReportCaller(true)
+	hook, err := loki.New(os.Getenv("LOKI_URL"), 102400, 1)
+	if err != nil {
+		log.Error(err)
+	} else {
+		log.AddHook(hook)
+	}
+}
+
 // @title Penny Vault Investment API
 // @version 1.0
 // @description Execute investment strategies
 // @license.name Commercial
 // @BasePath /
 func main() {
+	setupLogging()
+	log.Info("Logging configured")
+
 	// setup database
 	err := database.SetupDatabaseMigrations()
 	if err != nil {
@@ -56,6 +71,9 @@ func main() {
 		AllowMethods: "GET,POST,HEAD,PUT,DELETE,PATCH",
 	}
 	app.Use(cors.New(corsConfig))
+
+	// Setup logging middleware
+	app.Use(middleware.NewLogger())
 
 	// Configure authentication
 	signingKeys := jwks.LoadJWKS()
