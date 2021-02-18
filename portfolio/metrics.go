@@ -64,15 +64,15 @@ func (perf *Performance) BuildMetricsBundle() {
 
 // DrawDowns compute top 10 draw downs
 func (perf *Performance) DrawDowns() []*DrawDown {
-	if len(perf.Measurement) <= 0 {
+	if len(perf.Measurements) <= 0 {
 		return []*DrawDown{}
 	}
 
 	allDrawDowns := []*DrawDown{}
 
-	var peak float64 = perf.Measurement[0].Value
+	var peak float64 = perf.Measurements[0].Value
 	var drawDown *DrawDown
-	for _, v := range perf.Measurement {
+	for _, v := range perf.Measurements {
 		peak = math.Max(peak, v.Value)
 		diff := v.Value - peak
 		if diff < 0 {
@@ -106,7 +106,7 @@ func (perf *Performance) DrawDowns() []*DrawDown {
 // OneDayReturn compute the return over the last day
 func (perf *Performance) OneDayReturn(forDate time.Time, p *Portfolio) float64 {
 	// Compute 1-day return
-	value := perf.Measurement
+	value := perf.Measurements
 	sz := len(value)
 	var todaysValue float64
 	if sz > 0 {
@@ -132,7 +132,7 @@ func (perf *Performance) OneDayReturn(forDate time.Time, p *Portfolio) float64 {
 // OneWeekReturn compute the return over one week
 func (perf *Performance) OneWeekReturn(forDate time.Time, p *Portfolio) float64 {
 	// Compute 1-day return
-	value := perf.Measurement
+	value := perf.Measurements
 	sz := len(value)
 	var todaysValue float64
 	if sz > 0 {
@@ -157,7 +157,7 @@ func (perf *Performance) OneWeekReturn(forDate time.Time, p *Portfolio) float64 
 
 // OneMonthReturn get one month return from performance measurement
 func (perf *Performance) OneMonthReturn(forDate time.Time) float64 {
-	value := perf.Measurement
+	value := perf.Measurements
 	sz := len(value)
 	for ii := sz - 1; ii >= 0; ii-- {
 		dt := time.Unix(value[ii].Time, 0)
@@ -176,7 +176,7 @@ func (perf *Performance) OneMonthReturn(forDate time.Time) float64 {
 
 // NetProfit total profit earned on portfolio
 func (perf *Performance) NetProfit() float64 {
-	return perf.Measurement[len(perf.Measurement)-1].Value - perf.TotalDeposited + perf.TotalWithdrawn
+	return perf.Measurements[len(perf.Measurements)-1].Value - perf.TotalDeposited + perf.TotalWithdrawn
 }
 
 // NetProfitPercent profit earned on portfolio expressed as a percent
@@ -187,13 +187,13 @@ func (perf *Performance) NetProfitPercent() float64 {
 // PeriodCagr (final/initial)^(1/period) - 1
 // period is number of years to calculate CAGR over
 func (perf *Performance) PeriodCagr(period int) float64 {
-	var final float64 = perf.Measurement[len(perf.Measurement)-1].Value
+	var final float64 = perf.Measurements[len(perf.Measurements)-1].Value
 	var initial float64
 
-	finalDate := time.Unix(perf.Measurement[len(perf.Measurement)-1].Time, 0)
+	finalDate := time.Unix(perf.Measurements[len(perf.Measurements)-1].Time, 0)
 	initialDate := finalDate.AddDate(-1*period, 0, 0)
-	for ii := len(perf.Measurement) - 1; ii >= 0; ii-- {
-		meas := perf.Measurement[ii]
+	for ii := len(perf.Measurements) - 1; ii >= 0; ii-- {
+		meas := perf.Measurements[ii]
 		t := time.Unix(meas.Time, 0)
 		if t.Before(initialDate) || t.Equal(initialDate) {
 			initial = meas.Value
@@ -210,15 +210,15 @@ func (perf *Performance) PeriodCagr(period int) float64 {
 
 // Std standard deviation of portfolio
 func (perf *Performance) StdDev() float64 {
-	N := len(perf.Measurement)
+	N := len(perf.Measurements)
 	rets := make([]float64, N)
-	for ii, xx := range perf.Measurement {
+	for ii, xx := range perf.Measurements {
 		rets[ii] = xx.PercentReturn
 	}
 	m := stat.Mean(rets, nil)
 
 	var stderr float64
-	for _, xx := range perf.Measurement {
+	for _, xx := range perf.Measurements {
 		stderr += math.Pow(xx.PercentReturn-m, 2)
 	}
 
@@ -242,7 +242,7 @@ func (perf *Performance) StdDev() float64 {
 //
 // period is number of days to lookback
 func (perf *Performance) UlcerIndex(period int) []float64 {
-	N := len(perf.Measurement)
+	N := len(perf.Measurements)
 
 	if N < period {
 		return []float64{0}
@@ -252,7 +252,7 @@ func (perf *Performance) UlcerIndex(period int) []float64 {
 	lookback := make([]float64, period)
 	lookbackIdx := 0
 
-	for ii, xx := range perf.Measurement {
+	for ii, xx := range perf.Measurements {
 		lookback[lookbackIdx] = xx.Value
 		lookbackIdx = (lookbackIdx + 1) % period
 		if ii < period {
@@ -286,9 +286,9 @@ func (perf *Performance) AvgUlcerIndex(period int) float64 {
 
 // ExcessReturn compute the rate of return that is in excess of the risk free rate
 func (perf *Performance) ExcessReturn() []float64 {
-	rets := make([]float64, len(perf.Measurement))
-	prev := perf.Measurement[0].RiskFreeValue
-	for ii, xx := range perf.Measurement {
+	rets := make([]float64, len(perf.Measurements))
+	prev := perf.Measurements[0].RiskFreeValue
+	for ii, xx := range perf.Measurements {
 		riskFreeRate := xx.RiskFreeValue/prev - 1.0
 		prev = xx.RiskFreeValue
 		rets[ii] = xx.PercentReturn - riskFreeRate

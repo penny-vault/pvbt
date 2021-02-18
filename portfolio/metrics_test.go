@@ -122,7 +122,7 @@ var _ = Describe("Metrics", func() {
 
 			It("should have an ulcer index", func() {
 				u := perf.UlcerIndex(14)
-				Expect(u).To(HaveLen(len(perf.Measurement) - 14))
+				Expect(u).To(HaveLen(len(perf.Measurements) - 14))
 				Expect(u[0]).Should(BeNumerically("~", 20.2805, 1e-3))
 				Expect(u[50]).Should(BeNumerically("~", 10.5812, 1e-3))
 				Expect(u[len(u)-1]).Should(BeNumerically("~", 19.1695, 1e-3))

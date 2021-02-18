@@ -149,16 +149,17 @@ var _ = Describe("Portfolio", func() {
 			It("should have valid performance", func() {
 				err := p.TargetPortfolio(10000, df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
+
 				Expect(err).To(BeNil())
-				Expect(perf.Measurement).Should(HaveLen(35))
-				Expect(perf.Measurement[0]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurements).Should(HaveLen(35))
+				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1517356800,
 					Value:         10000,
 					RiskFreeValue: 10000,
 					Holdings:      "VFINX",
 				}))
 
-				Expect(perf.Measurement[24]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurements[24]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1580428800,
 					Value:         11126.332313770672,
 					RiskFreeValue: 10407.579998915518,
@@ -166,7 +167,7 @@ var _ = Describe("Portfolio", func() {
 					PercentReturn: -0.017122786477389185,
 				}))
 
-				Expect(perf.Measurement[34]).To(Equal(portfolio.PerformanceMeasurement{
+				Expect(perf.Measurements[34]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1606694400,
 					Value:         12676.603580175803,
 					RiskFreeValue: 10426.84579128732,
