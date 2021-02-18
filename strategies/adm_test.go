@@ -130,8 +130,8 @@ var _ = Describe("Adm", func() {
 					RiskFreeValue: 10000,
 					PercentReturn: 0,
 					Justification: map[string]interface{}{
-						"VFINX": 9.651766015061952,
-						"PRIDX": 10.204679763493571,
+						"VFINX Score": 11.039635491240361,
+						"PRIDX Score": 7.228182302084328,
 					},
 				}))
 				Expect(perf.Measurements[100]).To(Equal(portfolio.PerformanceMeasurement{
@@ -141,8 +141,8 @@ var _ = Describe("Adm", func() {
 					RiskFreeValue: 15173.981586783602,
 					PercentReturn: 0.045985060690943325,
 					Justification: map[string]interface{}{
-						"VFINX": 3.6201135690841006,
-						"PRIDX": -10.221908560340088,
+						"VFINX Score": 6.840593309526736,
+						"PRIDX Score": -7.943715719726785,
 					},
 				}))
 				Expect(perf.Measurements[200]).To(Equal(portfolio.PerformanceMeasurement{
@@ -152,8 +152,8 @@ var _ = Describe("Adm", func() {
 					RiskFreeValue: 19938.252280594555,
 					PercentReturn: 0.06929347826087029,
 					Justification: map[string]interface{}{
-						"VFINX": 3.3706118128606035,
-						"PRIDX": 15.859200885179298,
+						"VFINX Score": 2.734696874619626,
+						"PRIDX Score": 13.388751105525918,
 					},
 				}))
 				Expect(perf.Measurements[300]).To(Equal(portfolio.PerformanceMeasurement{
@@ -163,8 +163,8 @@ var _ = Describe("Adm", func() {
 					RiskFreeValue: 21966.917804088513,
 					PercentReturn: -0.01388044019244239,
 					Justification: map[string]interface{}{
-						"VFINX": 5.787448604977961,
-						"PRIDX": 1.0266808214779608,
+						"VFINX Score": 3.6407964883074544,
+						"PRIDX Score": 0.9912254124299698,
 					},
 				}))
 
@@ -175,8 +175,8 @@ var _ = Describe("Adm", func() {
 					RiskFreeValue: 23244.597277008164,
 					PercentReturn: 0.027872645147074993,
 					Justification: map[string]interface{}{
-						"PRIDX": 18.048957055687936,
-						"VFINX": 11.242040896256247,
+						"VFINX Score": 11.242040896256247,
+						"PRIDX Score": 18.048957055687936,
 					},
 				}))
 			})
