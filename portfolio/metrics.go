@@ -343,17 +343,43 @@ func (perf *Performance) SortinoRatio() float64 {
 
 // USMarketCorrelation
 
-// Beta
+// Beta is a measure of the volatility—or systematic risk—of a security or portfolio
+// compared to the market as a whole. Beta is used in the capital asset pricing model
+// (CAPM), which describes the relationship between systematic risk and expected
+// return for assets (usually stocks). CAPM is widely used as a method for pricing
+// risky securities and for generating estimates of the expected returns of assets,
+// considering both the risk of those assets and the cost of capital.
+func (perf *Performance) Beta(benchmark *Performance) float64 {
+	retA := perf.Return()
+	retB := benchmark.Return()
+
+	covar := stat.Covariance(retA, retB, nil)
+	return covar / stat.Variance(retB, nil)
+}
 
 // Alpha
 
 // RSquared
 
-// TreynorRatio
+// TreynorRatio also known as the reward-to-volatility ratio, is a performance
+// metric for determining how much excess return was generated for each unit of risk
+// taken on by a portfolio.
+// treynor = Excess Return / Beta
+func (perf *Performance) TreynorRatio(benchmark *Performance) float64 {
+	excessReturn := perf.ExcessReturn()
+	return stat.Mean(excessReturn, nil) / perf.Beta(benchmark)
+}
 
 // CalmarRatio
 
-// ActiveReturn
+// Return
+func (perf *Performance) Return() []float64 {
+	rets := make([]float64, len(perf.Measurements))
+	for ii, xx := range perf.Measurements {
+		rets[ii] = xx.Value
+	}
+	return rets
+}
 
 // TrackingError
 

@@ -157,6 +157,7 @@ var _ = Describe("Portfolio", func() {
 					Value:         10000,
 					RiskFreeValue: 10000,
 					Holdings:      "VFINX",
+					Justification: map[string]interface{}{},
 				}))
 
 				Expect(perf.Measurements[24]).To(Equal(portfolio.PerformanceMeasurement{
@@ -165,6 +166,7 @@ var _ = Describe("Portfolio", func() {
 					RiskFreeValue: 10407.579998915518,
 					Holdings:      "VFINX",
 					PercentReturn: -0.017122786477389185,
+					Justification: map[string]interface{}{},
 				}))
 
 				Expect(perf.Measurements[34]).To(Equal(portfolio.PerformanceMeasurement{
@@ -173,6 +175,7 @@ var _ = Describe("Portfolio", func() {
 					RiskFreeValue: 10426.84579128732,
 					Holdings:      "VFINX",
 					PercentReturn: 0.10935637663885389,
+					Justification: map[string]interface{}{},
 				}))
 			})
 		})

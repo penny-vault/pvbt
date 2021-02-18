@@ -32,6 +32,7 @@ type Transaction struct {
 	PricePerShare float64
 	Shares        float64
 	TotalValue    float64
+	Justification map[string]interface{} `json:"justification"`
 }
 
 type Holding struct {
@@ -51,11 +52,12 @@ type Portfolio struct {
 }
 
 type PerformanceMeasurement struct {
-	Time          int64   `json:"time"`
-	Value         float64 `json:"value"`
-	RiskFreeValue float64 `json:"riskFreeValue"`
-	Holdings      string  `json:"holdings"`
-	PercentReturn float64 `json:"percentReturn"`
+	Time          int64                  `json:"time"`
+	Value         float64                `json:"value"`
+	RiskFreeValue float64                `json:"riskFreeValue"`
+	Holdings      string                 `json:"holdings"`
+	PercentReturn float64                `json:"percentReturn"`
+	Justification map[string]interface{} `json:"justification"`
 }
 
 // Performance of portfolio
@@ -287,6 +289,8 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	var currYearStartValue float64 = -1.0
 	var riskFreeValue float64 = 0
 
+	var lastJustification map[string]interface{}
+
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
@@ -303,6 +307,13 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		for ; trxIdx < numTrxs; trxIdx++ {
 			trx := p.Transactions[trxIdx]
 
+			// process transactions up to this point in time
+			if date.Before(trx.Date) {
+				break
+			}
+
+			lastJustification = trx.Justification
+
 			if trx.Kind == DepositTransaction || trx.Kind == WithdrawTransaction {
 				switch trx.Kind {
 				case DepositTransaction:
@@ -315,26 +326,21 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 				continue
 			}
 
-			// process transactions up to this point in time
-			if date.Equal(trx.Date) || date.After(trx.Date) {
-				shares := 0.0
-				if val, ok := holdings[trx.Ticker]; ok {
-					shares = val
-				}
-				switch trx.Kind {
-				case BuyTransaction:
-					shares += trx.Shares
-					log.Debugf("on %s buy %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
-				case SellTransaction:
-					shares -= trx.Shares
-					log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
-				default:
-					return Performance{}, errors.New("unrecognized transaction type")
-				}
-				holdings[trx.Ticker] = shares
-			} else {
-				break
+			shares := 0.0
+			if val, ok := holdings[trx.Ticker]; ok {
+				shares = val
 			}
+			switch trx.Kind {
+			case BuyTransaction:
+				shares += trx.Shares
+				log.Debugf("on %s buy %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
+			case SellTransaction:
+				shares -= trx.Shares
+				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
+			default:
+				return Performance{}, errors.New("unrecognized transaction type")
+			}
+			holdings[trx.Ticker] = shares
 		}
 
 		// iterate through each holding and add value to get total return
@@ -374,6 +380,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			RiskFreeValue: riskFreeValue,
 			Holdings:      tickers,
 			PercentReturn: ret,
+			Justification: lastJustification,
 		})
 
 		if date.Before(today) || date.Equal(today) {
@@ -440,7 +447,6 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	value := initial
 	var lastTransaction *Transaction
-	var lastSymbol string
 	var first bool = true
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
@@ -449,8 +455,20 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		}
 
 		// Get next transaction symbol
-		date := val[data.DateIdx].(time.Time)
-		symbol := val[TickerName].(string)
+		var date time.Time
+		var symbol string
+		justification := make(map[string]interface{})
+
+		for k, v := range val {
+			idx := k.(string)
+			if idx == data.DateIdx {
+				date = val[data.DateIdx].(time.Time)
+			} else if idx == TickerName {
+				symbol = val[TickerName].(string)
+			} else {
+				justification[idx] = v
+			}
+		}
 
 		if first {
 			first = false
@@ -462,63 +480,62 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 				PricePerShare: 0.0,
 				Shares:        0,
 				TotalValue:    initial,
+				Justification: justification,
 			})
 		}
 
-		if lastSymbol != symbol {
-			// Sell previous transaction
-			if lastTransaction != nil {
-				eod := prices[lastTransaction.Ticker]
-				res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
-				if err != nil {
-					return err
-				}
-				price := res[lastTransaction.Ticker].(float64)
-				value = lastTransaction.Shares * price
-				t := Transaction{
-					Date:          date,
-					Ticker:        lastTransaction.Ticker,
-					Kind:          SellTransaction,
-					PricePerShare: price,
-					Shares:        lastTransaction.Shares,
-					TotalValue:    value,
-				}
-				p.Transactions = append(p.Transactions, t)
-			}
-
-			// Buy new stock if it doesn't match the previous one
-			eod := prices[symbol]
+		// Sell previous transaction
+		if lastTransaction != nil {
+			eod := prices[lastTransaction.Ticker]
 			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
 			if err != nil {
 				return err
 			}
-			var price float64
-			if tmp, ok := res[symbol]; ok {
-				price = tmp.(float64)
-			} else {
-				log.WithFields(log.Fields{
-					"Symbol": symbol,
-					"Date":   date,
-				}).Debug("Security purchased before security price was available")
-				return fmt.Errorf("Security %s price data not available for date %s", symbol, date.String())
-			}
-
-			shares := value / price
-
+			price := res[lastTransaction.Ticker].(float64)
+			value = lastTransaction.Shares * price
 			t := Transaction{
 				Date:          date,
-				Ticker:        symbol,
-				Kind:          BuyTransaction,
+				Ticker:        lastTransaction.Ticker,
+				Kind:          SellTransaction,
 				PricePerShare: price,
-				Shares:        shares,
+				Shares:        lastTransaction.Shares,
 				TotalValue:    value,
+				Justification: justification,
 			}
-
-			lastTransaction = &t
-			lastSymbol = symbol
-
 			p.Transactions = append(p.Transactions, t)
 		}
+
+		// Buy new stock if it doesn't match the previous one
+		eod := prices[symbol]
+		res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
+		if err != nil {
+			return err
+		}
+		var price float64
+		if tmp, ok := res[symbol]; ok {
+			price = tmp.(float64)
+		} else {
+			log.WithFields(log.Fields{
+				"Symbol": symbol,
+				"Date":   date,
+			}).Debug("Security purchased before security price was available")
+			return fmt.Errorf("Security %s price data not available for date %s", symbol, date.String())
+		}
+
+		shares := value / price
+
+		t := Transaction{
+			Date:          date,
+			Ticker:        symbol,
+			Kind:          BuyTransaction,
+			PricePerShare: price,
+			Shares:        shares,
+			TotalValue:    value,
+			Justification: justification,
+		}
+
+		lastTransaction = &t
+		p.Transactions = append(p.Transactions, t)
 	}
 
 	return nil

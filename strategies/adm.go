@@ -297,8 +297,16 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*portfolio.
 		return nil, err
 	}
 	timeSeries := scoresDf.Series[dateIdx].Copy()
-
-	targetPortfolio := dataframe.NewDataFrame(timeSeries, argmax)
+	targetPortfolioSeries := make([]dataframe.Series, 0, len(scores))
+	targetPortfolioSeries = append(targetPortfolioSeries, timeSeries)
+	targetPortfolioSeries = append(targetPortfolioSeries, argmax)
+	for ii, xx := range scoresDf.Series {
+		if ii >= 2 {
+			xx.Rename(fmt.Sprintf("%s Score", xx.Name()))
+			targetPortfolioSeries = append(targetPortfolioSeries, xx)
+		}
+	}
+	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
 	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
 
 	p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager)
