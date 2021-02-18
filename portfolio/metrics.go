@@ -26,11 +26,12 @@ type CAGR struct {
 
 // MetricsBundle collection of statistics for a portfolio
 type MetricsBundle struct {
-	CAGRS        CAGR        `json:"cagrs"`
-	DrawDowns    []*DrawDown `json:"drawDowns"`
-	SharpeRatio  float64     `json:"sharpeRatio"`
-	SortinoRatio float64     `json:"sortinoRatio"`
-	StdDev       float64     `json:"stdDev"`
+	CAGRS         CAGR        `json:"cagrs"`
+	DrawDowns     []*DrawDown `json:"drawDowns"`
+	SharpeRatio   float64     `json:"sharpeRatio"`
+	SortinoRatio  float64     `json:"sortinoRatio"`
+	StdDev        float64     `json:"stdDev"`
+	UlcerIndexAvg float64     `json:"ulcerIndexAvg"`
 }
 
 func min(x, y int) int {
@@ -50,11 +51,12 @@ func (perf *Performance) BuildMetricsBundle() {
 	}
 
 	bundle := MetricsBundle{
-		CAGRS:        cagrs,
-		DrawDowns:    perf.DrawDowns(),
-		SharpeRatio:  perf.SharpeRatio(),
-		SortinoRatio: perf.SortinoRatio(),
-		StdDev:       perf.StdDev(),
+		CAGRS:         cagrs,
+		DrawDowns:     perf.DrawDowns(),
+		SharpeRatio:   perf.SharpeRatio(),
+		SortinoRatio:  perf.SortinoRatio(),
+		StdDev:        perf.StdDev(),
+		UlcerIndexAvg: perf.AvgUlcerIndex(14),
 	}
 
 	perf.MetricsBundle = bundle
@@ -241,6 +243,11 @@ func (perf *Performance) StdDev() float64 {
 // period is number of days to lookback
 func (perf *Performance) UlcerIndex(period int) []float64 {
 	N := len(perf.Measurement)
+
+	if N < period {
+		return []float64{0}
+	}
+
 	res := make([]float64, N-period)
 	lookback := make([]float64, period)
 	lookbackIdx := 0
