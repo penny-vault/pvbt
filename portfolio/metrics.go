@@ -325,6 +325,9 @@ func (perf *Performance) SortinoRatio() float64 {
 		}
 	}
 	downside = downside / float64(len(excessReturn))
+	if downside == 0 {
+		return 0
+	}
 	sortino := stat.Mean(excessReturn, nil) / math.Sqrt(downside)
 	return sortino * math.Sqrt(12) // annualize rate by adjusting by month
 }
