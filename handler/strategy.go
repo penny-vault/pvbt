@@ -99,19 +99,35 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 			return fiber.ErrBadRequest
 		}
 
+		start := time.Now()
 		p, err := stratObject.Compute(&manager)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest
 		}
+		stop := time.Now()
+		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
 
 		// calculate the portfolio's performance
+		start = time.Now()
 		performance, err := p.CalculatePerformance(manager.End)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest
 		}
+		stop = time.Now()
+		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
+
+		start = time.Now()
 		performance.BuildMetricsBundle()
+		stop = time.Now()
+		metricCalcDur := stop.Sub(start).Round(time.Millisecond)
+
+		log.WithFields(log.Fields{
+			"StratCalcDur":  stratComputeDur,
+			"PerfCalcDur":   calcPerfDur,
+			"MetricCalcDur": metricCalcDur,
+		}).Info("Strategy calculated")
 
 		return c.JSON(performance)
 	}
