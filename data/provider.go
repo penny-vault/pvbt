@@ -182,6 +182,10 @@ func (m *Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.Data
 		if v.Err == nil {
 			res[v.Ticker] = v.Data
 		} else {
+			log.WithFields(log.Fields{
+				"Ticker": v.Ticker,
+				"Error":  v.Err,
+			}).Warn("Cannot download ticker data")
 			errs = append(errs, v.Err)
 		}
 	}
