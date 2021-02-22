@@ -1,8 +1,9 @@
 package strategies
 
 // StrategyList List of all strategies
-var StrategyList = [1]StrategyInfo{
+var StrategyList = []StrategyInfo{
 	AcceleratingDualMomentumInfo(),
+	KellersDefensiveAssetAllocationInfo(),
 }
 
 // StrategyMap Map of strategies
