@@ -7,6 +7,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -23,15 +24,16 @@ const (
 	BuyTransaction      = "BUY"
 	DepositTransaction  = "DEPOSIT"
 	WithdrawTransaction = "WITHDRAW"
+	MarkerTransaction   = "MARKER"
 )
 
 type Transaction struct {
-	Date          time.Time
-	Ticker        string
-	Kind          string
-	PricePerShare float64
-	Shares        float64
-	TotalValue    float64
+	Date          time.Time              `json:"date"`
+	Ticker        string                 `json:"ticker"`
+	Kind          string                 `json:"kind"`
+	PricePerShare float64                `json:"pricePerShare"`
+	Shares        float64                `json:"shares"`
+	TotalValue    float64                `json:"totalValue"`
 	Justification map[string]interface{} `json:"justification"`
 }
 
@@ -47,8 +49,10 @@ type Portfolio struct {
 	StartTime    time.Time
 	EndTime      time.Time
 	Transactions []Transaction
+	Holdings     map[string]float64
 	dataProxy    *data.Manager
 	securities   map[string]bool
+	priceData    map[string]*dataframe.DataFrame
 }
 
 type PerformanceMeasurement struct {
@@ -65,6 +69,7 @@ type Performance struct {
 	PeriodStart        int64                    `json:"periodStart"`
 	PeriodEnd          int64                    `json:"periodEnd"`
 	Measurements       []PerformanceMeasurement `json:"measurements"`
+	Transactions       []Transaction            `json:"transactions"`
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
 	YTDReturn          float64                  `json:"ytdReturn"`
 	CurrentAsset       string                   `json:"currentAsset"`
@@ -158,7 +163,9 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 		// iterate through each holding and add value to get total return
 		totalVal := 0.0
 		for _, holding := range currHoldings {
-			if val, ok := quotes[holding.Ticker]; ok {
+			if holding.Ticker == "$CASH" {
+				totalVal += holding.Shares
+			} else if val, ok := quotes[holding.Ticker]; ok {
 				price := val.(float64)
 				totalVal += price * holding.Shares
 			} else {
@@ -179,7 +186,7 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 	periodHoldings := map[time.Time][]Holding{}
 
 	for _, t := range p.Transactions {
-		if t.Kind == DepositTransaction || t.Kind == WithdrawTransaction {
+		if t.Kind == DepositTransaction || t.Kind == WithdrawTransaction || t.Kind == MarkerTransaction {
 			continue
 		}
 
@@ -242,8 +249,9 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	}
 
 	perf := Performance{
-		PeriodStart: p.StartTime.Unix(),
-		PeriodEnd:   through.Unix(),
+		PeriodStart:  p.StartTime.Unix(),
+		PeriodEnd:    through.Unix(),
+		Transactions: p.Transactions,
 	}
 
 	// Calculate performance
@@ -308,11 +316,16 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			trx := p.Transactions[trxIdx]
 
 			// process transactions up to this point in time
+			// test if date is Before the trx.Date - if it is then break
 			if date.Before(trx.Date) {
 				break
 			}
 
 			lastJustification = trx.Justification
+
+			if trx.Kind == MarkerTransaction {
+				continue
+			}
 
 			if trx.Kind == DepositTransaction || trx.Kind == WithdrawTransaction {
 				switch trx.Kind {
@@ -340,18 +353,26 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			default:
 				return Performance{}, errors.New("unrecognized transaction type")
 			}
+
+			// Protect against floating point noise
+			if shares < 1.0e-11 {
+				shares = 0
+			}
+
 			holdings[trx.Ticker] = shares
 		}
 
 		// iterate through each holding and add value to get total return
 		totalVal = 0.0
-		var tickers string
+		var tickers []string
 		for symbol, qty := range holdings {
-			if val, ok := quotes[symbol]; ok {
+			if symbol == "$CASH" {
+				totalVal += qty
+			} else if val, ok := quotes[symbol]; ok {
 				price := val.(float64)
 				totalVal += price * qty
-				if qty > 0 {
-					tickers += symbol + " "
+				if qty > 1.0e-11 {
+					tickers = append(tickers, symbol)
 				}
 			} else {
 				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
@@ -368,7 +389,8 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			riskFreeValue *= (1 + riskFreeRate)
 		}
 
-		tickers = strings.Trim(tickers, " ")
+		sort.Strings(tickers)
+		holdingStr := strings.Join(tickers, " ")
 		ret := totalVal/prevVal - 1
 		duration := date.Sub(p.StartTime).Hours() / (24 * 365.25)
 		cagrSinceInception = math.Pow(totalVal/startVal, 1.0/duration) - 1
@@ -378,13 +400,13 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			Time:          date.Unix(),
 			Value:         totalVal,
 			RiskFreeValue: riskFreeValue,
-			Holdings:      tickers,
+			Holdings:      holdingStr,
 			PercentReturn: ret,
 			Justification: lastJustification,
 		})
 
 		if date.Before(today) || date.Equal(today) {
-			perf.CurrentAsset = tickers
+			perf.CurrentAsset = holdingStr
 		}
 	}
 
@@ -398,6 +420,174 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	}
 
 	return perf, nil
+}
+
+// RebalanceTo rebalance the portfolio to the target percentages
+// Assumptions: can only rebalance current holdings
+func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justification map[string]interface{}) error {
+	nTrx := len(p.Transactions)
+	if nTrx > 0 {
+		lastDate := p.Transactions[nTrx-1].Date
+		if lastDate.After(date) {
+			return fmt.Errorf("Cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
+		}
+	}
+
+	// check that target sums to 1.0
+	var total float64
+	for _, v := range target {
+		total += v
+	}
+
+	// Allow for floating point error
+	diff := math.Abs(1.0 - total)
+	if diff > 1.0e-11 {
+		return fmt.Errorf("Rebalance percent total does not equal 1.0, it is %.2f", total)
+	}
+
+	// get the cash position of the portfolio
+	var cash float64
+	if currCash, ok := p.Holdings["$CASH"]; ok {
+		cash += currCash
+	}
+
+	// get the current value of non-cash holdings
+	var securityValue float64
+	priceMap := map[string]float64{
+		"$CASH": 1.0,
+	}
+	for k, v := range p.Holdings {
+		if k != "$CASH" {
+			eod := p.priceData[k]
+			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
+			if err != nil {
+				return err
+			}
+
+			var price float64
+			if tmp, ok := res[k]; ok {
+				price = tmp.(float64)
+			} else {
+				log.WithFields(log.Fields{
+					"Symbol": k,
+					"Date":   date,
+				}).Debug("Security purchased before security price was available")
+				return fmt.Errorf("Security %s price data not available for date %s", k, date.String())
+			}
+
+			securityValue += v * price
+			priceMap[k] = price
+		}
+	}
+
+	// get any prices that we haven't already loaded
+	for k := range target {
+		if _, ok := priceMap[k]; !ok {
+			eod := p.priceData[k]
+			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
+			if err != nil {
+				return err
+			}
+
+			var price float64
+			if tmp, ok := res[k]; ok {
+				price = tmp.(float64)
+			} else {
+				log.WithFields(log.Fields{
+					"Symbol": k,
+					"Date":   date,
+				}).Debug("Security purchased before security price was available")
+				return fmt.Errorf("Security %s price data not available for date %s", k, date.String())
+			}
+
+			priceMap[k] = price
+		}
+	}
+
+	investable := cash + securityValue
+
+	// process all targets
+	sells := []Transaction{}
+	buys := []Transaction{}
+
+	// sell any holdings that we no longer want
+	for k, v := range p.Holdings {
+		if k == "$CASH" {
+			continue
+		}
+		if _, ok := target[k]; !ok {
+			t := Transaction{
+				Date:          date,
+				Ticker:        k,
+				Kind:          SellTransaction,
+				PricePerShare: priceMap[k],
+				Shares:        v,
+				TotalValue:    v * priceMap[k],
+				Justification: justification,
+			}
+			sells = append(sells, t)
+		}
+	}
+
+	newHoldings := make(map[string]float64)
+	for k, v := range target {
+		// is this security currently held and should we sell it?
+		if holding, ok := p.Holdings[k]; ok {
+			targetDollars := investable * v
+			currentDollars := holding * priceMap[k]
+			newHoldings[k] = targetDollars / priceMap[k]
+			if targetDollars < currentDollars {
+				// Need to sell to target amount
+				toSellDollars := currentDollars - targetDollars
+				toSellShares := toSellDollars / priceMap[k]
+				t := Transaction{
+					Date:          date,
+					Ticker:        k,
+					Kind:          SellTransaction,
+					PricePerShare: priceMap[k],
+					Shares:        toSellShares,
+					TotalValue:    toSellDollars,
+					Justification: justification,
+				}
+				sells = append(sells, t)
+			}
+			if targetDollars > currentDollars {
+				// Need to buy to target amount
+				toBuyDollars := targetDollars - currentDollars
+				toBuyShares := toBuyDollars / priceMap[k]
+				t := Transaction{
+					Date:          date,
+					Ticker:        k,
+					Kind:          BuyTransaction,
+					PricePerShare: priceMap[k],
+					Shares:        toBuyShares,
+					TotalValue:    toBuyDollars,
+					Justification: justification,
+				}
+				buys = append(buys, t)
+			}
+		} else {
+			// this is a new position
+			value := investable * v
+			shares := value / priceMap[k]
+			newHoldings[k] = shares
+			t := Transaction{
+				Date:          date,
+				Ticker:        k,
+				Kind:          BuyTransaction,
+				PricePerShare: priceMap[k],
+				Shares:        shares,
+				TotalValue:    value,
+				Justification: justification,
+			}
+			buys = append(buys, t)
+		}
+	}
+	p.Transactions = append(p.Transactions, sells...)
+	p.Transactions = append(p.Transactions, buys...)
+	p.Holdings = newHoldings
+
+	return nil
 }
 
 // TargetPortfolio invest target portfolio
@@ -414,16 +604,35 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	p.StartTime = timeSeries.Value(0).(time.Time)
 	p.EndTime = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
 
-	// Get price data
 	p.securities = make(map[string]bool)
-	iterator := target.Series[1].ValuesIterator()
+	tickerSeriesIdx, err := target.NameToColumn(TickerName)
+	if err != nil {
+		return fmt.Errorf("Missing required column: %s", TickerName)
+	}
+
+	// check series type
+	isSingleAsset := false
+	series := target.Series[tickerSeriesIdx]
+	if series.Type() == "string" {
+		isSingleAsset = true
+	}
+
+	// Get price data
+	iterator := target.Series[tickerSeriesIdx].ValuesIterator()
 	for {
 		row, val, _ := iterator()
 		if row == nil {
 			break
 		}
 
-		p.securities[val.(string)] = true
+		if isSingleAsset {
+			p.securities[val.(string)] = true
+		} else {
+			// it's multi-asset which means a map of tickers
+			for ticker := range val.(map[string]float64) {
+				p.securities[ticker] = true
+			}
+		}
 	}
 
 	symbols := []string{}
@@ -442,11 +651,10 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		}).Warn("Failed to load data for tickers")
 		return errors.New("Failed loading data for tickers")
 	}
+	p.priceData = prices
 
 	// Create transactions
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-	value := initial
-	var lastTransaction *Transaction
 	var first bool = true
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
@@ -456,7 +664,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 
 		// Get next transaction symbol
 		var date time.Time
-		var symbol string
+		var symbol interface{}
 		justification := make(map[string]interface{})
 
 		for k, v := range val {
@@ -464,7 +672,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 			if idx == data.DateIdx {
 				date = val[data.DateIdx].(time.Time)
 			} else if idx == TickerName {
-				symbol = val[TickerName].(string)
+				symbol = val[TickerName]
 			} else {
 				justification[idx] = v
 			}
@@ -475,67 +683,36 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 			// Create initial deposit
 			p.Transactions = append(p.Transactions, Transaction{
 				Date:          date,
-				Ticker:        "",
+				Ticker:        "$CASH",
 				Kind:          DepositTransaction,
-				PricePerShare: 0.0,
-				Shares:        0,
+				PricePerShare: 1.0,
+				Shares:        initial,
 				TotalValue:    initial,
 				Justification: justification,
 			})
+			p.Holdings = map[string]float64{
+				"$CASH": initial,
+			}
 		}
 
-		// Sell previous transaction
-		if lastTransaction != nil {
-			eod := prices[lastTransaction.Ticker]
-			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
-			if err != nil {
-				return err
-			}
-			price := res[lastTransaction.Ticker].(float64)
-			value = lastTransaction.Shares * price
-			t := Transaction{
-				Date:          date,
-				Ticker:        lastTransaction.Ticker,
-				Kind:          SellTransaction,
-				PricePerShare: price,
-				Shares:        lastTransaction.Shares,
-				TotalValue:    value,
-				Justification: justification,
-			}
-			p.Transactions = append(p.Transactions, t)
+		var rebalance map[string]float64
+		if isSingleAsset {
+			strSymbol := symbol.(string)
+			rebalance = map[string]float64{}
+			rebalance[strSymbol] = 1.0
+		} else {
+			rebalance = symbol.(map[string]float64)
 		}
 
-		// Buy new stock if it doesn't match the previous one
-		eod := prices[symbol]
-		res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
+		p.Transactions = append(p.Transactions, Transaction{
+			Date:          date,
+			Kind:          MarkerTransaction,
+			Justification: justification,
+		})
+		err = p.RebalanceTo(date, rebalance, justification)
 		if err != nil {
 			return err
 		}
-		var price float64
-		if tmp, ok := res[symbol]; ok {
-			price = tmp.(float64)
-		} else {
-			log.WithFields(log.Fields{
-				"Symbol": symbol,
-				"Date":   date,
-			}).Debug("Security purchased before security price was available")
-			return fmt.Errorf("Security %s price data not available for date %s", symbol, date.String())
-		}
-
-		shares := value / price
-
-		t := Transaction{
-			Date:          date,
-			Ticker:        symbol,
-			Kind:          BuyTransaction,
-			PricePerShare: price,
-			Shares:        shares,
-			TotalValue:    value,
-			Justification: justification,
-		}
-
-		lastTransaction = &t
-		p.Transactions = append(p.Transactions, t)
 	}
 
 	return nil
