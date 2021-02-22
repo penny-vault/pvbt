@@ -20,3 +20,4 @@ bin/
 sendgrid.env
 auth0.env
 loki.env
+database.env
