@@ -20,14 +20,15 @@ type Argument struct {
 
 // StrategyInfo information about a strategy
 type StrategyInfo struct {
-	Name        string              `json:"name"`
-	Shortcode   string              `json:"shortcode"`
-	Description string              `json:"description"`
-	Source      string              `json:"source"`
-	Version     string              `json:"version"`
-	YTDGain     float64             `json:"ytd_gain"`
-	Arguments   map[string]Argument `json:"arguments"`
-	Factory     StrategyFactory     `json:"-"`
+	Name                string                       `json:"name"`
+	Shortcode           string                       `json:"shortcode"`
+	Description         string                       `json:"description"`
+	Source              string                       `json:"source"`
+	Version             string                       `json:"version"`
+	YTDGain             float64                      `json:"ytd_gain"`
+	Arguments           map[string]Argument          `json:"arguments"`
+	SuggestedParameters map[string]map[string]string `json:"suggestedParams"`
+	Factory             StrategyFactory              `json:"-"`
 }
 
 // Strategy an investing strategy

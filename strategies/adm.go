@@ -1,3 +1,12 @@
+/*
+ * Accelerating Dual Momentum v1.0
+ * https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/
+ *
+ * A momentum strategy by Chris Ludlow and Steve Hanly that tries to avoid the
+ * S&P500's worst drawdowns while capturing most of the upside. It is an evolution
+ * of Gary Antonacci's Dual Momentum strategy.
+ */
+
 package strategies
 
 import (
@@ -8,6 +17,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/portfolio"
+	"main/util"
 	"strings"
 	"time"
 
@@ -23,7 +33,6 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 		Description: "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets.",
 		Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
 		Version:     "1.0.0",
-		YTDGain:     1.84,
 		Arguments: map[string]Argument{
 			"inTickers": Argument{
 				Name:        "Tickers",
@@ -36,6 +45,20 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 				Description: "Ticker to use when model scores are all below 0",
 				Typecode:    "string",
 				DefaultVal:  "VUSTX",
+			},
+		},
+		SuggestedParameters: map[string]map[string]string{
+			"Engineered Portfolio": {
+				"inTickers": `["VFINX", "VINEX"]`,
+				"outTicker": `VUSTX`,
+			},
+			"PRIDX": {
+				"inTickers": `["VFINX", "PRIDX"]`,
+				"outTicker": `VUSTX`,
+			},
+			"All ETF": {
+				"inTickers": `["SPY", "SCZ"]`,
+				"outTicker": `TLT`,
 			},
 		},
 		Factory: NewAcceleratingDualMomentum,
@@ -63,13 +86,11 @@ func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (Strategy, err
 		return nil, err
 	}
 
+	util.ArrToUpper(inTickers)
+
 	var outTicker string
 	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
 		return nil, err
-	}
-
-	for ii := range inTickers {
-		inTickers[ii] = strings.ToUpper(inTickers[ii])
 	}
 
 	outTicker = strings.ToUpper(outTicker)

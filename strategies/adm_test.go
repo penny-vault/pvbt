@@ -136,7 +136,7 @@ var _ = Describe("Adm", func() {
 				}))
 				Expect(perf.Measurements[100]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          880675200,
-					Value:         42408.6029810143,
+					Value:         42408.60298101431,
 					Holdings:      "VFINX",
 					RiskFreeValue: 15173.981586783602,
 					PercentReturn: 0.045985060690943325,
@@ -147,7 +147,7 @@ var _ = Describe("Adm", func() {
 				}))
 				Expect(perf.Measurements[200]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1143763200,
-					Value:         343579.75074944296,
+					Value:         343579.75074944284,
 					Holdings:      "PRIDX",
 					RiskFreeValue: 19938.252280594555,
 					PercentReturn: 0.06929347826087029,
@@ -158,7 +158,7 @@ var _ = Describe("Adm", func() {
 				}))
 				Expect(perf.Measurements[300]).To(Equal(portfolio.PerformanceMeasurement{
 					Time:          1406764800,
-					Value:         1.150248264616171e+06,
+					Value:         1.1502482646161707e+06,
 					Holdings:      "VFINX",
 					RiskFreeValue: 21966.917804088513,
 					PercentReturn: -0.01388044019244239,
