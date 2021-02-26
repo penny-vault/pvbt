@@ -419,7 +419,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*por
 	}
 	sort.Strings(symbols)
 	daa.CurrentSymbol = strings.Join(symbols, " ")
-	p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager)
+	p := portfolio.NewPortfolio("Defensive Asset Allocation Portfolio", manager)
 	err = p.TargetPortfolio(10000, daa.targetPortfolio)
 	if err != nil {
 		return nil, err
