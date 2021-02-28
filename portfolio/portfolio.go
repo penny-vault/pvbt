@@ -210,7 +210,7 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 			case SellTransaction:
 				h.Shares -= t.Shares
 			}
-			if h.Shares <= 0 {
+			if h.Shares <= 1e-5 {
 				delete(currHoldings, h.Ticker)
 			}
 		} else {
