@@ -212,6 +212,8 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 			}
 			if h.Shares <= 1e-5 {
 				delete(currHoldings, h.Ticker)
+			} else {
+				currHoldings[t.Ticker] = h
 			}
 		} else {
 			if t.Kind != BuyTransaction {
