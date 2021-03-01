@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.3.1] - 2021-02-28
 ### Fixed
 - Bug in portfolio metric calc that caused incorrect status to sometimes be sent
+- Unlimit portfolio name length
 
 ## [0.3.0] - 2021-02-21
 ### Added
