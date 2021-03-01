@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2021-02-28
+### Fixed
+- Bug in portfolio metric calc that caused incorrect status to sometimes be sent
+
 ## [0.3.0] - 2021-02-21
 ### Added
 - Additional logging showing performance of strategy simulation at various points
@@ -35,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock data retrieval interface
 - Acclerating Dual Momentum strategy
 
+[0.3.1]: https://github.com/jdfergason/pv-api/releases/tag/v0.3.1
 [0.3.0]: https://github.com/jdfergason/pv-api/releases/tag/v0.3.0
 [0.2.0]: https://github.com/jdfergason/pv-api/releases/tag/v0.2.0
 [0.1.1]: https://github.com/jdfergason/pv-api/releases/tag/v0.1.1
