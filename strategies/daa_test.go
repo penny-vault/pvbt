@@ -20,7 +20,7 @@ var _ = Describe("Daa", func() {
 	)
 
 	BeforeEach(func() {
-		jsonParams := `{"riskyUniverse": ["VFINX", "PRIDX"], "cashUniverse": ["VUSTX"], "protectiveUniverse": ["VUSTX"], "breadth": 1, "topT": 1}`
+		jsonParams := `{"riskUniverse": ["VFINX", "PRIDX"], "cashUniverse": ["VUSTX"], "protectiveUniverse": ["VUSTX"], "breadth": 1, "topT": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 			panic(err)
