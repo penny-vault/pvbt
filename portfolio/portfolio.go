@@ -357,7 +357,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			}
 
 			// Protect against floating point noise
-			if shares < 1.0e-11 {
+			if shares <= 1.0e-5 {
 				shares = 0
 			}
 
@@ -373,7 +373,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			} else if val, ok := quotes[symbol]; ok {
 				price := val.(float64)
 				totalVal += price * qty
-				if qty > 1.0e-11 {
+				if qty > 1.0e-5 {
 					tickers = append(tickers, symbol)
 				}
 			} else {
