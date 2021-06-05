@@ -68,6 +68,7 @@ type PerformanceMeasurement struct {
 type Performance struct {
 	PeriodStart        int64                    `json:"periodStart"`
 	PeriodEnd          int64                    `json:"periodEnd"`
+	ComputedOn         int64                    `json:"computedOn"`
 	Measurements       []PerformanceMeasurement `json:"measurements"`
 	Transactions       []Transaction            `json:"transactions"`
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
@@ -253,6 +254,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	perf := Performance{
 		PeriodStart:  p.StartTime.Unix(),
 		PeriodEnd:    through.Unix(),
+		ComputedOn:   time.Now().Unix(),
 		Transactions: p.Transactions,
 	}
 
