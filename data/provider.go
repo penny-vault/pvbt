@@ -70,6 +70,14 @@ func InitializeDataManager() {
 			"Error": err,
 		}).Fatal("Cannot load risk free rate")
 	}
+
+	// schedule a timer to update riskFreeRate in 24 hours
+	refreshTimer := time.NewTimer(24 * time.Hour)
+	go func() {
+		<-refreshTimer.C
+		log.Info("Refreshing risk free rate")
+		InitializeDataManager()
+	}()
 }
 
 // NewManager create a new data manager
