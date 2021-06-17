@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -9,6 +8,8 @@ import (
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/goccy/go-json"
 
 	log "github.com/sirupsen/logrus"
 )

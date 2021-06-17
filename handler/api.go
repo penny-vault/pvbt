@@ -1,12 +1,13 @@
 package handler
 
 import (
-	"encoding/json"
 	"main/data"
 	"main/portfolio"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"

@@ -1,13 +1,14 @@
 package strategies_test
 
 import (
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"main/data"
 	"main/portfolio"
 	"main/strategies"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo"

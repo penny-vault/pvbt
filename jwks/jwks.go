@@ -2,10 +2,11 @@ package jwks
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"os"
+
+	"github.com/goccy/go-json"
 
 	"github.com/lestrrat-go/jwx/jwk"
 	log "github.com/sirupsen/logrus"

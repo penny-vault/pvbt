@@ -3,7 +3,6 @@ package data
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -12,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	imports "github.com/rocketlaunchr/dataframe-go/imports"

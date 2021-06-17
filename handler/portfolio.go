@@ -2,9 +2,10 @@ package handler
 
 import (
 	"database/sql"
-	"encoding/json"
 	"main/database"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"

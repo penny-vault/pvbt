@@ -1,9 +1,10 @@
 package strategies
 
 import (
-	"encoding/json"
 	"main/data"
 	"main/portfolio"
+
+	"github.com/goccy/go-json"
 )
 
 // StrategyFactory factory method to create strategy

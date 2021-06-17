@@ -1,8 +1,9 @@
 package portfolio_test
 
 import (
-	"encoding/json"
 	"io/ioutil"
+
+	"github.com/goccy/go-json"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"

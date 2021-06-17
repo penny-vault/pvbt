@@ -11,7 +11,6 @@ package strategies
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"main/data"
@@ -20,6 +19,8 @@ import (
 	"main/util"
 	"strings"
 	"time"
+
+	"github.com/goccy/go-json"
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
