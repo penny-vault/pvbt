@@ -8,8 +8,8 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
+	"github.com/lestrrat-go/jwx/jwt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -79,11 +79,17 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		credentials := make(map[string]string)
 
 		// get tiingo token from jwt claims
-		user := c.Locals("user").(*jwt.Token)
-		claims := user.Claims.(jwt.MapClaims)
-		tiingoToken := claims["https://pennyvault.com/tiingo_token"].(string)
+		jwtToken := c.Locals("user").(jwt.Token)
+		if tiingoToken, ok := jwtToken.Get(`https://pennyvault.com/tiingo_token`); ok {
+			credentials["tiingo"] = tiingoToken.(string)
+		} else {
+			log.WithFields(log.Fields{
+				"jwtToken": tiingoToken,
+				"error":    "jwt token does not have expected claim: https://pennyvault.com/tiingo_token",
+			})
+			return fiber.ErrBadRequest
+		}
 
-		credentials["tiingo"] = tiingoToken
 		manager := data.NewManager(credentials)
 		manager.Begin = startDate
 		manager.End = endDate

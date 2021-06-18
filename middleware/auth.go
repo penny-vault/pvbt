@@ -2,15 +2,16 @@ package middleware
 
 import (
 	"github.com/gofiber/fiber/v2"
-	jwtware "github.com/gofiber/jwt/v2"
+	jwtware "github.com/jdfergason/jwt/v2"
+	"github.com/lestrrat-go/jwx/jwk"
 )
 
 // JWTAuth instantiate JWT auth middleware
-func JWTAuth(jwks map[string]interface{}) fiber.Handler {
+func JWTAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
 	return jwtware.New(jwtware.Config{
-		SigningKeys:   jwks,
-		SigningMethod: "RS256",
-		ErrorHandler:  jwtError,
+		Jwks:         jwks,
+		JwksUrl:      jwksUrl,
+		ErrorHandler: jwtError,
 	})
 }
 

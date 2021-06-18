@@ -7,10 +7,10 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/dgrijalva/jwt-go"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx/types"
+	"github.com/lestrrat-go/jwx/jwt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -34,9 +34,10 @@ type PortfolioResponse struct {
 // @Param id path string true "id of porfolio to retrieve"
 func GetPortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	userID := claims["sub"].(string)
+
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND userid=$2`
 	row := database.Conn.QueryRow(portfolioSQL, portfolioID, userID)
@@ -52,9 +53,9 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 // ListPortfolios list all portfolios for logged in user
 func ListPortfolios(c *fiber.Ctx) error {
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	userID := claims["sub"].(string)
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE userid=$1 ORDER BY name, created`
 	rows, err := database.Conn.Query(portfolioSQL, userID)
@@ -85,9 +86,9 @@ func ListPortfolios(c *fiber.Ctx) error {
 // CreatePortfolio new portfolio
 func CreatePortfolio(c *fiber.Ctx) error {
 	// get tiingo token and userID from jwt claims
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	userID := claims["sub"].(string)
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
 
 	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -114,9 +115,9 @@ func CreatePortfolio(c *fiber.Ctx) error {
 // UpdatePortfolio update portfolio
 func UpdatePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	userID := claims["sub"].(string)
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
 
 	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -162,9 +163,9 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 // DeletePortfolio delete portfolio
 func DeletePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-	user := c.Locals("user").(*jwt.Token)
-	claims := user.Claims.(jwt.MapClaims)
-	userID := claims["sub"].(string)
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
 
 	deleteSQL := "DELETE FROM Portfolio WHERE id=$1 AND userid=$2"
 	_, err := database.Conn.Exec(deleteSQL, portfolioID, userID)

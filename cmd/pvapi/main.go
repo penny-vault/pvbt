@@ -76,10 +76,10 @@ func main() {
 	app.Use(middleware.NewLogger())
 
 	// Configure authentication
-	signingKeys := jwks.LoadJWKS()
+	jwksAutoRefresh, jwksUrl := jwks.SetupJWKS()
 
 	// Setup routes
-	router.SetupRoutes(app, signingKeys)
+	router.SetupRoutes(app, jwksAutoRefresh, jwksUrl)
 
 	// initialize strategies
 	strategies.IntializeStrategyMap()

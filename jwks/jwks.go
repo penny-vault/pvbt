@@ -19,7 +19,7 @@ type authConfig struct {
 }
 
 // LoadJWKS load settings from auth.json and retrieve JWKS
-func LoadJWKS() map[string]interface{} {
+func SetupJWKS() (*jwk.AutoRefresh, string) {
 	// Load settings
 	jsonFile, err := os.Open("auth.json")
 	if err != nil {
@@ -35,27 +35,14 @@ func LoadJWKS() map[string]interface{} {
 	json.Unmarshal(byteValue, &config)
 
 	// read remote JWKS
-	jwksURL := fmt.Sprintf("https://%s/.well-known/jwks.json", config.Domain)
-	log.Printf("Reading JWKS from %s\n", jwksURL)
+	jwksUrl := fmt.Sprintf("https://%s/.well-known/jwks.json", config.Domain)
+	log.Printf("Reading JWKS from %s\n", jwksUrl)
 
-	set, err := jwk.FetchHTTP(jwksURL)
-	if err != nil {
-		log.Fatal(err)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ar := jwk.NewAutoRefresh(ctx)
+	ar.Configure(jwksUrl)
+	ar.Fetch(ctx, jwksUrl) // perform initial fetch
 
-	// reformat to {"kid": "key"}, the format needed by Fiber's JWT middleware
-	res := make(map[string]interface{})
-
-	for iter := set.Iterate(context.TODO()); iter.Next(context.TODO()); {
-		pair := iter.Pair()
-		key := pair.Value.(jwk.Key)
-
-		var raw interface{}
-		if err := key.Raw(&raw); err != nil {
-			log.Fatal(err)
-		}
-		res[key.KeyID()] = raw
-	}
-
-	return res
+	return ar, jwksUrl
 }
