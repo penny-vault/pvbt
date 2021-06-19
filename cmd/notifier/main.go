@@ -65,8 +65,23 @@ func getSavedPortfolios(startDate time.Time) []*savedStrategy {
 }
 
 func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Performance) {
-	updateSQL := `UPDATE portfolio SET ytd_return=$1, cagr_since_inception=$2 WHERE id=$3`
-	_, err := database.Conn.Query(updateSQL, perf.YTDReturn, perf.CagrSinceInception, s.ID)
+	updateSQL := `UPDATE portfolio SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12 WHERE id=$13`
+	_, err := database.Conn.Query(
+		updateSQL,
+		perf.YTDReturn,
+		perf.MetricsBundle.CAGRS.ThreeYear,
+		perf.MetricsBundle.CAGRS.FiveYear,
+		perf.MetricsBundle.CAGRS.TenYear,
+		perf.CagrSinceInception,
+		perf.MetricsBundle.StdDev,
+		perf.MetricsBundle.DownsideDeviation,
+		perf.MetricsBundle.MaxDrawDown.LossPercent,
+		perf.MetricsBundle.AvgDrawDown,
+		perf.MetricsBundle.SharpeRatio,
+		perf.MetricsBundle.SortinoRatio,
+		perf.MetricsBundle.UlcerIndexAvg,
+		s.ID,
+	)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Portfolio":            s.ID,
@@ -92,14 +107,22 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 		"Portfolio": p.ID,
 	}).Info("Computing portfolio performance")
 
-	u, err := getUser(p.UserID)
-	if err != nil {
-		return nil, err
+	var manager data.Manager
+	if p.UserID == "system" {
+		// System user is not in auth0 - expect an environment variable with the tiingo token to use
+		manager = data.NewManager(map[string]string{
+			"tiingo": os.Getenv("SYSTEM_TIINGO_TOKEN"),
+		})
+	} else {
+		u, err := getUser(p.UserID)
+		if err != nil {
+			return nil, err
+		}
+		manager = data.NewManager(map[string]string{
+			"tiingo": u.TiingoToken,
+		})
 	}
 
-	manager := data.NewManager(map[string]string{
-		"tiingo": u.TiingoToken,
-	})
 	manager.Begin = time.Unix(p.StartDate, 0)
 	manager.End = through
 	manager.Frequency = data.FrequencyMonthly
@@ -129,8 +152,8 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 	log.WithFields(log.Fields{
 		"Portfolio": p.ID,
 		"Strategy":  p.Strategy,
-	}).Error("Portfolio strategy not found")
-	return nil, errors.New("Strategy not found")
+	}).Error("portfolio strategy not found")
+	return nil, errors.New("strategy not found")
 }
 
 func datesEqual(d1 time.Time, d2 time.Time) bool {
@@ -264,7 +287,7 @@ func buildEmail(forDate time.Time, frequency string, s *savedStrategy,
 			"Function": "cmd/notifier/main.go:sendEmail",
 			"UserId":   to.ID,
 		}).Warn("Refusing to send email to unverified email address")
-		return nil, errors.New("Refusing to send email to unverified email address")
+		return nil, errors.New("refusing to send email to unverified email address")
 	}
 
 	from := User{
@@ -339,7 +362,13 @@ func main() {
 	testFlag := flag.Bool("test", false, "test the notifier and don't send notifications")
 	limitFlag := flag.Int("limit", 0, "limit the number of portfolios to process")
 	dateFlag := flag.String("date", "-1", "date to run notifier for")
+	debugFlag := flag.Bool("debug", false, "turn on debug logging")
 	flag.Parse()
+
+	// configure logging
+	if *debugFlag {
+		log.SetReportCaller(true)
+	}
 
 	var forDate time.Time
 	if *dateFlag == "-1" {
@@ -375,7 +404,7 @@ func main() {
 	data.InitializeDataManager()
 	log.Info("Initialized data framework")
 
-	strategies.IntializeStrategyMap()
+	strategies.InitializeStrategyMap()
 	log.Info("Initialized strategy map")
 
 	// get a list of all portfolios
@@ -386,9 +415,22 @@ func main() {
 	for ii, s := range savedPortfolios {
 		p, err := computePortfolioPerformance(s, forDate)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"PortfolioID": s.ID,
+				"Error":       err,
+			}).Error("Failed to compute portfolio performance")
 			continue
 		}
 		perf, err := p.CalculatePerformance(forDate)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":       err,
+				"PortfolioID": s.ID,
+				"Function":    "portfolio.CalculatePerformance",
+				"ForDate":     forDate.String(),
+			}).Error("Failed to calculate portfolio performance")
+		}
+		perf.BuildMetricsBundle()
 		updateSavedPortfolioPerformanceMetrics(s, &perf)
 		processNotifications(forDate, s, p, &perf)
 		if *limitFlag != 0 && *limitFlag >= ii {

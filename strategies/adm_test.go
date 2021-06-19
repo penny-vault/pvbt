@@ -116,12 +116,10 @@ var _ = Describe("Adm", func() {
 				Expect(err).To(BeNil())
 				Expect(adm.CurrentSymbol).To(Equal("PRIDX"))
 
-				var begin int64
-				begin = 617846400
+				var begin int64 = 617846400
 				Expect(perf.PeriodStart).To(Equal(begin))
 
-				var end int64
-				end = 1609459200
+				var end int64 = 1609459200
 				Expect(perf.PeriodEnd).To(Equal(end))
 				Expect(perf.Measurements).Should(HaveLen(379))
 				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{

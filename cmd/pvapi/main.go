@@ -18,7 +18,9 @@ import (
 	"main/router"
 	"main/strategies"
 	"os"
+	"time"
 
+	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
@@ -82,7 +84,13 @@ func main() {
 	router.SetupRoutes(app, jwksAutoRefresh, jwksUrl)
 
 	// initialize strategies
-	strategies.IntializeStrategyMap()
+	strategies.InitializeStrategyMap()
+
+	// Get strategy metrics
+	strategies.LoadStrategyMetricsFromDb()
+	scheduler := gocron.NewScheduler(time.UTC)
+	scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb)
+	scheduler.StartAsync()
 
 	// Get the PORT from heroku env
 	port := os.Getenv("PORT")

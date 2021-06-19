@@ -35,13 +35,13 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 		Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
 		Version:     "1.0.0",
 		Arguments: map[string]Argument{
-			"inTickers": Argument{
+			"inTickers": {
 				Name:        "Tickers",
 				Description: "List of ETF, Mutual Fund, or Stock tickers to invest in",
 				Typecode:    "[]string",
 				DefaultVal:  `["VFINX", "PRIDX"]`,
 			},
-			"outTicker": Argument{
+			"outTicker": {
 				Name:        "Out-of-Market Ticker",
 				Description: "Ticker to use when model scores are all below 0",
 				Typecode:    "string",
@@ -67,7 +67,6 @@ func AcceleratingDualMomentumInfo() StrategyInfo {
 }
 
 type AcceleratingDualMomentum struct {
-	info          StrategyInfo
 	inTickers     []string
 	prices        *dataframe.DataFrame
 	outTicker     string
@@ -96,19 +95,12 @@ func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (Strategy, err
 
 	outTicker = strings.ToUpper(outTicker)
 
-	var adm Strategy
-	adm = &AcceleratingDualMomentum{
-		info:      AcceleratingDualMomentumInfo(),
+	var adm Strategy = &AcceleratingDualMomentum{
 		inTickers: inTickers,
 		outTicker: outTicker,
 	}
 
 	return adm, nil
-}
-
-// GetInfo get information about this strategy
-func (adm *AcceleratingDualMomentum) GetInfo() StrategyInfo {
-	return adm.info
 }
 
 func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) error {
@@ -122,7 +114,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	prices, errs := manager.GetMultipleData(tickers...)
 
 	if len(errs) > 0 {
-		return errors.New("Failed to download data for tickers")
+		return errors.New("failed to download data for tickers")
 	}
 
 	var eod = []*dataframe.DataFrame{}
@@ -156,8 +148,8 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	riskFreeRate := prices[riskFreeSymbol]
 
 	// duplicate last row if it doesn't match endTime
-	valueIdx, err := riskFreeRate.NameToColumn("TB3MS")
-	timeSeriesIdx, err := riskFreeRate.NameToColumn(data.DateIdx)
+	valueIdx, _ := riskFreeRate.NameToColumn("TB3MS")
+	timeSeriesIdx, _ := riskFreeRate.NameToColumn(data.DateIdx)
 	rr := riskFreeRate.Series[valueIdx]
 	nrows = rr.NRows(dataframe.Options{})
 	val := rr.Value(nrows-1, dataframe.Options{}).(float64)
@@ -305,7 +297,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*portfolio.
 	}
 	scoresDf := dataframe.NewDataFrame(scores...)
 
-	tmp, err := dfextras.DropNA(context.TODO(), scoresDf)
+	tmp, _ := dfextras.DropNA(context.TODO(), scoresDf)
 	scoresDf = tmp.(*dataframe.DataFrame)
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)

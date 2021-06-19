@@ -115,7 +115,6 @@ func KellersDefensiveAssetAllocationInfo() StrategyInfo {
 
 // KellersDefensiveAssetAllocation strategy type
 type KellersDefensiveAssetAllocation struct {
-	info               StrategyInfo
 	cashUniverse       []string
 	protectiveUniverse []string
 	riskUniverse       []string
@@ -172,9 +171,7 @@ func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (Strate
 		return nil, err
 	}
 
-	var daa Strategy
-	daa = &KellersDefensiveAssetAllocation{
-		info:               KellersDefensiveAssetAllocationInfo(),
+	var daa Strategy = &KellersDefensiveAssetAllocation{
 		cashUniverse:       cashUniverse,
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,
@@ -336,11 +333,6 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	daa.targetPortfolio = dataframe.NewDataFrame(timeSeries, targetSeries)
 }
 
-// GetInfo get information about this strategy
-func (daa *KellersDefensiveAssetAllocation) GetInfo() StrategyInfo {
-	return daa.info
-}
-
 func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
@@ -353,7 +345,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 	prices, errs := manager.GetMultipleData(tickers...)
 
 	if len(errs) > 0 {
-		return errors.New("Failed to download data for tickers")
+		return errors.New("failed to download data for tickers")
 	}
 
 	var eod = []*dataframe.DataFrame{}

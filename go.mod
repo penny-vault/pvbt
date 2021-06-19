@@ -1,12 +1,13 @@
-// +heroku goVersion go1.15
+// +heroku goVersion go1.16
 
 module main
 
-go 1.15
+go 1.16
 
 require (
 	github.com/andybalholm/brotli v1.0.3 // indirect
 	github.com/apache/thrift v0.14.1 // indirect
+	github.com/go-co-op/gocron v1.6.2
 	github.com/goccy/go-json v0.7.1
 	github.com/gofiber/fiber/v2 v2.13.0
 	github.com/golang-migrate/migrate/v4 v4.14.2-0.20210203071828-a185b9e78f19
@@ -39,7 +40,6 @@ require (
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e // indirect
 	golang.org/x/exp v0.0.0-20210617012816-0dc655b38382 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
-	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
 	gonum.org/v1/gonum v0.9.1
 )

@@ -26,12 +26,15 @@ type CAGR struct {
 
 // MetricsBundle collection of statistics for a portfolio
 type MetricsBundle struct {
-	CAGRS         CAGR        `json:"cagrs"`
-	DrawDowns     []*DrawDown `json:"drawDowns"`
-	SharpeRatio   float64     `json:"sharpeRatio"`
-	SortinoRatio  float64     `json:"sortinoRatio"`
-	StdDev        float64     `json:"stdDev"`
-	UlcerIndexAvg float64     `json:"ulcerIndexAvg"`
+	CAGRS             CAGR        `json:"cagrs"`
+	DownsideDeviation float64     `json:"downsideDeviation"`
+	DrawDowns         []*DrawDown `json:"drawDowns"`
+	MaxDrawDown       *DrawDown   `json:"maxDrawDown"`
+	AvgDrawDown       float64     `json:"avgDrawDown"`
+	SharpeRatio       float64     `json:"sharpeRatio"`
+	SortinoRatio      float64     `json:"sortinoRatio"`
+	StdDev            float64     `json:"stdDev"`
+	UlcerIndexAvg     float64     `json:"ulcerIndexAvg"`
 }
 
 func min(x, y int) int {
@@ -50,28 +53,59 @@ func (perf *Performance) BuildMetricsBundle() {
 		TenYear:   perf.PeriodCagr(10),
 	}
 
+	drawDowns, maxDrawDown, avgDrawDown := perf.DrawDowns()
+
 	bundle := MetricsBundle{
-		CAGRS:         cagrs,
-		DrawDowns:     perf.DrawDowns(),
-		SharpeRatio:   perf.SharpeRatio(),
-		SortinoRatio:  perf.SortinoRatio(),
-		StdDev:        perf.StdDev(),
-		UlcerIndexAvg: perf.AvgUlcerIndex(14),
+		AvgDrawDown:       avgDrawDown,
+		CAGRS:             cagrs,
+		DownsideDeviation: perf.DownsideDeviation(),
+		DrawDowns:         drawDowns,
+		MaxDrawDown:       maxDrawDown,
+		SharpeRatio:       perf.SharpeRatio(),
+		SortinoRatio:      perf.SortinoRatio(),
+		StdDev:            perf.StdDev(),
+		UlcerIndexAvg:     perf.AvgUlcerIndex(14),
 	}
 
 	perf.MetricsBundle = bundle
 }
 
+// DownsideDeviation compute the downside deviation
+func (perf *Performance) DownsideDeviation() float64 {
+	excessReturn := perf.ExcessReturn()
+	if !(len(excessReturn) > 0) {
+		return 0.0
+	}
+	var downside float64
+	for _, xx := range excessReturn {
+		if xx < 0 {
+			downside += math.Pow(xx, 2)
+		}
+	}
+	downside = downside / float64(len(excessReturn))
+	if downside == 0 {
+		return 0
+	}
+	return math.Sqrt(downside)
+}
+
 // DrawDowns compute top 10 draw downs
-func (perf *Performance) DrawDowns() []*DrawDown {
+func (perf *Performance) DrawDowns() ([]*DrawDown, *DrawDown, float64) {
 	if len(perf.Measurements) <= 0 {
-		return []*DrawDown{}
+		log.Info("Skipping -- no draw downs for portfolio")
+		drawDown := &DrawDown{
+			Begin:       0,
+			End:         0,
+			LossPercent: 0,
+		}
+		return []*DrawDown{}, drawDown, 0
 	}
 
 	allDrawDowns := []*DrawDown{}
 
 	var peak float64 = perf.Measurements[0].Value
 	var drawDown *DrawDown
+	var avgDrawDown float64 = 0
 	for _, v := range perf.Measurements {
 		peak = math.Max(peak, v.Value)
 		diff := v.Value - peak
@@ -88,6 +122,7 @@ func (perf *Performance) DrawDowns() []*DrawDown {
 			if loss < drawDown.LossPercent {
 				drawDown.End = v.Time
 				drawDown.LossPercent = loss
+				avgDrawDown = (avgDrawDown + loss) / 2
 			}
 		} else if drawDown != nil {
 			drawDown.Recovery = v.Time
@@ -100,7 +135,7 @@ func (perf *Performance) DrawDowns() []*DrawDown {
 		return allDrawDowns[i].LossPercent < allDrawDowns[j].LossPercent
 	})
 
-	return allDrawDowns[0:min(10, len(allDrawDowns))]
+	return allDrawDowns[0:min(10, len(allDrawDowns))], allDrawDowns[0], avgDrawDown
 }
 
 // OneDayReturn compute the return over the last day
@@ -316,19 +351,8 @@ func (perf *Performance) SharpeRatio() float64 {
 // Calculation is based on this paper by Red Rock Capital
 // http://www.redrockcapital.com/Sortino__A__Sharper__Ratio_Red_Rock_Capital.pdf
 func (perf *Performance) SortinoRatio() float64 {
-	// get downside returns
-	var downside float64
 	excessReturn := perf.ExcessReturn()
-	for _, xx := range excessReturn {
-		if xx < 0 {
-			downside += math.Pow(xx, 2)
-		}
-	}
-	downside = downside / float64(len(excessReturn))
-	if downside == 0 {
-		return 0
-	}
-	sortino := stat.Mean(excessReturn, nil) / math.Sqrt(downside)
+	sortino := stat.Mean(excessReturn, nil) / perf.DownsideDeviation()
 	return sortino * math.Sqrt(12) // annualize rate by adjusting by month
 }
 
@@ -338,8 +362,6 @@ func (perf *Performance) SortinoRatio() float64 {
 // VolatilityMonthly
 
 // VolatilityAnnualized
-
-// DownsideDeviation
 
 // USMarketCorrelation
 

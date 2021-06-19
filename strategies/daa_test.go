@@ -120,12 +120,10 @@ var _ = Describe("Daa", func() {
 				Expect(err).To(BeNil())
 				Expect(daa.CurrentSymbol).To(Equal("VUSTX"))
 
-				var begin int64
-				begin = 633744000
+				var begin int64 = 633744000
 				Expect(perf.PeriodStart).To(Equal(begin))
 
-				var end int64
-				end = 1609459200
+				var end int64 = 1609459200
 				Expect(perf.PeriodEnd).To(Equal(end))
 				Expect(perf.Measurements).Should(HaveLen(379))
 

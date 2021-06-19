@@ -41,7 +41,7 @@ var _ = Describe("Metrics", func() {
 	Describe("When given a performance struct", func() {
 		Context("with portfolio returns", func() {
 			It("should have draw downs", func() {
-				drawDowns := perf.DrawDowns()
+				drawDowns, _, _ := perf.DrawDowns()
 
 				Expect(drawDowns).NotTo(BeNil())
 				Expect(drawDowns).To(HaveLen(10))
