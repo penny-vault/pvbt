@@ -15,8 +15,32 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+type PingResponse struct {
+	Status  string `json:"status" example:"success"`
+	Message string `json:"message" example:"API is alive"`
+	Time    string `json:"time" example:"2021-06-19T08:09:10.115924-05:00"`
+}
+
 func Ping(c *fiber.Ctx) error {
-	return c.JSON(fiber.Map{"status": "success", "message": "API is alive", "time": time.Now().String()})
+	var response PingResponse
+	now, err := time.Now().MarshalText()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Error("error while getting time in ping")
+		response = PingResponse{
+			Status:  "error",
+			Message: err.Error(),
+			Time:    string(now),
+		}
+	} else {
+		response = PingResponse{
+			Status:  "success",
+			Message: "API is alive",
+			Time:    string(now),
+		}
+	}
+	return c.JSON(response)
 }
 
 func Benchmark(c *fiber.Ctx) (resp error) {
