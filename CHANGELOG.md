@@ -7,7 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Fixed
 - When pvapi was running for a long time (>24 hrs) risk free rate data would become
-  out-dated. Set a refresh timer every 24 hours to update this data.
+  out-dated. Set a refresh timer every 24 hours to update this data
+- Periodic refresh of JSON Web Key Set incase it is invalidated
+
+### Changed
+- /v1/ api now returns the current time in it's message
+- Upgraded all libraries, including go-fiber to 2.13.0
+- Switch to faster JSON serializer/deserializer: goccy/go-json, in some cases
+  it is up to 2x faster
+
+### Added
+- Additional metrics in strategy list API; including: max draw down, downside risk, std. deviation, and more
+- OpenAPI 3.0 documentation
 
 ## [0.3.1] - 2021-02-28
 ### Fixed
