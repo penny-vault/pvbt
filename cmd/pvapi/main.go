@@ -82,7 +82,6 @@ func main() {
 	strategies.InitializeStrategyMap()
 
 	// Get strategy metrics
-	strategies.LoadStrategyMetricsFromDb()
 	scheduler := gocron.NewScheduler(time.UTC)
 	scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb)
 	scheduler.StartAsync()
