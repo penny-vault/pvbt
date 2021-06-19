@@ -31,6 +31,7 @@ func InitializeStrategyMap() {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
+	log.Info("refreshing portfolio metrics")
 StrategyLoop:
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
