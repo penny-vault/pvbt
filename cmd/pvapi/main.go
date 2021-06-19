@@ -40,11 +40,6 @@ func setupLogging() {
 	}
 }
 
-// @title Penny Vault Investment API
-// @version 1.0
-// @description Execute investment strategies
-// @license.name Commercial
-// @BasePath /
 func main() {
 	setupLogging()
 	log.Info("Logging configured")
