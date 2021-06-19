@@ -1,0 +1,374 @@
+openapi: '3.0.3'
+servers:
+  - description: Development server
+    url: http://localhost:3000/v1
+  - description: Production server
+    url: https://penny-vault.herokuapp.com/v1
+  - description: Staging server
+    url: https://pv-api-staging.herokuapp.com/v1
+info:
+  version: "1.0.0"
+  title: Penny Vault API
+  description: >-
+    Execute investment strategies and compute portfolio metrics
+paths:
+  /:
+    get:
+      summary: Ping service
+      description: >-
+        ping api to check for liveness and wake-up any sleeping instances
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+        "500":
+          description: ERROR
+      tags:
+        - utility
+  /benchmark:
+    post:
+      summary: calculate benchmark performance over specified time-frame
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            default: "1990-01-01"
+            example: "2021-06-18"
+          required: false
+          description: Date to start benchmark simulation on (yyyy-mm-dd)
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            default: "now"
+          examples:
+            date:
+              value: "2021-06-18"
+              summary: date string as yyyy-mm-dd
+            keyword:
+              value: "now"
+              summary: keyword indicating time, e.g. now
+          required: false
+          description: >-
+            Date to end benchmark simulation on. Entered as a 'yyyy-mm-dd' or using the convenience shortcut 'now' to specify the current date
+      requestBody:
+        description: >-
+          Benchmark parameters
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BenchmarkArgs'
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Not Authorized
+        "404":
+          description: Benchmark symbol not found
+      tags:
+        - portfolio
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MetricBundle:
+      description: collection of portfolio metrics
+      type: object
+      example:
+        cagrs:
+          1-yr: 0.3811364073876089
+          10-yr: 0.14472186517787256
+          3-yr: 0.17810447557991638
+          5-yr: 0.17070350884131757
+        drawDowns:
+          begin: 1196380800
+          end: 1235692800
+          lossPercent: -0.5096921151209781
+          recovery: 1346371200
+        sharpeRatio: 0.5691295208327964
+        sortinoRatio: 0.8399589527305837
+        stdDev: 0.14508276256543967
+        ulcerIndexAvg: 11.339463389310689
+      properties:
+        cagrs:
+          type: object
+          properties:
+            1-yr:
+              description: return over most recent 1-yr period
+              type: number
+              format: float
+            3-yr:
+              description: return over most recent 3-yr period
+              type: number
+              format: float
+            5-yr:
+              description: return over most recent 5-yr period
+              type: number
+              format: float
+            10-yr:
+              description: return over most recent 10-yr period
+              type: number
+              format: float
+          required:
+            - 1-yr
+            - 3-yr
+            - 5-yr
+            - 10-yr
+        drawDowns:
+          type: array
+          description: list of top-10 drawdowns over requested period
+          example:
+            begin: 1196380800
+            end: 1235692800
+            lossPercent: -0.5096921151209781
+            recovery: 1346371200
+          items:
+            type: object
+            properties:
+              begin:
+                type: integer
+                format: int64
+                description: unix timestamp of when draw down began
+              end:
+                type: integer
+                format: int64
+                description: unix timestamp of when draw down ended
+              lossPercent:
+                type: number
+                format: float
+                description: percentage lost during draw down
+              recovery:
+                type: number
+                format: int64
+                description: >-
+                  unix timestamp of when portfolio recovered the value it had prior to the draw down
+            required:
+              - begin
+              - end
+              - recovery
+              - lossPercent
+        sharpeRatio:
+          type: number
+          format: float
+          description: >-
+            a measure that indicates the average return minus the risk-free return divided by the standard deviation of return on an investment
+        sortinoRatio:
+          type: number
+          format: float
+          description: >-
+            similar to the sharpe ratio but only takes down side risk into account
+        stdDev:
+          type: number
+          format: float
+          description: >-
+            standard deviation of returns over time period
+        ulcerIndexAvg:
+          type: number
+          format: float
+          description: >-
+            The index increases in value as the price moves farther away from a recent high and falls as the price rises to new highs
+      required:
+        - cagrs
+        - drawDowns
+        - sharpeRatio
+        - sortinoRatio
+        - stdDev
+        - ulcerIndexAvg
+    PortfolioPerformance:
+      description: Performance results of a specific simulation
+      properties:
+          cagrSinceInception:
+              description: compound annual growth rate over whole period
+              type: number
+              format: float
+          computedOn:
+              description: when the performance data was calculated
+              type: integer
+          currentAsset:
+              description: >-
+                asset(s) that are currently held in portfolio, space separated
+              example: VFINX
+              type: string
+          measurements:
+            description: calculation of portfolio value over time
+            example:
+              - holdings: VFINX
+                justification: {}
+                percentReturn: 0
+                riskFreeValue: 10000
+                time: 617846400
+                value: 10000
+            items:
+              type: object
+              properties:
+                holdings:
+                  description: >-
+                    asset(s) that are held in this measurement, space separated
+                    example: A AAPL
+                    type: string
+                justification:
+                  description: >-
+                    per strategy specific field with information justifying the list of holdings. E.g. the adm strategy provides an object with each asset's momentum score
+                  type: object
+                percentReturn:
+                  description: >-
+                    percentage return of portfolio at measurement time
+                  type: number
+                  format: double
+                riskFreeValue:
+                  description: >-
+                    value of portfolio using risk free rate of return
+                  type: number
+                  format: double
+                time:
+                  description: >-
+                    time of measurement as a unix timestamp
+                  type: integer
+                  format: int64
+                value:
+                  description: >-
+                    value of portfolio at time
+                  type: number
+                  format: double
+              required:
+                - time
+                - value
+                - riskFreeValue
+                - holdings
+                - percentReturn
+                - justification
+            type: array
+          metrics:
+            description: collection of metrics calculated on portfolio
+            type: array
+            items:
+              $ref: "#/components/schemas/MetricBundle"
+          periodEnd:
+            type: integer
+            format: int64
+            description: >-
+              unix timestamp of the time when the simulation ended
+          periodStart:
+            type: integer
+            format: int64
+            description: >-
+              unix timestamp of the time when the simulation began
+          totalDeposited:
+            type: number
+            format: float
+            description: >-
+              total deposited in portfolio over simulation period
+          totalWithdrawn:
+            type: number
+            format: float
+            description: >-
+              total withdrawn from portfolio over simulation period
+          transactions:
+            type: array
+            description: transactions over simulation period
+            example:
+              - date: '1989-07-31T00:00:00Z'
+                justification: {}
+                kind: DEPOSIT
+                pricePerShare: 1
+                shares: 10000
+                ticker: $CASH
+                totalValue: 10000
+            items:
+              type: object
+              properties:
+                date:
+                  type: string
+                  example: '1989-07-31T00:00:00Z'
+                  description: ISO-8601 string of date of transaction
+                justification:
+                  description: >-
+                    per strategy specific field with information justifying the list of holdings. E.g. the adm strategy provides an object with each asset's momentum score
+                  type: object
+                kind:
+                  type: string
+                  enum:
+                    - DEPOSIT
+                    - WITHDRAW
+                    - MARKER
+                    - BUY
+                    - SELL
+                  description: transaction type
+                pricePerShare:
+                  type: number
+                  format: int64
+                  description: price paid per share of the security
+                ticker:
+                  type: string
+                  description: ticker of security invested in
+                totalValue:
+                  type: number
+                  format: float
+                  description: >-
+                    total amount of transaction (shares * pricePerShare) + commission
+                commission:
+                  type: number
+                  format: float
+                  description: >-
+                    commission paid on transaction
+              required:
+                - date
+                - ticker
+                - kind
+                - pricePerShare
+                - shares
+                - totalValue
+                - justification
+          ytdReturn:
+            type: number
+            format: float
+            description: YTD return of portfolio
+      required:
+        - periodStart
+        - periodEnd
+        - computedOn
+        - measurements
+        - transactions
+        - cagrSinceInception
+        - ytdReturn
+        - currentAsset
+        - totalDeposited
+        - totalWithdrawn
+        - metrics
+    BenchmarkArgs:
+      type: object
+      properties:
+        ticker:
+          type: string
+          example: VFINX
+          description: ticker symbol to use for benchmark
+        snapToStart:
+          type: boolean
+          description: >-
+            if simulation period should snap to the first date data is available
+    PingResponse:
+      type: object
+      properties:
+        message:
+          example: API is alive
+          type: string
+        status:
+          example: success
+          type: string
+        time:
+          example: "2021-06-19T08:09:10.115924-05:00"
+          type: string
+      required:
+        - message
+        - status
+        - time
