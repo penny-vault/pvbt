@@ -13,7 +13,9 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-// SMA computes the simple moving average of all the columns in eod for the specified lookback period.
+// SMA computes the simple moving average of all the columns in df for the specified
+// lookback period. For each column in the input dataframe a new column is added with
+// the suffix _SMA
 // NOTE: lookback is in terms of months
 func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 
@@ -32,6 +34,8 @@ func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 		name := df.Series[ii].Name(dataframe.Options{})
 		if strings.Compare(name, data.DateIdx) != 0 {
 			filterMap[name] = make([]float64, lookback)
+			smaName := fmt.Sprintf("%s_SMA", name)
+			seriesMap[smaName] = dataframe.NewSeriesFloat64(smaName, nil)
 			seriesMap[name] = dataframe.NewSeriesFloat64(name, nil)
 		}
 	}
@@ -63,7 +67,10 @@ func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 				filterMap[k.(string)][idx] = v.(float64)
 				if !warmup {
 					// out of warmup period; save average to a new row
-					seriesMap[k.(string)].Append(stat.Mean(filterMap[k.(string)], nil))
+					name := k.(string)
+					smaName := fmt.Sprintf("%s_SMA", name)
+					seriesMap[smaName].Append(stat.Mean(filterMap[name], nil))
+					seriesMap[name].Append(v.(float64))
 				}
 			} else {
 				if !warmup {

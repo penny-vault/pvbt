@@ -44,7 +44,7 @@ var _ = Describe("Filters", func() {
 				Expect(timeAxis.Value(3).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
 
 				// Confirm that col1 has all the expected values
-				col1Idx, err := sma.NameToColumn("col1")
+				col1Idx, err := sma.NameToColumn("col1_SMA")
 				col1 := sma.Series[col1Idx]
 				Expect(err).To(BeNil())
 				Expect(col1.Value(0)).Should(Equal(1.5))
@@ -69,7 +69,7 @@ var _ = Describe("Filters", func() {
 				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
 
 				// Confirm that col1 has all the expected values
-				col1Idx, err := sma.NameToColumn("col1")
+				col1Idx, err := sma.NameToColumn("col1_SMA")
 				col1 := sma.Series[col1Idx]
 				Expect(err).To(BeNil())
 				Expect(col1.Value(0)).Should(Equal(2.0))
@@ -91,7 +91,7 @@ var _ = Describe("Filters", func() {
 				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
 
 				// Confirm that col1 has all the expected values
-				col1Idx, err := sma.NameToColumn("col1")
+				col1Idx, err := sma.NameToColumn("col1_SMA")
 				col1 := sma.Series[col1Idx]
 				Expect(err).To(BeNil())
 				Expect(col1.Value(0)).Should(Equal(3.0))
