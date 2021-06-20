@@ -15,7 +15,6 @@ package strategies
 import (
 	"context"
 	"errors"
-	"fmt"
 	"main/data"
 	"main/dfextras"
 	"main/portfolio"
@@ -28,7 +27,6 @@ import (
 	"github.com/goccy/go-json"
 
 	"github.com/rocketlaunchr/dataframe-go"
-	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -182,81 +180,6 @@ func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (Strate
 	return daa, nil
 }
 
-func momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
-	nrows := eod.NRows(dataframe.Options{})
-	periods := []int{1, 3, 6, 12}
-	series := []dataframe.Series{}
-	tickers := []string{}
-
-	dateSeriesIdx, err := eod.NameToColumn(data.DateIdx)
-	if err != nil {
-		return nil, err
-	}
-
-	series = append(series, eod.Series[dateSeriesIdx].Copy())
-
-	// Get list of tickers and pre-allocate result series
-	for ii := range eod.Series {
-		name := eod.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, data.DateIdx) != 0 {
-			tickers = append(tickers, name)
-			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, eod.Series[ii].Copy(), score)
-		}
-	}
-
-	// Compute lag series and pre-allocate momentum series for all periods
-	for _, ii := range periods {
-		lag := dfextras.Lag(ii, eod)
-		for _, ticker := range tickers {
-			jj, err := lag.NameToColumn(ticker)
-			if err != nil {
-				return nil, err
-			}
-			s := lag.Series[jj]
-			name := fmt.Sprintf("%sLAG%d", ticker, ii)
-			s.Rename(name)
-
-			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", ticker, ii), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, s, mom)
-		}
-	}
-
-	mom := dataframe.NewDataFrame(series...)
-
-	// Calculate momentums for all periods
-	for _, ticker := range tickers {
-		for _, jj := range periods {
-			fn := funcs.RegFunc(fmt.Sprintf("((%s/%sLAG%d)-1)", ticker, ticker, jj))
-			funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
-		}
-	}
-
-	// Compute the equal weighted average of the 1-, 3-, 6-, and 12-month momentums
-	for _, ticker := range tickers {
-		fn := funcs.RegFunc(fmt.Sprintf("((12.0*%sMOM1)+(4.0*%sMOM3)+(2.0*%sMOM6)+%sMOM12)*0.25", ticker, ticker, ticker, ticker))
-		funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sSCORE", ticker))
-	}
-
-	// Build dataseries just from scores
-	scoresArr := make([]dataframe.Series, 0, 16)
-	scoresArr = append(scoresArr, eod.Series[dateSeriesIdx].Copy())
-	for _, scoreSeries := range mom.Series {
-		name := scoreSeries.Name()
-		if strings.HasSuffix(name, "SCORE") {
-			symbol := strings.TrimSuffix(name, "SCORE")
-			scoreSeries = scoreSeries.Copy()
-			scoreSeries.Rename(symbol)
-			scoresArr = append(scoresArr, scoreSeries)
-		}
-	}
-
-	df := dataframe.NewDataFrame(scoresArr...)
-	dfextras.DropNA(context.TODO(), df, dataframe.FilterOptions{InPlace: true})
-
-	return df, nil
-}
-
 func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	targetAssets := make([]interface{}, daa.momentum.NRows())
 	iterator := daa.momentum.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
@@ -396,7 +319,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*por
 	}
 
 	// Compute momentum scores
-	momentum, err := momentum13612(daa.prices)
+	momentum, err := dfextras.Momentum13612(daa.prices)
 	if err != nil {
 		return nil, err
 	}

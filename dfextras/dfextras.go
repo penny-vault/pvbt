@@ -153,7 +153,7 @@ func IndexOf(ctx context.Context, searchVal time.Time, series dataframe.Series, 
 	return -1
 }
 
-// Lag return a copy of the dataframe offset by
+// Lag return a copy of the dataframe offset by n
 func Lag(n int, df *dataframe.DataFrame) *dataframe.DataFrame {
 	series := []dataframe.Series{}
 
