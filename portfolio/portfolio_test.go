@@ -168,7 +168,7 @@ var _ = Describe("Portfolio", func() {
 
 			})
 			It("should have valid performance", func() {
-				err := p.TargetPortfolio(10000, df1)
+				p.TargetPortfolio(10000, df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
 
 				Expect(err).To(BeNil())
@@ -287,7 +287,7 @@ var _ = Describe("Portfolio", func() {
 
 			})
 			It("should have valid performance", func() {
-				err := p.TargetPortfolio(10000, df1)
+				p.TargetPortfolio(10000, df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, time.UTC))
 
 				Expect(err).To(BeNil())
