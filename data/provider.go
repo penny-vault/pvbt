@@ -30,7 +30,7 @@ const (
 )
 
 const (
-	DateIdx = "DATE"
+	DateIdx = "DATE" // TODO - need to change this to lower-case to reduce chance of it conflicting with a ticker
 )
 
 const (
