@@ -94,14 +94,14 @@ func (p *Portfolio) ValueAsOf(d time.Time) (float64, error) {
 	value, err := p.valueOverPeriod(s, d)
 	sz := len(value)
 	if sz <= 0 {
-		return 0, errors.New("Failed to compute value for date")
+		return 0, errors.New("failed to compute value for date")
 	}
 	return value[sz-1].Value, err
 }
 
 func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMeasurement, error) {
 	if len(p.Transactions) == 0 {
-		return nil, errors.New("Cannot calculate performance for portfolio with no transactions")
+		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
 	p.dataProxy.Begin = s
@@ -131,7 +131,7 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 	// get quote data
 	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) > 0 {
-		return nil, errors.New("Failed to download data for tickers")
+		return nil, errors.New("failed to download data for tickers")
 	}
 
 	var eod = []*dataframe.DataFrame{}
@@ -219,7 +219,7 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 		} else {
 			if t.Kind != BuyTransaction {
 				log.Error("Transactions are out of order")
-				return nil, errors.New("Transactions are out of order")
+				return nil, errors.New("transactions are out of order")
 			}
 			currHoldings[t.Ticker] = Holding{
 				Ticker: t.Ticker,
@@ -248,7 +248,7 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 // CalculatePerformance calculate performance of portfolio
 func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error) {
 	if len(p.Transactions) == 0 {
-		return Performance{}, errors.New("Cannot calculate performance for portfolio with no transactions")
+		return Performance{}, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
 	perf := Performance{
@@ -270,7 +270,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 
 	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) > 0 {
-		return Performance{}, errors.New("Failed to download data for tickers")
+		return Performance{}, errors.New("failed to download data for tickers")
 	}
 
 	var eod = []*dataframe.DataFrame{}
@@ -433,7 +433,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	if nTrx > 0 {
 		lastDate := p.Transactions[nTrx-1].Date
 		if lastDate.After(date) {
-			return fmt.Errorf("Cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
+			return fmt.Errorf("cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
 		}
 	}
 
@@ -446,7 +446,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	// Allow for floating point error
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
-		return fmt.Errorf("Rebalance percent total does not equal 1.0, it is %.2f", total)
+		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f", total)
 	}
 
 	// get the cash position of the portfolio
@@ -476,7 +476,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					"Symbol": k,
 					"Date":   date,
 				}).Debug("Security purchased before security price was available")
-				return fmt.Errorf("Security %s price data not available for date %s", k, date.String())
+				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 
 			securityValue += v * price
@@ -501,7 +501,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					"Symbol": k,
 					"Date":   date,
 				}).Debug("Security purchased before security price was available")
-				return fmt.Errorf("Security %s price data not available for date %s", k, date.String())
+				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 
 			priceMap[k] = price
@@ -611,7 +611,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	p.securities = make(map[string]bool)
 	tickerSeriesIdx, err := target.NameToColumn(TickerName)
 	if err != nil {
-		return fmt.Errorf("Missing required column: %s", TickerName)
+		return fmt.Errorf("missing required column: %s", TickerName)
 	}
 
 	// check series type
@@ -653,7 +653,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		log.WithFields(log.Fields{
 			"Error": strings.Join(errorMsgs, ", "),
 		}).Warn("Failed to load data for tickers")
-		return errors.New("Failed loading data for tickers")
+		return errors.New("failed loading data for tickers")
 	}
 	p.priceData = prices
 
