@@ -17,6 +17,7 @@ type Argument struct {
 	Description string   `json:"description"`
 	Typecode    string   `json:"typecode"`
 	DefaultVal  string   `json:"default"`
+	Advanced    bool     `json:"advanced"`
 	Options     []string `json:"options"`
 }
 

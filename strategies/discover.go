@@ -13,6 +13,7 @@ import (
 var StrategyList = []StrategyInfo{
 	AcceleratingDualMomentumInfo(),
 	KellersDefensiveAssetAllocationInfo(),
+	KellersProtectiveAssetAllocationInfo(),
 }
 
 // StrategyMap Map of strategies

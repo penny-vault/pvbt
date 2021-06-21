@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Additional metrics in strategy list API; including: max draw down, downside risk, std. deviation, and more
 - OpenAPI 3.0 documentation
+- Keller's Protective Asset Allocation strategy (PAA)
 
 ## [0.3.1] - 2021-02-28
 ### Fixed
