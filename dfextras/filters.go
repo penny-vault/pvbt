@@ -15,9 +15,14 @@ import (
 
 // SMA computes the simple moving average of all the columns in df for the specified
 // lookback period. For each column in the input dataframe a new column is added with
-// the suffix _SMA
+// the suffix SMA
 // NOTE: lookback is in terms of months
-func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe.DataFrame, error) {
+
+	suffix := "_SMA"
+	if len(colSuffix) > 0 {
+		suffix = colSuffix[0]
+	}
 
 	if (lookback > df.NRows()) ||
 		(lookback <= 0) {
@@ -34,7 +39,7 @@ func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 		name := df.Series[ii].Name(dataframe.Options{})
 		if strings.Compare(name, data.DateIdx) != 0 {
 			filterMap[name] = make([]float64, lookback)
-			smaName := fmt.Sprintf("%s_SMA", name)
+			smaName := fmt.Sprintf("%s%s", name, suffix)
 			seriesMap[smaName] = dataframe.NewSeriesFloat64(smaName, nil)
 			seriesMap[name] = dataframe.NewSeriesFloat64(name, nil)
 		}
@@ -68,7 +73,7 @@ func SMA(lookback int, df *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 				if !warmup {
 					// out of warmup period; save average to a new row
 					name := k.(string)
-					smaName := fmt.Sprintf("%s_SMA", name)
+					smaName := fmt.Sprintf("%s%s", name, suffix)
 					seriesMap[smaName].Append(stat.Mean(filterMap[name], nil))
 					seriesMap[name].Append(v.(float64))
 				}
