@@ -43,6 +43,13 @@ type Holding struct {
 	Shares float64
 }
 
+type ReportableHolding struct {
+	Ticker           string  `json:"ticker"`
+	Shares           float64 `json:"shares"`
+	PercentPortfolio float64 `json:"percentPortfolio"`
+	Value            float64 `json:"value"`
+}
+
 // Portfolio manage a portfolio
 type Portfolio struct {
 	Name         string
@@ -73,7 +80,8 @@ type Performance struct {
 	Transactions       []Transaction            `json:"transactions"`
 	CagrSinceInception float64                  `json:"cagrSinceInception"`
 	YTDReturn          float64                  `json:"ytdReturn"`
-	CurrentAsset       string                   `json:"currentAsset"`
+	CurrentAsset       string                   `json:"currentAsset"` // deprecated
+	CurrentAssets      []ReportableHolding      `json:"currentAssets"`
 	TotalDeposited     float64                  `json:"totalDeposited"`
 	TotalWithdrawn     float64                  `json:"totalWithdrawn"`
 	MetricsBundle      MetricsBundle            `json:"metrics"`
@@ -368,7 +376,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 
 		// iterate through each holding and add value to get total return
 		totalVal = 0.0
-		var tickers []string
+		tickers := make([]string, 0, len(holdings))
 		for symbol, qty := range holdings {
 			if symbol == "$CASH" {
 				totalVal += qty
@@ -380,6 +388,31 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 				}
 			} else {
 				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
+			}
+		}
+
+		// this is done as a second loop because we need totalVal to be set for
+		// percent calculation
+		currentAssets := make([]ReportableHolding, 0, len(holdings))
+		for symbol, qty := range holdings {
+			var value float64
+			if symbol == "$CASH" {
+				value = qty
+			} else if val, ok := quotes[symbol]; ok {
+				price := val.(float64)
+				if qty > 1.0e-5 {
+					value = price * qty
+				}
+			} else {
+				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
+			}
+			if qty > 1.0e-5 {
+				currentAssets = append(currentAssets, ReportableHolding{
+					Ticker:           symbol,
+					Shares:           qty,
+					PercentPortfolio: value / totalVal,
+					Value:            value,
+				})
 			}
 		}
 
@@ -411,6 +444,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 
 		if date.Before(today) || date.Equal(today) {
 			perf.CurrentAsset = holdingStr
+			perf.CurrentAssets = currentAssets
 		}
 	}
 
@@ -446,7 +480,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	// Allow for floating point error
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
-		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f", total)
+		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f for date %s", total, date)
 	}
 
 	// get the cash position of the portfolio
@@ -594,7 +628,22 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	return nil
 }
 
-// TargetPortfolio invest target portfolio
+// TargetPortfolioFromDataFrame invest's the portfolio in the ratios specified by the dataframe `target`
+//   at each date period in the dataframe. The dataframe must have a date column and a float64
+//   column for each ticker to invest in. Column values are the target percentage during that
+//   time period. All columns in a row (excluding the date column) must sum to 1.0
+//
+//   E.g.,
+//
+//   | date       | VFINX | PRIDX |
+//   |------------|-------|-------|
+//   | 2021-01-01 | .5    | .5    |
+//   | 2021-02-01 | .25   | .75   |
+//   | 2021-03-01 | 0     | 1.0   |
+//
+// TODO
+
+// TargetPortfolio
 func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame) error {
 	p.Transactions = []Transaction{}
 	timeIdx, err := target.NameToColumn(data.DateIdx)
