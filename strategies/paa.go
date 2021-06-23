@@ -36,11 +36,17 @@ func max(x int, y int) int {
 // KellersProtectiveAssetAllocationInfo information describing this strategy
 func KellersProtectiveAssetAllocationInfo() StrategyInfo {
 	return StrategyInfo{
-		Name:        "Kellers Protective Asset Allocation",
-		Shortcode:   "paa",
-		Description: `A simple dual-momentum model (called Protective Asset Allocation or PAA) with a vigorous “crash protection” which might fit this bill. It is a tactical variation on the traditional 60/40 stock/bond portfolio where the optimal stock/bond mix is determined by multi-market breadth using dual momentum.`,
-		Source:      "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html",
-		Version:     "1.0.0",
+		Name:      "Kellers Protective Asset Allocation",
+		Shortcode: "paa",
+		Description: `<p>The Protective Asset Allocation strategy was developed by Wouter Keller and JW Keuning.</p>
+<br/>
+		It’s based off their paper Protective Asset Allocation (PAA): A Simple Momentum-Based Alternative for Term Deposits.
+
+		The strategy uses dual momentum to determine what assets to hold but has a very aggressive portfolio protection mechanism in case of a market crash.
+
+		Their goal was to make an “appealing alternative for a 1-year term deposit.”`,
+		Source:  "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html",
+		Version: "1.0.0",
 		Arguments: map[string]Argument{
 			"riskUniverse": {
 				Name:        "Risk Universe",
@@ -80,13 +86,28 @@ func KellersProtectiveAssetAllocationInfo() StrategyInfo {
 			"PAA-Conservative": {
 				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
 				"protectiveUniverse": `["$CASH"]`,
-				"protectiveFactor":   "2",
+				"protectionFactor":   "2",
 				"lookback":           "12",
 				"topN":               "6",
 			},
 			"PAA0": {
 				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
 				"protectiveUniverse": `["IEF"]`,
+				"protectionFactor":   "0",
+				"lookback":           "12",
+				"topN":               "6",
+			},
+			"PAA1": {
+				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
+				"protectiveUniverse": `["IEF"]`,
+				"protectionFactor":   "1",
+				"lookback":           "12",
+				"topN":               "6",
+			},
+			"PAA2": {
+				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
+				"protectiveUniverse": `["IEF"]`,
+				"protectionFactor":   "2",
 				"lookback":           "12",
 				"topN":               "6",
 			},
@@ -99,15 +120,13 @@ func KellersProtectiveAssetAllocationInfo() StrategyInfo {
 type KellersProtectiveAssetAllocation struct {
 	protectiveUniverse []string
 	riskUniverse       []string
+	allTickers         []string
 	protectionFactor   int
 	topN               int
 	lookback           int
 	prices             *dataframe.DataFrame
 	dataStartTime      time.Time
 	dataEndTime        time.Time
-
-	// Public
-	CurrentSymbol string
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
@@ -139,9 +158,14 @@ func NewKellersProtectiveAssetAllocation(args map[string]json.RawMessage) (Strat
 		return nil, err
 	}
 
+	allTickers := make([]string, 0, len(riskUniverse)+len(protectiveUniverse))
+	allTickers = append(allTickers, riskUniverse...)
+	allTickers = append(allTickers, protectiveUniverse...)
+
 	var paa Strategy = &KellersProtectiveAssetAllocation{
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,
+		allTickers:         allTickers,
 		protectionFactor:   protectionFactor,
 		lookback:           lookback,
 		topN:               topN,
@@ -211,11 +235,7 @@ func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Man
 func (paa *KellersProtectiveAssetAllocation) mom(sma *dataframe.DataFrame) error {
 	dontLock := dataframe.Options{DontLock: true}
 
-	allTickers := make([]string, 0, len(paa.riskUniverse)+len(paa.protectiveUniverse))
-	allTickers = append(allTickers, paa.riskUniverse...)
-	allTickers = append(allTickers, paa.protectiveUniverse...)
-
-	for _, ticker := range allTickers {
+	for _, ticker := range paa.allTickers {
 		name := fmt.Sprintf("%s_MOM", ticker)
 		sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 			Size: sma.NRows(dontLock),
@@ -253,7 +273,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 		for _, ticker := range paa.riskUniverse {
 			momCol := fmt.Sprintf("%s_MOM", ticker)
 			floatVal := vals[momCol].(float64)
-			if floatVal > 0 {
+			if floatVal > 0 && len(sortable) < paa.topN {
 				sortable = append(sortable, util.Pair{
 					Key:   ticker,
 					Value: floatVal,
@@ -369,6 +389,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 		if bf > 0 {
 			targetMap[protectiveAsset] = bf
 		}
+
 		targetAssets[*row] = targetMap
 	}
 	mom.Unlock()
@@ -379,7 +400,50 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 	}
 	timeSeries := mom.Series[timeIdx].Copy()
 	targetSeries := dataframe.NewSeriesMixed(portfolio.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
-	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
+
+	series := make([]dataframe.Series, 0, len(paa.riskUniverse)+len(paa.protectiveUniverse))
+	series = append(series, timeSeries)
+	series = append(series, targetSeries)
+
+	for _, ticker := range paa.allTickers {
+		colIdx, err := mom.NameToColumn(fmt.Sprintf("%s_MOM", ticker))
+		if err != nil {
+			return nil, err
+		}
+
+		col := mom.Series[colIdx]
+		col.Lock()
+		newCol := col.Copy()
+		col.Unlock()
+		newCol.Rename(fmt.Sprintf("%s Score", ticker))
+		series = append(series, newCol)
+	}
+
+	// add # good assets
+	colIdx, err := mom.NameToColumn("paa_n")
+	if err != nil {
+		return nil, err
+	}
+	col := mom.Series[colIdx]
+	col.Lock()
+	newCol := col.Copy()
+	col.Unlock()
+	newCol.Rename("Num Good Assets")
+	series = append(series, newCol)
+
+	// add bond ffraction
+	colIdx, err = mom.NameToColumn("paa_bf")
+	if err != nil {
+		return nil, err
+	}
+	col = mom.Series[colIdx]
+	col.Lock()
+	newCol = col.Copy()
+	col.Unlock()
+	newCol.Rename("Bond Fraction")
+	series = append(series, newCol)
+
+	targetPortfolio := dataframe.NewDataFrame(series...)
 
 	return targetPortfolio, nil
 }
@@ -393,10 +457,21 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*po
 		return nil, err
 	}
 
-	df, err := dfextras.SMA(paa.lookback, paa.prices)
+	df, err := dfextras.SMA(paa.lookback-1, paa.prices)
 	if err != nil {
 		return nil, err
 	}
+
+	// offset the *_SMA columns by 1-month
+	smaCols := make([]string, 0, len(paa.allTickers))
+	for _, ticker := range paa.allTickers {
+		smaCols = append(smaCols, fmt.Sprintf("%s_SMA", ticker))
+	}
+
+	df = dfextras.Lag(1, df, smaCols...)
+	dfextras.DropNA(context.TODO(), df, dataframe.FilterOptions{
+		InPlace: true,
+	})
 
 	if err := paa.mom(df); err != nil {
 		return nil, err
@@ -414,14 +489,6 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*po
 	if err != nil {
 		return nil, err
 	}
-
-	row := targetPortfolio.Row(targetPortfolio.NRows()-1, true, dataframe.SeriesName)
-	rowMap := row[portfolio.TickerName].(map[string]float64)
-	assets := make([]string, 0, len(rowMap))
-	for k := range rowMap {
-		assets = append(assets, k)
-	}
-	paa.CurrentSymbol = strings.Join(assets, " ")
 
 	return &p, nil
 }
