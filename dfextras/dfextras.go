@@ -154,24 +154,46 @@ func IndexOf(ctx context.Context, searchVal time.Time, series dataframe.Series, 
 }
 
 // Lag return a copy of the dataframe offset by n
-func Lag(n int, df *dataframe.DataFrame) *dataframe.DataFrame {
-	series := []dataframe.Series{}
+func Lag(n int, df *dataframe.DataFrame, cols ...string) *dataframe.DataFrame {
+	seriesArr := []dataframe.Series{}
 
 	df.Lock()
 	defer df.Unlock()
 
 	dontLock := dataframe.Options{DontLock: true}
 
-	for ii := range df.Series {
-		s := df.Series[ii].Copy()
-		for x := 0; x < n; x++ {
-			s.Prepend(nil)
-			s.Remove(s.NRows(dontLock)-1, dontLock)
-		}
-		series = append(series, s)
+	// convert cols to a map
+	sz := len(cols)
+	if sz == 0 {
+		sz = len(df.Series)
 	}
 
-	return dataframe.NewDataFrame(series...)
+	colMap := make(map[string]struct{}, sz)
+	if len(cols) != 0 {
+		for _, col := range cols {
+			colMap[col] = struct{}{}
+		}
+	} else {
+		for _, series := range df.Series {
+			colMap[series.Name()] = struct{}{}
+		}
+	}
+
+	for _, series := range df.Series {
+		if _, ok := colMap[series.Name()]; ok {
+			s := series.Copy()
+			for x := 0; x < n; x++ {
+				s.Prepend(nil)
+				s.Remove(s.NRows(dontLock)-1, dontLock)
+			}
+			seriesArr = append(seriesArr, s)
+		} else {
+			s := series.Copy()
+			seriesArr = append(seriesArr, s)
+		}
+	}
+
+	return dataframe.NewDataFrame(seriesArr...)
 }
 
 // Merge merge multiple dataframes
