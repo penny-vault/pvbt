@@ -1,4 +1,4 @@
-package strategies_test
+package paa_test
 
 import (
 	"testing"
@@ -24,5 +24,5 @@ var _ = AfterSuite(func() {
 
 func TestStrategies(t *testing.T) {
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Strategies Suite")
+	RunSpecs(t, "PAA Strategy Suite")
 }

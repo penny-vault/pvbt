@@ -1,11 +1,11 @@
-package strategies_test
+package adm_test
 
 import (
 	"fmt"
 	"io/ioutil"
 	"main/data"
 	"main/portfolio"
-	"main/strategies"
+	"main/strategies/adm"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -17,7 +17,7 @@ import (
 
 var _ = Describe("Adm", func() {
 	var (
-		adm     *strategies.AcceleratingDualMomentum
+		strat   *adm.AcceleratingDualMomentum
 		manager data.Manager
 	)
 
@@ -28,14 +28,14 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		tmp, _ := strategies.NewAcceleratingDualMomentum(params)
-		adm = tmp.(*strategies.AcceleratingDualMomentum)
+		tmp, _ := adm.NewAcceleratingDualMomentum(params)
+		strat = tmp.(*adm.AcceleratingDualMomentum)
 
 		manager = data.NewManager(map[string]string{
 			"tiingo": "TEST",
 		})
 
-		content, err := ioutil.ReadFile("testdata/TB3MS.csv")
+		content, err := ioutil.ReadFile("../testdata/TB3MS.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -43,7 +43,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=AdjustedClose&fam=avg",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/VUSTX.csv")
+		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -51,7 +51,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/VUSTX_2.csv")
+		content, err = ioutil.ReadFile("../testdata/VUSTX_2.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -59,7 +59,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/VFINX.csv")
+		content, err = ioutil.ReadFile("../testdata/VFINX.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -67,7 +67,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/VFINX_2.csv")
+		content, err = ioutil.ReadFile("../testdata/VFINX_2.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -75,7 +75,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/PRIDX.csv")
+		content, err = ioutil.ReadFile("../testdata/PRIDX.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -83,7 +83,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/PRIDX_2.csv")
+		content, err = ioutil.ReadFile("../testdata/PRIDX_2.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -91,7 +91,7 @@ var _ = Describe("Adm", func() {
 		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
 			httpmock.NewBytesResponder(200, content))
 
-		content, err = ioutil.ReadFile("testdata/riskfree.csv")
+		content, err = ioutil.ReadFile("../testdata/riskfree.csv")
 		if err != nil {
 			panic(err)
 		}
@@ -109,12 +109,12 @@ var _ = Describe("Adm", func() {
 			It("should be invested in PRIDX", func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
-				p, err := adm.Compute(&manager)
+				p, err := strat.Compute(&manager)
 				Expect(err).To(BeNil())
 
 				perf, err := p.CalculatePerformance(manager.End)
 				Expect(err).To(BeNil())
-				Expect(adm.CurrentSymbol).To(Equal("PRIDX"))
+				Expect(strat.CurrentSymbol).To(Equal("PRIDX"))
 
 				var begin int64 = 617846400
 				Expect(perf.PeriodStart).To(Equal(begin))

@@ -10,7 +10,7 @@
  * improves the tracking error due to higher in-the-market-rates
  */
 
-package strategies
+package daa
 
 import (
 	"context"
@@ -18,6 +18,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/portfolio"
+	"main/strategies/strategy"
 	"main/util"
 	"math"
 	"sort"
@@ -31,14 +32,14 @@ import (
 )
 
 // KellersDefensiveAssetAllocationInfo information describing this strategy
-func KellersDefensiveAssetAllocationInfo() StrategyInfo {
-	return StrategyInfo{
+func KellersDefensiveAssetAllocationInfo() strategy.StrategyInfo {
+	return strategy.StrategyInfo{
 		Name:        "Kellers Defensive Asset Allocation",
 		Shortcode:   "daa",
 		Description: `A strategy that has a built-in crash protection that looks at the "breadth-momentum" of a canary universe.`,
 		Source:      "https://indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html",
 		Version:     "1.0.0",
-		Arguments: map[string]Argument{
+		Arguments: map[string]strategy.Argument{
 			"riskUniverse": {
 				Name:        "Risk Universe",
 				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe",
@@ -140,7 +141,7 @@ func (a byTicker) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTicker) Less(i, j int) bool { return a[i].Score > a[j].Score }
 
 // NewKellersDefensiveAssetAllocation Construct a new Kellers DAA strategy
-func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (Strategy, error) {
+func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	cashUniverse := []string{}
 	if err := json.Unmarshal(args["cashUniverse"], &cashUniverse); err != nil {
 		return nil, err
@@ -169,7 +170,7 @@ func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (Strate
 		return nil, err
 	}
 
-	var daa Strategy = &KellersDefensiveAssetAllocation{
+	var daa strategy.Strategy = &KellersDefensiveAssetAllocation{
 		cashUniverse:       cashUniverse,
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,

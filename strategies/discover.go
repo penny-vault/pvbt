@@ -2,6 +2,10 @@ package strategies
 
 import (
 	"main/database"
+	"main/strategies/adm"
+	"main/strategies/daa"
+	"main/strategies/paa"
+	"main/strategies/strategy"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -10,17 +14,17 @@ import (
 )
 
 // StrategyList List of all strategies
-var StrategyList = []StrategyInfo{
-	AcceleratingDualMomentumInfo(),
-	KellersDefensiveAssetAllocationInfo(),
-	KellersProtectiveAssetAllocationInfo(),
+var StrategyList = []strategy.StrategyInfo{
+	adm.AcceleratingDualMomentumInfo(),
+	daa.KellersDefensiveAssetAllocationInfo(),
+	paa.KellersProtectiveAssetAllocationInfo(),
 }
 
 // StrategyMap Map of strategies
-var StrategyMap = make(map[string]*StrategyInfo)
+var StrategyMap = make(map[string]*strategy.StrategyInfo)
 
 // StrategyMetrics map of updated metrics for each strategy - this is used by the StrategyInfo constrcutors and the GetStrategies endpoint
-var StrategyMetricsMap = make(map[string]StrategyMetrics)
+var StrategyMetricsMap = make(map[string]strategy.StrategyMetrics)
 
 // InitializeStrategyMap configure the strategy map
 func InitializeStrategyMap() {
@@ -47,7 +51,7 @@ StrategyLoop:
 			return
 		} else {
 			for rows.Next() {
-				s := StrategyMetrics{}
+				s := strategy.StrategyMetrics{}
 				rows.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
 				StrategyMetricsMap[strat.Shortcode] = s
 				strat.Metrics = s

@@ -4,7 +4,7 @@
  * https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2759734
  */
 
-package strategies
+package paa
 
 import (
 	"context"
@@ -13,6 +13,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/portfolio"
+	"main/strategies/strategy"
 	"main/util"
 	"sort"
 	"strings"
@@ -34,8 +35,8 @@ func max(x int, y int) int {
 }
 
 // KellersProtectiveAssetAllocationInfo information describing this strategy
-func KellersProtectiveAssetAllocationInfo() StrategyInfo {
-	return StrategyInfo{
+func KellersProtectiveAssetAllocationInfo() strategy.StrategyInfo {
+	return strategy.StrategyInfo{
 		Name:      "Kellers Protective Asset Allocation",
 		Shortcode: "paa",
 		Description: `<p>The Protective Asset Allocation strategy was developed by Wouter Keller and JW Keuning.</p>
@@ -47,7 +48,7 @@ func KellersProtectiveAssetAllocationInfo() StrategyInfo {
 		Their goal was to make an “appealing alternative for a 1-year term deposit.”`,
 		Source:  "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html",
 		Version: "1.0.0",
-		Arguments: map[string]Argument{
+		Arguments: map[string]strategy.Argument{
 			"riskUniverse": {
 				Name:        "Risk Universe",
 				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe",
@@ -130,7 +131,7 @@ type KellersProtectiveAssetAllocation struct {
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
-func NewKellersProtectiveAssetAllocation(args map[string]json.RawMessage) (Strategy, error) {
+func NewKellersProtectiveAssetAllocation(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	protectiveUniverse := []string{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
@@ -162,7 +163,7 @@ func NewKellersProtectiveAssetAllocation(args map[string]json.RawMessage) (Strat
 	allTickers = append(allTickers, riskUniverse...)
 	allTickers = append(allTickers, protectiveUniverse...)
 
-	var paa Strategy = &KellersProtectiveAssetAllocation{
+	var paa strategy.Strategy = &KellersProtectiveAssetAllocation{
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,
 		allTickers:         allTickers,

@@ -7,7 +7,7 @@
  * of Gary Antonacci's Dual Momentum strategy.
  */
 
-package strategies
+package adm
 
 import (
 	"context"
@@ -16,6 +16,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/portfolio"
+	"main/strategies/strategy"
 	"main/util"
 	"strings"
 	"time"
@@ -27,14 +28,14 @@ import (
 )
 
 // AcceleratingDualMomentumInfo information describing this strategy
-func AcceleratingDualMomentumInfo() StrategyInfo {
-	return StrategyInfo{
+func AcceleratingDualMomentumInfo() strategy.StrategyInfo {
+	return strategy.StrategyInfo{
 		Name:        "Accelerating Dual Momentum",
 		Shortcode:   "adm",
 		Description: "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets.",
 		Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
 		Version:     "1.0.0",
-		Arguments: map[string]Argument{
+		Arguments: map[string]strategy.Argument{
 			"inTickers": {
 				Name:        "Tickers",
 				Description: "List of ETF, Mutual Fund, or Stock tickers to invest in",
@@ -80,7 +81,7 @@ type AcceleratingDualMomentum struct {
 }
 
 // NewAcceleratingDualMomentum Construct a new Accelerating Dual Momentum strategy
-func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (Strategy, error) {
+func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	inTickers := []string{}
 	if err := json.Unmarshal(args["inTickers"], &inTickers); err != nil {
 		return nil, err
@@ -95,7 +96,7 @@ func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (Strategy, err
 
 	outTicker = strings.ToUpper(outTicker)
 
-	var adm Strategy = &AcceleratingDualMomentum{
+	var adm strategy.Strategy = &AcceleratingDualMomentum{
 		inTickers: inTickers,
 		outTicker: outTicker,
 	}

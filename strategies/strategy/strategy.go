@@ -1,4 +1,4 @@
-package strategies
+package strategy
 
 import (
 	"main/data"
