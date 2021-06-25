@@ -8,7 +8,7 @@ version = "1.0.0"
 name = "Tickers"
 description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
 typecode = "[]string"
-default = '["VFINX" "PRIDX"]'
+default = '["VFINX", "PRIDX"]'
 
 [arguments.outTicker]
 name = "Out-of-Market Ticker"
@@ -17,13 +17,13 @@ typecode = "string"
 default = "VUSTX"
 
 [suggested."Engineered Portfolio"]
-inTickers = '["VFINX" "VINEX"]'
+inTickers = '["VFINX", "VINEX"]'
 outTicker = "VUSTX"
 
 [suggested.PRIDX]
-inTickers = '["VFINX" "PRIDX"]'
+inTickers = '["VFINX", "PRIDX"]'
 outTicker = "VUSTX"
 
 [suggested."All ETF"]
-inTickers = '["SPY" "SCZ"]'
+inTickers = '["SPY", "SCZ"]'
 outTicker = "TLT"
