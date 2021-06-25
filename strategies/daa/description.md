@@ -4,7 +4,7 @@ The **Defensive Asset Allocation** strategy was developed by [Wouter Keller](htt
 
 ## Rules
 
-The strategy has three main groups of ETFS it allocats:
+The strategy has three main groups of ETFs it allocates:
 
 - **Risky**: SPY, IWM, QQQ, VGK, EWJ, EEM, VNQ, DBC,GLD, TLT, HYG, LQD
 - **Protective**: SHY, IEF, LQD

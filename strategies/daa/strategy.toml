@@ -1,5 +1,5 @@
 description = 'A strategy that has a built-in crash protection that looks at the "breadth-momentum" of a canary universe.'
-name = "Kellers Defensive Asset Allocation"
+name = "Defensive Asset Allocation"
 shortcode = "daa"
 source = "https=//indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html"
 version = "1.0.0"
