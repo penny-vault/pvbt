@@ -27,46 +27,6 @@ import (
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 )
 
-// AcceleratingDualMomentumInfo information describing this strategy
-func AcceleratingDualMomentumInfo() strategy.StrategyInfo {
-	return strategy.StrategyInfo{
-		Name:        "Accelerating Dual Momentum",
-		Shortcode:   "adm",
-		Description: "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets.",
-		Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
-		Version:     "1.0.0",
-		Arguments: map[string]strategy.Argument{
-			"inTickers": {
-				Name:        "Tickers",
-				Description: "List of ETF, Mutual Fund, or Stock tickers to invest in",
-				Typecode:    "[]string",
-				DefaultVal:  `["VFINX", "PRIDX"]`,
-			},
-			"outTicker": {
-				Name:        "Out-of-Market Ticker",
-				Description: "Ticker to use when model scores are all below 0",
-				Typecode:    "string",
-				DefaultVal:  "VUSTX",
-			},
-		},
-		SuggestedParameters: map[string]map[string]string{
-			"Engineered Portfolio": {
-				"inTickers": `["VFINX", "VINEX"]`,
-				"outTicker": `VUSTX`,
-			},
-			"PRIDX": {
-				"inTickers": `["VFINX", "PRIDX"]`,
-				"outTicker": `VUSTX`,
-			},
-			"All ETF": {
-				"inTickers": `["SPY", "SCZ"]`,
-				"outTicker": `TLT`,
-			},
-		},
-		Factory: NewAcceleratingDualMomentum,
-	}
-}
-
 type AcceleratingDualMomentum struct {
 	inTickers     []string
 	prices        *dataframe.DataFrame
@@ -80,8 +40,8 @@ type AcceleratingDualMomentum struct {
 	CurrentSymbol string
 }
 
-// NewAcceleratingDualMomentum Construct a new Accelerating Dual Momentum strategy
-func NewAcceleratingDualMomentum(args map[string]json.RawMessage) (strategy.Strategy, error) {
+// New Construct a new Accelerating Dual Momentum strategy
+func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	inTickers := []string{}
 	if err := json.Unmarshal(args["inTickers"], &inTickers); err != nil {
 		return nil, err

@@ -16,7 +16,7 @@ type Argument struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Typecode    string   `json:"typecode"`
-	DefaultVal  string   `json:"default"`
+	Default     string   `json:"default"`
 	Advanced    bool     `json:"advanced"`
 	Options     []string `json:"options"`
 }
@@ -40,15 +40,16 @@ type StrategyMetrics struct {
 
 // StrategyInfo information about a strategy
 type StrategyInfo struct {
-	Name                string                       `json:"name"`
-	Shortcode           string                       `json:"shortcode"`
-	Description         string                       `json:"description"`
-	Source              string                       `json:"source"`
-	Version             string                       `json:"version"`
-	Arguments           map[string]Argument          `json:"arguments"`
-	SuggestedParameters map[string]map[string]string `json:"suggestedParams"`
-	Metrics             StrategyMetrics              `json:"metrics"`
-	Factory             StrategyFactory              `json:"-"`
+	Name            string                       `json:"name"`
+	Shortcode       string                       `json:"shortcode"`
+	Description     string                       `json:"description"`
+	LongDescription string                       `json:"longDescription"`
+	Source          string                       `json:"source"`
+	Version         string                       `json:"version"`
+	Arguments       map[string]Argument          `json:"arguments"`
+	Suggested       map[string]map[string]string `json:"suggestedParams"`
+	Metrics         StrategyMetrics              `json:"metrics"`
+	Factory         StrategyFactory              `json:"-"`
 }
 
 // Strategy an investing strategy

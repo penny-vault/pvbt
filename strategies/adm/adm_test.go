@@ -28,7 +28,7 @@ var _ = Describe("Adm", func() {
 			panic(err)
 		}
 
-		tmp, _ := adm.NewAcceleratingDualMomentum(params)
+		tmp, _ := adm.New(params)
 		strat = tmp.(*adm.AcceleratingDualMomentum)
 
 		manager = data.NewManager(map[string]string{

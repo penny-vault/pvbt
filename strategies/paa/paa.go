@@ -34,89 +34,6 @@ func max(x int, y int) int {
 	return x
 }
 
-// KellersProtectiveAssetAllocationInfo information describing this strategy
-func KellersProtectiveAssetAllocationInfo() strategy.StrategyInfo {
-	return strategy.StrategyInfo{
-		Name:      "Kellers Protective Asset Allocation",
-		Shortcode: "paa",
-		Description: `<p>The Protective Asset Allocation strategy was developed by Wouter Keller and JW Keuning.</p>
-<br/>
-		It’s based off their paper Protective Asset Allocation (PAA): A Simple Momentum-Based Alternative for Term Deposits.
-
-		The strategy uses dual momentum to determine what assets to hold but has a very aggressive portfolio protection mechanism in case of a market crash.
-
-		Their goal was to make an “appealing alternative for a 1-year term deposit.”`,
-		Source:  "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html",
-		Version: "1.0.0",
-		Arguments: map[string]strategy.Argument{
-			"riskUniverse": {
-				Name:        "Risk Universe",
-				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe",
-				Typecode:    "[]string",
-				DefaultVal:  `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
-			},
-			"protectiveUniverse": {
-				Name:        "Protective Universe",
-				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash",
-				Typecode:    "[]string",
-				DefaultVal:  `["IEF"]`,
-			},
-			"protectionFactor": {
-				Name:        "Protection Factor",
-				Description: "Factor describing how protective the crash protection should be; higher numbers are more protective.",
-				Typecode:    "number",
-				Advanced:    true,
-				DefaultVal:  "2",
-			},
-			"lookback": {
-				Name:        "Lookback",
-				Description: "Number of months to lookback in momentum filter.",
-				Typecode:    "number",
-				Advanced:    true,
-				DefaultVal:  "12",
-			},
-			"topN": {
-				Name:        "Top N",
-				Description: "Number of top risk assets to invest in at a time",
-				Typecode:    "number",
-				Advanced:    true,
-				DefaultVal:  "6",
-			},
-		},
-		SuggestedParameters: map[string]map[string]string{
-			"PAA-Conservative": {
-				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
-				"protectiveUniverse": `["$CASH"]`,
-				"protectionFactor":   "2",
-				"lookback":           "12",
-				"topN":               "6",
-			},
-			"PAA0": {
-				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
-				"protectiveUniverse": `["IEF"]`,
-				"protectionFactor":   "0",
-				"lookback":           "12",
-				"topN":               "6",
-			},
-			"PAA1": {
-				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
-				"protectiveUniverse": `["IEF"]`,
-				"protectionFactor":   "1",
-				"lookback":           "12",
-				"topN":               "6",
-			},
-			"PAA2": {
-				"riskUniverse":       `["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]`,
-				"protectiveUniverse": `["IEF"]`,
-				"protectionFactor":   "2",
-				"lookback":           "12",
-				"topN":               "6",
-			},
-		},
-		Factory: NewKellersProtectiveAssetAllocation,
-	}
-}
-
 // KellersProtectiveAssetAllocation strategy type
 type KellersProtectiveAssetAllocation struct {
 	protectiveUniverse []string
@@ -131,7 +48,7 @@ type KellersProtectiveAssetAllocation struct {
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
-func NewKellersProtectiveAssetAllocation(args map[string]json.RawMessage) (strategy.Strategy, error) {
+func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	protectiveUniverse := []string{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err

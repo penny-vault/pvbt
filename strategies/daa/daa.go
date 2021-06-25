@@ -31,87 +31,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// KellersDefensiveAssetAllocationInfo information describing this strategy
-func KellersDefensiveAssetAllocationInfo() strategy.StrategyInfo {
-	return strategy.StrategyInfo{
-		Name:        "Kellers Defensive Asset Allocation",
-		Shortcode:   "daa",
-		Description: `A strategy that has a built-in crash protection that looks at the "breadth-momentum" of a canary universe.`,
-		Source:      "https://indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html",
-		Version:     "1.0.0",
-		Arguments: map[string]strategy.Argument{
-			"riskUniverse": {
-				Name:        "Risk Universe",
-				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe",
-				Typecode:    "[]string",
-				DefaultVal:  `["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]`,
-			},
-			"protectiveUniverse": {
-				Name:        "Protective Universe",
-				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash",
-				Typecode:    "[]string",
-				DefaultVal:  `["VWO", "AGG"]`,
-			},
-			"cashUniverse": {
-				Name:        "Cash Universe",
-				Description: "List of ETF, Mutual Fund, or Stock tickers in the 'cash' universe",
-				Typecode:    "[]string",
-				DefaultVal:  `["SHY", "IEF", "LQD"]`,
-			},
-			"breadth": {
-				Name:        "Breadth",
-				Description: "Breadth (B) parameter that determines the cash fraction given the canary breadth",
-				Typecode:    "number",
-				DefaultVal:  "2",
-			},
-			"topT": {
-				Name:        "Top T",
-				Description: "Number of top risk assets to invest in at a time",
-				Typecode:    "number",
-				DefaultVal:  "6",
-			},
-		},
-		SuggestedParameters: map[string]map[string]string{
-			"DAA-G12": {
-				"riskUniverse":       `["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]`,
-				"protectiveUniverse": `["VWO", "AGG"]`,
-				"cashUniverse":       `["SHY", "IEF", "LQD"]`,
-				"breadth":            "2",
-				"topT":               "6",
-			},
-			"DAA-G6": {
-				"riskUniverse":       `["SPY", "VEA", "VWO", "LQD", "TLT", "HYG"]`,
-				"protectiveUniverse": `["VWO", "AGG"]`,
-				"cashUniverse":       `["SHY", "IEF", "LQD"]`,
-				"breadth":            "2",
-				"topT":               "6",
-			},
-			"DAA1-G4 - Aggressive G4": {
-				"riskUniverse":       `["SPY", "VEA", "VWO", "AGG"]`,
-				"protectiveUniverse": `["VWO", "AGG"]`,
-				"cashUniverse":       `["SHV", "IEF", "UST"]`,
-				"breadth":            "1",
-				"topT":               "4",
-			},
-			"DAA1-G12 - Aggressive G12": {
-				"riskUniverse":       `["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]`,
-				"protectiveUniverse": `["VWO", "AGG"]`,
-				"cashUniverse":       `["SHV", "IEF", "UST"]`,
-				"breadth":            "1",
-				"topT":               "2",
-			},
-			"DAA1-U1 - Minimalistic": {
-				"riskUniverse":       `["SPY"]`,
-				"protectiveUniverse": `["VWO", "AGG"]`,
-				"cashUniverse":       `["SHV", "IEF", "UST"]`,
-				"breadth":            "1",
-				"topT":               "1",
-			},
-		},
-		Factory: NewKellersDefensiveAssetAllocation,
-	}
-}
-
 // KellersDefensiveAssetAllocation strategy type
 type KellersDefensiveAssetAllocation struct {
 	cashUniverse       []string
@@ -140,8 +59,8 @@ func (a byTicker) Len() int           { return len(a) }
 func (a byTicker) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a byTicker) Less(i, j int) bool { return a[i].Score > a[j].Score }
 
-// NewKellersDefensiveAssetAllocation Construct a new Kellers DAA strategy
-func NewKellersDefensiveAssetAllocation(args map[string]json.RawMessage) (strategy.Strategy, error) {
+// New constructs a new Kellers DAA strategy
+func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	cashUniverse := []string{}
 	if err := json.Unmarshal(args["cashUniverse"], &cashUniverse); err != nil {
 		return nil, err

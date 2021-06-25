@@ -27,7 +27,7 @@ var _ = Describe("Daa", func() {
 			panic(err)
 		}
 
-		tmp, err := daa.NewKellersDefensiveAssetAllocation(params)
+		tmp, err := daa.New(params)
 		if err != nil {
 			panic(err)
 		}

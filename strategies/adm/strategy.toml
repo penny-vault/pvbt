@@ -1,0 +1,29 @@
+name = "Accelerating Dual Momentum"
+shortcode = "adm"
+description = "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets."
+source = "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/"
+version = "1.0.0"
+
+[arguments.inTickers]
+name = "Tickers"
+description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
+typecode = "[]string"
+default = '["VFINX" "PRIDX"]'
+
+[arguments.outTicker]
+name = "Out-of-Market Ticker"
+description = "Ticker to use when model scores are all below 0"
+typecode = "string"
+default = "VUSTX"
+
+[suggested."Engineered Portfolio"]
+inTickers = '["VFINX" "VINEX"]'
+outTicker = "VUSTX"
+
+[suggested.PRIDX]
+inTickers = '["VFINX" "PRIDX"]'
+outTicker = "VUSTX"
+
+[suggested."All ETF"]
+inTickers = '["SPY" "SCZ"]'
+outTicker = "TLT"

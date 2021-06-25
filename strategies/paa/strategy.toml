@@ -1,0 +1,66 @@
+name = "Protective Asset Allocation"
+shortcode = "paa"
+description = "A strategy that seeks to create an appealing alternative to a 1-yr CD while boosting returns"
+source = "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html"
+version = "1.0.0"
+
+[arguments.riskUniverse]
+name = "Risk Universe"
+description = "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe"
+typecode = "[]string"
+default = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+
+[arguments.protectiveUniverse]
+name = "Protective Universe"
+description = "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash"
+typecode = "[]string"
+default = '["IEF"]'
+
+[arguments.protectionFactor]
+name = "Protection Factor"
+description = "Factor describing how protective the crash protection should be; higher numbers are more protective."
+typecode = "number"
+advanced = true
+default = "2"
+
+[arguments.lookback]
+name = "Lookback"
+description = "Number of months to lookback in momentum filter."
+typecode = "number"
+advanced = true
+default = "12"
+
+[arguments.topN]
+name = "Top N"
+description = "Number of top risk assets to invest in at a time"
+typecode = "number"
+advanced = true
+default = "6"
+
+[suggested.PAA-Conservative]
+riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+protectiveUniverse = '["$CASH"]'
+protectionFactor = "2"
+lookback = "12"
+topN = "6"
+
+[suggested.PAA0]
+riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+protectiveUniverse = '["IEF"]'
+protectionFactor = "0"
+lookback = "12"
+topN = "6"
+
+[suggested.PAA1]
+riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+protectiveUniverse = '["IEF"]'
+protectionFactor = "1"
+lookback = "12"
+topN = "6"
+
+[suggested.PAA2]
+riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+protectiveUniverse = '["IEF"]'
+protectionFactor = "2"
+lookback = "12"
+topN = "6"

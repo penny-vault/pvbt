@@ -27,7 +27,7 @@ var _ = Describe("PAA", func() {
 			panic(err)
 		}
 
-		tmp, err := paa.NewKellersProtectiveAssetAllocation(params)
+		tmp, err := paa.New(params)
 		if err != nil {
 			panic(err)
 		}

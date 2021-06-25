@@ -1,6 +1,9 @@
 package strategies
 
 import (
+	"embed"
+	"fmt"
+	"io/ioutil"
 	"main/database"
 	"main/strategies/adm"
 	"main/strategies/daa"
@@ -10,15 +13,15 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
+	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
 )
 
+//go:embed **/*.md **/*.toml
+var resources embed.FS
+
 // StrategyList List of all strategies
-var StrategyList = []strategy.StrategyInfo{
-	adm.AcceleratingDualMomentumInfo(),
-	daa.KellersDefensiveAssetAllocationInfo(),
-	paa.KellersProtectiveAssetAllocationInfo(),
-}
+var StrategyList = []strategy.StrategyInfo{}
 
 // StrategyMap Map of strategies
 var StrategyMap = make(map[string]*strategy.StrategyInfo)
@@ -28,10 +31,63 @@ var StrategyMetricsMap = make(map[string]strategy.StrategyMetrics)
 
 // InitializeStrategyMap configure the strategy map
 func InitializeStrategyMap() {
-	for ii := range StrategyList {
-		strat := StrategyList[ii]
-		StrategyMap[strat.Shortcode] = &strat
+	Register("adm", adm.New)
+	Register("daa", daa.New)
+	Register("paa", paa.New)
+}
+
+func Register(strategyPkg string, factory strategy.StrategyFactory) {
+	// read description
+	fn := fmt.Sprintf("%s/description.md", strategyPkg)
+	file, err := resources.Open(fn)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"File":  fn,
+		}).Error("failed to open file")
 	}
+	defer file.Close()
+	doc, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"File":  fn,
+		}).Error("failed to read file")
+	}
+	longDescription := string(doc)
+
+	// load config file
+	fn = fmt.Sprintf("%s/strategy.toml", strategyPkg)
+	file, err = resources.Open(fn)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"File":  fn,
+		}).Error("failed to open file")
+	}
+	defer file.Close()
+	doc, err = ioutil.ReadAll(file)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"File":  fn,
+		}).Error("failed to read file")
+	}
+
+	var strat strategy.StrategyInfo
+	err = toml.Unmarshal(doc, &strat)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"File":  fn,
+		}).Error("failed to parse toml file")
+	}
+
+	strat.LongDescription = longDescription
+	strat.Factory = factory
+
+	StrategyList = append(StrategyList, strat)
+	StrategyMap[strat.Shortcode] = &strat
 }
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
@@ -66,9 +122,9 @@ StrategyLoop:
 		for k, v := range strat.Arguments {
 			var output interface{}
 			if v.Typecode == "string" {
-				output = v.DefaultVal
+				output = v.Default
 			} else {
-				json.Unmarshal([]byte(v.DefaultVal), &output)
+				json.Unmarshal([]byte(v.Default), &output)
 			}
 			argumentsMap[k] = output
 		}

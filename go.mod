@@ -31,6 +31,7 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.13.0
+	github.com/pelletier/go-toml/v2 v2.0.0-beta.3 // indirect
 	github.com/prometheus/common v0.29.0
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20210422123815-aaa951b82e1b
 	github.com/sendgrid/rest v2.6.4+incompatible // indirect
