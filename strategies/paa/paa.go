@@ -26,12 +26,12 @@ import (
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 )
 
-func max(x int, y int) int {
+func min(x int, y int) int {
 	if x < y {
-		return y
+		return x
 	}
 
-	return x
+	return y
 }
 
 // KellersProtectiveAssetAllocation strategy type
@@ -294,7 +294,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 		protectiveAsset := protectiveSelection[*row]
 
 		// equal weight risk assets
-		numRiskAssetsToHold := max(paa.topN, len(riskAssets))
+		numRiskAssetsToHold := min(paa.topN, len(riskAssets))
 		riskAssetsEqualWeightPercentage := sf / float64(numRiskAssetsToHold)
 
 		targetMap := make(map[string]float64)
