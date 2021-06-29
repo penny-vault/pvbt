@@ -177,7 +177,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1517356800,
 					Value:         10000,
 					RiskFreeValue: 10000,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           40.465492594616656,
+							PercentPortfolio: 1,
+							Value:            10000,
+						},
+					},
 					Justification: map[string]interface{}{},
 				}))
 
@@ -185,7 +192,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1580428800,
 					Value:         11126.332313770672,
 					RiskFreeValue: 10407.579998915518,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           37.97822129326269,
+							PercentPortfolio: 1,
+							Value:            11126.332313770672,
+						},
+					},
 					PercentReturn: -0.017122786477389185,
 					Justification: map[string]interface{}{},
 				}))
@@ -194,7 +208,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1606694400,
 					Value:         12676.603580175803,
 					RiskFreeValue: 10426.84579128732,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           37.97822129326269,
+							PercentPortfolio: 1,
+							Value:            12676.603580175803,
+						},
+					},
 					PercentReturn: 0.10935637663885389,
 					Justification: map[string]interface{}{},
 				}))
@@ -296,7 +317,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1517356800,
 					Value:         10000,
 					RiskFreeValue: 10000,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           40.465492594616656,
+							PercentPortfolio: 1,
+							Value:            10000,
+						},
+					},
 					Justification: map[string]interface{}{},
 				}))
 
@@ -304,7 +332,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1580428800,
 					Value:         11126.332313770672,
 					RiskFreeValue: 10407.579998915518,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           37.97822129326269,
+							PercentPortfolio: 1,
+							Value:            11126.332313770672,
+						},
+					},
 					PercentReturn: -0.017122786477389185,
 					Justification: map[string]interface{}{},
 				}))
@@ -313,7 +348,14 @@ var _ = Describe("Portfolio", func() {
 					Time:          1606694400,
 					Value:         12676.603580175803,
 					RiskFreeValue: 10426.84579128732,
-					Holdings:      "VFINX",
+					Holdings: []portfolio.ReportableHolding{
+						{
+							Ticker:           "VFINX",
+							Shares:           37.97822129326269,
+							PercentPortfolio: 1,
+							Value:            12676.603580175803,
+						},
+					},
 					PercentReturn: 0.10935637663885389,
 					Justification: map[string]interface{}{},
 				}))

@@ -66,7 +66,7 @@ type PerformanceMeasurement struct {
 	Time          int64                  `json:"time"`
 	Value         float64                `json:"value"`
 	RiskFreeValue float64                `json:"riskFreeValue"`
-	Holdings      string                 `json:"holdings"`
+	Holdings      []ReportableHolding    `json:"holdings"`
 	PercentReturn float64                `json:"percentReturn"`
 	Justification map[string]interface{} `json:"justification"`
 }
@@ -437,7 +437,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 			Time:          date.Unix(),
 			Value:         totalVal,
 			RiskFreeValue: riskFreeValue,
-			Holdings:      holdingStr,
+			Holdings:      currentAssets,
 			PercentReturn: ret,
 			Justification: lastJustification,
 		})

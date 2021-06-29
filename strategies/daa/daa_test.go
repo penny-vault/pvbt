@@ -131,26 +131,26 @@ var _ = Describe("Daa", func() {
 				// So we adjust here and ignore the first 6 entries
 				Expect(perf.Measurements[6].Time).To(BeNumerically("==", 633744000))
 				Expect(perf.Measurements[6].Value).To(BeNumerically("==", 10000))
-				Expect(perf.Measurements[6].Holdings).To(Equal("VUSTX"))
+				Expect(perf.Measurements[6].Holdings[0].Ticker).To(Equal("VUSTX"))
 
 				Expect(perf.Measurements[10].Time).To(BeNumerically("==", 644112000))
 				Expect(perf.Measurements[10].Value).Should(BeNumerically("~", 10092.8205, 1e-4))
-				Expect(perf.Measurements[10].Holdings).To(Equal("PRIDX"))
+				Expect(perf.Measurements[10].Holdings[0].Ticker).To(Equal("PRIDX"))
 				Expect(perf.Measurements[10].PercentReturn).Should(BeNumerically("~", 0.0451, 1e-4))
 
 				Expect(perf.Measurements[65].Time).To(BeNumerically("==", 788745600))
 				Expect(perf.Measurements[65].Value).Should(BeNumerically("~", 14016.5776, 1e-4))
-				Expect(perf.Measurements[65].Holdings).To(Equal("VFINX"))
+				Expect(perf.Measurements[65].Holdings[0].Ticker).To(Equal("VFINX"))
 				Expect(perf.Measurements[65].PercentReturn).Should(BeNumerically("~", 0.0159, 1e-4))
 
 				Expect(perf.Measurements[264].Time).To(BeNumerically("==", 1311897600))
 				Expect(perf.Measurements[264].Value).Should(BeNumerically("~", 56807.9076, 1e-4))
-				Expect(perf.Measurements[264].Holdings).To(Equal("PRIDX"))
+				Expect(perf.Measurements[264].Holdings[0].Ticker).To(Equal("PRIDX"))
 				Expect(perf.Measurements[264].PercentReturn).Should(BeNumerically("~", 0.0418, 1e-4))
 
 				Expect(perf.Measurements[378].Time).To(BeNumerically("==", 1611878400))
 				Expect(perf.Measurements[378].Value).Should(BeNumerically("~", 208158.8420, 1e-4))
-				Expect(perf.Measurements[378].Holdings).To(Equal("VUSTX"))
+				Expect(perf.Measurements[378].Holdings[0].Ticker).To(Equal("VUSTX"))
 				Expect(perf.Measurements[378].PercentReturn).Should(BeNumerically("~", -0.0299, 1e-4))
 			})
 		})
