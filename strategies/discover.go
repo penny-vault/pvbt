@@ -1,6 +1,7 @@
 package strategies
 
 import (
+	"context"
 	"embed"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -93,57 +95,82 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
 	log.Info("refreshing portfolio metrics")
-StrategyLoop:
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
 
 		// check if this strategy already has a portfolio associated with it
-		rows, err := database.Conn.Query("SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM Portfolio WHERE userid='system' AND name=$1", strat.Name)
+		trx, err := database.TrxForUser("pvuser")
 		if err != nil {
+			log.WithFields(log.Fields{
+				"Endpoint": "UpdatePortfolio",
+				"Error":    err,
+				"UserID":   "pvuser",
+			}).Fatal("unable to get database transaction for user")
+		}
+
+		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolio_v1 WHERE user_id='pvuser' AND name=$1", strat.Name)
+		s := strategy.StrategyMetrics{}
+		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
+
+		switch err {
+		case nil: // no error
+			StrategyMetricsMap[strat.Shortcode] = s
+			strat.Metrics = s
+			trx.Commit(context.Background())
+		case pgx.ErrNoRows:
+			// It seems this strategy doesn't have a database entry yet -- create one
+			trx.Rollback(context.Background())
+			trx, err = database.TrxForUser("pvuser")
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Endpoint": "UpdatePortfolio",
+					"Error":    err,
+					"UserID":   "pvuser",
+				}).Fatal("unable to get database transaction for user")
+			}
+
+			portfolioID := uuid.New()
+			// build arguments
+			argumentsMap := make(map[string]interface{})
+			for k, v := range strat.Arguments {
+				var output interface{}
+				if v.Typecode == "string" {
+					output = v.Default
+				} else {
+					json.Unmarshal([]byte(v.Default), &output)
+				}
+				argumentsMap[k] = output
+			}
+			arguments, err := json.Marshal(argumentsMap)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Shortcode":    strat.Shortcode,
+					"StrategyName": strat.Name,
+					"Error":        err,
+				}).Warn("Unable to build arguments for metrics calculation")
+				trx.Rollback(context.Background())
+				return
+			}
+			portfolioSQL := `INSERT INTO portfolio_v1 ("id", "user_id", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
+			_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, "pvuser", strat.Name, strat.Shortcode, string(arguments), time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC))
+			if err != nil {
+				trx.Rollback(context.Background())
+				log.WithFields(log.Fields{
+					"Shortcode":    strat.Shortcode,
+					"StrategyName": strat.Name,
+					"Error":        err,
+					"Query":        portfolioSQL,
+				}).Warn("failed to create portfolio for strategy metrics")
+				return
+			}
+			trx.Commit(context.Background())
+		default:
 			log.WithFields(log.Fields{
 				"Strategy": strat.Shortcode,
 				"Error":    err,
 			}).Error("failed to lookup strategy portfolio")
+			trx.Rollback(context.Background())
 			return
-		} else {
-			for rows.Next() {
-				s := strategy.StrategyMetrics{}
-				rows.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
-				StrategyMetricsMap[strat.Shortcode] = s
-				strat.Metrics = s
-				continue StrategyLoop
-			}
-		}
-
-		// It seems this strategy doesn't have a database entry yet -- create one
-		portfolioID := uuid.New()
-		// build arguments
-		argumentsMap := make(map[string]interface{})
-		for k, v := range strat.Arguments {
-			var output interface{}
-			if v.Typecode == "string" {
-				output = v.Default
-			} else {
-				json.Unmarshal([]byte(v.Default), &output)
-			}
-			argumentsMap[k] = output
-		}
-		arguments, err := json.Marshal(argumentsMap)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Shortcode":    strat.Shortcode,
-				"StrategyName": strat.Name,
-				"Error":        err,
-			}).Warn("Unable to build arguments for metrics calculation")
-		}
-		portfolioSQL := `INSERT INTO Portfolio ("id", "userid", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
-		_, err = database.Conn.Exec(portfolioSQL, portfolioID, "system", strat.Name, strat.Shortcode, string(arguments), time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC))
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Shortcode":    strat.Shortcode,
-				"StrategyName": strat.Name,
-				"Error":        err,
-			}).Warn("failed to create portfolio for strategy metrics")
 		}
 	}
 }

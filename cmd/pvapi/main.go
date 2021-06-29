@@ -24,14 +24,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/github"
-
 	log "github.com/sirupsen/logrus"
 )
 
 func setupLogging() {
-	log.SetReportCaller(true)
+	//	log.SetReportCaller(true)
 	hook, err := loki.New(os.Getenv("LOKI_URL"), 102400, 1)
 	if err != nil {
 		log.Error(err)
@@ -45,11 +42,7 @@ func main() {
 	log.Info("Logging configured")
 
 	// setup database
-	err := database.SetupDatabaseMigrations()
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = database.Connect()
+	err := database.Connect()
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,11 +14,8 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-
-	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/github"
 	"github.com/google/uuid"
-	"github.com/jmoiron/sqlx/types"
+	"github.com/jackc/pgtype"
 
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
@@ -37,7 +35,7 @@ type savedStrategy struct {
 	UserID        string
 	Name          string
 	Strategy      string
-	Arguments     types.JSONText
+	Arguments     pgtype.JSON
 	StartDate     int64
 	Notifications int
 }
@@ -46,27 +44,75 @@ var disableSend bool = false
 
 func getSavedPortfolios(startDate time.Time) []*savedStrategy {
 	ret := []*savedStrategy{}
-	portfolioSQL := `SELECT id, userid, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, notifications FROM portfolio WHERE start_date <= $1`
-	rows, err := database.Conn.Query(portfolioSQL, startDate)
+	trx, err := database.TrxForUser("pvapi")
 	if err != nil {
-		log.Fatalf("Database query error in notifier: %s", err)
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Fatal("failed to create database transaction for pvapi")
+	}
+	// get a list of users
+	userSQL := `SELECT b.rolname as user FROM (pg_catalog.pg_roles r LEFT JOIN pg_catalog.pg_auth_members m ON r.oid = m.member) JOIN pg_catalog.pg_roles b ON (m.roleid = b.oid) where r.rolname=$1;`
+	rows, err := trx.Query(context.Background(), userSQL, "pvapi")
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Query": userSQL,
+			"Error": err,
+		}).Fatal("failed to execute query to get user accounts with portfolios")
 	}
 
+	users := []string{}
 	for rows.Next() {
-		p := savedStrategy{}
-		err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.Notifications)
+		var userID string
+		rows.Scan(&userID)
+		users = append(users, userID)
+	}
+	trx.Commit(context.Background())
+
+	for _, userID := range users {
+		trx, err := database.TrxForUser(userID)
 		if err != nil {
-			log.Fatalf("Database query error in notifier: %s", err)
+			log.WithFields(log.Fields{
+				"Error":  err,
+				"UserID": userID,
+			}).Error("failed to create database transaction for user")
+			continue
 		}
-		ret = append(ret, &p)
+		portfolioSQL := `SELECT id, user_id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, notifications FROM portfolio_v1 WHERE start_date <= $1`
+		rows, err := trx.Query(context.Background(), portfolioSQL, startDate)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"UserID": userID,
+				"Query":  portfolioSQL,
+				"Error":  err,
+			}).Error("Could not fetch portfolios for user")
+			trx.Rollback(context.Background())
+			continue
+		}
+
+		for rows.Next() {
+			p := savedStrategy{}
+			err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.Notifications)
+			if err != nil {
+				log.Fatalf("Database query error in notifier: %s", err)
+			}
+			ret = append(ret, &p)
+		}
+		trx.Commit(context.Background())
 	}
 
 	return ret
 }
 
 func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Performance) {
-	updateSQL := `UPDATE portfolio SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12 WHERE id=$13`
-	_, err := database.Conn.Query(
+	trx, err := database.TrxForUser(s.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"UserID": s.UserID,
+			"Error":  err,
+		}).Error("Failed to get transaction for user")
+	}
+	updateSQL := `UPDATE portfolio_v1 SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12 WHERE id=$13`
+	_, err = trx.Exec(context.Background(),
 		updateSQL,
 		perf.YTDReturn,
 		perf.MetricsBundle.CAGRS.ThreeYear,
@@ -91,6 +137,8 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 			"PerformanceEndDate":   time.Unix(perf.PeriodEnd, 0),
 			"Error":                err,
 		}).Error("Could not update portfolio performance metrics")
+		trx.Rollback(context.Background())
+		return
 	}
 
 	log.WithFields(log.Fields{
@@ -100,6 +148,7 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 		"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
 		"PerformanceEndDate":   time.Unix(perf.PeriodEnd, 0),
 	}).Info("Calculated portfolio performance")
+	trx.Commit(context.Background())
 }
 
 func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfolio.Portfolio, error) {
@@ -129,7 +178,7 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 
 	if strategy, ok := strategies.StrategyMap[p.Strategy]; ok {
 		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal(p.Arguments, &params); err != nil {
+		if err := json.Unmarshal(p.Arguments.Bytes, &params); err != nil {
 			log.Println(err)
 			return nil, err
 		}
@@ -392,11 +441,7 @@ func main() {
 	disableSend = *testFlag
 
 	// setup database
-	err := database.SetupDatabaseMigrations()
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = database.Connect()
+	err := database.Connect()
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -5,23 +5,22 @@ module main
 go 1.16
 
 require (
+	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
 	github.com/andybalholm/brotli v1.0.3 // indirect
 	github.com/apache/thrift v0.14.1 // indirect
 	github.com/go-co-op/gocron v1.6.2
 	github.com/goccy/go-json v0.7.1
 	github.com/gofiber/fiber/v2 v2.13.0
-	github.com/golang-migrate/migrate/v4 v4.14.2-0.20210203071828-a185b9e78f19
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.6 // indirect
-	github.com/google/go-querystring v1.1.0 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/guptarohit/asciigraph v0.5.2 // indirect
-	github.com/hashicorp/errwrap v1.1.0 // indirect
-	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/jackc/pgtype v1.7.0
+	github.com/jackc/pgx/v4 v4.11.0
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jdfergason/jwt/v2 v2.2.3
-	github.com/jmoiron/sqlx v1.3.4
+	github.com/jmoiron/sqlx v1.3.4 // indirect
 	github.com/juju/utils/v2 v2.0.0-20210305225158-eedbe7b6b3e2 // indirect
 	github.com/klauspost/compress v1.13.1 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
@@ -31,7 +30,8 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/onsi/ginkgo v1.16.4
 	github.com/onsi/gomega v1.13.0
-	github.com/pelletier/go-toml/v2 v2.0.0-beta.3 // indirect
+	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.0.0-beta.3
 	github.com/prometheus/common v0.29.0
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20210422123815-aaa951b82e1b
 	github.com/sendgrid/rest v2.6.4+incompatible // indirect
