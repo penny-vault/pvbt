@@ -27,12 +27,14 @@ name = "Breadth"
 description = "Breadth (B) parameter that determines the cash fraction given the canary breadth"
 typecode = "number"
 default = "2"
+advanced = true
 
 [arguments.topT]
 name = "Top T"
 description = "Number of top risk assets to invest in at a time"
 typecode = "number"
 default = "6"
+advanced = true
 
 [suggested.DAA-G12]
 riskUniverse = '["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]'
