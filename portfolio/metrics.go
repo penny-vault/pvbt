@@ -106,13 +106,14 @@ func (perf *Performance) DrawDowns() ([]*DrawDown, *DrawDown, float64) {
 	var peak float64 = perf.Measurements[0].Value
 	var drawDown *DrawDown
 	var avgDrawDown float64 = 0
+	var prev int64
 	for _, v := range perf.Measurements {
 		peak = math.Max(peak, v.Value)
 		diff := v.Value - peak
 		if diff < 0 {
 			if drawDown == nil {
 				drawDown = &DrawDown{
-					Begin:       v.Time,
+					Begin:       prev,
 					End:         v.Time,
 					LossPercent: (v.Value / peak) - 1.0,
 				}
@@ -129,6 +130,7 @@ func (perf *Performance) DrawDowns() ([]*DrawDown, *DrawDown, float64) {
 			allDrawDowns = append(allDrawDowns, drawDown)
 			drawDown = nil
 		}
+		prev = v.Time
 	}
 
 	sort.Slice(allDrawDowns, func(i, j int) bool {
