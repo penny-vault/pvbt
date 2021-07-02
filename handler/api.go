@@ -4,10 +4,9 @@ import (
 	"main/data"
 	"main/portfolio"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
-
-	"github.com/goccy/go-json"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/lestrrat-go/jwx/jwt"
@@ -108,28 +107,25 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	manager.Begin = startDate
 	manager.End = endDate
 
-	type BenchmarkArgs struct {
-		Ticker      string `json:"ticker"`
-		SnapToStart bool   `json:"snapToStart"`
-	}
-
-	var args BenchmarkArgs
-	if err := json.Unmarshal(c.Body(), &args); err != nil {
+	snapToStart, err := strconv.ParseBool(c.Query("snapToStart", "true"))
+	if err != nil {
 		log.WithFields(
 			log.Fields{
-				"Error":      err,
-				"StatusCode": fiber.ErrBadRequest,
-				"Body":       c.Body(),
-				"Uri":        "/v1/benchmark",
-			}).Warn("/v1/benchmark called with invalid args")
+				"Error":       err,
+				"StatusCode":  fiber.ErrBadRequest,
+				"SnapToStart": c.Query("snapToStart"),
+				"Uri":         "/v1/benchmark",
+			}).Warn("/v1/benchmark called with invalid snapToStart")
 		return fiber.ErrBadRequest
 	}
 
-	if args.SnapToStart {
-		securityStart, err := manager.GetData(args.Ticker)
+	ticker := c.Params("ticker")
+
+	if snapToStart {
+		securityStart, err := manager.GetData(ticker)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"Symbol": args.Ticker,
+				"Symbol": ticker,
 				"Error":  err,
 			}).Warn("Could not load symbol data")
 			return fiber.ErrBadRequest
@@ -138,13 +134,13 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		startDate = row[data.DateIdx].(time.Time)
 	}
 
-	benchmarkTicker := strings.ToUpper(args.Ticker)
+	benchmarkTicker := strings.ToUpper(ticker)
 
 	dates := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
 	tickers := dataframe.NewSeriesString(portfolio.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
-	p := portfolio.NewPortfolio(args.Ticker, &manager)
+	p := portfolio.NewPortfolio(ticker, &manager)
 	err = p.TargetPortfolio(10000, targetPortfolio)
 	if err != nil {
 		log.WithFields(log.Fields{

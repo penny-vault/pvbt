@@ -15,7 +15,6 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
-	"github.com/jackc/pgtype"
 
 	"github.com/sendgrid/sendgrid-go"
 	"github.com/sendgrid/sendgrid-go/helpers/mail"
@@ -35,7 +34,7 @@ type savedStrategy struct {
 	UserID        string
 	Name          string
 	Strategy      string
-	Arguments     pgtype.JSON
+	Arguments     map[string]json.RawMessage
 	StartDate     int64
 	Notifications int
 }
@@ -177,13 +176,7 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 	manager.Frequency = data.FrequencyMonthly
 
 	if strategy, ok := strategies.StrategyMap[p.Strategy]; ok {
-		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal(p.Arguments.Bytes, &params); err != nil {
-			log.Println(err)
-			return nil, err
-		}
-
-		stratObject, err := strategy.Factory(params)
+		stratObject, err := strategy.Factory(p.Arguments)
 		if err != nil {
 			log.Println(err)
 			return nil, err

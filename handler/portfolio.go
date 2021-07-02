@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/jackc/pgtype"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -16,16 +15,16 @@ import (
 )
 
 type PortfolioResponse struct {
-	ID                 uuid.UUID       `json:"id"`
-	Name               string          `json:"name"`
-	Strategy           string          `json:"strategy"`
-	Arguments          pgtype.JSON     `json:"arguments"`
-	StartDate          int64           `json:"start_date"`
-	YTDReturn          sql.NullFloat64 `json:"ytd_return"`
-	CAGRSinceInception sql.NullFloat64 `json:"cagr_since_inception"`
-	Notifications      int             `json:"notifications"`
-	Created            int64           `json:"created"`
-	LastChanged        int64           `json:"lastchanged"`
+	ID                 uuid.UUID              `json:"id"`
+	Name               string                 `json:"name"`
+	Strategy           string                 `json:"strategy"`
+	Arguments          map[string]interface{} `json:"arguments"`
+	StartDate          int64                  `json:"start_date"`
+	YTDReturn          sql.NullFloat64        `json:"ytd_return"`
+	CAGRSinceInception sql.NullFloat64        `json:"cagr_since_inception"`
+	Notifications      int                    `json:"notifications"`
+	Created            int64                  `json:"created"`
+	LastChanged        int64                  `json:"lastchanged"`
 }
 
 // GetPortfolio get a portfolio
@@ -160,11 +159,24 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	trx.Commit(context.Background())
+	err = trx.Commit(context.Background())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint": "CreatePortfolio",
+			"Strategy": params.Strategy,
+			"Error":    err,
+			"Body":     string(c.Body()),
+			"Query":    portfolioSQL,
+		}).Warn("Failed to create portfolio")
+		trx.Rollback(context.Background())
+		return fiber.ErrInternalServerError
+	}
 	return c.JSON(PortfolioResponse{
-		ID:       portfolioID,
-		Name:     params.Name,
-		Strategy: params.Strategy,
+		ID:        portfolioID,
+		Name:      params.Name,
+		StartDate: params.StartDate,
+		Strategy:  params.Strategy,
+		Arguments: params.Arguments,
 	})
 }
 
@@ -277,6 +289,18 @@ func DeletePortfolio(c *fiber.Ctx) error {
 			"Query":    deleteSQL,
 			"Error":    err,
 		}).Warn("DeletePortfolio failed")
+		trx.Rollback(context.Background())
+		return fiber.ErrInternalServerError
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint": "DeletePortfolio",
+			"Query":    deleteSQL,
+			"Error":    err,
+		}).Warn("DeletePortfolio failed")
+		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
 

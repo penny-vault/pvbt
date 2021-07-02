@@ -20,7 +20,7 @@ func ListStrategies(c *fiber.Ctx) error {
 
 // GetStrategy get configuration for a specific strategy
 func GetStrategy(c *fiber.Ctx) error {
-	shortcode := c.Params("id")
+	shortcode := c.Params("shortcode")
 	if strategy, ok := strategies.StrategyMap[shortcode]; ok {
 		return c.JSON(strategy)
 	}
@@ -29,7 +29,7 @@ func GetStrategy(c *fiber.Ctx) error {
 
 // RunStrategy execute strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
-	shortcode := c.Params("id")
+	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
 
@@ -95,7 +95,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		manager.End = endDate
 
 		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal(c.Body(), &params); err != nil {
+		if err := json.Unmarshal([]byte(c.Query("arguments", "{}")), &params); err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest
 		}

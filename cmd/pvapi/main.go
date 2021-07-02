@@ -28,7 +28,7 @@ import (
 )
 
 func setupLogging() {
-	//	log.SetReportCaller(true)
+	log.SetReportCaller(true)
 	hook, err := loki.New(os.Getenv("LOKI_URL"), 102400, 1)
 	if err != nil {
 		log.Error(err)

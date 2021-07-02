@@ -28,12 +28,26 @@ paths:
           description: ERROR
       tags:
         - utility
-  /benchmark:
-    post:
+  /benchmark/{ticker}:
+    get:
       summary: calculate benchmark performance over specified time-frame
       security:
         - bearerAuth: []
       parameters:
+        - in: path
+          name: ticker
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: snapToStart
+          description: >-
+            indicates if data should "snap" to the start of the
+            period or use the exact start date provided
+          schema:
+            type: boolean
+            default: true
+          required: false
         - in: query
           name: startDate
           schema:
@@ -41,7 +55,8 @@ paths:
             default: "1990-01-01"
             example: "2021-06-18"
           required: false
-          description: Date to start benchmark simulation on (yyyy-mm-dd)
+          description: >-
+            Date to start benchmark simulation on (yyyy-mm-dd)
         - in: query
           name: endDate
           schema:
@@ -56,24 +71,290 @@ paths:
               summary: keyword indicating time, e.g. now
           required: false
           description: >-
-            Date to end benchmark simulation on. Entered as a 'yyyy-mm-dd' or using the convenience shortcut 'now' to specify the current date
-      requestBody:
-        description: >-
-          Benchmark parameters
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BenchmarkArgs'
+            Date to end benchmark simulation on. Entered as a
+            'yyyy-mm-dd' or using the convenience shortcut 'now' to
+            specify the current date
       responses:
         "200":
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPerformance'
+        "400":
+          description: Bad parameters
         "401":
           description: Not Authorized
         "404":
           description: Benchmark symbol not found
       tags:
         - portfolio
+  /portfolio/:
+    get:
+      summary: retrieve a list of portfolios for the logged-in user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+    post:
+      summary: create a new portfolio
+      requestBody:
+        description: New portfolio settings
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Portfolio'
+            example:
+              name: My Portfolio
+              strategy: adm
+              arguments:
+                inTickers:
+                  - VFINX
+                  - SCZ
+                outTicker: VUSTX
+                start_date: 315532800
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+              example:
+                id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+                name: Accelerating Dual Momentum
+                strategy: adm
+                arguments:
+                  inTickers:
+                    - VFINX
+                    - SCZ
+                  outTicker: VUSTX
+                start_date: 315532800
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+  /portfolio/{id}:
+    get:
+      summary: retrieve a specific portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to retrieve
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No portoflio found for specified id
+      tags:
+        - portfolio
+    patch:
+      summary: modify a portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to update
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      requestBody:
+        description: portfolio settings to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Portfolio'
+            example:
+              name: My Portfolio Renamed
+              notifications: 4113
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+              example:
+                id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+                name: My Portfolio Renamed
+                strategy: adm
+                arguments:
+                  inTickers:
+                    - VFINX
+                    - SCZ
+                  outTicker: VUSTX
+                start_date: 315532800
+                ytd_return:
+                  Float64: 0.32
+                  Valid: true
+                cagr_since_inception:
+                  Float64: 0.14323
+                  Valid: true
+                notifications: 4113
+                created: 1625109105
+                lastchanged: 1625109339
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+    delete:
+      summary: delete the portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to delete
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+  /strategy/:
+    get:
+      summary: retrieve a list of strategies
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - strategy
+  /strategy/{shortcode}:
+    get:
+      summary: retrieve details about a specific strategy
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shortcode
+          description: shortcode of the strategy to retrieve
+          required: true
+          schema:
+            type: string
+          example: adm
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyInfo'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No portoflio found for specified id
+      tags:
+        - strategy
+  /strategy/{shortcode}/execute:
+    get:
+      summary: execute the strategy with given parameters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shortcode
+          description: shortcode of the strategy to run
+          required: true
+          schema:
+            type: string
+          example: adm
+        - in: query
+          name: arguments
+          description: JSON arguments for specified strategy
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: startDate
+          description: date to begin simulation on
+          required: false
+          schema:
+            type: string
+            format: date
+            default: '1980-01-01'
+        - in: query
+          name: endDate
+          description: date to finish simulation on
+          required: false
+          schema:
+            type: string
+            format: date
+            example: '2021-07-01'
+            default: current date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPerformance'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No strategy found for specified shortcode
+      tags:
+        - strategy
 components:
   securitySchemes:
     bearerAuth:
@@ -184,6 +465,96 @@ components:
         - sortinoRatio
         - stdDev
         - ulcerIndexAvg
+    NullableFloat:
+      type: object
+      properties:
+        Float64:
+          type: number
+          description: Field value
+        Valid:
+          type: boolean
+          description: when false the float value should be considered NaN
+    PingResponse:
+      type: object
+      properties:
+        message:
+          example: API is alive
+          type: string
+        status:
+          example: success
+          type: string
+        time:
+          example: "2021-06-19T08:09:10.115924-05:00"
+          type: string
+      required:
+        - message
+        - status
+        - time
+    Portfolio:
+      description: a portfolio represents a collection of investments and transactions
+      type: object
+      example:
+        id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+        name: Accelerating Dual Momentum
+        strategy: adm
+        arguments:
+          inTickers:
+            - VFINX
+            - SCZ
+          outTicker: VUSTX
+        start_date: 315532800
+        ytd_return:
+          Float64: 0
+          Valid: false
+        cagr_since_inception:
+          Float64: 0
+          Valid: false
+        notifications: 4113
+        created: 1625109105
+        lastchanged: 1625109339
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: unique identifier for the portfolio
+        name:
+          type: string
+          description: name of the portfolio
+        strategy:
+          type: string
+          description: shortcode of strategy used with Portfolio
+        arguments:
+          type: object
+          description: strategy specific arguments
+        start_date:
+          type: number
+          description: >-
+            date of first transaction in portfolio as number of seconds
+            since Jan 1, 1970
+        ytd_return:
+          $ref: '#/components/schemas/NullableFloat'
+          description: percent return YTD of portfolio
+        cagr_since_inception:
+          $ref: '#/components/schemas/NullableFloat'
+          description: Compound annual growth rate (CAGR) of portfolio since start_date
+        notifications:
+          type: number
+          description: integer describing which notifications are enabled for the portoflio
+        created:
+          type: number
+          description: unix timestamp of when portfolio was created
+        lastchanged:
+          type: number
+          description: unix timestamp of when portfolio was last modified
+      required:
+        - name
+        - strategy
+        - arguments
+        - start_date
+    PortfolioList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Portfolio'
     PortfolioPerformance:
       description: Performance results of a specific simulation
       properties:
@@ -345,30 +716,44 @@ components:
         - totalDeposited
         - totalWithdrawn
         - metrics
-    BenchmarkArgs:
+    Status:
       type: object
       properties:
-        ticker:
-          type: string
-          example: VFINX
-          description: ticker symbol to use for benchmark
-        snapToStart:
-          type: boolean
-          description: >-
-            if simulation period should snap to the first date data is available
-    PingResponse:
-      type: object
-      properties:
-        message:
-          example: API is alive
-          type: string
         status:
-          example: success
           type: string
-        time:
-          example: "2021-06-19T08:09:10.115924-05:00"
+          enum:
+            - success
+            - failure
+    StrategyInfo:
+      type: object
+      properties:
+        name:
           type: string
-      required:
-        - message
-        - status
-        - time
+        shortcode:
+          type: string
+          description: shortcode of strategy
+        description:
+          type: string
+          description: short-description of strategy
+        longDescription:
+          type: string
+          description: longer description of strategy as markdown
+        source:
+          type: string
+          description: original author of the strategy
+        version:
+          type: string
+          description: version number of strategy implementation
+          example: 1.0.0
+        arguments:
+          type: object
+          description: strategy specific arguments
+        suggestedParams:
+          type: object
+          description: optional list of recommended parameters
+        metrics:
+          $ref: '#/components/schemas/MetricBundle'
+    StrategyInfoList:
+      type: array
+      items:
+        $ref: '#/components/schemas/StrategyInfo'
