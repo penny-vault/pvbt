@@ -47,6 +47,7 @@ type StrategyInfo struct {
 	LongDescription string                       `json:"longDescription"`
 	Source          string                       `json:"source"`
 	Version         string                       `json:"version"`
+	Benchmark       string                       `json:"benchmark"`
 	Arguments       map[string]Argument          `json:"arguments"`
 	Suggested       map[string]map[string]string `json:"suggestedParams"`
 	Metrics         StrategyMetrics              `json:"metrics"`

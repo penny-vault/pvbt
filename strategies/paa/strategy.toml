@@ -3,6 +3,7 @@ shortcode = "paa"
 description = "A strategy that seeks to create an appealing alternative to a 1-yr CD while boosting returns"
 source = "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html"
 version = "1.0.0"
+benchmark = "SHY"
 
 [arguments.riskUniverse]
 name = "Risk Universe"
@@ -14,7 +15,7 @@ default = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG"
 name = "Protective Universe"
 description = "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash"
 typecode = "[]string"
-default = '["IEF"]'
+default = '["IEF", "SHY"]'
 
 [arguments.protectionFactor]
 name = "Protection Factor"
@@ -46,21 +47,21 @@ topN = "6"
 
 [suggested.PAA0]
 riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF"]'
+protectiveUniverse = '["IEF", "SHY"]'
 protectionFactor = "0"
 lookback = "12"
 topN = "6"
 
 [suggested.PAA1]
 riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF"]'
+protectiveUniverse = '["IEF", "SHY"]'
 protectionFactor = "1"
 lookback = "12"
 topN = "6"
 
 [suggested.PAA2]
 riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF"]'
+protectiveUniverse = '["IEF", "SHY"]'
 protectionFactor = "2"
 lookback = "12"
 topN = "6"

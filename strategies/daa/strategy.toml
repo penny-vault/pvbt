@@ -3,6 +3,7 @@ name = "Defensive Asset Allocation"
 shortcode = "daa"
 source = "https=//indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html"
 version = "1.0.0"
+benchmark = "VFINX"
 
 [arguments.riskUniverse]
 name = "Risk Universe"
