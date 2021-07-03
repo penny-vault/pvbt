@@ -191,7 +191,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 		for _, ticker := range paa.riskUniverse {
 			momCol := fmt.Sprintf("%s_MOM", ticker)
 			floatVal := vals[momCol].(float64)
-			if floatVal > 0 && len(sortable) < paa.topN {
+			if floatVal > 0 {
 				sortable = append(sortable, util.Pair{
 					Key:   ticker,
 					Value: floatVal,
@@ -199,8 +199,10 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 			}
 		}
 
-		sort.Sort(sortable) // sort by momentum score
-		riskRanked[*row] = sortable
+		sort.Sort(sort.Reverse(sortable)) // sort by momentum score
+
+		// limit to topN assest
+		riskRanked[*row] = sortable[0:min(len(sortable), paa.topN)]
 
 		// rank each protective asset and select max
 		sortable = make(util.PairList, 0, len(paa.protectiveUniverse))
@@ -212,7 +214,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 			})
 		}
 
-		sort.Sort(sortable) // sort by momentum score
+		sort.Sort(sort.Reverse(sortable)) // sort by momentum score
 		protectiveSelection[*row] = sortable[0].Key
 	}
 	df.Unlock()
@@ -333,7 +335,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 		col.Lock()
 		newCol := col.Copy()
 		col.Unlock()
-		newCol.Rename(fmt.Sprintf("%s Score", ticker))
+		newCol.Rename(ticker)
 		series = append(series, newCol)
 	}
 
@@ -346,10 +348,10 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 	col.Lock()
 	newCol := col.Copy()
 	col.Unlock()
-	newCol.Rename("Num Good Assets")
+	newCol.Rename("# Good")
 	series = append(series, newCol)
 
-	// add bond ffraction
+	// add bond fraction
 	colIdx, err = mom.NameToColumn("paa_bf")
 	if err != nil {
 		return nil, err
