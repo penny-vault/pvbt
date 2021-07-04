@@ -156,7 +156,7 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 	}).Info("Computing portfolio performance")
 
 	var manager data.Manager
-	if p.UserID == "system" {
+	if p.UserID == "pvuser" {
 		// System user is not in auth0 - expect an environment variable with the tiingo token to use
 		manager = data.NewManager(map[string]string{
 			"tiingo": os.Getenv("SYSTEM_TIINGO_TOKEN"),
@@ -231,6 +231,10 @@ func lastTradingDayOfYear(today time.Time, manager *data.Manager) bool {
 }
 
 func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Portfolio, perf *portfolio.Performance) {
+	if s.UserID == "pvuser" {
+		return
+	}
+
 	u, err := getUser(s.UserID)
 	if err != nil {
 		return
