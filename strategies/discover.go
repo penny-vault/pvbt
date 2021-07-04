@@ -23,7 +23,7 @@ import (
 var resources embed.FS
 
 // StrategyList List of all strategies
-var StrategyList = []strategy.StrategyInfo{}
+var StrategyList = []*strategy.StrategyInfo{}
 
 // StrategyMap Map of strategies
 var StrategyMap = make(map[string]*strategy.StrategyInfo)
@@ -88,7 +88,7 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 	strat.LongDescription = longDescription
 	strat.Factory = factory
 
-	StrategyList = append(StrategyList, strat)
+	StrategyList = append(StrategyList, &strat)
 	StrategyMap[strat.Shortcode] = &strat
 }
 
