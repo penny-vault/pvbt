@@ -362,6 +362,14 @@ components:
       scheme: bearer
       bearerFormat: JWT
   schemas:
+    Holding:
+      description: A holding in the portfolio
+      type: object
+      example:
+        ticker: VFINX
+        shares: 10
+        percentPortfolio: 1.0
+        value: 10000.0
     MetricBundle:
       description: collection of portfolio metrics
       type: object
@@ -573,8 +581,7 @@ components:
           measurements:
             description: calculation of portfolio value over time
             example:
-              - holdings: VFINX
-                justification: {}
+              - justification: {}
                 percentReturn: 0
                 riskFreeValue: 10000
                 time: 617846400
@@ -586,7 +593,7 @@ components:
                   description: >-
                     asset(s) that are held in this measurement, space separated
                     example: A AAPL
-                    type: string
+                  $ref: '#/components/schemas/Holding'
                 justification:
                   description: >-
                     per strategy specific field with information justifying the list of holdings. E.g. the adm strategy provides an object with each asset's momentum score
@@ -732,6 +739,9 @@ components:
         shortcode:
           type: string
           description: shortcode of strategy
+        benchmark:
+          type: string
+          description: preferred benchmark for strategy
         description:
           type: string
           description: short-description of strategy
