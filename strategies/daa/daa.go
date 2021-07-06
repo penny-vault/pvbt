@@ -150,14 +150,22 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 
 		// build investment map
 		targetMap := make(map[string]float64)
-		targetMap[cashAsset] = cf
+		if cf > 1.0e-5 {
+			targetMap[cashAsset] = cf
+		}
 		w := (1.0 - cf) / float64(t)
 
 		for _, asset := range riskAssets {
 			if alloc, ok := targetMap[asset]; ok {
-				targetMap[asset] = w + alloc
+				shares := w + alloc
+				if shares > 1.0e-5 {
+					targetMap[asset] = shares
+				}
 			} else {
-				targetMap[asset] = w
+				// skip 0 allocations
+				if w > 1.0e-5 {
+					targetMap[asset] = w
+				}
 			}
 		}
 

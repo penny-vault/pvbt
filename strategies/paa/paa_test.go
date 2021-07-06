@@ -114,7 +114,7 @@ var _ = Describe("PAA", func() {
 				p, err := strat.Compute(&manager)
 				Expect(err).To(BeNil())
 
-				Expect(p.Transactions).Should(HaveLen(543))
+				Expect(p.Transactions).Should(HaveLen(526))
 			})
 		})
 	})
