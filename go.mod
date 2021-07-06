@@ -38,6 +38,7 @@ require (
 	github.com/sendgrid/sendgrid-go v3.10.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/xitongsys/parquet-go v1.6.0 // indirect
+	github.com/zeebo/blake3 v0.1.1 // indirect
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e // indirect
 	golang.org/x/exp v0.0.0-20210617012816-0dc655b38382 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect

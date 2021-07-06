@@ -110,7 +110,26 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 			"Error":  err,
 		}).Error("Failed to get transaction for user")
 	}
-	updateSQL := `UPDATE portfolio_v1 SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12 WHERE id=$13`
+	updateSQL := `UPDATE portfolio_v1 SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12, performance_json=$13 WHERE id=$14`
+
+	// create JSON without transaction and measurement arrays
+	trxArray := perf.Transactions
+	measArray := perf.Measurements
+
+	perf.Transactions = []portfolio.Transaction{}
+	perf.Measurements = []portfolio.PerformanceMeasurement{}
+
+	perfJSON, err := json.Marshal(perf)
+
+	perf.Transactions = trxArray
+	perf.Measurements = measArray
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"PortfolioID": s.ID,
+			"Error":       err,
+		}).Error("could not encode performance struct as JSON")
+	}
 	_, err = trx.Exec(context.Background(),
 		updateSQL,
 		perf.YTDReturn,
@@ -125,11 +144,12 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 		perf.MetricsBundle.SharpeRatio,
 		perf.MetricsBundle.SortinoRatio,
 		perf.MetricsBundle.UlcerIndexAvg,
+		perfJSON,
 		s.ID,
 	)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"Portfolio":            s.ID,
+			"PortfolioID":          s.ID,
 			"YTDReturn":            perf.YTDReturn,
 			"CagrSinceInception":   perf.CagrSinceInception,
 			"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
@@ -141,13 +161,171 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 	}
 
 	log.WithFields(log.Fields{
-		"Portfolio":            s.ID,
+		"PortfolioID":          s.ID,
 		"YTDReturn":            perf.YTDReturn,
 		"CagrSinceInception":   perf.CagrSinceInception,
 		"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
 		"PerformanceEndDate":   time.Unix(perf.PeriodEnd, 0),
 	}).Info("Calculated portfolio performance")
 	trx.Commit(context.Background())
+}
+
+func saveTransactions(s *savedStrategy, perf *portfolio.Performance) error {
+	startTime := time.Now()
+	log.WithFields(log.Fields{
+		"NumTransactions": len(perf.Transactions),
+		"StartTime":       startTime,
+	}).Info("Saving transactions to the database")
+
+	trx, err := database.TrxForUser(s.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"UserID": s.UserID,
+			"Error":  err,
+		}).Error("Failed to get transaction for user")
+	}
+
+	sql := `INSERT INTO portfolio_transaction_v1
+			(
+				"composite_figi",
+				"event_date",
+				"justification",
+				"num_shares",
+				"portfolio_id",
+				"price_per_share",
+				"sequence_num",
+			 	"source",
+				"source_id",
+				"ticker",
+				"total_value",
+				"transaction_type"
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			ON CONFLICT ON CONSTRAINT portfolio_transaction_v1_portfolio_id_source_id_key DO NOTHING`
+
+	now := time.Now()
+	for idx, transaction := range perf.Transactions {
+		// don't save future transactions -- note, transactions must be date ordered so it's
+		// safe to bail after we see one
+		if transaction.Date.After(now) {
+			break
+		}
+
+		_, err = trx.Exec(context.Background(), sql,
+			transaction.CompositeFIGI,
+			transaction.Date,
+			transaction.Justification,
+			transaction.Shares,
+			s.ID,
+			transaction.PricePerShare,
+			idx,
+			transaction.Source,
+			transaction.SourceID,
+			transaction.Ticker,
+			transaction.TotalValue,
+			transaction.Kind,
+		)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"PortfolioID": s.ID,
+				"Source":      transaction.Source,
+				"SourceID":    transaction.SourceID,
+				"Error":       err,
+			}).Warn("could not save transaction to database")
+			trx.Rollback(context.Background())
+			return err
+		}
+	}
+	trx.Commit(context.Background())
+
+	endTime := time.Now()
+	duration := endTime.Sub(startTime)
+	log.WithFields(log.Fields{
+		"NumTransactions": len(perf.Transactions),
+		"EndTime":         endTime,
+		"Duration":        duration,
+	}).Info("Saved transactions to the database")
+
+	return nil
+}
+
+func saveMeasurements(s *savedStrategy, perf *portfolio.Performance) error {
+	startTime := time.Now()
+	log.WithFields(log.Fields{
+		"NumMeasurements": len(perf.Measurements),
+		"StartTime":       startTime,
+	}).Info("Saving measurements to the database")
+
+	trx, err := database.TrxForUser(s.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"UserID": s.UserID,
+			"Error":  err,
+		}).Error("Failed to get transaction for user")
+	}
+
+	sql := `INSERT INTO portfolio_measurement_v1
+			(
+				"event_date",
+				"holdings",
+				"justification",
+				"percent_return",
+				"portfolio_id",
+				"risk_free_value",
+				"total_deposited_to_date",
+				"total_withdrawn_to_date",
+				"value"
+			)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
+			DO UPDATE SET
+				holdings=$2,
+				justification=$3,
+				percent_return=$4,
+				risk_free_value=$6,
+				total_deposited_to_date=$7,
+				total_withdrawn_to_date=$8,
+				value=$9;`
+
+	now := time.Now()
+	for _, measurement := range perf.Measurements {
+		date := time.Unix(measurement.Time, 0)
+		// don't save future performance measurements
+		if date.After(now) {
+			break
+		}
+
+		_, err = trx.Exec(context.Background(), sql,
+			time.Unix(measurement.Time, 0),
+			measurement.Holdings,
+			measurement.Justification,
+			measurement.PercentReturn,
+			s.ID,
+			measurement.RiskFreeValue,
+			measurement.TotalDeposited,
+			measurement.TotalWithdrawn,
+			measurement.Value,
+		)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"PortfolioID": s.ID,
+				"Error":       err,
+			}).Warn("could not save measurement to database")
+			trx.Rollback(context.Background())
+			return err
+		}
+	}
+	trx.Commit(context.Background())
+
+	endTime := time.Now()
+	duration := endTime.Sub(startTime)
+	log.WithFields(log.Fields{
+		"NumMeasurements": len(perf.Measurements),
+		"EndTime":         endTime,
+		"Duration":        duration,
+	}).Info("Saved measurements to the database")
+
+	return nil
 }
 
 func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfolio.Portfolio, error) {
@@ -408,6 +586,7 @@ func main() {
 	testFlag := flag.Bool("test", false, "test the notifier and don't send notifications")
 	limitFlag := flag.Int("limit", 0, "limit the number of portfolios to process")
 	dateFlag := flag.String("date", "-1", "date to run notifier for")
+	portfolioFlag := flag.String("portfolio", "all", "run portfolio specified by id, or 'all' to run all portfolios")
 	debugFlag := flag.Bool("debug", false, "turn on debug logging")
 	flag.Parse()
 
@@ -449,34 +628,49 @@ func main() {
 	strategies.InitializeStrategyMap()
 	log.Info("Initialized strategy map")
 
+	var portfolioID uuid.UUID
+	if *portfolioFlag != "all" {
+		portfolioID, err = uuid.Parse(*portfolioFlag)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"PortfolioID": *portfolioFlag,
+				"Error":       err,
+			}).Fatal("Cannot parse portfolio ID")
+		}
+	}
+
 	// get a list of all portfolios
 	savedPortfolios := getSavedPortfolios(forDate)
 	log.WithFields(log.Fields{
 		"NumPortfolios": len(savedPortfolios),
 	}).Info("Got saved portfolios")
 	for ii, s := range savedPortfolios {
-		p, err := computePortfolioPerformance(s, forDate)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"PortfolioID": s.ID,
-				"Error":       err,
-			}).Error("Failed to compute portfolio performance")
-			continue
-		}
-		perf, err := p.CalculatePerformance(forDate)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":       err,
-				"PortfolioID": s.ID,
-				"Function":    "portfolio.CalculatePerformance",
-				"ForDate":     forDate.String(),
-			}).Error("Failed to calculate portfolio performance")
-		}
-		perf.BuildMetricsBundle()
-		updateSavedPortfolioPerformanceMetrics(s, &perf)
-		processNotifications(forDate, s, p, &perf)
-		if *limitFlag != 0 && *limitFlag >= ii {
-			break
+		if *portfolioFlag != "all" && portfolioID == s.ID {
+			p, err := computePortfolioPerformance(s, forDate)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"PortfolioID": s.ID,
+					"Error":       err,
+				}).Error("Failed to compute portfolio performance")
+				continue
+			}
+			perf, err := p.CalculatePerformance(forDate)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Error":       err,
+					"PortfolioID": s.ID,
+					"Function":    "portfolio.CalculatePerformance",
+					"ForDate":     forDate.String(),
+				}).Error("Failed to calculate portfolio performance")
+			}
+			perf.BuildMetricsBundle()
+			updateSavedPortfolioPerformanceMetrics(s, &perf)
+			saveTransactions(s, &perf)
+			saveMeasurements(s, &perf)
+			processNotifications(forDate, s, p, &perf)
+			if *limitFlag != 0 && *limitFlag >= ii {
+				break
+			}
 		}
 	}
 }

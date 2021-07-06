@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"main/database"
+	"main/portfolio"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -19,12 +20,12 @@ type PortfolioResponse struct {
 	Name               string                 `json:"name"`
 	Strategy           string                 `json:"strategy"`
 	Arguments          map[string]interface{} `json:"arguments"`
-	StartDate          int64                  `json:"start_date"`
-	YTDReturn          sql.NullFloat64        `json:"ytd_return"`
-	CAGRSinceInception sql.NullFloat64        `json:"cagr_since_inception"`
+	StartDate          int64                  `json:"startDate"`
+	YTDReturn          sql.NullFloat64        `json:"ytdReturn"`
+	CAGRSinceInception sql.NullFloat64        `json:"cagrSinceInception"`
 	Notifications      int                    `json:"notifications"`
 	Created            int64                  `json:"created"`
-	LastChanged        int64                  `json:"lastchanged"`
+	LastChanged        int64                  `json:"lastChanged"`
 }
 
 // GetPortfolio get a portfolio
@@ -43,9 +44,10 @@ func GetPortfolio(c *fiber.Ctx) error {
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"Endpoint": "GetPortfolio",
-			"Error":    err,
-			"UserID":   userID,
+			"Endpoint":    "GetPortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
 		}).Error("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
@@ -53,11 +55,39 @@ func GetPortfolio(c *fiber.Ctx) error {
 	p := PortfolioResponse{}
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
-		log.Warnf("GetPortfolio %s failed: %s", portfolioID, err)
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Warn("could not scan row from db into Performance struct")
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
 	trx.Commit(context.Background())
+	return c.JSON(p)
+}
+
+func GetPortfolioPerformance(c *fiber.Ctx) error {
+	portfolioIDStr := c.Params("id")
+	portfolioID, err := uuid.Parse(portfolioIDStr)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":       "GetPortfolioPerformance",
+			"Error":          err,
+			"PortfolioIDStr": portfolioIDStr,
+		}).Warn("failed to parse portfolio id")
+		return fiber.ErrBadRequest
+	}
+
+	// get tiingo token from jwt claims
+	jwtToken := c.Locals("user").(jwt.Token)
+	userID := jwtToken.Subject()
+
+	p, err := portfolio.LoadPerformanceFromDB(portfolioID, userID)
+	if err != nil {
+		return err
+	}
 	return c.JSON(p)
 }
 
@@ -89,7 +119,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	portfolios := []PortfolioResponse{}
+	portfolios := make([]PortfolioResponse, 0, 10)
 	for rows.Next() {
 		p := PortfolioResponse{}
 		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)

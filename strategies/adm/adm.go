@@ -28,13 +28,11 @@ import (
 )
 
 type AcceleratingDualMomentum struct {
-	inTickers     []string
-	prices        *dataframe.DataFrame
-	outTicker     string
-	riskFreeRate  *dataframe.DataFrame
-	momentum      *dataframe.DataFrame
-	dataStartTime time.Time
-	dataEndTime   time.Time
+	inTickers    []string
+	prices       *dataframe.DataFrame
+	outTicker    string
+	riskFreeRate *dataframe.DataFrame
+	momentum     *dataframe.DataFrame
 
 	// Public
 	CurrentSymbol string
@@ -102,8 +100,6 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	nrows := timeSeries.NRows(dataframe.Options{})
 	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
 	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	adm.dataStartTime = startTime
-	adm.dataEndTime = endTime
 
 	// Get risk free rate (3-mo T-bill secondary rate)
 	riskFreeRate := prices[riskFreeSymbol]

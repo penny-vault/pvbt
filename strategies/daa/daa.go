@@ -41,8 +41,6 @@ type KellersDefensiveAssetAllocation struct {
 	targetPortfolio    *dataframe.DataFrame
 	prices             *dataframe.DataFrame
 	momentum           *dataframe.DataFrame
-	dataStartTime      time.Time
-	dataEndTime        time.Time
 
 	// Public
 	CurrentSymbol string
@@ -201,19 +199,6 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 	if err != nil {
 		return err
 	}
-
-	// Get aligned start and end times
-	timeColumn, err := mergedEod.NameToColumn(data.DateIdx, dataframe.Options{})
-	if err != nil {
-		return err
-	}
-
-	timeSeries := mergedEod.Series[timeColumn]
-	nrows := timeSeries.NRows(dataframe.Options{})
-	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
-	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	daa.dataStartTime = startTime
-	daa.dataEndTime = endTime
 
 	return nil
 }

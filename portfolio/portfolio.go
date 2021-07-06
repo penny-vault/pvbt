@@ -2,21 +2,27 @@ package portfolio
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"main/data"
+	"main/database"
 	"main/dfextras"
 	"math"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
+	"github.com/zeebo/blake3"
 )
 
 const (
 	TickerName = "TICKER"
+	SourceName = "PV"
 )
 
 const (
@@ -30,9 +36,12 @@ const (
 type Transaction struct {
 	Date          time.Time              `json:"date"`
 	Ticker        string                 `json:"ticker"`
+	CompositeFIGI string                 `json:"compositeFIGI"`
 	Kind          string                 `json:"kind"`
 	PricePerShare float64                `json:"pricePerShare"`
 	Shares        float64                `json:"shares"`
+	Source        string                 `json:"source"`
+	SourceID      []byte                 `json:"sourceID"`
 	TotalValue    float64                `json:"totalValue"`
 	Justification map[string]interface{} `json:"justification"`
 }
@@ -52,23 +61,33 @@ type ReportableHolding struct {
 
 // Portfolio manage a portfolio
 type Portfolio struct {
-	Name         string
-	StartTime    time.Time
-	EndTime      time.Time
-	Transactions []Transaction
-	Holdings     map[string]float64
-	dataProxy    *data.Manager
-	securities   map[string]bool
-	priceData    map[string]*dataframe.DataFrame
+	ID                uuid.UUID
+	UserID            string
+	Name              string
+	StartDate         time.Time
+	EndDate           time.Time
+	StrategyShortcode string
+	StrategyArguments map[string]json.RawMessage
+	Notifications     int
+	Transactions      []Transaction
+	Measurements      []PerformanceMeasurement
+	Holdings          map[string]float64
+
+	// private
+	dataProxy  *data.Manager
+	securities map[string]bool
+	priceData  map[string]*dataframe.DataFrame
 }
 
 type PerformanceMeasurement struct {
-	Time          int64                  `json:"time"`
-	Value         float64                `json:"value"`
-	RiskFreeValue float64                `json:"riskFreeValue"`
-	Holdings      []ReportableHolding    `json:"holdings"`
-	PercentReturn float64                `json:"percentReturn"`
-	Justification map[string]interface{} `json:"justification"`
+	Time           int64                  `json:"time"`
+	Value          float64                `json:"value"`
+	RiskFreeValue  float64                `json:"riskFreeValue"`
+	Holdings       []ReportableHolding    `json:"holdings"`
+	PercentReturn  float64                `json:"percentReturn"`
+	TotalDeposited float64                `json:"totalDeposited"`
+	TotalWithdrawn float64                `json:"totalWithdrawn"`
+	Justification  map[string]interface{} `json:"justification"`
 }
 
 // Performance of portfolio
@@ -260,7 +279,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 	}
 
 	perf := Performance{
-		PeriodStart:  p.StartTime.Unix(),
+		PeriodStart:  p.StartDate.Unix(),
 		PeriodEnd:    through.Unix(),
 		ComputedOn:   time.Now().Unix(),
 		Transactions: p.Transactions,
@@ -272,7 +291,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		symbols = append(symbols, k)
 	}
 
-	p.dataProxy.Begin = p.StartTime
+	p.dataProxy.Begin = p.StartDate
 	p.dataProxy.End = through
 	p.dataProxy.Frequency = data.FrequencyMonthly
 
@@ -429,7 +448,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		sort.Strings(tickers)
 		holdingStr := strings.Join(tickers, " ")
 		ret := totalVal/prevVal - 1
-		duration := date.Sub(p.StartTime).Hours() / (24 * 365.25)
+		duration := date.Sub(p.StartDate).Hours() / (24 * 365.25)
 		cagrSinceInception = math.Pow(totalVal/startVal, 1.0/duration) - 1
 		prevVal = totalVal
 
@@ -553,6 +572,17 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 		if k == "$CASH" {
 			continue
 		}
+
+		if v <= 1.0e-5 {
+			log.WithFields(log.Fields{
+				"Ticker":   k,
+				"Kind":     "SellTransaction",
+				"Shares":   v,
+				"Holdings": p.Holdings,
+			}).Warn("holdings are out of sync")
+			return errors.New("holdings are out of sync, cannot rebalance portfolio")
+		}
+
 		if _, ok := target[k]; !ok {
 			t := Transaction{
 				Date:          date,
@@ -562,7 +592,19 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 				Shares:        v,
 				TotalValue:    v * priceMap[k],
 				Justification: justification,
+				Source:        SourceName,
 			}
+
+			err := computeTransactionSourceID(&t)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Error":             err,
+					"TransactionDate":   date,
+					"TransactionTicker": k,
+					"TransactionType":   SellTransaction,
+				}).Warn("couldn't compute SourceID for transaction")
+			}
+
 			sells = append(sells, t)
 		}
 	}
@@ -573,11 +615,23 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 		if holding, ok := p.Holdings[k]; ok {
 			targetDollars := investable * v
 			currentDollars := holding * priceMap[k]
-			newHoldings[k] = targetDollars / priceMap[k]
+			if (targetDollars / priceMap[k]) > 1.0e-5 {
+				newHoldings[k] = targetDollars / priceMap[k]
+			}
 			if targetDollars < currentDollars {
 				// Need to sell to target amount
 				toSellDollars := currentDollars - targetDollars
 				toSellShares := toSellDollars / priceMap[k]
+				if toSellDollars <= 1.0e-5 {
+					log.WithFields(log.Fields{
+						"Ticker": k,
+						"Kind":   "SellTransaction",
+						"Shares": toSellShares,
+						"Date":   date,
+					}).Warn("holdings are out of sync - refusing to sell 0 shares")
+					return errors.New("holdings are out of sync, cannot rebalance portfolio")
+				}
+
 				t := Transaction{
 					Date:          date,
 					Ticker:        k,
@@ -587,38 +641,95 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					TotalValue:    toSellDollars,
 					Justification: justification,
 				}
+
+				err := computeTransactionSourceID(&t)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"Error":             err,
+						"TransactionDate":   date,
+						"TransactionTicker": k,
+						"TransactionType":   SellTransaction,
+					}).Warn("couldn't compute SourceID for transaction")
+				}
+
 				sells = append(sells, t)
 			}
 			if targetDollars > currentDollars {
 				// Need to buy to target amount
 				toBuyDollars := targetDollars - currentDollars
 				toBuyShares := toBuyDollars / priceMap[k]
-				t := Transaction{
-					Date:          date,
-					Ticker:        k,
-					Kind:          BuyTransaction,
-					PricePerShare: priceMap[k],
-					Shares:        toBuyShares,
-					TotalValue:    toBuyDollars,
-					Justification: justification,
+
+				if toBuyShares <= 1.0e-5 {
+					log.WithFields(log.Fields{
+						"Ticker":     k,
+						"Kind":       "BuyTransaction",
+						"Shares":     v,
+						"TotalValue": toBuyDollars,
+						"Date":       date,
+					}).Warn("Refusing to buy 0 shares")
+				} else {
+
+					t := Transaction{
+						Date:          date,
+						Ticker:        k,
+						Kind:          BuyTransaction,
+						PricePerShare: priceMap[k],
+						Shares:        toBuyShares,
+						TotalValue:    toBuyDollars,
+						Justification: justification,
+					}
+
+					err := computeTransactionSourceID(&t)
+					if err != nil {
+						log.WithFields(log.Fields{
+							"Error":             err,
+							"TransactionDate":   date,
+							"TransactionTicker": k,
+							"TransactionType":   BuyTransaction,
+						}).Warn("couldn't compute SourceID for transaction")
+					}
+
+					buys = append(buys, t)
 				}
-				buys = append(buys, t)
 			}
 		} else {
 			// this is a new position
 			value := investable * v
 			shares := value / priceMap[k]
-			newHoldings[k] = shares
-			t := Transaction{
-				Date:          date,
-				Ticker:        k,
-				Kind:          BuyTransaction,
-				PricePerShare: priceMap[k],
-				Shares:        shares,
-				TotalValue:    value,
-				Justification: justification,
+
+			if shares <= 1.0e-5 {
+				log.WithFields(log.Fields{
+					"Ticker":     k,
+					"Kind":       "BuyTransaction",
+					"Shares":     v,
+					"TotalValue": value,
+					"Date":       date,
+				}).Warn("Refusing to buy 0 shares")
+			} else {
+				newHoldings[k] = shares
+
+				t := Transaction{
+					Date:          date,
+					Ticker:        k,
+					Kind:          BuyTransaction,
+					PricePerShare: priceMap[k],
+					Shares:        shares,
+					TotalValue:    value,
+					Justification: justification,
+				}
+
+				err := computeTransactionSourceID(&t)
+				if err != nil {
+					log.WithFields(log.Fields{
+						"Error":             err,
+						"TransactionDate":   date,
+						"TransactionTicker": k,
+						"TransactionType":   BuyTransaction,
+					}).Warn("couldn't compute SourceID for transaction")
+				}
+
+				buys = append(buys, t)
 			}
-			buys = append(buys, t)
 		}
 	}
 	p.Transactions = append(p.Transactions, sells...)
@@ -643,7 +754,10 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 //
 // TODO
 
-// TargetPortfolio
+// TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
+//   `target` must have a column named `data.DateIdx` (DATE) and either a string column
+//   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
+//   the percentages of portfolio to hold
 func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame) error {
 	p.Transactions = []Transaction{}
 	timeIdx, err := target.NameToColumn(data.DateIdx)
@@ -654,8 +768,8 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	timeSeries := target.Series[timeIdx]
 
 	// Set time range of portfolio
-	p.StartTime = timeSeries.Value(0).(time.Time)
-	p.EndTime = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
+	p.StartDate = timeSeries.Value(0).(time.Time)
+	p.EndDate = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
 
 	p.securities = make(map[string]bool)
 	tickerSeriesIdx, err := target.NameToColumn(TickerName)
@@ -734,7 +848,7 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		if first {
 			first = false
 			// Create initial deposit
-			p.Transactions = append(p.Transactions, Transaction{
+			t := Transaction{
 				Date:          date,
 				Ticker:        "$CASH",
 				Kind:          DepositTransaction,
@@ -742,7 +856,17 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 				Shares:        initial,
 				TotalValue:    initial,
 				Justification: justification,
-			})
+			}
+			err := computeTransactionSourceID(&t)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Error":             err,
+					"TransactionDate":   date,
+					"TransactionTicker": "$CASH",
+					"TransactionType":   DepositTransaction,
+				}).Warn("couldn't compute SourceID for transaction")
+			}
+			p.Transactions = append(p.Transactions, t)
 			p.Holdings = map[string]float64{
 				"$CASH": initial,
 			}
@@ -757,16 +881,160 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 			rebalance = symbol.(map[string]float64)
 		}
 
-		p.Transactions = append(p.Transactions, Transaction{
+		t := Transaction{
 			Date:          date,
 			Kind:          MarkerTransaction,
 			Justification: justification,
-		})
+		}
+		err := computeTransactionSourceID(&t)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":           err,
+				"TransactionType": MarkerTransaction,
+			}).Warn("couldn't compute SourceID for transaction")
+		}
+
+		p.Transactions = append(p.Transactions, t)
 		err = p.RebalanceTo(date, rebalance, justification)
 		if err != nil {
 			return err
 		}
 	}
 
+	return nil
+}
+
+func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
+	portfolioSQL := `SELECT performance_json FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolioPerformance",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Error("unable to get database transaction for user")
+		return nil, fiber.ErrServiceUnavailable
+	}
+
+	p := Performance{}
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p)
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolioPerformance",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Warn("GetPortfolioPerformance failed")
+		trx.Rollback(context.Background())
+		return nil, fiber.ErrNotFound
+	}
+
+	// Get transactions
+	transactionSQL := "SELECT event_date, ticker, transaction_type, price_per_share, num_shares, total_value, justification FROM portfolio_transaction_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY sequence_num"
+	rows, err := trx.Query(context.Background(), transactionSQL, portfolioID, userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolioPerformance:Transaction",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+			"Query":       transactionSQL,
+		}).Warn("GetPortfolioPerformance failed")
+		trx.Rollback(context.Background())
+		return nil, fiber.ErrInternalServerError
+	}
+
+	transactions := make([]Transaction, 0, 1000)
+	for rows.Next() {
+		t := Transaction{}
+		err := rows.Scan(&t.Date, &t.Ticker, &t.Kind, &t.PricePerShare, &t.Shares, &t.TotalValue, &t.Justification)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Endpoint":    "GetPortfolioPerformance:Transaction-Iterator",
+				"Error":       err,
+				"PortfolioID": portfolioID,
+				"UserID":      userID,
+				"Query":       transactionSQL,
+			}).Warn("GetPortfolioPerformance failed")
+			trx.Rollback(context.Background())
+			return nil, fiber.ErrInternalServerError
+		}
+		transactions = append(transactions, t)
+	}
+	p.Transactions = transactions
+
+	// load measurements
+	measurementSQL := "SELECT event_date, value, risk_free_value, holdings, percent_return, justification FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	rows, err = trx.Query(context.Background(), measurementSQL, portfolioID, userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolioPerformance:Measurement",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+			"Query":       transactionSQL,
+		}).Warn("GetPortfolioPerformance failed")
+		trx.Rollback(context.Background())
+		return nil, fiber.ErrInternalServerError
+	}
+
+	measurements := make([]PerformanceMeasurement, 0, 1000)
+	for rows.Next() {
+		m := PerformanceMeasurement{}
+		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.PercentReturn, &m.Justification)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Endpoint":    "GetPortfolioPerformance:Measurement-Iterator",
+				"Error":       err,
+				"PortfolioID": portfolioID,
+				"UserID":      userID,
+				"Query":       transactionSQL,
+			}).Warn("GetPortfolioPerformance failed")
+			trx.Rollback(context.Background())
+			return nil, fiber.ErrInternalServerError
+		}
+		measurements = append(measurements, m)
+	}
+	p.Measurements = measurements
+
+	return &p, nil
+}
+
+// Private API
+
+// computeTransactionSourceID calculates a 16-byte blake3 hash using the date, source,
+//   composite figi, ticker, kind, price per share, shares, and total value
+func computeTransactionSourceID(t *Transaction) error {
+	h := blake3.New()
+
+	// Date as UTC unix timestamp (second precision)
+	// NOTE: casting to uint64 doesn't change the sign bit here
+	d, err := t.Date.UTC().MarshalText()
+	if err != nil {
+		return err
+	}
+	h.Write(d)
+
+	h.Write([]byte(t.Source))
+	h.Write([]byte(t.CompositeFIGI))
+	h.Write([]byte(t.Ticker))
+	h.Write([]byte(t.Kind))
+	h.Write([]byte(fmt.Sprintf("%.5f", t.PricePerShare)))
+	h.Write([]byte(fmt.Sprintf("%.5f", t.Shares)))
+	h.Write([]byte(fmt.Sprintf("%.5f", t.TotalValue)))
+
+	digest := h.Digest()
+	buf := make([]byte, 16)
+	n, err := digest.Read(buf)
+	if err != nil {
+		return err
+	}
+	if n != 16 {
+		return errors.New("generate hash failed -- couldn't read 16 bytes from digest")
+	}
+
+	t.SourceID = buf
 	return nil
 }

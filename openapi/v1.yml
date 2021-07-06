@@ -124,7 +124,7 @@ paths:
                   - VFINX
                   - SCZ
                 outTicker: VUSTX
-                start_date: 315532800
+                startDate: 315532800
       responses:
         "200":
           description: OK
@@ -141,7 +141,7 @@ paths:
                     - VFINX
                     - SCZ
                   outTicker: VUSTX
-                start_date: 315532800
+                startDate: 315532800
         "400":
           description: Bad parameters
         "401":
@@ -216,11 +216,11 @@ paths:
                     - VFINX
                     - SCZ
                   outTicker: VUSTX
-                start_date: 315532800
-                ytd_return:
+                startDate: 315532800
+                ytdReturn:
                   Float64: 0.32
                   Valid: true
-                cagr_since_inception:
+                cagrSinceInception:
                   Float64: 0.14323
                   Valid: true
                 notifications: 4113
@@ -510,11 +510,11 @@ components:
             - VFINX
             - SCZ
           outTicker: VUSTX
-        start_date: 315532800
-        ytd_return:
+        startDate: 315532800
+        ytdReturn:
           Float64: 0
           Valid: false
-        cagr_since_inception:
+        cagrSinceInception:
           Float64: 0
           Valid: false
         notifications: 4113
@@ -534,31 +534,31 @@ components:
         arguments:
           type: object
           description: strategy specific arguments
-        start_date:
+        startDate:
           type: number
           description: >-
             date of first transaction in portfolio as number of seconds
             since Jan 1, 1970
-        ytd_return:
+        ytdReturn:
           $ref: '#/components/schemas/NullableFloat'
           description: percent return YTD of portfolio
-        cagr_since_inception:
+        cagrSinceInception:
           $ref: '#/components/schemas/NullableFloat'
-          description: Compound annual growth rate (CAGR) of portfolio since start_date
+          description: Compound annual growth rate (CAGR) of portfolio since startDate
         notifications:
           type: number
           description: integer describing which notifications are enabled for the portoflio
         created:
           type: number
           description: unix timestamp of when portfolio was created
-        lastchanged:
+        lastChanged:
           type: number
           description: unix timestamp of when portfolio was last modified
       required:
         - name
         - strategy
         - arguments
-        - start_date
+        - startDate
     PortfolioList:
       type: array
       items:

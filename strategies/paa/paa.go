@@ -43,8 +43,6 @@ type KellersProtectiveAssetAllocation struct {
 	topN               int
 	lookback           int
 	prices             *dataframe.DataFrame
-	dataStartTime      time.Time
-	dataEndTime        time.Time
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
@@ -116,19 +114,6 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(manager *data.Man
 	if err != nil {
 		return err
 	}
-
-	// Get aligned start and end times
-	timeColumn, err := mergedEod.NameToColumn(data.DateIdx, dataframe.Options{})
-	if err != nil {
-		return err
-	}
-
-	timeSeries := mergedEod.Series[timeColumn]
-	nrows := timeSeries.NRows(dataframe.Options{})
-	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
-	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	paa.dataStartTime = startTime
-	paa.dataEndTime = endTime
 
 	return nil
 }
@@ -301,8 +286,10 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 
 		targetMap := make(map[string]float64)
 
-		for _, asset := range riskAssets {
-			targetMap[asset.Key] = riskAssetsEqualWeightPercentage
+		if riskAssetsEqualWeightPercentage > 1.0e-5 {
+			for _, asset := range riskAssets {
+				targetMap[asset.Key] = riskAssetsEqualWeightPercentage
+			}
 		}
 
 		// allocate 100% of bond fraction to protective asset with highest momentum score
