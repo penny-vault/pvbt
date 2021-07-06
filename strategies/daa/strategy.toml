@@ -2,7 +2,7 @@ description = 'A strategy that has a built-in crash protection that looks at the
 name = "Defensive Asset Allocation"
 shortcode = "daa"
 source = "https=//indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html"
-version = "1.0.0"
+version = "1.0.1"
 benchmark = "VFINX"
 
 [arguments.riskUniverse]
