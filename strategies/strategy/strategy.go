@@ -25,18 +25,18 @@ type Argument struct {
 // StrategyMetrics collection of strategy metrics that should be regularly updated
 type StrategyMetrics struct {
 	ID                 uuid.UUID       `json:"id"`
-	YTDReturn          sql.NullFloat64 `json:"ytd_return"`
-	CagrSinceInception sql.NullFloat64 `json:"cagr_since_inception"`
-	CagrThreeYr        sql.NullFloat64 `json:"cagr_3yr"`
-	CagrFiveYr         sql.NullFloat64 `json:"cagr_5yr"`
-	CagrTenYr          sql.NullFloat64 `json:"cagr_10yr"`
-	StdDev             sql.NullFloat64 `json:"std_dev"`
-	DownsideDeviation  sql.NullFloat64 `json:"downside_deviation"`
-	MaxDrawDown        sql.NullFloat64 `json:"max_draw_down"`
-	AvgDrawDown        sql.NullFloat64 `json:"avg_draw_down"`
-	SharpeRatio        sql.NullFloat64 `json:"sharpe_ratio"`
-	SortinoRatio       sql.NullFloat64 `json:"sortino_ratio"`
-	UlcerIndex         sql.NullFloat64 `json:"ulcer_index"`
+	YTDReturn          sql.NullFloat64 `json:"ytdReturn"`
+	CagrSinceInception sql.NullFloat64 `json:"cagrSinceInception"`
+	CagrThreeYr        sql.NullFloat64 `json:"cagr3yr"`
+	CagrFiveYr         sql.NullFloat64 `json:"cagr5yr"`
+	CagrTenYr          sql.NullFloat64 `json:"cagr10yr"`
+	StdDev             sql.NullFloat64 `json:"stdDev"`
+	DownsideDeviation  sql.NullFloat64 `json:"downsideDeviation"`
+	MaxDrawDown        sql.NullFloat64 `json:"maxDrawDown"`
+	AvgDrawDown        sql.NullFloat64 `json:"avgDrawDown"`
+	SharpeRatio        sql.NullFloat64 `json:"sharpeRatio"`
+	SortinoRatio       sql.NullFloat64 `json:"sortinoRatio"`
+	UlcerIndex         sql.NullFloat64 `json:"ulcerIndex"`
 }
 
 // StrategyInfo information about a strategy
