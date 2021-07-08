@@ -177,7 +177,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).To(BeNil())
 				Expect(perf.Measurements).Should(HaveLen(35))
 				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1517374800,
+					Time:          1517432400,
 					Value:         10000,
 					RiskFreeValue: 10000,
 					Holdings: []portfolio.ReportableHolding{
@@ -192,9 +192,9 @@ var _ = Describe("Portfolio", func() {
 				}))
 
 				Expect(perf.Measurements[24]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1580446800,
+					Time:          1580504400,
 					Value:         11126.332313770672,
-					RiskFreeValue: 10407.579998915518,
+					RiskFreeValue: 10408.532279756642,
 					Holdings: []portfolio.ReportableHolding{
 						{
 							Ticker:           "VFINX",
@@ -208,9 +208,9 @@ var _ = Describe("Portfolio", func() {
 				}))
 
 				Expect(perf.Measurements[34]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1606712400,
+					Time:          1606770000,
 					Value:         12676.603580175803,
-					RiskFreeValue: 10426.84579128732,
+					RiskFreeValue: 10426.584603075284,
 					Holdings: []portfolio.ReportableHolding{
 						{
 							Ticker:           "VFINX",
@@ -234,23 +234,23 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions).To(HaveLen(11))
 
 				// First transaction
-				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
 
 				// marker transaction
-				Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[1].Kind).To(Equal(portfolio.MarkerTransaction))
 
 				// buy of VFINX
-				Expect(p.Transactions[2].Date).To(Equal(time.Date(2018, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[2].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[2].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[2].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[2].Shares).Should(BeNumerically("~", 40.47, 1e-2))
 				Expect(p.Transactions[2].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
 
 				// Sell transaction should be a Sell of VFINX
-				Expect(p.Transactions[4].Date).To(Equal(time.Date(2019, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[4].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[4].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[4].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[4].Shares).Should(BeNumerically("~", 30.349, 1e-2))
@@ -264,21 +264,21 @@ var _ = Describe("Portfolio", func() {
 					vustxIdx = 5
 					pridxIdx = 6
 				}
-				Expect(p.Transactions[pridxIdx].Date).To(Equal(time.Date(2019, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[pridxIdx].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[pridxIdx].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[pridxIdx].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[pridxIdx].Shares).Should(BeNumerically("~", 86.5085, 1e-2))
 				Expect(p.Transactions[pridxIdx].TotalValue).Should(BeNumerically("~", 4877.1812, 1e-2))
 
 				// Buy VUSTX
-				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2019, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vustxIdx].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[vustxIdx].Ticker).To(Equal("VUSTX"))
 				Expect(p.Transactions[vustxIdx].Shares).Should(BeNumerically("~", 233.01898, 1e-2))
 				Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2438.5906, 1e-2))
 
 				// marker transaction
-				Expect(p.Transactions[7].Date).To(Equal(time.Date(2020, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[7].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[7].Kind).To(Equal(portfolio.MarkerTransaction))
 
 				// Sell VUSTX
@@ -289,21 +289,21 @@ var _ = Describe("Portfolio", func() {
 					vfinxIdx = 8
 					vustxIdx = 9
 				}
-				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2020, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vustxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vustxIdx].Ticker).To(Equal("VUSTX"))
 				Expect(p.Transactions[vustxIdx].Shares).Should(BeNumerically("~", 233.01898, 1e-2))
 				Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2971.2879, 1e-2))
 
 				// Sell VFINX
-				Expect(p.Transactions[vfinxIdx].Date).To(Equal(time.Date(2020, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[vfinxIdx].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vfinxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vfinxIdx].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[vfinxIdx].Shares).Should(BeNumerically("~", 10.11637, 1e-2))
 				Expect(p.Transactions[vfinxIdx].TotalValue).Should(BeNumerically("~", 2963.7546, 1e-2))
 
 				// Buy PRIDX
-				Expect(p.Transactions[10].Date).To(Equal(time.Date(2020, 01, 31, 0, 0, 0, 0, tz)))
+				Expect(p.Transactions[10].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[10].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[10].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[10].Shares).Should(BeNumerically("~", 92.2913, 1e-2))
@@ -317,7 +317,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).To(BeNil())
 				Expect(perf.Measurements).Should(HaveLen(35))
 				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1517374800,
+					Time:          1517432400,
 					Value:         10000,
 					RiskFreeValue: 10000,
 					Holdings: []portfolio.ReportableHolding{
@@ -332,9 +332,9 @@ var _ = Describe("Portfolio", func() {
 				}))
 
 				Expect(perf.Measurements[24]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1580446800,
+					Time:          1580504400,
 					Value:         11126.332313770672,
-					RiskFreeValue: 10407.579998915518,
+					RiskFreeValue: 10408.532279756642,
 					Holdings: []portfolio.ReportableHolding{
 						{
 							Ticker:           "VFINX",
@@ -348,9 +348,9 @@ var _ = Describe("Portfolio", func() {
 				}))
 
 				Expect(perf.Measurements[34]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:          1606712400,
+					Time:          1606770000,
 					Value:         12676.603580175803,
-					RiskFreeValue: 10426.84579128732,
+					RiskFreeValue: 10426.584603075284,
 					Holdings: []portfolio.ReportableHolding{
 						{
 							Ticker:           "VFINX",

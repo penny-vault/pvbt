@@ -119,14 +119,14 @@ var _ = Describe("Adm", func() {
 				Expect(err).To(BeNil())
 				Expect(strat.CurrentSymbol).To(Equal("PRIDX"))
 
-				var begin int64 = 617860800
+				var begin int64 = 617918400
 				Expect(perf.PeriodStart).To(Equal(begin))
 
 				var end int64 = 1609477200
 				Expect(perf.PeriodEnd).To(Equal(end))
 				Expect(perf.Measurements).Should(HaveLen(379))
 				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  617860800,
+					Time:  617918400,
 					Value: 10000,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -144,7 +144,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[100]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  880693200,
+					Time:  880750800,
 					Value: 42408.60298101431,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -154,7 +154,7 @@ var _ = Describe("Adm", func() {
 							Value:            42408.60298101431,
 						},
 					},
-					RiskFreeValue: 15173.981586783602,
+					RiskFreeValue: 15177.26344096807,
 					PercentReturn: 0.045985060690943325,
 					Justification: map[string]interface{}{
 						"VFINX Score": 6.840593309526736,
@@ -162,7 +162,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[200]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1143781200,
+					Time:  1143838800,
 					Value: 343579.75074944284,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -172,7 +172,7 @@ var _ = Describe("Adm", func() {
 							Value:            343579.75074944284,
 						},
 					},
-					RiskFreeValue: 19938.252280594555,
+					RiskFreeValue: 19949.19576487317,
 					PercentReturn: 0.06929347826087029,
 					Justification: map[string]interface{}{
 						"VFINX Score": 2.734696874619626,
@@ -180,7 +180,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[300]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1406779200,
+					Time:  1406836800,
 					Value: 1.1502482646161707e+06,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -190,7 +190,7 @@ var _ = Describe("Adm", func() {
 							Value:            1.1502482646161707e+06,
 						},
 					},
-					RiskFreeValue: 21966.917804088513,
+					RiskFreeValue: 21980.61683825629,
 					PercentReturn: -0.01388044019244239,
 					Justification: map[string]interface{}{
 						"VFINX Score": 3.6407964883074544,
@@ -199,7 +199,7 @@ var _ = Describe("Adm", func() {
 				}))
 
 				Expect(perf.Measurements[378]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1611896400,
+					Time:  1611954000,
 					Value: 3.279045827906852e+06,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -209,7 +209,7 @@ var _ = Describe("Adm", func() {
 							Value:            3.279045827906852e+06,
 						},
 					},
-					RiskFreeValue: 23244.597277008164,
+					RiskFreeValue: 23263.159737958395,
 					PercentReturn: 0.027872645147074993,
 					Justification: map[string]interface{}{
 						"VFINX Score": 11.242040896256247,
