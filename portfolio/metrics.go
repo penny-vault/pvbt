@@ -194,12 +194,13 @@ func (perf *Performance) OneWeekReturn(forDate time.Time, p *Portfolio) float64 
 
 // OneMonthReturn get one month return from performance measurement
 func (perf *Performance) OneMonthReturn(forDate time.Time) float64 {
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	value := perf.Measurements
 	sz := len(value)
 	for ii := sz - 1; ii >= 0; ii-- {
 		dt := time.Unix(value[ii].Time, 0)
 		year, month, day := dt.Date()
-		dt = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		dt = time.Date(year, month, day, 0, 0, 0, 0, tz)
 		if forDate.Equal(dt) {
 			return value[ii].PercentReturn
 		}

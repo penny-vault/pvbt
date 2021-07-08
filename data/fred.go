@@ -52,12 +52,17 @@ func (f fred) GetDataForPeriod(symbol string, frequency string,
 		return nil, err
 	}
 
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
 		DictateDataType: map[string]interface{}{
 			DateIdx: imports.Converter{
 				ConcreteType: time.Time{},
 				ConverterFunc: func(in interface{}) (interface{}, error) {
-					return time.Parse("2006-01-02", in.(string))
+					return time.ParseInLocation("2006-01-02", in.(string), tz)
 				},
 			},
 			symbol: imports.Converter{

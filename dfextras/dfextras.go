@@ -3,11 +3,23 @@ package dfextras
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
 	"github.com/rocketlaunchr/dataframe-go"
 )
+
+const MaxUint64 = ^uint64(0)
+const MaxInt64 = int64(MaxUint64 >> 1)
+const MinInt64 = -MaxInt64 - 1
+
+func abs(n time.Duration) time.Duration {
+	y := n >> 63
+	return (n ^ y) - y
+}
 
 // Collection of helpers make it easier to work on dataframes
 
@@ -98,23 +110,55 @@ func DropNA(ctx context.Context, sdf interface{}, opts ...dataframe.FilterOption
 }
 
 // Find row with value
-func FindTime(ctx context.Context, df *dataframe.DataFrame, searchVal time.Time, col string) (map[interface{}]interface{}, error) {
+func FindTime(df *dataframe.DataFrame, searchVal time.Time, col string) map[interface{}]interface{} {
 	iterator := df.ValuesIterator()
 	for {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-
 		row, val, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 
 		if val[col].(time.Time).Equal(searchVal) {
-			return val, nil
+			return val
 		}
 	}
-	return nil, nil
+	return nil
+}
+
+// FindNearestTime locates the row with the time closest to timeVal, assuming that the
+// input dataframe is sorted in ascending order. Returns nil if there is not a value
+// within at least maxDistance
+func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, maxDistance time.Duration) map[interface{}]interface{} {
+	iterator := df.ValuesIterator()
+	lastDistance := time.Duration(MaxInt64)
+	var lastRow map[interface{}]interface{} = nil
+	for {
+
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		rowTime := val[col].(time.Time)
+		distance := abs(rowTime.Sub(timeVal))
+
+		if lastDistance < distance {
+			if lastDistance <= maxDistance {
+				return lastRow
+			} else {
+				return nil
+			}
+		}
+
+		lastRow = val
+		lastDistance = distance
+	}
+
+	if lastDistance <= maxDistance {
+		return lastRow
+	} else {
+		return nil
+	}
 }
 
 // IndexOf value v in series
@@ -145,7 +189,7 @@ func IndexOf(ctx context.Context, searchVal time.Time, series dataframe.Series, 
 			break
 		}
 
-		if searchVal == val.(time.Time) {
+		if searchVal.Equal(val.(time.Time)) {
 			return *row
 		}
 	}
@@ -211,7 +255,7 @@ func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame
 	for ii := range dfs {
 		jj, err := dfs[ii].NameToColumn(timeAxisName, dontLock)
 		if err != nil {
-			return nil, errors.New("All dataframes must contain the time axis")
+			return nil, errors.New("all dataframes must contain the time axis")
 		}
 
 		timeSeries := dfs[ii].Series[jj]
@@ -259,7 +303,7 @@ func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame
 	// build series, using math.NaN to fill non-value areas
 	series := []dataframe.Series{newTimeAxis}
 	for ii := range dfs {
-		timeAxisColumn, err := dfs[ii].NameToColumn(timeAxisName)
+		timeAxisColumn, _ := dfs[ii].NameToColumn(timeAxisName)
 		timeSeries := dfs[ii].Series[timeAxisColumn]
 		// calculate num to add to beginning and end of df
 		iterator := newTimeAxis.ValuesIterator()
@@ -294,7 +338,7 @@ func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame
 			newDf.Append(&dataframe.Options{}, blankRow...)
 		}
 
-		err = newDf.RemoveSeries(timeAxisName)
+		err := newDf.RemoveSeries(timeAxisName)
 		if err != nil {
 			return nil, err
 		}
@@ -325,7 +369,7 @@ func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*datafra
 	for ii := range dfs {
 		jj, err := dfs[ii].NameToColumn(timeAxisName, dontLock)
 		if err != nil {
-			return nil, errors.New("All dataframes must contain the time axis")
+			return nil, errors.New("all dataframes must contain the time axis")
 		}
 
 		timeSeries := dfs[ii].Series[jj]
@@ -357,6 +401,10 @@ func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*datafra
 	for ii := range dfs {
 		newDf, err := TimeAlign(ctx, dfs[ii], timeAxisMap[ii], startTime, endTime)
 		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":  err,
+				"Method": "MergeAndTimeAlign:TimeAlign",
+			}).Error("time align failed")
 			return nil, err
 		}
 
@@ -428,7 +476,7 @@ func TimeAlign(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int,
 	endIdx := IndexOf(ctx, endTime, timeSeries, true)
 
 	if startIdx == -1 || endIdx == -1 {
-		return nil, errors.New("dataframes do not overlap")
+		return nil, fmt.Errorf("dataframes do not overlap. startIdx=%d  endIdx=%d", startIdx, endIdx)
 	}
 
 	r := dataframe.Range{

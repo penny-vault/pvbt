@@ -104,6 +104,11 @@ func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, 
 		return time.Time{}, err
 	}
 
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		return time.Time{}, err
+	}
+
 	if len(jsonResp) > 0 {
 		dtParts := strings.Split(jsonResp[0].Date, "T")
 		if len(dtParts) == 0 {
@@ -114,9 +119,9 @@ func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, 
 				"DateStr":   jsonResp[0].Date,
 				"Error":     err,
 			}).Error("Invalid date format")
-			return time.Time{}, errors.New("Invalid date format")
+			return time.Time{}, errors.New("invalid date format")
 		}
-		lastDay, err := time.Parse("2006-01-02", dtParts[0])
+		lastDay, err := time.ParseInLocation("2006-01-02", dtParts[0], tz)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Function":   "data/tiingo.go:LastTradingDay",
@@ -131,7 +136,7 @@ func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, 
 		return lastDay, nil
 	}
 
-	return time.Time{}, errors.New("No data returned")
+	return time.Time{}, errors.New("no data returned")
 }
 
 // LastTradingDayOfWeek return the last trading day of the week
@@ -239,12 +244,22 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 		},
 	}
 
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		return nil, err
+	}
+
 	res, err := imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
 		DictateDataType: map[string]interface{}{
 			"date": imports.Converter{
 				ConcreteType: time.Time{},
 				ConverterFunc: func(in interface{}) (interface{}, error) {
-					return time.Parse("2006-01-02", in.(string))
+					dt, err := time.ParseInLocation("2006-01-02", in.(string), tz)
+					if err != nil {
+						return nil, err
+					}
+					dt = dt.Add(time.Hour * 16)
+					return dt, nil
 				},
 			},
 			"open":      floatConverter,
@@ -259,6 +274,10 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 			"adjVolume": floatConverter,
 		},
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	err = nil
 	var timeSeries dataframe.Series

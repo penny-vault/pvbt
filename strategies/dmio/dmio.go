@@ -114,9 +114,6 @@ type DualMomentumInOut struct {
 
 	isBull bool
 
-	dataStartTime time.Time
-	dataEndTime   time.Time
-
 	// Public
 	CurrentSymbol string
 }
@@ -208,19 +205,6 @@ func (dmio *DualMomentumInOut) downloadPriceData(manager *data.Manager) error {
 	if err != nil {
 		return err
 	}
-
-	// Get aligned start and end times
-	timeColumn, err := mergedEod.NameToColumn(data.DateIdx, dataframe.Options{})
-	if err != nil {
-		return err
-	}
-
-	timeSeries := mergedEod.Series[timeColumn]
-	nrows := timeSeries.NRows(dataframe.Options{})
-	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
-	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	dmio.dataStartTime = startTime
-	dmio.dataEndTime = endTime
 
 	return nil
 }

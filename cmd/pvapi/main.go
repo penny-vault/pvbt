@@ -75,7 +75,8 @@ func main() {
 	strategies.InitializeStrategyMap()
 
 	// Get strategy metrics
-	scheduler := gocron.NewScheduler(time.UTC)
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	scheduler := gocron.NewScheduler(tz)
 	scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb)
 	scheduler.StartAsync()
 

@@ -94,6 +94,8 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+
 	log.Info("refreshing portfolio metrics")
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
@@ -152,7 +154,7 @@ func LoadStrategyMetricsFromDb() {
 				return
 			}
 			portfolioSQL := `INSERT INTO portfolio_v1 ("id", "user_id", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
-			_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, "pvuser", strat.Name, strat.Shortcode, string(arguments), time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC))
+			_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, "pvuser", strat.Name, strat.Shortcode, string(arguments), time.Date(1980, 1, 1, 0, 0, 0, 0, tz))
 			if err != nil {
 				trx.Rollback(context.Background())
 				log.WithFields(log.Fields{

@@ -16,23 +16,25 @@ var _ = Describe("Dfextras", func() {
 		df1 *dataframe.DataFrame
 		df2 *dataframe.DataFrame
 		df3 *dataframe.DataFrame
+		tz  *time.Location
 	)
 
 	BeforeEach(func() {
+		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
 		series1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 5}, []float64{1.0, 2.0, 3.0})
 		df1 = dataframe.NewDataFrame(series1)
 		tSeries1 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
-			time.Date(1982, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1983, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1984, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1985, time.July, 27, 0, 0, 0, 0, time.UTC),
+			time.Date(1982, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1983, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1984, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1985, time.July, 27, 0, 0, 0, 0, tz),
 		})
 		fSeries1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 4}, []float64{1.0, 2.0, 3.0, 4.0})
 		tSeries2 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
-			time.Date(1984, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1985, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1986, time.July, 27, 0, 0, 0, 0, time.UTC),
-			time.Date(1987, time.July, 27, 0, 0, 0, 0, time.UTC),
+			time.Date(1984, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1985, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1986, time.July, 27, 0, 0, 0, 0, tz),
+			time.Date(1987, time.July, 27, 0, 0, 0, 0, tz),
 		})
 		fSeries2 := fSeries1.Copy()
 		fSeries2.Rename("col2")
@@ -60,12 +62,12 @@ var _ = Describe("Dfextras", func() {
 				timeAxisIdx, err := newDf.NameToColumn(data.DateIdx)
 				timeAxis := newDf.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
-				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(1982, time.July, 27, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(1983, time.July, 27, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(1984, time.July, 27, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(3).(time.Time)).Should(Equal(time.Date(1985, time.July, 27, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(4).(time.Time)).Should(Equal(time.Date(1986, time.July, 27, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(5).(time.Time)).Should(Equal(time.Date(1987, time.July, 27, 0, 0, 0, 0, time.UTC)))
+				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(1982, time.July, 27, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(1983, time.July, 27, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(1984, time.July, 27, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(3).(time.Time)).Should(Equal(time.Date(1985, time.July, 27, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(4).(time.Time)).Should(Equal(time.Date(1986, time.July, 27, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(5).(time.Time)).Should(Equal(time.Date(1987, time.July, 27, 0, 0, 0, 0, tz)))
 
 				// Confirm that col1 has all the expected values
 				col1Idx, err := newDf.NameToColumn("col1")

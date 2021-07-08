@@ -36,7 +36,16 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	var startDate time.Time
 	var endDate time.Time
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Timezone": "America/New_York",
+			"Error":    err,
+		}).Warn("Could not load timezone")
+		return fiber.ErrInternalServerError
+	}
+
+	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Function":     "handler/strategy.go:RunStrategy",
@@ -51,10 +60,10 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	if endDateStr == "now" {
 		endDate = time.Now()
 		year, month, day := endDate.Date()
-		endDate = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		endDate = time.Date(year, month, day, 0, 0, 0, 0, tz)
 	} else {
 		var err error
-		endDate, err = time.Parse("2006-01-02", endDateStr)
+		endDate, err = time.ParseInLocation("2006-01-02", endDateStr, tz)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Function":     "handler/strategy.go:RunStrategy",

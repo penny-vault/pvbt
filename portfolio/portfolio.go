@@ -175,6 +175,9 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 	values := []*PerformanceMeasurement{}
 	currHoldings := holdings[s]
 	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
+
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
@@ -182,7 +185,7 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 		}
 		date := quotes[data.DateIdx].(time.Time)
 		year, month, day := date.Date()
-		date = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		date = time.Date(year, month, day, 0, 0, 0, 0, tz)
 
 		if v, ok := holdings[date]; ok {
 			currHoldings = v
@@ -516,10 +519,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	for k, v := range p.Holdings {
 		if k != "$CASH" {
 			eod := p.priceData[k]
-			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
-			if err != nil {
-				return err
-			}
+			res := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24)
 
 			var price float64
 			if tmp, ok := res[k]; ok {
@@ -541,10 +541,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	for k := range target {
 		if _, ok := priceMap[k]; !ok {
 			eod := p.priceData[k]
-			res, err := dfextras.FindTime(context.TODO(), eod, date, data.DateIdx)
-			if err != nil {
-				return err
-			}
+			res := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24)
 
 			var price float64
 			if tmp, ok := res[k]; ok {
@@ -843,6 +840,18 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 			} else {
 				justification[idx] = v
 			}
+		}
+
+		// HACK - if the date is Midnight adjust to market close (i.e. 4pm EST)
+		// This should really be set correctly for the day. The problem is if the
+		// transaction is on a day where the market closes early (either because of
+		// a holiday or because a "circuit-breaker" threshold was reached) we do
+		// not have a reliable datasource that tells us the time the market closed.
+		//
+		// Generally speaking getting the time slightly off here is immaterial so this
+		// is an OK hack
+		if date.Hour() == 0 && date.Minute() == 0 && date.Second() == 0 {
+			date = date.Add(time.Hour * 16)
 		}
 
 		if first {

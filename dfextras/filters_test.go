@@ -13,16 +13,19 @@ import (
 var _ = Describe("Filters", func() {
 	var (
 		df1 *dataframe.DataFrame
+		tz  *time.Location
 	)
 
 	BeforeEach(func() {
+		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+
 		series1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 4}, []float64{1.0, 2.0, 3.0, 4.0, 5.0})
 		tSeries1 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
-			time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2021, time.February, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2021, time.March, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2021, time.April, 1, 0, 0, 0, 0, time.UTC),
-			time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
+			time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
+			time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
+			time.Date(2021, time.April, 1, 0, 0, 0, 0, tz),
+			time.Date(2021, time.May, 1, 0, 0, 0, 0, tz),
 		})
 		df1 = dataframe.NewDataFrame(tSeries1, series1)
 	})
@@ -38,10 +41,10 @@ var _ = Describe("Filters", func() {
 				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
-				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.February, 1, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(2021, time.March, 1, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(2021, time.April, 1, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(3).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
+				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.February, 1, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(2021, time.March, 1, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(2021, time.April, 1, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(3).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, tz)))
 
 				// Confirm that col1 has all the expected values
 				col1Idx, err := sma.NameToColumn("col1_SMA")
@@ -64,9 +67,9 @@ var _ = Describe("Filters", func() {
 				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
-				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.March, 1, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(2021, time.April, 1, 0, 0, 0, 0, time.UTC)))
-				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
+				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.March, 1, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(1).(time.Time)).Should(Equal(time.Date(2021, time.April, 1, 0, 0, 0, 0, tz)))
+				Expect(timeAxis.Value(2).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, tz)))
 
 				// Confirm that col1 has all the expected values
 				col1Idx, err := sma.NameToColumn("col1_SMA")
@@ -88,7 +91,7 @@ var _ = Describe("Filters", func() {
 				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
-				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, time.UTC)))
+				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, tz)))
 
 				// Confirm that col1 has all the expected values
 				col1Idx, err := sma.NameToColumn("col1_SMA")

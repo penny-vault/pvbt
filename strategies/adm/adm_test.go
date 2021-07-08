@@ -19,9 +19,12 @@ var _ = Describe("Adm", func() {
 	var (
 		strat   *adm.AcceleratingDualMomentum
 		manager data.Manager
+		tz      *time.Location
 	)
 
 	BeforeEach(func() {
+		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+
 		jsonParams := `{"inTickers": ["VFINX", "PRIDX"], "outTicker": "VUSTX"}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
@@ -107,8 +110,8 @@ var _ = Describe("Adm", func() {
 	Describe("Compute momentum scores", func() {
 		Context("with full stock history", func() {
 			It("should be invested in PRIDX", func() {
-				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
-				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
+				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
+				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				p, err := strat.Compute(&manager)
 				Expect(err).To(BeNil())
 
@@ -116,14 +119,14 @@ var _ = Describe("Adm", func() {
 				Expect(err).To(BeNil())
 				Expect(strat.CurrentSymbol).To(Equal("PRIDX"))
 
-				var begin int64 = 617846400
+				var begin int64 = 617860800
 				Expect(perf.PeriodStart).To(Equal(begin))
 
-				var end int64 = 1609459200
+				var end int64 = 1609477200
 				Expect(perf.PeriodEnd).To(Equal(end))
 				Expect(perf.Measurements).Should(HaveLen(379))
 				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  617846400,
+					Time:  617860800,
 					Value: 10000,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -141,7 +144,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[100]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  880675200,
+					Time:  880693200,
 					Value: 42408.60298101431,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -159,7 +162,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[200]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1143763200,
+					Time:  1143781200,
 					Value: 343579.75074944284,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -177,7 +180,7 @@ var _ = Describe("Adm", func() {
 					},
 				}))
 				Expect(perf.Measurements[300]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1406764800,
+					Time:  1406779200,
 					Value: 1.1502482646161707e+06,
 					Holdings: []portfolio.ReportableHolding{
 						{
@@ -196,7 +199,7 @@ var _ = Describe("Adm", func() {
 				}))
 
 				Expect(perf.Measurements[378]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1611878400,
+					Time:  1611896400,
 					Value: 3.279045827906852e+06,
 					Holdings: []portfolio.ReportableHolding{
 						{

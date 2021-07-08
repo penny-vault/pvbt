@@ -18,9 +18,12 @@ var _ = Describe("PAA", func() {
 	var (
 		strat   *paa.KellersProtectiveAssetAllocation
 		manager data.Manager
+		tz      *time.Location
 	)
 
 	BeforeEach(func() {
+		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+
 		jsonParams := `{"riskUniverse": ["VFINX", "PRIDX"], "protectiveUniverse": ["VUSTX"], "protectionFactor": 2, "lookback": 12, "topN": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
@@ -109,8 +112,8 @@ var _ = Describe("PAA", func() {
 	Describe("Calculate portfolio based on Keller's Protective Asset Allocation", func() {
 		Context("with N=2, a=2", func() {
 			It("should be invested in VUSTX", func() {
-				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, time.UTC)
-				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC)
+				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
+				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				p, err := strat.Compute(&manager)
 				Expect(err).To(BeNil())
 
