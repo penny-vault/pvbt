@@ -107,11 +107,41 @@ type Performance struct {
 }
 
 // NewPortfolio create a portfolio
-func NewPortfolio(name string, manager *data.Manager) Portfolio {
-	return Portfolio{
-		Name:      name,
-		dataProxy: manager,
+func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *Portfolio {
+	p := Portfolio{
+		Name:         name,
+		Transactions: []Transaction{},
+		dataProxy:    manager,
+		StartDate:    startDate,
+		securities:   make(map[string]bool),
 	}
+
+	// Create initial deposit
+	t := Transaction{
+		Date:          startDate,
+		Ticker:        "$CASH",
+		Kind:          DepositTransaction,
+		PricePerShare: 1.0,
+		Shares:        initial,
+		TotalValue:    initial,
+		Justification: nil,
+	}
+
+	err := computeTransactionSourceID(&t)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":             err,
+			"TransactionDate":   startDate,
+			"TransactionTicker": "$CASH",
+			"TransactionType":   DepositTransaction,
+		}).Warn("couldn't compute SourceID for initial deposit")
+	}
+	p.Transactions = append(p.Transactions, t)
+	p.Holdings = map[string]float64{
+		"$CASH": initial,
+	}
+
+	return &p
 }
 
 // ValueAsOf return the value of the portfolio for the given date
@@ -755,8 +785,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 //   `target` must have a column named `data.DateIdx` (DATE) and either a string column
 //   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
 //   the percentages of portfolio to hold
-func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame) error {
-	p.Transactions = []Transaction{}
+func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 	timeIdx, err := target.NameToColumn(data.DateIdx)
 	if err != nil {
 		return err
@@ -765,10 +794,15 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 	timeSeries := target.Series[timeIdx]
 
 	// Set time range of portfolio
-	p.StartDate = timeSeries.Value(0).(time.Time)
 	p.EndDate = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
 
-	p.securities = make(map[string]bool)
+	// Adjust first transaction to the target portfolio's first date if
+	// there are no other transactions in the portfolio
+	if len(p.Transactions) == 1 {
+		p.StartDate = timeSeries.Value(0).(time.Time)
+		p.Transactions[0].Date = p.StartDate
+	}
+
 	tickerSeriesIdx, err := target.NameToColumn(TickerName)
 	if err != nil {
 		return fmt.Errorf("missing required column: %s", TickerName)
@@ -819,7 +853,6 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 
 	// Create transactions
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-	var first bool = true
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
 		if row == nil {
@@ -852,33 +885,6 @@ func (p *Portfolio) TargetPortfolio(initial float64, target *dataframe.DataFrame
 		// is an OK hack
 		if date.Hour() == 0 && date.Minute() == 0 && date.Second() == 0 {
 			date = date.Add(time.Hour * 16)
-		}
-
-		if first {
-			first = false
-			// Create initial deposit
-			t := Transaction{
-				Date:          date,
-				Ticker:        "$CASH",
-				Kind:          DepositTransaction,
-				PricePerShare: 1.0,
-				Shares:        initial,
-				TotalValue:    initial,
-				Justification: justification,
-			}
-			err := computeTransactionSourceID(&t)
-			if err != nil {
-				log.WithFields(log.Fields{
-					"Error":             err,
-					"TransactionDate":   date,
-					"TransactionTicker": "$CASH",
-					"TransactionType":   DepositTransaction,
-				}).Warn("couldn't compute SourceID for transaction")
-			}
-			p.Transactions = append(p.Transactions, t)
-			p.Holdings = map[string]float64{
-				"$CASH": initial,
-			}
 		}
 
 		var rebalance map[string]float64

@@ -356,17 +356,17 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 }
 
 // Compute signal
-func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*portfolio.Portfolio, error) {
+func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
 	paa.validateTimeRange(manager)
 
 	err := paa.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	df, err := dfextras.SMA(paa.lookback-1, paa.prices)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// offset the *_SMA columns by 1-month
@@ -381,21 +381,20 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*po
 	})
 
 	if err := paa.mom(df); err != nil {
-		return nil, err
+		return err
 	}
 
 	riskRanked, protectiveSelection := paa.rank(df)
 
 	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection, df)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	p := portfolio.NewPortfolio("Protective Asset Allocation Portfolio", manager)
-	err = p.TargetPortfolio(10000, targetPortfolio)
+	err = myPortfolio.TargetPortfolio(targetPortfolio)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &p, nil
+	return nil
 }

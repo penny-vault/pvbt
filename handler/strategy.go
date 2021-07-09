@@ -2,6 +2,7 @@ package handler
 
 import (
 	"main/data"
+	"main/portfolio"
 	"main/strategies"
 	"runtime/debug"
 	"time"
@@ -41,7 +42,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		log.WithFields(log.Fields{
 			"Timezone": "America/New_York",
 			"Error":    err,
-		}).Warn("Could not load timezone")
+		}).Warn("could not load timezone")
 		return fiber.ErrInternalServerError
 	}
 
@@ -53,7 +54,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 			"StartDateStr": startDateStr,
 			"EndDateStr":   endDateStr,
 			"Error":        err,
-		}).Error("Cannoy parse start date query parameter")
+		}).Error("cannot parse start date query parameter")
 		return fiber.ErrNotAcceptable
 	}
 
@@ -71,7 +72,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 				"StartDateStr": startDateStr,
 				"EndDateStr":   endDateStr,
 				"Error":        err,
-			}).Error("Cannoy parse end date query parameter")
+			}).Error("cannot parse end date query parameter")
 			return fiber.ErrNotAcceptable
 		}
 	}
@@ -94,8 +95,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		} else {
 			log.WithFields(log.Fields{
 				"jwtToken": tiingoToken,
-				"error":    "jwt token does not have expected claim: https://pennyvault.com/tiingo_token",
-			})
+			}).Warn("jwt token does not have expected claim: https://pennyvault.com/tiingo_token")
 			return fiber.ErrBadRequest
 		}
 
@@ -116,7 +116,8 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 
 		start := time.Now()
-		p, err := stratObject.Compute(&manager)
+		p := portfolio.NewPortfolio(strat.Name, startDate, 10000, &manager)
+		err = stratObject.Compute(&manager, p)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest

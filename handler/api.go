@@ -149,8 +149,8 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	tickers := dataframe.NewSeriesString(portfolio.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
-	p := portfolio.NewPortfolio(ticker, &manager)
-	err = p.TargetPortfolio(10000, targetPortfolio)
+	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)
+	err = p.TargetPortfolio(targetPortfolio)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error":      err,

@@ -360,7 +360,8 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 			return nil, err
 		}
 
-		computedPortfolio, err := stratObject.Compute(&manager)
+		computedPortfolio := portfolio.NewPortfolio(strategy.Name, time.Unix(p.StartDate, 0), 10000, &manager)
+		err = stratObject.Compute(&manager, computedPortfolio)
 		if err != nil {
 			log.Println(err)
 			return nil, err

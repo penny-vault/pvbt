@@ -56,5 +56,5 @@ type StrategyInfo struct {
 
 // Strategy an investing strategy
 type Strategy interface {
-	Compute(manager *data.Manager) (*portfolio.Portfolio, error)
+	Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error
 }

@@ -241,7 +241,7 @@ func (dmio *DualMomentumInOut) calculateSignal() error {
 }
 
 // Compute signal
-func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*portfolio.Portfolio, error) {
+func (dmio *DualMomentumInOut) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -259,16 +259,15 @@ func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*portfolio.Portfo
 
 	err := dmio.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	dmio.calculateSignal()
 
-	p := portfolio.NewPortfolio("Dual Momentum In/Out Portfolio", manager)
-	err = p.TargetPortfolio(10000, dmio.targetPortfolio)
+	err = myPortfolio.TargetPortfolio(dmio.targetPortfolio)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &p, nil
+	return nil
 }

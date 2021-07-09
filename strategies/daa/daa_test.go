@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"main/data"
+	"main/portfolio"
 	"main/strategies/daa"
 	"time"
 
@@ -19,6 +20,7 @@ var _ = Describe("Daa", func() {
 		strat   *daa.KellersDefensiveAssetAllocation
 		manager data.Manager
 		tz      *time.Location
+		p       *portfolio.Portfolio
 	)
 
 	BeforeEach(func() {
@@ -39,6 +41,8 @@ var _ = Describe("Daa", func() {
 		manager = data.NewManager(map[string]string{
 			"tiingo": "TEST",
 		})
+
+		p = portfolio.NewPortfolio("DAA", time.Date(1980, time.January, 1, 0, 0, 0, 0, tz), 10000, &manager)
 
 		content, err := ioutil.ReadFile("../testdata/TB3MS.csv")
 		if err != nil {
@@ -114,7 +118,7 @@ var _ = Describe("Daa", func() {
 			It("should be invested in VUSTX", func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				p, err := strat.Compute(&manager)
+				err := strat.Compute(&manager, p)
 				Expect(err).To(BeNil())
 
 				Expect(p.Transactions).Should(HaveLen(701))

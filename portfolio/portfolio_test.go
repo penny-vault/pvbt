@@ -16,7 +16,7 @@ import (
 
 var _ = Describe("Portfolio", func() {
 	var (
-		p         portfolio.Portfolio
+		p         *portfolio.Portfolio
 		df1       *dataframe.DataFrame
 		dfMulti   *dataframe.DataFrame
 		dataProxy data.Manager
@@ -91,7 +91,7 @@ var _ = Describe("Portfolio", func() {
 		dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 		dataProxy.Frequency = data.FrequencyMonthly
 
-		p = portfolio.NewPortfolio("Test", &dataProxy)
+		p = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
 
 		timeSeries := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 			time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
@@ -128,7 +128,7 @@ var _ = Describe("Portfolio", func() {
 	Describe("When given a portfolio", func() {
 		Context("with a single holding at a time", func() {
 			It("should have transactions", func() {
-				err := p.TargetPortfolio(10000, df1)
+				err := p.TargetPortfolio(df1)
 				Expect(err).To(BeNil())
 				Expect(p.Transactions).To(HaveLen(9))
 
@@ -171,7 +171,7 @@ var _ = Describe("Portfolio", func() {
 
 			})
 			It("should have valid performance", func() {
-				p.TargetPortfolio(10000, df1)
+				p.TargetPortfolio(df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 
 				Expect(err).To(BeNil())
@@ -229,12 +229,12 @@ var _ = Describe("Portfolio", func() {
 	Describe("When given a target portfolio", func() {
 		Context("with multiple holdings at a time", func() {
 			It("should have transactions", func() {
-				err := p.TargetPortfolio(10000, dfMulti)
+				err := p.TargetPortfolio(dfMulti)
 				Expect(err).To(BeNil())
 				Expect(p.Transactions).To(HaveLen(11))
 
 				// First transaction
-				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
+				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 01, 31, 0, 0, 0, 0, tz)))
 				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
 
@@ -311,7 +311,7 @@ var _ = Describe("Portfolio", func() {
 
 			})
 			It("should have valid performance", func() {
-				p.TargetPortfolio(10000, df1)
+				p.TargetPortfolio(df1)
 				perf, err := p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 
 				Expect(err).To(BeNil())

@@ -212,7 +212,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*portfolio.Portfolio, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -228,13 +228,13 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*por
 
 	err := daa.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Compute momentum scores
 	momentum, err := dfextras.Momentum13612(daa.prices)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	daa.momentum = momentum
@@ -248,11 +248,10 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*por
 	}
 	sort.Strings(symbols)
 	daa.CurrentSymbol = strings.Join(symbols, " ")
-	p := portfolio.NewPortfolio("Defensive Asset Allocation Portfolio", manager)
-	err = p.TargetPortfolio(10000, daa.targetPortfolio)
+	err = myPortfolio.TargetPortfolio(daa.targetPortfolio)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return &p, nil
+	return nil
 }
