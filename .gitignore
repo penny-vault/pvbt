@@ -22,3 +22,4 @@ auth0.env
 loki.env
 database.env
 tiingo.env
+secret.env
