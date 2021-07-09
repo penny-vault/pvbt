@@ -4,8 +4,8 @@ servers:
     url: http://localhost:3000/v1
   - description: Production server
     url: https://penny-vault.herokuapp.com/v1
-  - description: Staging server
-    url: https://pv-api-staging.herokuapp.com/v1
+  - description: Beta server
+    url: https://pv-api-beta.herokuapp.com/v1
 info:
   version: "1.0.0"
   title: Penny Vault API
@@ -357,10 +357,14 @@ paths:
         - strategy
 components:
   securitySchemes:
-    bearerAuth:
+    BearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: query
+      name: apikey
   schemas:
     Holding:
       description: A holding in the portfolio

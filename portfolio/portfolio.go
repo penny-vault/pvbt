@@ -920,6 +920,8 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 }
 
 func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
+	perfTable := make(map[string]time.Duration)
+	s := time.Now()
 	portfolioSQL := `SELECT performance_json FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
@@ -945,8 +947,11 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		trx.Rollback(context.Background())
 		return nil, fiber.ErrNotFound
 	}
+	e := time.Now()
+	perfTable["portfolio"] = e.Sub(s)
 
 	// Get transactions
+	s = time.Now()
 	transactionSQL := "SELECT event_date, ticker, transaction_type, price_per_share, num_shares, total_value, justification FROM portfolio_transaction_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY sequence_num"
 	rows, err := trx.Query(context.Background(), transactionSQL, portfolioID, userID)
 	if err != nil {
@@ -979,9 +984,12 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		transactions = append(transactions, t)
 	}
 	p.Transactions = transactions
+	e = time.Now()
+	perfTable["transactions"] = e.Sub(s)
 
 	// load measurements
-	measurementSQL := "SELECT event_date, value, risk_free_value, holdings, percent_return, justification FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	s = time.Now()
+	measurementSQL := "SELECT extract(epoch from event_date), value, risk_free_value, holdings, percent_return, justification FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
 	rows, err = trx.Query(context.Background(), measurementSQL, portfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -1013,6 +1021,12 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		measurements = append(measurements, m)
 	}
 	p.Measurements = measurements
+	e = time.Now()
+
+	perfTable["measurements"] = e.Sub(s)
+
+	fmt.Println("PerfTable:")
+	fmt.Println(perfTable)
 
 	return &p, nil
 }

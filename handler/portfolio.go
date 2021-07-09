@@ -11,7 +11,6 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
-	"github.com/lestrrat-go/jwx/jwt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -36,9 +35,7 @@ type PortfolioResponse struct {
 func GetPortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
@@ -80,9 +77,7 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	p, err := portfolio.LoadPerformanceFromDB(portfolioID, userID)
 	if err != nil {
@@ -93,9 +88,7 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 
 // ListPortfolios list all portfolios for logged in user
 func ListPortfolios(c *fiber.Ctx) error {
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio_v1 WHERE user_id=$1 ORDER BY name, created`
 	trx, err := database.TrxForUser(userID)
@@ -152,10 +145,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 
 // CreatePortfolio new portfolio
 func CreatePortfolio(c *fiber.Ctx) error {
-	// get tiingo token and userID from jwt claims
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -210,12 +200,11 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	})
 }
 
-// UpdatePortfolio update portfolio
+// UpdatePortfolio loads the portfolio from the database and updates it with the values passed
+// via the PATCH command
 func UpdatePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -297,9 +286,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 // DeletePortfolio delete portfolio
 func DeletePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	userID := jwtToken.Subject()
+	userID := c.Locals("userID").(string)
 
 	trx, err := database.TrxForUser(userID)
 	if err != nil {

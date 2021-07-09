@@ -1,18 +1,75 @@
 package handler
 
 import (
+	"bytes"
+	"compress/gzip"
+	"encoding/hex"
 	"main/data"
 	"main/portfolio"
+	"main/util"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
-	"github.com/lestrrat-go/jwx/jwt"
 	"github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
 )
+
+// ApiKey returns a hex-encoded JSON string containing the userID and tiingoToken
+type ApiKeyResponse struct {
+	Token string `json:"token"`
+}
+
+func ApiKey(c *fiber.Ctx) error {
+	// get tiingo token from jwt claims
+	pvToken := make(map[string]string)
+	pvToken["userID"] = c.Locals("userID").(string)
+	pvToken["tiingo"] = c.Locals("tiingoToken").(string)
+
+	jsonPVToken, err := json.Marshal(pvToken)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not encode pvToken")
+		return fiber.ErrBadRequest
+	}
+
+	// gzip result
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	_, err = zw.Write(jsonPVToken)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not gzip data")
+		return fiber.ErrInternalServerError
+	}
+
+	if err := zw.Close(); err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not gzip data")
+		return fiber.ErrInternalServerError
+	}
+
+	// encrypt it
+	encryptedToken, err := util.Encrypt(buf.Bytes())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not encrypt data")
+		return fiber.ErrBadRequest
+	}
+
+	resp := ApiKeyResponse{
+		Token: hex.EncodeToString(encryptedToken),
+	}
+
+	return c.JSON(resp)
+}
 
 type PingResponse struct {
 	Status  string `json:"status" example:"success"`
@@ -101,16 +158,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	credentials := make(map[string]string)
 
 	// get tiingo token from jwt claims
-	jwtToken := c.Locals("user").(jwt.Token)
-	if tiingoToken, ok := jwtToken.Get(`https://pennyvault.com/tiingo_token`); ok {
-		credentials["tiingo"] = tiingoToken.(string)
-	} else {
-		log.WithFields(log.Fields{
-			"jwtToken": tiingoToken,
-			"error":    "jwt token does not have expected claim: https://pennyvault.com/tiingo_token",
-		})
-		return fiber.ErrBadRequest
-	}
+	credentials["tiingo"] = c.Locals("tiingoToken").(string)
 
 	manager := data.NewManager(credentials)
 	manager.Begin = startDate
