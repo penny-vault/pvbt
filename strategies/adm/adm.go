@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"main/data"
 	"main/dfextras"
-	"main/portfolio"
 	"main/strategies/strategy"
 	"main/util"
 	"strings"
@@ -210,7 +209,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 }
 
 // Compute signal
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
+func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -226,7 +225,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager, myPortfolio 
 
 	err := adm.downloadPriceData(manager)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Compute momentum scores
@@ -258,14 +257,14 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager, myPortfolio 
 	scoresDf = tmp.(*dataframe.DataFrame)
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
-	argmax.Rename(portfolio.TickerName)
+	argmax.Rename(util.TickerName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	dateIdx, err := scoresDf.NameToColumn(data.DateIdx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	timeSeries := scoresDf.Series[dateIdx].Copy()
 	targetPortfolioSeries := make([]dataframe.Series, 0, len(scores))
@@ -280,10 +279,5 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager, myPortfolio 
 	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
 	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
 
-	err = myPortfolio.TargetPortfolio(targetPortfolio)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return targetPortfolio, nil
 }

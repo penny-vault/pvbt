@@ -8,6 +8,8 @@ import (
 	"main/data"
 	"main/database"
 	"main/dfextras"
+	"main/strategies"
+	"main/util"
 	"math"
 	"sort"
 	"strings"
@@ -21,7 +23,6 @@ import (
 )
 
 const (
-	TickerName = "TICKER"
 	SourceName = "PV"
 )
 
@@ -306,9 +307,9 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 }
 
 // CalculatePerformance calculate performance of portfolio
-func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error) {
+func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error) {
 	if len(p.Transactions) == 0 {
-		return Performance{}, errors.New("cannot calculate performance for portfolio with no transactions")
+		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
 	perf := Performance{
@@ -330,7 +331,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 
 	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) > 0 {
-		return Performance{}, errors.New("failed to download data for tickers")
+		return nil, errors.New("failed to download data for tickers")
 	}
 
 	var eod = []*dataframe.DataFrame{}
@@ -340,7 +341,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 
 	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
 	if err != nil {
-		return perf, err
+		return nil, err
 	}
 
 	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
@@ -415,7 +416,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 				shares -= trx.Shares
 				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			default:
-				return Performance{}, errors.New("unrecognized transaction type")
+				return nil, errors.New("unrecognized transaction type")
 			}
 
 			// Protect against floating point noise
@@ -439,7 +440,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 					tickers = append(tickers, symbol)
 				}
 			} else {
-				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
+				return nil, fmt.Errorf("no quote for symbol: %s", symbol)
 			}
 		}
 
@@ -456,7 +457,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 					value = price * qty
 				}
 			} else {
-				return Performance{}, fmt.Errorf("no quote for symbol: %s", symbol)
+				return nil, fmt.Errorf("no quote for symbol: %s", symbol)
 			}
 			if qty > 1.0e-5 {
 				currentAssets = append(currentAssets, ReportableHolding{
@@ -509,7 +510,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (Performance, error)
 		perf.YTDReturn = totalVal/currYearStartValue - 1.0
 	}
 
-	return perf, nil
+	return &perf, nil
 }
 
 // RebalanceTo rebalance the portfolio to the target percentages
@@ -803,9 +804,9 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		p.Transactions[0].Date = p.StartDate
 	}
 
-	tickerSeriesIdx, err := target.NameToColumn(TickerName)
+	tickerSeriesIdx, err := target.NameToColumn(util.TickerName)
 	if err != nil {
-		return fmt.Errorf("missing required column: %s", TickerName)
+		return fmt.Errorf("missing required column: %s", util.TickerName)
 	}
 
 	// check series type
@@ -868,8 +869,8 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 			idx := k.(string)
 			if idx == data.DateIdx {
 				date = val[data.DateIdx].(time.Time)
-			} else if idx == TickerName {
-				symbol = val[TickerName]
+			} else if idx == util.TickerName {
+				symbol = val[util.TickerName]
 			} else {
 				justification[idx] = v
 			}
@@ -917,6 +918,182 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 	}
 
 	return nil
+}
+
+// UpdateTransactions calculates new transactions based on the portfolio strategy
+// from the portfolio end date to `through`
+func (p *Portfolio) UpdateTransactions(manager *data.Manager, through time.Time) error {
+	manager.Begin = p.EndDate
+	manager.End = through
+	manager.Frequency = data.FrequencyMonthly
+
+	if strategy, ok := strategies.StrategyMap[p.StrategyShortcode]; ok {
+		stratObject, err := strategy.Factory(p.StrategyArguments)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":     err,
+				"Portfolio": p.ID,
+				"Strategy":  p.StrategyShortcode,
+			}).Error("failed to initialize portfolio strategy")
+			return err
+		}
+
+		targetPortfolio, err := stratObject.Compute(manager)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":     err,
+				"Portfolio": p.ID,
+				"Strategy":  p.StrategyShortcode,
+			}).Error("failed to run portfolio strategy")
+			return err
+		}
+
+		err = p.TargetPortfolio(targetPortfolio)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":     err,
+				"Portfolio": p.ID,
+				"Strategy":  p.StrategyShortcode,
+			}).Error("failed to apply target portfolio")
+			return err
+		}
+	} else {
+		log.WithFields(log.Fields{
+			"Portfolio": p.ID,
+			"Strategy":  p.StrategyShortcode,
+		}).Error("portfolio strategy not found")
+		return errors.New("strategy not found")
+	}
+
+	return nil
+}
+
+func (p *Portfolio) loadMeasurementsFromDB() error {
+	trx, err := database.TrxForUser(p.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": p.ID,
+			"UserID":      p.UserID,
+		}).Error("unable to get database transaction object")
+		return nil
+	}
+
+	measurementSQL := "SELECT extract(epoch from event_date), value, risk_free_value, holdings, percent_return, justification FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	rows, err := trx.Query(context.Background(), measurementSQL, p.ID, p.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": p.ID,
+			"UserID":      p.UserID,
+			"Query":       measurementSQL,
+		}).Warn("failed executing measurement query")
+		trx.Rollback(context.Background())
+		return err
+	}
+
+	measurements := make([]PerformanceMeasurement, 0, 1000)
+	for rows.Next() {
+		m := PerformanceMeasurement{}
+		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.PercentReturn, &m.Justification)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Endpoint":    "GetPortfolioPerformance:Measurement-Iterator",
+				"Error":       err,
+				"PortfolioID": p.ID,
+				"UserID":      p.UserID,
+				"Query":       measurementSQL,
+			}).Warn("GetPortfolioPerformance failed")
+			trx.Rollback(context.Background())
+			return err
+		}
+		measurements = append(measurements, m)
+	}
+	p.Measurements = measurements
+	return nil
+}
+
+func (p *Portfolio) loadTransactionsFromDB() error {
+	trx, err := database.TrxForUser(p.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": p.ID,
+			"UserID":      p.UserID,
+		}).Error("unable to get database transaction object")
+		return nil
+	}
+
+	// Get portfolio transactions
+	transactionSQL := "SELECT event_date, ticker, transaction_type, price_per_share, num_shares, total_value, justification FROM portfolio_transaction_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY sequence_num"
+	rows, err := trx.Query(context.Background(), transactionSQL, p.ID, p.UserID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": p.ID,
+			"UserID":      p.UserID,
+			"Query":       transactionSQL,
+		}).Warn("could not load portfolio transactions from database")
+		trx.Rollback(context.Background())
+		return err
+	}
+
+	transactions := make([]Transaction, 0, 1000)
+	for rows.Next() {
+		t := Transaction{}
+		err := rows.Scan(&t.Date, &t.Ticker, &t.Kind, &t.PricePerShare, &t.Shares, &t.TotalValue, &t.Justification)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":       err,
+				"PortfolioID": p.ID,
+				"UserID":      p.UserID,
+				"Query":       transactionSQL,
+			}).Warn("failed scanning row into transaction fields")
+			trx.Rollback(context.Background())
+			return err
+		}
+		transactions = append(transactions, t)
+	}
+	p.Transactions = transactions
+	return nil
+}
+
+func LoadFromDB(portfolioID uuid.UUID, userID string) (*Portfolio, error) {
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":  err,
+			"UserID": userID,
+		}).Error("failed to create database transaction for user")
+		return nil, err
+	}
+
+	p := Portfolio{}
+	portfolioSQL := `SELECT name, strategy_shortcode, arguments, start_date, end_date, notifications FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &p.Notifications)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"UserID":      userID,
+			"PortfolioID": portfolioID,
+			"Query":       portfolioSQL,
+			"Error":       err,
+		}).Warn("could not load portfolio from database")
+		trx.Rollback(context.Background())
+		return nil, err
+	}
+	trx.Commit(context.Background())
+
+	if err := p.loadTransactionsFromDB(); err != nil {
+		// Error is logged by loadTransactionsFromDB
+		return nil, err
+	}
+
+	if err := p.loadMeasurementsFromDB(); err != nil {
+		// Error is logged by loadMeasurementsFromDB
+		return nil, err
+	}
+
+	return &p, nil
 }
 
 func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
@@ -997,7 +1174,7 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 			"Error":       err,
 			"PortfolioID": portfolioID,
 			"UserID":      userID,
-			"Query":       transactionSQL,
+			"Query":       measurementSQL,
 		}).Warn("GetPortfolioPerformance failed")
 		trx.Rollback(context.Background())
 		return nil, fiber.ErrInternalServerError
@@ -1013,7 +1190,7 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 				"Error":       err,
 				"PortfolioID": portfolioID,
 				"UserID":      userID,
-				"Query":       transactionSQL,
+				"Query":       measurementSQL,
 			}).Warn("GetPortfolioPerformance failed")
 			trx.Rollback(context.Background())
 			return nil, fiber.ErrInternalServerError

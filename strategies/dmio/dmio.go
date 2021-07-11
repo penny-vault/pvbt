@@ -12,7 +12,6 @@ import (
 	"errors"
 	"main/data"
 	"main/dfextras"
-	"main/portfolio"
 	"main/strategies/strategy"
 	"main/util"
 	"strings"
@@ -241,7 +240,7 @@ func (dmio *DualMomentumInOut) calculateSignal() error {
 }
 
 // Compute signal
-func (dmio *DualMomentumInOut) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
+func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -259,15 +258,13 @@ func (dmio *DualMomentumInOut) Compute(manager *data.Manager, myPortfolio *portf
 
 	err := dmio.downloadPriceData(manager)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	dmio.calculateSignal()
-
-	err = myPortfolio.TargetPortfolio(dmio.targetPortfolio)
+	err = dmio.calculateSignal()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return dmio.targetPortfolio, nil
 }

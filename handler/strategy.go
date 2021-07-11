@@ -108,11 +108,17 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 		start := time.Now()
 		p := portfolio.NewPortfolio(strat.Name, startDate, 10000, &manager)
-		err = stratObject.Compute(&manager, p)
+		target, err := stratObject.Compute(&manager)
 		if err != nil {
 			log.Println(err)
 			return fiber.ErrBadRequest
 		}
+
+		if err := p.TargetPortfolio(target); err != nil {
+			log.Println(err)
+			return fiber.ErrBadRequest
+		}
+
 		stop := time.Now()
 		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
 

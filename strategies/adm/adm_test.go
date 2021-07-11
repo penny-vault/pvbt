@@ -113,7 +113,9 @@ var _ = Describe("Adm", func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager.Begin, 10000, &manager)
-				err := strat.Compute(&manager, p)
+				target, err := strat.Compute(&manager)
+				Expect(err).To(BeNil())
+				p.TargetPortfolio(target)
 				Expect(err).To(BeNil())
 
 				perf, err := p.CalculatePerformance(manager.End)

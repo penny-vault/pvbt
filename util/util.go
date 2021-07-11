@@ -13,6 +13,10 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+const (
+	TickerName = "TICKER"
+)
+
 // Struct used for sorting tickers by a float64 value (i.e. momentum)
 type Pair struct {
 	Key   string

@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"main/data"
 	"main/dfextras"
-	"main/portfolio"
 	"main/strategies/strategy"
 	"main/util"
 	"sort"
@@ -306,7 +305,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 		log.Error("Time series not set on momentum series")
 	}
 	timeSeries := mom.Series[timeIdx].Copy()
-	targetSeries := dataframe.NewSeriesMixed(portfolio.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
+	targetSeries := dataframe.NewSeriesMixed(util.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 
 	series := make([]dataframe.Series, 0, len(paa.riskUniverse)+len(paa.protectiveUniverse))
 	series = append(series, timeSeries)
@@ -356,17 +355,17 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 }
 
 // Compute signal
-func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
+func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
 	paa.validateTimeRange(manager)
 
 	err := paa.downloadPriceData(manager)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	df, err := dfextras.SMA(paa.lookback-1, paa.prices)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// offset the *_SMA columns by 1-month
@@ -381,20 +380,15 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager, myPo
 	})
 
 	if err := paa.mom(df); err != nil {
-		return err
+		return nil, err
 	}
 
 	riskRanked, protectiveSelection := paa.rank(df)
 
 	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection, df)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = myPortfolio.TargetPortfolio(targetPortfolio)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return targetPortfolio, nil
 }

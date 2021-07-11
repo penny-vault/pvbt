@@ -17,7 +17,6 @@ import (
 	"errors"
 	"main/data"
 	"main/dfextras"
-	"main/portfolio"
 	"main/strategies/strategy"
 	"main/util"
 	"math"
@@ -178,7 +177,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	}
 	timeSeries := daa.momentum.Series[timeIdx]
 
-	targetSeries := dataframe.NewSeriesMixed(portfolio.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
+	targetSeries := dataframe.NewSeriesMixed(util.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	daa.targetPortfolio = dataframe.NewDataFrame(timeSeries, targetSeries)
 }
 
@@ -212,7 +211,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error {
+func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -228,30 +227,26 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager, myPor
 
 	err := daa.downloadPriceData(manager)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Compute momentum scores
 	momentum, err := dfextras.Momentum13612(daa.prices)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	daa.momentum = momentum
 	daa.findTopTRiskAssets()
 
 	symbols := []string{}
-	tickerIdx, _ := daa.targetPortfolio.NameToColumn(portfolio.TickerName)
+	tickerIdx, _ := daa.targetPortfolio.NameToColumn(util.TickerName)
 	lastTarget := daa.targetPortfolio.Series[tickerIdx].Value(daa.targetPortfolio.NRows() - 1).(map[string]float64)
 	for kk := range lastTarget {
 		symbols = append(symbols, kk)
 	}
 	sort.Strings(symbols)
 	daa.CurrentSymbol = strings.Join(symbols, " ")
-	err = myPortfolio.TargetPortfolio(daa.targetPortfolio)
-	if err != nil {
-		return err
-	}
 
-	return nil
+	return daa.targetPortfolio, nil
 }

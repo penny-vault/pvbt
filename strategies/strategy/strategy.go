@@ -3,10 +3,10 @@ package strategy
 import (
 	"database/sql"
 	"main/data"
-	"main/portfolio"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
+	"github.com/rocketlaunchr/dataframe-go"
 )
 
 // StrategyFactory factory method to create strategy
@@ -56,5 +56,5 @@ type StrategyInfo struct {
 
 // Strategy an investing strategy
 type Strategy interface {
-	Compute(manager *data.Manager, myPortfolio *portfolio.Portfolio) error
+	Compute(manager *data.Manager) (*dataframe.DataFrame, error)
 }

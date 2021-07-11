@@ -118,7 +118,11 @@ var _ = Describe("Daa", func() {
 			It("should be invested in VUSTX", func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				err := strat.Compute(&manager, p)
+
+				target, err := strat.Compute(&manager)
+				Expect(err).To(BeNil())
+
+				err = p.TargetPortfolio(target)
 				Expect(err).To(BeNil())
 
 				Expect(p.Transactions).Should(HaveLen(701))

@@ -29,20 +29,10 @@ const (
 	annually = 0x00010000
 )
 
-type savedStrategy struct {
-	ID            uuid.UUID
-	UserID        string
-	Name          string
-	Strategy      string
-	Arguments     map[string]json.RawMessage
-	StartDate     int64
-	Notifications int
-}
-
 var disableSend bool = false
 
-func getSavedPortfolios(startDate time.Time) []*savedStrategy {
-	ret := []*savedStrategy{}
+func getSavedPortfolios(startDate time.Time) []*portfolio.Portfolio {
+	ret := []*portfolio.Portfolio{}
 	trx, err := database.TrxForUser("pvapi")
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -76,7 +66,7 @@ func getSavedPortfolios(startDate time.Time) []*savedStrategy {
 			}).Error("failed to create database transaction for user")
 			continue
 		}
-		portfolioSQL := `SELECT id, user_id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, notifications FROM portfolio_v1 WHERE start_date <= $1`
+		portfolioSQL := `SELECT id FROM portfolio_v1 WHERE start_date <= $1`
 		rows, err := trx.Query(context.Background(), portfolioSQL, startDate)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -89,12 +79,22 @@ func getSavedPortfolios(startDate time.Time) []*savedStrategy {
 		}
 
 		for rows.Next() {
-			p := savedStrategy{}
-			err := rows.Scan(&p.ID, &p.UserID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.Notifications)
+			id := uuid.UUID{}
+			err := rows.Scan(&id)
 			if err != nil {
-				log.Fatalf("Database query error in notifier: %s", err)
+				log.WithFields(log.Fields{
+					"Error": err,
+				}).Fatal("database query selecting user portfolio id's failed")
 			}
-			ret = append(ret, &p)
+			if p, err := portfolio.LoadFromDB(id, userID); err != nil {
+				log.WithFields(log.Fields{
+					"Error":       err,
+					"PortfolioID": id,
+					"UserID":      userID,
+				}).Fatal("could not load portfolio from database")
+			} else {
+				ret = append(ret, p)
+			}
 		}
 		trx.Commit(context.Background())
 	}
@@ -102,11 +102,11 @@ func getSavedPortfolios(startDate time.Time) []*savedStrategy {
 	return ret
 }
 
-func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Performance) {
-	trx, err := database.TrxForUser(s.UserID)
+func updateSavedPortfolioPerformanceMetrics(p *portfolio.Portfolio, perf *portfolio.Performance) {
+	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"UserID": s.UserID,
+			"UserID": p.UserID,
 			"Error":  err,
 		}).Error("Failed to get transaction for user")
 	}
@@ -126,7 +126,7 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 
 	if err != nil {
 		log.WithFields(log.Fields{
-			"PortfolioID": s.ID,
+			"PortfolioID": p.ID,
 			"Error":       err,
 		}).Error("could not encode performance struct as JSON")
 	}
@@ -145,11 +145,11 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 		perf.MetricsBundle.SortinoRatio,
 		perf.MetricsBundle.UlcerIndexAvg,
 		perfJSON,
-		s.ID,
+		p.ID,
 	)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"PortfolioID":          s.ID,
+			"PortfolioID":          p.ID,
 			"YTDReturn":            perf.YTDReturn,
 			"CagrSinceInception":   perf.CagrSinceInception,
 			"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
@@ -161,7 +161,7 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 	}
 
 	log.WithFields(log.Fields{
-		"PortfolioID":          s.ID,
+		"PortfolioID":          p.ID,
 		"YTDReturn":            perf.YTDReturn,
 		"CagrSinceInception":   perf.CagrSinceInception,
 		"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
@@ -170,17 +170,17 @@ func updateSavedPortfolioPerformanceMetrics(s *savedStrategy, perf *portfolio.Pe
 	trx.Commit(context.Background())
 }
 
-func saveTransactions(s *savedStrategy, perf *portfolio.Performance) error {
+func saveTransactions(p *portfolio.Portfolio, perf *portfolio.Performance) error {
 	startTime := time.Now()
 	log.WithFields(log.Fields{
 		"NumTransactions": len(perf.Transactions),
 		"StartTime":       startTime,
 	}).Info("Saving transactions to the database")
 
-	trx, err := database.TrxForUser(s.UserID)
+	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"UserID": s.UserID,
+			"UserID": p.UserID,
 			"Error":  err,
 		}).Error("Failed to get transaction for user")
 	}
@@ -216,7 +216,7 @@ func saveTransactions(s *savedStrategy, perf *portfolio.Performance) error {
 			transaction.Date,
 			transaction.Justification,
 			transaction.Shares,
-			s.ID,
+			p.ID,
 			transaction.PricePerShare,
 			idx,
 			transaction.Source,
@@ -227,7 +227,7 @@ func saveTransactions(s *savedStrategy, perf *portfolio.Performance) error {
 		)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"PortfolioID": s.ID,
+				"PortfolioID": p.ID,
 				"Source":      transaction.Source,
 				"SourceID":    transaction.SourceID,
 				"Error":       err,
@@ -244,24 +244,24 @@ func saveTransactions(s *savedStrategy, perf *portfolio.Performance) error {
 		"NumTransactions": len(perf.Transactions),
 		"EndTime":         endTime,
 		"Duration":        duration,
-	}).Info("Saved transactions to the database")
+	}).Info("saved transactions to the database")
 
 	return nil
 }
 
-func saveMeasurements(s *savedStrategy, perf *portfolio.Performance) error {
+func saveMeasurements(p *portfolio.Portfolio, perf *portfolio.Performance) error {
 	startTime := time.Now()
 	log.WithFields(log.Fields{
 		"NumMeasurements": len(perf.Measurements),
 		"StartTime":       startTime,
-	}).Info("Saving measurements to the database")
+	}).Info("saving measurements to the database")
 
-	trx, err := database.TrxForUser(s.UserID)
+	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"UserID": s.UserID,
+			"UserID": p.UserID,
 			"Error":  err,
-		}).Error("Failed to get transaction for user")
+		}).Error("failed to get transaction for user")
 	}
 
 	sql := `INSERT INTO portfolio_measurement_v1
@@ -300,7 +300,7 @@ func saveMeasurements(s *savedStrategy, perf *portfolio.Performance) error {
 			measurement.Holdings,
 			measurement.Justification,
 			measurement.PercentReturn,
-			s.ID,
+			p.ID,
 			measurement.RiskFreeValue,
 			measurement.TotalDeposited,
 			measurement.TotalWithdrawn,
@@ -308,7 +308,7 @@ func saveMeasurements(s *savedStrategy, perf *portfolio.Performance) error {
 		)
 		if err != nil {
 			log.WithFields(log.Fields{
-				"PortfolioID": s.ID,
+				"PortfolioID": p.ID,
 				"Error":       err,
 			}).Warn("could not save measurement to database")
 			trx.Rollback(context.Background())
@@ -323,12 +323,12 @@ func saveMeasurements(s *savedStrategy, perf *portfolio.Performance) error {
 		"NumMeasurements": len(perf.Measurements),
 		"EndTime":         endTime,
 		"Duration":        duration,
-	}).Info("Saved measurements to the database")
+	}).Info("saved measurements to the database")
 
 	return nil
 }
 
-func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfolio.Portfolio, error) {
+func updateTransactions(p *portfolio.Portfolio, through time.Time) error {
 	log.WithFields(log.Fields{
 		"Portfolio": p.ID,
 	}).Info("Computing portfolio performance")
@@ -342,39 +342,18 @@ func computePortfolioPerformance(p *savedStrategy, through time.Time) (*portfoli
 	} else {
 		u, err := getUser(p.UserID)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		manager = data.NewManager(map[string]string{
 			"tiingo": u.TiingoToken,
 		})
 	}
 
-	manager.Begin = time.Unix(p.StartDate, 0)
+	manager.Begin = p.StartDate
 	manager.End = through
 	manager.Frequency = data.FrequencyMonthly
 
-	if strategy, ok := strategies.StrategyMap[p.Strategy]; ok {
-		stratObject, err := strategy.Factory(p.Arguments)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-
-		computedPortfolio := portfolio.NewPortfolio(strategy.Name, time.Unix(p.StartDate, 0), 10000, &manager)
-		err = stratObject.Compute(&manager, computedPortfolio)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-
-		return computedPortfolio, nil
-	}
-
-	log.WithFields(log.Fields{
-		"Portfolio": p.ID,
-		"Strategy":  p.Strategy,
-	}).Error("portfolio strategy not found")
-	return nil, errors.New("strategy not found")
+	return p.UpdateTransactions(&manager, through)
 }
 
 func datesEqual(d1 time.Time, d2 time.Time) bool {
@@ -409,12 +388,12 @@ func lastTradingDayOfYear(today time.Time, manager *data.Manager) bool {
 	return datesEqual(today, lastDay)
 }
 
-func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Portfolio, perf *portfolio.Performance) {
-	if s.UserID == "pvuser" {
+func processNotifications(forDate time.Time, p *portfolio.Portfolio, perf *portfolio.Performance) {
+	if p.UserID == "pvuser" {
 		return
 	}
 
-	u, err := getUser(s.UserID)
+	u, err := getUser(p.UserID)
 	if err != nil {
 		return
 	}
@@ -424,31 +403,31 @@ func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Port
 	manager := data.NewManager(map[string]string{
 		"tiingo": u.TiingoToken,
 	})
-	manager.Begin = time.Unix(s.StartDate, 0)
+	manager.Begin = p.StartDate
 
-	if (s.Notifications & daily) == daily {
+	if (p.Notifications & daily) == daily {
 		toSend = append(toSend, "Daily")
 	}
-	if (s.Notifications & weekly) == weekly {
+	if (p.Notifications & weekly) == weekly {
 		// only send on Friday
 		if lastTradingDayOfWeek(forDate, &manager) {
 			toSend = append(toSend, "Weekly")
 		}
 	}
-	if (s.Notifications & monthly) == monthly {
+	if (p.Notifications & monthly) == monthly {
 		if lastTradingDayOfMonth(forDate, &manager) {
 			toSend = append(toSend, "Monthly")
 		}
 	}
-	if (s.Notifications & annually) == annually {
+	if (p.Notifications & annually) == annually {
 		if lastTradingDayOfYear(forDate, &manager) {
 			toSend = append(toSend, "Annually")
 		}
 	}
 
 	for _, freq := range toSend {
-		log.Infof("Send %s notification for portfolio %s", freq, s.ID)
-		message, err := buildEmail(forDate, freq, s, p, perf, u)
+		log.Infof("Send %s notification for portfolio %s", freq, p.ID)
+		message, err := buildEmail(forDate, freq, p, perf, u)
 		if err != nil {
 			continue
 		}
@@ -462,7 +441,7 @@ func processNotifications(forDate time.Time, s *savedStrategy, p *portfolio.Port
 			"Function":   "cmd/notifier/main.go:processNotifications",
 			"StatusCode": statusCode,
 			"MessageID":  messageIDs,
-			"Portfolio":  s.ID,
+			"Portfolio":  p.ID,
 			"UserId":     u.ID,
 			"UserEmail":  u.Email,
 		}).Infof("Sent %s email to %s", freq, u.Email)
@@ -505,8 +484,8 @@ func formatReturn(ret float64) string {
 // Email utilizing dynamic transactional templates
 // Note: you must customize subject line of the dynamic template itself
 // Note: you may not use substitutions with dynamic templates
-func buildEmail(forDate time.Time, frequency string, s *savedStrategy,
-	p *portfolio.Portfolio, perf *portfolio.Performance, to *User) ([]byte, error) {
+func buildEmail(forDate time.Time, frequency string, p *portfolio.Portfolio,
+	perf *portfolio.Performance, to *User) ([]byte, error) {
 	if !to.Verified {
 		log.WithFields(log.Fields{
 			"Function": "cmd/notifier/main.go:sendEmail",
@@ -534,8 +513,8 @@ func buildEmail(forDate time.Time, frequency string, s *savedStrategy,
 	}
 	person.AddTos(tos...)
 
-	person.SetDynamicTemplateData("portfolioName", s.Name)
-	if strat, ok := strategies.StrategyMap[s.Strategy]; ok {
+	person.SetDynamicTemplateData("portfolioName", p.Name)
+	if strat, ok := strategies.StrategyMap[p.StrategyShortcode]; ok {
 		person.SetDynamicTemplateData("strategy", strat.Name)
 	}
 
@@ -645,30 +624,30 @@ func main() {
 	log.WithFields(log.Fields{
 		"NumPortfolios": len(savedPortfolios),
 	}).Info("Got saved portfolios")
-	for ii, s := range savedPortfolios {
-		if *portfolioFlag != "all" && portfolioID == s.ID {
-			p, err := computePortfolioPerformance(s, forDate)
+	for ii, p := range savedPortfolios {
+		if *portfolioFlag != "all" && portfolioID == p.ID {
+			err = updateTransactions(p, forDate)
 			if err != nil {
 				log.WithFields(log.Fields{
-					"PortfolioID": s.ID,
+					"PortfolioID": p.ID,
 					"Error":       err,
-				}).Error("Failed to compute portfolio performance")
+				}).Error("Failed to update portfolio transactions")
 				continue
 			}
 			perf, err := p.CalculatePerformance(forDate)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error":       err,
-					"PortfolioID": s.ID,
+					"PortfolioID": p.ID,
 					"Function":    "portfolio.CalculatePerformance",
 					"ForDate":     forDate.String(),
 				}).Error("Failed to calculate portfolio performance")
 			}
 			perf.BuildMetricsBundle()
-			updateSavedPortfolioPerformanceMetrics(s, &perf)
-			saveTransactions(s, &perf)
-			saveMeasurements(s, &perf)
-			processNotifications(forDate, s, p, &perf)
+			updateSavedPortfolioPerformanceMetrics(p, perf)
+			saveTransactions(p, perf)
+			saveMeasurements(p, perf)
+			processNotifications(forDate, p, perf)
 			if *limitFlag != 0 && *limitFlag >= ii {
 				break
 			}

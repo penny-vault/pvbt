@@ -194,7 +194,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	benchmarkTicker := strings.ToUpper(ticker)
 
 	dates := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
-	tickers := dataframe.NewSeriesString(portfolio.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
+	tickers := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
 	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)

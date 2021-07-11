@@ -12,6 +12,7 @@ import (
 
 	"main/data"
 	"main/portfolio"
+	"main/util"
 )
 
 var _ = Describe("Portfolio", func() {
@@ -99,7 +100,7 @@ var _ = Describe("Portfolio", func() {
 			time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 		})
 
-		tickerSeries := dataframe.NewSeriesString(portfolio.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
+		tickerSeries := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
 			"VFINX",
 			"PRIDX",
 			"VFINX",
@@ -107,7 +108,7 @@ var _ = Describe("Portfolio", func() {
 
 		df1 = dataframe.NewDataFrame(timeSeries, tickerSeries)
 
-		tickerSeriesMulti := dataframe.NewSeriesMixed(portfolio.TickerName,
+		tickerSeriesMulti := dataframe.NewSeriesMixed(util.TickerName,
 			&dataframe.SeriesInit{Size: 3},
 			map[string]float64{
 				"VFINX": 1.0,
