@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/golang/protobuf/proto"
-	"github.com/golang/protobuf/ptypes/timestamp"
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 const (
@@ -121,7 +121,7 @@ func (l *Loki) run() {
 			lastPktTime = curPktTime
 
 			tsNano := curPktTime.UnixNano()
-			ts := &timestamp.Timestamp{
+			ts := &timestamppb.Timestamp{
 				Seconds: tsNano / int64(time.Second),
 				Nanos:   int32(tsNano % int64(time.Second)),
 			}

@@ -11,12 +11,10 @@ require (
 	github.com/go-co-op/gocron v1.6.2
 	github.com/goccy/go-json v0.7.1
 	github.com/gofiber/fiber/v2 v2.13.0
-	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
 	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/guptarohit/asciigraph v0.5.2 // indirect
-	github.com/jackc/pgtype v1.7.0
 	github.com/jackc/pgx/v4 v4.11.0
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jdfergason/jwt/v2 v2.2.3
@@ -38,10 +36,11 @@ require (
 	github.com/sendgrid/sendgrid-go v3.10.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
 	github.com/xitongsys/parquet-go v1.6.0 // indirect
-	github.com/zeebo/blake3 v0.1.1 // indirect
+	github.com/zeebo/blake3 v0.1.1
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e // indirect
 	golang.org/x/exp v0.0.0-20210617012816-0dc655b38382 // indirect
 	golang.org/x/net v0.0.0-20210614182718-04defd469f4e // indirect
 	golang.org/x/sys v0.0.0-20210616094352-59db8d763f22 // indirect
 	gonum.org/v1/gonum v0.9.1
+	google.golang.org/protobuf v1.27.1
 )

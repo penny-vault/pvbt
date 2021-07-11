@@ -39,7 +39,7 @@ type tiingoJSONResponse struct {
 	SplitFactor float64 `json:"splitFactor"`
 }
 
-var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
+// var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
 var tiingoAPI = "https://api.tiingo.com"
 
 // NewTiingo Create a new Tiingo data provider
@@ -182,7 +182,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	// build URL to get data
 	var url string
 	nullTime := time.Time{}
-	if begin == nullTime || end == nullTime {
+	if begin.Equal(nullTime) || end.Equal(nullTime) {
 		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, frequency, t.apikey)
 	} else {
 		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency, t.apikey)
@@ -285,7 +285,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 
 	timeSeriesIdx, err := res.NameToColumn("date")
 	if err != nil {
-		return nil, errors.New("Cannot find time series")
+		return nil, errors.New("cannot find time series")
 	}
 
 	timeSeries = res.Series[timeSeriesIdx]
@@ -325,29 +325,29 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	case MetricAdjustedOpen:
 		valueSeriesIdx, err := res.NameToColumn("adjOpen")
 		if err != nil {
-			return nil, errors.New("Adjusted open metric not found")
+			return nil, errors.New("adjusted open metric not found")
 		}
 		valueSeries = res.Series[valueSeriesIdx]
 	case MetricAdjustedHigh:
 		valueSeriesIdx, err := res.NameToColumn("adjHigh")
 		if err != nil {
-			return nil, errors.New("Adjusted high metric not found")
+			return nil, errors.New("adjusted high metric not found")
 		}
 		valueSeries = res.Series[valueSeriesIdx]
 	case MetricAdjustedLow:
 		valueSeriesIdx, err := res.NameToColumn("adjLow")
 		if err != nil {
-			return nil, errors.New("Adjusted low metric not found")
+			return nil, errors.New("adjusted low metric not found")
 		}
 		valueSeries = res.Series[valueSeriesIdx]
 	case MetricAdjustedClose:
 		valueSeriesIdx, err := res.NameToColumn("adjClose")
 		if err != nil {
-			return nil, errors.New("Adjsuted close metric not found")
+			return nil, errors.New("adjsuted close metric not found")
 		}
 		valueSeries = res.Series[valueSeriesIdx]
 	default:
-		return nil, errors.New("Un-supported metric")
+		return nil, errors.New("un-supported metric")
 	}
 
 	if err != nil {

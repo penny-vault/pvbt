@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 package logrusloki;
+option go_package = "/loki";
 
 import "google/protobuf/timestamp.proto";
 

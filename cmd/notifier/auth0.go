@@ -66,7 +66,7 @@ func getToken() (string, error) {
 				"Domain":   domain,
 				"ClientId": clientID,
 				"Error":    err,
-			}).Error("Cannot get Auth0 Management API access token request")
+			}).Error("cannot get Auth0 Management API access token request")
 		return "", err
 	}
 
@@ -77,6 +77,7 @@ func getToken() (string, error) {
 		// as we are just formatting an error message for the
 		// already errored out HTTP response
 		respBody, _ := ioutil.ReadAll(resp.Body)
+		msg := "cannot get Auth0 Management API access token request"
 		log.WithFields(
 			log.Fields{
 				"Domain":     domain,
@@ -84,12 +85,13 @@ func getToken() (string, error) {
 				"StatusCode": resp.StatusCode,
 				"Headers":    resp.Header,
 				"Body":       respBody,
-			}).Error("Cannot get Auth0 Management API access token request")
-		return "", errors.New("Cannot get Auth0 Management API access token request")
+			}).Error(msg)
+		return "", errors.New(msg)
 	}
 
 	respBody, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		msg := "failed to read body response when retrieving Auth0 Management API access token"
 		log.WithFields(
 			log.Fields{
 				"Domain":     domain,
@@ -97,13 +99,14 @@ func getToken() (string, error) {
 				"StatusCode": resp.StatusCode,
 				"Headers":    resp.Header,
 				"Body":       respBody,
-			}).Error("Failed to read body response when retrieving Auth0 Management API access token")
-		return "", errors.New("Cannot get Auth0 Management API access token request")
+			}).Error(msg)
+		return "", errors.New(msg)
 	}
 
 	managementToken := &Token{}
 	err = json.Unmarshal(respBody, managementToken)
 	if err != nil {
+		msg := "failed to convert json Auth0 Management API access token"
 		log.WithFields(
 			log.Fields{
 				"Domain":     domain,
@@ -111,8 +114,8 @@ func getToken() (string, error) {
 				"StatusCode": resp.StatusCode,
 				"Headers":    resp.Header,
 				"Body":       respBody,
-			}).Error("Failed to convert json Auth0 Management API access token")
-		return "", errors.New("Cannot get Auth0 Management API access token request")
+			}).Error(msg)
+		return "", errors.New(msg)
 	}
 
 	return managementToken.AccessToken, nil
@@ -126,7 +129,7 @@ func getUser(userID string) (*User, error) {
 
 	log.WithFields(log.Fields{
 		"UserId": userID,
-	}).Info("Requesting user from auth0")
+	}).Info("requesting user from auth0")
 
 	// User hasn't been loaded yet, request from identity provider
 	domain := os.Getenv("AUTH0_DOMAIN")
@@ -143,7 +146,7 @@ func getUser(userID string) (*User, error) {
 			"Domain": domain,
 			"UserId": userID,
 			"Error":  err,
-		}).Error("Could not create Auth0 user request")
+		}).Error("could not create Auth0 user request")
 		return nil, err
 	}
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
@@ -154,20 +157,21 @@ func getUser(userID string) (*User, error) {
 			"Domain": domain,
 			"UserId": userID,
 			"Error":  err,
-		}).Error("User account request failed")
+		}).Error("user account request failed")
 		return nil, err
 	}
 
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
 		respBody, _ := ioutil.ReadAll(resp.Body)
+		msg := "user account request failed"
 		log.WithFields(log.Fields{
 			"Domain": domain,
 			"UserId": userID,
 			"Error":  err,
 			"Body":   string(respBody),
-		}).Error("User account request failed")
-		return nil, errors.New("User account request failed")
+		}).Error(msg)
+		return nil, errors.New(msg)
 	}
 
 	respBody, _ := ioutil.ReadAll(resp.Body)
@@ -179,7 +183,7 @@ func getUser(userID string) (*User, error) {
 			"UserId": userID,
 			"Error":  err,
 			"Body":   string(respBody),
-		}).Error("Could not decode user response")
+		}).Error("could not decode user response")
 	}
 
 	u := User{
@@ -190,6 +194,7 @@ func getUser(userID string) (*User, error) {
 	}
 
 	if v, ok := auth0User.UserMetaData["tiingo_token"]; ok {
+		msg := "could not decode user response - tiingo token invalid type"
 		if tiingoToken, ok := v.(string); ok {
 			u.TiingoToken = tiingoToken
 		} else {
@@ -198,17 +203,18 @@ func getUser(userID string) (*User, error) {
 				"UserId": userID,
 				"Error":  err,
 				"Body":   string(respBody),
-			}).Error("Could not decode user response - tiingo token invalid type")
-			return nil, errors.New("Could not decode user response - tiingo token invalid type")
+			}).Error(msg)
+			return nil, errors.New(msg)
 		}
 	} else {
+		msg := "could not decode user response - tiingo token missing"
 		log.WithFields(log.Fields{
 			"Domain": domain,
 			"UserId": userID,
 			"Error":  err,
 			"Body":   string(respBody),
-		}).Error("Could not decode user response - tiingo token missing")
-		return nil, errors.New("Could not decode user response - tiingo token missing")
+		}).Error(msg)
+		return nil, errors.New(msg)
 	}
 
 	userMap[userID] = u
