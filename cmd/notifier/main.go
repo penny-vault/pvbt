@@ -10,6 +10,7 @@ import (
 	"main/portfolio"
 	"main/strategies"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -86,7 +87,7 @@ func getSavedPortfolios(startDate time.Time) []*portfolio.Portfolio {
 					"Error": err,
 				}).Fatal("database query selecting user portfolio id's failed")
 			}
-			if p, err := portfolio.LoadFromDB(id, userID); err != nil {
+			if p, err := portfolio.LoadFromDB(id, userID, nil); err != nil {
 				log.WithFields(log.Fields{
 					"Error":       err,
 					"PortfolioID": id,
@@ -112,16 +113,13 @@ func updateSavedPortfolioPerformanceMetrics(p *portfolio.Portfolio, perf *portfo
 	}
 	updateSQL := `UPDATE portfolio_v1 SET ytd_return=$1, cagr_3yr=$2, cagr_5yr=$3, cagr_10yr=$4, cagr_since_inception=$5, std_dev=$6, downside_deviation=$7, max_draw_down=$8, avg_draw_down=$9, sharpe_ratio=$10, sortino_ratio=$11, ulcer_index=$12, performance_json=$13 WHERE id=$14`
 
-	// create JSON without transaction and measurement arrays
-	trxArray := perf.Transactions
+	// create JSON without measurement array
 	measArray := perf.Measurements
 
-	perf.Transactions = []portfolio.Transaction{}
-	perf.Measurements = []portfolio.PerformanceMeasurement{}
+	perf.Measurements = []*portfolio.PerformanceMeasurement{}
 
 	perfJSON, err := json.Marshal(perf)
 
-	perf.Transactions = trxArray
 	perf.Measurements = measArray
 
 	if err != nil {
@@ -130,28 +128,35 @@ func updateSavedPortfolioPerformanceMetrics(p *portfolio.Portfolio, perf *portfo
 			"Error":       err,
 		}).Error("could not encode performance struct as JSON")
 	}
+
+	n := len(perf.Measurements)
+	m1 := perf.Measurements[n-1]
+	maxDD := 0.0
+	if len(perf.DrawDowns) > 0 {
+		maxDD = perf.DrawDowns[0].LossPercent
+	}
 	_, err = trx.Exec(context.Background(),
 		updateSQL,
-		perf.YTDReturn,
-		perf.MetricsBundle.CAGRS.ThreeYear,
-		perf.MetricsBundle.CAGRS.FiveYear,
-		perf.MetricsBundle.CAGRS.TenYear,
-		perf.CagrSinceInception,
-		perf.MetricsBundle.StdDev,
-		perf.MetricsBundle.DownsideDeviation,
-		perf.MetricsBundle.MaxDrawDown.LossPercent,
-		perf.MetricsBundle.AvgDrawDown,
-		perf.MetricsBundle.SharpeRatio,
-		perf.MetricsBundle.SortinoRatio,
-		perf.MetricsBundle.UlcerIndexAvg,
+		perf.TWRReturnYTD,
+		m1.TWRRThreeYear,
+		m1.TWRRFiveYear,
+		m1.TWRRTenYear,
+		perf.TWRRSinceInception,
+		m1.StdDev,
+		m1.DownsideDeviation,
+		maxDD,
+		perf.AvgDrawDown,
+		perf.SharpeRatioSinceInception,
+		perf.SortinoRatioSinceInception,
+		perf.UlcerIndexAvg,
 		perfJSON,
 		p.ID,
 	)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID":          p.ID,
-			"YTDReturn":            perf.YTDReturn,
-			"CagrSinceInception":   perf.CagrSinceInception,
+			"YTDReturn":            perf.TWRReturnYTD,
+			"CagrSinceInception":   perf.TWRRSinceInception,
 			"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
 			"PerformanceEndDate":   time.Unix(perf.PeriodEnd, 0),
 			"Error":                err,
@@ -162,18 +167,18 @@ func updateSavedPortfolioPerformanceMetrics(p *portfolio.Portfolio, perf *portfo
 
 	log.WithFields(log.Fields{
 		"PortfolioID":          p.ID,
-		"YTDReturn":            perf.YTDReturn,
-		"CagrSinceInception":   perf.CagrSinceInception,
+		"YTDReturn":            perf.TWRReturnYTD,
+		"CagrSinceInception":   perf.TWRRSinceInception,
 		"PerformanceStartDate": time.Unix(perf.PeriodStart, 0),
 		"PerformanceEndDate":   time.Unix(perf.PeriodEnd, 0),
 	}).Info("Calculated portfolio performance")
 	trx.Commit(context.Background())
 }
 
-func saveTransactions(p *portfolio.Portfolio, perf *portfolio.Performance) error {
+func saveTransactions(p *portfolio.Portfolio) error {
 	startTime := time.Now()
 	log.WithFields(log.Fields{
-		"NumTransactions": len(perf.Transactions),
+		"NumTransactions": len(p.Transactions),
 		"StartTime":       startTime,
 	}).Info("Saving transactions to the database")
 
@@ -204,7 +209,7 @@ func saveTransactions(p *portfolio.Portfolio, perf *portfolio.Performance) error
 			ON CONFLICT ON CONSTRAINT portfolio_transaction_v1_portfolio_id_source_id_key DO NOTHING`
 
 	now := time.Now()
-	for idx, transaction := range perf.Transactions {
+	for idx, transaction := range p.Transactions {
 		// don't save future transactions -- note, transactions must be date ordered so it's
 		// safe to bail after we see one
 		if transaction.Date.After(now) {
@@ -241,7 +246,7 @@ func saveTransactions(p *portfolio.Portfolio, perf *portfolio.Performance) error
 	endTime := time.Now()
 	duration := endTime.Sub(startTime)
 	log.WithFields(log.Fields{
-		"NumTransactions": len(perf.Transactions),
+		"NumTransactions": len(p.Transactions),
 		"EndTime":         endTime,
 		"Duration":        duration,
 	}).Info("saved transactions to the database")
@@ -299,7 +304,7 @@ func saveMeasurements(p *portfolio.Portfolio, perf *portfolio.Performance) error
 			time.Unix(measurement.Time, 0),
 			measurement.Holdings,
 			measurement.Justification,
-			measurement.PercentReturn,
+			measurement.TWRROneDay,
 			p.ID,
 			measurement.RiskFreeValue,
 			measurement.TotalDeposited,
@@ -453,13 +458,13 @@ func periodReturn(forDate time.Time, frequency string, p *portfolio.Portfolio,
 	var ret float64
 	switch frequency {
 	case "Daily":
-		ret = perf.OneDayReturn(forDate, p)
+		ret = perf.TWRR(1, portfolio.STRATEGY)
 	case "Weekly":
-		ret = perf.OneWeekReturn(forDate, p)
+		ret = perf.TWRR(5, portfolio.STRATEGY)
 	case "Monthly":
-		ret = perf.OneMonthReturn(forDate)
+		ret = perf.TWRR(21, portfolio.STRATEGY)
 	case "Annually":
-		ret = perf.YTDReturn
+		ret = perf.TWRReturnYTD
 	}
 	return formatReturn(ret)
 }
@@ -520,10 +525,16 @@ func buildEmail(forDate time.Time, frequency string, p *portfolio.Portfolio,
 
 	person.SetDynamicTemplateData("frequency", frequency)
 	person.SetDynamicTemplateData("forDate", formatDate(forDate))
-	person.SetDynamicTemplateData("currentAsset", perf.CurrentAsset)
+
+	tickers := make([]string, 0, len(perf.CurrentAssets))
+	for _, holding := range perf.CurrentAssets {
+		tickers = append(tickers, holding.Ticker)
+	}
+	sort.Strings(tickers)
+	person.SetDynamicTemplateData("currentAsset", strings.Join(tickers, " "))
 
 	person.SetDynamicTemplateData("periodReturn", periodReturn(forDate, frequency, p, perf))
-	person.SetDynamicTemplateData("ytdReturn", formatReturn(perf.YTDReturn))
+	person.SetDynamicTemplateData("ytdReturn", formatReturn(perf.TWRReturnYTD))
 
 	m.AddPersonalizations(person)
 	return mail.GetRequestBody(m), nil
@@ -643,9 +654,8 @@ func main() {
 					"ForDate":     forDate.String(),
 				}).Error("Failed to calculate portfolio performance")
 			}
-			perf.BuildMetricsBundle()
 			updateSavedPortfolioPerformanceMetrics(p, perf)
-			saveTransactions(p, perf)
+			saveTransactions(p)
 			saveMeasurements(p, perf)
 			processNotifications(forDate, p, perf)
 			if *limitFlag != 0 && *limitFlag >= ii {
