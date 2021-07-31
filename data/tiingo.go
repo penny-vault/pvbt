@@ -21,6 +21,7 @@ import (
 
 type tiingo struct {
 	apikey string
+	cache  map[string]*dataframe.DataFrame
 }
 
 type tiingoJSONResponse struct {
@@ -46,12 +47,13 @@ var tiingoAPI = "https://api.tiingo.com"
 func NewTiingo(key string) tiingo {
 	return tiingo{
 		apikey: key,
+		cache:  make(map[string]*dataframe.DataFrame),
 	}
 }
 
 // Date provider functions
 
-// LastTradingDayOfWeek return the last trading day of the week
+// LastTradingDay return the last trading day for the requested frequency
 func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, error) {
 	symbol := "SPY"
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
@@ -188,95 +190,101 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 		url = fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&format=csv&resampleFreq=%s&token=%s", tiingoAPI, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency, t.apikey)
 	}
 
-	resp, err := http.Get(url)
+	var res *dataframe.DataFrame
+	res, ok := t.cache[url]
+	if !ok {
+		resp, err := http.Get(url)
 
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Url":       url,
-			"Symbol":    symbol,
-			"Metric":    metric,
-			"Frequency": frequency,
-			"StartTime": begin.String(),
-			"EndTime":   end.String(),
-			"Error":     err,
-		}).Debug("Failed to load eod prices")
-		return nil, err
-	}
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Url":       url,
+				"Symbol":    symbol,
+				"Metric":    metric,
+				"Frequency": frequency,
+				"StartTime": begin.String(),
+				"EndTime":   end.String(),
+				"Error":     err,
+			}).Debug("Failed to load eod prices")
+			return nil, err
+		}
 
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Url":        url,
-			"Symbol":     symbol,
-			"Metric":     metric,
-			"Frequency":  frequency,
-			"StartTime":  begin.String(),
-			"EndTime":    end.String(),
-			"Error":      err,
-			"StatusCode": resp.StatusCode,
-		}).Debug("Failed to load eod prices -- reading body failed")
-		return nil, err
-	}
+		defer resp.Body.Close()
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Url":        url,
+				"Symbol":     symbol,
+				"Metric":     metric,
+				"Frequency":  frequency,
+				"StartTime":  begin.String(),
+				"EndTime":    end.String(),
+				"Error":      err,
+				"StatusCode": resp.StatusCode,
+			}).Debug("Failed to load eod prices -- reading body failed")
+			return nil, err
+		}
 
-	if resp.StatusCode >= 400 {
-		log.WithFields(log.Fields{
-			"Url":        url,
-			"Symbol":     symbol,
-			"Metric":     metric,
-			"Frequency":  frequency,
-			"StartTime":  begin.String(),
-			"EndTime":    end.String(),
-			"Body":       string(body),
-			"StatusCode": resp.StatusCode,
-		}).Debug("Failed to load eod prices")
-		return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
-	}
+		if resp.StatusCode >= 400 {
+			log.WithFields(log.Fields{
+				"Url":        url,
+				"Symbol":     symbol,
+				"Metric":     metric,
+				"Frequency":  frequency,
+				"StartTime":  begin.String(),
+				"EndTime":    end.String(),
+				"Body":       string(body),
+				"StatusCode": resp.StatusCode,
+			}).Debug("Failed to load eod prices")
+			return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
+		}
 
-	floatConverter := imports.Converter{
-		ConcreteType: float64(0),
-		ConverterFunc: func(in interface{}) (interface{}, error) {
-			v, err := strconv.ParseFloat(in.(string), 64)
-			if err != nil {
-				return math.NaN(), nil
-			}
-			return v, nil
-		},
-	}
-
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		return nil, err
-	}
-
-	res, err := imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
-		DictateDataType: map[string]interface{}{
-			"date": imports.Converter{
-				ConcreteType: time.Time{},
-				ConverterFunc: func(in interface{}) (interface{}, error) {
-					dt, err := time.ParseInLocation("2006-01-02", in.(string), tz)
-					if err != nil {
-						return nil, err
-					}
-					dt = dt.Add(time.Hour * 16)
-					return dt, nil
-				},
+		floatConverter := imports.Converter{
+			ConcreteType: float64(0),
+			ConverterFunc: func(in interface{}) (interface{}, error) {
+				v, err := strconv.ParseFloat(in.(string), 64)
+				if err != nil {
+					return math.NaN(), nil
+				}
+				return v, nil
 			},
-			"open":      floatConverter,
-			"high":      floatConverter,
-			"low":       floatConverter,
-			"close":     floatConverter,
-			"volume":    floatConverter,
-			"adjOpen":   floatConverter,
-			"adjHigh":   floatConverter,
-			"adjLow":    floatConverter,
-			"adjClose":  floatConverter,
-			"adjVolume": floatConverter,
-		},
-	})
+		}
 
-	if err != nil {
-		return nil, err
+		tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+		if err != nil {
+			return nil, err
+		}
+
+		res, err = imports.LoadFromCSV(context.TODO(), bytes.NewReader(body), imports.CSVLoadOptions{
+			DictateDataType: map[string]interface{}{
+				"date": imports.Converter{
+					ConcreteType: time.Time{},
+					ConverterFunc: func(in interface{}) (interface{}, error) {
+						dt, err := time.ParseInLocation("2006-01-02", in.(string), tz)
+						if err != nil {
+							return nil, err
+						}
+						dt = dt.Add(time.Hour * 16)
+						return dt, nil
+					},
+				},
+				"open":        floatConverter,
+				"high":        floatConverter,
+				"low":         floatConverter,
+				"close":       floatConverter,
+				"volume":      floatConverter,
+				"adjOpen":     floatConverter,
+				"adjHigh":     floatConverter,
+				"adjLow":      floatConverter,
+				"adjClose":    floatConverter,
+				"adjVolume":   floatConverter,
+				"divCash":     floatConverter,
+				"splitFactor": floatConverter,
+			},
+		})
+
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	err = nil
@@ -288,7 +296,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 		return nil, errors.New("cannot find time series")
 	}
 
-	timeSeries = res.Series[timeSeriesIdx]
+	timeSeries = res.Series[timeSeriesIdx].Copy()
 	timeSeries.Rename(DateIdx)
 
 	switch metric {
@@ -297,55 +305,67 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 		if err != nil {
 			return nil, errors.New("open metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricHigh:
 		valueSeriesIdx, err := res.NameToColumn("high")
 		if err != nil {
 			return nil, errors.New("high metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricLow:
 		valueSeriesIdx, err := res.NameToColumn("low")
 		if err != nil {
 			return nil, errors.New("low metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricClose:
 		valueSeriesIdx, err := res.NameToColumn("close")
 		if err != nil {
 			return nil, errors.New("close metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricVolume:
 		valueSeriesIdx, err := res.NameToColumn("volume")
 		if err != nil {
 			return nil, errors.New("volume metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricAdjustedOpen:
 		valueSeriesIdx, err := res.NameToColumn("adjOpen")
 		if err != nil {
 			return nil, errors.New("adjusted open metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricAdjustedHigh:
 		valueSeriesIdx, err := res.NameToColumn("adjHigh")
 		if err != nil {
 			return nil, errors.New("adjusted high metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricAdjustedLow:
 		valueSeriesIdx, err := res.NameToColumn("adjLow")
 		if err != nil {
 			return nil, errors.New("adjusted low metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricAdjustedClose:
 		valueSeriesIdx, err := res.NameToColumn("adjClose")
 		if err != nil {
-			return nil, errors.New("adjsuted close metric not found")
+			return nil, errors.New("adjusted close metric not found")
 		}
-		valueSeries = res.Series[valueSeriesIdx]
+		valueSeries = res.Series[valueSeriesIdx].Copy()
+	case MetricDividendCash:
+		valueSeriesIdx, err := res.NameToColumn("divCash")
+		if err != nil {
+			return nil, errors.New("dividend metric not found")
+		}
+		valueSeries = res.Series[valueSeriesIdx].Copy()
+	case MetricSplitFactor:
+		valueSeriesIdx, err := res.NameToColumn("splitFactor")
+		if err != nil {
+			return nil, errors.New("split factor metric not found")
+		}
+		valueSeries = res.Series[valueSeriesIdx].Copy()
 	default:
 		return nil, errors.New("un-supported metric")
 	}

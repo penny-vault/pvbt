@@ -34,15 +34,18 @@ const (
 )
 
 const (
-	MetricOpen          = "Open"
-	MetricLow           = "Low"
-	MetricHigh          = "High"
-	MetricClose         = "Close"
-	MetricVolume        = "Volume"
-	MetricAdjustedOpen  = "AdjustedOpen"
-	MetricAdjustedLow   = "AdjustedLow"
-	MetricAdjustedHigh  = "AdjustedHigh"
-	MetricAdjustedClose = "AdjustedClose"
+	MetricOpen           = "Open"
+	MetricLow            = "Low"
+	MetricHigh           = "High"
+	MetricClose          = "Close"
+	MetricVolume         = "Volume"
+	MetricAdjustedOpen   = "AdjustedOpen"
+	MetricAdjustedLow    = "AdjustedLow"
+	MetricAdjustedHigh   = "AdjustedHigh"
+	MetricAdjustedClose  = "AdjustedClose"
+	MetricAdjustedVolume = "AdjustedVolume"
+	MetricDividendCash   = "DividendCash"
+	MetricSplitFactor    = "SplitFactor"
 )
 
 // Manager data manager type
@@ -86,7 +89,7 @@ func NewManager(credentials map[string]string) Manager {
 		Frequency:   FrequencyMonthly,
 		credentials: credentials,
 		providers:   map[string]Provider{},
-		Metric:      MetricAdjustedClose,
+		Metric:      MetricClose,
 	}
 
 	// Create Tiingo API
@@ -121,7 +124,10 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 	}
 
 	var ret float64
-	iterator := riskFreeRate.ValuesIterator(dataframe.ValuesOptions{start, 1, true})
+	iterator := riskFreeRate.ValuesIterator(dataframe.ValuesOptions{
+		InitialRow:   start,
+		Step:         1,
+		DontReadLock: true})
 	for {
 		row, vals, _ := iterator(dataframe.SeriesName)
 		if row == nil {
@@ -139,7 +145,6 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 		}
 	}
 
-	log.Debugf("lad idx: %d", m.lastRiskFreeIdx)
 	return ret
 }
 
