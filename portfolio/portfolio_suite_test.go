@@ -9,6 +9,8 @@ import (
 )
 
 var _ = BeforeSuite(func() {
+	//	log.SetLevel(log.DebugLevel)
+
 	// block all HTTP requests
 	httpmock.Activate()
 })

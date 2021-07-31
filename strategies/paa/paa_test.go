@@ -4,23 +4,25 @@ import (
 	"fmt"
 	"io/ioutil"
 	"main/data"
-	"main/portfolio"
 	"main/strategies/paa"
+	"main/util"
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/rocketlaunchr/dataframe-go"
 
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("PAA", func() {
+var _ = Describe("Daa", func() {
 	var (
 		strat   *paa.KellersProtectiveAssetAllocation
 		manager data.Manager
 		tz      *time.Location
-		p       *portfolio.Portfolio
+		target  *dataframe.DataFrame
+		err     error
 	)
 
 	BeforeEach(func() {
@@ -42,14 +44,12 @@ var _ = Describe("PAA", func() {
 			"tiingo": "TEST",
 		})
 
-		p = portfolio.NewPortfolio("PAA", time.Date(1980, time.January, 1, 0, 0, 0, 0, tz), 10000, &manager)
-
 		content, err := ioutil.ReadFile("../testdata/TB3MS.csv")
 		if err != nil {
 			panic(err)
 		}
 
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=AdjustedClose&fam=avg",
+		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=Close&fam=avg",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
@@ -113,18 +113,62 @@ var _ = Describe("PAA", func() {
 		data.InitializeDataManager()
 	})
 
-	Describe("Calculate portfolio based on Keller's Protective Asset Allocation", func() {
-		Context("with N=2, a=2", func() {
-			It("should be invested in VUSTX", func() {
+	Describe("Compute momentum scores", func() {
+		Context("with full stock history", func() {
+			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				target, err := strat.Compute(&manager)
-				Expect(err).To(BeNil())
+				target, err = strat.Compute(&manager)
+			})
 
-				err = p.TargetPortfolio(target)
+			It("should not error", func() {
 				Expect(err).To(BeNil())
+			})
 
-				Expect(p.Transactions).Should(HaveLen(526))
+			It("should have length", func() {
+				Expect(target.NRows()).To(Equal(374))
+			})
+
+			It("should begin on", func() {
+				val := target.Row(0, true, dataframe.SeriesName)
+				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.December, 29, 16, 0, 0, 0, tz)))
+			})
+
+			It("should end on", func() {
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+			})
+
+			It("should be invested in PRIDX to start", func() {
+				val := target.Row(0, true, dataframe.SeriesName)
+				t := val[util.TickerName].(map[string]float64)
+				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in PRIDX to end", func() {
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				t := val[util.TickerName].(map[string]float64)
+				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in VFINX on 1997-11-28", func() {
+				val := target.Row(100, true, dataframe.SeriesName)
+				t := val[util.TickerName].(map[string]float64)
+				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in PRIDX on 2006-03-31", func() {
+				val := target.Row(200, true, dataframe.SeriesName)
+				t := val[util.TickerName].(map[string]float64)
+				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in VUSTX on 2014-07-31", func() {
+				val := target.Row(300, true, dataframe.SeriesName)
+				t := val[util.TickerName].(map[string]float64)
+				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
 			})
 		})
 	})

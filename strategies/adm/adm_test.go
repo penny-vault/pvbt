@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"main/data"
-	"main/portfolio"
 	"main/strategies/adm"
+	"main/util"
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/rocketlaunchr/dataframe-go"
 
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo"
@@ -20,6 +21,8 @@ var _ = Describe("Adm", func() {
 		strat   *adm.AcceleratingDualMomentum
 		manager data.Manager
 		tz      *time.Location
+		target  *dataframe.DataFrame
+		err     error
 	)
 
 	BeforeEach(func() {
@@ -42,8 +45,7 @@ var _ = Describe("Adm", func() {
 		if err != nil {
 			panic(err)
 		}
-
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=AdjustedClose&fam=avg",
+		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=Close&fam=avg",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
@@ -109,116 +111,55 @@ var _ = Describe("Adm", func() {
 
 	Describe("Compute momentum scores", func() {
 		Context("with full stock history", func() {
-			It("should be invested in PRIDX", func() {
+			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				p := portfolio.NewPortfolio("Accelerating Dual Momentum", manager.Begin, 10000, &manager)
-				target, err := strat.Compute(&manager)
+				target, err = strat.Compute(&manager)
+			})
+
+			It("should not error", func() {
 				Expect(err).To(BeNil())
-				p.TargetPortfolio(target)
-				Expect(err).To(BeNil())
+			})
 
-				perf, err := p.CalculatePerformance(manager.End)
-				Expect(err).To(BeNil())
-				Expect(strat.CurrentSymbol).To(Equal("PRIDX"))
+			It("should have length", func() {
+				Expect(target.NRows()).To(Equal(379))
+			})
 
-				var begin int64 = 617918400
-				Expect(perf.PeriodStart).To(Equal(begin))
+			It("should begin on", func() {
+				val := target.Row(0, true, dataframe.SeriesName)
+				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.July, 31, 16, 0, 0, 0, tz)))
+			})
 
-				var end int64 = 1609477200
-				Expect(perf.PeriodEnd).To(Equal(end))
-				Expect(perf.Measurements).Should(HaveLen(379))
-				Expect(perf.Measurements[0]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  617918400,
-					Value: 10000,
-					Holdings: []portfolio.ReportableHolding{
-						{
-							Ticker:           "VFINX",
-							Shares:           589.5892770347044,
-							PercentPortfolio: 1,
-							Value:            10000,
-						},
-					},
-					RiskFreeValue: 10000,
-					PercentReturn: 0,
-					Justification: map[string]interface{}{
-						"VFINX Score": 11.039635491240361,
-						"PRIDX Score": 7.228182302084328,
-					},
-				}))
-				Expect(perf.Measurements[100]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  880750800,
-					Value: 42408.60298101431,
-					Holdings: []portfolio.ReportableHolding{
-						{
-							Ticker:           "VFINX",
-							Shares:           726.673315772532,
-							PercentPortfolio: 1,
-							Value:            42408.60298101431,
-						},
-					},
-					RiskFreeValue: 15177.26344096807,
-					PercentReturn: 0.045985060690943325,
-					Justification: map[string]interface{}{
-						"VFINX Score": 6.840593309526736,
-						"PRIDX Score": -7.943715719726785,
-					},
-				}))
-				Expect(perf.Measurements[200]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1143838800,
-					Value: 343579.75074944284,
-					Holdings: []portfolio.ReportableHolding{
-						{
-							Ticker:           "PRIDX",
-							Shares:           13581.990073636443,
-							PercentPortfolio: 1,
-							Value:            343579.75074944284,
-						},
-					},
-					RiskFreeValue: 19949.19576487317,
-					PercentReturn: 0.06929347826087029,
-					Justification: map[string]interface{}{
-						"VFINX Score": 2.734696874619626,
-						"PRIDX Score": 13.388751105525918,
-					},
-				}))
-				Expect(perf.Measurements[300]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1406836800,
-					Value: 1.1502482646161707e+06,
-					Holdings: []portfolio.ReportableHolding{
-						{
-							Ticker:           "VFINX",
-							Shares:           7287.807720408271,
-							PercentPortfolio: 1,
-							Value:            1.1502482646161707e+06,
-						},
-					},
-					RiskFreeValue: 21980.61683825629,
-					PercentReturn: -0.01388044019244239,
-					Justification: map[string]interface{}{
-						"VFINX Score": 3.6407964883074544,
-						"PRIDX Score": 0.9912254124299698,
-					},
-				}))
+			It("should end on", func() {
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+			})
 
-				Expect(perf.Measurements[378]).To(Equal(portfolio.PerformanceMeasurement{
-					Time:  1611954000,
-					Value: 3.279045827906852e+06,
-					Holdings: []portfolio.ReportableHolding{
-						{
-							Ticker:           "PRIDX",
-							Shares:           35145.1857224743,
-							PercentPortfolio: 1,
-							Value:            3.279045827906852e+06,
-						},
-					},
-					RiskFreeValue: 23263.159737958395,
-					PercentReturn: 0.027872645147074993,
-					Justification: map[string]interface{}{
-						"VFINX Score": 11.242040896256247,
-						"PRIDX Score": 18.048957055687936,
-					},
-				}))
+			It("should be invested in VFINX to start", func() {
+				val := target.Row(0, true, dataframe.SeriesName)
+				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
+			})
+
+			It("should be invested in PRIDX to end", func() {
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				Expect(val[util.TickerName].(string)).To(Equal("PRIDX"))
+			})
+
+			It("should be invested in PRIDX on 1997-11-28", func() {
+				val := target.Row(100, true, dataframe.SeriesName)
+				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
+			})
+
+			It("should be invested in PRIDX on 2006-03-31", func() {
+				val := target.Row(200, true, dataframe.SeriesName)
+				Expect(val[util.TickerName].(string)).To(Equal("PRIDX"))
+			})
+
+			It("should be invested in VFINX on 2014-07-31", func() {
+				val := target.Row(300, true, dataframe.SeriesName)
+				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
 			})
 		})
 	})

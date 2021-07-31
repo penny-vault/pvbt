@@ -132,15 +132,9 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		stop = time.Now()
 		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
 
-		start = time.Now()
-		performance.BuildMetricsBundle()
-		stop = time.Now()
-		metricCalcDur := stop.Sub(start).Round(time.Millisecond)
-
 		log.WithFields(log.Fields{
-			"StratCalcDur":  stratComputeDur,
-			"PerfCalcDur":   calcPerfDur,
-			"MetricCalcDur": metricCalcDur,
+			"StratCalcDur": stratComputeDur,
+			"PerfCalcDur":  calcPerfDur,
 		}).Info("Strategy calculated")
 
 		return c.JSON(performance)
