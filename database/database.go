@@ -2,6 +2,7 @@ package database
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -15,6 +16,11 @@ import (
 var pool *pgxpool.Pool
 
 func createUser(userID string) error {
+	if userID == "" {
+		log.Error("userID cannot be an empty string")
+		return errors.New("userID cannot be an empty string")
+	}
+
 	log.WithFields(log.Fields{
 		"UserID": userID,
 	}).Info("creating new role")
@@ -114,7 +120,7 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 		log.WithFields(log.Fields{
 			"UserID": userID,
 			"Error":  err,
-		}).Info("Role doesn't seem to exist")
+		}).Warn("role does not exist")
 		trx.Rollback(context.Background())
 		err = createUser(userID)
 		if err != nil {
