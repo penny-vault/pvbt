@@ -4,16 +4,29 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/jdfergason/pv-api)](https://goreportcard.com/report/github.com/jdfergason/pv-api)
 [![codecov](https://codecov.io/gh/jdfergason/pv-api/branch/master/graph/badge.svg?token=L3C272LW9C)](https://codecov.io/gh/jdfergason/pv-api)
 
-Penny Vault HTTPS api that is deployed to Heroku.
+Penny Vault api provides backend functionality for managing a quantiative invesment portfolio. It has functions for:
 
-# List of environment variable configuration
+- Backtesting a strategy with a user provided set of parameters
+- Running a strategy at regular intervals to and recording transactions
+- Notifying clients of trade signals
+- Calculating portfolio performance
 
-- AUTH0_CLIENT_ID: configuration for auth0
-- AUTH0_DOMAIN: configuration for auth0
-- AUTH0_SECRET: configuration for auth0
-- DATABASE_URL: database connection string
-- LOKI_URL: URL to send loki logs to
-- PORT: port server should listen on
-- PV_SECRET: hex-encoded 32-byte key used for encrypting / decrypting API keys
-- SENDGRID_API_KEY: sendgrid api key
-- SYSTEM_TIINGO_TOKEN: tiingo token to use when computing overall strategy performance
+The project is versioned in compliance with [Semantic Versioning 2.0](https://semver.org)
+
+# Building
+
+    mage build
+
+# Running
+
+To run the application use the `pvapi` executable. The HTTPS api can be served with:
+
+    pvapi serve -p 3000
+
+For complete details run:
+
+    pvapi help
+
+# Configuring
+
+There are a number of configuration variables necessary to run pvapi. These can be provided via a toml file (see: config.toml.tmpl for an example), environment variables, or as flags to the command line.
