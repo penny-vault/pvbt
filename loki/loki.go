@@ -16,7 +16,8 @@ import (
 
 	"github.com/golang/snappy"
 	"github.com/prometheus/common/model"
-	"github.com/sirupsen/logrus"
+	logrus "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -41,6 +42,15 @@ type Loki struct {
 	execEnv   string
 	data      map[model.LabelName]model.LabelValue
 	wg        sync.WaitGroup
+}
+
+func Init() {
+	hook, err := New(viper.GetString("loki.url"), 102400, 1)
+	if err != nil {
+		logrus.Error(err)
+	} else {
+		logrus.AddHook(hook)
+	}
 }
 
 func New(URL string, batchSize, batchWait int) (*Loki, error) {

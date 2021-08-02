@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
+	"main/common"
 	"main/data"
 	"main/portfolio"
-	"main/util"
 	"runtime"
 	"strconv"
 	"strings"
@@ -56,7 +56,7 @@ func ApiKey(c *fiber.Ctx) error {
 	}
 
 	// encrypt it
-	encryptedToken, err := util.Encrypt(buf.Bytes())
+	encryptedToken, err := common.Encrypt(buf.Bytes())
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
@@ -194,7 +194,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	benchmarkTicker := strings.ToUpper(ticker)
 
 	dates := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
-	tickers := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
+	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
 	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)

@@ -3,9 +3,9 @@ package daa_test
 import (
 	"fmt"
 	"io/ioutil"
+	"main/common"
 	"main/data"
 	"main/strategies/daa"
-	"main/util"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -142,32 +142,32 @@ var _ = Describe("Daa", func() {
 
 			It("should be invested in VUSTX to start", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				t := val[util.TickerName].(map[string]float64)
+				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VUSTX to end", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				t := val[util.TickerName].(map[string]float64)
+				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in PRIDX on 1997-11-28", func() {
 				val := target.Row(100, true, dataframe.SeriesName)
-				t := val[util.TickerName].(map[string]float64)
+				t := val[common.TickerName].(map[string]float64)
 				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VFINX on 2006-03-31", func() {
 				val := target.Row(200, true, dataframe.SeriesName)
-				t := val[util.TickerName].(map[string]float64)
+				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VFINX on 2014-07-31", func() {
 				val := target.Row(300, true, dataframe.SeriesName)
-				t := val[util.TickerName].(map[string]float64)
+				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
 			})
 		})

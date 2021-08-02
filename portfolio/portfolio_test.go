@@ -10,9 +10,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rocketlaunchr/dataframe-go"
 
+	"main/common"
 	"main/data"
 	"main/portfolio"
-	"main/util"
 )
 
 var _ = Describe("Portfolio", func() {
@@ -121,7 +121,7 @@ var _ = Describe("Portfolio", func() {
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
 
-				tickerSeries := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
+				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
 					"VFINX",
 					"PRIDX",
 					"VFINX",
@@ -251,7 +251,7 @@ var _ = Describe("Portfolio", func() {
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
 
-				tickerSeries2 := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 1}, []string{
+				tickerSeries2 := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, []string{
 					"TSLA",
 				})
 
@@ -306,7 +306,7 @@ var _ = Describe("Portfolio", func() {
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
 
-				tickerSeries := dataframe.NewSeriesString(util.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
+				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
 					"VFINX",
 					"PRIDX",
 					"VFINX",
@@ -369,7 +369,7 @@ var _ = Describe("Portfolio", func() {
 						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 					})
 
-					tickerSeriesMulti := dataframe.NewSeriesMixed(util.TickerName,
+					tickerSeriesMulti := dataframe.NewSeriesMixed(common.TickerName,
 						&dataframe.SeriesInit{Size: 3},
 						map[string]float64{
 							"VFINX": 1.0,

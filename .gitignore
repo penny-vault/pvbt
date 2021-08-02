@@ -12,9 +12,8 @@
 *.out
 coverage.txt
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-bin/
+# compiled binaries
+pvapi
 
 # configuration development files
 *.env

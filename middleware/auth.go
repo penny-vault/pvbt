@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
-	"main/util"
+	"main/common"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
@@ -45,7 +45,7 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).SendString("could not hex decode apikey")
 		}
 
-		unencryptedBytes, err := util.Decrypt(tokenBytes)
+		unencryptedBytes, err := common.Decrypt(tokenBytes)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error": err,

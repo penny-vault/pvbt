@@ -3,9 +3,9 @@ package adm_test
 import (
 	"fmt"
 	"io/ioutil"
+	"main/common"
 	"main/data"
 	"main/strategies/adm"
-	"main/util"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -138,28 +138,28 @@ var _ = Describe("Adm", func() {
 
 			It("should be invested in VFINX to start", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
 			})
 
 			It("should be invested in PRIDX to end", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[util.TickerName].(string)).To(Equal("PRIDX"))
+				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
 			})
 
 			It("should be invested in PRIDX on 1997-11-28", func() {
 				val := target.Row(100, true, dataframe.SeriesName)
-				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
 			})
 
 			It("should be invested in PRIDX on 2006-03-31", func() {
 				val := target.Row(200, true, dataframe.SeriesName)
-				Expect(val[util.TickerName].(string)).To(Equal("PRIDX"))
+				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
 			})
 
 			It("should be invested in VFINX on 2014-07-31", func() {
 				val := target.Row(300, true, dataframe.SeriesName)
-				Expect(val[util.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
 			})
 		})
 	})

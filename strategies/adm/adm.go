@@ -13,10 +13,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"main/common"
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
-	"main/util"
 	"strings"
 	"time"
 
@@ -44,7 +44,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	util.ArrToUpper(inTickers)
+	common.ArrToUpper(inTickers)
 
 	var outTicker string
 	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
@@ -257,7 +257,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 	scoresDf = tmp.(*dataframe.DataFrame)
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
-	argmax.Rename(util.TickerName)
+	argmax.Rename(common.TickerName)
 	if err != nil {
 		return nil, err
 	}

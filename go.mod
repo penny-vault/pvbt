@@ -36,6 +36,9 @@ require (
 	github.com/sendgrid/rest v2.6.4+incompatible // indirect
 	github.com/sendgrid/sendgrid-go v3.10.0+incompatible
 	github.com/sirupsen/logrus v1.8.1
+	github.com/spf13/cast v1.3.1
+	github.com/spf13/cobra v1.2.1
+	github.com/spf13/viper v1.8.1
 	github.com/xitongsys/parquet-go v1.6.0 // indirect
 	github.com/zeebo/blake3 v0.1.1
 	golang.org/x/crypto v0.0.0-20210616213533-5ff15b29337e // indirect

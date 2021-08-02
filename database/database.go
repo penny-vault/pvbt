@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 // Private
@@ -92,7 +92,7 @@ func createUser(userID string) error {
 
 func Connect() error {
 	var err error
-	pool, err = pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	pool, err = pgxpool.Connect(context.Background(), viper.GetString("database.url"))
 	if err != nil {
 		return err
 	}

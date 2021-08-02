@@ -10,10 +10,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"main/common"
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
-	"main/util"
 	"sort"
 	"strings"
 	"time"
@@ -50,13 +50,13 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(protectiveUniverse)
+	common.ArrToUpper(protectiveUniverse)
 
 	riskUniverse := []string{}
 	if err := json.Unmarshal(args["riskUniverse"], &riskUniverse); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(riskUniverse)
+	common.ArrToUpper(riskUniverse)
 
 	var protectionFactor int
 	if err := json.Unmarshal(args["protectionFactor"], &protectionFactor); err != nil {
@@ -153,14 +153,14 @@ func (paa *KellersProtectiveAssetAllocation) mom(sma *dataframe.DataFrame) error
 }
 
 // rank securities based on their momentum scores
-func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]util.PairList, []string) {
+func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]common.PairList, []string) {
 	iterator := df.ValuesIterator(dataframe.ValuesOptions{
 		InitialRow:   0,
 		Step:         1,
 		DontReadLock: true,
 	})
 
-	riskRanked := make([]util.PairList, df.NRows())
+	riskRanked := make([]common.PairList, df.NRows())
 	protectiveSelection := make([]string, df.NRows())
 
 	df.Lock()
@@ -171,12 +171,12 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 		}
 
 		// rank each risky asset if it's momentum is greater than 0
-		sortable := make(util.PairList, 0, len(paa.riskUniverse))
+		sortable := make(common.PairList, 0, len(paa.riskUniverse))
 		for _, ticker := range paa.riskUniverse {
 			momCol := fmt.Sprintf("%s_MOM", ticker)
 			floatVal := vals[momCol].(float64)
 			if floatVal > 0 {
-				sortable = append(sortable, util.Pair{
+				sortable = append(sortable, common.Pair{
 					Key:   ticker,
 					Value: floatVal,
 				})
@@ -189,10 +189,10 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 		riskRanked[*row] = sortable[0:min(len(sortable), paa.topN)]
 
 		// rank each protective asset and select max
-		sortable = make(util.PairList, 0, len(paa.protectiveUniverse))
+		sortable = make(common.PairList, 0, len(paa.protectiveUniverse))
 		for _, ticker := range paa.protectiveUniverse {
 			momCol := fmt.Sprintf("%s_MOM", ticker)
-			sortable = append(sortable, util.Pair{
+			sortable = append(sortable, common.Pair{
 				Key:   ticker,
 				Value: vals[momCol].(float64),
 			})
@@ -207,7 +207,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]ut
 }
 
 // buildPortfolio computes the bond fraction at each period and creates a listing of target holdings
-func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.PairList, protectiveSelection []string, mom *dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.PairList, protectiveSelection []string, mom *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	// N is the number of assets in the risky universe
 	N := float64(len(paa.riskUniverse))
 
@@ -305,7 +305,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []util.Pa
 		log.Error("Time series not set on momentum series")
 	}
 	timeSeries := mom.Series[timeIdx].Copy()
-	targetSeries := dataframe.NewSeriesMixed(util.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
+	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 
 	series := make([]dataframe.Series, 0, len(paa.riskUniverse)+len(paa.protectiveUniverse))
 	series = append(series, timeSeries)

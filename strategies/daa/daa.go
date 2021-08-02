@@ -15,10 +15,10 @@ package daa
 import (
 	"context"
 	"errors"
+	"main/common"
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
-	"main/util"
 	"math"
 	"sort"
 	"strings"
@@ -62,19 +62,19 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	if err := json.Unmarshal(args["cashUniverse"], &cashUniverse); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(cashUniverse)
+	common.ArrToUpper(cashUniverse)
 
 	protectiveUniverse := []string{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(protectiveUniverse)
+	common.ArrToUpper(protectiveUniverse)
 
 	riskUniverse := []string{}
 	if err := json.Unmarshal(args["riskUniverse"], &riskUniverse); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(riskUniverse)
+	common.ArrToUpper(riskUniverse)
 
 	var breadth float64
 	if err := json.Unmarshal(args["breadth"], &breadth); err != nil {
@@ -177,7 +177,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	}
 	timeSeries := daa.momentum.Series[timeIdx]
 
-	targetSeries := dataframe.NewSeriesMixed(util.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
+	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	daa.targetPortfolio = dataframe.NewDataFrame(timeSeries, targetSeries)
 }
 
@@ -240,7 +240,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dat
 	daa.findTopTRiskAssets()
 
 	symbols := []string{}
-	tickerIdx, _ := daa.targetPortfolio.NameToColumn(util.TickerName)
+	tickerIdx, _ := daa.targetPortfolio.NameToColumn(common.TickerName)
 	lastTarget := daa.targetPortfolio.Series[tickerIdx].Value(daa.targetPortfolio.NRows() - 1).(map[string]float64)
 	for kk := range lastTarget {
 		symbols = append(symbols, kk)

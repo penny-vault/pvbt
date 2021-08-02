@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"main/common"
 	"main/data"
 	"main/database"
 	"main/dfextras"
 	"main/strategies"
-	"main/util"
 	"math"
 	"sort"
 	"strings"
@@ -578,9 +578,9 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		p.Transactions[0].Date = p.StartDate
 	}
 
-	tickerSeriesIdx, err := target.NameToColumn(util.TickerName)
+	tickerSeriesIdx, err := target.NameToColumn(common.TickerName)
 	if err != nil {
-		return fmt.Errorf("missing required column: %s", util.TickerName)
+		return fmt.Errorf("missing required column: %s", common.TickerName)
 	}
 
 	// check series type
@@ -645,8 +645,8 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 			switch idx {
 			case data.DateIdx:
 				date = val[data.DateIdx].(time.Time)
-			case util.TickerName:
-				symbol = val[util.TickerName]
+			case common.TickerName:
+				symbol = val[common.TickerName]
 			default:
 				justification[idx] = v
 			}

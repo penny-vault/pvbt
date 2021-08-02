@@ -1,4 +1,4 @@
-package util
+package common
 
 import (
 	"crypto/aes"
@@ -11,6 +11,7 @@ import (
 	"time"
 
 	log "github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 )
 
 const (
@@ -46,7 +47,7 @@ func ArrToUpper(arr []string) {
 
 // Encrypt an array of byte data using the PV_SECRET key
 func Encrypt(data []byte) ([]byte, error) {
-	key, err := hex.DecodeString(os.Getenv("PV_SECRET"))
+	key, err := hex.DecodeString(viper.GetString("secret_key"))
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
@@ -75,7 +76,7 @@ func Encrypt(data []byte) ([]byte, error) {
 
 // Decrypt data and return using PV_SECRET key
 func Decrypt(data []byte) ([]byte, error) {
-	key, err := hex.DecodeString(os.Getenv("PV_SECRET"))
+	key, err := hex.DecodeString(viper.GetString("secret_key"))
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
@@ -105,4 +106,48 @@ func Decrypt(data []byte) ([]byte, error) {
 		return nil, err
 	}
 	return plaintext, nil
+}
+
+func SetupLogging() {
+	// Set level
+	level := viper.GetString("log.level")
+	level = strings.ToLower(level)
+
+	switch level {
+	case "debug":
+		log.SetLevel(log.DebugLevel)
+	case "error":
+		log.SetLevel(log.ErrorLevel)
+	case "fatal":
+		log.SetLevel(log.FatalLevel)
+	case "info":
+		log.SetLevel(log.InfoLevel)
+	case "panic":
+		log.SetLevel(log.PanicLevel)
+	case "trace":
+		log.SetLevel(log.TraceLevel)
+	case "warning":
+		log.SetLevel(log.WarnLevel)
+	default:
+		log.SetLevel(log.WarnLevel)
+	}
+
+	// Set report caller
+	log.SetReportCaller(viper.GetBool("log.report_caller"))
+
+	// Setup output
+	output := viper.GetString("log.output")
+	switch output {
+	case "stdout":
+		log.SetOutput(os.Stdout)
+	case "stderr":
+		log.SetOutput(os.Stderr)
+	default:
+		fh, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+		if err != nil {
+			panic(err)
+		}
+		defer fh.Close()
+		log.SetOutput(fh)
+	}
 }

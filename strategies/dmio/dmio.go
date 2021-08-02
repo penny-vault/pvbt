@@ -10,10 +10,10 @@ package dmio
 import (
 	"context"
 	"errors"
+	"main/common"
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
-	"main/util"
 	"strings"
 	"time"
 
@@ -123,19 +123,19 @@ func NewDualMomentumInOut(args map[string]json.RawMessage) (strategy.Strategy, e
 	if err := json.Unmarshal(args["stocks"], &stocks); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(stocks)
+	common.ArrToUpper(stocks)
 
 	bonds := []string{}
 	if err := json.Unmarshal(args["bonds"], &bonds); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(bonds)
+	common.ArrToUpper(bonds)
 
 	canary := []string{}
 	if err := json.Unmarshal(args["canary"], &canary); err != nil {
 		return nil, err
 	}
-	util.ArrToUpper(canary)
+	common.ArrToUpper(canary)
 
 	var market string
 	if err := json.Unmarshal(args["market"], &market); err != nil {
