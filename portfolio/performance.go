@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"main/common"
 	"main/data"
 	"main/database"
 	"main/dfextras"
@@ -14,126 +15,158 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/shamaton/msgpack/v2"
 	log "github.com/sirupsen/logrus"
 )
 
 // TYPES
 
 type DrawDown struct {
-	Begin       int64   `json:"begin"`
-	End         int64   `json:"end"`
-	Recovery    int64   `json:"recovery"`
-	LossPercent float64 `json:"lossPercent"`
+	Begin       int64   `msgpack:"begin"`
+	End         int64   `msgpack:"end"`
+	Recovery    int64   `msgpack:"recovery"`
+	LossPercent float64 `msgpack:"lossPercent"`
+}
+
+type AnnualReturn struct {
+	Year   int32   `msgpack:"year"`
+	Return float64 `msgpack:"return"`
+}
+
+type Returns struct {
+	MWRRSinceInception float64 `msgpack:"mwrrSinceInception"`
+	MWRRYTD            float64 `msgpack:"mwrrYtd"`
+	MWRROneYear        float64 `msgpack:"mwrrOneYear"`
+	MWRRThreeYear      float64 `msgpack:"mwrrThreeYear"`
+	MWRRFiveYear       float64 `msgpack:"mwrrFiveYear"`
+	MWRRTenYear        float64 `msgpack:"mwrrTenYear"`
+
+	TWRRSinceInception float64 `msgpack:"twrrSinceInception"`
+	TWRRYTD            float64 `msgpack:"twrrYtd"`
+	TWRROneYear        float64 `msgpack:"twrrOneYear"`
+	TWRRThreeYear      float64 `msgpack:"twrrThreeYear"`
+	TWRRFiveYear       float64 `msgpack:"twrrFiveYear"`
+	TWRRTenYear        float64 `msgpack:"twrrTenYear"`
+}
+
+type Metrics struct {
+	AlphaSinceInception             float64      `msgpack:"alpha"`
+	AvgDrawDown                     float64      `msgpack:"avgDrawDown"`
+	BestYear                        AnnualReturn `msgpack:"bestYear"`
+	BetaSinceInception              float64      `msgpack:"beta"`
+	DownsideDeviationSinceInception float64      `msgpack:"downsideDeviation"`
+	ExcessKurtosisSinceInception    float64      `msgpack:"excessKurtosis"`
+	FinalBalance                    float64      `msgpack:"finalBalance"`
+	SharpeRatioSinceInception       float64      `msgpack:"sharpeRatio"`
+	Skewness                        float64      `msgpack:"skewness"`
+	SortinoRatioSinceInception      float64      `msgpack:"sortinoRatio"`
+	StdDevSinceInception            float64      `msgpack:"stdDev"`
+	TotalDeposited                  float64      `msgpack:"totalDeposited"`
+	TotalWithdrawn                  float64      `msgpack:"totalWithdrawn"`
+	UlcerIndexAvg                   float64      `msgpack:"ulcerIndexAvg"`
+	UlcerIndexP50                   float64      `msgpack:"ulcerIndexP50"`
+	UlcerIndexP90                   float64      `msgpack:"uclerIndexP90"`
+	UlcerIndexP99                   float64      `msgpack:"ulcerIndexP99"`
+	WorstYear                       AnnualReturn `msgpack:"worstYear"`
+
+	DynamicWithdrawalRateSinceInception   float64 `msgpack:"dynamicWithdrawalRate"`
+	PerpetualWithdrawalRateSinceInception float64 `msgpack:"perpetualWithdrawalRate"`
+	SafeWithdrawalRateSinceInception      float64 `msgpack:"safeWithdrawalRate"`
+
+	//	UpsideCaptureRatio   float64 `msgpack:"upsideCaptureRatio"`
+	//	DownsideCaptureRatio float64 `msgpack:"downsideCaptureRatio"`
 }
 
 // Performance of portfolio
 type Performance struct {
-	PortfolioID uuid.UUID `json:"portfolioID"`
-	PeriodStart int64     `json:"periodStart"`
-	PeriodEnd   int64     `json:"periodEnd"`
-	ComputedOn  int64     `json:"computedOn"`
+	PortfolioID uuid.UUID `msgpack:"portfolioID"`
+	PeriodStart int64     `msgpack:"periodStart"`
+	PeriodEnd   int64     `msgpack:"periodEnd"`
+	ComputedOn  int64     `msgpack:"computedOn"`
 
-	CurrentAssets []*ReportableHolding      `json:"currentAssets"`
-	Measurements  []*PerformanceMeasurement `json:"measurements"`
-	DrawDowns     []*DrawDown               `json:"drawDowns"`
+	CurrentAssets []*ReportableHolding      `msgpack:"currentAssets"`
+	Measurements  []*PerformanceMeasurement `msgpack:"-"`
+	DrawDowns     []*DrawDown               `msgpack:"drawDowns"`
 
-	MWRRSinceInception float64 `json:"mwrrSinceInception"`
-	MWRReturnYTD       float64 `json:"mwrrYtd"`
-	TWRRSinceInception float64 `json:"twrrSinceInception"`
-	TWRReturnYTD       float64 `json:"twrrYtd"`
+	PortfolioReturns Returns `msgpack:"portfolioReturns"`
+	BenchmarkReturns Returns `msgpack:"benchmarkReturns"`
 
-	AlphaSinceInception          float64 `json:"alpha"`
-	AvgDrawDown                  float64 `json:"avgDrawDown"`
-	BetaSinceInception           float64 `json:"beta"`
-	ExcessKurtosisSinceInception float64 `json:"excessKurtosis"`
-	SharpeRatioSinceInception    float64 `json:"sharpRatio"`
-	Skewness                     float64 `json:"skewness"`
-	SortinoRatioSinceInception   float64 `json:"sortinoRatio"`
-	UlcerIndexAvg                float64 `json:"ulcerIndexAvg"`
-	UlcerIndexP50                float64 `json:"ulcerIndexP50"`
-	UlcerIndexP90                float64 `json:"uclerIndexP90"`
-	UlcerIndexP99                float64 `json:"ulcerIndexP99"`
-
-	DynamicWithdrawalRateSinceInception   float64 `json:"dynamicWithdrawalRate"`
-	PerpetualWithdrawalRateSinceInception float64 `json:"perpetualWithdrawalRate"`
-	SafeWithdrawalRateSinceInception      float64 `json:"safeWithdrawalRate"`
-
-	//	UpsideCaptureRatio   float64 `json:"upsideCaptureRatio"`
-	//	DownsideCaptureRatio float64 `json:"downsideCaptureRatio"`
+	PortfolioMetrics Metrics `msgpack:"portfolioMetrics"`
+	BenchmarkMetrics Metrics `msgpack:"benchmarkMetrics"`
 }
 
 type PerformanceMeasurement struct {
-	Time int64 `json:"time"`
+	Time int64 `msgpack:"time"`
 
-	Value          float64 `json:"value"`
-	BenchmarkValue float64 `json:"benchmarkValue"`
-	RiskFreeValue  float64 `json:"riskFreeValue"`
+	Value          float64 `msgpack:"value"`
+	BenchmarkValue float64 `msgpack:"benchmarkValue"`
+	RiskFreeValue  float64 `msgpack:"riskFreeValue"`
 
-	StrategyGrowthOf10K  float64 `json:"strategyGrowthOf10K"`
-	BenchmarkGrowthOf10K float64 `json:"benchmarkGrowthOf10K"`
-	RiskFreeGrowthOf10K  float64 `json:"riskFreeGrowthOf10K"`
+	StrategyGrowthOf10K  float64 `msgpack:"strategyGrowthOf10K"`
+	BenchmarkGrowthOf10K float64 `msgpack:"benchmarkGrowthOf10K"`
+	RiskFreeGrowthOf10K  float64 `msgpack:"riskFreeGrowthOf10K"`
 
-	Holdings       []*ReportableHolding   `json:"holdings"`
-	TotalDeposited float64                `json:"totalDeposited"`
-	TotalWithdrawn float64                `json:"totalWithdrawn"`
-	Justification  map[string]interface{} `json:"justification"`
+	Holdings       []*ReportableHolding   `msgpack:"holdings"`
+	TotalDeposited float64                `msgpack:"totalDeposited"`
+	TotalWithdrawn float64                `msgpack:"totalWithdrawn"`
+	Justification  map[string]interface{} `msgpack:"justification"`
 
 	// Time-weighted rate of return
-	TWRROneDay     float64 `json:"twrrOneDay"`
-	TWRROneWeek    float64 `json:"twrrOneWeek"`
-	TWRROneMonth   float64 `json:"twrrOneMonth"`
-	TWRRThreeMonth float64 `json:"twrrThreeMonth"`
-	TWRROneYear    float64 `json:"twrrOneYear"`
-	TWRRThreeYear  float64 `json:"twrrThreeYear"`
-	TWRRFiveYear   float64 `json:"twrrFiveYear"`
-	TWRRTenYear    float64 `json:"twrrTenYear"`
+	TWRROneDay     float64 `msgpack:"twrrOneDay"`
+	TWRROneWeek    float64 `msgpack:"twrrOneWeek"`
+	TWRROneMonth   float64 `msgpack:"twrrOneMonth"`
+	TWRRThreeMonth float64 `msgpack:"twrrThreeMonth"`
+	TWRROneYear    float64 `msgpack:"twrrOneYear"`
+	TWRRThreeYear  float64 `msgpack:"twrrThreeYear"`
+	TWRRFiveYear   float64 `msgpack:"twrrFiveYear"`
+	TWRRTenYear    float64 `msgpack:"twrrTenYear"`
 
 	// Money-weighted rate of return
-	MWRROneDay     float64 `json:"mwrrOneDay"`
-	MWRROneWeek    float64 `json:"mwrrOneWeek"`
-	MWRROneMonth   float64 `json:"mwrrOneMonth"`
-	MWRRThreeMonth float64 `json:"mwrrThreeMonth"`
-	MWRROneYear    float64 `json:"mwrrOneYear"`
-	MWRRThreeYear  float64 `json:"mwrrThreeYear"`
-	MWRRFiveYear   float64 `json:"mwrrFiveYear"`
-	MWRRTenYear    float64 `json:"mwrrTenYear"`
+	MWRROneDay     float64 `msgpack:"mwrrOneDay"`
+	MWRROneWeek    float64 `msgpack:"mwrrOneWeek"`
+	MWRROneMonth   float64 `msgpack:"mwrrOneMonth"`
+	MWRRThreeMonth float64 `msgpack:"mwrrThreeMonth"`
+	MWRROneYear    float64 `msgpack:"mwrrOneYear"`
+	MWRRThreeYear  float64 `msgpack:"mwrrThreeYear"`
+	MWRRFiveYear   float64 `msgpack:"mwrrFiveYear"`
+	MWRRTenYear    float64 `msgpack:"mwrrTenYear"`
 
 	// active return
-	ActiveReturnOneYear   float64 `json:"activeReturnOneYear"`
-	ActiveReturnThreeYear float64 `json:"activeReturnThreeYear"`
-	ActiveReturnFiveYear  float64 `json:"activeReturnFiveYear"`
-	ActiveReturnTenYear   float64 `json:"activeReturnTenYear"`
+	ActiveReturnOneYear   float64 `msgpack:"activeReturnOneYear"`
+	ActiveReturnThreeYear float64 `msgpack:"activeReturnThreeYear"`
+	ActiveReturnFiveYear  float64 `msgpack:"activeReturnFiveYear"`
+	ActiveReturnTenYear   float64 `msgpack:"activeReturnTenYear"`
 
 	// alpha
-	AlphaOneYear   float64 `json:"alphaOneYear"`
-	AlphaThreeYear float64 `json:"alphaThreeYear"`
-	AlphaFiveYear  float64 `json:"alphaFiveYear"`
-	AlphaTenYear   float64 `json:"alphaTenYear"`
+	AlphaOneYear   float64 `msgpack:"alphaOneYear"`
+	AlphaThreeYear float64 `msgpack:"alphaThreeYear"`
+	AlphaFiveYear  float64 `msgpack:"alphaFiveYear"`
+	AlphaTenYear   float64 `msgpack:"alphaTenYear"`
 
 	// beta
-	BetaOneYear   float64 `json:"betaOneYear"`
-	BetaThreeYear float64 `json:"betaThreeYear"`
-	BetaFiveYear  float64 `json:"betaFiveYear"`
-	BetaTenYear   float64 `json:"betaTenYear"`
+	BetaOneYear   float64 `msgpack:"betaOneYear"`
+	BetaThreeYear float64 `msgpack:"betaThreeYear"`
+	BetaFiveYear  float64 `msgpack:"betaFiveYear"`
+	BetaTenYear   float64 `msgpack:"betaTenYear"`
 
 	// ratios
-	CalmarRatio       float64 `json:"calmarRatio"`
-	DownsideDeviation float64 `json:"downsideDeviation"`
-	InformationRatio  float64 `json:"informationRatio"`
-	KRatio            float64 `json:"kRatio"`
-	KellerRatio       float64 `json:"kellerRatio"`
-	SharpeRatio       float64 `json:"sharpeRatio"`
-	SortinoRatio      float64 `json:"sortinoRatio"`
-	StdDev            float64 `json:"stdDev"`
-	TreynorRatio      float64 `json:"treynorRatio"`
-	UlcerIndex        float64 `json:"ulcerIndex"`
+	CalmarRatio       float64 `msgpack:"calmarRatio"`
+	DownsideDeviation float64 `msgpack:"downsideDeviation"`
+	InformationRatio  float64 `msgpack:"informationRatio"`
+	KRatio            float64 `msgpack:"kRatio"`
+	KellerRatio       float64 `msgpack:"kellerRatio"`
+	SharpeRatio       float64 `msgpack:"sharpeRatio"`
+	SortinoRatio      float64 `msgpack:"sortinoRatio"`
+	StdDev            float64 `msgpack:"stdDev"`
+	TreynorRatio      float64 `msgpack:"treynorRatio"`
+	UlcerIndex        float64 `msgpack:"ulcerIndex"`
 }
 
 type ReportableHolding struct {
-	Ticker           string  `json:"ticker"`
-	Shares           float64 `json:"shares"`
-	PercentPortfolio float64 `json:"percentPortfolio"`
-	Value            float64 `json:"value"`
+	Ticker           string  `msgpack:"ticker"`
+	Shares           float64 `msgpack:"shares"`
+	PercentPortfolio float64 `msgpack:"percentPortfolio"`
+	Value            float64 `msgpack:"value"`
 }
 
 // METHODS
@@ -214,6 +247,24 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	var prevVal float64 = -1
 	today := time.Now()
 	currYear := today.Year()
+	bestYearPort := AnnualReturn{
+		Year:   math.MinInt32,
+		Return: -99999,
+	}
+	worstYearPort := AnnualReturn{
+		Year:   math.MinInt32,
+		Return: 99999,
+	}
+	bestYearBenchmark := AnnualReturn{
+		Year:   math.MinInt32,
+		Return: -99999,
+	}
+	worstYearBenchmark := AnnualReturn{
+		Year:   math.MinInt32,
+		Return: 99999,
+	}
+	prevDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+	prevMeasurement := PerformanceMeasurement{}
 	var totalVal float64
 	var currYearStartValue float64 = -1
 	var riskFreeValue float64 = 0
@@ -340,7 +391,6 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 				if qty > 1.0e-5 {
 					value = price * qty
 				}
-				log.Debugf("[meas update value] %s ** %s ** price=%.5f ** value=%.2f", date, symbol, price, value)
 			} else {
 				return nil, fmt.Errorf("no quote for symbol: %s", symbol)
 			}
@@ -379,19 +429,27 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			Justification:        lastJustification,
 		}
 
-		log.Debugf("[create meas] %s ** %.5f", date, totalVal)
-
 		perf.Measurements = append(perf.Measurements, &measurement)
 
 		if len(perf.Measurements) >= 2 {
 			// Growth of 10k
-			measurement.StrategyGrowthOf10K = stratGrowth * perf.TWRR(2, STRATEGY)
-			measurement.BenchmarkGrowthOf10K = benchGrowth * perf.TWRR(2, BENCHMARK)
-			measurement.RiskFreeGrowthOf10K = riskFreeGrowth * perf.TWRR(2, RISKFREE)
+			stratRate := perf.TWRR(2, STRATEGY)
+			if !math.IsNaN(stratRate) {
+				stratGrowth *= (1.0 + stratRate)
+			}
+			measurement.StrategyGrowthOf10K = stratGrowth
 
-			stratGrowth = measurement.StrategyGrowthOf10K
-			benchGrowth = measurement.BenchmarkGrowthOf10K
-			riskFreeGrowth = measurement.RiskFreeGrowthOf10K
+			benchRate := perf.TWRR(2, BENCHMARK)
+			if !math.IsNaN(benchRate) {
+				benchGrowth *= (1.0 + benchRate)
+			}
+			measurement.BenchmarkGrowthOf10K = benchGrowth
+
+			rfRate := perf.TWRR(2, RISKFREE)
+			if !math.IsNaN(benchRate) {
+				riskFreeGrowth *= (1.0 + rfRate)
+			}
+			measurement.RiskFreeGrowthOf10K *= riskFreeGrowth
 
 			// time-weighted rate of return
 			measurement.TWRROneDay = perf.TWRR(2, STRATEGY)
@@ -404,14 +462,14 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			measurement.TWRRTenYear = perf.TWRR(2520, STRATEGY)
 
 			// money-weighted rate of return
-			measurement.MWRROneDay = perf.MWRR(1)
-			measurement.MWRROneWeek = perf.MWRR(5)
-			measurement.MWRROneMonth = perf.MWRR(21)
-			measurement.MWRRThreeMonth = perf.MWRR(63)
-			measurement.MWRROneYear = perf.MWRR(252)
-			measurement.MWRRThreeYear = perf.MWRR(756)
-			measurement.MWRRFiveYear = perf.MWRR(1260)
-			measurement.MWRRTenYear = perf.MWRR(2520)
+			measurement.MWRROneDay = perf.MWRR(1, STRATEGY)
+			measurement.MWRROneWeek = perf.MWRR(5, STRATEGY)
+			measurement.MWRROneMonth = perf.MWRR(21, STRATEGY)
+			measurement.MWRRThreeMonth = perf.MWRR(63, STRATEGY)
+			measurement.MWRROneYear = perf.MWRR(252, STRATEGY)
+			measurement.MWRRThreeYear = perf.MWRR(756, STRATEGY)
+			measurement.MWRRFiveYear = perf.MWRR(1260, STRATEGY)
+			measurement.MWRRTenYear = perf.MWRR(2520, STRATEGY)
 
 			// active return
 			measurement.ActiveReturnOneYear = perf.ActiveReturn(252)
@@ -444,36 +502,131 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			measurement.UlcerIndex = perf.UlcerIndex()
 		}
 
+		if prevDate.Year() != date.Year() {
+			if prevMeasurement.TWRROneYear > bestYearPort.Return {
+				bestYearPort.Return = prevMeasurement.TWRROneYear
+				bestYearPort.Year = int32(prevDate.Year())
+			}
+
+			if prevMeasurement.TWRROneYear < worstYearPort.Return {
+				worstYearPort.Return = prevMeasurement.TWRROneYear
+				worstYearPort.Year = int32(prevDate.Year())
+			}
+
+			// calculate 1-yr benchmark rate of return
+			numMeasurements := len(perf.Measurements)
+			if numMeasurements > 252 {
+
+				measYr1 := perf.Measurements[numMeasurements-253]
+				rr := (prevMeasurement.BenchmarkGrowthOf10K / measYr1.BenchmarkGrowthOf10K) - 1.0
+				if rr > bestYearBenchmark.Return {
+					bestYearBenchmark.Return = rr
+					bestYearBenchmark.Year = int32(prevDate.Year())
+				}
+
+				if rr < worstYearBenchmark.Return {
+					worstYearBenchmark.Return = rr
+					worstYearBenchmark.Year = int32(prevDate.Year())
+				}
+			}
+		}
+		prevMeasurement = measurement
+		prevDate = date
+
 		if date.Before(today) || date.Equal(today) {
 			perf.CurrentAssets = currentAssets
 		}
 	}
 
 	sinceInceptionPeriods := uint(len(perf.Measurements))
-	perf.AlphaSinceInception = perf.Alpha(sinceInceptionPeriods)
-	perf.AvgDrawDown = perf.AverageDrawDown(sinceInceptionPeriods)
-	perf.BetaSinceInception = perf.Beta(sinceInceptionPeriods)
-	perf.ExcessKurtosisSinceInception = perf.ExcessKurtosis(sinceInceptionPeriods)
-	perf.SharpeRatioSinceInception = perf.SharpeRatio(sinceInceptionPeriods)
-	perf.Skewness = perf.Skew(sinceInceptionPeriods)
-	perf.SortinoRatioSinceInception = perf.SortinoRatio(sinceInceptionPeriods)
-	perf.UlcerIndexAvg = perf.AvgUlcerIndex(sinceInceptionPeriods)
-	perf.UlcerIndexP50 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .5)
-	perf.UlcerIndexP90 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .9)
-	perf.UlcerIndexP99 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .99)
+	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods)
+
+	perf.PortfolioReturns = Returns{
+		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, STRATEGY),
+		MWRROneYear:        perf.MWRR(252, STRATEGY),
+		MWRRThreeYear:      perf.MWRR(756, STRATEGY),
+		MWRRFiveYear:       perf.MWRR(1260, STRATEGY),
+		MWRRTenYear:        perf.MWRR(2520, STRATEGY),
+
+		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, STRATEGY),
+		TWRROneYear:        perf.TWRR(252, STRATEGY),
+		TWRRThreeYear:      perf.TWRR(756, STRATEGY),
+		TWRRFiveYear:       perf.TWRR(1260, STRATEGY),
+		TWRRTenYear:        perf.TWRR(2520, STRATEGY),
+	}
+
+	perf.BenchmarkReturns = Returns{
+		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, BENCHMARK),
+		MWRROneYear:        perf.MWRR(252, BENCHMARK),
+		MWRRThreeYear:      perf.MWRR(756, BENCHMARK),
+		MWRRFiveYear:       perf.MWRR(1260, BENCHMARK),
+		MWRRTenYear:        perf.MWRR(2520, BENCHMARK),
+
+		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, BENCHMARK),
+		TWRROneYear:        perf.TWRR(252, BENCHMARK),
+		TWRRThreeYear:      perf.TWRR(756, BENCHMARK),
+		TWRRFiveYear:       perf.TWRR(1260, BENCHMARK),
+		TWRRTenYear:        perf.TWRR(2520, BENCHMARK),
+	}
+
+	perf.PortfolioMetrics = Metrics{
+		AlphaSinceInception:             perf.Alpha(sinceInceptionPeriods),
+		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
+		BetaSinceInception:              perf.Beta(sinceInceptionPeriods),
+		BestYear:                        bestYearPort,
+		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
+		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
+		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].Value,
+		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods),
+		Skewness:                        perf.Skew(sinceInceptionPeriods),
+		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods),
+		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods),
+		TotalDeposited:                  perf.Measurements[len(perf.Measurements)-1].TotalDeposited,
+		TotalWithdrawn:                  perf.Measurements[len(perf.Measurements)-1].TotalWithdrawn,
+		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
+		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
+		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
+		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
+		WorstYear:                       worstYearPort,
+	}
+
+	perf.BenchmarkMetrics = Metrics{
+		AlphaSinceInception:             math.NaN(), // alpha doesn't make sense for benchmark
+		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
+		BestYear:                        bestYearBenchmark,
+		BetaSinceInception:              math.NaN(),
+		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
+		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
+		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].BenchmarkValue,
+		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods),
+		Skewness:                        perf.Skew(sinceInceptionPeriods),
+		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods),
+		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods),
+		TotalDeposited:                  math.NaN(),
+		TotalWithdrawn:                  math.NaN(),
+		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
+		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
+		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
+		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
+		WorstYear:                       worstYearBenchmark,
+	}
 
 	monthlyRets := perf.monthlyReturn(sinceInceptionPeriods)
 	bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
-	perf.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
-	perf.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
-	perf.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
+	perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
+	perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
+	perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
 
 	if currYearStartValue <= 0 {
-		perf.MWRReturnYTD = 0.0
-		perf.TWRReturnYTD = 0.0
+		perf.PortfolioReturns.MWRRYTD = 0.0
+		perf.PortfolioReturns.TWRRYTD = 0.0
+		perf.BenchmarkReturns.MWRRYTD = 0.0
+		perf.BenchmarkReturns.TWRRYTD = 0.0
 	} else {
-		perf.MWRReturnYTD = perf.MWRRYtd()
-		perf.TWRReturnYTD = perf.TWRRYtd()
+		perf.PortfolioReturns.MWRRYTD = perf.MWRRYtd(STRATEGY)
+		perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
+		perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
+		perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
 	}
 
 	return &perf, nil
@@ -572,11 +725,27 @@ func (p *Performance) Save(userID string) error {
 			"PortfolioID": p.PortfolioID,
 			"UserID":      userID,
 		}).Error("unable to get database transaction for user")
-		return nil
+		return err
 	}
 
-	sql := `UPDATE TABLE portfolio_v1 SET
-		performance_json=$2,
+	err = p.SaveWithTransaction(trx, userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": p.PortfolioID,
+			"UserID":      userID,
+		}).Error("unable to save portfolio transactions")
+		trx.Rollback(context.Background())
+		return err
+	}
+
+	err = trx.Commit(context.Background())
+	return err
+}
+
+func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
+	sql := `UPDATE portfolio_v1 SET
+		performance_msgpack=$2,
 		ytd_return=$3,
 		cagr_since_inception=$4,
 		cagr_3yr=$5,
@@ -590,41 +759,105 @@ func (p *Performance) Save(userID string) error {
 		sortino_ratio=$13,
 		ulcer_index=$14
 	WHERE id=$1`
-	performanceJSON, err := json.Marshal(p)
+	performanceMsgpack, err := msgpack.Marshal(p)
+	if err != nil {
+		return err
+	}
+	performanceMsgpack, err = common.Compress(performanceMsgpack)
 	if err != nil {
 		return err
 	}
 
-	fmt.Println(sql)
-	fmt.Println(performanceJSON)
+	maxDrawDown := 0.0
+	if len(p.DrawDowns) > 0 {
+		maxDrawDown = p.DrawDowns[0].LossPercent
+	}
 
-	/*
-		_, err = trx.Exec(context.Background(), sql, p.PortfolioID, performanceJSON, p.YTDReturn,
-			p.CagrSinceInception, p.MetricsBundle.CAGRS.ThreeYear, p.MetricsBundle.CAGRS.FiveYear,
-			p.MetricsBundle.CAGRS.TenYear, p.MetricsBundle.StdDev, p.MetricsBundle.DownsideDeviation,
-			p.MetricsBundle.MaxDrawDown.LossPercent, p.MetricsBundle.AvgDrawDown,
-			p.MetricsBundle.SharpeRatio, p.MetricsBundle.SortinoRatio, p.MetricsBundle.UlcerIndexAvg)
-		if err != nil {
-			return err
-		}
-	*/
+	_, err = trx.Exec(context.Background(), sql,
+		p.PortfolioID,
+		performanceMsgpack,
+		p.PortfolioReturns.TWRRYTD,
+		p.PortfolioReturns.TWRRSinceInception,
+		p.PortfolioReturns.TWRRThreeYear,
+		p.PortfolioReturns.TWRRFiveYear,
+		p.PortfolioReturns.TWRRTenYear,
+		p.PortfolioMetrics.StdDevSinceInception,
+		p.PortfolioMetrics.DownsideDeviationSinceInception,
+		maxDrawDown,
+		p.PortfolioMetrics.AvgDrawDown,
+		p.PortfolioMetrics.SharpeRatioSinceInception,
+		p.PortfolioMetrics.SortinoRatioSinceInception,
+		p.PortfolioMetrics.UlcerIndexAvg)
+	if err != nil {
+		log.Println("(0)")
+		trx.Rollback(context.Background())
+		return err
+	}
 
-	trx.Commit(context.Background())
+	err = p.saveMeasurements(trx, userID)
+	if err != nil {
+		log.Println("(4)")
+
+		trx.Rollback(context.Background())
+		return err
+	}
+
 	return nil
 }
 
 func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
-	sql := `INSERT INTO portfolio_performance_v1 (
+	sql := `INSERT INTO portfolio_measurement_v1 (
 		event_date,
 		justification,
-		percent_return,
 		portfolio_id,
 		risk_free_value,
 		total_deposited_to_date,
 		total_withdrawn_to_date,
 		user_id,
-		value,
-		holdings
+		strategy_value,
+		holdings,
+		alpha_1yr,
+		alpha_3yr,
+		alpha_5yr,
+		alpha_10yr,
+		beta_1yr,
+		beta_3yr,
+		beta_5yr,
+		beta_10yr,
+		twrr_1d,
+		twrr_1wk,
+		twrr_1mo,
+		twrr_3mo,
+		twrr_1yr,
+		twrr_3yr,
+		twrr_5yr,
+		twrr_10yr,
+		mwrr_1d,
+		mwrr_1wk,
+		mwrr_1mo,
+		mwrr_3mo,
+		mwrr_1yr,
+		mwrr_3yr,
+		mwrr_5yr,
+		mwrr_10yr,
+		active_return_1yr,
+		active_return_3yr,
+		active_return_5yr,
+		active_return_10yr,
+		calmar_ratio,
+		downside_deviation,
+		information_ratio,
+		k_ratio,
+		keller_ratio,
+		sharpe_ratio,
+		sortino_ratio,
+		std_dev,
+		treynor_ratio,
+		ulcer_index,
+		benchmark_value,
+		strategy_growth_of_10k,
+		benchmark_growth_of_10k,
+		risk_free_growth_of_10k
 	) VALUES (
 		$1,
 		$2,
@@ -635,11 +868,173 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$7,
 		$8,
 		$9,
-		$10
-	) ON CONFLICT ON CONSTRAINT portfolio_performance_v1_pkey
+		$10,
+		$11,
+		$12,
+		$13,
+		$14,
+		$15,
+		$16,
+		$17,
+		$18,
+		$19,
+		$20,
+		$21,
+		$22,
+		$23,
+		$24,
+		$25,
+		$26,
+		$27,
+		$28,
+		$29,
+		$30,
+		$31,
+		$32,
+		$33,
+		$34,
+		$35,
+		$36,
+		$37,
+		$38,
+		$39,
+		$40,
+		$41,
+		$42,
+		$43,
+		$44,
+		$45,
+		$46,
+		$47,
+		$48,
+		$49,
+		$50,
+		$51
+	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
 	DO UPDATE SET
-	WHERE portfolio_id=$4`
+		justification=$2,
+		risk_free_value=$4,
+		total_deposited_to_date=$5,
+		total_withdrawn_to_date=$6,
+		strategy_value=$8,
+		holdings=$9,
+		alpha_1yr=$10,
+		alpha_3yr=$11,
+		alpha_5yr=$12,
+		alpha_10yr=$13,
+		beta_1yr=$14,
+		beta_3yr=$15,
+		beta_5yr=$16,
+		beta_10yr=$17,
+		twrr_1d=$18,
+		twrr_1wk=$19,
+		twrr_1mo=$20,
+		twrr_3mo=$21,
+		twrr_1yr=$22,
+		twrr_3yr=$23,
+		twrr_5yr=$24,
+		twrr_10yr=$25,
+		mwrr_1d=$26,
+		mwrr_1wk=$27,
+		mwrr_1mo=$28,
+		mwrr_3mo=$29,
+		mwrr_1yr=$30,
+		mwrr_3yr=$31,
+		mwrr_5yr=$32,
+		mwrr_10yr=$33,
+		active_return_1yr=$34,
+		active_return_3yr=$35,
+		active_return_5yr=$36,
+		active_return_10yr=$37,
+		calmar_ratio=$38,
+		downside_deviation=$39,
+		information_ratio=$40,
+		k_ratio=$41,
+		keller_ratio=$42,
+		sharpe_ratio=$43,
+		sortino_ratio=$44,
+		std_dev=$45,
+		treynor_ratio=$46,
+		ulcer_index=$47,
+		benchmark_value=$48,
+		strategy_growth_of_10k=$49,
+		benchmark_growth_of_10k=$50,
+		risk_free_growth_of_10k=$51`
 
-	fmt.Println(sql)
+	for _, m := range p.Measurements {
+		justification, err := json.Marshal(m.Justification)
+		if err != nil {
+			log.Println("(5)")
+
+			return err
+		}
+
+		holdings, err := json.Marshal(m.Holdings)
+		if err != nil {
+			log.Println("(6)")
+			return err
+		}
+
+		_, err = trx.Exec(context.Background(), sql,
+			time.Unix(m.Time, 0),
+			justification,
+			p.PortfolioID,
+			m.RiskFreeValue,
+			m.TotalDeposited,
+			m.TotalWithdrawn,
+			userID,
+			m.Value,
+			holdings,
+			m.AlphaOneYear,
+			m.AlphaThreeYear,
+			m.AlphaFiveYear,
+			m.AlphaTenYear,
+			m.BetaOneYear,
+			m.BetaThreeYear,
+			m.BetaFiveYear,
+			m.BetaTenYear,
+			m.TWRROneDay,
+			m.TWRROneWeek,
+			m.TWRROneMonth,
+			m.TWRRThreeMonth,
+			m.TWRROneYear,
+			m.TWRRThreeYear,
+			m.TWRRFiveYear,
+			m.TWRRTenYear,
+			m.MWRROneDay,
+			m.MWRROneWeek,
+			m.MWRROneMonth,
+			m.MWRRThreeMonth,
+			m.MWRROneYear,
+			m.MWRRThreeYear,
+			m.MWRRFiveYear,
+			m.MWRRTenYear,
+			m.ActiveReturnOneYear,
+			m.ActiveReturnThreeYear,
+			m.ActiveReturnFiveYear,
+			m.ActiveReturnTenYear,
+			m.CalmarRatio,
+			m.DownsideDeviation,
+			m.InformationRatio,
+			m.KRatio,
+			m.KellerRatio,
+			m.SharpeRatio,
+			m.SortinoRatio,
+			m.StdDev,
+			m.TreynorRatio,
+			m.UlcerIndex,
+			m.BenchmarkValue,
+			m.StrategyGrowthOf10K,
+			m.BenchmarkGrowthOf10K,
+			m.RiskFreeGrowthOf10K)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":       err,
+				"Measurement": fmt.Sprintf("%+v", m),
+			}).Debug("could not save portfolio measurement")
+			return err
+		}
+	}
+
 	return nil
 }

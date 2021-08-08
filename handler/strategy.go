@@ -1,13 +1,14 @@
 package handler
 
 import (
+	"main/backtest"
 	"main/data"
-	"main/portfolio"
 	"main/strategies"
 	"runtime/debug"
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/shamaton/msgpack/v2"
 
 	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
@@ -15,6 +16,7 @@ import (
 
 // ListStrategies get a list of all strategies
 func ListStrategies(c *fiber.Ctx) error {
+	log.Info("ListStrategies")
 	return c.JSON(strategies.StrategyList)
 }
 
@@ -84,61 +86,35 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	if strat, ok := strategies.StrategyMap[shortcode]; ok {
-		credentials := make(map[string]string)
+	credentials := make(map[string]string)
+	credentials["tiingo"] = c.Locals("tiingoToken").(string)
+	manager := data.NewManager(credentials)
 
-		// get tiingo token from jwt claims
-		credentials["tiingo"] = c.Locals("tiingoToken").(string)
-
-		manager := data.NewManager(credentials)
-		manager.Begin = startDate
-		manager.End = endDate
-
-		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal([]byte(c.Query("arguments", "{}")), &params); err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		stratObject, err := strat.Factory(params)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		start := time.Now()
-		p := portfolio.NewPortfolio(strat.Name, startDate, 10000, &manager)
-		target, err := stratObject.Compute(&manager)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		if err := p.TargetPortfolio(target); err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		stop := time.Now()
-		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
-
-		// calculate the portfolio's performance
-		start = time.Now()
-		performance, err := p.CalculatePerformance(manager.End)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-		stop = time.Now()
-		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
-
-		log.WithFields(log.Fields{
-			"StratCalcDur": stratComputeDur,
-			"PerfCalcDur":  calcPerfDur,
-		}).Info("Strategy calculated")
-
-		return c.JSON(performance)
+	params := map[string]json.RawMessage{}
+	if err := json.Unmarshal([]byte(c.Query("arguments", "{}")), &params); err != nil {
+		log.Println(err)
+		return fiber.ErrBadRequest
 	}
 
-	return fiber.ErrNotFound
+	b, err := backtest.New(shortcode, params, startDate, endDate, &manager)
+	if err != nil {
+		if err.Error() == "strategy not found" {
+			return fiber.ErrNotFound
+		}
+
+		return fiber.ErrBadRequest
+	}
+
+	go b.Serialize(c.Locals("userID").(string))
+
+	msgpackPerformance, err := msgpack.Marshal(b.Performance)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Error("msgpack serialization failed for performance")
+		return fiber.ErrInternalServerError
+	}
+
+	c.Set("Content-type", "application/x-msgpack")
+	return c.Send(msgpackPerformance)
 }

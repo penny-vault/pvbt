@@ -9,12 +9,13 @@ require (
 	github.com/andybalholm/brotli v1.0.3 // indirect
 	github.com/apache/thrift v0.14.1 // indirect
 	github.com/go-co-op/gocron v1.6.2
+	github.com/go-redis/redis/v8 v8.11.1
 	github.com/goccy/go-json v0.7.1
 	github.com/gofiber/fiber/v2 v2.13.0
 	github.com/golang/snappy v0.0.3
-	github.com/google/go-cmp v0.5.6 // indirect
 	github.com/google/uuid v1.2.0
 	github.com/guptarohit/asciigraph v0.5.2 // indirect
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jackc/pgx/v4 v4.11.0
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jdfergason/jwt/v2 v2.2.3
@@ -31,12 +32,11 @@ require (
 	github.com/onsi/gomega v1.13.0
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.0-beta.3
+	github.com/pierrec/lz4/v4 v4.1.8
 	github.com/prometheus/common v0.29.0
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20210422123815-aaa951b82e1b
-	github.com/sendgrid/rest v2.6.4+incompatible // indirect
-	github.com/sendgrid/sendgrid-go v3.10.0+incompatible
+	github.com/shamaton/msgpack/v2 v2.0.1
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cast v1.3.1
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.8.1
 	github.com/xitongsys/parquet-go v1.6.0 // indirect

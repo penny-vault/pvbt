@@ -1419,27 +1419,27 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.MWRR(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.MWRR(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.MWRR(1))).Should(BeTrue())
+				Expect(math.IsNaN(perf.MWRR(1, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.MWRR(2521))).Should(BeTrue())
+				Expect(math.IsNaN(perf.MWRR(2521, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have MWRR for 1-day", func() {
-				Expect(perf.MWRR(2)).Should(BeNumerically("~", 0.00019928))
+				Expect(perf.MWRR(2, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00019928))
 			})
 
 			It("should have MWRR for 5-day", func() {
-				Expect(perf.MWRR(5)).Should(BeNumerically("~", 0.00079761))
+				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00079761))
 			})
 
 			It("should have MWRR for the full period", func() {
-				Expect(perf.MWRR(2520)).Should(BeNumerically("~", 0.1063351))
+				Expect(perf.MWRR(2520, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1063351))
 			})
 		})
 		Context("with 3 years of simulated data", func() {
@@ -1480,7 +1480,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have MWRR", func() {
-				Expect(perf.MWRR(5)).Should(BeNumerically("~", 0.0635))
+				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0635))
 			})
 		})
 		Context("with 4 months of simulated data", func() {
@@ -1521,7 +1521,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have MWRR", func() {
-				Expect(perf.MWRR(5)).Should(BeNumerically("~", 0.2039559))
+				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.2039559))
 			})
 		})
 		Context("with 3 years of simulated data", func() {
@@ -1562,7 +1562,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have negative MWRR", func() {
-				Expect(perf.MWRR(5)).Should(BeNumerically("~", -.0354))
+				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", -.0354))
 			})
 		})
 
@@ -1632,11 +1632,11 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have an MWRR YTD", func() {
-				Expect(perf.MWRRYtd()).To(BeNumerically("~", 0.18181818))
+				Expect(perf.MWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.18181818))
 			})
 
 			It("should have an TWRR YTD", func() {
-				Expect(perf.TWRRYtd()).To(BeNumerically("~", 0.18181818))
+				Expect(perf.TWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.18181818))
 			})
 		})
 	})

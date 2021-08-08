@@ -3,11 +3,13 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"main/database"
 	"main/portfolio"
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/shamaton/msgpack/v2"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -71,6 +73,67 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Endpoint":       "GetPortfolioPerformance",
+			"Error":          err,
+			"PortfolioIDStr": portfolioIDStr,
+		}).Warn("failed to parse portfolio id")
+		return fiber.ErrBadRequest
+	}
+
+	userID := c.Locals("userID").(string)
+
+	p, err := portfolio.LoadPerformanceFromDB(portfolioID, userID)
+	if err != nil {
+		return err
+	}
+	return c.JSON(p)
+}
+
+func GetPortfolioMeasurements(c *fiber.Ctx) error {
+	portfolioIDStr := c.Params("id")
+	portfolioID, err := uuid.Parse(portfolioIDStr)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":       "GetPortfolioMeasurements",
+			"Error":          err,
+			"PortfolioIDStr": portfolioIDStr,
+		}).Warn("failed to parse portfolio id")
+		return fiber.ErrBadRequest
+	}
+
+	userID := c.Locals("userID").(string)
+
+	s := time.Now()
+	var j string
+	trx, _ := database.TrxForUser(userID)
+	trx.QueryRow(context.Background(), `
+	select array_to_json(array_agg(row_to_json(t))) as res
+    from (
+		SELECT event_date, strategy_growth_of_10k AS strategy, benchmark_growth_of_10k as benchmark FROM portfolio_measurement_v1 WHERE portfolio_id=$1
+    ) t
+	`, portfolioID).Scan(&j)
+	e := time.Now()
+	fmt.Printf("query duration: %.4f\n", e.Sub(s).Seconds())
+
+	s = time.Now()
+	m := make([]map[string]interface{}, 0, 100)
+	json.Unmarshal([]byte(j), &m)
+	e = time.Now()
+	fmt.Printf("deserialize duration: %.4f\n", e.Sub(s).Seconds())
+
+	s = time.Now()
+	data, _ := msgpack.Marshal(m)
+	e = time.Now()
+	fmt.Printf("msgpack duration: %.4f\n", e.Sub(s).Seconds())
+
+	return c.Send(data)
+}
+
+func GetPortfolioTransactions(c *fiber.Ctx) error {
+	portfolioIDStr := c.Params("id")
+	portfolioID, err := uuid.Parse(portfolioIDStr)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":       "GetPortfolioMeasurements",
 			"Error":          err,
 			"PortfolioIDStr": portfolioIDStr,
 		}).Warn("failed to parse portfolio id")

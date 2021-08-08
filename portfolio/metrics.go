@@ -141,7 +141,9 @@ func (perf *Performance) AvgUlcerIndex(periods uint) float64 {
 	startIdx := len(perf.Measurements) - int(periods)
 	u := make([]float64, 0, len(perf.Measurements))
 	for _, xx := range perf.Measurements[startIdx:] {
-		u = append(u, xx.UlcerIndex)
+		if !math.IsNaN(xx.UlcerIndex) && !math.IsInf(xx.UlcerIndex, 1) {
+			u = append(u, xx.UlcerIndex)
+		}
 	}
 
 	return stat.Mean(u, nil)
@@ -338,7 +340,7 @@ func (perf *Performance) MaxDrawDown(periods uint) *DrawDown {
 // if periods = 2, then return (p1 - deposits + withdraws) / p0
 // if 1 < periods < 252, then return xirr(cashflows) un-annualized
 // else return xirr(cashflows) which is annualized return
-func (perf *Performance) MWRR(periods uint) float64 {
+func (perf *Performance) MWRR(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if periods > uint(n) || periods <= 1 {
 		return math.NaN()
@@ -364,7 +366,14 @@ func (perf *Performance) MWRR(periods uint) float64 {
 		deposited := m1.TotalDeposited - m0.TotalDeposited
 		withdrawn := m1.TotalWithdrawn - m0.TotalWithdrawn
 
-		rate = (m1.Value - deposited + withdrawn) / m0.Value
+		switch kind {
+		case STRATEGY:
+			rate = (m1.Value - deposited + withdrawn) / m0.Value
+		case BENCHMARK:
+			rate = (m1.BenchmarkValue - deposited + withdrawn) / m0.BenchmarkValue
+		case RISKFREE:
+			rate = (m1.RiskFreeValue - deposited + withdrawn) / m0.RiskFreeValue
+		}
 		if years > 1 {
 			return math.Pow(rate, 1.0/years) - 1.0
 		} else {
@@ -373,9 +382,19 @@ func (perf *Performance) MWRR(periods uint) float64 {
 	} else {
 		cashflows := make([]cashflow, 0, 5)
 
+		var val float64
+		switch kind {
+		case STRATEGY:
+			val = perf.Measurements[startIdx].Value * -1.0
+		case BENCHMARK:
+			val = perf.Measurements[startIdx].BenchmarkValue * -1.0
+		case RISKFREE:
+			val = perf.Measurements[startIdx].RiskFreeValue * -1.0
+		}
+
 		cashflows = append(cashflows, cashflow{
 			date:  time.Unix(perf.Measurements[startIdx].Time, 0),
-			value: perf.Measurements[startIdx].Value * -1.0,
+			value: val,
 		})
 
 		for ii, jj := startIdx, startIdx+1; jj < endIdx; ii, jj = ii+1, jj+1 {
@@ -392,9 +411,18 @@ func (perf *Performance) MWRR(periods uint) float64 {
 			}
 		}
 
+		switch kind {
+		case STRATEGY:
+			val = perf.Measurements[n-1].Value
+		case BENCHMARK:
+			val = perf.Measurements[n-1].BenchmarkValue
+		case RISKFREE:
+			val = perf.Measurements[n-1].RiskFreeValue
+		}
+
 		cashflows = append(cashflows, cashflow{
 			date:  time.Unix(perf.Measurements[n-1].Time, 0),
-			value: perf.Measurements[n-1].Value,
+			value: val,
 		})
 
 		// performance optimization when there have been no cashflows over the period
@@ -417,9 +445,9 @@ func (perf *Performance) MWRR(periods uint) float64 {
 }
 
 // MWRRYtd calculates the money weighted YTD return
-func (perf *Performance) MWRRYtd() float64 {
+func (perf *Performance) MWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
-	return perf.MWRR(periods)
+	return perf.MWRR(periods, kind)
 }
 
 // NetProfit total profit earned on portfolio
@@ -630,9 +658,9 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 }
 
 // TWRRYtd calculates the time-weighted YTD return
-func (perf *Performance) TWRRYtd() float64 {
+func (perf *Performance) TWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
-	return perf.TWRR(periods, STRATEGY)
+	return perf.TWRR(periods, kind)
 }
 
 // UlcerIndex The Ulcer Index (UI) is a technical indicator that measures downside

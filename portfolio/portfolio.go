@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v4"
 	"github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
 	"github.com/zeebo/blake3"
@@ -1061,10 +1062,35 @@ func (p *Portfolio) Save(userID string) error {
 		return err
 	}
 
+	err = p.SaveWithTransaction(trx, userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"PortfolioID": p.ID,
+			"Strategy":    p.StrategyShortcode,
+			"Error":       err,
+		}).Warn("failed to create portfolio transactions")
+		trx.Rollback(context.Background())
+		return err
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		log.WithFields(log.Fields{
+			"PortfolioID": p.ID,
+			"Strategy":    p.StrategyShortcode,
+			"Error":       err,
+		}).Warn("failed to commit portfolio transaction")
+		trx.Rollback(context.Background())
+		return err
+	}
+
+	return nil
+}
+
+func (p *Portfolio) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	portfolioSQL := `
 	INSERT INTO portfolio_v1 (
 		"id",
-		"user_id",
 		"name",
 		"strategy_shortcode",
 		"arguments",
@@ -1080,18 +1106,28 @@ func (p *Portfolio) Save(userID string) error {
 		$5,
 		$6,
 		$7,
-		$8,
-		$9
+		$8
 	) ON CONFLICT ON CONSTRAINT portfolio_v1_pkey
 	DO UPDATE SET
-		name=$3,
-		strategy_shortcode=$4,
-		arguments=$5,
-		start_date=$6,
-		end_date=$7,
-		holdings=$8,
-		notifications=$9;`
-	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.UserID, p.Name, p.StrategyShortcode, p.StrategyArguments, p.StartDate, p.EndDate, p.Holdings, p.Notifications)
+		name=$2,
+		strategy_shortcode=$3,
+		arguments=$4,
+		start_date=$5,
+		end_date=$6,
+		holdings=$7,
+		notifications=$8`
+	holdings, err := json.Marshal(p.Holdings)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"PortfolioID": p.ID,
+			"Strategy":    p.StrategyShortcode,
+			"Error":       err,
+			"Query":       portfolioSQL,
+		}).Warn("failed to marshal holdings")
+		trx.Rollback(context.Background())
+		return err
+	}
+	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode, p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
@@ -1103,39 +1139,15 @@ func (p *Portfolio) Save(userID string) error {
 		return err
 	}
 
-	err = trx.Commit(context.Background())
-	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-			"Query":       portfolioSQL,
-		}).Warn("failed to commit portfolio transaction")
-		trx.Rollback(context.Background())
-		return err
-	}
-
-	p.saveTransactions()
-
-	return nil
+	return p.saveTransactions(trx)
 }
 
-func (p *Portfolio) saveTransactions() error {
-	trx, err := database.TrxForUser(p.UserID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": p.UserID,
-		}).Error("unable to get database transaction for user")
-		return err
-	}
-
+func (p *Portfolio) saveTransactions(trx pgx.Tx) error {
 	transactionSQL := `
 	INSERT INTO portfolio_transaction_v1 (
 		"id",
 		"portfolio_id",
-		"user_id",
-
+		"transaction_type",
 		"cleared",
 		"commission",
 		"composite_figi",
@@ -1172,6 +1184,7 @@ func (p *Portfolio) saveTransactions() error {
 		$18
 	) ON CONFLICT ON CONSTRAINT portfolio_transaction_v1_pkey
  	DO UPDATE SET
+		transaction_type=$3,
 		cleared=$4,
 		commission=$5,
 		composite_figi=$6,
@@ -1186,63 +1199,31 @@ func (p *Portfolio) saveTransactions() error {
 		tax_type=$15,
 		ticker=$16,
 		total_value=$17,
-		sequence_num=$18
-	WHERE (
-		portfolio_transaction_v1.cleared,
-		portfolio_transaction_v1.commission,
-		portfolio_transaction_v1.composite_figi,
-		portfolio_transaction_v1.event_date,
-		portfolio_transaction_v1.justification,
-		portfolio_transaction_v1.memo,
-		portfolio_transaction_v1.price_per_share,
-		portfolio_transaction_v1.num_shares,
-		portfolio_transaction_v1.source,
-		portfolio_transaction_v1.source_id,
-		portfolio_transaction_v1.tags,
-		portfolio_transaction_v1.tax_type,
-		portfolio_transaction_v1.ticker,
-		portfolio_transaction_v1.total_value,
-		portfolio_transaction_v1.sequence_num
-	) IS DISTINCT FROM (
-		excluded.cleared,
-		excluded.commission,
-		excluded.composite_figi,
-		excluded.event_date,
-		excluded.justification,
-		excluded.memo,
-		excluded.price_per_share,
-		excluded.num_shares,
-		excluded.source,
-		excluded.source_id,
-		excluded.tags,
-		excluded.tax_type,
-		excluded.ticker,
-		excluded.total_value,
-		excluded.sequence_num
-	)`
+		sequence_num=$18`
 
 	for idx, t := range p.Transactions {
-		_, err = trx.Exec(context.Background(), transactionSQL,
-			t.ID,
-			p.ID,
-			p.UserID,
-
-			t.Cleared,
-			t.Commission,
-			t.CompositeFIGI,
-			t.Date,
-			t.Justification,
-			t.Kind,
-			t.Memo,
-			t.PricePerShare,
-			t.Shares,
-			t.Source,
-			t.SourceID,
-			t.Tags,
-			t.TaxDisposition,
-			t.Ticker,
-			t.TotalValue,
-			idx,
+		if t.TaxDisposition == "" {
+			t.TaxDisposition = "TAXABLE"
+		}
+		_, err := trx.Exec(context.Background(), transactionSQL,
+			t.ID,             // 1
+			p.ID,             // 2
+			t.Kind,           // 3
+			t.Cleared,        // 4
+			t.Commission,     // 5
+			t.CompositeFIGI,  // 6
+			t.Date,           // 7
+			t.Justification,  // 8
+			t.Memo,           // 9
+			t.PricePerShare,  // 10
+			t.Shares,         // 11
+			t.Source,         // 12
+			t.SourceID,       // 13
+			t.Tags,           // 14
+			t.TaxDisposition, // 15
+			t.Ticker,         // 16
+			t.TotalValue,     // 17
+			idx,              // 18
 		)
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -1254,16 +1235,6 @@ func (p *Portfolio) saveTransactions() error {
 			trx.Rollback(context.Background())
 			return err
 		}
-	}
-
-	err = trx.Commit(context.Background())
-	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Error":       err,
-		}).Warn("failed to commit portfolio transaction")
-		trx.Rollback(context.Background())
-		return err
 	}
 
 	return nil

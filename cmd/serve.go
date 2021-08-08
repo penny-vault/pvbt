@@ -34,6 +34,7 @@ var serveCmd = &cobra.Command{
 	Long:  `Run HTTP server that implements the Penny Vault API`,
 	Run: func(cmd *cobra.Command, args []string) {
 		common.SetupLogging()
+		common.SetupCache()
 		loki_url := viper.GetString("log.loki_url")
 		if loki_url != "" {
 			loki.Init()

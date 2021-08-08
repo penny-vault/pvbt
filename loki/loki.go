@@ -45,7 +45,7 @@ type Loki struct {
 }
 
 func Init() {
-	hook, err := New(viper.GetString("loki.url"), 102400, 1)
+	hook, err := New(viper.GetString("log.loki_url"), 102400, 1)
 	if err != nil {
 		logrus.Error(err)
 	} else {

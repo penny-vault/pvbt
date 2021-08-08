@@ -91,8 +91,9 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
 		}
 
 		res := jwtMiddleware(c)
+
 		if res != nil {
-			return res
+			return c.SendString(res.Error())
 		}
 
 		// store user ID and token in c.Locals
@@ -113,10 +114,17 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
 }
 
 func jwtError(c *fiber.Ctx, err error) error {
+	log.WithFields(log.Fields{
+		"Error": err,
+	}).Warn("jwt authentication error")
+
 	if err.Error() == "Missing or malformed JWT" {
-		return c.Status(fiber.StatusBadRequest).
+		c.Status(fiber.StatusBadRequest).
 			JSON(fiber.Map{"status": "error", "message": "Missing or malformed JWT", "data": nil})
+	} else {
+		c.Status(fiber.StatusUnauthorized).
+			JSON(fiber.Map{"status": "error", "message": "Invalid or expired JWT", "data": nil})
 	}
-	return c.Status(fiber.StatusUnauthorized).
-		JSON(fiber.Map{"status": "error", "message": "Invalid or expired JWT", "data": nil})
+
+	return err
 }
