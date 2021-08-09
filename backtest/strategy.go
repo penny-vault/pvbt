@@ -24,7 +24,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 	if strat, ok := strategies.StrategyMap[shortcode]; ok {
 		stratObject, err := strat.Factory(params)
 		if err != nil {
-			log.Println(err)
+			log.Warn(err)
 			return nil, err
 		}
 
@@ -35,7 +35,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 		p := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
 		target, err := stratObject.Compute(manager)
 		if err != nil {
-			log.Println(err)
+			log.Warn(err)
 			return nil, err
 		}
 		stop := time.Now()
@@ -43,7 +43,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 
 		start = time.Now()
 		if err := p.TargetPortfolio(target); err != nil {
-			log.Println(err)
+			log.Warn(err)
 			return nil, err
 		}
 
@@ -54,7 +54,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 		start = time.Now()
 		performance, err := p.CalculatePerformance(manager.End)
 		if err != nil {
-			log.Println(err)
+			log.Warn(err)
 			return nil, err
 		}
 		stop = time.Now()
@@ -64,7 +64,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 			"StratCalcDur":       stratComputeDur,
 			"TargetPortfolioDur": targetPortfolioDur,
 			"PerfCalcDur":        calcPerfDur,
-		}).Info("Backtest runtime performance (s)")
+		}).Info("Backtest runtime performance")
 
 		backtest := &Backtest{
 			Portfolio:   p,

@@ -339,7 +339,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 				log.WithFields(log.Fields{
 					"Symbol": k,
 					"Date":   date,
-				}).Debug("Security purchased before security price was available")
+				}).Warn("Security purchased before security price was available")
 				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 
@@ -550,6 +550,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 			}
 		}
 	}
+
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
 	p.Holdings = newHoldings
@@ -688,7 +689,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
 		"CreateTransactions": t4.Sub(t3).Round(time.Millisecond),
 		"NumRebalances":      target.NRows(),
-	}).Info("TargetPortfolio runtimes (s)")
+	}).Info("TargetPortfolio runtimes")
 
 	return nil
 }

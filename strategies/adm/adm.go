@@ -291,7 +291,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
 		"ScoreCalculation":   t4.Sub(t3).Round(time.Millisecond),
 		"PortfolioSelection": t6.Sub(t5).Round(time.Millisecond),
-	}).Info("ADM calculation runtimes (s)")
+	}).Info("ADM calculation runtimes")
 
 	return targetPortfolio, nil
 }

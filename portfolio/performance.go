@@ -505,7 +505,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		"BenchmarkDownload":      t4.Sub(t3).Round(time.Millisecond),
 		"QuoteMerge":             t6.Sub(t5).Round(time.Millisecond),
 		"PerformanceCalculation": t8.Sub(t7).Round(time.Millisecond),
-	}).Info("Portfolio performance metrics calculation runtimes (s)")
+	}).Info("CalculatePerformance runtime")
 
 	return &perf, nil
 }
