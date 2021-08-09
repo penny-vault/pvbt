@@ -19,156 +19,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-// TYPES
-
-type DrawDown struct {
-	Begin       int64   `msgpack:"begin"`
-	End         int64   `msgpack:"end"`
-	Recovery    int64   `msgpack:"recovery"`
-	LossPercent float64 `msgpack:"lossPercent"`
-}
-
-type AnnualReturn struct {
-	Year   int32   `msgpack:"year"`
-	Return float64 `msgpack:"return"`
-}
-
-type Returns struct {
-	MWRRSinceInception float64 `msgpack:"mwrrSinceInception"`
-	MWRRYTD            float64 `msgpack:"mwrrYtd"`
-	MWRROneYear        float64 `msgpack:"mwrrOneYear"`
-	MWRRThreeYear      float64 `msgpack:"mwrrThreeYear"`
-	MWRRFiveYear       float64 `msgpack:"mwrrFiveYear"`
-	MWRRTenYear        float64 `msgpack:"mwrrTenYear"`
-
-	TWRRSinceInception float64 `msgpack:"twrrSinceInception"`
-	TWRRYTD            float64 `msgpack:"twrrYtd"`
-	TWRROneYear        float64 `msgpack:"twrrOneYear"`
-	TWRRThreeYear      float64 `msgpack:"twrrThreeYear"`
-	TWRRFiveYear       float64 `msgpack:"twrrFiveYear"`
-	TWRRTenYear        float64 `msgpack:"twrrTenYear"`
-}
-
-type Metrics struct {
-	AlphaSinceInception             float64      `msgpack:"alpha"`
-	AvgDrawDown                     float64      `msgpack:"avgDrawDown"`
-	BestYear                        AnnualReturn `msgpack:"bestYear"`
-	BetaSinceInception              float64      `msgpack:"beta"`
-	DownsideDeviationSinceInception float64      `msgpack:"downsideDeviation"`
-	ExcessKurtosisSinceInception    float64      `msgpack:"excessKurtosis"`
-	FinalBalance                    float64      `msgpack:"finalBalance"`
-	SharpeRatioSinceInception       float64      `msgpack:"sharpeRatio"`
-	Skewness                        float64      `msgpack:"skewness"`
-	SortinoRatioSinceInception      float64      `msgpack:"sortinoRatio"`
-	StdDevSinceInception            float64      `msgpack:"stdDev"`
-	TotalDeposited                  float64      `msgpack:"totalDeposited"`
-	TotalWithdrawn                  float64      `msgpack:"totalWithdrawn"`
-	UlcerIndexAvg                   float64      `msgpack:"ulcerIndexAvg"`
-	UlcerIndexP50                   float64      `msgpack:"ulcerIndexP50"`
-	UlcerIndexP90                   float64      `msgpack:"uclerIndexP90"`
-	UlcerIndexP99                   float64      `msgpack:"ulcerIndexP99"`
-	WorstYear                       AnnualReturn `msgpack:"worstYear"`
-
-	DynamicWithdrawalRateSinceInception   float64 `msgpack:"dynamicWithdrawalRate"`
-	PerpetualWithdrawalRateSinceInception float64 `msgpack:"perpetualWithdrawalRate"`
-	SafeWithdrawalRateSinceInception      float64 `msgpack:"safeWithdrawalRate"`
-
-	//	UpsideCaptureRatio   float64 `msgpack:"upsideCaptureRatio"`
-	//	DownsideCaptureRatio float64 `msgpack:"downsideCaptureRatio"`
-}
-
-// Performance of portfolio
-type Performance struct {
-	PortfolioID uuid.UUID `msgpack:"portfolioID"`
-	PeriodStart int64     `msgpack:"periodStart"`
-	PeriodEnd   int64     `msgpack:"periodEnd"`
-	ComputedOn  int64     `msgpack:"computedOn"`
-
-	CurrentAssets []*ReportableHolding      `msgpack:"currentAssets"`
-	Measurements  []*PerformanceMeasurement `msgpack:"-"`
-	DrawDowns     []*DrawDown               `msgpack:"drawDowns"`
-
-	PortfolioReturns Returns `msgpack:"portfolioReturns"`
-	BenchmarkReturns Returns `msgpack:"benchmarkReturns"`
-
-	PortfolioMetrics Metrics `msgpack:"portfolioMetrics"`
-	BenchmarkMetrics Metrics `msgpack:"benchmarkMetrics"`
-}
-
-type PerformanceMeasurement struct {
-	Time int64 `msgpack:"time"`
-
-	Value          float64 `msgpack:"value"`
-	BenchmarkValue float64 `msgpack:"benchmarkValue"`
-	RiskFreeValue  float64 `msgpack:"riskFreeValue"`
-
-	StrategyGrowthOf10K  float64 `msgpack:"strategyGrowthOf10K"`
-	BenchmarkGrowthOf10K float64 `msgpack:"benchmarkGrowthOf10K"`
-	RiskFreeGrowthOf10K  float64 `msgpack:"riskFreeGrowthOf10K"`
-
-	Holdings       []*ReportableHolding   `msgpack:"holdings"`
-	TotalDeposited float64                `msgpack:"totalDeposited"`
-	TotalWithdrawn float64                `msgpack:"totalWithdrawn"`
-	Justification  map[string]interface{} `msgpack:"justification"`
-
-	// Time-weighted rate of return
-	TWRROneDay     float64 `msgpack:"twrrOneDay"`
-	TWRROneWeek    float64 `msgpack:"twrrOneWeek"`
-	TWRROneMonth   float64 `msgpack:"twrrOneMonth"`
-	TWRRThreeMonth float64 `msgpack:"twrrThreeMonth"`
-	TWRROneYear    float64 `msgpack:"twrrOneYear"`
-	TWRRThreeYear  float64 `msgpack:"twrrThreeYear"`
-	TWRRFiveYear   float64 `msgpack:"twrrFiveYear"`
-	TWRRTenYear    float64 `msgpack:"twrrTenYear"`
-
-	// Money-weighted rate of return
-	MWRROneDay     float64 `msgpack:"mwrrOneDay"`
-	MWRROneWeek    float64 `msgpack:"mwrrOneWeek"`
-	MWRROneMonth   float64 `msgpack:"mwrrOneMonth"`
-	MWRRThreeMonth float64 `msgpack:"mwrrThreeMonth"`
-	MWRROneYear    float64 `msgpack:"mwrrOneYear"`
-	MWRRThreeYear  float64 `msgpack:"mwrrThreeYear"`
-	MWRRFiveYear   float64 `msgpack:"mwrrFiveYear"`
-	MWRRTenYear    float64 `msgpack:"mwrrTenYear"`
-
-	// active return
-	ActiveReturnOneYear   float64 `msgpack:"activeReturnOneYear"`
-	ActiveReturnThreeYear float64 `msgpack:"activeReturnThreeYear"`
-	ActiveReturnFiveYear  float64 `msgpack:"activeReturnFiveYear"`
-	ActiveReturnTenYear   float64 `msgpack:"activeReturnTenYear"`
-
-	// alpha
-	AlphaOneYear   float64 `msgpack:"alphaOneYear"`
-	AlphaThreeYear float64 `msgpack:"alphaThreeYear"`
-	AlphaFiveYear  float64 `msgpack:"alphaFiveYear"`
-	AlphaTenYear   float64 `msgpack:"alphaTenYear"`
-
-	// beta
-	BetaOneYear   float64 `msgpack:"betaOneYear"`
-	BetaThreeYear float64 `msgpack:"betaThreeYear"`
-	BetaFiveYear  float64 `msgpack:"betaFiveYear"`
-	BetaTenYear   float64 `msgpack:"betaTenYear"`
-
-	// ratios
-	CalmarRatio       float64 `msgpack:"calmarRatio"`
-	DownsideDeviation float64 `msgpack:"downsideDeviation"`
-	InformationRatio  float64 `msgpack:"informationRatio"`
-	KRatio            float64 `msgpack:"kRatio"`
-	KellerRatio       float64 `msgpack:"kellerRatio"`
-	SharpeRatio       float64 `msgpack:"sharpeRatio"`
-	SortinoRatio      float64 `msgpack:"sortinoRatio"`
-	StdDev            float64 `msgpack:"stdDev"`
-	TreynorRatio      float64 `msgpack:"treynorRatio"`
-	UlcerIndex        float64 `msgpack:"ulcerIndex"`
-}
-
-type ReportableHolding struct {
-	Ticker           string  `msgpack:"ticker"`
-	Shares           float64 `msgpack:"shares"`
-	PercentPortfolio float64 `msgpack:"percentPortfolio"`
-	Value            float64 `msgpack:"value"`
-}
-
 // METHODS
 
 // CalculatePerformance calculates various performance metrics of portfolio
@@ -177,11 +27,15 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
+	portfolioID, err := p.ID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
 	perf := Performance{
-		PortfolioID: p.ID,
-		PeriodStart: p.StartDate.Unix(),
-		PeriodEnd:   through.Unix(),
-		ComputedOn:  time.Now().Unix(),
+		PortfolioID: portfolioID,
+		PeriodStart: p.StartDate,
+		PeriodEnd:   through,
+		ComputedOn:  time.Now(),
 	}
 
 	// Get a list of symbols that data should be pulled for
@@ -248,19 +102,19 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	today := time.Now()
 	currYear := today.Year()
 	bestYearPort := AnnualReturn{
-		Year:   math.MinInt32,
+		Year:   0,
 		Return: -99999,
 	}
 	worstYearPort := AnnualReturn{
-		Year:   math.MinInt32,
+		Year:   0,
 		Return: 99999,
 	}
 	bestYearBenchmark := AnnualReturn{
-		Year:   math.MinInt32,
+		Year:   0,
 		Return: -99999,
 	}
 	worstYearBenchmark := AnnualReturn{
-		Year:   math.MinInt32,
+		Year:   0,
 		Return: 99999,
 	}
 	prevDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -398,7 +252,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 				currentAssets = append(currentAssets, &ReportableHolding{
 					Ticker:           symbol,
 					Shares:           qty,
-					PercentPortfolio: value / totalVal,
+					PercentPortfolio: float32(value / totalVal),
 					Value:            value,
 				})
 			}
@@ -415,8 +269,17 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 
 		prevVal = totalVal
 
+		justification := make([]*Justification, 0, len(lastJustification))
+		for k, v := range lastJustification {
+			j := &Justification{
+				Key:   k,
+				Value: v.(float64),
+			}
+			justification = append(justification, j)
+		}
+
 		measurement := PerformanceMeasurement{
-			Time:                 date.Unix(),
+			Time:                 date,
 			Value:                totalVal,
 			BenchmarkValue:       benchmarkValue,
 			RiskFreeValue:        riskFreeValue,
@@ -426,7 +289,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			Holdings:             currentAssets,
 			TotalDeposited:       depositedToDate,
 			TotalWithdrawn:       withdrawnToDate,
-			Justification:        lastJustification,
+			Justification:        justification,
 		}
 
 		perf.Measurements = append(perf.Measurements, &measurement)
@@ -452,65 +315,65 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			measurement.RiskFreeGrowthOf10K *= riskFreeGrowth
 
 			// time-weighted rate of return
-			measurement.TWRROneDay = perf.TWRR(2, STRATEGY)
-			measurement.TWRROneWeek = perf.TWRR(5, STRATEGY)
-			measurement.TWRROneMonth = perf.TWRR(21, STRATEGY)
-			measurement.TWRRThreeMonth = perf.TWRR(63, STRATEGY)
-			measurement.TWRROneYear = perf.TWRR(252, STRATEGY)
-			measurement.TWRRThreeYear = perf.TWRR(756, STRATEGY)
-			measurement.TWRRFiveYear = perf.TWRR(1260, STRATEGY)
-			measurement.TWRRTenYear = perf.TWRR(2520, STRATEGY)
+			measurement.TWRROneDay = float32(perf.TWRR(2, STRATEGY))
+			measurement.TWRROneWeek = float32(perf.TWRR(5, STRATEGY))
+			measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
+			measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
+			measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
+			measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
+			measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
+			measurement.TWRRTenYear = float32(perf.TWRR(2520, STRATEGY))
 
 			// money-weighted rate of return
-			measurement.MWRROneDay = perf.MWRR(1, STRATEGY)
-			measurement.MWRROneWeek = perf.MWRR(5, STRATEGY)
-			measurement.MWRROneMonth = perf.MWRR(21, STRATEGY)
-			measurement.MWRRThreeMonth = perf.MWRR(63, STRATEGY)
-			measurement.MWRROneYear = perf.MWRR(252, STRATEGY)
-			measurement.MWRRThreeYear = perf.MWRR(756, STRATEGY)
-			measurement.MWRRFiveYear = perf.MWRR(1260, STRATEGY)
-			measurement.MWRRTenYear = perf.MWRR(2520, STRATEGY)
+			measurement.MWRROneDay = float32(perf.MWRR(1, STRATEGY))
+			measurement.MWRROneWeek = float32(perf.MWRR(5, STRATEGY))
+			measurement.MWRROneMonth = float32(perf.MWRR(21, STRATEGY))
+			measurement.MWRRThreeMonth = float32(perf.MWRR(63, STRATEGY))
+			measurement.MWRROneYear = float32(perf.MWRR(252, STRATEGY))
+			measurement.MWRRThreeYear = float32(perf.MWRR(756, STRATEGY))
+			measurement.MWRRFiveYear = float32(perf.MWRR(1260, STRATEGY))
+			measurement.MWRRTenYear = float32(perf.MWRR(2520, STRATEGY))
 
 			// active return
-			measurement.ActiveReturnOneYear = perf.ActiveReturn(252)
-			measurement.ActiveReturnThreeYear = perf.ActiveReturn(756)
-			measurement.ActiveReturnFiveYear = perf.ActiveReturn(1260)
-			measurement.ActiveReturnTenYear = perf.ActiveReturn(2520)
+			measurement.ActiveReturnOneYear = float32(perf.ActiveReturn(252))
+			measurement.ActiveReturnThreeYear = float32(perf.ActiveReturn(756))
+			measurement.ActiveReturnFiveYear = float32(perf.ActiveReturn(1260))
+			measurement.ActiveReturnTenYear = float32(perf.ActiveReturn(2520))
 
 			// alpha
-			measurement.AlphaOneYear = perf.Alpha(252)
-			measurement.AlphaThreeYear = perf.Alpha(756)
-			measurement.AlphaFiveYear = perf.Alpha(1260)
-			measurement.AlphaTenYear = perf.Alpha(2520)
+			measurement.AlphaOneYear = float32(perf.Alpha(252))
+			measurement.AlphaThreeYear = float32(perf.Alpha(756))
+			measurement.AlphaFiveYear = float32(perf.Alpha(1260))
+			measurement.AlphaTenYear = float32(perf.Alpha(2520))
 
 			// beta
-			measurement.BetaOneYear = perf.Beta(252)
-			measurement.BetaThreeYear = perf.Beta(756)
-			measurement.BetaFiveYear = perf.Beta(1260)
-			measurement.BetaTenYear = perf.Beta(2520)
+			measurement.BetaOneYear = float32(perf.Beta(252))
+			measurement.BetaThreeYear = float32(perf.Beta(756))
+			measurement.BetaFiveYear = float32(perf.Beta(1260))
+			measurement.BetaTenYear = float32(perf.Beta(2520))
 
 			// ratios
-			measurement.CalmarRatio = perf.CalmarRatio(756)             // 3 year lookback
-			measurement.DownsideDeviation = perf.DownsideDeviation(756) // 3 year lookback
-			measurement.InformationRatio = perf.InformationRatio(756)   // 3 year lookback
-			measurement.KRatio = perf.KRatio(756)                       // 3 year lookback
-			measurement.KellerRatio = perf.KellerRatio(756)             // 3 year lookback
-			measurement.SharpeRatio = perf.SharpeRatio(63)              // 3 month lookback
-			measurement.SortinoRatio = perf.SortinoRatio(63)            // 3 month lookback
-			measurement.StdDev = perf.StdDev(63)                        // 3 month lookback
-			measurement.TreynorRatio = perf.TreynorRatio(756)
-			measurement.UlcerIndex = perf.UlcerIndex()
+			measurement.CalmarRatio = float32(perf.CalmarRatio(756))             // 3 year lookback
+			measurement.DownsideDeviation = float32(perf.DownsideDeviation(756)) // 3 year lookback
+			measurement.InformationRatio = float32(perf.InformationRatio(756))   // 3 year lookback
+			measurement.KRatio = float32(perf.KRatio(756))                       // 3 year lookback
+			measurement.KellerRatio = float32(perf.KellerRatio(756))             // 3 year lookback
+			measurement.SharpeRatio = float32(perf.SharpeRatio(63))              // 3 month lookback
+			measurement.SortinoRatio = float32(perf.SortinoRatio(63))            // 3 month lookback
+			measurement.StdDev = float32(perf.StdDev(63))                        // 3 month lookback
+			measurement.TreynorRatio = float32(perf.TreynorRatio(756))
+			measurement.UlcerIndex = float32(perf.UlcerIndex())
 		}
 
 		if prevDate.Year() != date.Year() {
 			if prevMeasurement.TWRROneYear > bestYearPort.Return {
 				bestYearPort.Return = prevMeasurement.TWRROneYear
-				bestYearPort.Year = int32(prevDate.Year())
+				bestYearPort.Year = uint16(prevDate.Year())
 			}
 
 			if prevMeasurement.TWRROneYear < worstYearPort.Return {
 				worstYearPort.Return = prevMeasurement.TWRROneYear
-				worstYearPort.Year = int32(prevDate.Year())
+				worstYearPort.Year = uint16(prevDate.Year())
 			}
 
 			// calculate 1-yr benchmark rate of return
@@ -518,15 +381,15 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			if numMeasurements > 252 {
 
 				measYr1 := perf.Measurements[numMeasurements-253]
-				rr := (prevMeasurement.BenchmarkGrowthOf10K / measYr1.BenchmarkGrowthOf10K) - 1.0
+				rr := float32((prevMeasurement.BenchmarkGrowthOf10K / measYr1.BenchmarkGrowthOf10K) - 1.0)
 				if rr > bestYearBenchmark.Return {
 					bestYearBenchmark.Return = rr
-					bestYearBenchmark.Year = int32(prevDate.Year())
+					bestYearBenchmark.Year = uint16(prevDate.Year())
 				}
 
 				if rr < worstYearBenchmark.Return {
 					worstYearBenchmark.Return = rr
-					worstYearBenchmark.Year = int32(prevDate.Year())
+					worstYearBenchmark.Year = uint16(prevDate.Year())
 				}
 			}
 		}
@@ -541,7 +404,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	sinceInceptionPeriods := uint(len(perf.Measurements))
 	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods)
 
-	perf.PortfolioReturns = Returns{
+	perf.PortfolioReturns = &Returns{
 		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, STRATEGY),
 		MWRROneYear:        perf.MWRR(252, STRATEGY),
 		MWRRThreeYear:      perf.MWRR(756, STRATEGY),
@@ -555,7 +418,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		TWRRTenYear:        perf.TWRR(2520, STRATEGY),
 	}
 
-	perf.BenchmarkReturns = Returns{
+	perf.BenchmarkReturns = &Returns{
 		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, BENCHMARK),
 		MWRROneYear:        perf.MWRR(252, BENCHMARK),
 		MWRRThreeYear:      perf.MWRR(756, BENCHMARK),
@@ -569,11 +432,11 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		TWRRTenYear:        perf.TWRR(2520, BENCHMARK),
 	}
 
-	perf.PortfolioMetrics = Metrics{
+	perf.PortfolioMetrics = &Metrics{
 		AlphaSinceInception:             perf.Alpha(sinceInceptionPeriods),
 		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
 		BetaSinceInception:              perf.Beta(sinceInceptionPeriods),
-		BestYear:                        bestYearPort,
+		BestYear:                        &bestYearPort,
 		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
 		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
 		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].Value,
@@ -587,13 +450,13 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
 		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
 		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
-		WorstYear:                       worstYearPort,
+		WorstYear:                       &worstYearPort,
 	}
 
-	perf.BenchmarkMetrics = Metrics{
+	perf.BenchmarkMetrics = &Metrics{
 		AlphaSinceInception:             math.NaN(), // alpha doesn't make sense for benchmark
 		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
-		BestYear:                        bestYearBenchmark,
+		BestYear:                        &bestYearBenchmark,
 		BetaSinceInception:              math.NaN(),
 		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
 		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
@@ -608,7 +471,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
 		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
 		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
-		WorstYear:                       worstYearBenchmark,
+		WorstYear:                       &worstYearBenchmark,
 	}
 
 	monthlyRets := perf.monthlyReturn(sinceInceptionPeriods)
@@ -648,8 +511,12 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		return nil, err
 	}
 
+	binaryID, err := portfolioID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
 	p := Performance{
-		PortfolioID: portfolioID,
+		PortfolioID: binaryID,
 	}
 	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p)
 
@@ -976,7 +843,7 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		}
 
 		_, err = trx.Exec(context.Background(), sql,
-			time.Unix(m.Time, 0),
+			m.Time,
 			justification,
 			p.PortfolioID,
 			m.RiskFreeValue,

@@ -32,7 +32,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -41,7 +41,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 3.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -96,7 +96,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 						RiskFreeValue:  riskFreeValue,
@@ -107,7 +107,7 @@ var _ = Describe("Metrics", func() {
 					riskFreeValue += 1.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -148,31 +148,31 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -204,61 +204,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -277,61 +277,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -357,12 +357,12 @@ var _ = Describe("Metrics", func() {
 
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[0]
-				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[0]
-				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
@@ -372,17 +372,17 @@ var _ = Describe("Metrics", func() {
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[0]
-				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with start date of 6/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[1]
-				Expect(dd.Begin).To(Equal(time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Begin).To(Equal(time.Date(2010, 6, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with end date of 9/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[1]
-				Expect(dd.End).To(Equal(time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.End).To(Equal(time.Date(2010, 9, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with LossPercent of -.05", func() {
@@ -392,7 +392,7 @@ var _ = Describe("Metrics", func() {
 
 			It("should have drawdown[1] with Recovery time of 10/1/2010", func() {
 				dd := perf.AllDrawDowns(10)[1]
-				Expect(dd.Recovery).To(Equal(time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Recovery).To(Equal(time.Date(2010, 10, 1, 16, 0, 0, 0, tz)))
 			})
 		})
 	})
@@ -403,23 +403,23 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:       time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:       time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						UlcerIndex: 1.0,
 					},
 					{
-						Time:       time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:       time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						UlcerIndex: 2.0,
 					},
 					{
-						Time:       time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:       time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						UlcerIndex: 3.0,
 					},
 					{
-						Time:       time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:       time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						UlcerIndex: 4.0,
 					},
 					{
-						Time:       time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:       time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						UlcerIndex: 5.0,
 					},
 				}
@@ -458,7 +458,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -467,7 +467,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 10.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -513,7 +513,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -522,7 +522,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 10.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -561,61 +561,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -636,102 +636,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:         10_000.00,
 						RiskFreeValue: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:         9_995.36929844871,
 						RiskFreeValue: 9_921.3630406291,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:         9_930.53947673072,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:         9_818.24496411206,
 						RiskFreeValue: 9_724.77064220184,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:         9_848.34452419541,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:         9_738.36536235239,
 						RiskFreeValue: 9_947.5753604194,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:         9_792.77610557999,
 						RiskFreeValue: 9_868.9384010485,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:         9_945.5892567724,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:         9_993.05394767307,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:         10_004.6307015513,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:         10_042.8339893494,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:         10_034.7302616347,
 						RiskFreeValue: 9_633.02752293578,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_462.64744429882,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_528.17824377457,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:         9_938.64320444554,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:         9_880.75943505448,
 						RiskFreeValue: 9_554.39056356487,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:         9_910.85899513783,
 						RiskFreeValue: 9_515.07208387942,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:         9_952.5353090994,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:         10_006.946052327,
 						RiskFreeValue: 9_685.45216251638,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:         10_070.9662957698,
 						RiskFreeValue: 9_659.23984272608,
 					},
@@ -794,7 +794,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -803,7 +803,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 5.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -842,61 +842,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -917,102 +917,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:          10_000.00,
 						BenchmarkValue: 10_000.00,
 					},
 					{
-						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:          9_995.36929844871,
 						BenchmarkValue: 9_921.3630406291,
 					},
 					{
-						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:          9_930.53947673072,
 						BenchmarkValue: 9_750.98296199214,
 					},
 					{
-						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:          9_818.24496411206,
 						BenchmarkValue: 9_724.77064220184,
 					},
 					{
-						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:          9_848.34452419541,
 						BenchmarkValue: 9_777.19528178244,
 					},
 					{
-						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:          9_738.36536235239,
 						BenchmarkValue: 9_947.5753604194,
 					},
 					{
-						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:          9_792.77610557999,
 						BenchmarkValue: 9_868.9384010485,
 					},
 					{
-						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:          9_945.5892567724,
 						BenchmarkValue: 9_711.66448230669,
 					},
 					{
-						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:          9_993.05394767307,
 						BenchmarkValue: 9_711.66448230669,
 					},
 					{
-						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:          10_004.6307015513,
 						BenchmarkValue: 9_750.98296199214,
 					},
 					{
-						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:          10_042.8339893494,
 						BenchmarkValue: 9_777.19528178244,
 					},
 					{
-						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:          10_034.7302616347,
 						BenchmarkValue: 9_633.02752293578,
 					},
 					{
-						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_462.64744429882,
 					},
 					{
-						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_528.17824377457,
 					},
 					{
-						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:          9_938.64320444554,
 						BenchmarkValue: 9_541.28440366972,
 					},
 					{
-						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:          9_880.75943505448,
 						BenchmarkValue: 9_554.39056356487,
 					},
 					{
-						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:          9_910.85899513783,
 						BenchmarkValue: 9_515.07208387942,
 					},
 					{
-						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:          9_952.5353090994,
 						BenchmarkValue: 9_541.28440366972,
 					},
 					{
-						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:          10_006.946052327,
 						BenchmarkValue: 9_685.45216251638,
 					},
 					{
-						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:          10_070.9662957698,
 						BenchmarkValue: 9_659.23984272608,
 					},
@@ -1048,7 +1048,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -1057,7 +1057,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 10.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -1096,61 +1096,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1176,7 +1176,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 					})
@@ -1185,7 +1185,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 10.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -1224,61 +1224,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1299,61 +1299,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1375,12 +1375,12 @@ var _ = Describe("Metrics", func() {
 
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
 				dd := perf.MaxDrawDown(10)
-				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
 				dd := perf.MaxDrawDown(10)
-				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
@@ -1390,7 +1390,7 @@ var _ = Describe("Metrics", func() {
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
 				dd := perf.MaxDrawDown(10)
-				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 		})
 	})
@@ -1405,7 +1405,7 @@ var _ = Describe("Metrics", func() {
 				perf.Measurements = []*portfolio.PerformanceMeasurement{}
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 						TotalDeposited: 10_000.0,
@@ -1447,31 +1447,31 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2011, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2011, 1, 1, 16, 0, 0, 0, tz),
 						Value:          11_020.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2012, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2012, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 11_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2012, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2012, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2013, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2013, 1, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
@@ -1488,31 +1488,31 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_020.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 11_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
@@ -1529,31 +1529,31 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2011, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2011, 1, 1, 16, 0, 0, 0, tz),
 						Value:          11_020.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2012, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2012, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 11_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2012, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2012, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
 					},
 					{
-						Time:           time.Date(2013, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2013, 1, 1, 16, 0, 0, 0, tz),
 						Value:          8_005.0,
 						TotalDeposited: 10_010.0,
 						TotalWithdrawn: 1_000.0,
@@ -1575,55 +1575,55 @@ var _ = Describe("Metrics", func() {
 				year := time.Now().Year()
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(year-1, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year-1, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year-1, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year-1, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_250.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year-1, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year-1, 6, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year-1, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year-1, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year, 1, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year, 3, 1, 16, 0, 0, 0, tz),
 						Value:          11_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year, 6, 1, 16, 0, 0, 0, tz),
 						Value:          12_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year, 9, 1, 16, 0, 0, 0, tz),
 						Value:          12_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year, 12, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(year, 12, 1, 16, 0, 0, 0, tz),
 						Value:          13_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1653,7 +1653,7 @@ var _ = Describe("Metrics", func() {
 				yearDays := 0
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						TotalDeposited: deposited,
 					})
@@ -1662,7 +1662,7 @@ var _ = Describe("Metrics", func() {
 					benchmarkValue += 5.0
 					yearDays += 1
 					if yearDays == 252 {
-						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz).Unix()
+						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
 						yearDays = 0
 					} else {
@@ -1685,61 +1685,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 2, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 3, 1, 16, 0, 0, 0, tz),
 						Value:          10_020.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 4, 1, 16, 0, 0, 0, tz),
 						Value:          11_000.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 5, 1, 16, 0, 0, 0, tz),
 						Value:          11_005.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 6, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 7, 1, 16, 0, 0, 0, tz),
 						Value:          10_500.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 8, 1, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 9, 1, 16, 0, 0, 0, tz),
 						Value:          10_490.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 10, 1, 16, 0, 0, 0, tz),
 						Value:          11_010.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1760,102 +1760,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:         10_000.00,
 						RiskFreeValue: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:         9_995.36929844871,
 						RiskFreeValue: 9_921.3630406291,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:         9_930.53947673072,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:         9_818.24496411206,
 						RiskFreeValue: 9_724.77064220184,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:         9_848.34452419541,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:         9_738.36536235239,
 						RiskFreeValue: 9_947.5753604194,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:         9_792.77610557999,
 						RiskFreeValue: 9_868.9384010485,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:         9_945.5892567724,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:         9_993.05394767307,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:         10_004.6307015513,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:         10_042.8339893494,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:         10_034.7302616347,
 						RiskFreeValue: 9_633.02752293578,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_462.64744429882,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_528.17824377457,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:         9_938.64320444554,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:         9_880.75943505448,
 						RiskFreeValue: 9_554.39056356487,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:         9_910.85899513783,
 						RiskFreeValue: 9_515.07208387942,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:         9_952.5353090994,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:         10_006.946052327,
 						RiskFreeValue: 9_685.45216251638,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:         10_070.9662957698,
 						RiskFreeValue: 9_659.23984272608,
 					},
@@ -1886,102 +1886,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
 						Value:         10_000.00,
 						RiskFreeValue: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
 						Value:         9_995.36929844871,
 						RiskFreeValue: 9_921.3630406291,
 					},
 					{
-						Time:          time.Date(2019, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
 						Value:         9_930.53947673072,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2019, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
 						Value:         9_818.24496411206,
 						RiskFreeValue: 9_724.77064220184,
 					},
 					{
-						Time:          time.Date(2019, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
 						Value:         9_848.34452419541,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2019, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
 						Value:         9_738.36536235239,
 						RiskFreeValue: 9_947.5753604194,
 					},
 					{
-						Time:          time.Date(2019, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
 						Value:         9_792.77610557999,
 						RiskFreeValue: 9_868.9384010485,
 					},
 					{
-						Time:          time.Date(2019, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
 						Value:         9_945.5892567724,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2019, 8, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
 						Value:         9_993.05394767307,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2019, 9, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 9, 1, 16, 0, 0, 0, tz),
 						Value:         10_004.6307015513,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2019, 10, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 10, 1, 16, 0, 0, 0, tz),
 						Value:         10_042.8339893494,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2019, 11, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 11, 1, 16, 0, 0, 0, tz),
 						Value:         10_034.7302616347,
 						RiskFreeValue: 9_633.02752293578,
 					},
 					{
-						Time:          time.Date(2019, 12, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2019, 12, 1, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_462.64744429882,
 					},
 					{
-						Time:          time.Date(2020, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 1, 1, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_528.17824377457,
 					},
 					{
-						Time:          time.Date(2020, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 2, 1, 16, 0, 0, 0, tz),
 						Value:         9_938.64320444554,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2020, 3, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 3, 1, 16, 0, 0, 0, tz),
 						Value:         9_880.75943505448,
 						RiskFreeValue: 9_554.39056356487,
 					},
 					{
-						Time:          time.Date(2020, 4, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 4, 1, 16, 0, 0, 0, tz),
 						Value:         9_910.85899513783,
 						RiskFreeValue: 9_515.07208387942,
 					},
 					{
-						Time:          time.Date(2020, 5, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 5, 1, 16, 0, 0, 0, tz),
 						Value:         9_952.5353090994,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2020, 6, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 6, 1, 16, 0, 0, 0, tz),
 						Value:         10_006.946052327,
 						RiskFreeValue: 9_685.45216251638,
 					},
 					{
-						Time:          time.Date(2020, 7, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2020, 7, 1, 16, 0, 0, 0, tz),
 						Value:         10_070.9662957698,
 						RiskFreeValue: 9_659.23984272608,
 					},
@@ -2012,102 +2012,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:         10_000.00,
 						RiskFreeValue: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:         9_995.36929844871,
 						RiskFreeValue: 9_921.3630406291,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:         9_930.53947673072,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:         9_818.24496411206,
 						RiskFreeValue: 9_724.77064220184,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:         9_848.34452419541,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:         9_738.36536235239,
 						RiskFreeValue: 9_947.5753604194,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:         9_792.77610557999,
 						RiskFreeValue: 9_868.9384010485,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:         9_945.5892567724,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:         9_993.05394767307,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:         10_004.6307015513,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:         10_042.8339893494,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:         10_034.7302616347,
 						RiskFreeValue: 9_633.02752293578,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_462.64744429882,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_528.17824377457,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:         9_938.64320444554,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:         9_880.75943505448,
 						RiskFreeValue: 9_554.39056356487,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:         9_910.85899513783,
 						RiskFreeValue: 9_515.07208387942,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:         9_952.5353090994,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:         10_006.946052327,
 						RiskFreeValue: 9_685.45216251638,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:         10_070.9662957698,
 						RiskFreeValue: 9_659.23984272608,
 					},
@@ -2138,102 +2138,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:         10_000.00,
 						RiskFreeValue: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:         9_995.36929844871,
 						RiskFreeValue: 9_921.3630406291,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:         9_930.53947673072,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:         9_818.24496411206,
 						RiskFreeValue: 9_724.77064220184,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:         9_848.34452419541,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:         9_738.36536235239,
 						RiskFreeValue: 9_947.5753604194,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:         9_792.77610557999,
 						RiskFreeValue: 9_868.9384010485,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:         9_945.5892567724,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:         9_993.05394767307,
 						RiskFreeValue: 9_711.66448230669,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:         10_004.6307015513,
 						RiskFreeValue: 9_750.98296199214,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:         10_042.8339893494,
 						RiskFreeValue: 9_777.19528178244,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:         10_034.7302616347,
 						RiskFreeValue: 9_633.02752293578,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_462.64744429882,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:         10_067.1451724937,
 						RiskFreeValue: 9_528.17824377457,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:         9_938.64320444554,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:         9_880.75943505448,
 						RiskFreeValue: 9_554.39056356487,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:         9_910.85899513783,
 						RiskFreeValue: 9_515.07208387942,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:         9_952.5353090994,
 						RiskFreeValue: 9_541.28440366972,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:         10_006.946052327,
 						RiskFreeValue: 9_685.45216251638,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:         10_070.9662957698,
 						RiskFreeValue: 9_659.23984272608,
 					},
@@ -2268,7 +2268,7 @@ var _ = Describe("Metrics", func() {
 				perf.Measurements = []*portfolio.PerformanceMeasurement{}
 				for ii := 0; ii < 2520; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
-						Time:           date.Unix(),
+						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
 						TotalDeposited: 10000.0,
@@ -2315,61 +2315,61 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 1, 16, 0, 0, 0, tz),
 						Value:          10_000.00,
 						TotalDeposited: 10_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 2, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 2, 16, 0, 0, 0, tz),
 						Value:          10_200.00,
 						TotalDeposited: 10_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 3, 16, 0, 0, 0, tz),
 						Value:          9_690.00,
 						TotalDeposited: 10_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 4, 16, 0, 0, 0, tz),
 						Value:          10_319.85,
 						TotalDeposited: 10_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 5, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 5, 16, 0, 0, 0, tz),
 						Value:          15_577.85,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 6, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 6, 16, 0, 0, 0, tz),
 						Value:          15_110.51,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 0.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 7, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 7, 16, 0, 0, 0, tz),
 						Value:          6_808.30,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 8_000.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 8, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 8, 16, 0, 0, 0, tz),
 						Value:          7_148.72,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 8_000.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 9, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 9, 16, 0, 0, 0, tz),
 						Value:          7_363.18,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 8_000.00,
 					},
 					{
-						Time:           time.Date(2010, 1, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2010, 1, 10, 16, 0, 0, 0, tz),
 						Value:          7_657.70,
 						TotalDeposited: 15_000.00,
 						TotalWithdrawn: 8_000.00,
@@ -2389,215 +2389,215 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:  time.Date(2020, 1, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 1, 16, 0, 0, 0, tz),
 						Value: 10_000,
 					},
 					{
-						Time:  time.Date(2020, 1, 2, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 2, 16, 0, 0, 0, tz),
 						Value: 10_110,
 					}, // Draw Down #1
 					{
-						Time:  time.Date(2020, 1, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 3, 16, 0, 0, 0, tz),
 						Value: 10_090,
 					},
 					{
-						Time:  time.Date(2020, 1, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 4, 16, 0, 0, 0, tz),
 						Value: 10_080,
 					},
 					{
-						Time:  time.Date(2020, 1, 5, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 5, 16, 0, 0, 0, tz),
 						Value: 10_090,
 					},
 					{
-						Time:  time.Date(2020, 1, 6, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 6, 16, 0, 0, 0, tz),
 						Value: 10_120,
 					}, // Draw Down #2
 					{
-						Time:  time.Date(2020, 1, 7, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 7, 16, 0, 0, 0, tz),
 						Value: 10_110,
 					},
 					{
-						Time:  time.Date(2020, 1, 8, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 8, 16, 0, 0, 0, tz),
 						Value: 10_090,
 					},
 					{
-						Time:  time.Date(2020, 1, 9, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 9, 16, 0, 0, 0, tz),
 						Value: 10_080,
 					},
 					{
-						Time:  time.Date(2020, 1, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 10, 16, 0, 0, 0, tz),
 						Value: 10_090,
 					},
 					{
-						Time:  time.Date(2020, 1, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 11, 16, 0, 0, 0, tz),
 						Value: 10_130,
 					},
 					{
-						Time:  time.Date(2020, 1, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 12, 16, 0, 0, 0, tz),
 						Value: 10_140,
 					}, // Draw Down #3
 					{
-						Time:  time.Date(2020, 1, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 13, 16, 0, 0, 0, tz),
 						Value: 10_010,
 					},
 					{
-						Time:  time.Date(2020, 1, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 14, 16, 0, 0, 0, tz),
 						Value: 9_000,
 					},
 					{
-						Time:  time.Date(2020, 1, 15, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 15, 16, 0, 0, 0, tz),
 						Value: 9_900,
 					},
 					{
-						Time:  time.Date(2020, 1, 16, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 16, 16, 0, 0, 0, tz),
 						Value: 11_000,
 					}, // Draw Down #4
 					{
-						Time:  time.Date(2020, 1, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 17, 16, 0, 0, 0, tz),
 						Value: 10_900,
 					},
 					{
-						Time:  time.Date(2020, 1, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 18, 16, 0, 0, 0, tz),
 						Value: 10_910,
 					},
 					{
-						Time:  time.Date(2020, 1, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 19, 16, 0, 0, 0, tz),
 						Value: 11_001,
 					}, // Draw Down #5
 					{
-						Time:  time.Date(2020, 1, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 20, 16, 0, 0, 0, tz),
 						Value: 11_000,
 					},
 					{
-						Time:  time.Date(2020, 1, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 21, 16, 0, 0, 0, tz),
 						Value: 10_500,
 					},
 					{
-						Time:  time.Date(2020, 1, 22, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 22, 16, 0, 0, 0, tz),
 						Value: 11_100,
 					}, // Draw Down #6
 					{
-						Time:  time.Date(2020, 1, 23, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 23, 16, 0, 0, 0, tz),
 						Value: 11_050,
 					},
 					{
-						Time:  time.Date(2020, 1, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 24, 16, 0, 0, 0, tz),
 						Value: 11_020,
 					},
 					{
-						Time:  time.Date(2020, 1, 25, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 25, 16, 0, 0, 0, tz),
 						Value: 11_200,
 					},
 					{
-						Time:  time.Date(2020, 1, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 26, 16, 0, 0, 0, tz),
 						Value: 11_500,
 					}, // Draw Down #7
 					{
-						Time:  time.Date(2020, 1, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 27, 16, 0, 0, 0, tz),
 						Value: 11_400,
 					},
 					{
-						Time:  time.Date(2020, 1, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 28, 16, 0, 0, 0, tz),
 						Value: 11_300,
 					},
 					{
-						Time:  time.Date(2020, 1, 29, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 29, 16, 0, 0, 0, tz),
 						Value: 11_600,
 					},
 					{
-						Time:  time.Date(2020, 1, 30, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 1, 30, 16, 0, 0, 0, tz),
 						Value: 11_650,
 					}, // Draw Down #8
 					{
-						Time:  time.Date(2020, 2, 1, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 1, 16, 0, 0, 0, tz),
 						Value: 11_600,
 					},
 					{
-						Time:  time.Date(2020, 2, 2, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 2, 16, 0, 0, 0, tz),
 						Value: 11_620,
 					},
 					{
-						Time:  time.Date(2020, 2, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 3, 16, 0, 0, 0, tz),
 						Value: 11_800,
 					}, // Draw Down #9
 					{
-						Time:  time.Date(2020, 2, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 4, 16, 0, 0, 0, tz),
 						Value: 11_700,
 					},
 					{
-						Time:  time.Date(2020, 2, 5, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 5, 16, 0, 0, 0, tz),
 						Value: 11_750,
 					},
 					{
-						Time:  time.Date(2020, 2, 6, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 6, 16, 0, 0, 0, tz),
 						Value: 11_900,
 					},
 					{
-						Time:  time.Date(2020, 2, 7, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 7, 16, 0, 0, 0, tz),
 						Value: 12_000,
 					}, // Draw Down #10
 					{
-						Time:  time.Date(2020, 2, 8, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 8, 16, 0, 0, 0, tz),
 						Value: 11_999,
 					},
 					{
-						Time:  time.Date(2020, 2, 9, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 9, 16, 0, 0, 0, tz),
 						Value: 11_998,
 					},
 					{
-						Time:  time.Date(2020, 2, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 10, 16, 0, 0, 0, tz),
 						Value: 12_005,
 					},
 					{
-						Time:  time.Date(2020, 2, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 11, 16, 0, 0, 0, tz),
 						Value: 13_000,
 					}, // Draw Down #11 (max)
 					{
-						Time:  time.Date(2020, 2, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 12, 16, 0, 0, 0, tz),
 						Value: 12_500,
 					},
 					{
-						Time:  time.Date(2020, 2, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 13, 16, 0, 0, 0, tz),
 						Value: 11_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 14, 16, 0, 0, 0, tz),
 						Value: 10_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 15, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 15, 16, 0, 0, 0, tz),
 						Value: 9_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 16, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 16, 16, 0, 0, 0, tz),
 						Value: 8_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 17, 16, 0, 0, 0, tz),
 						Value: 10_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 19, 16, 0, 0, 0, tz),
 						Value: 12_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 20, 16, 0, 0, 0, tz),
 						Value: 14_000,
 					},
 					{
-						Time:  time.Date(2020, 2, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 21, 16, 0, 0, 0, tz),
 						Value: 15_000,
 					}, // Draw Down #12
 					{
-						Time:  time.Date(2020, 2, 22, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 22, 16, 0, 0, 0, tz),
 						Value: 14_900,
 					},
 					{
-						Time:  time.Date(2020, 2, 23, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 23, 16, 0, 0, 0, tz),
 						Value: 14_950,
 					},
 					{
-						Time:  time.Date(2020, 2, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:  time.Date(2020, 2, 24, 16, 0, 0, 0, tz),
 						Value: 15_100,
 					},
 				}
@@ -2610,9 +2610,9 @@ var _ = Describe("Metrics", func() {
 			It("should be sorted from max to min", func() {
 				ddArr := perf.Top10DrawDowns(uint(len(perf.Measurements)))
 				dd0 := ddArr[0]
-				Expect(dd0.Begin).To(Equal(time.Date(2020, 2, 11, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd0.Begin).To(Equal(time.Date(2020, 2, 11, 16, 0, 0, 0, tz)))
 				dd1 := ddArr[9]
-				Expect(dd1.Begin).To(Equal(time.Date(2020, 1, 6, 16, 0, 0, 0, tz).Unix()))
+				Expect(dd1.Begin).To(Equal(time.Date(2020, 1, 6, 16, 0, 0, 0, tz)))
 			})
 		})
 	})
@@ -2623,102 +2623,102 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:          10_000.00,
 						BenchmarkValue: 10_000.00,
 					},
 					{
-						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:          9_995.36929844871,
 						BenchmarkValue: 9_921.3630406291,
 					},
 					{
-						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:          9_930.53947673072,
 						BenchmarkValue: 9_750.98296199214,
 					},
 					{
-						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:          9_818.24496411206,
 						BenchmarkValue: 9_724.77064220184,
 					},
 					{
-						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:          9_848.34452419541,
 						BenchmarkValue: 9_777.19528178244,
 					},
 					{
-						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:          9_738.36536235239,
 						BenchmarkValue: 9_947.5753604194,
 					},
 					{
-						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:          9_792.77610557999,
 						BenchmarkValue: 9_868.9384010485,
 					},
 					{
-						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:          9_945.5892567724,
 						BenchmarkValue: 9_711.66448230669,
 					},
 					{
-						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:          9_993.05394767307,
 						BenchmarkValue: 9_711.66448230669,
 					},
 					{
-						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:          10_004.6307015513,
 						BenchmarkValue: 9_750.98296199214,
 					},
 					{
-						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:          10_042.8339893494,
 						BenchmarkValue: 9_777.19528178244,
 					},
 					{
-						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:          10_034.7302616347,
 						BenchmarkValue: 9_633.02752293578,
 					},
 					{
-						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_462.64744429882,
 					},
 					{
-						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_528.17824377457,
 					},
 					{
-						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:          9_938.64320444554,
 						BenchmarkValue: 9_541.28440366972,
 					},
 					{
-						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:          9_880.75943505448,
 						BenchmarkValue: 9_554.39056356487,
 					},
 					{
-						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:          9_910.85899513783,
 						BenchmarkValue: 9_515.07208387942,
 					},
 					{
-						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:          9_952.5353090994,
 						BenchmarkValue: 9_541.28440366972,
 					},
 					{
-						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:          10_006.946052327,
 						BenchmarkValue: 9_685.45216251638,
 					},
 					{
-						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:          10_070.9662957698,
 						BenchmarkValue: 9_659.23984272608,
 					},
@@ -2749,121 +2749,121 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:          10_000.00,
 						BenchmarkValue: 10_000.00,
 						RiskFreeValue:  10_001,
 					},
 					{
-						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:          9_995.36929844871,
 						BenchmarkValue: 9_921.3630406291,
 						RiskFreeValue:  10_002,
 					},
 					{
-						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:          9_930.53947673072,
 						BenchmarkValue: 9_750.98296199214,
 						RiskFreeValue:  10_003,
 					},
 					{
-						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:          9_818.24496411206,
 						BenchmarkValue: 9_724.77064220184,
 						RiskFreeValue:  10_004,
 					},
 					{
-						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:          9_848.34452419541,
 						BenchmarkValue: 9_777.19528178244,
 						RiskFreeValue:  10_005,
 					},
 					{
-						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:          9_738.36536235239,
 						BenchmarkValue: 9_947.5753604194,
 						RiskFreeValue:  10_006,
 					},
 					{
-						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:          9_792.77610557999,
 						BenchmarkValue: 9_868.9384010485,
 						RiskFreeValue:  10_007,
 					},
 					{
-						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:          9_945.5892567724,
 						BenchmarkValue: 9_711.66448230669,
 						RiskFreeValue:  10_008,
 					},
 					{
-						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:          9_993.05394767307,
 						BenchmarkValue: 9_711.66448230669,
 						RiskFreeValue:  10_009,
 					},
 					{
-						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:          10_004.6307015513,
 						BenchmarkValue: 9_750.98296199214,
 						RiskFreeValue:  10_010,
 					},
 					{
-						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:          10_042.8339893494,
 						BenchmarkValue: 9_777.19528178244,
 						RiskFreeValue:  10_011,
 					},
 					{
-						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:          10_034.7302616347,
 						BenchmarkValue: 9_633.02752293578,
 						RiskFreeValue:  10_012,
 					},
 					{
-						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_462.64744429882,
 						RiskFreeValue:  10_013,
 					},
 					{
-						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_528.17824377457,
 						RiskFreeValue:  10_014,
 					},
 					{
-						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:          9_938.64320444554,
 						BenchmarkValue: 9_541.28440366972,
 						RiskFreeValue:  10_015,
 					},
 					{
-						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:          9_880.75943505448,
 						BenchmarkValue: 9_554.39056356487,
 						RiskFreeValue:  10_016,
 					},
 					{
-						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:          9_910.85899513783,
 						BenchmarkValue: 9_515.07208387942,
 						RiskFreeValue:  10_017,
 					},
 					{
-						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:          9_952.5353090994,
 						BenchmarkValue: 9_541.28440366972,
 						RiskFreeValue:  10_018,
 					},
 					{
-						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:          10_006.946052327,
 						BenchmarkValue: 9_685.45216251638,
 						RiskFreeValue:  10_019,
 					},
 					{
-						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:          10_070.9662957698,
 						BenchmarkValue: 9_659.23984272608,
 						RiskFreeValue:  10_020,
@@ -2906,121 +2906,121 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
 						Value:          10_000.00,
 						BenchmarkValue: 10_000.00,
 						RiskFreeValue:  10_001,
 					},
 					{
-						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
 						Value:          9_995.36929844871,
 						BenchmarkValue: 9_921.3630406291,
 						RiskFreeValue:  10_002,
 					},
 					{
-						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
 						Value:          9_930.53947673072,
 						BenchmarkValue: 9_750.98296199214,
 						RiskFreeValue:  10_003,
 					},
 					{
-						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
 						Value:          9_818.24496411206,
 						BenchmarkValue: 9_724.77064220184,
 						RiskFreeValue:  10_004,
 					},
 					{
-						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
 						Value:          9_848.34452419541,
 						BenchmarkValue: 9_777.19528178244,
 						RiskFreeValue:  10_005,
 					},
 					{
-						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
 						Value:          9_738.36536235239,
 						BenchmarkValue: 9_947.5753604194,
 						RiskFreeValue:  10_006,
 					},
 					{
-						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
 						Value:          9_792.77610557999,
 						BenchmarkValue: 9_868.9384010485,
 						RiskFreeValue:  10_007,
 					},
 					{
-						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
 						Value:          9_945.5892567724,
 						BenchmarkValue: 9_711.66448230669,
 						RiskFreeValue:  10_008,
 					},
 					{
-						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
 						Value:          9_993.05394767307,
 						BenchmarkValue: 9_711.66448230669,
 						RiskFreeValue:  10_009,
 					},
 					{
-						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
 						Value:          10_004.6307015513,
 						BenchmarkValue: 9_750.98296199214,
 						RiskFreeValue:  10_010,
 					},
 					{
-						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
 						Value:          10_042.8339893494,
 						BenchmarkValue: 9_777.19528178244,
 						RiskFreeValue:  10_011,
 					},
 					{
-						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
 						Value:          10_034.7302616347,
 						BenchmarkValue: 9_633.02752293578,
 						RiskFreeValue:  10_012,
 					},
 					{
-						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_462.64744429882,
 						RiskFreeValue:  10_013,
 					},
 					{
-						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
 						Value:          10_067.1451724937,
 						BenchmarkValue: 9_528.17824377457,
 						RiskFreeValue:  10_014,
 					},
 					{
-						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
 						Value:          9_938.64320444554,
 						BenchmarkValue: 9_541.28440366972,
 						RiskFreeValue:  10_015,
 					},
 					{
-						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
 						Value:          9_880.75943505448,
 						BenchmarkValue: 9_554.39056356487,
 						RiskFreeValue:  10_016,
 					},
 					{
-						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
 						Value:          9_910.85899513783,
 						BenchmarkValue: 9_515.07208387942,
 						RiskFreeValue:  10_017,
 					},
 					{
-						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
 						Value:          9_952.5353090994,
 						BenchmarkValue: 9_541.28440366972,
 						RiskFreeValue:  10_018,
 					},
 					{
-						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
 						Value:          10_006.946052327,
 						BenchmarkValue: 9_685.45216251638,
 						RiskFreeValue:  10_019,
 					},
 					{
-						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz).Unix(),
+						Time:           time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
 						Value:          10_070.9662957698,
 						BenchmarkValue: 9_659.23984272608,
 						RiskFreeValue:  10_020,
@@ -3041,7 +3041,7 @@ var _ = Describe("Metrics", func() {
 				perf.Measurements = make([]*portfolio.PerformanceMeasurement, 100)
 				for ii := 0; ii < 100; ii++ {
 					perf.Measurements[ii] = &portfolio.PerformanceMeasurement{
-						UlcerIndex: float64(ii + 1.0),
+						UlcerIndex: float32(ii + 1.0),
 					}
 				}
 			})

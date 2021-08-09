@@ -27,6 +27,10 @@ type cashflow struct {
 	value float64
 }
 
+func isNaN(x float32) bool {
+	return math.IsNaN(float64(x))
+}
+
 // Metric Functions
 
 // ActiveReturn calculates the difference in return vs a benchmark
@@ -100,7 +104,7 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 	startIdx := len(perf.Measurements) - int(periods)
 	m0 := perf.Measurements[startIdx]
 
-	var peak float64 = m0.Value
+	peak := m0.Value
 	var drawDown *DrawDown
 	var prev int64
 	for _, v := range perf.Measurements[startIdx:] {
@@ -110,22 +114,22 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 			if drawDown == nil {
 				drawDown = &DrawDown{
 					Begin:       prev,
-					End:         v.Time,
-					LossPercent: (v.Value / peak) - 1.0,
+					End:         v.Time.Unix(),
+					LossPercent: float64((v.Value / peak) - 1.0),
 				}
 			}
 
 			loss := (v.Value/peak - 1.0)
 			if loss < drawDown.LossPercent {
-				drawDown.End = v.Time
-				drawDown.LossPercent = loss
+				drawDown.End = v.Time.Unix()
+				drawDown.LossPercent = float64(loss)
 			}
 		} else if drawDown != nil {
-			drawDown.Recovery = v.Time
+			drawDown.Recovery = v.Time.Unix()
 			allDrawDowns = append(allDrawDowns, drawDown)
 			drawDown = nil
 		}
-		prev = v.Time
+		prev = v.Time.Unix()
 	}
 
 	return allDrawDowns
@@ -141,8 +145,8 @@ func (perf *Performance) AvgUlcerIndex(periods uint) float64 {
 	startIdx := len(perf.Measurements) - int(periods)
 	u := make([]float64, 0, len(perf.Measurements))
 	for _, xx := range perf.Measurements[startIdx:] {
-		if !math.IsNaN(xx.UlcerIndex) && !math.IsInf(xx.UlcerIndex, 1) {
-			u = append(u, xx.UlcerIndex)
+		if !isNaN(xx.UlcerIndex) {
+			u = append(u, float64(xx.UlcerIndex))
 		}
 	}
 
@@ -352,8 +356,8 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 	startIdx := len(perf.Measurements) - pp
 	endIdx := len(perf.Measurements) - 1
 
-	start := time.Unix(perf.Measurements[startIdx].Time, 0)
-	end := time.Unix(perf.Measurements[endIdx].Time, 0)
+	start := perf.Measurements[startIdx].Time
+	end := perf.Measurements[endIdx].Time
 	duration := end.Sub(start)
 
 	// if period is greater than a year then annualize the result
@@ -368,11 +372,11 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 
 		switch kind {
 		case STRATEGY:
-			rate = (m1.Value - deposited + withdrawn) / m0.Value
+			rate = float64((m1.Value - deposited + withdrawn) / m0.Value)
 		case BENCHMARK:
-			rate = (m1.BenchmarkValue - deposited + withdrawn) / m0.BenchmarkValue
+			rate = float64((m1.BenchmarkValue - deposited + withdrawn) / m0.BenchmarkValue)
 		case RISKFREE:
-			rate = (m1.RiskFreeValue - deposited + withdrawn) / m0.RiskFreeValue
+			rate = float64((m1.RiskFreeValue - deposited + withdrawn) / m0.RiskFreeValue)
 		}
 		if years > 1 {
 			return math.Pow(rate, 1.0/years) - 1.0
@@ -385,15 +389,15 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 		var val float64
 		switch kind {
 		case STRATEGY:
-			val = perf.Measurements[startIdx].Value * -1.0
+			val = float64(perf.Measurements[startIdx].Value) * -1.0
 		case BENCHMARK:
-			val = perf.Measurements[startIdx].BenchmarkValue * -1.0
+			val = float64(perf.Measurements[startIdx].BenchmarkValue) * -1.0
 		case RISKFREE:
-			val = perf.Measurements[startIdx].RiskFreeValue * -1.0
+			val = float64(perf.Measurements[startIdx].RiskFreeValue) * -1.0
 		}
 
 		cashflows = append(cashflows, cashflow{
-			date:  time.Unix(perf.Measurements[startIdx].Time, 0),
+			date:  perf.Measurements[startIdx].Time,
 			value: val,
 		})
 
@@ -402,10 +406,10 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 			m1 := perf.Measurements[jj]
 			deposited := m1.TotalDeposited - m0.TotalDeposited
 			withdrawn := m1.TotalWithdrawn - m0.TotalWithdrawn
-			change := deposited - withdrawn
+			change := float64(deposited - withdrawn)
 			if math.Abs(change) > 0 {
 				cashflows = append(cashflows, cashflow{
-					date:  time.Unix(perf.Measurements[jj].Time, 0),
+					date:  perf.Measurements[jj].Time,
 					value: change * -1.0,
 				})
 			}
@@ -421,7 +425,7 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 		}
 
 		cashflows = append(cashflows, cashflow{
-			date:  time.Unix(perf.Measurements[n-1].Time, 0),
+			date:  perf.Measurements[n-1].Time,
 			value: val,
 		})
 
@@ -644,8 +648,8 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 		rate = rate * r0
 	}
 
-	start := time.Unix(perf.Measurements[startIdx].Time, 0)
-	end := time.Unix(perf.Measurements[endIdx].Time, 0)
+	start := perf.Measurements[startIdx].Time
+	end := perf.Measurements[endIdx].Time
 	duration := end.Sub(start)
 
 	// if period is greater than a year then annualize the result
@@ -724,7 +728,7 @@ func (perf *Performance) UlcerIndexPercentile(periods uint, percentile float64) 
 	startIdx := len(perf.Measurements) - int(periods)
 	u := make([]float64, 0, len(perf.Measurements))
 	for _, xx := range perf.Measurements[startIdx:] {
-		u = append(u, xx.UlcerIndex)
+		u = append(u, float64(xx.UlcerIndex))
 	}
 
 	sort.Float64s(u)
@@ -862,11 +866,11 @@ func minInt(x, y int) int {
 
 func (perf *Performance) monthlyReturn(periods uint) []float64 {
 	rets := make([]float64, 0, 600)
-	lastMonth := time.Unix(perf.Measurements[0].Time, 0).Month()
+	lastMonth := perf.Measurements[0].Time.Month()
 	last := perf.Measurements[0]
 	m := perf.Measurements
 	for _, curr := range m[(len(m) - int(periods)):] {
-		t := time.Unix(curr.Time, 0)
+		t := curr.Time
 		if lastMonth != t.Month() {
 			r := (curr.Value / last.Value) - 1.0
 			last = curr
@@ -952,7 +956,7 @@ func (perf *Performance) ytdPeriods() uint {
 	year := today.Year()
 	var periods uint = 0
 	for _, x := range perf.Measurements {
-		if year == time.Unix(x.Time, 0).Year() {
+		if year == x.Time.Year() {
 			periods++
 		}
 	}

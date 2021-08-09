@@ -1,0 +1,154 @@
+package portfolio
+
+type DrawDown struct {
+	Begin       int64
+	End         int64
+	Recovery    int64
+	LossPercent float64
+}
+
+type AnnualReturn struct {
+	Year   uint16
+	Return float32
+}
+
+type Justification struct {
+	Key text
+	Reason text
+	Value float64
+}
+
+type Metrics struct {
+	AlphaSinceInception             float64
+	AvgDrawDown                     float64
+	BestYear                        AnnualReturn
+	BetaSinceInception              float64
+	DownsideDeviationSinceInception float64
+	ExcessKurtosisSinceInception    float64
+	FinalBalance                    float64
+	SharpeRatioSinceInception       float64
+	Skewness                        float64
+	SortinoRatioSinceInception      float64
+	StdDevSinceInception            float64
+	TotalDeposited                  float64
+	TotalWithdrawn                  float64
+	UlcerIndexAvg                   float64
+	UlcerIndexP50                   float64
+	UlcerIndexP90                   float64
+	UlcerIndexP99                   float64
+	WorstYear                       AnnualReturn
+
+	DynamicWithdrawalRateSinceInception   float64
+	PerpetualWithdrawalRateSinceInception float64
+	SafeWithdrawalRateSinceInception      float64
+
+	//	UpsideCaptureRatio   float64
+	//	DownsideCaptureRatio float64
+}
+
+type Performance struct {
+	PortfolioID binary
+	PeriodStart timestamp
+	PeriodEnd   timestamp
+	ComputedOn  timestamp
+
+	CurrentAssets []ReportableHolding
+	Measurements  []PerformanceMeasurement
+	DrawDowns     []DrawDown
+
+	PortfolioReturns Returns
+	BenchmarkReturns Returns
+
+	PortfolioMetrics Metrics
+	BenchmarkMetrics Metrics
+}
+
+type PerformanceMeasurement struct {
+	Time timestamp
+
+	Value          float64
+	BenchmarkValue float64
+	RiskFreeValue  float64
+
+	StrategyGrowthOf10K  float64
+	BenchmarkGrowthOf10K float64
+	RiskFreeGrowthOf10K  float64
+
+	Holdings       []ReportableHolding
+	TotalDeposited float64
+	TotalWithdrawn float64
+	Justification  []Justification
+
+	// Time-weighted rate of return
+	TWRROneDay     float32
+	TWRROneWeek    float32
+	TWRROneMonth   float32
+	TWRRThreeMonth float32
+	TWRROneYear    float32
+	TWRRThreeYear  float32
+	TWRRFiveYear   float32
+	TWRRTenYear    float32
+
+	// Money-weighted rate of return
+	MWRROneDay     float32
+	MWRROneWeek    float32
+	MWRROneMonth   float32
+	MWRRThreeMonth float32
+	MWRROneYear    float32
+	MWRRThreeYear  float32
+	MWRRFiveYear   float32
+	MWRRTenYear    float32
+
+	// active return
+	ActiveReturnOneYear   float32
+	ActiveReturnThreeYear float32
+	ActiveReturnFiveYear  float32
+	ActiveReturnTenYear   float32
+
+	// alpha
+	AlphaOneYear   float32
+	AlphaThreeYear float32
+	AlphaFiveYear  float32
+	AlphaTenYear   float32
+
+	// beta
+	BetaOneYear   float32
+	BetaThreeYear float32
+	BetaFiveYear  float32
+	BetaTenYear   float32
+
+	// ratios
+	CalmarRatio       float32
+	DownsideDeviation float32
+	InformationRatio  float32
+	KRatio            float32
+	KellerRatio       float32
+	SharpeRatio       float32
+	SortinoRatio      float32
+	StdDev            float32
+	TreynorRatio      float32
+	UlcerIndex        float32
+}
+
+type ReportableHolding struct {
+	Ticker           text
+	Shares           float64
+	PercentPortfolio float32
+	Value            float64
+}
+
+type Returns struct {
+	MWRRSinceInception float64
+	MWRRYTD            float64
+	MWRROneYear        float64
+	MWRRThreeYear      float64
+	MWRRFiveYear       float64
+	MWRRTenYear        float64
+
+	TWRRSinceInception float64
+	TWRRYTD            float64
+	TWRROneYear        float64
+	TWRRThreeYear      float64
+	TWRRFiveYear       float64
+	TWRRTenYear        float64
+}

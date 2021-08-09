@@ -287,12 +287,12 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).NotTo(HaveOccurred())
 
 				// Friday, August 28, 2020
-				Expect(time.Unix(perf.Measurements[146].Time, 0).In(tz)).To(Equal(time.Date(2020, time.August, 28, 16, 0, 0, 0, tz)))
+				Expect(perf.Measurements[146].Time).To(Equal(time.Date(2020, time.August, 28, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[146].Value).Should(BeNumerically("~", 34022.4726, 1e-5))
 				Expect(perf.Measurements[146].Holdings[0].Shares).Should(BeNumerically("~", 15.37114, 1e-5))
 
 				// Monday, August 31, 2020
-				Expect(time.Unix(perf.Measurements[147].Time, 0).In(tz)).To(Equal(time.Date(2020, time.August, 31, 16, 0, 0, 0, tz)))
+				Expect(perf.Measurements[147].Time).To(Equal(time.Date(2020, time.August, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[147].Value).Should(BeNumerically("~", 38298.72266, 1e-5))
 				Expect(perf.Measurements[147].Holdings[0].Shares).Should(BeNumerically("~", 76.85568, 1e-5))
 			})

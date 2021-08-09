@@ -217,7 +217,7 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 			}
 		}
 		values = append(values, &PerformanceMeasurement{
-			Time:  date.Unix(),
+			Time:  date,
 			Value: totalVal,
 		})
 	}

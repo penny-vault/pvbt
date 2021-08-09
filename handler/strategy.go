@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/shamaton/msgpack/v2"
 
 	"github.com/gofiber/fiber/v2"
 	log "github.com/sirupsen/logrus"
@@ -107,14 +106,17 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	go b.Serialize(c.Locals("userID").(string))
 
-	msgpackPerformance, err := msgpack.Marshal(b.Performance)
+	measurements := b.Performance.Measurements
+	b.Performance.Measurements = nil // set measurements to nil for serialization
+	serialized, err := b.Performance.MarshalBinary()
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
-		}).Error("msgpack serialization failed for performance")
+		}).Error("serialization failed for performance")
 		return fiber.ErrInternalServerError
 	}
+	b.Performance.Measurements = measurements
 
-	c.Set("Content-type", "application/x-msgpack")
-	return c.Send(msgpackPerformance)
+	c.Set("Content-type", "application/x-colfer")
+	return c.Send(serialized)
 }
