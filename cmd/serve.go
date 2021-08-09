@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"main/common"
 	"main/data"
 	"main/database"
@@ -9,6 +10,10 @@ import (
 	"main/middleware"
 	"main/router"
 	"main/strategies"
+	"os"
+	"os/signal"
+	"runtime/pprof"
+	"runtime/trace"
 	"time"
 
 	"github.com/go-co-op/gocron"
@@ -33,6 +38,32 @@ var serveCmd = &cobra.Command{
 	Short: "Run the pv-api server",
 	Long:  `Run HTTP server that implements the Penny Vault API`,
 	Run: func(cmd *cobra.Command, args []string) {
+		if Profile {
+			f, err := os.Create("profile.out")
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
+
+		if Trace {
+			f, err := os.Create("trace.out")
+			if err != nil {
+				log.Fatalf("failed to create trace output file: %v", err)
+			}
+			defer func() {
+				if err := f.Close(); err != nil {
+					log.Fatalf("failed to close trace file: %v", err)
+				}
+			}()
+
+			if err := trace.Start(f); err != nil {
+				log.Fatalf("failed to start trace: %v", err)
+			}
+			defer trace.Stop()
+		}
+
 		common.SetupLogging()
 		common.SetupCache()
 		loki_url := viper.GetString("log.loki_url")
@@ -53,6 +84,15 @@ var serveCmd = &cobra.Command{
 
 		// Create new Fiber instance
 		app := fiber.New()
+
+		// shutdown cleanly on interrupt
+		c := make(chan os.Signal, 1)
+		signal.Notify(c, os.Interrupt)
+		go func() {
+			_ = <-c
+			fmt.Println("Gracefully shutting down...")
+			_ = app.Shutdown()
+		}()
 
 		// Configure CORS
 		corsConfig := cors.Config{
@@ -81,6 +121,9 @@ var serveCmd = &cobra.Command{
 		scheduler.StartAsync()
 
 		// Start server on http://${heroku-url}:${port}
-		log.Fatal(app.Listen(":" + viper.GetString("server.port")))
+		err = app.Listen(":" + viper.GetString("server.port"))
+		if err != nil {
+			log.Fatal(err)
+		}
 	},
 }

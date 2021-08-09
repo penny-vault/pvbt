@@ -9,6 +9,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+var Profile bool
+var Trace bool
+
 func init() {
 	// PV secret key
 	viper.BindEnv("secret_key", "PV_SECRET")
@@ -49,6 +52,9 @@ func init() {
 	viper.BindEnv("log.loki_url", "LOKI_URL")
 	rootCmd.PersistentFlags().String("log-loki-url", "", "Loki server to send log messages to, if blank don't send to Loki")
 	viper.BindPFlag("log.loki_url", serveCmd.Flags().Lookup("log-loki-url"))
+
+	rootCmd.PersistentFlags().BoolVar(&Profile, "cpu-profile", false, "Run pprof and save in profile.out")
+	rootCmd.PersistentFlags().BoolVar(&Trace, "trace", false, "Trace program execution and save in trace.out")
 }
 
 var rootCmd = &cobra.Command{
