@@ -204,7 +204,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 				"StartTime": begin.String(),
 				"EndTime":   end.String(),
 				"Error":     err,
-			}).Debug("Failed to load eod prices")
+			}).Warn("Failed to load eod prices")
 			return nil, err
 		}
 
@@ -220,7 +220,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 				"EndTime":    end.String(),
 				"Error":      err,
 				"StatusCode": resp.StatusCode,
-			}).Debug("Failed to load eod prices -- reading body failed")
+			}).Warn("Failed to load eod prices -- reading body failed")
 			return nil, err
 		}
 
@@ -234,7 +234,7 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 				"EndTime":    end.String(),
 				"Body":       string(body),
 				"StatusCode": resp.StatusCode,
-			}).Debug("Failed to load eod prices")
+			}).Warn("Failed to load eod prices")
 			return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 		}
 
