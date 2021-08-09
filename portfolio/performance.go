@@ -57,7 +57,9 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	p.dataProxy.End = through
 	p.dataProxy.Frequency = data.FrequencyDaily
 
+	t1 := time.Now()
 	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
+	t2 := time.Now()
 	if len(errs) > 0 {
 		return nil, errors.New("failed to download data for tickers")
 	}
@@ -68,6 +70,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	}
 
 	// Get benchmark quotes but use adjustedClose prices
+	t3 := time.Now()
 	metric := p.dataProxy.Metric
 	p.dataProxy.Metric = data.MetricAdjustedClose
 	benchmarkEod, err := p.dataProxy.GetData(p.Benchmark)
@@ -82,7 +85,9 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	s := benchmarkEod.Series[benchColumn]
 	s.Rename("$BENCHMARK")
 	eod = append(eod, benchmarkEod)
+	t4 := time.Now()
 
+	t5 := time.Now()
 	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
 	if err != nil {
 		return nil, err
@@ -91,7 +96,9 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
 		InPlace: true,
 	})
+	t6 := time.Now()
 
+	t7 := time.Now()
 	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
@@ -491,6 +498,14 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
 		perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
 	}
+	t8 := time.Now()
+
+	log.WithFields(log.Fields{
+		"QuoteDownload":          t2.Sub(t1).Round(time.Millisecond),
+		"BenchmarkDownload":      t4.Sub(t3).Round(time.Millisecond),
+		"QuoteMerge":             t6.Sub(t5).Round(time.Millisecond),
+		"PerformanceCalculation": t8.Sub(t7).Round(time.Millisecond),
+	}).Info("Portfolio performance metrics calculation runtimes (s)")
 
 	return &perf, nil
 }

@@ -24,6 +24,8 @@ import (
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type AcceleratingDualMomentum struct {
@@ -223,14 +225,19 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		manager.Begin = manager.Begin.AddDate(0, -6, 0)
 	}
 
+	t1 := time.Now()
 	err := adm.downloadPriceData(manager)
 	if err != nil {
 		return nil, err
 	}
+	t2 := time.Now()
 
 	// Compute momentum scores
+	t3 := time.Now()
 	adm.computeScores()
+	t4 := time.Now()
 
+	t5 := time.Now()
 	scores := []dataframe.Series{}
 	timeIdx, _ := adm.momentum.NameToColumn(data.DateIdx)
 
@@ -277,7 +284,14 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		}
 	}
 	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
+	t6 := time.Now()
 	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
+
+	log.WithFields(log.Fields{
+		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
+		"ScoreCalculation":   t4.Sub(t3).Round(time.Millisecond),
+		"PortfolioSelection": t6.Sub(t5).Round(time.Millisecond),
+	}).Info("ADM calculation runtimes (s)")
 
 	return targetPortfolio, nil
 }

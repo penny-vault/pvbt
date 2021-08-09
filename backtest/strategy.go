@@ -38,14 +38,17 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 			log.Println(err)
 			return nil, err
 		}
+		stop := time.Now()
+		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
 
+		start = time.Now()
 		if err := p.TargetPortfolio(target); err != nil {
 			log.Println(err)
 			return nil, err
 		}
 
-		stop := time.Now()
-		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
+		stop = time.Now()
+		targetPortfolioDur := stop.Sub(start).Round(time.Millisecond)
 
 		// calculate the portfolio's performance
 		start = time.Now()
@@ -58,9 +61,10 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
 
 		log.WithFields(log.Fields{
-			"StratCalcDur": stratComputeDur,
-			"PerfCalcDur":  calcPerfDur,
-		}).Info("Strategy performance calculated")
+			"StratCalcDur":       stratComputeDur,
+			"TargetPortfolioDur": targetPortfolioDur,
+			"PerfCalcDur":        calcPerfDur,
+		}).Info("Backtest runtime performance (s)")
 
 		backtest := &Backtest{
 			Portfolio:   p,

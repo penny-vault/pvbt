@@ -615,6 +615,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		symbols = append(symbols, k)
 	}
 
+	t1 := time.Now()
 	prices, errs := p.dataProxy.GetMultipleData(symbols...)
 	if len(errs) != 0 {
 		errorMsgs := make([]string, len(errs))
@@ -627,8 +628,10 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		return errors.New("failed loading data for tickers")
 	}
 	p.priceData = prices
+	t2 := time.Now()
 
 	// Create transactions
+	t3 := time.Now()
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
@@ -679,6 +682,13 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 			return err
 		}
 	}
+	t4 := time.Now()
+
+	log.WithFields(log.Fields{
+		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
+		"CreateTransactions": t4.Sub(t3).Round(time.Millisecond),
+		"NumRebalances":      target.NRows(),
+	}).Info("TargetPortfolio runtimes (s)")
 
 	return nil
 }
