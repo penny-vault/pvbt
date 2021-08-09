@@ -212,10 +212,10 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
-	if manager.End == nullTime {
+	if manager.End.Equal(nullTime) {
 		manager.End = time.Now()
 	}
-	if manager.Begin == nullTime {
+	if manager.Begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	} else {
