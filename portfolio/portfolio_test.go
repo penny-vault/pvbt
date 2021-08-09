@@ -144,7 +144,8 @@ var _ = Describe("Portfolio", func() {
 				target := make(map[string]float64)
 				target["VFINX"] = 1.0
 				justification := make(map[string]interface{})
-				err = p.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
+				hints := make(map[string]int)
+				err = p.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification, hints)
 				Expect(err).To(HaveOccurred())
 			})
 

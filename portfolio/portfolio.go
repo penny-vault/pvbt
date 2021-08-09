@@ -290,7 +290,7 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justification map[string]interface{}) error {
+func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justification map[string]interface{}, hints map[string]int) error {
 	err := p.FillCorporateActions(date)
 	if err != nil {
 		return err
@@ -330,7 +330,12 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	for k, v := range p.Holdings {
 		if k != "$CASH" {
 			eod := p.priceData[k]
-			res := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24)
+			hint := 0
+			if xx, ok := hints[k]; ok {
+				hint = xx
+			}
+			res, hint := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24, hint)
+			hints[k] = hint // maps are always pass by reference
 
 			var price float64
 			if tmp, ok := res[k]; ok {
@@ -354,7 +359,13 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	for k := range target {
 		if _, ok := priceMap[k]; !ok {
 			eod := p.priceData[k]
-			res := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24)
+
+			hint := 0
+			if xx, ok := hints[k]; ok {
+				hint = xx
+			}
+			res, hint := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24, hint)
+			hints[k] = hint
 
 			var price float64
 			if tmp, ok := res[k]; ok {
@@ -632,6 +643,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 	t2 := time.Now()
 
 	// Create transactions
+	hints := make(map[string]int)
 	t3 := time.Now()
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	for {
@@ -678,7 +690,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 			rebalance = symbol.(map[string]float64)
 		}
 
-		err = p.RebalanceTo(date, rebalance, justification)
+		err = p.RebalanceTo(date, rebalance, justification, hints)
 		if err != nil {
 			return err
 		}

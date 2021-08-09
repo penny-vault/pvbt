@@ -128,10 +128,18 @@ func FindTime(df *dataframe.DataFrame, searchVal time.Time, col string) map[inte
 // FindNearestTime locates the row with the time closest to timeVal, assuming that the
 // input dataframe is sorted in ascending order. Returns nil if there is not a value
 // within at least maxDistance
-func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, maxDistance time.Duration) map[interface{}]interface{} {
-	iterator := df.ValuesIterator()
+func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, maxDistance time.Duration, startHint ...int) (map[interface{}]interface{}, int) {
+	start := 0
+	if len(startHint) > 0 {
+		start = startHint[0]
+	}
+	iterator := df.ValuesIterator(dataframe.ValuesOptions{
+		InitialRow: start,
+		Step:       1,
+	})
 	lastDistance := time.Duration(MaxInt64)
 	var lastRow map[interface{}]interface{} = nil
+	var hint = start
 	for {
 
 		row, val, _ := iterator(dataframe.SeriesName)
@@ -144,20 +152,21 @@ func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, max
 
 		if lastDistance < distance {
 			if lastDistance <= maxDistance {
-				return lastRow
+				return lastRow, hint
 			} else {
-				return nil
+				return nil, 0
 			}
 		}
 
 		lastRow = val
+		hint = *row
 		lastDistance = distance
 	}
 
 	if lastDistance <= maxDistance {
-		return lastRow
+		return lastRow, hint
 	} else {
-		return nil
+		return nil, hint
 	}
 }
 
