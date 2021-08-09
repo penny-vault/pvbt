@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -22,6 +23,7 @@ import (
 type tiingo struct {
 	apikey string
 	cache  map[string]*dataframe.DataFrame
+	lock   sync.RWMutex
 }
 
 type tiingoJSONResponse struct {
@@ -44,8 +46,8 @@ type tiingoJSONResponse struct {
 var tiingoAPI = "https://api.tiingo.com"
 
 // NewTiingo Create a new Tiingo data provider
-func NewTiingo(key string) tiingo {
-	return tiingo{
+func NewTiingo(key string) *tiingo {
+	return &tiingo{
 		apikey: key,
 		cache:  make(map[string]*dataframe.DataFrame),
 	}
@@ -54,7 +56,7 @@ func NewTiingo(key string) tiingo {
 // Date provider functions
 
 // LastTradingDay return the last trading day for the requested frequency
-func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, error) {
+func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, error) {
 	symbol := "SPY"
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
 
@@ -142,27 +144,27 @@ func (t tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, 
 }
 
 // LastTradingDayOfWeek return the last trading day of the week
-func (t tiingo) LastTradingDayOfWeek(forDate time.Time) (time.Time, error) {
+func (t *tiingo) LastTradingDayOfWeek(forDate time.Time) (time.Time, error) {
 	return t.LastTradingDay(forDate, "weekly")
 }
 
 // LastTradingDayOfMonth return the last trading day of the month
-func (t tiingo) LastTradingDayOfMonth(forDate time.Time) (time.Time, error) {
+func (t *tiingo) LastTradingDayOfMonth(forDate time.Time) (time.Time, error) {
 	return t.LastTradingDay(forDate, "monthly")
 }
 
 // LastTradingDayOfYear return the last trading day of the year
-func (t tiingo) LastTradingDayOfYear(forDate time.Time) (time.Time, error) {
+func (t *tiingo) LastTradingDayOfYear(forDate time.Time) (time.Time, error) {
 	return t.LastTradingDay(forDate, "annually")
 }
 
 // Provider functions
 
-func (t tiingo) DataType() string {
+func (t *tiingo) DataType() string {
 	return "security"
 }
 
-func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	validFrequencies := map[string]bool{
 		FrequencyDaily:   true,
 		FrequencyWeekly:  true,
@@ -191,7 +193,19 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 	}
 
 	var res *dataframe.DataFrame
+	t.lock.RLock()
 	res, ok := t.cache[url]
+	t.lock.RUnlock()
+
+	log.WithFields(log.Fields{
+		"symbol":    symbol,
+		"metric":    metric,
+		"frequency": frequency,
+		"begin":     begin,
+		"end":       end,
+		"cached":    ok,
+	}).Debug("load data from tiingo")
+
 	if !ok {
 		resp, err := http.Get(url)
 
@@ -285,6 +299,10 @@ func (t tiingo) GetDataForPeriod(symbol string, metric string, frequency string,
 		if err != nil {
 			return nil, err
 		}
+
+		t.lock.Lock()
+		t.cache[url] = res
+		t.lock.Unlock()
 	}
 
 	err = nil
