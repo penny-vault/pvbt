@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"encoding/hex"
+	"fmt"
 	"main/backtest"
+	"main/common"
 	"main/data"
 	"main/strategies"
 	"runtime/debug"
@@ -104,7 +107,42 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	go b.Serialize(c.Locals("userID").(string))
+	go b.Save(c.Locals("userID").(string))
+
+	portfolioIDStr := hex.EncodeToString(b.PortfolioModel.Portfolio.ID)
+	serializedPortfolio, err := b.PortfolioModel.Portfolio.MarshalBinary()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": portfolioIDStr,
+		}).Error("serialization failed for portfolio")
+		return err
+	}
+	err = common.CacheSet(portfolioIDStr, serializedPortfolio)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": portfolioIDStr,
+		}).Error("caching failed for portfolio")
+		return err
+	}
+
+	serializedPerformance, err := b.Performance.MarshalBinary()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": portfolioIDStr,
+		}).Error("serialization failed for portfolio")
+		return err
+	}
+	err = common.CacheSet(fmt.Sprintf("%s:performance", portfolioIDStr), serializedPerformance)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": portfolioIDStr,
+		}).Error("caching failed for portfolio")
+		return err
+	}
 
 	measurements := b.Performance.Measurements
 	b.Performance.Measurements = nil // set measurements to nil for serialization

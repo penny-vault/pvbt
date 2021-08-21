@@ -17,6 +17,7 @@ import (
 
 var _ = Describe("Portfolio", func() {
 	var (
+		pm *portfolio.PortfolioModel
 		p  *portfolio.Portfolio
 		df *dataframe.DataFrame
 
@@ -128,12 +129,13 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				p = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				p = pm.Portfolio
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				err = p.TargetPortfolio(df)
+				err = pm.TargetPortfolio(df)
 			})
 
 			It("should not error", func() {
@@ -143,9 +145,9 @@ var _ = Describe("Portfolio", func() {
 			It("should error if trying to rebalance on a date when transactions have already occurred", func() {
 				target := make(map[string]float64)
 				target["VFINX"] = 1.0
-				justification := make(map[string]interface{})
+				justification := make([]*portfolio.Justification, 0)
 				hints := make(map[string]int)
-				err = p.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification, hints)
+				err = pm.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification, hints)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -257,14 +259,15 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries2, tickerSeries2)
-				p = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				p = pm.Portfolio
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				err = p.TargetPortfolio(df)
+				err = pm.TargetPortfolio(df)
 				if err == nil {
-					p.FillCorporateActions(time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
+					pm.FillCorporateActions(time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
 				}
 			})
 
@@ -284,7 +287,7 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
-				perf, err = p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				perf, err = pm.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 				Expect(err).NotTo(HaveOccurred())
 
 				// Friday, August 28, 2020
@@ -314,13 +317,13 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				p = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				p.TargetPortfolio(df)
-				perf, err = p.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				pm.TargetPortfolio(df)
+				perf, err = pm.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 			})
 
 			It("should not error", func() {
@@ -332,32 +335,32 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("should have a balance of $10,000 on Jan 31, 2018", func() {
-				Expect(perf.Measurements[0].Time).To(Equal(int64(1517432400)))
+				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
 			})
 
 			It("should have a balance of $10,000 on Jan 31, 2018", func() {
-				Expect(perf.Measurements[0].Time).To(Equal(int64(1517432400)))
+				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
 			})
 			It("value should not be calculated on non-trading days", func() {
-				Expect(perf.Measurements[3].Time).To(Equal(int64(1517864400)))
+				Expect(perf.Measurements[3].Time).To(Equal(time.Date(2018, 2, 5, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[3].Value).Should(BeNumerically("~", 9382.18611, 1e-5))
 				Expect(perf.Measurements[3].BenchmarkValue).Should(BeNumerically("~", 9382.18611, 1e-5))
 			})
 
 			It("value should include the dividend released on 2018-03-23", func() {
-				Expect(perf.Measurements[36].Time).To(Equal(int64(1521835200)))
+				Expect(perf.Measurements[36].Time).To(Equal(time.Date(2018, 3, 23, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[36].Value).Should(BeNumerically("~", 9195.83397, 1e-5))
 				Expect(perf.Measurements[36].BenchmarkValue).Should(BeNumerically("~", 9195.83397, 1e-5))
 			})
 
 			It("should have a final measurement on November 30, 2020", func() {
-				Expect(perf.Measurements[713].Time).To(Equal(int64(1606770000)))
+				Expect(perf.Measurements[713].Time).To(Equal(time.Date(2020, 11, 30, 16, 0, 0, 0, tz)))
 			})
 		})
 
@@ -386,12 +389,13 @@ var _ = Describe("Portfolio", func() {
 					)
 
 					df = dataframe.NewDataFrame(timeSeries, tickerSeriesMulti)
-					p = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+					pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+					p = pm.Portfolio
 					dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 					dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 					dataProxy.Frequency = data.FrequencyDaily
 
-					err = p.TargetPortfolio(df)
+					err = pm.TargetPortfolio(df)
 				})
 
 				It("should not error", func() {

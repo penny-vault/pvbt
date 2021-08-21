@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"main/common"
 	"main/data"
 	"main/database"
 	"main/dfextras"
@@ -15,31 +14,27 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/rocketlaunchr/dataframe-go"
-	"github.com/shamaton/msgpack/v2"
 	log "github.com/sirupsen/logrus"
 )
 
 // METHODS
 
 // CalculatePerformance calculates various performance metrics of portfolio
-func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error) {
+func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance, error) {
+	p := pm.Portfolio
 	if len(p.Transactions) == 0 {
 		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
-	portfolioID, err := p.ID.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
 	perf := Performance{
-		PortfolioID: portfolioID,
+		PortfolioID: p.ID,
 		PeriodStart: p.StartDate,
 		PeriodEnd:   through,
 		ComputedOn:  time.Now(),
 	}
 
 	// Get a list of symbols that data should be pulled for
-	uniqueSymbols := make(map[string]bool, len(p.Holdings)+1)
+	uniqueSymbols := make(map[string]bool, len(pm.holdings)+1)
 	uniqueSymbols[p.Benchmark] = true
 	for _, trx := range p.Transactions {
 		if trx.Ticker != "" && trx.Ticker != "$CASH" {
@@ -53,12 +48,12 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	}
 
 	// Calculate performance
-	p.dataProxy.Begin = p.StartDate
-	p.dataProxy.End = through
-	p.dataProxy.Frequency = data.FrequencyDaily
+	pm.dataProxy.Begin = p.StartDate
+	pm.dataProxy.End = through
+	pm.dataProxy.Frequency = data.FrequencyDaily
 
 	t1 := time.Now()
-	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
+	quotes, errs := pm.dataProxy.GetMultipleData(symbols...)
 	t2 := time.Now()
 	if len(errs) > 0 {
 		return nil, errors.New("failed to download data for tickers")
@@ -71,13 +66,13 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 
 	// Get benchmark quotes but use adjustedClose prices
 	t3 := time.Now()
-	metric := p.dataProxy.Metric
-	p.dataProxy.Metric = data.MetricAdjustedClose
-	benchmarkEod, err := p.dataProxy.GetData(p.Benchmark)
+	metric := pm.dataProxy.Metric
+	pm.dataProxy.Metric = data.MetricAdjustedClose
+	benchmarkEod, err := pm.dataProxy.GetData(p.Benchmark)
 	if err != nil {
 		return nil, err
 	}
-	p.dataProxy.Metric = metric
+	pm.dataProxy.Metric = metric
 	benchColumn, err := benchmarkEod.NameToColumn(p.Benchmark)
 	if err != nil {
 		return nil, err
@@ -130,7 +125,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 	var currYearStartValue float64 = -1
 	var riskFreeValue float64 = 0
 
-	var lastJustification map[string]interface{}
+	var lastJustification []*Justification
 
 	depositedToDate := 0.0
 	withdrawnToDate := 0.0
@@ -148,9 +143,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 		}
 		date := quotes[data.DateIdx].(time.Time)
 
-		if benchmarkShares == 0.0 {
-			benchmarkShares = benchmarkValue / quotes["$BENCHMARK"].(float64)
-		} else {
+		if benchmarkShares != 0.0 {
 			benchmarkValue = benchmarkShares * quotes["$BENCHMARK"].(float64)
 		}
 
@@ -227,6 +220,9 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			holdings[trx.Ticker] = shares
 		}
 
+		// update benchmarkShares to reflect any new deposits or withdrawals
+		benchmarkShares = benchmarkValue / quotes["$BENCHMARK"].(float64)
+
 		// iterate through each holding and add value to get total return
 		totalVal = 0.0
 		for symbol, qty := range holdings {
@@ -269,21 +265,12 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			prevVal = totalVal
 		} else {
 			// update riskFreeValue
-			rawRate := p.dataProxy.RiskFreeRate(date)
+			rawRate := pm.dataProxy.RiskFreeRate(date)
 			riskFreeRate := rawRate / 100.0 / 12.0
 			riskFreeValue *= (1 + riskFreeRate)
 		}
 
 		prevVal = totalVal
-
-		justification := make([]*Justification, 0, len(lastJustification))
-		for k, v := range lastJustification {
-			j := &Justification{
-				Key:   k,
-				Value: v.(float64),
-			}
-			justification = append(justification, j)
-		}
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,
@@ -296,7 +283,7 @@ func (p *Portfolio) CalculatePerformance(through time.Time) (*Performance, error
 			Holdings:             currentAssets,
 			TotalDeposited:       depositedToDate,
 			TotalWithdrawn:       withdrawnToDate,
-			Justification:        justification,
+			Justification:        lastJustification,
 		}
 
 		perf.Measurements = append(perf.Measurements, &measurement)
@@ -627,7 +614,7 @@ func (p *Performance) Save(userID string) error {
 
 func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	sql := `UPDATE portfolio_v1 SET
-		performance_msgpack=$2,
+		performance_bytes=$2,
 		ytd_return=$3,
 		cagr_since_inception=$4,
 		cagr_3yr=$5,
@@ -641,14 +628,15 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		sortino_ratio=$13,
 		ulcer_index=$14
 	WHERE id=$1`
-	performanceMsgpack, err := msgpack.Marshal(p)
+
+	tmp := p.Measurements
+	p.Measurements = make([]*PerformanceMeasurement, 0)
+	raw, err := p.MarshalBinary()
 	if err != nil {
+		trx.Rollback(context.Background())
 		return err
 	}
-	performanceMsgpack, err = common.Compress(performanceMsgpack)
-	if err != nil {
-		return err
-	}
+	p.Measurements = tmp
 
 	maxDrawDown := 0.0
 	if len(p.DrawDowns) > 0 {
@@ -657,7 +645,7 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 
 	_, err = trx.Exec(context.Background(), sql,
 		p.PortfolioID,
-		performanceMsgpack,
+		raw,
 		p.PortfolioReturns.TWRRYTD,
 		p.PortfolioReturns.TWRRSinceInception,
 		p.PortfolioReturns.TWRRThreeYear,
@@ -671,15 +659,12 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		p.PortfolioMetrics.SortinoRatioSinceInception,
 		p.PortfolioMetrics.UlcerIndexAvg)
 	if err != nil {
-		log.Println("(0)")
 		trx.Rollback(context.Background())
 		return err
 	}
 
 	err = p.saveMeasurements(trx, userID)
 	if err != nil {
-		log.Println("(4)")
-
 		trx.Rollback(context.Background())
 		return err
 	}
@@ -846,14 +831,11 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	for _, m := range p.Measurements {
 		justification, err := json.Marshal(m.Justification)
 		if err != nil {
-			log.Println("(5)")
-
 			return err
 		}
 
 		holdings, err := json.Marshal(m.Holdings)
 		if err != nil {
-			log.Println("(6)")
 			return err
 		}
 

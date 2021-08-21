@@ -35,46 +35,12 @@ const (
 	WithdrawTransaction = "WITHDRAW"
 )
 
-type Transaction struct {
-	ID             uuid.UUID              `json:"id"`
-	Cleared        bool                   `json:"cleared"`
-	Commission     float64                `json:"commission"`
-	CompositeFIGI  string                 `json:"compositeFIGI"`
-	Date           time.Time              `json:"date"`
-	Justification  map[string]interface{} `json:"justification"`
-	Kind           string                 `json:"kind"`
-	Memo           string                 `json:"memo"`
-	PricePerShare  float64                `json:"pricePerShare"`
-	Shares         float64                `json:"shares"`
-	Source         string                 `json:"source"`
-	SourceID       []byte                 `json:"sourceID"`
-	Tags           []string               `json:"tags"`
-	TaxDisposition string                 `json:"taxDisposition"`
-	Ticker         string                 `json:"ticker"`
-	TotalValue     float64                `json:"totalValue"`
-}
-
-type Holding struct {
-	Date   time.Time
-	Ticker string
-	Shares float64
-}
-
-// Portfolio manage a portfolio
-type Portfolio struct {
-	ID                uuid.UUID
-	UserID            string
-	Name              string
-	StartDate         time.Time
-	EndDate           time.Time
-	Benchmark         string
-	StrategyShortcode string
-	StrategyArguments map[string]json.RawMessage
-	Notifications     int
-	Transactions      []Transaction
-	Holdings          map[string]float64
+// PortfolioModel stores a portfolio and associated price data that is used for computation
+type PortfolioModel struct {
+	Portfolio *Portfolio
 
 	// private
+	holdings     map[string]float64
 	dataProxy    *data.Manager
 	priceData    map[string]*dataframe.DataFrame
 	dividendData map[string]*dataframe.DataFrame
@@ -82,22 +48,28 @@ type Portfolio struct {
 }
 
 // NewPortfolio create a portfolio
-func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *Portfolio {
+func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *PortfolioModel {
+	id, _ := uuid.New().MarshalBinary()
 	p := Portfolio{
-		ID:           uuid.New(),
+		ID:           id,
 		Name:         name,
 		Benchmark:    "VFINX",
-		Transactions: []Transaction{},
-		dataProxy:    manager,
+		Transactions: []*Transaction{},
 		StartDate:    startDate,
 	}
 
-	p.dataProxy.Begin = startDate
-	p.dataProxy.End = time.Now()
+	model := PortfolioModel{
+		Portfolio: &p,
+		dataProxy: manager,
+	}
+
+	model.dataProxy.Begin = startDate
+	model.dataProxy.End = time.Now()
 
 	// Create initial deposit
+	trxID, _ := uuid.New().MarshalBinary()
 	t := Transaction{
-		ID:            uuid.New(),
+		ID:            trxID,
 		Date:          startDate,
 		Ticker:        "$CASH",
 		Kind:          DepositTransaction,
@@ -116,22 +88,35 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 			"TransactionType":   DepositTransaction,
 		}).Warn("couldn't compute SourceID for initial deposit")
 	}
-	p.Transactions = append(p.Transactions, t)
-	p.Holdings = map[string]float64{
+	p.Transactions = append(p.Transactions, &t)
+	model.holdings = map[string]float64{
 		"$CASH": initial,
 	}
 
-	p.dividendData = make(map[string]*dataframe.DataFrame)
-	p.splitData = make(map[string]*dataframe.DataFrame)
+	model.dividendData = make(map[string]*dataframe.DataFrame)
+	model.splitData = make(map[string]*dataframe.DataFrame)
 
-	return &p
+	return &model
+}
+
+func buildHoldingsArray(date time.Time, holdings map[string]float64) []*Holding {
+	holdingArray := make([]*Holding, 0, len(holdings))
+	for k, v := range holdings {
+		h := &Holding{
+			Date:   date,
+			Ticker: k,
+			Shares: v,
+		}
+		holdingArray = append(holdingArray, h)
+	}
+	return holdingArray
 }
 
 // ValueAsOf return the value of the portfolio for the given date
-func (p *Portfolio) ValueAsOf(d time.Time) (float64, error) {
+func (pm *PortfolioModel) ValueAsOf(d time.Time) (float64, error) {
 	// Get last 7 days of values, in case 'd' isn't a market day
 	s := d.AddDate(0, 0, -7)
-	value, err := p.valueOverPeriod(s, d)
+	value, err := pm.valueOverPeriod(s, d)
 	sz := len(value)
 	if sz <= 0 {
 		return 0, errors.New("failed to compute value for date")
@@ -139,17 +124,18 @@ func (p *Portfolio) ValueAsOf(d time.Time) (float64, error) {
 	return value[sz-1].Value, err
 }
 
-func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMeasurement, error) {
+func (pm *PortfolioModel) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMeasurement, error) {
+	p := pm.Portfolio
 	if len(p.Transactions) == 0 {
 		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
-	p.dataProxy.Begin = s
-	p.dataProxy.End = e
-	p.dataProxy.Frequency = data.FrequencyDaily
+	pm.dataProxy.Begin = s
+	pm.dataProxy.End = e
+	pm.dataProxy.Frequency = data.FrequencyDaily
 
 	// Get holdings over period
-	holdings, err := p.holdingsOverPeriod(s, e)
+	holdings, err := pm.holdingsOverPeriod(s, e)
 	if err != nil {
 		log.Error(err)
 		return nil, err
@@ -169,7 +155,7 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 	}
 
 	// get quote data
-	quotes, errs := p.dataProxy.GetMultipleData(symbols...)
+	quotes, errs := pm.dataProxy.GetMultipleData(symbols...)
 	if len(errs) > 0 {
 		return nil, errors.New("failed to download data for tickers")
 	}
@@ -225,10 +211,11 @@ func (p *Portfolio) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMea
 	return values, nil
 }
 
-func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time][]Holding, error) {
+func (pm *PortfolioModel) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time][]Holding, error) {
 	currHoldings := map[string]Holding{}
 	periodHoldings := map[time.Time][]Holding{}
 
+	p := pm.Portfolio
 	for _, t := range p.Transactions {
 		if t.Kind == DepositTransaction || t.Kind == WithdrawTransaction {
 			continue
@@ -290,8 +277,9 @@ func (p *Portfolio) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time]
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justification map[string]interface{}, hints map[string]int) error {
-	err := p.FillCorporateActions(date)
+func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64, justification []*Justification, hints map[string]int) error {
+	p := pm.Portfolio
+	err := pm.FillCorporateActions(date)
 	if err != nil {
 		return err
 	}
@@ -318,7 +306,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 
 	// get the cash position of the portfolio
 	var cash float64
-	if currCash, ok := p.Holdings["$CASH"]; ok {
+	if currCash, ok := pm.holdings["$CASH"]; ok {
 		cash += currCash
 	}
 
@@ -327,9 +315,9 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	priceMap := map[string]float64{
 		"$CASH": 1.0,
 	}
-	for k, v := range p.Holdings {
+	for k, v := range pm.holdings {
 		if k != "$CASH" {
-			eod := p.priceData[k]
+			eod := pm.priceData[k]
 			hint := 0
 			if xx, ok := hints[k]; ok {
 				hint = xx
@@ -358,7 +346,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	// get any prices that we haven't already loaded
 	for k := range target {
 		if _, ok := priceMap[k]; !ok {
-			eod := p.priceData[k]
+			eod := pm.priceData[k]
 
 			hint := 0
 			if xx, ok := hints[k]; ok {
@@ -385,11 +373,11 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 	investable := cash + securityValue
 
 	// process all targets
-	sells := []Transaction{}
-	buys := []Transaction{}
+	sells := make([]*Transaction, 0, 10)
+	buys := make([]*Transaction, 0, 10)
 
 	// sell any holdings that we no longer want
-	for k, v := range p.Holdings {
+	for k, v := range pm.holdings {
 		if k == "$CASH" {
 			continue
 		}
@@ -399,14 +387,15 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 				"Ticker":   k,
 				"Kind":     "SellTransaction",
 				"Shares":   v,
-				"Holdings": p.Holdings,
+				"Holdings": pm.holdings,
 			}).Warn("holdings are out of sync")
 			return errors.New("holdings are out of sync, cannot rebalance portfolio")
 		}
 
 		if _, ok := target[k]; !ok {
+			trxId, _ := uuid.New().MarshalBinary()
 			t := Transaction{
-				ID:            uuid.New(),
+				ID:            trxId,
 				Date:          date,
 				Ticker:        k,
 				Kind:          SellTransaction,
@@ -427,14 +416,14 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 				}).Warn("couldn't compute SourceID for transaction")
 			}
 
-			sells = append(sells, t)
+			sells = append(sells, &t)
 		}
 	}
 
 	newHoldings := make(map[string]float64)
 	for k, v := range target {
 		// is this security currently held and should we sell it?
-		if holding, ok := p.Holdings[k]; ok {
+		if holding, ok := pm.holdings[k]; ok {
 			targetDollars := investable * v
 			currentDollars := holding * priceMap[k]
 			if (targetDollars / priceMap[k]) > 1.0e-5 {
@@ -454,8 +443,9 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					return errors.New("holdings are out of sync, cannot rebalance portfolio")
 				}
 
+				trxId, _ := uuid.New().MarshalBinary()
 				t := Transaction{
-					ID:            uuid.New(),
+					ID:            trxId,
 					Date:          date,
 					Ticker:        k,
 					Kind:          SellTransaction,
@@ -475,7 +465,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					}).Warn("couldn't compute SourceID for transaction")
 				}
 
-				sells = append(sells, t)
+				sells = append(sells, &t)
 			}
 			if targetDollars > currentDollars {
 				// Need to buy to target amount
@@ -491,9 +481,9 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 						"Date":       date,
 					}).Warn("Refusing to buy 0 shares")
 				} else {
-
+					trxId, _ := uuid.New().MarshalBinary()
 					t := Transaction{
-						ID:            uuid.New(),
+						ID:            trxId,
 						Date:          date,
 						Ticker:        k,
 						Kind:          BuyTransaction,
@@ -515,7 +505,7 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 						}).Warn("couldn't compute SourceID for transaction")
 					}
 
-					buys = append(buys, t)
+					buys = append(buys, &t)
 				}
 			}
 		} else {
@@ -533,9 +523,9 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 				}).Warn("Refusing to buy 0 shares")
 			} else {
 				newHoldings[k] = shares
-
+				trxId, _ := uuid.New().MarshalBinary()
 				t := Transaction{
-					ID:            uuid.New(),
+					ID:            trxId,
 					Date:          date,
 					Ticker:        k,
 					Kind:          BuyTransaction,
@@ -557,14 +547,16 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 					}).Warn("couldn't compute SourceID for transaction")
 				}
 
-				buys = append(buys, t)
+				buys = append(buys, &t)
 			}
 		}
 	}
 
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
-	p.Holdings = newHoldings
+	pm.holdings = newHoldings
+
+	p.CurrentHoldings = buildHoldingsArray(date, newHoldings)
 
 	return nil
 }
@@ -573,7 +565,8 @@ func (p *Portfolio) RebalanceTo(date time.Time, target map[string]float64, justi
 //   `target` must have a column named `data.DateIdx` (DATE) and either a string column
 //   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
 //   the percentages of portfolio to hold
-func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
+func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
+	p := pm.Portfolio
 	timeIdx, err := target.NameToColumn(data.DateIdx)
 	if err != nil {
 		return err
@@ -628,7 +621,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 	}
 
 	t1 := time.Now()
-	prices, errs := p.dataProxy.GetMultipleData(symbols...)
+	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
 	if len(errs) != 0 {
 		errorMsgs := make([]string, len(errs))
 		for ii, xx := range errs {
@@ -639,7 +632,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		}).Warn("Failed to load data for tickers")
 		return errors.New("failed loading data for tickers")
 	}
-	p.priceData = prices
+	pm.priceData = prices
 	t2 := time.Now()
 
 	// Create transactions
@@ -655,17 +648,23 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 		// Get next transaction symbol
 		var date time.Time
 		var symbol interface{}
-		justification := make(map[string]interface{})
+		justification := make([]*Justification, 0, len(val))
 
 		for k, v := range val {
 			idx := k.(string)
 			switch idx {
 			case data.DateIdx:
-				date = val[data.DateIdx].(time.Time)
+				date = v.(time.Time)
 			case common.TickerName:
-				symbol = val[common.TickerName]
+				symbol = v
 			default:
-				justification[idx] = v
+				if value, ok := v.(float64); ok {
+					j := &Justification{
+						Key:   idx,
+						Value: value,
+					}
+					justification = append(justification, j)
+				}
 			}
 		}
 
@@ -690,7 +689,7 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 			rebalance = symbol.(map[string]float64)
 		}
 
-		err = p.RebalanceTo(date, rebalance, justification, hints)
+		err = pm.RebalanceTo(date, rebalance, justification, hints)
 		if err != nil {
 			return err
 		}
@@ -708,7 +707,8 @@ func (p *Portfolio) TargetPortfolio(target *dataframe.DataFrame) error {
 
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
-func (p *Portfolio) FillCorporateActions(through time.Time) error {
+func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
+	p := pm.Portfolio
 	// nothing to do if there are no transactions
 	n := len(p.Transactions)
 	if n == 0 {
@@ -733,12 +733,12 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 	// Load split & dividend history
 	symbols := []string{}
 	cnt := 0
-	for k := range p.Holdings {
+	for k := range pm.holdings {
 		if k != "$CASH" {
 			cnt++
 			// NOTE: splitData and dividendData are always updated in sync so they
 			// always match
-			if _, ok := p.dividendData[k]; !ok {
+			if _, ok := pm.dividendData[k]; !ok {
 				symbols = append(symbols, k)
 			}
 		}
@@ -749,9 +749,9 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 	}
 
 	if len(symbols) > 0 {
-		metric := p.dataProxy.Metric
-		p.dataProxy.Metric = data.MetricDividendCash
-		divMap, errs := p.dataProxy.GetMultipleData(symbols...)
+		metric := pm.dataProxy.Metric
+		pm.dataProxy.Metric = data.MetricDividendCash
+		divMap, errs := pm.dataProxy.GetMultipleData(symbols...)
 		if len(errs) > 0 {
 			log.Error(errs)
 			return errors.New("failed to download dividend data for tickers")
@@ -768,11 +768,11 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 			dataframe.Filter(context.Background(), v, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
-			p.dividendData[k] = v
+			pm.dividendData[k] = v
 		}
 
-		p.dataProxy.Metric = data.MetricSplitFactor
-		splitMap, errs := p.dataProxy.GetMultipleData(symbols...)
+		pm.dataProxy.Metric = data.MetricSplitFactor
+		splitMap, errs := pm.dataProxy.GetMultipleData(symbols...)
 		if len(errs) > 0 {
 			log.Error(errs)
 			return errors.New("failed to download split data for tickers")
@@ -789,21 +789,21 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 			dataframe.Filter(context.Background(), v, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
-			p.splitData[k] = v
+			pm.splitData[k] = v
 		}
 
-		p.dataProxy.Metric = metric
+		pm.dataProxy.Metric = metric
 	}
 
-	addTransactions := make([]Transaction, 0, 10)
+	addTransactions := make([]*Transaction, 0, 10)
 
-	for k := range p.Holdings {
+	for k := range pm.holdings {
 		if k == "$CASH" {
 			continue
 		}
 
 		// do dividends
-		iterator := p.dividendData[k].ValuesIterator(
+		iterator := pm.dividendData[k].ValuesIterator(
 			dataframe.ValuesOptions{
 				InitialRow:   0,
 				Step:         1,
@@ -821,11 +821,12 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 			if date.After(from) && date.Before(through) {
 				// it's in range
 				dividend := divs[k].(float64)
-				nShares := p.Holdings[k]
+				nShares := pm.holdings[k]
 				totalValue := nShares * dividend
 				// there is a dividend, record it
+				trxId, _ := uuid.New().MarshalBinary()
 				t := Transaction{
-					ID:            uuid.New(),
+					ID:            trxId,
 					Date:          date,
 					Ticker:        k,
 					Kind:          DividendTransaction,
@@ -834,14 +835,14 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 					Justification: nil,
 				}
 				// update cash position in holdings
-				p.Holdings["$CASH"] += nShares * dividend
+				pm.holdings["$CASH"] += nShares * dividend
 				computeTransactionSourceID(&t)
-				addTransactions = append(addTransactions, t)
+				addTransactions = append(addTransactions, &t)
 			}
 		}
 
 		// do splits
-		iterator = p.splitData[k].ValuesIterator(
+		iterator = pm.splitData[k].ValuesIterator(
 			dataframe.ValuesOptions{
 				InitialRow:   0,
 				Step:         1,
@@ -859,11 +860,12 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 			if date.After(from) && date.Before(through) {
 				// it's in range
 				splitFactor := s[k].(float64)
-				nShares := p.Holdings[k]
+				nShares := pm.holdings[k]
 				shares := splitFactor * nShares
 				// there is a split, record it
+				trxId, _ := uuid.New().MarshalBinary()
 				t := Transaction{
-					ID:            uuid.New(),
+					ID:            trxId,
 					Date:          date,
 					Ticker:        k,
 					Kind:          SplitTransaction,
@@ -873,10 +875,10 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 					Justification: nil,
 				}
 				computeTransactionSourceID(&t)
-				addTransactions = append(addTransactions, t)
+				addTransactions = append(addTransactions, &t)
 
 				// update holdings
-				p.Holdings[k] = shares
+				pm.holdings[k] = shares
 			}
 		}
 	}
@@ -889,13 +891,17 @@ func (p *Portfolio) FillCorporateActions(through time.Time) error {
 
 // UpdateTransactions calculates new transactions based on the portfolio strategy
 // from the portfolio end date to `through`
-func (p *Portfolio) UpdateTransactions(manager *data.Manager, through time.Time) error {
+func (pm *PortfolioModel) UpdateTransactions(manager *data.Manager, through time.Time) error {
+	p := pm.Portfolio
 	manager.Begin = p.EndDate
 	manager.End = through
 	manager.Frequency = data.FrequencyDaily
 
+	arguments := make(map[string]json.RawMessage)
+	json.Unmarshal([]byte(p.StrategyArguments), &arguments)
+
 	if strategy, ok := strategies.StrategyMap[p.StrategyShortcode]; ok {
-		stratObject, err := strategy.Factory(p.StrategyArguments)
+		stratObject, err := strategy.Factory(arguments)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
@@ -915,7 +921,7 @@ func (p *Portfolio) UpdateTransactions(manager *data.Manager, through time.Time)
 			return err
 		}
 
-		err = p.TargetPortfolio(targetPortfolio)
+		err = pm.TargetPortfolio(targetPortfolio)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
@@ -939,7 +945,8 @@ func (p *Portfolio) UpdateTransactions(manager *data.Manager, through time.Time)
 
 // LOAD
 
-func (p *Portfolio) loadTransactionsFromDB() error {
+func (pm *PortfolioModel) loadTransactionsFromDB() error {
+	p := pm.Portfolio
 	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -983,7 +990,7 @@ func (p *Portfolio) loadTransactionsFromDB() error {
 		return err
 	}
 
-	transactions := make([]Transaction, 0, 1000)
+	transactions := make([]*Transaction, 0, 1000)
 	for rows.Next() {
 		t := Transaction{}
 		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &t.CompositeFIGI,
@@ -999,13 +1006,13 @@ func (p *Portfolio) loadTransactionsFromDB() error {
 			trx.Rollback(context.Background())
 			return err
 		}
-		transactions = append(transactions, t)
+		transactions = append(transactions, &t)
 	}
 	p.Transactions = transactions
 	return nil
 }
 
-func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (*Portfolio, error) {
+func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (*PortfolioModel, error) {
 	if userID == "" {
 		log.WithFields(log.Fields{
 			"PortfolioID": portfolioID,
@@ -1022,15 +1029,19 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 		return nil, err
 	}
 
-	p := Portfolio{
-		ID:           portfolioID,
+	id, _ := portfolioID.MarshalBinary()
+	p := &Portfolio{
+		ID:           id,
 		UserID:       userID,
-		Transactions: []Transaction{},
-		dataProxy:    dataProxy,
+		Transactions: []*Transaction{},
 	}
 
-	p.dividendData = make(map[string]*dataframe.DataFrame)
-	p.splitData = make(map[string]*dataframe.DataFrame)
+	pm := &PortfolioModel{
+		Portfolio:    p,
+		dataProxy:    dataProxy,
+		dividendData: make(map[string]*dataframe.DataFrame),
+		splitData:    make(map[string]*dataframe.DataFrame),
+	}
 
 	portfolioSQL := `
 	SELECT
@@ -1047,7 +1058,7 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 		portfolio_v1
 	WHERE
 		id=$1 AND user_id=$2`
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &p.Holdings, &p.Notifications)
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"UserID":      userID,
@@ -1060,19 +1071,21 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 	}
 	trx.Commit(context.Background())
 
-	p.dataProxy.Begin = p.StartDate
-	p.dataProxy.End = time.Now()
+	p.CurrentHoldings = buildHoldingsArray(time.Now(), pm.holdings)
+	pm.dataProxy.Begin = p.StartDate
+	pm.dataProxy.End = time.Now()
 
-	if err := p.loadTransactionsFromDB(); err != nil {
+	if err := pm.loadTransactionsFromDB(); err != nil {
 		// Error is logged by loadTransactionsFromDB
 		return nil, err
 	}
 
-	return &p, nil
+	return pm, nil
 }
 
 // Save portfolio to database along with all transaction data
-func (p *Portfolio) Save(userID string) error {
+func (pm *PortfolioModel) Save(userID string) error {
+	p := pm.Portfolio
 	p.UserID = userID
 
 	// Save to database
@@ -1085,7 +1098,7 @@ func (p *Portfolio) Save(userID string) error {
 		return err
 	}
 
-	err = p.SaveWithTransaction(trx, userID)
+	err = pm.SaveWithTransaction(trx, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
@@ -1110,7 +1123,8 @@ func (p *Portfolio) Save(userID string) error {
 	return nil
 }
 
-func (p *Portfolio) SaveWithTransaction(trx pgx.Tx, userID string) error {
+func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
+	p := pm.Portfolio
 	portfolioSQL := `
 	INSERT INTO portfolio_v1 (
 		"id",
@@ -1139,7 +1153,7 @@ func (p *Portfolio) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		end_date=$6,
 		holdings=$7,
 		notifications=$8`
-	holdings, err := json.Marshal(p.Holdings)
+	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
@@ -1162,10 +1176,11 @@ func (p *Portfolio) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		return err
 	}
 
-	return p.saveTransactions(trx)
+	return pm.saveTransactions(trx)
 }
 
-func (p *Portfolio) saveTransactions(trx pgx.Tx) error {
+func (pm *PortfolioModel) saveTransactions(trx pgx.Tx) error {
+	p := pm.Portfolio
 	transactionSQL := `
 	INSERT INTO portfolio_transaction_v1 (
 		"id",

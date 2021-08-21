@@ -16,6 +16,7 @@ require (
 	github.com/google/uuid v1.2.0
 	github.com/guptarohit/asciigraph v0.5.2 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/jackc/pgsql v0.0.0-20200214204435-ebb58a15ff4a
 	github.com/jackc/pgx/v4 v4.11.0
 	github.com/jarcoal/httpmock v1.0.8
 	github.com/jdfergason/jwt/v2 v2.2.3
@@ -35,7 +36,6 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.8
 	github.com/prometheus/common v0.29.0
 	github.com/rocketlaunchr/dataframe-go v0.0.0-20210422123815-aaa951b82e1b
-	github.com/shamaton/msgpack/v2 v2.0.1
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.2.1
 	github.com/spf13/viper v1.8.1

@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"main/database"
+	"main/filter"
 	"main/portfolio"
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/shamaton/msgpack/v2"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
@@ -89,41 +89,51 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 }
 
 func GetPortfolioMeasurements(c *fiber.Ctx) error {
-	portfolioIDStr := c.Params("id")
-	portfolioID, err := uuid.Parse(portfolioIDStr)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":       "GetPortfolioMeasurements",
-			"Error":          err,
-			"PortfolioIDStr": portfolioIDStr,
-		}).Warn("failed to parse portfolio id")
-		return fiber.ErrBadRequest
-	}
-
+	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
 
+	f := filter.New(portfolioID, userID)
+
+	field1 := c.Query("field1", "strategy_growth_of_10k")
+	field2 := c.Query("field2", "benchmark_growth_of_10k")
+
+	sinceStr := c.Query("since", "0")
+
 	s := time.Now()
-	var j string
-	trx, _ := database.TrxForUser(userID)
-	trx.QueryRow(context.Background(), `
-	select array_to_json(array_agg(row_to_json(t))) as res
-    from (
-		SELECT event_date, strategy_growth_of_10k AS strategy, benchmark_growth_of_10k as benchmark FROM portfolio_measurement_v1 WHERE portfolio_id=$1
-    ) t
-	`, portfolioID).Scan(&j)
+
+	where := make(map[string]string)
+	req := c.Request()
+	req.URI().QueryArgs().VisitAll(func(key, value []byte) {
+		k := string(key)
+		if k != "field1" && k != "field2" && k != "offset" && k != "limit" {
+			where[k] = string(value)
+		}
+	})
+
+	var since time.Time
+	if sinceStr == "0" {
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+	} else {
+		var err error
+		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":      err,
+				"DateString": sinceStr,
+			}).Warn("could not parse date string")
+		}
+	}
+
+	data, err := f.GetMeasurements(field1, field2, since)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not retrieve measurements")
+
+		return fiber.ErrBadRequest
+	}
 	e := time.Now()
 	fmt.Printf("query duration: %.4f\n", e.Sub(s).Seconds())
-
-	s = time.Now()
-	m := make([]map[string]interface{}, 0, 100)
-	json.Unmarshal([]byte(j), &m)
-	e = time.Now()
-	fmt.Printf("deserialize duration: %.4f\n", e.Sub(s).Seconds())
-
-	s = time.Now()
-	data, _ := msgpack.Marshal(m)
-	e = time.Now()
-	fmt.Printf("msgpack duration: %.4f\n", e.Sub(s).Seconds())
 
 	return c.Send(data)
 }

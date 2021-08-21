@@ -106,7 +106,7 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 
 	peak := m0.Value
 	var drawDown *DrawDown
-	var prev int64
+	var prev time.Time
 	for _, v := range perf.Measurements[startIdx:] {
 		peak = math.Max(peak, v.Value)
 		diff := v.Value - peak
@@ -114,22 +114,22 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 			if drawDown == nil {
 				drawDown = &DrawDown{
 					Begin:       prev,
-					End:         v.Time.Unix(),
+					End:         v.Time,
 					LossPercent: float64((v.Value / peak) - 1.0),
 				}
 			}
 
 			loss := (v.Value/peak - 1.0)
 			if loss < drawDown.LossPercent {
-				drawDown.End = v.Time.Unix()
+				drawDown.End = v.Time
 				drawDown.LossPercent = float64(loss)
 			}
 		} else if drawDown != nil {
-			drawDown.Recovery = v.Time.Unix()
+			drawDown.Recovery = v.Time
 			allDrawDowns = append(allDrawDowns, drawDown)
 			drawDown = nil
 		}
-		prev = v.Time.Unix()
+		prev = v.Time
 	}
 
 	return allDrawDowns

@@ -1,21 +1,59 @@
 package portfolio
 
+type Justification struct {
+	Key text
+	Value float64
+}
+
+type Transaction struct {
+	ID             binary
+	Cleared        bool
+	Commission     float64
+	CompositeFIGI  text
+	Date           timestamp
+	Justification  []Justification
+	Kind           text
+	Memo           text
+	PricePerShare  float64
+	Shares         float64
+	Source         text
+	SourceID       binary
+	Tags           []text
+	TaxDisposition text
+	Ticker         text
+	TotalValue     float64
+}
+
+type Holding struct {
+	Date   timestamp
+	Ticker text
+	Shares float64
+}
+
+type Portfolio struct {
+	ID                binary
+	UserID            text
+	Name              text
+	StartDate         timestamp
+	EndDate           timestamp
+	Benchmark         text
+	StrategyShortcode text
+	StrategyArguments text
+	Notifications     int32
+	Transactions      []Transaction
+	CurrentHoldings   []Holding
+}
+
 type DrawDown struct {
-	Begin       int64
-	End         int64
-	Recovery    int64
+	Begin       timestamp
+	End         timestamp
+	Recovery    timestamp
 	LossPercent float64
 }
 
 type AnnualReturn struct {
 	Year   uint16
 	Return float32
-}
-
-type Justification struct {
-	Key text
-	Reason text
-	Value float64
 }
 
 type Metrics struct {
@@ -61,6 +99,17 @@ type Performance struct {
 
 	PortfolioMetrics Metrics
 	BenchmarkMetrics Metrics
+}
+
+type PerformanceMeasurementItem struct {
+	Time timestamp
+	Value1 float64
+	Value2 float64
+}
+
+type PerformanceMeasurementItemList struct {
+	Items []PerformanceMeasurementItem
+	FieldNames []text
 }
 
 type PerformanceMeasurement struct {

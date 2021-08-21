@@ -43,12 +43,2156 @@ func (i ColferTail) Error() string {
 	return fmt.Sprintf("colfer: data continuation at byte %d", i)
 }
 
+type Justification struct {
+	Key string
+
+	Value float64
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+func (o *Justification) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.Key); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Key)
+	}
+
+	if v := o.Value; v != 0 {
+		buf[i] = 1
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *Justification) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.Key); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Justification.Key exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if o.Value != 0 {
+		l += 9
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.Justification exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// The error return option is portfolio.ColferMax.
+func (o *Justification) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *Justification) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Justification.Key size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Key = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Value = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Justification size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *Justification) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type Transaction struct {
+	ID []byte
+
+	Cleared bool
+
+	Commission float64
+
+	CompositeFIGI string
+
+	Date time.Time
+
+	Justification []*Justification
+
+	Kind string
+
+	Memo string
+
+	PricePerShare float64
+
+	Shares float64
+
+	Source string
+
+	SourceID []byte
+
+	Tags []string
+
+	TaxDisposition string
+
+	Ticker string
+
+	TotalValue float64
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Justification will be replaced with a new value.
+func (o *Transaction) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.ID); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.ID)
+	}
+
+	if o.Cleared {
+		buf[i] = 1
+		i++
+	}
+
+	if v := o.Commission; v != 0 {
+		buf[i] = 2
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if l := len(o.CompositeFIGI); l != 0 {
+		buf[i] = 3
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.CompositeFIGI)
+	}
+
+	if v := o.Date; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 4
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 4 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if l := len(o.Justification); l != 0 {
+		buf[i] = 5
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Justification {
+			if v == nil {
+				v = new(Justification)
+				o.Justification[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	if l := len(o.Kind); l != 0 {
+		buf[i] = 6
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Kind)
+	}
+
+	if l := len(o.Memo); l != 0 {
+		buf[i] = 7
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Memo)
+	}
+
+	if v := o.PricePerShare; v != 0 {
+		buf[i] = 8
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if v := o.Shares; v != 0 {
+		buf[i] = 9
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if l := len(o.Source); l != 0 {
+		buf[i] = 10
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Source)
+	}
+
+	if l := len(o.SourceID); l != 0 {
+		buf[i] = 11
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.SourceID)
+	}
+
+	if l := len(o.Tags); l != 0 {
+		buf[i] = 12
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for _, a := range o.Tags {
+			x = uint(len(a))
+			for x >= 0x80 {
+				buf[i] = byte(x | 0x80)
+				x >>= 7
+				i++
+			}
+			buf[i] = byte(x)
+			i++
+			i += copy(buf[i:], a)
+		}
+	}
+
+	if l := len(o.TaxDisposition); l != 0 {
+		buf[i] = 13
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.TaxDisposition)
+	}
+
+	if l := len(o.Ticker); l != 0 {
+		buf[i] = 14
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Ticker)
+	}
+
+	if v := o.TotalValue; v != 0 {
+		buf[i] = 15
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *Transaction) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.ID); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.ID exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if o.Cleared {
+		l++
+	}
+
+	if o.Commission != 0 {
+		l += 9
+	}
+
+	if x := len(o.CompositeFIGI); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.CompositeFIGI exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if v := o.Date; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if x := len(o.Justification); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Justification exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Justification {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Transaction size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if x := len(o.Kind); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Kind exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.Memo); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Memo exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if o.PricePerShare != 0 {
+		l += 9
+	}
+
+	if o.Shares != 0 {
+		l += 9
+	}
+
+	if x := len(o.Source); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Source exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.SourceID); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.SourceID exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.Tags); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Tags exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, a := range o.Tags {
+			x = len(a)
+			if x > ColferSizeMax {
+				return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Tags exceeds %d bytes", ColferSizeMax))
+			}
+			for l += x + 1; x >= 0x80; l++ {
+				x >>= 7
+			}
+		}
+		if l >= ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Transaction size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if x := len(o.TaxDisposition); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.TaxDisposition exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.Ticker); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Transaction.Ticker exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if o.TotalValue != 0 {
+		l += 9
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.Transaction exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Justification will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *Transaction) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *Transaction) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.ID size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+		v := make([]byte, int(x))
+
+		start := i
+		i += len(v)
+		if i >= len(data) {
+			goto eof
+		}
+		copy(v, data[start:i])
+		o.ID = v
+
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		o.Cleared = true
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Commission = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 3 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.CompositeFIGI size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.CompositeFIGI = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 4 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Date = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 4|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.Date = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 5 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Justification length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*Justification, l)
+		malloc := make([]Justification, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Justification = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 6 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Kind size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Kind = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 7 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Memo size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Memo = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 8 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.PricePerShare = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 9 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Shares = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 10 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Source size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Source = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 11 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.SourceID size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+		v := make([]byte, int(x))
+
+		start := i
+		i += len(v)
+		if i >= len(data) {
+			goto eof
+		}
+		copy(v, data[start:i])
+		o.SourceID = v
+
+		header = data[i]
+		i++
+	}
+
+	if header == 12 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Tags length %d exceeds %d elements", x, ColferListMax))
+		}
+		a := make([]string, int(x))
+		o.Tags = a
+
+		for ai := range a {
+			if i >= len(data) {
+				goto eof
+			}
+			x := uint(data[i])
+			i++
+
+			if x >= 0x80 {
+				x &= 0x7f
+				for shift := uint(7); ; shift += 7 {
+					if i >= len(data) {
+						goto eof
+					}
+					b := uint(data[i])
+					i++
+
+					if b < 0x80 {
+						x |= b << shift
+						break
+					}
+					x |= (b & 0x7f) << shift
+				}
+			}
+
+			if x > uint(ColferSizeMax) {
+				return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Tags element %d size %d exceeds %d bytes", ai, x, ColferSizeMax))
+			}
+
+			start := i
+			i += int(x)
+			if i >= len(data) {
+				goto eof
+			}
+			a[ai] = string(data[start:i])
+		}
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 13 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.TaxDisposition size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.TaxDisposition = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 14 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.Ticker size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Ticker = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 15 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.TotalValue = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Transaction size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *Transaction) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type Holding struct {
+	Date time.Time
+
+	Ticker string
+
+	Shares float64
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+func (o *Holding) MarshalTo(buf []byte) int {
+	var i int
+
+	if v := o.Date; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 0
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 0 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if l := len(o.Ticker); l != 0 {
+		buf[i] = 1
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Ticker)
+	}
+
+	if v := o.Shares; v != 0 {
+		buf[i] = 2
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *Holding) MarshalLen() (int, error) {
+	l := 1
+
+	if v := o.Date; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if x := len(o.Ticker); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Holding.Ticker exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if o.Shares != 0 {
+		l += 9
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.Holding exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// The error return option is portfolio.ColferMax.
+func (o *Holding) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *Holding) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Date = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 0|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.Date = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Holding.Ticker size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Ticker = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Shares = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Holding size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *Holding) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type Portfolio struct {
+	ID []byte
+
+	UserID string
+
+	Name string
+
+	StartDate time.Time
+
+	EndDate time.Time
+
+	Benchmark string
+
+	StrategyShortcode string
+
+	StrategyArguments string
+
+	Notifications int32
+
+	Transactions []*Transaction
+
+	CurrentHoldings []*Holding
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Transactions will be replaced with a new value.
+// All nil entries in o.CurrentHoldings will be replaced with a new value.
+func (o *Portfolio) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.ID); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.ID)
+	}
+
+	if l := len(o.UserID); l != 0 {
+		buf[i] = 1
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.UserID)
+	}
+
+	if l := len(o.Name); l != 0 {
+		buf[i] = 2
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Name)
+	}
+
+	if v := o.StartDate; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 3
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 3 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if v := o.EndDate; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 4
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 4 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if l := len(o.Benchmark); l != 0 {
+		buf[i] = 5
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Benchmark)
+	}
+
+	if l := len(o.StrategyShortcode); l != 0 {
+		buf[i] = 6
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.StrategyShortcode)
+	}
+
+	if l := len(o.StrategyArguments); l != 0 {
+		buf[i] = 7
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.StrategyArguments)
+	}
+
+	if v := o.Notifications; v != 0 {
+		x := uint32(v)
+		if v >= 0 {
+			buf[i] = 8
+		} else {
+			x = ^x + 1
+			buf[i] = 8 | 0x80
+		}
+		i++
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+	}
+
+	if l := len(o.Transactions); l != 0 {
+		buf[i] = 9
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Transactions {
+			if v == nil {
+				v = new(Transaction)
+				o.Transactions[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	if l := len(o.CurrentHoldings); l != 0 {
+		buf[i] = 10
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.CurrentHoldings {
+			if v == nil {
+				v = new(Holding)
+				o.CurrentHoldings[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *Portfolio) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.ID); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.ID exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.UserID); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.UserID exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.Name); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.Name exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if v := o.StartDate; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if v := o.EndDate; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if x := len(o.Benchmark); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.Benchmark exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.StrategyShortcode); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.StrategyShortcode exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.StrategyArguments); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.StrategyArguments exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if v := o.Notifications; v != 0 {
+		x := uint32(v)
+		if v < 0 {
+			x = ^x + 1
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := len(o.Transactions); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.Transactions exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Transactions {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if x := len(o.CurrentHoldings); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.CurrentHoldings exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.CurrentHoldings {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.Portfolio exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Transactions will be replaced with a new value.
+// All nil entries in o.CurrentHoldings will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *Portfolio) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *Portfolio) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.ID size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+		v := make([]byte, int(x))
+
+		start := i
+		i += len(v)
+		if i >= len(data) {
+			goto eof
+		}
+		copy(v, data[start:i])
+		o.ID = v
+
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.UserID size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.UserID = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.Name size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Name = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 3 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.StartDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 3|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.StartDate = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 4 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.EndDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 4|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.EndDate = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 5 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.Benchmark size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Benchmark = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 6 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.StrategyShortcode size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.StrategyShortcode = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 7 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.StrategyArguments size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.StrategyArguments = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 8 {
+		if i+1 >= len(data) {
+			i++
+			goto eof
+		}
+		x := uint32(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				b := uint32(data[i])
+				i++
+				if i >= len(data) {
+					goto eof
+				}
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+		o.Notifications = int32(x)
+
+		header = data[i]
+		i++
+	} else if header == 8|0x80 {
+		if i+1 >= len(data) {
+			i++
+			goto eof
+		}
+		x := uint32(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				b := uint32(data[i])
+				i++
+				if i >= len(data) {
+					goto eof
+				}
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+		o.Notifications = int32(^x + 1)
+
+		header = data[i]
+		i++
+	}
+
+	if header == 9 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.Transactions length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*Transaction, l)
+		malloc := make([]Transaction, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Transactions = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 10 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.CurrentHoldings length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*Holding, l)
+		malloc := make([]Holding, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.CurrentHoldings = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *Portfolio) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
 type DrawDown struct {
-	Begin int64
+	Begin time.Time
 
-	End int64
+	End time.Time
 
-	Recovery int64
+	Recovery time.Time
 
 	LossPercent float64
 }
@@ -58,58 +2202,49 @@ type DrawDown struct {
 func (o *DrawDown) MarshalTo(buf []byte) int {
 	var i int
 
-	if v := o.Begin; v != 0 {
-		x := uint64(v)
-		if v >= 0 {
+	if v := o.Begin; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
 			buf[i] = 0
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
 		} else {
-			x = ^x + 1
 			buf[i] = 0 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
 		}
-		i++
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
 	}
 
-	if v := o.End; v != 0 {
-		x := uint64(v)
-		if v >= 0 {
+	if v := o.End; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
 			buf[i] = 1
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
 		} else {
-			x = ^x + 1
 			buf[i] = 1 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
 		}
-		i++
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
 	}
 
-	if v := o.Recovery; v != 0 {
-		x := uint64(v)
-		if v >= 0 {
+	if v := o.Recovery; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
 			buf[i] = 2
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
 		} else {
-			x = ^x + 1
 			buf[i] = 2 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
 		}
-		i++
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
 	}
 
 	if v := o.LossPercent; v != 0 {
@@ -128,39 +2263,27 @@ func (o *DrawDown) MarshalTo(buf []byte) int {
 func (o *DrawDown) MarshalLen() (int, error) {
 	l := 1
 
-	if v := o.Begin; v != 0 {
-		l += 2
-		x := uint64(v)
-		if v < 0 {
-			x = ^x + 1
-		}
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			x >>= 7
-			l++
+	if v := o.Begin; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
 		}
 	}
 
-	if v := o.End; v != 0 {
-		l += 2
-		x := uint64(v)
-		if v < 0 {
-			x = ^x + 1
-		}
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			x >>= 7
-			l++
+	if v := o.End; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
 		}
 	}
 
-	if v := o.Recovery; v != 0 {
-		l += 2
-		x := uint64(v)
-		if v < 0 {
-			x = ^x + 1
-		}
-		for n := 0; x >= 0x80 && n < 8; n++ {
-			x >>= 7
-			l++
+	if v := o.Recovery; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
 		}
 	}
 
@@ -196,175 +2319,61 @@ func (o *DrawDown) Unmarshal(data []byte) (int, error) {
 	i := 1
 
 	if header == 0 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 8
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.Begin = int64(x)
-
+		o.Begin = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
 		header = data[i]
 		i++
 	} else if header == 0|0x80 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 12
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.Begin = int64(^x + 1)
-
+		o.Begin = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
 		header = data[i]
 		i++
 	}
 
 	if header == 1 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 8
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.End = int64(x)
-
+		o.End = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
 		header = data[i]
 		i++
 	} else if header == 1|0x80 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 12
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.End = int64(^x + 1)
-
+		o.End = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
 		header = data[i]
 		i++
 	}
 
 	if header == 2 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 8
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.Recovery = int64(x)
-
+		o.Recovery = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
 		header = data[i]
 		i++
 	} else if header == 2|0x80 {
-		if i+1 >= len(data) {
-			i++
+		start := i
+		i += 12
+		if i >= len(data) {
 			goto eof
 		}
-		x := uint64(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				b := uint64(data[i])
-				i++
-				if i >= len(data) {
-					goto eof
-				}
-
-				if b < 0x80 || shift == 56 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-		o.Recovery = int64(^x + 1)
-
+		o.Recovery = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
 		header = data[i]
 		i++
 	}
@@ -528,224 +2537,6 @@ eof:
 // UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
 // The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
 func (o *AnnualReturn) UnmarshalBinary(data []byte) error {
-	i, err := o.Unmarshal(data)
-	if i < len(data) && err == nil {
-		return ColferTail(i)
-	}
-	return err
-}
-
-type Justification struct {
-	Key string
-
-	Reason string
-
-	Value float64
-}
-
-// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
-// If the buffer is too small, MarshalTo will panic.
-func (o *Justification) MarshalTo(buf []byte) int {
-	var i int
-
-	if l := len(o.Key); l != 0 {
-		buf[i] = 0
-		i++
-		x := uint(l)
-		for x >= 0x80 {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
-		i += copy(buf[i:], o.Key)
-	}
-
-	if l := len(o.Reason); l != 0 {
-		buf[i] = 1
-		i++
-		x := uint(l)
-		for x >= 0x80 {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
-		i += copy(buf[i:], o.Reason)
-	}
-
-	if v := o.Value; v != 0 {
-		buf[i] = 2
-		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
-		i += 9
-	}
-
-	buf[i] = 0x7f
-	i++
-	return i
-}
-
-// MarshalLen returns the Colfer serial byte size.
-// The error return option is portfolio.ColferMax.
-func (o *Justification) MarshalLen() (int, error) {
-	l := 1
-
-	if x := len(o.Key); x != 0 {
-		if x > ColferSizeMax {
-			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Justification.Key exceeds %d bytes", ColferSizeMax))
-		}
-		for l += x + 2; x >= 0x80; l++ {
-			x >>= 7
-		}
-	}
-
-	if x := len(o.Reason); x != 0 {
-		if x > ColferSizeMax {
-			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Justification.Reason exceeds %d bytes", ColferSizeMax))
-		}
-		for l += x + 2; x >= 0x80; l++ {
-			x >>= 7
-		}
-	}
-
-	if o.Value != 0 {
-		l += 9
-	}
-
-	if l > ColferSizeMax {
-		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.Justification exceeds %d bytes", ColferSizeMax))
-	}
-	return l, nil
-}
-
-// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
-// The error return option is portfolio.ColferMax.
-func (o *Justification) MarshalBinary() (data []byte, err error) {
-	l, err := o.MarshalLen()
-	if err != nil {
-		return nil, err
-	}
-	data = make([]byte, l)
-	o.MarshalTo(data)
-	return data, nil
-}
-
-// Unmarshal decodes data as Colfer and returns the number of bytes read.
-// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
-func (o *Justification) Unmarshal(data []byte) (int, error) {
-	if len(data) == 0 {
-		return 0, io.EOF
-	}
-	header := data[0]
-	i := 1
-
-	if header == 0 {
-		if i >= len(data) {
-			goto eof
-		}
-		x := uint(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				if i >= len(data) {
-					goto eof
-				}
-				b := uint(data[i])
-				i++
-
-				if b < 0x80 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-
-		if x > uint(ColferSizeMax) {
-			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Justification.Key size %d exceeds %d bytes", x, ColferSizeMax))
-		}
-
-		start := i
-		i += int(x)
-		if i >= len(data) {
-			goto eof
-		}
-		o.Key = string(data[start:i])
-
-		header = data[i]
-		i++
-	}
-
-	if header == 1 {
-		if i >= len(data) {
-			goto eof
-		}
-		x := uint(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				if i >= len(data) {
-					goto eof
-				}
-				b := uint(data[i])
-				i++
-
-				if b < 0x80 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-
-		if x > uint(ColferSizeMax) {
-			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Justification.Reason size %d exceeds %d bytes", x, ColferSizeMax))
-		}
-
-		start := i
-		i += int(x)
-		if i >= len(data) {
-			goto eof
-		}
-		o.Reason = string(data[start:i])
-
-		header = data[i]
-		i++
-	}
-
-	if header == 2 {
-		start := i
-		i += 8
-		if i >= len(data) {
-			goto eof
-		}
-		o.Value = math.Float64frombits(intconv.Uint64(data[start:]))
-		header = data[i]
-		i++
-	}
-
-	if header != 0x7f {
-		return 0, ColferError(i - 1)
-	}
-	if i < ColferSizeMax {
-		return i, nil
-	}
-eof:
-	if i >= ColferSizeMax {
-		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Justification size exceeds %d bytes", ColferSizeMax))
-	}
-	return 0, io.EOF
-}
-
-// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
-// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
-func (o *Justification) UnmarshalBinary(data []byte) error {
 	i, err := o.Unmarshal(data)
 	if i < len(data) && err == nil {
 		return ColferTail(i)
@@ -2022,6 +3813,451 @@ eof:
 // UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
 // The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
 func (o *Performance) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type PerformanceMeasurementItem struct {
+	Time time.Time
+
+	Value1 float64
+
+	Value2 float64
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+func (o *PerformanceMeasurementItem) MarshalTo(buf []byte) int {
+	var i int
+
+	if v := o.Time; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 0
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 0 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if v := o.Value1; v != 0 {
+		buf[i] = 1
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if v := o.Value2; v != 0 {
+		buf[i] = 2
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *PerformanceMeasurementItem) MarshalLen() (int, error) {
+	l := 1
+
+	if v := o.Time; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if o.Value1 != 0 {
+		l += 9
+	}
+
+	if o.Value2 != 0 {
+		l += 9
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItem exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// The error return option is portfolio.ColferMax.
+func (o *PerformanceMeasurementItem) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *PerformanceMeasurementItem) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Time = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 0|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.Time = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Value1 = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Value2 = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItem size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *PerformanceMeasurementItem) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type PerformanceMeasurementItemList struct {
+	Items []*PerformanceMeasurementItem
+
+	FieldNames []string
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Items will be replaced with a new value.
+func (o *PerformanceMeasurementItemList) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.Items); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Items {
+			if v == nil {
+				v = new(PerformanceMeasurementItem)
+				o.Items[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	if l := len(o.FieldNames); l != 0 {
+		buf[i] = 1
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for _, a := range o.FieldNames {
+			x = uint(len(a))
+			for x >= 0x80 {
+				buf[i] = byte(x | 0x80)
+				x >>= 7
+				i++
+			}
+			buf[i] = byte(x)
+			i++
+			i += copy(buf[i:], a)
+		}
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *PerformanceMeasurementItemList) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.Items); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PerformanceMeasurementItemList.Items exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Items {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItemList size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if x := len(o.FieldNames); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PerformanceMeasurementItemList.FieldNames exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, a := range o.FieldNames {
+			x = len(a)
+			if x > ColferSizeMax {
+				return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PerformanceMeasurementItemList.FieldNames exceeds %d bytes", ColferSizeMax))
+			}
+			for l += x + 1; x >= 0x80; l++ {
+				x >>= 7
+			}
+		}
+		if l >= ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItemList size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItemList exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Items will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *PerformanceMeasurementItemList) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *PerformanceMeasurementItemList) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurementItemList.Items length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*PerformanceMeasurementItem, l)
+		malloc := make([]PerformanceMeasurementItem, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurementItemList size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Items = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurementItemList.FieldNames length %d exceeds %d elements", x, ColferListMax))
+		}
+		a := make([]string, int(x))
+		o.FieldNames = a
+
+		for ai := range a {
+			if i >= len(data) {
+				goto eof
+			}
+			x := uint(data[i])
+			i++
+
+			if x >= 0x80 {
+				x &= 0x7f
+				for shift := uint(7); ; shift += 7 {
+					if i >= len(data) {
+						goto eof
+					}
+					b := uint(data[i])
+					i++
+
+					if b < 0x80 {
+						x |= b << shift
+						break
+					}
+					x |= (b & 0x7f) << shift
+				}
+			}
+
+			if x > uint(ColferSizeMax) {
+				return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurementItemList.FieldNames element %d size %d exceeds %d bytes", ai, x, ColferSizeMax))
+			}
+
+			start := i
+			i += int(x)
+			if i >= len(data) {
+				goto eof
+			}
+			a[ai] = string(data[start:i])
+		}
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurementItemList size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *PerformanceMeasurementItemList) UnmarshalBinary(data []byte) error {
 	i, err := o.Unmarshal(data)
 	if i < len(data) && err == nil {
 		return ColferTail(i)

@@ -89,9 +89,12 @@ var serveCmd = &cobra.Command{
 		c := make(chan os.Signal, 1)
 		signal.Notify(c, os.Interrupt)
 		go func() {
-			_ = <-c
-			fmt.Println("Gracefully shutting down...")
-			_ = app.Shutdown()
+			sig := <-c // block until signal is read
+			fmt.Printf("Received signal: '%s'; shutting down...\n", sig.String())
+			err = app.Shutdown()
+			if err != nil {
+				log.Fatal(err)
+			}
 		}()
 
 		// Configure CORS
