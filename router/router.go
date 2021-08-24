@@ -28,6 +28,7 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksUrl string) {
 	portfolio.Delete("/:id", middleware.PVAuth(jwks, jwksUrl), handler.DeletePortfolio)
 	portfolio.Get("/:id/performance", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolioPerformance)
 	portfolio.Get("/:id/measurements", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolioMeasurements)
+	portfolio.Get("/:id/holdings", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolioHoldings)
 	portfolio.Get("/:id/transactions", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolioTransactions)
 
 	// Strategy

@@ -4285,8 +4285,6 @@ type PerformanceMeasurement struct {
 	TotalDeposited float64
 
 	TotalWithdrawn float64
-
-	Justification []*Justification
 	// Time-weighted rate of return
 	TWRROneDay float32
 
@@ -4368,7 +4366,6 @@ type PerformanceMeasurement struct {
 // MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
 // If the buffer is too small, MarshalTo will panic.
 // All nil entries in o.Holdings will be replaced with a new value.
-// All nil entries in o.Justification will be replaced with a new value.
 func (o *PerformanceMeasurement) MarshalTo(buf []byte) int {
 	var i int
 
@@ -4455,250 +4452,230 @@ func (o *PerformanceMeasurement) MarshalTo(buf []byte) int {
 		i += 9
 	}
 
-	if l := len(o.Justification); l != 0 {
-		buf[i] = 10
-		i++
-		x := uint(l)
-		for x >= 0x80 {
-			buf[i] = byte(x | 0x80)
-			x >>= 7
-			i++
-		}
-		buf[i] = byte(x)
-		i++
-		for vi, v := range o.Justification {
-			if v == nil {
-				v = new(Justification)
-				o.Justification[vi] = v
-			}
-			i += v.MarshalTo(buf[i:])
-		}
-	}
-
 	if v := o.TWRROneDay; v != 0 {
-		buf[i] = 11
+		buf[i] = 10
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRROneWeek; v != 0 {
-		buf[i] = 12
+		buf[i] = 11
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRROneMonth; v != 0 {
-		buf[i] = 13
+		buf[i] = 12
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRRThreeMonth; v != 0 {
-		buf[i] = 14
+		buf[i] = 13
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRROneYear; v != 0 {
-		buf[i] = 15
+		buf[i] = 14
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRRThreeYear; v != 0 {
-		buf[i] = 16
+		buf[i] = 15
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRRFiveYear; v != 0 {
-		buf[i] = 17
+		buf[i] = 16
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TWRRTenYear; v != 0 {
-		buf[i] = 18
+		buf[i] = 17
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRROneDay; v != 0 {
-		buf[i] = 19
+		buf[i] = 18
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRROneWeek; v != 0 {
-		buf[i] = 20
+		buf[i] = 19
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRROneMonth; v != 0 {
-		buf[i] = 21
+		buf[i] = 20
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRRThreeMonth; v != 0 {
-		buf[i] = 22
+		buf[i] = 21
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRROneYear; v != 0 {
-		buf[i] = 23
+		buf[i] = 22
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRRThreeYear; v != 0 {
-		buf[i] = 24
+		buf[i] = 23
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRRFiveYear; v != 0 {
-		buf[i] = 25
+		buf[i] = 24
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.MWRRTenYear; v != 0 {
-		buf[i] = 26
+		buf[i] = 25
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.ActiveReturnOneYear; v != 0 {
-		buf[i] = 27
+		buf[i] = 26
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.ActiveReturnThreeYear; v != 0 {
-		buf[i] = 28
+		buf[i] = 27
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.ActiveReturnFiveYear; v != 0 {
-		buf[i] = 29
+		buf[i] = 28
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.ActiveReturnTenYear; v != 0 {
-		buf[i] = 30
+		buf[i] = 29
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.AlphaOneYear; v != 0 {
-		buf[i] = 31
+		buf[i] = 30
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.AlphaThreeYear; v != 0 {
-		buf[i] = 32
+		buf[i] = 31
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.AlphaFiveYear; v != 0 {
-		buf[i] = 33
+		buf[i] = 32
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.AlphaTenYear; v != 0 {
-		buf[i] = 34
+		buf[i] = 33
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.BetaOneYear; v != 0 {
-		buf[i] = 35
+		buf[i] = 34
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.BetaThreeYear; v != 0 {
-		buf[i] = 36
+		buf[i] = 35
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.BetaFiveYear; v != 0 {
-		buf[i] = 37
+		buf[i] = 36
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.BetaTenYear; v != 0 {
-		buf[i] = 38
+		buf[i] = 37
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.CalmarRatio; v != 0 {
-		buf[i] = 39
+		buf[i] = 38
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.DownsideDeviation; v != 0 {
-		buf[i] = 40
+		buf[i] = 39
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.InformationRatio; v != 0 {
-		buf[i] = 41
+		buf[i] = 40
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.KRatio; v != 0 {
-		buf[i] = 42
+		buf[i] = 41
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.KellerRatio; v != 0 {
-		buf[i] = 43
+		buf[i] = 42
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.SharpeRatio; v != 0 {
-		buf[i] = 44
+		buf[i] = 43
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.SortinoRatio; v != 0 {
-		buf[i] = 45
+		buf[i] = 44
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.StdDev; v != 0 {
-		buf[i] = 46
+		buf[i] = 45
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.TreynorRatio; v != 0 {
-		buf[i] = 47
+		buf[i] = 46
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.UlcerIndex; v != 0 {
-		buf[i] = 48
+		buf[i] = 47
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
@@ -4774,29 +4751,6 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 
 	if o.TotalWithdrawn != 0 {
 		l += 9
-	}
-
-	if x := len(o.Justification); x != 0 {
-		if x > ColferListMax {
-			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PerformanceMeasurement.Justification exceeds %d elements", ColferListMax))
-		}
-		for l += 2; x >= 0x80; l++ {
-			x >>= 7
-		}
-		for _, v := range o.Justification {
-			if v == nil {
-				l++
-				continue
-			}
-			vl, err := v.MarshalLen()
-			if err != nil {
-				return 0, err
-			}
-			l += vl
-		}
-		if l > ColferSizeMax {
-			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PerformanceMeasurement size exceeds %d bytes", ColferSizeMax))
-		}
 	}
 
 	if o.TWRROneDay != 0 {
@@ -4959,7 +4913,6 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 
 // MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
 // All nil entries in o.Holdings will be replaced with a new value.
-// All nil entries in o.Justification will be replaced with a new value.
 // The error return option is portfolio.ColferMax.
 func (o *PerformanceMeasurement) MarshalBinary() (data []byte, err error) {
 	l, err := o.MarshalLen()
@@ -5142,59 +5095,6 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 	}
 
 	if header == 10 {
-		if i >= len(data) {
-			goto eof
-		}
-		x := uint(data[i])
-		i++
-
-		if x >= 0x80 {
-			x &= 0x7f
-			for shift := uint(7); ; shift += 7 {
-				if i >= len(data) {
-					goto eof
-				}
-				b := uint(data[i])
-				i++
-
-				if b < 0x80 {
-					x |= b << shift
-					break
-				}
-				x |= (b & 0x7f) << shift
-			}
-		}
-
-		if x > uint(ColferListMax) {
-			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurement.Justification length %d exceeds %d elements", x, ColferListMax))
-		}
-
-		l := int(x)
-		a := make([]*Justification, l)
-		malloc := make([]Justification, l)
-		for ai := range a {
-			v := &malloc[ai]
-			a[ai] = v
-
-			n, err := v.Unmarshal(data[i:])
-			if err != nil {
-				if err == io.EOF && len(data) >= ColferSizeMax {
-					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PerformanceMeasurement size exceeds %d bytes", ColferSizeMax))
-				}
-				return 0, err
-			}
-			i += n
-		}
-		o.Justification = a
-
-		if i >= len(data) {
-			goto eof
-		}
-		header = data[i]
-		i++
-	}
-
-	if header == 11 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5205,7 +5105,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 12 {
+	if header == 11 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5216,7 +5116,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 13 {
+	if header == 12 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5227,7 +5127,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 14 {
+	if header == 13 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5238,7 +5138,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 15 {
+	if header == 14 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5249,7 +5149,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 16 {
+	if header == 15 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5260,7 +5160,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 17 {
+	if header == 16 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5271,7 +5171,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 18 {
+	if header == 17 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5282,7 +5182,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 19 {
+	if header == 18 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5293,7 +5193,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 20 {
+	if header == 19 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5304,7 +5204,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 21 {
+	if header == 20 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5315,7 +5215,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 22 {
+	if header == 21 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5326,7 +5226,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 23 {
+	if header == 22 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5337,7 +5237,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 24 {
+	if header == 23 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5348,7 +5248,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 25 {
+	if header == 24 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5359,7 +5259,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 26 {
+	if header == 25 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5370,7 +5270,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 27 {
+	if header == 26 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5381,7 +5281,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 28 {
+	if header == 27 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5392,7 +5292,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 29 {
+	if header == 28 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5403,7 +5303,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 30 {
+	if header == 29 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5414,7 +5314,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 31 {
+	if header == 30 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5425,7 +5325,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 32 {
+	if header == 31 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5436,7 +5336,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 33 {
+	if header == 32 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5447,7 +5347,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 34 {
+	if header == 33 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5458,7 +5358,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 35 {
+	if header == 34 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5469,7 +5369,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 36 {
+	if header == 35 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5480,7 +5380,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 37 {
+	if header == 36 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5491,7 +5391,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 38 {
+	if header == 37 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5502,7 +5402,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 39 {
+	if header == 38 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5513,7 +5413,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 40 {
+	if header == 39 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5524,7 +5424,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 41 {
+	if header == 40 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5535,7 +5435,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 42 {
+	if header == 41 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5546,7 +5446,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 43 {
+	if header == 42 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5557,7 +5457,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 44 {
+	if header == 43 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5568,7 +5468,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 45 {
+	if header == 44 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5579,7 +5479,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 46 {
+	if header == 45 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5590,7 +5490,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 47 {
+	if header == 46 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -5601,7 +5501,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 48 {
+	if header == 47 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -6171,6 +6071,598 @@ eof:
 // UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
 // The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
 func (o *Returns) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type PortfolioHoldingItem struct {
+	Time time.Time
+
+	Holdings []*ReportableHolding
+
+	PercentReturn float64
+
+	Value float64
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Holdings will be replaced with a new value.
+func (o *PortfolioHoldingItem) MarshalTo(buf []byte) int {
+	var i int
+
+	if v := o.Time; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 0
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 0 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
+	if l := len(o.Holdings); l != 0 {
+		buf[i] = 1
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Holdings {
+			if v == nil {
+				v = new(ReportableHolding)
+				o.Holdings[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	if v := o.PercentReturn; v != 0 {
+		buf[i] = 2
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if v := o.Value; v != 0 {
+		buf[i] = 3
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioHoldingItem) MarshalLen() (int, error) {
+	l := 1
+
+	if v := o.Time; !v.IsZero() {
+		if s := uint64(v.Unix()); s < 1<<32 {
+			l += 9
+		} else {
+			l += 13
+		}
+	}
+
+	if x := len(o.Holdings); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PortfolioHoldingItem.Holdings exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Holdings {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItem size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if o.PercentReturn != 0 {
+		l += 9
+	}
+
+	if o.Value != 0 {
+		l += 9
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItem exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Holdings will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioHoldingItem) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *PortfolioHoldingItem) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Time = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 0|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.Time = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioHoldingItem.Holdings length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*ReportableHolding, l)
+		malloc := make([]ReportableHolding, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioHoldingItem size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Holdings = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.PercentReturn = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 3 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Value = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItem size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *PortfolioHoldingItem) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type PortfolioHoldingItemList struct {
+	Items []*PortfolioHoldingItem
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Items will be replaced with a new value.
+func (o *PortfolioHoldingItemList) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.Items); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Items {
+			if v == nil {
+				v = new(PortfolioHoldingItem)
+				o.Items[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioHoldingItemList) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.Items); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PortfolioHoldingItemList.Items exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Items {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItemList size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItemList exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Items will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioHoldingItemList) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *PortfolioHoldingItemList) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioHoldingItemList.Items length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*PortfolioHoldingItem, l)
+		malloc := make([]PortfolioHoldingItem, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioHoldingItemList size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Items = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioHoldingItemList size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *PortfolioHoldingItemList) UnmarshalBinary(data []byte) error {
+	i, err := o.Unmarshal(data)
+	if i < len(data) && err == nil {
+		return ColferTail(i)
+	}
+	return err
+}
+
+type PortfolioTransactionList struct {
+	Items []*Transaction
+}
+
+// MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
+// If the buffer is too small, MarshalTo will panic.
+// All nil entries in o.Items will be replaced with a new value.
+func (o *PortfolioTransactionList) MarshalTo(buf []byte) int {
+	var i int
+
+	if l := len(o.Items); l != 0 {
+		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		for vi, v := range o.Items {
+			if v == nil {
+				v = new(Transaction)
+				o.Items[vi] = v
+			}
+			i += v.MarshalTo(buf[i:])
+		}
+	}
+
+	buf[i] = 0x7f
+	i++
+	return i
+}
+
+// MarshalLen returns the Colfer serial byte size.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioTransactionList) MarshalLen() (int, error) {
+	l := 1
+
+	if x := len(o.Items); x != 0 {
+		if x > ColferListMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.PortfolioTransactionList.Items exceeds %d elements", ColferListMax))
+		}
+		for l += 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+		for _, v := range o.Items {
+			if v == nil {
+				l++
+				continue
+			}
+			vl, err := v.MarshalLen()
+			if err != nil {
+				return 0, err
+			}
+			l += vl
+		}
+		if l > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioTransactionList size exceeds %d bytes", ColferSizeMax))
+		}
+	}
+
+	if l > ColferSizeMax {
+		return l, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioTransactionList exceeds %d bytes", ColferSizeMax))
+	}
+	return l, nil
+}
+
+// MarshalBinary encodes o as Colfer conform encoding.BinaryMarshaler.
+// All nil entries in o.Items will be replaced with a new value.
+// The error return option is portfolio.ColferMax.
+func (o *PortfolioTransactionList) MarshalBinary() (data []byte, err error) {
+	l, err := o.MarshalLen()
+	if err != nil {
+		return nil, err
+	}
+	data = make([]byte, l)
+	o.MarshalTo(data)
+	return data, nil
+}
+
+// Unmarshal decodes data as Colfer and returns the number of bytes read.
+// The error return options are io.EOF, portfolio.ColferError and portfolio.ColferMax.
+func (o *PortfolioTransactionList) Unmarshal(data []byte) (int, error) {
+	if len(data) == 0 {
+		return 0, io.EOF
+	}
+	header := data[0]
+	i := 1
+
+	if header == 0 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferListMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioTransactionList.Items length %d exceeds %d elements", x, ColferListMax))
+		}
+
+		l := int(x)
+		a := make([]*Transaction, l)
+		malloc := make([]Transaction, l)
+		for ai := range a {
+			v := &malloc[ai]
+			a[ai] = v
+
+			n, err := v.Unmarshal(data[i:])
+			if err != nil {
+				if err == io.EOF && len(data) >= ColferSizeMax {
+					return 0, ColferMax(fmt.Sprintf("colfer: portfolio.PortfolioTransactionList size exceeds %d bytes", ColferSizeMax))
+				}
+				return 0, err
+			}
+			i += n
+		}
+		o.Items = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header != 0x7f {
+		return 0, ColferError(i - 1)
+	}
+	if i < ColferSizeMax {
+		return i, nil
+	}
+eof:
+	if i >= ColferSizeMax {
+		return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.PortfolioTransactionList size exceeds %d bytes", ColferSizeMax))
+	}
+	return 0, io.EOF
+}
+
+// UnmarshalBinary decodes data as Colfer conform encoding.BinaryUnmarshaler.
+// The error return options are io.EOF, portfolio.ColferError, portfolio.ColferTail and portfolio.ColferMax.
+func (o *PortfolioTransactionList) UnmarshalBinary(data []byte) error {
 	i, err := o.Unmarshal(data)
 	if i < len(data) && err == nil {
 		return ColferTail(i)

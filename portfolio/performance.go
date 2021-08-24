@@ -125,8 +125,6 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	var currYearStartValue float64 = -1
 	var riskFreeValue float64 = 0
 
-	var lastJustification []*Justification
-
 	depositedToDate := 0.0
 	withdrawnToDate := 0.0
 	benchmarkValue := 10_000.0
@@ -161,8 +159,6 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			if date.Before(trx.Date) {
 				break
 			}
-
-			lastJustification = trx.Justification
 
 			if trx.Kind == DepositTransaction || trx.Kind == WithdrawTransaction {
 				switch trx.Kind {
@@ -283,7 +279,6 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			Holdings:             currentAssets,
 			TotalDeposited:       depositedToDate,
 			TotalWithdrawn:       withdrawnToDate,
-			Justification:        lastJustification,
 		}
 
 		perf.Measurements = append(perf.Measurements, &measurement)
@@ -551,7 +546,7 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
 func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
-	measurementSQL := "SELECT extract(epoch from event_date), value, risk_free_value, holdings, percent_return, justification FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	measurementSQL := "SELECT extract(epoch from event_date), value, risk_free_value, holdings, percent_return FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
 	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -567,7 +562,7 @@ func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
 	measurements := make([]*PerformanceMeasurement, 0, 1000)
 	for rows.Next() {
 		m := PerformanceMeasurement{}
-		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.Justification)
+		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":       err,
@@ -675,7 +670,6 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	sql := `INSERT INTO portfolio_measurement_v1 (
 		event_date,
-		justification,
 		portfolio_id,
 		risk_free_value,
 		total_deposited_to_date,
@@ -775,65 +769,58 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$47,
 		$48,
 		$49,
-		$50,
-		$51
+		$50
 	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
 	DO UPDATE SET
-		justification=$2,
-		risk_free_value=$4,
-		total_deposited_to_date=$5,
-		total_withdrawn_to_date=$6,
-		strategy_value=$8,
-		holdings=$9,
-		alpha_1yr=$10,
-		alpha_3yr=$11,
-		alpha_5yr=$12,
-		alpha_10yr=$13,
-		beta_1yr=$14,
-		beta_3yr=$15,
-		beta_5yr=$16,
-		beta_10yr=$17,
-		twrr_1d=$18,
-		twrr_1wk=$19,
-		twrr_1mo=$20,
-		twrr_3mo=$21,
-		twrr_1yr=$22,
-		twrr_3yr=$23,
-		twrr_5yr=$24,
-		twrr_10yr=$25,
-		mwrr_1d=$26,
-		mwrr_1wk=$27,
-		mwrr_1mo=$28,
-		mwrr_3mo=$29,
-		mwrr_1yr=$30,
-		mwrr_3yr=$31,
-		mwrr_5yr=$32,
-		mwrr_10yr=$33,
-		active_return_1yr=$34,
-		active_return_3yr=$35,
-		active_return_5yr=$36,
-		active_return_10yr=$37,
-		calmar_ratio=$38,
-		downside_deviation=$39,
-		information_ratio=$40,
-		k_ratio=$41,
-		keller_ratio=$42,
-		sharpe_ratio=$43,
-		sortino_ratio=$44,
-		std_dev=$45,
-		treynor_ratio=$46,
-		ulcer_index=$47,
-		benchmark_value=$48,
-		strategy_growth_of_10k=$49,
-		benchmark_growth_of_10k=$50,
-		risk_free_growth_of_10k=$51`
+		risk_free_value=$3,
+		total_deposited_to_date=$4,
+		total_withdrawn_to_date=$5,
+		strategy_value=$7,
+		holdings=$8,
+		alpha_1yr=$9,
+		alpha_3yr=$10,
+		alpha_5yr=$11,
+		alpha_10yr=$12,
+		beta_1yr=$13,
+		beta_3yr=$14,
+		beta_5yr=$15,
+		beta_10yr=$16,
+		twrr_1d=$17,
+		twrr_1wk=$18,
+		twrr_1mo=$19,
+		twrr_3mo=$20,
+		twrr_1yr=$21,
+		twrr_3yr=$22,
+		twrr_5yr=$23,
+		twrr_10yr=$24,
+		mwrr_1d=$25,
+		mwrr_1wk=$26,
+		mwrr_1mo=$27,
+		mwrr_3mo=$28,
+		mwrr_1yr=$29,
+		mwrr_3yr=$30,
+		mwrr_5yr=$31,
+		mwrr_10yr=$32,
+		active_return_1yr=$33,
+		active_return_3yr=$34,
+		active_return_5yr=$35,
+		active_return_10yr=$36,
+		calmar_ratio=$37,
+		downside_deviation=$38,
+		information_ratio=$39,
+		k_ratio=$40,
+		keller_ratio=$41,
+		sharpe_ratio=$42,
+		sortino_ratio=$43,
+		std_dev=$44,
+		treynor_ratio=$45,
+		ulcer_index=$46,
+		benchmark_value=$47,
+		strategy_growth_of_10k=$48,
+		benchmark_growth_of_10k=$49,
+		risk_free_growth_of_10k=$50`
 
 	for _, m := range p.Measurements {
-		justification, err := json.Marshal(m.Justification)
-		if err != nil {
-			return err
-		}
-
 		holdings, err := json.Marshal(m.Holdings)
 		if err != nil {
 			return err
@@ -841,7 +828,6 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 
 		_, err = trx.Exec(context.Background(), sql,
 			m.Time,
-			justification,
 			p.PortfolioID,
 			m.RiskFreeValue,
 			m.TotalDeposited,

@@ -7,7 +7,8 @@ import (
 )
 
 type FilterObject struct {
-	Performance portfolio.Performance
+	Portfolio   *portfolio.Portfolio
+	Performance *portfolio.Performance
 }
 
 func getValue(m *portfolio.PerformanceMeasurement, field string) float64 {
@@ -133,4 +134,89 @@ func (f *FilterObject) GetMeasurements(field1 string, field2 string, since time.
 		}
 	}
 	return meas.MarshalBinary()
+}
+
+func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, error) {
+	var periodReturn string
+	switch frequency {
+	case "annually":
+		periodReturn = "twrr_1yr"
+	case "monthly":
+		periodReturn = "twrr_1mo"
+	case "daily":
+		periodReturn = "twrr_1d"
+	default:
+		periodReturn = "twrr_1mo"
+	}
+
+	// filter measurements by where
+	filtered := make([]*portfolio.PerformanceMeasurement, 0, len(f.Performance.Measurements))
+	var last *portfolio.PerformanceMeasurement
+	added := false
+	for _, meas := range f.Performance.Measurements {
+		added = false
+		switch frequency {
+		case "annually":
+			if last == nil {
+				if meas.Time.After(since) {
+					filtered = append(filtered, meas)
+					added = true
+				}
+			} else if last.Time.Year() != meas.Time.Year() && meas.Time.After(since) {
+				filtered = append(filtered, meas)
+				added = true
+			}
+		case "monthly":
+			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
+				filtered = append(filtered, last)
+				added = true
+			}
+		case "daily":
+			if meas.Time.After(since) {
+				filtered = append(filtered, meas)
+				added = true
+			}
+		default: // monthly
+			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
+				filtered = append(filtered, last)
+				added = true
+			}
+		}
+		last = meas
+	}
+
+	// add the last measurement if it wasn't already added
+	if !added {
+		filtered = append(filtered, last)
+	}
+
+	meas := portfolio.PortfolioHoldingItemList{
+		Items: make([]*portfolio.PortfolioHoldingItem, len(filtered)),
+	}
+
+	for idx, xx := range filtered {
+		meas.Items[idx] = &portfolio.PortfolioHoldingItem{
+			Time:          xx.Time,
+			Holdings:      xx.Holdings,
+			PercentReturn: getValue(xx, periodReturn),
+			Value:         xx.Value,
+		}
+	}
+	return meas.MarshalBinary()
+}
+
+func (f *FilterObject) GetTransactions(since time.Time) ([]byte, error) {
+	// filter transactions
+	filtered := make([]*portfolio.Transaction, 0, len(f.Portfolio.Transactions))
+	for _, xx := range f.Portfolio.Transactions {
+		if xx.Date.After(since) || xx.Date.Equal(since) {
+			filtered = append(filtered, xx)
+		}
+	}
+
+	trx := portfolio.PortfolioTransactionList{
+		Items: filtered,
+	}
+
+	return trx.MarshalBinary()
 }

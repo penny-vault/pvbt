@@ -1,4 +1,4 @@
-package portfolio
+package colfer
 
 type Justification struct {
 	Key text
@@ -126,7 +126,6 @@ type PerformanceMeasurement struct {
 	Holdings       []ReportableHolding
 	TotalDeposited float64
 	TotalWithdrawn float64
-	Justification  []Justification
 
 	// Time-weighted rate of return
 	TWRROneDay     float32
@@ -200,4 +199,19 @@ type Returns struct {
 	TWRRThreeYear      float64
 	TWRRFiveYear       float64
 	TWRRTenYear        float64
+}
+
+type PortfolioHoldingItem struct {
+	Time          timestamp
+	Holdings      []ReportableHolding
+	PercentReturn float64
+	Value         float64
+}
+
+type PortfolioHoldingItemList struct {
+	Items []PortfolioHoldingItem
+}
+
+type PortfolioTransactionList struct {
+	Items []Transaction
 }

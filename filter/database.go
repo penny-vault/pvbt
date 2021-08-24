@@ -22,13 +22,17 @@ type FilterDatabase struct {
 	UserID      string
 }
 
-func BuildQuery(from string, fields []string, where map[string]string, order string) (string, []interface{}, error) {
+func BuildQuery(from string, fields []string, safeFields []string, where map[string]string, order string) (string, []interface{}, error) {
 	if strings.Compare(from, "") == 0 {
 		return "", nil, errors.New("'from' cannot be empty")
 	}
 	stmt := &pgsql.SelectStatement{}
 	for _, ff := range fields {
 		stmt.Select(pgx.Identifier{ff}.Sanitize())
+	}
+
+	for _, ff := range safeFields {
+		stmt.Select(ff)
 	}
 
 	stmt.From(pgx.Identifier{from}.Sanitize())
@@ -84,7 +88,9 @@ func BuildQuery(from string, fields []string, where map[string]string, order str
 		}
 	}
 
-	stmt.Order(order)
+	if order != "" {
+		stmt.Order(order)
+	}
 
 	sql, args := pgsql.Build(stmt)
 	return sql, args, nil
@@ -98,13 +104,11 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sql, args, err := BuildQuery("portfolio_measurement_v1", fields, where, "event_date DESC")
+	sql, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{}, where, "event_date DESC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err
 	}
-
-	log.Info(sql)
 
 	trx, _ := database.TrxForUser(f.UserID)
 	err = trx.QueryRow(context.Background(), fmt.Sprintf(`
@@ -128,5 +132,98 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 	}
 
 	data, err := meas.MarshalBinary()
+	return data, err
+}
+
+func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte, error) {
+	var j string
+	where := make(map[string]string)
+
+	var periodReturn string
+	switch frequency {
+	case "annually":
+		periodReturn = "twrr_1yr"
+	case "monthly":
+		periodReturn = "twrr_1mo"
+	case "daily":
+		periodReturn = "twrr_1d"
+	default:
+		periodReturn = "twrr_1mo"
+	}
+	fields := []string{"event_date", "holdings", periodReturn, "strategy_value"}
+
+	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
+	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
+
+	sqlTmp, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
+	if err != nil {
+		log.Warn(err)
+		return nil, err
+	}
+
+	sql := fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+
+	trx, _ := database.TrxForUser(f.UserID)
+	err = trx.QueryRow(context.Background(), fmt.Sprintf(`
+			select array_to_json(array_agg(row_to_json(tbl))) as res
+		    from (
+				%s
+		    ) tbl
+			`, sql), args...).Scan(&j)
+	if err != nil {
+		log.Warn(err)
+		return nil, err
+	}
+
+	h := portfolio.PortfolioHoldingItemList{
+		Items: make([]*portfolio.PortfolioHoldingItem, 0, 100),
+	}
+	err = json.Unmarshal([]byte(j), &h.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := h.MarshalBinary()
+	return data, err
+}
+
+func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
+	var j string
+	where := make(map[string]string)
+
+	fields := []string{"event_date", "id", "cleared", "commission", "composite_figi", "justification",
+		"transaction_type", "memo", "price_per_share", "num_shares", "source", "source_id", "tags",
+		"tax_type", "ticker", "total_value"}
+
+	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
+	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
+
+	sql, args, err := BuildQuery("portfolio_transaction_v1", fields, []string{""}, where, "event_date DESC")
+	if err != nil {
+		log.Warn(err)
+		return nil, err
+	}
+
+	trx, _ := database.TrxForUser(f.UserID)
+	err = trx.QueryRow(context.Background(), fmt.Sprintf(`
+			select array_to_json(array_agg(row_to_json(tbl))) as res
+		    from (
+				%s
+		    ) tbl
+			`, sql), args...).Scan(&j)
+	if err != nil {
+		log.Warn(err)
+		return nil, err
+	}
+
+	h := portfolio.PortfolioTransactionList{
+		Items: make([]*portfolio.Transaction, 0, 100),
+	}
+	err = json.Unmarshal([]byte(j), &h.Items)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := h.MarshalBinary()
 	return data, err
 }

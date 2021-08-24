@@ -138,25 +138,71 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 	return c.Send(data)
 }
 
-func GetPortfolioTransactions(c *fiber.Ctx) error {
+func GetPortfolioHoldings(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
-	portfolioID, err := uuid.Parse(portfolioIDStr)
+	userID := c.Locals("userID").(string)
+
+	f := filter.New(portfolioIDStr, userID)
+
+	frequency := c.Query("frequency", "monthly")
+	sinceStr := c.Query("since", "0")
+	var since time.Time
+	if sinceStr == "0" {
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+	} else {
+		var err error
+		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":      err,
+				"DateString": sinceStr,
+			}).Warn("could not parse date string")
+		}
+	}
+
+	data, err := f.GetHoldings(frequency, since)
 	if err != nil {
 		log.WithFields(log.Fields{
-			"Endpoint":       "GetPortfolioMeasurements",
-			"Error":          err,
-			"PortfolioIDStr": portfolioIDStr,
-		}).Warn("failed to parse portfolio id")
+			"Error": err,
+		}).Warn("could not retrieve holdings")
+
 		return fiber.ErrBadRequest
 	}
 
+	return c.Send(data)
+}
+
+func GetPortfolioTransactions(c *fiber.Ctx) error {
+	portfolioIDStr := c.Params("id")
 	userID := c.Locals("userID").(string)
 
-	p, err := portfolio.LoadPerformanceFromDB(portfolioID, userID)
-	if err != nil {
-		return err
+	f := filter.New(portfolioIDStr, userID)
+
+	sinceStr := c.Query("since", "0")
+	var since time.Time
+	if sinceStr == "0" {
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+	} else {
+		var err error
+		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error":      err,
+				"DateString": sinceStr,
+			}).Warn("could not parse date string")
+		}
 	}
-	return c.JSON(p)
+
+	data, err := f.GetTransactions(since)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+		}).Warn("could not retrieve transactions")
+
+		return fiber.ErrBadRequest
+	}
+
+	return c.Send(data)
 }
 
 // ListPortfolios list all portfolios for logged in user
