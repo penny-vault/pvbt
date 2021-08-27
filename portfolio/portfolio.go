@@ -635,6 +635,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 	}
 
 	t1 := time.Now()
+	pm.dataProxy.Metric = data.MetricClose
 	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
 	if len(errs) != 0 {
 		errorMsgs := make([]string, len(errs))

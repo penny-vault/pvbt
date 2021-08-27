@@ -80,6 +80,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
+	manager.Metric = data.MetricAdjustedClose
 
 	tickers := []string{}
 	tickers = append(tickers, adm.inTickers...)

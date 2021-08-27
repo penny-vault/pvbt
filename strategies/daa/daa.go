@@ -198,6 +198,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
+	manager.Metric = data.MetricAdjustedClose
 
 	tickers := []string{}
 	tickers = append(tickers, daa.cashUniverse...)
