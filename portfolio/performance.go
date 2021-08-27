@@ -195,14 +195,39 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				depositedToDate += trx.TotalValue
 				riskFreeValue += trx.TotalValue
 				benchmarkValue += trx.TotalValue
+				if val, ok := holdings["$CASH"]; ok {
+					holdings["$CASH"] = val + trx.TotalValue
+				} else {
+					holdings["$CASH"] = trx.TotalValue
+				}
 				continue
 			case WithdrawTransaction:
 				withdrawnToDate += trx.TotalValue
 				riskFreeValue -= trx.TotalValue
 				benchmarkValue -= trx.TotalValue
+				if val, ok := holdings["$CASH"]; ok {
+					holdings["$CASH"] = val - trx.TotalValue
+				} else {
+					log.WithFields(log.Fields{
+						"PortfolioID": pm.Portfolio.ID,
+						"TotalValue":  trx.TotalValue,
+						"Date":        trx.Date,
+						"Ticker":      trx.Ticker,
+					}).Warn("insufficient cash position for withdraw transaction")
+				}
 				continue
 			case BuyTransaction:
 				shares += trx.Shares
+				if val, ok := holdings["$CASH"]; ok {
+					holdings["$CASH"] = val - trx.TotalValue
+				} else {
+					log.WithFields(log.Fields{
+						"PortfolioID": pm.Portfolio.ID,
+						"TotalValue":  trx.TotalValue,
+						"Date":        trx.Date,
+						"Ticker":      trx.Ticker,
+					}).Warn("insufficient cash position for buy transaction")
+				}
 				log.Debugf("on %s buy %.2f shares of %s for %.2f @ %.2f per share", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			case DividendTransaction:
 				if val, ok := holdings["$CASH"]; ok {
@@ -217,9 +242,20 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				log.Debugf("on %s, %s split and %.5f shares were added", trx.Date, trx.Ticker, trx.Shares)
 			case SellTransaction:
 				shares -= trx.Shares
+				if val, ok := holdings["$CASH"]; ok {
+					holdings["$CASH"] = val + trx.TotalValue
+				} else {
+					holdings["$CASH"] = trx.TotalValue
+				}
 				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			default:
 				return nil, errors.New("unrecognized transaction type")
+			}
+
+			if val, ok := holdings["$CASH"]; ok {
+				if val <= 1.0e-5 {
+					delete(holdings, "$CASH")
+				}
 			}
 
 			// Protect against floating point noise
