@@ -109,7 +109,7 @@ func (b *Backtest) Save(userID string) error {
 		return err
 	}
 
-	err = b.PortfolioModel.SaveWithTransaction(trx, userID)
+	err = b.PortfolioModel.SaveWithTransaction(trx, userID, true)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error":       err,

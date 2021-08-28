@@ -30,3 +30,7 @@ For complete details run:
 # Configuring
 
 There are a number of configuration variables necessary to run pvapi. These can be provided via a toml file (see: config.toml.tmpl for an example), environment variables, or as flags to the command line.
+
+# Design principals
+
+This software follows the design principals laid out in the [12-factor app](https://12factor.net).

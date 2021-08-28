@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -144,4 +145,60 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 	}
 
 	return trx, nil
+}
+
+// Get a list of users in the pvapi role
+func GetUsers() ([]string, error) {
+	trx, err := pool.Begin(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	sql := `WITH RECURSIVE cte AS (
+		SELECT oid FROM pg_roles WHERE rolname = $1
+		UNION ALL
+			SELECT m.roleid
+			FROM cte JOIN pg_auth_members m ON m.member = cte.oid
+	)
+	SELECT oid::regrole::text AS rolename FROM cte;`
+	rows, err := trx.Query(context.Background(), sql, "pvapi")
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"Query": sql,
+		}).Warn("get list of database roles failed")
+		trx.Rollback(context.Background())
+		return nil, err
+	}
+
+	users := make([]string, 0, 100)
+	for rows.Next() {
+		var roleName string
+		err := rows.Scan(&roleName)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Error": err,
+				"Query": sql,
+			}).Warn("GetUser scan failed")
+			continue
+		}
+
+		roleName = strings.Trim(roleName, "\"")
+		if roleName == "pvapi" || roleName == "pvanon" || roleName == "pvhealth" || roleName == "pvuser" {
+			continue
+		}
+		users = append(users, roleName)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error": err,
+			"Query": sql,
+		}).Warn("GetUser query read failed")
+		trx.Rollback(context.Background())
+		return nil, err
+	}
+
+	return users, nil
 }

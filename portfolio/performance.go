@@ -768,7 +768,8 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		benchmark_value,
 		strategy_growth_of_10k,
 		benchmark_growth_of_10k,
-		risk_free_growth_of_10k
+		risk_free_growth_of_10k,
+		user_id
 	) VALUES (
 		$1,
 		$2,
@@ -819,7 +820,8 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$47,
 		$48,
 		$49,
-		$50
+		$50,
+		$51
 	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
 	DO UPDATE SET
 		risk_free_value=$3,
@@ -926,7 +928,8 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 			m.BenchmarkValue,
 			m.StrategyGrowthOf10K,
 			m.BenchmarkGrowthOf10K,
-			m.RiskFreeGrowthOf10K)
+			m.RiskFreeGrowthOf10K,
+			userID)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":       err,

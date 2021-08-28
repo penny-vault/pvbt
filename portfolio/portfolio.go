@@ -1113,7 +1113,7 @@ func (pm *PortfolioModel) Save(userID string) error {
 		return err
 	}
 
-	err = pm.SaveWithTransaction(trx, userID)
+	err = pm.SaveWithTransaction(trx, userID, false)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
@@ -1138,7 +1138,7 @@ func (pm *PortfolioModel) Save(userID string) error {
 	return nil
 }
 
-func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
+func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, temporary bool) error {
 	p := pm.Portfolio
 	portfolioSQL := `
 	INSERT INTO portfolio_v1 (
@@ -1149,7 +1149,9 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		"start_date",
 		"end_date",
 		"holdings",
-		"notifications"
+		"notifications",
+		"temporary",
+		"user_id"
 	) VALUES (
 		$1,
 		$2,
@@ -1158,7 +1160,9 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		$5,
 		$6,
 		$7,
-		$8
+		$8,
+		$9,
+		$10
 	) ON CONFLICT ON CONSTRAINT portfolio_v1_pkey
 	DO UPDATE SET
 		name=$2,
@@ -1167,7 +1171,8 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		start_date=$5,
 		end_date=$6,
 		holdings=$7,
-		notifications=$8`
+		notifications=$8,
+		temporary=$9`
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -1179,7 +1184,8 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		trx.Rollback(context.Background())
 		return err
 	}
-	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode, p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications)
+	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
+		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
@@ -1191,10 +1197,10 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		return err
 	}
 
-	return pm.saveTransactions(trx)
+	return pm.saveTransactions(trx, userID)
 }
 
-func (pm *PortfolioModel) saveTransactions(trx pgx.Tx) error {
+func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	p := pm.Portfolio
 	transactionSQL := `
 	INSERT INTO portfolio_transaction_v1 (
@@ -1215,7 +1221,8 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx) error {
 		"tax_type",
 		"ticker",
 		"total_value",
-		"sequence_num"
+		"sequence_num",
+		"user_id"
 	) VALUES (
 		$1,
 		$2,
@@ -1234,7 +1241,8 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx) error {
 		$15,
 		$16,
 		$17,
-		$18
+		$18,
+		$19
 	) ON CONFLICT ON CONSTRAINT portfolio_transaction_v1_pkey
  	DO UPDATE SET
 		transaction_type=$3,
@@ -1277,6 +1285,7 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx) error {
 			t.Ticker,         // 16
 			t.TotalValue,     // 17
 			idx,              // 18
+			userID,           // 19
 		)
 		if err != nil {
 			log.WithFields(log.Fields{

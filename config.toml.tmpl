@@ -8,6 +8,7 @@ domain = "TODO"
 
 [database]
 url = "TODO"
+max_temp_portfolio_age_secs = 86400
 
 [log]
 level = "warning"
@@ -21,11 +22,11 @@ apikey = ""
 [tiingo]
 system_token = ""
 
-[redis]
-address = ""
-user = ""
-password = ""
-
+[cache]
+redis = false
+redis_url = "redis://localhost:6379" # redis://<user>:<pass>@localhost:6379/<db> "redis://pvapi:Vq!fDX5nAgrJeeduwmnfa9GS78LkSz@redis-16005.c16.us-east-1-2.ec2.cloud.redislabs.com:16005"
+local_size = 10 # number of items to cache in local memory
+ttl = 86400 # number of seconds to store in redis cache
 
 [server]
 port = 3000
