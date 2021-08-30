@@ -43,9 +43,7 @@ func (f fred) DataType() string {
 	return "rate"
 }
 
-func (f fred) GetDataForPeriod(symbol string, frequency string,
-	metric string, begin time.Time,
-	end time.Time) (data *dataframe.DataFrame, err error) {
+func (f fred) GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	// build URL to get data
 	url := fmt.Sprintf("%s/graph/fredgraph.csv?mode=fred&id=%s&cosd=%s&coed=%s&fq=%s&fam=avg", fredURL, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency)
 	//log.Printf("Download from FRED: %s\n", url)

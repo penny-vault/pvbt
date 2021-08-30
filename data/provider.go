@@ -80,7 +80,7 @@ var riskFreeRate *dataframe.DataFrame
 func InitializeDataManager() {
 	fred := NewFred()
 	var err error
-	riskFreeRate, err = fred.GetDataForPeriod("DTB3", FrequencyDaily, MetricClose,
+	riskFreeRate, err = fred.GetDataForPeriod("DTB3", MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
 		log.WithFields(log.Fields{
