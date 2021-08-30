@@ -44,7 +44,7 @@ var _ = Describe("Metrics", func() {
 				benchmarkValue := 10_000.00
 				perf.Measurements = []*portfolio.PerformanceMeasurement{}
 				yearDays := 0
-				for ii := 0; ii < 2520; ii++ {
+				for ii := 0; ii < 2521; ii++ {
 					perf.Measurements = append(perf.Measurements, &portfolio.PerformanceMeasurement{
 						Time:           date,
 						Value:          value,
@@ -68,32 +68,28 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.ActiveReturn(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.ActiveReturn(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.ActiveReturn(2531))).Should(BeTrue())
 			})
 
 			It("should have active return for 1-day", func() {
-				Expect(perf.ActiveReturn(2)).Should(BeNumerically("~", 2.838e-05))
+				Expect(perf.ActiveReturn(1)).Should(BeNumerically("~", 2.838e-05))
 			})
 
 			It("should have active return for 1-month", func() {
-				Expect(perf.ActiveReturn(21)).Should(BeNumerically("~", 5.7164e-04))
+				Expect(perf.ActiveReturn(21)).Should(BeNumerically("~", 0.000600222919))
 			})
 
 			It("should have active return for 1-yr", func() {
-				Expect(perf.ActiveReturn(252)).Should(BeNumerically("~", 0.00783186))
+				Expect(perf.ActiveReturn(252)).Should(BeNumerically("~", 0.00786306073))
 			})
 
 			It("should have active return for 2-yr", func() {
-				Expect(perf.ActiveReturn(504)).Should(BeNumerically("~", 8.2794909e-03))
+				Expect(perf.ActiveReturn(504)).Should(BeNumerically("~", 0.00828326496))
 			})
 
 			It("should have active return for 10-yr", func() {
-				Expect(perf.ActiveReturn(2520)).Should(BeNumerically("~", 1.4284958e-02))
+				Expect(perf.ActiveReturn(2520)).Should(BeNumerically("~", 0.0142840859))
 			})
 		})
 	})
@@ -132,10 +128,6 @@ var _ = Describe("Metrics", func() {
 
 			It("should be NaN for period of 0", func() {
 				Expect(math.IsNaN(perf.Alpha(0))).Should(BeTrue())
-			})
-
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.Alpha(1))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
@@ -199,16 +191,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.AverageDrawDown(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.AverageDrawDown(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.AverageDrawDown(11))).Should(BeTrue())
 			})
 
 			It("should have drawdowns when only one drawdown occurs", func() {
-				Expect(perf.AverageDrawDown(5)).Should(BeNumerically("~", -0.08909091))
+				Expect(perf.AverageDrawDown(4)).Should(BeNumerically("~", -0.08909091))
 			})
 
 		})
@@ -280,7 +268,7 @@ var _ = Describe("Metrics", func() {
 				}
 			})
 			It("should have average drawdowns when multiple drawdowns occur", func() {
-				Expect(perf.AverageDrawDown(10)).Should(BeNumerically("~", -0.06816035))
+				Expect(perf.AverageDrawDown(9)).Should(BeNumerically("~", -0.06816035))
 			})
 		})
 	})
@@ -366,46 +354,46 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have 2 drawdowns", func() {
-				Expect(perf.AllDrawDowns(10)).To(HaveLen(2))
+				Expect(perf.AllDrawDowns(9)).To(HaveLen(2))
 			})
 
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[0]
+				dd := perf.AllDrawDowns(9)[0]
 				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[0]
+				dd := perf.AllDrawDowns(9)[0]
 				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
-				dd := perf.AllDrawDowns(10)[0]
+				dd := perf.AllDrawDowns(9)[0]
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.08909091))
 			})
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[0]
+				dd := perf.AllDrawDowns(9)[0]
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with start date of 6/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[1]
+				dd := perf.AllDrawDowns(9)[1]
 				Expect(dd.Begin).To(Equal(time.Date(2010, 6, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with end date of 9/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[1]
+				dd := perf.AllDrawDowns(9)[1]
 				Expect(dd.End).To(Equal(time.Date(2010, 9, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with LossPercent of -.05", func() {
-				dd := perf.AllDrawDowns(10)[1]
+				dd := perf.AllDrawDowns(9)[1]
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.04722979))
 			})
 
 			It("should have drawdown[1] with Recovery time of 10/1/2010", func() {
-				dd := perf.AllDrawDowns(10)[1]
+				dd := perf.AllDrawDowns(9)[1]
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 10, 1, 16, 0, 0, 0, tz)))
 			})
 		})
@@ -443,20 +431,16 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.AvgUlcerIndex(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.AvgUlcerIndex(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.AvgUlcerIndex(2531))).Should(BeTrue())
 			})
 
 			It("should have value over 2 periods", func() {
-				Expect(perf.AvgUlcerIndex(2)).Should(BeNumerically("~", 4.5))
+				Expect(perf.AvgUlcerIndex(2)).Should(BeNumerically("~", 4.0))
 			})
 
 			It("should have value over whole window", func() {
-				Expect(perf.AvgUlcerIndex(5)).Should(BeNumerically("~", 3.0))
+				Expect(perf.AvgUlcerIndex(4)).Should(BeNumerically("~", 3.0))
 			})
 		})
 	})
@@ -492,10 +476,6 @@ var _ = Describe("Metrics", func() {
 
 			It("should be NaN for period of 0", func() {
 				Expect(math.IsNaN(perf.Beta(0))).Should(BeTrue())
-			})
-
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.Beta(1))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
@@ -549,24 +529,20 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.CalmarRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.CalmarRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.CalmarRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have value for 1-yr", func() {
-				Expect(perf.CalmarRatio(252)).Should(BeNumerically("~", 0.07680538))
+				Expect(perf.CalmarRatio(252)).Should(BeNumerically("~", 0.0771349862))
 			})
 
 			It("should have value for 3-yr", func() {
-				Expect(perf.CalmarRatio(756)).Should(BeNumerically("~", 0.08396588))
+				Expect(perf.CalmarRatio(756)).Should(BeNumerically("~", 0.0840169073))
 			})
 
 			It("should have value for 5-yr", func() {
-				Expect(perf.CalmarRatio(1260)).Should(BeNumerically("~", 0.09266673))
+				Expect(perf.CalmarRatio(1260)).Should(BeNumerically("~", 0.092710428))
 			})
 		})
 
@@ -638,7 +614,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.CalmarRatio(10)).Should(BeNumerically("~", 1.13367347))
+				Expect(perf.CalmarRatio(9)).Should(BeNumerically("~", 1.13367347))
 			})
 		})
 
@@ -756,16 +732,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.DownsideDeviation(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.DownsideDeviation(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.DownsideDeviation(2531))).Should(BeTrue())
 			})
 
 			It("should have value", func() {
-				Expect(perf.DownsideDeviation(20)).Should(BeNumerically("~", 0.00805711))
+				Expect(perf.DownsideDeviation(19)).Should(BeNumerically("~", 0.00805711))
 			})
 		})
 	})
@@ -830,20 +802,16 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.ExcessKurtosis(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.ExcessKurtosis(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.ExcessKurtosis(2531))).Should(BeTrue())
 			})
 
 			It("should have value for 1-yr", func() {
-				Expect(perf.ExcessKurtosis(252)).Should(BeNumerically("~", -1.19999999))
+				Expect(perf.ExcessKurtosis(252)).Should(BeNumerically("~", -1.2))
 			})
 
 			It("should have value for 3-yr", func() {
-				Expect(perf.ExcessKurtosis(756)).Should(BeNumerically("~", -1.19999999))
+				Expect(perf.ExcessKurtosis(756)).Should(BeNumerically("~", -1.2))
 			})
 
 			It("should have value for 5-yr", func() {
@@ -919,7 +887,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.ExcessKurtosis(10)).Should(BeNumerically("~", -0.72976815))
+				Expect(perf.ExcessKurtosis(9)).Should(BeNumerically("~", -0.72976815))
 			})
 		})
 
@@ -1037,16 +1005,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.InformationRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.InformationRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.InformationRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have value", func() {
-				Expect(perf.InformationRatio(20)).Should(BeNumerically("~", 2.52819494))
+				Expect(perf.InformationRatio(19)).Should(BeNumerically("~", 2.52819494))
 			})
 		})
 	})
@@ -1084,24 +1048,20 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.KellerRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.KellerRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.KellerRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have value for 1-yr", func() {
-				Expect(perf.KellerRatio(252)).Should(BeNumerically("~", 0.07680538))
+				Expect(perf.KellerRatio(252)).Should(BeNumerically("~", 0.0771349862))
 			})
 
 			It("should have value for 3-yr", func() {
-				Expect(perf.KellerRatio(756)).Should(BeNumerically("~", 0.08396588))
+				Expect(perf.KellerRatio(756)).Should(BeNumerically("~", 0.0840169073))
 			})
 
 			It("should have value for 5-yr", func() {
-				Expect(perf.KellerRatio(1260)).Should(BeNumerically("~", 0.09266673))
+				Expect(perf.KellerRatio(1260)).Should(BeNumerically("~", 0.092710428))
 			})
 		})
 
@@ -1173,7 +1133,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.KellerRatio(10)).Should(BeNumerically("~", 0.1092621))
+				Expect(perf.KellerRatio(9)).Should(BeNumerically("~", 0.1092621))
 			})
 		})
 
@@ -1210,10 +1170,6 @@ var _ = Describe("Metrics", func() {
 
 			It("should be NaN for period of 0", func() {
 				Expect(math.IsNaN(perf.KRatio(0))).Should(BeTrue())
-			})
-
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.KRatio(1))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
@@ -1301,7 +1257,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.KRatio(10)).Should(BeNumerically("~", 0.06900656))
+				Expect(perf.KRatio(9)).Should(BeNumerically("~", 0.0727393))
 			})
 		})
 
@@ -1379,31 +1335,31 @@ var _ = Describe("Metrics", func() {
 				Expect(perf.MaxDrawDown(0)).To(BeNil())
 			})
 
-			It("should be nil for period of 1", func() {
-				Expect(perf.MaxDrawDown(1)).To(BeNil())
-			})
-
 			It("should not be nil for period greater than # of measurements", func() {
 				Expect(perf.MaxDrawDown(11)).ToNot(BeNil())
 			})
 
+			It("should not be nil for period matching # of measurements", func() {
+				Expect(perf.MaxDrawDown(10)).ToNot(BeNil())
+			})
+
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
-				dd := perf.MaxDrawDown(10)
+				dd := perf.MaxDrawDown(9)
 				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
-				dd := perf.MaxDrawDown(10)
+				dd := perf.MaxDrawDown(9)
 				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
-				dd := perf.MaxDrawDown(10)
+				dd := perf.MaxDrawDown(9)
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.08909091))
 			})
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
-				dd := perf.MaxDrawDown(10)
+				dd := perf.MaxDrawDown(9)
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 		})
@@ -1436,24 +1392,20 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.MWRR(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.MWRR(1, portfolio.STRATEGY))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.MWRR(2521, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have MWRR for 1-day", func() {
-				Expect(perf.MWRR(2, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00019928))
+				Expect(perf.MWRR(1, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00019928))
 			})
 
 			It("should have MWRR for 5-day", func() {
-				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00079761))
+				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0009972))
 			})
 
 			It("should have MWRR for the full period", func() {
-				Expect(perf.MWRR(2520, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1063351))
+				Expect(perf.MWRR(2519, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1063351))
 			})
 		})
 		Context("with 3 years of simulated data", func() {
@@ -1494,7 +1446,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have MWRR", func() {
-				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0635))
+				Expect(perf.MWRR(4, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0635))
 			})
 		})
 		Context("with 4 months of simulated data", func() {
@@ -1535,7 +1487,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have MWRR", func() {
-				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.2039559))
+				Expect(perf.MWRR(4, portfolio.STRATEGY)).Should(BeNumerically("~", 0.2039559))
 			})
 		})
 		Context("with 3 years of simulated data", func() {
@@ -1576,10 +1528,9 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have negative MWRR", func() {
-				Expect(perf.MWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", -.0354))
+				Expect(perf.MWRR(4, portfolio.STRATEGY)).Should(BeNumerically("~", -.0354))
 			})
 		})
-
 	})
 
 	Describe("when calculating year-to-date performance", func() {
@@ -1607,7 +1558,7 @@ var _ = Describe("Metrics", func() {
 						TotalWithdrawn: 0.0,
 					},
 					{
-						Time:           time.Date(year-1, 9, 1, 16, 0, 0, 0, tz),
+						Time:           time.Date(year-1, 12, 31, 16, 0, 0, 0, tz),
 						Value:          10_750.0,
 						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
@@ -1646,11 +1597,11 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have an MWRR YTD", func() {
-				Expect(perf.MWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.18181818))
+				Expect(perf.MWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.20930233))
 			})
 
 			It("should have an TWRR YTD", func() {
-				Expect(perf.TWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.18181818))
+				Expect(perf.TWRRYtd(portfolio.STRATEGY)).To(BeNumerically("~", 0.20930233))
 			})
 		})
 	})
@@ -1762,7 +1713,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.ExcessKurtosis(10)).Should(BeNumerically("~", -0.72976815))
+				Expect(perf.NetProfit()).Should(BeNumerically("~", 1_010))
 			})
 		})
 
@@ -1880,16 +1831,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.SharpeRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.SharpeRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.SharpeRatio(20)).Should(BeNumerically("~", 4.82091768))
+				Expect(perf.SharpeRatio(19)).Should(BeNumerically("~", 4.82091768))
 			})
 		})
 	})
@@ -2006,16 +1953,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.SharpeRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.SharpeRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.Skew(20)).Should(BeNumerically("~", -0.29798929))
+				Expect(perf.Skew(19)).Should(BeNumerically("~", -0.29798929))
 			})
 		})
 	})
@@ -2132,16 +2075,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.SortinoRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.SortinoRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.SortinoRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.SortinoRatio(20)).Should(BeNumerically("~", 4.27863817))
+				Expect(perf.SortinoRatio(19)).Should(BeNumerically("~", 4.27863817))
 			})
 		})
 	})
@@ -2258,16 +2197,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.StdDev(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.StdDev(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.StdDev(2531))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.StdDev(20)).Should(BeNumerically("~", 0.00715081))
+				Expect(perf.StdDev(19)).Should(BeNumerically("~", 0.00715081))
 			})
 		})
 	})
@@ -2285,7 +2220,7 @@ var _ = Describe("Metrics", func() {
 						Time:           date,
 						Value:          value,
 						BenchmarkValue: benchmarkValue,
-						TotalDeposited: 10000.0,
+						TotalDeposited: 10_000.0,
 						TotalWithdrawn: 0.0,
 					})
 
@@ -2299,28 +2234,24 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.TWRR(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.TWRR(1, portfolio.STRATEGY))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.TWRR(2521, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be .01% for 1-day", func() {
-				Expect(perf.TWRR(2, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00019928))
+				Expect(perf.TWRR(1, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00019928))
 			})
 
 			It("should be 0.08% for 5-day", func() {
-				Expect(perf.TWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00079761))
+				Expect(perf.TWRR(5, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00099721))
 			})
 
 			It("should be 0.4% for 1-month", func() {
-				Expect(perf.TWRR(21, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0040008))
+				Expect(perf.TWRR(21, portfolio.STRATEGY)).Should(BeNumerically("~", 0.00420168))
 			})
 
 			It("should be 100.76% for the full period", func() {
-				Expect(perf.TWRR(2520, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1063351))
+				Expect(perf.TWRR(2519, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1063351))
 			})
 		})
 
@@ -2392,7 +2323,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have return of ~13%", func() {
-				Expect(perf.TWRR(10, portfolio.STRATEGY)).Should(BeNumerically("~", 0.13098, 1e-5))
+				Expect(perf.TWRR(9, portfolio.STRATEGY)).Should(BeNumerically("~", 0.13098, 1e-5))
 			})
 		})
 	})
@@ -2618,11 +2549,11 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should only have 10 draw downs returned", func() {
-				Expect(perf.Top10DrawDowns(uint(len(perf.Measurements)))).To(HaveLen(10))
+				Expect(perf.Top10DrawDowns(uint(len(perf.Measurements)) - 1)).To(HaveLen(10))
 			})
 
 			It("should be sorted from max to min", func() {
-				ddArr := perf.Top10DrawDowns(uint(len(perf.Measurements)))
+				ddArr := perf.Top10DrawDowns(uint(len(perf.Measurements)) - 1)
 				dd0 := ddArr[0]
 				Expect(dd0.Begin).To(Equal(time.Date(2020, 2, 11, 16, 0, 0, 0, tz)))
 				dd1 := ddArr[9]
@@ -2743,16 +2674,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.TrackingError(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.TrackingError(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.TrackingError(2531))).Should(BeTrue())
 			})
 
 			It("should have value", func() {
-				Expect(perf.TrackingError(20)).Should(BeNumerically("~", 0.0136356))
+				Expect(perf.TrackingError(19)).Should(BeNumerically("~", 0.0136356))
 			})
 		})
 	})
@@ -2889,16 +2816,12 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.TreynorRatio(0))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.TreynorRatio(1))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.TreynorRatio(2531))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.TreynorRatio(20)).Should(BeNumerically("~", -0.00177697))
+				Expect(perf.TreynorRatio(19)).Should(BeNumerically("~", -0.00177697))
 			})
 		})
 	})
@@ -3064,10 +2987,6 @@ var _ = Describe("Metrics", func() {
 				Expect(math.IsNaN(perf.UlcerIndexPercentile(0, .5))).Should(BeTrue())
 			})
 
-			It("should be NaN for period of 1", func() {
-				Expect(math.IsNaN(perf.UlcerIndexPercentile(1, .5))).Should(BeTrue())
-			})
-
 			It("should be NaN for period greater than # of measurements", func() {
 				Expect(math.IsNaN(perf.UlcerIndexPercentile(2531, .5))).Should(BeTrue())
 			})
@@ -3081,27 +3000,27 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have median Ulcer index of 50", func() {
-				Expect(perf.UlcerIndexPercentile(100, .50)).Should(BeNumerically("~", 50.0))
+				Expect(perf.UlcerIndexPercentile(99, .50)).Should(BeNumerically("~", 50.0))
 			})
 
 			It("should have q1 Ulcer index of 25", func() {
-				Expect(perf.UlcerIndexPercentile(100, .25)).Should(BeNumerically("~", 25.0))
+				Expect(perf.UlcerIndexPercentile(99, .25)).Should(BeNumerically("~", 25.0))
 			})
 
 			It("should have q3 Ulcer index of 75", func() {
-				Expect(perf.UlcerIndexPercentile(100, .75)).Should(BeNumerically("~", 75.0))
+				Expect(perf.UlcerIndexPercentile(99, .75)).Should(BeNumerically("~", 75.0))
 			})
 
 			It("should have 90% Ulcer index of 90", func() {
-				Expect(perf.UlcerIndexPercentile(100, .9)).Should(BeNumerically("~", 90.0))
+				Expect(perf.UlcerIndexPercentile(99, .9)).Should(BeNumerically("~", 90.0))
 			})
 
 			It("should have not overrun for 0%", func() {
-				Expect(perf.UlcerIndexPercentile(100, 0.0)).Should(BeNumerically("~", 1.0))
+				Expect(perf.UlcerIndexPercentile(99, 0.0)).Should(BeNumerically("~", 1.0))
 			})
 
 			It("should have not overrun for 100%", func() {
-				Expect(perf.UlcerIndexPercentile(100, 1.0)).Should(BeNumerically("~", 100.0))
+				Expect(perf.UlcerIndexPercentile(99, 1.0)).Should(BeNumerically("~", 100.0))
 			})
 		})
 	})

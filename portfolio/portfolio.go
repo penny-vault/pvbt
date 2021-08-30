@@ -590,6 +590,10 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 
 	// Set time range of portfolio
 	p.EndDate = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
+	now := time.Now()
+	if now.Before(p.EndDate) {
+		p.EndDate = now
+	}
 
 	// Adjust first transaction to the target portfolio's first date if
 	// there are no other transactions in the portfolio
@@ -647,7 +651,13 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 		}).Warn("Failed to load data for tickers")
 		return errors.New("failed loading data for tickers")
 	}
-	pm.priceData = prices
+	// extend the price data map
+	if pm.priceData == nil {
+		pm.priceData = make(map[string]*dataframe.DataFrame)
+	}
+	for k, v := range prices {
+		pm.priceData[k] = v
+	}
 	t2 := time.Now()
 
 	// Create transactions
@@ -906,11 +916,11 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 
 // UpdateTransactions calculates new transactions based on the portfolio strategy
 // from the portfolio end date to `through`
-func (pm *PortfolioModel) UpdateTransactions(manager *data.Manager, through time.Time) error {
+func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 	p := pm.Portfolio
-	manager.Begin = p.EndDate
-	manager.End = through
-	manager.Frequency = data.FrequencyDaily
+	pm.dataProxy.Begin = p.EndDate
+	pm.dataProxy.End = through
+	pm.dataProxy.Frequency = data.FrequencyDaily
 
 	arguments := make(map[string]json.RawMessage)
 	json.Unmarshal([]byte(p.StrategyArguments), &arguments)
@@ -926,7 +936,7 @@ func (pm *PortfolioModel) UpdateTransactions(manager *data.Manager, through time
 			return err
 		}
 
-		targetPortfolio, err := stratObject.Compute(manager)
+		targetPortfolio, err := stratObject.Compute(pm.dataProxy)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
@@ -1068,12 +1078,13 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 			ELSE end_DATE
 		END AS end_date,
 		holdings,
-		notifications
+		notifications,
+		benchmark
 	FROM
 		portfolio_v1
 	WHERE
 		id=$1 AND user_id=$2`
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications)
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"UserID":      userID,
@@ -1089,6 +1100,29 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 	p.CurrentHoldings = buildHoldingsArray(time.Now(), pm.holdings)
 	pm.dataProxy.Begin = p.StartDate
 	pm.dataProxy.End = time.Now()
+
+	pm.dataProxy.Metric = data.MetricClose
+	symbols := make([]string, 0, len(pm.holdings))
+	for k, _ := range pm.holdings {
+		if k != "$CASH" {
+			symbols = append(symbols, k)
+		}
+	}
+	log.WithFields(log.Fields{
+		"Symbols": symbols,
+	}).Info("loading price data for current holdings")
+	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
+	if len(errs) != 0 {
+		errorMsgs := make([]string, len(errs))
+		for ii, xx := range errs {
+			errorMsgs[ii] = xx.Error()
+		}
+		log.WithFields(log.Fields{
+			"Error": strings.Join(errorMsgs, ", "),
+		}).Warn("Failed to load data for tickers")
+		return nil, errors.New("failed loading data for tickers")
+	}
+	pm.priceData = prices
 
 	if err := pm.loadTransactionsFromDB(); err != nil {
 		// Error is logged by loadTransactionsFromDB
@@ -1262,7 +1296,15 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 		total_value=$17,
 		sequence_num=$18`
 
+	now := time.Now()
 	for idx, t := range p.Transactions {
+		if t.Date.After(now) {
+			log.WithFields(log.Fields{
+				"TransactionID":   t.ID,
+				"TransactionDate": t.Date,
+				"Now":             now,
+			}).Info("Not saving transaction because it is in the future")
+		}
 		if t.TaxDisposition == "" {
 			t.TaxDisposition = "TAXABLE"
 		}

@@ -148,12 +148,39 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	benchGrowth := 10_000.0
 	riskFreeGrowth := 10_000.0
 
+	daysToStartOfWeek := uint(0)
+	daysToStartOfMonth := uint(0)
+	daysToStartOfYear := uint(0)
+
+	var last time.Time
+	var lastAssets []*ReportableHolding
+
 	for {
 		row, quotes, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 		date := quotes[data.DateIdx].(time.Time)
+
+		if last.Weekday() > date.Weekday() {
+			daysToStartOfWeek = 1
+		} else {
+			daysToStartOfWeek++
+		}
+
+		if last.Month() != date.Month() {
+			daysToStartOfMonth = 1
+		} else {
+			daysToStartOfMonth++
+		}
+
+		if last.Year() != date.Year() {
+			daysToStartOfYear = 1
+		} else {
+			daysToStartOfYear++
+		}
+
+		last = date
 
 		if benchmarkShares != 0.0 {
 			benchmarkValue = benchmarkShares * quotes["$BENCHMARK"].(float64)
@@ -307,6 +334,10 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			}
 		}
 
+		if lastAssets == nil {
+			lastAssets = currentAssets
+		}
+
 		if prevVal == -1 {
 			prevVal = totalVal
 		} else {
@@ -326,38 +357,42 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			StrategyGrowthOf10K:  stratGrowth,
 			BenchmarkGrowthOf10K: benchGrowth,
 			RiskFreeGrowthOf10K:  riskFreeGrowth,
-			Holdings:             currentAssets,
+			Holdings:             lastAssets,
 			TotalDeposited:       depositedToDate,
 			TotalWithdrawn:       withdrawnToDate,
 		}
 
+		lastAssets = currentAssets
 		perf.Measurements = append(perf.Measurements, &measurement)
 
 		if len(perf.Measurements) >= 2 {
 			// Growth of 10k
-			stratRate := perf.TWRR(2, STRATEGY)
+			stratRate := perf.TWRR(1, STRATEGY)
 			if !math.IsNaN(stratRate) {
 				stratGrowth *= (1.0 + stratRate)
 			}
 			measurement.StrategyGrowthOf10K = stratGrowth
 
-			benchRate := perf.TWRR(2, BENCHMARK)
+			benchRate := perf.TWRR(1, BENCHMARK)
 			if !math.IsNaN(benchRate) {
 				benchGrowth *= (1.0 + benchRate)
 			}
 			measurement.BenchmarkGrowthOf10K = benchGrowth
 
-			rfRate := perf.TWRR(2, RISKFREE)
+			rfRate := perf.TWRR(1, RISKFREE)
 			if !math.IsNaN(benchRate) {
 				riskFreeGrowth *= (1.0 + rfRate)
 			}
 			measurement.RiskFreeGrowthOf10K *= riskFreeGrowth
 
 			// time-weighted rate of return
-			measurement.TWRROneDay = float32(perf.TWRR(2, STRATEGY))
+			measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
+			measurement.TWRRWeekToDate = float32(perf.TWRR(daysToStartOfWeek, STRATEGY))
 			measurement.TWRROneWeek = float32(perf.TWRR(5, STRATEGY))
+			measurement.TWRRMonthToDate = float32(perf.TWRR(daysToStartOfMonth, STRATEGY))
 			measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
 			measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
+			measurement.TWRRYearToDate = float32(perf.TWRR(daysToStartOfYear, STRATEGY))
 			measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
 			measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
 			measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
@@ -365,9 +400,12 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 
 			// money-weighted rate of return
 			measurement.MWRROneDay = float32(perf.MWRR(1, STRATEGY))
+			measurement.MWRRWeekToDate = float32(perf.MWRR(daysToStartOfWeek, STRATEGY))
 			measurement.MWRROneWeek = float32(perf.MWRR(5, STRATEGY))
+			measurement.MWRRMonthToDate = float32(perf.MWRR(daysToStartOfMonth, STRATEGY))
 			measurement.MWRROneMonth = float32(perf.MWRR(21, STRATEGY))
 			measurement.MWRRThreeMonth = float32(perf.MWRR(63, STRATEGY))
+			measurement.MWRRYearToDate = float32(perf.MWRR(daysToStartOfYear, STRATEGY))
 			measurement.MWRROneYear = float32(perf.MWRR(252, STRATEGY))
 			measurement.MWRRThreeYear = float32(perf.MWRR(756, STRATEGY))
 			measurement.MWRRFiveYear = float32(perf.MWRR(1260, STRATEGY))
@@ -440,7 +478,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		}
 	}
 
-	sinceInceptionPeriods := uint(len(perf.Measurements))
+	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
 	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods)
 
 	perf.PortfolioReturns = &Returns{
@@ -769,7 +807,12 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		strategy_growth_of_10k,
 		benchmark_growth_of_10k,
 		risk_free_growth_of_10k,
-		user_id
+		twrr_wtd,
+		twrr_mtd,
+		twrr_ytd,
+		mwrr_wtd,
+		mwrr_mtd,
+		mwrr_ytd
 	) VALUES (
 		$1,
 		$2,
@@ -821,7 +864,12 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$48,
 		$49,
 		$50,
-		$51
+		$51,
+		$52,
+		$53,
+		$54,
+		$55,
+		$56
 	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
 	DO UPDATE SET
 		risk_free_value=$3,
@@ -870,7 +918,13 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		benchmark_value=$47,
 		strategy_growth_of_10k=$48,
 		benchmark_growth_of_10k=$49,
-		risk_free_growth_of_10k=$50`
+		risk_free_growth_of_10k=$50,
+		twrr_wtd=$51,
+		twrr_mtd=$52,
+		twrr_ytd=$53,
+		mwrr_wtd=$54,
+		mwrr_mtd=$55,
+		mwrr_ytd=$56`
 
 	for _, m := range p.Measurements {
 		holdings, err := json.Marshal(m.Holdings)
@@ -879,57 +933,63 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		}
 
 		_, err = trx.Exec(context.Background(), sql,
-			m.Time,
-			p.PortfolioID,
-			m.RiskFreeValue,
-			m.TotalDeposited,
-			m.TotalWithdrawn,
-			userID,
-			m.Value,
-			holdings,
-			m.AlphaOneYear,
-			m.AlphaThreeYear,
-			m.AlphaFiveYear,
-			m.AlphaTenYear,
-			m.BetaOneYear,
-			m.BetaThreeYear,
-			m.BetaFiveYear,
-			m.BetaTenYear,
-			m.TWRROneDay,
-			m.TWRROneWeek,
-			m.TWRROneMonth,
-			m.TWRRThreeMonth,
-			m.TWRROneYear,
-			m.TWRRThreeYear,
-			m.TWRRFiveYear,
-			m.TWRRTenYear,
-			m.MWRROneDay,
-			m.MWRROneWeek,
-			m.MWRROneMonth,
-			m.MWRRThreeMonth,
-			m.MWRROneYear,
-			m.MWRRThreeYear,
-			m.MWRRFiveYear,
-			m.MWRRTenYear,
-			m.ActiveReturnOneYear,
-			m.ActiveReturnThreeYear,
-			m.ActiveReturnFiveYear,
-			m.ActiveReturnTenYear,
-			m.CalmarRatio,
-			m.DownsideDeviation,
-			m.InformationRatio,
-			m.KRatio,
-			m.KellerRatio,
-			m.SharpeRatio,
-			m.SortinoRatio,
-			m.StdDev,
-			m.TreynorRatio,
-			m.UlcerIndex,
-			m.BenchmarkValue,
-			m.StrategyGrowthOf10K,
-			m.BenchmarkGrowthOf10K,
-			m.RiskFreeGrowthOf10K,
-			userID)
+			m.Time,                  // 1
+			p.PortfolioID,           // 2
+			m.RiskFreeValue,         // 3
+			m.TotalDeposited,        // 4
+			m.TotalWithdrawn,        // 5
+			userID,                  // 6
+			m.Value,                 // 7
+			holdings,                // 8
+			m.AlphaOneYear,          // 9
+			m.AlphaThreeYear,        // 10
+			m.AlphaFiveYear,         // 11
+			m.AlphaTenYear,          // 12
+			m.BetaOneYear,           // 13
+			m.BetaThreeYear,         // 14
+			m.BetaFiveYear,          // 15
+			m.BetaTenYear,           // 16
+			m.TWRROneDay,            // 17
+			m.TWRROneWeek,           // 18
+			m.TWRROneMonth,          // 19
+			m.TWRRThreeMonth,        // 20
+			m.TWRROneYear,           // 21
+			m.TWRRThreeYear,         // 22
+			m.TWRRFiveYear,          // 23
+			m.TWRRTenYear,           // 24
+			m.MWRROneDay,            // 25
+			m.MWRROneWeek,           // 26
+			m.MWRROneMonth,          // 27
+			m.MWRRThreeMonth,        // 28
+			m.MWRROneYear,           // 29
+			m.MWRRThreeYear,         // 30
+			m.MWRRFiveYear,          // 31
+			m.MWRRTenYear,           // 32
+			m.ActiveReturnOneYear,   // 33
+			m.ActiveReturnThreeYear, // 34
+			m.ActiveReturnFiveYear,  // 35
+			m.ActiveReturnTenYear,   // 36
+			m.CalmarRatio,           // 37
+			m.DownsideDeviation,     // 38
+			m.InformationRatio,      // 39
+			m.KRatio,                // 40
+			m.KellerRatio,           // 41
+			m.SharpeRatio,           // 42
+			m.SortinoRatio,          // 43
+			m.StdDev,                // 44
+			m.TreynorRatio,          // 45
+			m.UlcerIndex,            // 46
+			m.BenchmarkValue,        // 47
+			m.StrategyGrowthOf10K,   // 48
+			m.BenchmarkGrowthOf10K,  // 49
+			m.RiskFreeGrowthOf10K,   // 50
+			m.TWRRWeekToDate,        // 51
+			m.TWRRMonthToDate,       // 52
+			m.TWRRYearToDate,        // 53
+			m.MWRRWeekToDate,        // 54
+			m.MWRRMonthToDate,       // 55
+			m.MWRRYearToDate,        // 56
+		)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":       err,

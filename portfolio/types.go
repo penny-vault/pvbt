@@ -4288,11 +4288,17 @@ type PerformanceMeasurement struct {
 	// Time-weighted rate of return
 	TWRROneDay float32
 
+	TWRRWeekToDate float32
+
 	TWRROneWeek float32
+
+	TWRRMonthToDate float32
 
 	TWRROneMonth float32
 
 	TWRRThreeMonth float32
+
+	TWRRYearToDate float32
 
 	TWRROneYear float32
 
@@ -4304,11 +4310,17 @@ type PerformanceMeasurement struct {
 	// Money-weighted rate of return
 	MWRROneDay float32
 
+	MWRRWeekToDate float32
+
 	MWRROneWeek float32
+
+	MWRRMonthToDate float32
 
 	MWRROneMonth float32
 
 	MWRRThreeMonth float32
+
+	MWRRYearToDate float32
 
 	MWRROneYear float32
 
@@ -4458,224 +4470,260 @@ func (o *PerformanceMeasurement) MarshalTo(buf []byte) int {
 		i += 5
 	}
 
-	if v := o.TWRROneWeek; v != 0 {
+	if v := o.TWRRWeekToDate; v != 0 {
 		buf[i] = 11
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRROneMonth; v != 0 {
+	if v := o.TWRROneWeek; v != 0 {
 		buf[i] = 12
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRRThreeMonth; v != 0 {
+	if v := o.TWRRMonthToDate; v != 0 {
 		buf[i] = 13
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRROneYear; v != 0 {
+	if v := o.TWRROneMonth; v != 0 {
 		buf[i] = 14
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRRThreeYear; v != 0 {
+	if v := o.TWRRThreeMonth; v != 0 {
 		buf[i] = 15
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRRFiveYear; v != 0 {
+	if v := o.TWRRYearToDate; v != 0 {
 		buf[i] = 16
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TWRRTenYear; v != 0 {
+	if v := o.TWRROneYear; v != 0 {
 		buf[i] = 17
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRROneDay; v != 0 {
+	if v := o.TWRRThreeYear; v != 0 {
 		buf[i] = 18
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRROneWeek; v != 0 {
+	if v := o.TWRRFiveYear; v != 0 {
 		buf[i] = 19
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRROneMonth; v != 0 {
+	if v := o.TWRRTenYear; v != 0 {
 		buf[i] = 20
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRRThreeMonth; v != 0 {
+	if v := o.MWRROneDay; v != 0 {
 		buf[i] = 21
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRROneYear; v != 0 {
+	if v := o.MWRRWeekToDate; v != 0 {
 		buf[i] = 22
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRRThreeYear; v != 0 {
+	if v := o.MWRROneWeek; v != 0 {
 		buf[i] = 23
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRRFiveYear; v != 0 {
+	if v := o.MWRRMonthToDate; v != 0 {
 		buf[i] = 24
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.MWRRTenYear; v != 0 {
+	if v := o.MWRROneMonth; v != 0 {
 		buf[i] = 25
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.ActiveReturnOneYear; v != 0 {
+	if v := o.MWRRThreeMonth; v != 0 {
 		buf[i] = 26
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.ActiveReturnThreeYear; v != 0 {
+	if v := o.MWRRYearToDate; v != 0 {
 		buf[i] = 27
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.ActiveReturnFiveYear; v != 0 {
+	if v := o.MWRROneYear; v != 0 {
 		buf[i] = 28
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.ActiveReturnTenYear; v != 0 {
+	if v := o.MWRRThreeYear; v != 0 {
 		buf[i] = 29
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.AlphaOneYear; v != 0 {
+	if v := o.MWRRFiveYear; v != 0 {
 		buf[i] = 30
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.AlphaThreeYear; v != 0 {
+	if v := o.MWRRTenYear; v != 0 {
 		buf[i] = 31
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.AlphaFiveYear; v != 0 {
+	if v := o.ActiveReturnOneYear; v != 0 {
 		buf[i] = 32
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.AlphaTenYear; v != 0 {
+	if v := o.ActiveReturnThreeYear; v != 0 {
 		buf[i] = 33
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.BetaOneYear; v != 0 {
+	if v := o.ActiveReturnFiveYear; v != 0 {
 		buf[i] = 34
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.BetaThreeYear; v != 0 {
+	if v := o.ActiveReturnTenYear; v != 0 {
 		buf[i] = 35
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.BetaFiveYear; v != 0 {
+	if v := o.AlphaOneYear; v != 0 {
 		buf[i] = 36
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.BetaTenYear; v != 0 {
+	if v := o.AlphaThreeYear; v != 0 {
 		buf[i] = 37
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.CalmarRatio; v != 0 {
+	if v := o.AlphaFiveYear; v != 0 {
 		buf[i] = 38
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.DownsideDeviation; v != 0 {
+	if v := o.AlphaTenYear; v != 0 {
 		buf[i] = 39
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.InformationRatio; v != 0 {
+	if v := o.BetaOneYear; v != 0 {
 		buf[i] = 40
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.KRatio; v != 0 {
+	if v := o.BetaThreeYear; v != 0 {
 		buf[i] = 41
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.KellerRatio; v != 0 {
+	if v := o.BetaFiveYear; v != 0 {
 		buf[i] = 42
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.SharpeRatio; v != 0 {
+	if v := o.BetaTenYear; v != 0 {
 		buf[i] = 43
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.SortinoRatio; v != 0 {
+	if v := o.CalmarRatio; v != 0 {
 		buf[i] = 44
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.StdDev; v != 0 {
+	if v := o.DownsideDeviation; v != 0 {
 		buf[i] = 45
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.TreynorRatio; v != 0 {
+	if v := o.InformationRatio; v != 0 {
 		buf[i] = 46
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
-	if v := o.UlcerIndex; v != 0 {
+	if v := o.KRatio; v != 0 {
 		buf[i] = 47
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.KellerRatio; v != 0 {
+		buf[i] = 48
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.SharpeRatio; v != 0 {
+		buf[i] = 49
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.SortinoRatio; v != 0 {
+		buf[i] = 50
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.StdDev; v != 0 {
+		buf[i] = 51
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.TreynorRatio; v != 0 {
+		buf[i] = 52
+		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
+		i += 5
+	}
+
+	if v := o.UlcerIndex; v != 0 {
+		buf[i] = 53
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
@@ -4757,7 +4805,15 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 		l += 5
 	}
 
+	if o.TWRRWeekToDate != 0 {
+		l += 5
+	}
+
 	if o.TWRROneWeek != 0 {
+		l += 5
+	}
+
+	if o.TWRRMonthToDate != 0 {
 		l += 5
 	}
 
@@ -4766,6 +4822,10 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 	}
 
 	if o.TWRRThreeMonth != 0 {
+		l += 5
+	}
+
+	if o.TWRRYearToDate != 0 {
 		l += 5
 	}
 
@@ -4789,7 +4849,15 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 		l += 5
 	}
 
+	if o.MWRRWeekToDate != 0 {
+		l += 5
+	}
+
 	if o.MWRROneWeek != 0 {
+		l += 5
+	}
+
+	if o.MWRRMonthToDate != 0 {
 		l += 5
 	}
 
@@ -4798,6 +4866,10 @@ func (o *PerformanceMeasurement) MarshalLen() (int, error) {
 	}
 
 	if o.MWRRThreeMonth != 0 {
+		l += 5
+	}
+
+	if o.MWRRYearToDate != 0 {
 		l += 5
 	}
 
@@ -5111,7 +5183,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRROneWeek = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRWeekToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5122,7 +5194,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRROneMonth = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRROneWeek = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5133,7 +5205,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRRThreeMonth = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRMonthToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5144,7 +5216,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRROneYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRROneMonth = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5155,7 +5227,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRRThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRThreeMonth = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5166,7 +5238,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRRFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRYearToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5177,7 +5249,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TWRRTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRROneYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5188,7 +5260,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRROneDay = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5199,7 +5271,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRROneWeek = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5210,7 +5282,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRROneMonth = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.TWRRTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5221,7 +5293,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRRThreeMonth = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRROneDay = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5232,7 +5304,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRROneYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRWeekToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5243,7 +5315,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRRThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRROneWeek = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5254,7 +5326,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRRFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRMonthToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5265,7 +5337,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.MWRRTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRROneMonth = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5276,7 +5348,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.ActiveReturnOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRThreeMonth = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5287,7 +5359,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.ActiveReturnThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRYearToDate = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5298,7 +5370,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.ActiveReturnFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRROneYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5309,7 +5381,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.ActiveReturnTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5320,7 +5392,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.AlphaOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5331,7 +5403,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.AlphaThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.MWRRTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5342,7 +5414,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.AlphaFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.ActiveReturnOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5353,7 +5425,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.AlphaTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.ActiveReturnThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5364,7 +5436,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.BetaOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.ActiveReturnFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5375,7 +5447,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.BetaThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.ActiveReturnTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5386,7 +5458,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.BetaFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.AlphaOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5397,7 +5469,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.BetaTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.AlphaThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5408,7 +5480,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.CalmarRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.AlphaFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5419,7 +5491,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.DownsideDeviation = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.AlphaTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5430,7 +5502,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.InformationRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.BetaOneYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5441,7 +5513,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.KRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.BetaThreeYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5452,7 +5524,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.KellerRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.BetaFiveYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5463,7 +5535,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.SharpeRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.BetaTenYear = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5474,7 +5546,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.SortinoRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.CalmarRatio = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5485,7 +5557,7 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.StdDev = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.DownsideDeviation = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
@@ -5496,12 +5568,78 @@ func (o *PerformanceMeasurement) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.TreynorRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		o.InformationRatio = math.Float32frombits(intconv.Uint32(data[start:]))
 		header = data[i]
 		i++
 	}
 
 	if header == 47 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.KRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 48 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.KellerRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 49 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.SharpeRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 50 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.SortinoRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 51 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.StdDev = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 52 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.TreynorRatio = math.Float32frombits(intconv.Uint32(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 53 {
 		start := i
 		i += 4
 		if i >= len(data) {

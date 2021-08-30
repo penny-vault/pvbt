@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package colfer
+package portfolio
 
 type Justification struct {
 	Key text
@@ -142,24 +142,30 @@ type PerformanceMeasurement struct {
 	TotalWithdrawn float64
 
 	// Time-weighted rate of return
-	TWRROneDay     float32
-	TWRROneWeek    float32
-	TWRROneMonth   float32
-	TWRRThreeMonth float32
-	TWRROneYear    float32
-	TWRRThreeYear  float32
-	TWRRFiveYear   float32
-	TWRRTenYear    float32
+	TWRROneDay      float32
+	TWRRWeekToDate  float32
+	TWRROneWeek     float32
+	TWRRMonthToDate float32
+	TWRROneMonth    float32
+	TWRRThreeMonth  float32
+	TWRRYearToDate  float32
+	TWRROneYear     float32
+	TWRRThreeYear   float32
+	TWRRFiveYear    float32
+	TWRRTenYear     float32
 
 	// Money-weighted rate of return
-	MWRROneDay     float32
-	MWRROneWeek    float32
-	MWRROneMonth   float32
-	MWRRThreeMonth float32
-	MWRROneYear    float32
-	MWRRThreeYear  float32
-	MWRRFiveYear   float32
-	MWRRTenYear    float32
+	MWRROneDay      float32
+	MWRRWeekToDate  float32
+	MWRROneWeek     float32
+	MWRRMonthToDate float32
+	MWRROneMonth    float32
+	MWRRThreeMonth  float32
+	MWRRYearToDate  float32
+	MWRROneYear     float32
+	MWRRThreeYear   float32
+	MWRRFiveYear    float32
+	MWRRTenYear     float32
 
 	// active return
 	ActiveReturnOneYear   float32

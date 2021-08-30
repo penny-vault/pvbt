@@ -55,7 +55,7 @@ func isNaN(x float32) bool {
 // of the assets held does not match the S&P500 well.
 func (perf *Performance) ActiveReturn(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -69,7 +69,7 @@ func (perf *Performance) ActiveReturn(periods uint) float64 {
 // α = Rp – [Rf + (Rm – Rf) β]
 func (perf *Performance) Alpha(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -87,7 +87,7 @@ func (perf *Performance) Alpha(periods uint) float64 {
 // the portfolio recovered
 func (perf *Performance) AverageDrawDown(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -107,15 +107,19 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 	allDrawDowns := []*DrawDown{}
 
 	n := len(perf.Measurements)
-	if periods <= 1 {
+	if periods < 2 {
 		return allDrawDowns
 	}
 
-	if uint(n) < periods {
-		periods = uint(n)
+	if uint(n) <= periods {
+		periods = uint(n) - 1
 	}
 
-	startIdx := len(perf.Measurements) - int(periods)
+	startIdx := len(perf.Measurements) - int(periods) - 1
+	if startIdx < 0 {
+		return allDrawDowns
+	}
+
 	m0 := perf.Measurements[startIdx]
 
 	peak := m0.Value
@@ -152,11 +156,15 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 // AvgUlcerIndex compute average ulcer index over the last N periods
 func (perf *Performance) AvgUlcerIndex(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	startIdx := len(perf.Measurements) - int(periods)
+	startIdx := len(perf.Measurements) - int(periods) - 1
+	if startIdx < 0 {
+		return math.NaN()
+	}
+
 	u := make([]float64, 0, len(perf.Measurements))
 	for _, xx := range perf.Measurements[startIdx:] {
 		if !isNaN(xx.UlcerIndex) {
@@ -175,7 +183,7 @@ func (perf *Performance) AvgUlcerIndex(periods uint) float64 {
 // considering both the risk of those assets and the cost of capital.
 func (perf *Performance) Beta(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -193,7 +201,7 @@ func (perf *Performance) Beta(periods uint) float64 {
 // frame, which is typically set at 36 months.
 func (perf *Performance) CalmarRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -209,7 +217,7 @@ func (perf *Performance) CalmarRatio(periods uint) float64 {
 // DownsideDeviation compute the standard deviation of negative excess returns
 func (perf *Performance) DownsideDeviation(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -252,12 +260,16 @@ func DynamicWithdrawalRate(mc [][]float64, inflation float64) float64 {
 // distribution of outcomes.
 func (perf *Performance) ExcessKurtosis(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	v := make([]float64, periods)
-	startIdx := len(perf.Measurements) - int(periods)
+	v := make([]float64, periods+1)
+	startIdx := len(perf.Measurements) - int(periods) - 1
+	if startIdx < 0 {
+		return math.NaN()
+	}
+
 	idx := 0
 	for _, xx := range perf.Measurements[startIdx:] {
 		v[idx] = xx.Value
@@ -270,7 +282,7 @@ func (perf *Performance) ExcessKurtosis(periods uint) float64 {
 // compared to the volatility of those returns.
 func (perf *Performance) InformationRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -292,7 +304,7 @@ func (perf *Performance) InformationRatio(periods uint) float64 {
 // K = R * ( 1 - D / ( 1 - D ) ), if R >= 0% and D <= 50%, and K = 0% otherwise
 func (perf *Performance) KellerRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -316,7 +328,7 @@ func (perf *Performance) KellerRatio(periods uint) float64 {
 // k-ratio = (Slope logVAMI regression line) / n(Standard Error of the Slope)
 func (perf *Performance) KRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -360,15 +372,18 @@ func (perf *Performance) MaxDrawDown(periods uint) *DrawDown {
 // else return xirr(cashflows) which is annualized return
 func (perf *Performance) MWRR(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
 	pp := int(periods)
 
 	rate := 1.0
-	startIdx := len(perf.Measurements) - pp
+	startIdx := len(perf.Measurements) - pp - 1
 	endIdx := len(perf.Measurements) - 1
+	if startIdx < 0 {
+		return math.NaN()
+	}
 
 	start := perf.Measurements[startIdx].Time
 	end := perf.Measurements[endIdx].Time
@@ -377,7 +392,7 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 	// if period is greater than a year then annualize the result
 	years := toYears(duration)
 
-	if periods == 2 {
+	if periods == 1 {
 		m0 := perf.Measurements[startIdx]
 		m1 := perf.Measurements[endIdx]
 
@@ -514,7 +529,7 @@ func SafeWithdrawalRate(mc [][]float64, inflation float64) float64 {
 // Sharpe = (Rp - Rf) / std * √252
 func (perf *Performance) SharpeRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -531,7 +546,7 @@ func (perf *Performance) SharpeRatio(periods uint) float64 {
 // Skew computes the skew of the portfolio measurements relative to the normal distribution
 func (perf *Performance) Skew(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -550,7 +565,7 @@ func (perf *Performance) Skew(periods uint) float64 {
 // http://www.redrockcapital.com/Sortino__A__Sharper__Ratio_Red_Rock_Capital.pdf
 func (perf *Performance) SortinoRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -567,7 +582,7 @@ func (perf *Performance) SortinoRatio(periods uint) float64 {
 // Std standard deviation of portfolio
 func (perf *Performance) StdDev(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -598,7 +613,7 @@ func (perf *Performance) Top10DrawDowns(periods uint) []*DrawDown {
 // the price behavior of a benchmark.
 func (perf *Performance) TrackingError(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -619,7 +634,7 @@ func (perf *Performance) TrackingError(periods uint) float64 {
 // treynor = Excess Return / Beta
 func (perf *Performance) TreynorRatio(periods uint) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -630,15 +645,18 @@ func (perf *Performance) TreynorRatio(periods uint) float64 {
 // TWRR computes the time-weighted rate of return for the specified number of periods
 func (perf *Performance) TWRR(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
 	pp := int(periods)
 
 	rate := 1.0
-	startIdx := len(perf.Measurements) - pp
+	startIdx := len(perf.Measurements) - pp - 1
 	endIdx := len(perf.Measurements) - 1
+	if startIdx < 0 {
+		return math.NaN()
+	}
 
 	for ii, jj := startIdx, startIdx+1; jj < n; ii, jj = ii+1, jj+1 {
 		s := perf.Measurements[ii]
@@ -731,7 +749,7 @@ func (perf *Performance) UlcerIndex() float64 {
 // UlcerIndexPercentile compute average ulcer index over the last N periods
 func (perf *Performance) UlcerIndexPercentile(periods uint, percentile float64) float64 {
 	n := len(perf.Measurements)
-	if periods > uint(n) || periods <= 1 {
+	if periods > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
@@ -739,7 +757,11 @@ func (perf *Performance) UlcerIndexPercentile(periods uint, percentile float64) 
 		return math.NaN()
 	}
 
-	startIdx := len(perf.Measurements) - int(periods)
+	startIdx := len(perf.Measurements) - int(periods) - 1
+	if startIdx < 0 {
+		return math.NaN()
+	}
+
 	u := make([]float64, 0, len(perf.Measurements))
 	for _, xx := range perf.Measurements[startIdx:] {
 		u = append(u, float64(xx.UlcerIndex))
@@ -774,7 +796,10 @@ func (perf *Performance) adjustedReturns(periods uint, kind string) []float64 {
 	n := len(perf.Measurements)
 	pp := int(periods)
 	rets := make([]float64, 0, periods)
-	startIdx := len(perf.Measurements) - pp
+	startIdx := len(perf.Measurements) - pp - 1
+	if startIdx < 0 {
+		return nil
+	}
 
 	for ii, jj := startIdx, startIdx+1; jj < n; ii, jj = ii+1, jj+1 {
 		s := perf.Measurements[ii]
@@ -883,7 +908,11 @@ func (perf *Performance) monthlyReturn(periods uint) []float64 {
 	lastMonth := perf.Measurements[0].Time.Month()
 	last := perf.Measurements[0]
 	m := perf.Measurements
-	for _, curr := range m[(len(m) - int(periods)):] {
+	startIdx := (len(m) - int(periods) - 1)
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	for _, curr := range m[startIdx:] {
 		t := curr.Time
 		if lastMonth != t.Month() {
 			r := (curr.Value / last.Value) - 1.0
@@ -916,7 +945,7 @@ func monthlyReturnToAnnual(ts []float64) []float64 {
 // vami returns the hypothetical return of a $1,000 investment over the
 // given number of periods
 func (perf *Performance) vami(periods uint) []float64 {
-	rP := perf.adjustedReturns(periods, STRATEGY)
+	rP := perf.adjustedReturns(periods-1, STRATEGY)
 	v := make([]float64, periods)
 	v[0] = 1000
 	for ii, r := range rP {

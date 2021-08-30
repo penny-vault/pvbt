@@ -156,13 +156,15 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	var periodReturn string
 	switch frequency {
 	case "annually":
-		periodReturn = "twrr_1yr"
+		periodReturn = "twrr_ytd"
 	case "monthly":
-		periodReturn = "twrr_1mo"
+		periodReturn = "twrr_mtd"
+	case "weekly":
+		periodReturn = "twrr_wtd"
 	case "daily":
 		periodReturn = "twrr_1d"
 	default:
-		periodReturn = "twrr_1mo"
+		periodReturn = "twrr_mtd"
 	}
 	fields := []string{"event_date", "holdings", periodReturn, "strategy_value"}
 
@@ -175,7 +177,19 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 		return nil, err
 	}
 
-	sql := fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+	var sql string
+	switch frequency {
+	case "annually":
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date)", periodReturn, sqlTmp)
+	case "monthly":
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+	case "weekly":
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date)", periodReturn, sqlTmp)
+	case "daily":
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date)", periodReturn, sqlTmp)
+	default:
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+	}
 
 	trx, _ := database.TrxForUser(f.UserID)
 	err = trx.QueryRow(context.Background(), fmt.Sprintf(`

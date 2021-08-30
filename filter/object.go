@@ -45,12 +45,18 @@ func getValue(m *portfolio.PerformanceMeasurement, field string) float64 {
 		return float64(m.BetaTenYear)
 	case "twrr_1d":
 		return float64(m.TWRROneDay)
+	case "twrr_wtd":
+		return float64(m.TWRRWeekToDate)
 	case "twrr_1wk":
 		return float64(m.TWRROneWeek)
+	case "twrr_mtd":
+		return float64(m.TWRRMonthToDate)
 	case "twrr_1mo":
 		return float64(m.TWRROneMonth)
 	case "twrr_3mo":
 		return float64(m.TWRRThreeMonth)
+	case "twrr_ytd":
+		return float64(m.TWRRYearToDate)
 	case "twrr_1yr":
 		return float64(m.TWRROneYear)
 	case "twrr_3yr":
@@ -61,12 +67,18 @@ func getValue(m *portfolio.PerformanceMeasurement, field string) float64 {
 		return float64(m.TWRRTenYear)
 	case "mwrr_1d":
 		return float64(m.MWRROneDay)
+	case "mwrr_wtd":
+		return float64(m.MWRRWeekToDate)
 	case "mwrr_1wk":
 		return float64(m.MWRROneWeek)
+	case "mwrr_mtd":
+		return float64(m.MWRRMonthToDate)
 	case "mwrr_1mo":
 		return float64(m.MWRROneMonth)
 	case "mwrr_3mo":
 		return float64(m.MWRRThreeMonth)
+	case "mwrr_ytd":
+		return float64(m.MWRRYearToDate)
 	case "mwrr_1yr":
 		return float64(m.MWRROneYear)
 	case "mwrr_3yr":
@@ -154,13 +166,15 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 	var periodReturn string
 	switch frequency {
 	case "annually":
-		periodReturn = "twrr_1yr"
+		periodReturn = "twrr_ytd"
 	case "monthly":
-		periodReturn = "twrr_1mo"
+		periodReturn = "twrr_mtd"
+	case "weekly":
+		periodReturn = "twrr_wtd"
 	case "daily":
 		periodReturn = "twrr_1d"
 	default:
-		periodReturn = "twrr_1mo"
+		periodReturn = "twrr_mtd"
 	}
 
 	// filter measurements by where
@@ -177,11 +191,16 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 					added = true
 				}
 			} else if last.Time.Year() != meas.Time.Year() && meas.Time.After(since) {
-				filtered = append(filtered, meas)
+				filtered = append(filtered, last)
 				added = true
 			}
 		case "monthly":
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
+				filtered = append(filtered, last)
+				added = true
+			}
+		case "weekly":
+			if last != nil && meas.Time.Weekday() < last.Time.Weekday() && meas.Time.After(since) {
 				filtered = append(filtered, last)
 				added = true
 			}
