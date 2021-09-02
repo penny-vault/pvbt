@@ -97,7 +97,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 }
 
 // Save the backtest to the Database
-func (b *Backtest) Save(userID string) error {
+func (b *Backtest) Save(userID string, permanent bool) error {
 	start := time.Now()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
@@ -109,7 +109,7 @@ func (b *Backtest) Save(userID string) error {
 		return err
 	}
 
-	err = b.PortfolioModel.SaveWithTransaction(trx, userID, true)
+	err = b.PortfolioModel.SaveWithTransaction(trx, userID, permanent)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error":       err,

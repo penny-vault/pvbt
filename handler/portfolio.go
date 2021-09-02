@@ -223,7 +223,7 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 func ListPortfolios(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio_v1 WHERE user_id=$1 ORDER BY name, created`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio_v1 WHERE user_id=$1 AND temporary=false ORDER BY name, created`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -274,63 +274,6 @@ func ListPortfolios(c *fiber.Ctx) error {
 
 	trx.Commit(context.Background())
 	return c.JSON(portfolios)
-}
-
-// CreatePortfolio new portfolio
-func CreatePortfolio(c *fiber.Ctx) error {
-	userID := c.Locals("userID").(string)
-
-	params := PortfolioResponse{}
-	if err := json.Unmarshal(c.Body(), &params); err != nil {
-		log.Warnf("Bad request: %s", err)
-		return fiber.ErrBadRequest
-	}
-
-	// Save to database
-	trx, err := database.TrxForUser(userID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "CreatePortfolio",
-			"Error":    err,
-			"UserID":   userID,
-		}).Error("unable to get database transaction for user")
-		return fiber.ErrServiceUnavailable
-	}
-
-	portfolioID := uuid.New()
-	portfolioSQL := `INSERT INTO portfolio_v1 ("id", "user_id", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, userID, params.Name, params.Strategy, params.Arguments, time.Unix(params.StartDate, 0))
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "CreatePortfolio",
-			"Strategy": params.Strategy,
-			"Error":    err,
-			"Body":     string(c.Body()),
-			"Query":    portfolioSQL,
-		}).Warn("Failed to create portfolio")
-		trx.Rollback(context.Background())
-		return fiber.ErrBadRequest
-	}
-
-	err = trx.Commit(context.Background())
-	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "CreatePortfolio",
-			"Strategy": params.Strategy,
-			"Error":    err,
-			"Body":     string(c.Body()),
-			"Query":    portfolioSQL,
-		}).Warn("Failed to create portfolio")
-		trx.Rollback(context.Background())
-		return fiber.ErrInternalServerError
-	}
-	return c.JSON(PortfolioResponse{
-		ID:        portfolioID,
-		Name:      params.Name,
-		StartDate: params.StartDate,
-		Strategy:  params.Strategy,
-		Arguments: params.Arguments,
-	})
 }
 
 // UpdatePortfolio loads the portfolio from the database and updates it with the values passed

@@ -24,7 +24,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -73,19 +72,21 @@ var updateCmd = &cobra.Command{
 
 		// get a list of portfolio id's to update
 		portfolios := make([]*portfolio.PortfolioModel, 0, 100)
-		if PortfolioID == "" {
+		if PortfolioID != "" {
 			portfolioParts := strings.Split(PortfolioID, ":")
 			if len(portfolioParts) != 2 {
 				log.Fatal("Must specify portfolioID as {userID}:{portfolioID}")
 			}
 			u := portfolioParts[0]
 			pIDStr := portfolioParts[1]
-			pID := uuid.MustParse(pIDStr)
-			p, err := portfolio.LoadFromDB(pID, u, &dataManager)
+			ids := []string{
+				pIDStr,
+			}
+			p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 			if err != nil {
 				log.Fatal(err)
 			}
-			portfolios = append(portfolios, p)
+			portfolios = append(portfolios, p[0])
 		} else {
 			// load portfolio ids from database
 			users, err := database.GetUsers()
@@ -115,14 +116,15 @@ var updateCmd = &cobra.Command{
 						continue
 					}
 
-					pID := uuid.MustParse(pIDStr)
-
-					p, err := portfolio.LoadFromDB(pID, u, &dataManager)
+					ids := []string{
+						pIDStr,
+					}
+					p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 					if err != nil {
 						log.Fatal(err)
 					}
 
-					portfolios = append(portfolios, p)
+					portfolios = append(portfolios, p[0])
 				}
 			}
 		}
@@ -139,6 +141,7 @@ var updateCmd = &cobra.Command{
 				"EndDate":     pm.Portfolio.EndDate.Format("2006-01-02"),
 			}).Info("updating portfolio")
 
+			pm.LoadTransactionsFromDB()
 			pm.UpdateTransactions(dt)
 			perf, err := pm.CalculatePerformance(dt)
 			if err != nil {

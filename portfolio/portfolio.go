@@ -581,6 +581,11 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 //   the percentages of portfolio to hold
 func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 	p := pm.Portfolio
+
+	if target.NRows() == 0 {
+		return nil
+	}
+
 	timeIdx, err := target.NameToColumn(data.DateIdx)
 	if err != nil {
 		return err
@@ -970,7 +975,7 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 
 // LOAD
 
-func (pm *PortfolioModel) loadTransactionsFromDB() error {
+func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	p := pm.Portfolio
 	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
@@ -1037,10 +1042,10 @@ func (pm *PortfolioModel) loadTransactionsFromDB() error {
 	return nil
 }
 
-func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (*PortfolioModel, error) {
+func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*PortfolioModel, error) {
 	if userID == "" {
 		log.WithFields(log.Fields{
-			"PortfolioID": portfolioID,
+			"PortfolioID": portfolioIDs,
 			"UserID":      userID,
 		}).Error("userID cannot be an empty string")
 		return nil, errors.New("userID cannot be an empty string")
@@ -1054,82 +1059,124 @@ func LoadFromDB(portfolioID uuid.UUID, userID string, dataProxy *data.Manager) (
 		return nil, err
 	}
 
-	id, _ := portfolioID.MarshalBinary()
-	p := &Portfolio{
-		ID:           id,
-		UserID:       userID,
-		Transactions: []*Transaction{},
+	var rows pgx.Rows
+	if len(portfolioIDs) > 0 {
+		portfolioSQL := `
+		SELECT
+			id,
+			name,
+			strategy_shortcode,
+			arguments,
+			start_date,
+			CASE WHEN end_date IS NULL THEN start_date
+				ELSE end_DATE
+			END AS end_date,
+			holdings,
+			notifications,
+			benchmark
+		FROM
+			portfolio_v1
+		WHERE
+			id = ANY ($1) AND user_id=$2`
+		fmt.Printf("pID: %+v \n", portfolioIDs)
+		rows, err = trx.Query(context.Background(), portfolioSQL, portfolioIDs, userID)
+	} else {
+		portfolioSQL := `
+		SELECT
+			id,
+			name,
+			strategy_shortcode,
+			arguments,
+			start_date,
+			CASE WHEN end_date IS NULL THEN start_date
+				ELSE end_DATE
+			END AS end_date,
+			holdings,
+			notifications,
+			benchmark
+		FROM
+			portfolio_v1
+		WHERE
+			user_id=$1`
+		rows, err = trx.Query(context.Background(), portfolioSQL, userID)
 	}
 
-	pm := &PortfolioModel{
-		Portfolio:    p,
-		dataProxy:    dataProxy,
-		dividendData: make(map[string]*dataframe.DataFrame),
-		splitData:    make(map[string]*dataframe.DataFrame),
-	}
-
-	portfolioSQL := `
-	SELECT
-		name,
-		strategy_shortcode,
-		arguments,
-		start_date,
-		CASE WHEN end_date IS NULL THEN start_date
-			ELSE end_DATE
-		END AS end_date,
-		holdings,
-		notifications,
-		benchmark
-	FROM
-		portfolio_v1
-	WHERE
-		id=$1 AND user_id=$2`
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"UserID":      userID,
-			"PortfolioID": portfolioID,
-			"Query":       portfolioSQL,
+			"PortfolioID": portfolioIDs,
 			"Error":       err,
 		}).Warn("could not load portfolio from database")
 		trx.Rollback(context.Background())
 		return nil, err
 	}
-	trx.Commit(context.Background())
 
-	p.CurrentHoldings = buildHoldingsArray(time.Now(), pm.holdings)
-	pm.dataProxy.Begin = p.StartDate
-	pm.dataProxy.End = time.Now()
-
-	pm.dataProxy.Metric = data.MetricClose
-	symbols := make([]string, 0, len(pm.holdings))
-	for k, _ := range pm.holdings {
-		if k != "$CASH" {
-			symbols = append(symbols, k)
-		}
+	sz := len(portfolioIDs)
+	if sz == 0 {
+		sz = 10
 	}
-	log.WithFields(log.Fields{
-		"Symbols": symbols,
-	}).Info("loading price data for current holdings")
-	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
-	if len(errs) != 0 {
-		errorMsgs := make([]string, len(errs))
-		for ii, xx := range errs {
-			errorMsgs[ii] = xx.Error()
+	resultSet := make([]*PortfolioModel, 0, sz)
+
+	for rows.Next() {
+		p := &Portfolio{
+			UserID:       userID,
+			Transactions: []*Transaction{},
+		}
+
+		pm := &PortfolioModel{
+			Portfolio:    p,
+			dataProxy:    dataProxy,
+			dividendData: make(map[string]*dataframe.DataFrame),
+			splitData:    make(map[string]*dataframe.DataFrame),
+		}
+
+		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"UserID":      userID,
+				"PortfolioID": portfolioIDs,
+				"Error":       err,
+			}).Warn("could not load portfolio from database")
+			trx.Rollback(context.Background())
+			return nil, err
+		}
+
+		p.CurrentHoldings = buildHoldingsArray(time.Now(), pm.holdings)
+		pm.dataProxy.Begin = p.StartDate
+		pm.dataProxy.End = time.Now()
+
+		pm.dataProxy.Metric = data.MetricClose
+		symbols := make([]string, 0, len(pm.holdings))
+		for k, _ := range pm.holdings {
+			if k != "$CASH" {
+				symbols = append(symbols, k)
+			}
 		}
 		log.WithFields(log.Fields{
-			"Error": strings.Join(errorMsgs, ", "),
-		}).Warn("Failed to load data for tickers")
-		return nil, errors.New("failed loading data for tickers")
-	}
-	pm.priceData = prices
+			"Symbols": symbols,
+		}).Info("loading price data for current holdings")
+		prices, errs := pm.dataProxy.GetMultipleData(symbols...)
+		if len(errs) != 0 {
+			errorMsgs := make([]string, len(errs))
+			for ii, xx := range errs {
+				errorMsgs[ii] = xx.Error()
+			}
+			log.WithFields(log.Fields{
+				"Error": strings.Join(errorMsgs, ", "),
+			}).Warn("Failed to load data for tickers")
+			return nil, errors.New("failed loading data for tickers")
+		}
+		pm.priceData = prices
 
-	if err := pm.loadTransactionsFromDB(); err != nil {
-		// Error is logged by loadTransactionsFromDB
-		return nil, err
+		resultSet = append(resultSet, pm)
 	}
 
-	return pm, nil
+	if len(resultSet) == 0 && len(portfolioIDs) != 0 {
+		return nil, errors.New("requested portfolioID is not in the database")
+	}
+
+	trx.Commit(context.Background())
+	return resultSet, nil
 }
 
 // Save portfolio to database along with all transaction data
@@ -1172,7 +1219,8 @@ func (pm *PortfolioModel) Save(userID string) error {
 	return nil
 }
 
-func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, temporary bool) error {
+func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) error {
+	temporary := !permanent
 	p := pm.Portfolio
 	portfolioSQL := `
 	INSERT INTO portfolio_v1 (

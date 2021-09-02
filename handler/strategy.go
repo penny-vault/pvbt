@@ -107,7 +107,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	manager := data.NewManager(credentials)
 
 	params := map[string]json.RawMessage{}
-	if err := json.Unmarshal([]byte(c.Query("arguments", "{}")), &params); err != nil {
+	if err := json.Unmarshal(c.Body(), &params); err != nil {
 		log.Println(err)
 		return fiber.ErrBadRequest
 	}
@@ -121,7 +121,11 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	go b.Save(c.Locals("userID").(string))
+	permanent := false
+	if c.Query("permanent", "false") == "true" {
+		permanent = true
+	}
+	go b.Save(c.Locals("userID").(string), permanent)
 
 	portfolioIDStr := hex.EncodeToString(b.PortfolioModel.Portfolio.ID)
 	serializedPortfolio, err := b.PortfolioModel.Portfolio.MarshalBinary()

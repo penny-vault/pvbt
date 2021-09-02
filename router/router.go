@@ -36,7 +36,6 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksUrl string) {
 	// Portfolio
 	portfolio := api.Group("/portfolio")
 	portfolio.Get("/", middleware.PVAuth(jwks, jwksUrl), handler.ListPortfolios)
-	portfolio.Post("/", middleware.PVAuth(jwks, jwksUrl), handler.CreatePortfolio)
 	portfolio.Get("/:id", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolio)
 	portfolio.Patch("/:id", middleware.PVAuth(jwks, jwksUrl), handler.UpdatePortfolio)
 	portfolio.Delete("/:id", middleware.PVAuth(jwks, jwksUrl), handler.DeletePortfolio)
@@ -49,5 +48,5 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksUrl string) {
 	strategy := api.Group("/strategy")
 	strategy.Get("/", middleware.PVAuth(jwks, jwksUrl), handler.ListStrategies)
 	strategy.Get("/:shortcode", middleware.PVAuth(jwks, jwksUrl), handler.GetStrategy)
-	strategy.Get("/:shortcode/execute", middleware.PVAuth(jwks, jwksUrl), handler.RunStrategy)
+	strategy.Post("/:shortcode/execute", middleware.PVAuth(jwks, jwksUrl), handler.RunStrategy)
 }
