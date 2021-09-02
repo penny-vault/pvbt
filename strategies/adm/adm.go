@@ -48,9 +48,6 @@ type AcceleratingDualMomentum struct {
 	outTicker    string
 	riskFreeRate *dataframe.DataFrame
 	momentum     *dataframe.DataFrame
-
-	// Public
-	CurrentSymbol string
 }
 
 // New Construct a new Accelerating Dual Momentum strategy
@@ -300,7 +297,6 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 	}
 	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
 	t6 := time.Now()
-	adm.CurrentSymbol = targetPortfolio.Series[1].Value(targetPortfolio.NRows() - 1).(string)
 
 	log.WithFields(log.Fields{
 		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),

@@ -126,9 +126,6 @@ type DualMomentumInOut struct {
 	momentum        *dataframe.DataFrame
 
 	isBull bool
-
-	// Public
-	CurrentSymbol string
 }
 
 // NewDualMomentumInOut Construct a new Dual Momentum In/Out strategy

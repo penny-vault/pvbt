@@ -35,7 +35,6 @@ import (
 	"main/strategies/strategy"
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -54,9 +53,6 @@ type KellersDefensiveAssetAllocation struct {
 	targetPortfolio    *dataframe.DataFrame
 	prices             *dataframe.DataFrame
 	momentum           *dataframe.DataFrame
-
-	// Public
-	CurrentSymbol string
 }
 
 type momScore struct {
@@ -253,15 +249,6 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dat
 
 	daa.momentum = momentum
 	daa.findTopTRiskAssets()
-
-	symbols := []string{}
-	tickerIdx, _ := daa.targetPortfolio.NameToColumn(common.TickerName)
-	lastTarget := daa.targetPortfolio.Series[tickerIdx].Value(daa.targetPortfolio.NRows() - 1).(map[string]float64)
-	for kk := range lastTarget {
-		symbols = append(symbols, kk)
-	}
-	sort.Strings(symbols)
-	daa.CurrentSymbol = strings.Join(symbols, " ")
 
 	return daa.targetPortfolio, nil
 }
