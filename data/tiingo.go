@@ -186,7 +186,7 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 		FrequencyAnnualy: true,
 	}
 
-	var t1, t2, t3, t4 time.Time
+	// var t1, t2, t3, t4 time.Time
 
 	if _, ok := validFrequencies[frequency]; !ok {
 		log.WithFields(log.Fields{
@@ -223,9 +223,9 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 	}).Debug("load data from tiingo")
 
 	if !ok {
-		t1 = time.Now()
+		// t1 = time.Now()
 		resp, err := http.Get(url)
-		t2 = time.Now()
+		// t2 = time.Now()
 
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -269,7 +269,7 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 			}).Warn("Failed to load eod prices")
 			return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 		}
-		t3 = time.Now()
+		// t3 = time.Now()
 
 		floatConverter := imports.Converter{
 			ConcreteType: float64(0),
@@ -314,7 +314,7 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 				"splitFactor": floatConverter,
 			},
 		})
-		t4 = time.Now()
+		// t4 = time.Now()
 
 		if err != nil {
 			return nil, err
@@ -415,12 +415,14 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 	valueSeries.Rename(symbol)
 	df := dataframe.NewDataFrame(timeSeries, valueSeries)
 
-	log.WithFields(log.Fields{
-		"HttpRequest": t2.Sub(t1).Round(time.Millisecond),
-		"ParseCSV":    t4.Sub(t3).Round(time.Millisecond),
-		"Symbol":      symbol,
-		"Frequency":   frequency,
-	}).Debug("TargetPortfolio runtimes")
+	/*
+		log.WithFields(log.Fields{
+			"HttpRequest": t2.Sub(t1).Round(time.Millisecond),
+			"ParseCSV":    t4.Sub(t3).Round(time.Millisecond),
+			"Symbol":      symbol,
+			"Frequency":   frequency,
+		}).Debug("TargetPortfolio runtimes")
+	*/
 
 	return df, err
 }
