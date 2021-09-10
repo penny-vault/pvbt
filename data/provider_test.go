@@ -48,7 +48,7 @@ var _ = Describe("Provider", func() {
 		}
 
 		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
+		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
 		httpmock.RegisterResponder("GET", url,
 			httpmock.NewBytesResponder(200, content))
 
@@ -64,7 +64,7 @@ var _ = Describe("Provider", func() {
 	})
 
 	Describe("When data framework is initialized", func() {
-		Context("with the DTB3 data", func() {
+		Context("with the DGS3MO data", func() {
 			It("should be able to retrieve the risk free rate", func() {
 				rate := dataProxy.RiskFreeRate(time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 10.66, 1e-2))

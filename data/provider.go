@@ -80,7 +80,7 @@ var riskFreeRate *dataframe.DataFrame
 func InitializeDataManager() {
 	fred := NewFred()
 	var err error
-	riskFreeRate, err = fred.GetDataForPeriod("DTB3", MetricClose, FrequencyDaily,
+	riskFreeRate, err = fred.GetDataForPeriod("DGS3MO", MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -148,9 +148,9 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 			break
 		}
 
-		if !math.IsNaN(vals["DTB3"].(float64)) {
+		if !math.IsNaN(vals["DGS3MO"].(float64)) {
 			m.lastRiskFreeIdx = *row
-			ret = vals["DTB3"].(float64)
+			ret = vals["DGS3MO"].(float64)
 		}
 
 		dt := vals[DateIdx].(time.Time)

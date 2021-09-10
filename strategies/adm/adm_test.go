@@ -59,7 +59,7 @@ var _ = Describe("Adm", func() {
 		if err != nil {
 			panic(err)
 		}
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=TB3MS&cosd=1979-07-01&coed=2021-01-01&fq=Monthly&fam=avg",
+		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=GS3M&cosd=1979-07-01&coed=2021-01-01&fq=Monthly&fam=avg",
 			httpmock.NewBytesResponder(200, content))
 
 		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
@@ -116,7 +116,7 @@ var _ = Describe("Adm", func() {
 		}
 
 		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
+		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
 		httpmock.RegisterResponder("GET", url,
 			httpmock.NewBytesResponder(200, content))
 
