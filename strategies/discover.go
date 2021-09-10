@@ -24,11 +24,7 @@ import (
 	"main/strategies/daa"
 	"main/strategies/paa"
 	"main/strategies/strategy"
-	"time"
 
-	"github.com/goccy/go-json"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v4"
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
 )
@@ -108,13 +104,11 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-
 	log.Info("refreshing portfolio metrics")
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
 
-		// check if this strategy already has a portfolio associated with it
+		// load results from the database
 		trx, err := database.TrxForUser("pvuser")
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -128,65 +122,17 @@ func LoadStrategyMetricsFromDb() {
 		s := strategy.StrategyMetrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
 
-		switch err {
-		case nil: // no error
-			StrategyMetricsMap[strat.Shortcode] = s
-			strat.Metrics = s
-			trx.Commit(context.Background())
-		case pgx.ErrNoRows:
-			// It seems this strategy doesn't have a database entry yet -- create one
-			trx.Rollback(context.Background())
-			trx, err = database.TrxForUser("pvuser")
-			if err != nil {
-				log.WithFields(log.Fields{
-					"Endpoint": "UpdatePortfolio",
-					"Error":    err,
-					"UserID":   "pvuser",
-				}).Fatal("unable to get database transaction for user")
-			}
-
-			portfolioID := uuid.New()
-			// build arguments
-			argumentsMap := make(map[string]interface{})
-			for k, v := range strat.Arguments {
-				var output interface{}
-				if v.Typecode == "string" {
-					output = v.Default
-				} else {
-					json.Unmarshal([]byte(v.Default), &output)
-				}
-				argumentsMap[k] = output
-			}
-			arguments, err := json.Marshal(argumentsMap)
-			if err != nil {
-				log.WithFields(log.Fields{
-					"Shortcode":    strat.Shortcode,
-					"StrategyName": strat.Name,
-					"Error":        err,
-				}).Warn("Unable to build arguments for metrics calculation")
-				trx.Rollback(context.Background())
-				return
-			}
-			portfolioSQL := `INSERT INTO portfolio_v1 ("id", "user_id", "name", "strategy_shortcode", "arguments", "start_date") VALUES ($1, $2, $3, $4, $5, $6)`
-			_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, "pvuser", strat.Name, strat.Shortcode, string(arguments), time.Date(1980, 1, 1, 0, 0, 0, 0, tz))
-			if err != nil {
-				trx.Rollback(context.Background())
-				log.WithFields(log.Fields{
-					"Shortcode":    strat.Shortcode,
-					"StrategyName": strat.Name,
-					"Error":        err,
-					"Query":        portfolioSQL,
-				}).Warn("failed to create portfolio for strategy metrics")
-				return
-			}
-			trx.Commit(context.Background())
-		default:
+		if err != nil {
 			log.WithFields(log.Fields{
 				"Strategy": strat.Shortcode,
 				"Error":    err,
-			}).Error("failed to lookup strategy portfolio")
+			}).Error("failed to lookup strategy portfolio in database")
 			trx.Rollback(context.Background())
-			return
+			continue
 		}
+
+		StrategyMetricsMap[strat.Shortcode] = s
+		strat.Metrics = s
+		trx.Commit(context.Background())
 	}
 }

@@ -17,10 +17,13 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
+	"main/backtest"
 	"main/data"
 	"main/database"
 	"main/portfolio"
 	"main/strategies"
+	"main/strategies/strategy"
 	"strings"
 	"time"
 
@@ -70,6 +73,16 @@ var updateCmd = &cobra.Command{
 		credentials["tiingo"] = viper.GetString("tiingo.system_token")
 		dataManager := data.NewManager(credentials)
 
+		strategies.LoadStrategyMetricsFromDb()
+		for _, strat := range strategies.StrategyList {
+			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
+				log.WithFields(log.Fields{
+					"Strategy": strat.Shortcode,
+				}).Info("create portfolio for strategy")
+				createStrategyPortfolio(strat, &dataManager)
+			}
+		}
+
 		// get a list of portfolio id's to update
 		portfolios := make([]*portfolio.PortfolioModel, 0, 100)
 		if PortfolioID != "" {
@@ -90,6 +103,7 @@ var updateCmd = &cobra.Command{
 		} else {
 			// load portfolio ids from database
 			users, err := database.GetUsers()
+			users = append(users, "pvuser")
 			if err != nil {
 				log.Fatal(err)
 			}
@@ -165,4 +179,45 @@ var updateCmd = &cobra.Command{
 			}
 		}
 	},
+}
+
+func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager) error {
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+
+	// build arguments
+	argumentsMap := make(map[string]interface{})
+	for k, v := range strat.Arguments {
+		var output interface{}
+		if v.Typecode == "string" {
+			output = v.Default
+		} else {
+			json.Unmarshal([]byte(v.Default), &output)
+		}
+		argumentsMap[k] = output
+	}
+	arguments, err := json.Marshal(argumentsMap)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Shortcode":    strat.Shortcode,
+			"StrategyName": strat.Name,
+			"Error":        err,
+		}).Warn("Unable to build arguments for metrics calculation")
+		return err
+	}
+
+	params := make(map[string]json.RawMessage)
+	json.Unmarshal(arguments, &params)
+
+	b, err := backtest.New(strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Shortcode":    strat.Shortcode,
+			"StrategyName": strat.Name,
+			"Error":        err,
+		}).Warn("Unable to build arguments for metrics calculation")
+		return err
+	}
+
+	b.Save("pvuser", true)
+	return nil
 }
