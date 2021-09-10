@@ -643,7 +643,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 		symbols = append(symbols, k)
 	}
 
-	t1 := time.Now()
+	// t1 := time.Now()
 	pm.dataProxy.Metric = data.MetricClose
 	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
 	if len(errs) != 0 {
@@ -663,11 +663,11 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 	for k, v := range prices {
 		pm.priceData[k] = v
 	}
-	t2 := time.Now()
+	// t2 := time.Now()
 
 	// Create transactions
 	hints := make(map[string]int)
-	t3 := time.Now()
+	// t3 := time.Now()
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	for {
 		row, val, _ := targetIter(dataframe.SeriesName)
@@ -724,13 +724,15 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 			return err
 		}
 	}
-	t4 := time.Now()
+	// t4 := time.Now()
 
-	log.WithFields(log.Fields{
-		"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
-		"CreateTransactions": t4.Sub(t3).Round(time.Millisecond),
-		"NumRebalances":      target.NRows(),
-	}).Info("TargetPortfolio runtimes")
+	/*
+		log.WithFields(log.Fields{
+			"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
+			"CreateTransactions": t4.Sub(t3).Round(time.Millisecond),
+			"NumRebalances":      target.NRows(),
+		}).Info("TargetPortfolio runtimes")
+	*/
 
 	return nil
 }
@@ -757,6 +759,10 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 	through = through.AddDate(0, 0, 1)
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
+		log.WithFields(log.Fields{
+			"Through": through,
+			"Start":   from,
+		}).Warn("start date occurs after through date")
 		return errors.New("start date occurs after through date")
 	}
 

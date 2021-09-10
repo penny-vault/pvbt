@@ -188,15 +188,15 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.AverageDrawDown(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.AverageDrawDown(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.AverageDrawDown(11))).Should(BeTrue())
+				Expect(math.IsNaN(perf.AverageDrawDown(11, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have drawdowns when only one drawdown occurs", func() {
-				Expect(perf.AverageDrawDown(4)).Should(BeNumerically("~", -0.08909091))
+				Expect(perf.AverageDrawDown(4, portfolio.STRATEGY)).Should(BeNumerically("~", -0.08909091))
 			})
 
 		})
@@ -268,7 +268,7 @@ var _ = Describe("Metrics", func() {
 				}
 			})
 			It("should have average drawdowns when multiple drawdowns occur", func() {
-				Expect(perf.AverageDrawDown(9)).Should(BeNumerically("~", -0.06816035))
+				Expect(perf.AverageDrawDown(9, portfolio.STRATEGY)).Should(BeNumerically("~", -0.06816035))
 			})
 		})
 	})
@@ -342,58 +342,58 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be 0 for period of 0", func() {
-				Expect(perf.AllDrawDowns(0)).To(HaveLen(0))
+				Expect(perf.AllDrawDowns(0, portfolio.STRATEGY)).To(HaveLen(0))
 			})
 
 			It("should be 0 for period of 1", func() {
-				Expect(perf.AllDrawDowns(1)).To(HaveLen(0))
+				Expect(perf.AllDrawDowns(1, portfolio.STRATEGY)).To(HaveLen(0))
 			})
 
 			It("should be 2 for period greater than # of measurements", func() {
-				Expect(perf.AllDrawDowns(11)).To(HaveLen(2))
+				Expect(perf.AllDrawDowns(11, portfolio.STRATEGY)).To(HaveLen(2))
 			})
 
 			It("should have 2 drawdowns", func() {
-				Expect(perf.AllDrawDowns(9)).To(HaveLen(2))
+				Expect(perf.AllDrawDowns(9, portfolio.STRATEGY)).To(HaveLen(2))
 			})
 
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[0]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[0]
 				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[0]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[0]
 				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
-				dd := perf.AllDrawDowns(9)[0]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[0]
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.08909091))
 			})
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[0]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[0]
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with start date of 6/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[1]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[1]
 				Expect(dd.Begin).To(Equal(time.Date(2010, 6, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with end date of 9/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[1]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[1]
 				Expect(dd.End).To(Equal(time.Date(2010, 9, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[1] with LossPercent of -.05", func() {
-				dd := perf.AllDrawDowns(9)[1]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[1]
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.04722979))
 			})
 
 			It("should have drawdown[1] with Recovery time of 10/1/2010", func() {
-				dd := perf.AllDrawDowns(9)[1]
+				dd := perf.AllDrawDowns(9, portfolio.STRATEGY)[1]
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 10, 1, 16, 0, 0, 0, tz)))
 			})
 		})
@@ -526,23 +526,23 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.CalmarRatio(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.CalmarRatio(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.CalmarRatio(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.CalmarRatio(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have value for 1-yr", func() {
-				Expect(perf.CalmarRatio(252)).Should(BeNumerically("~", 0.0771349862))
+				Expect(perf.CalmarRatio(252, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0771349862))
 			})
 
 			It("should have value for 3-yr", func() {
-				Expect(perf.CalmarRatio(756)).Should(BeNumerically("~", 0.0840169073))
+				Expect(perf.CalmarRatio(756, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0840169073))
 			})
 
 			It("should have value for 5-yr", func() {
-				Expect(perf.CalmarRatio(1260)).Should(BeNumerically("~", 0.092710428))
+				Expect(perf.CalmarRatio(1260, portfolio.STRATEGY)).Should(BeNumerically("~", 0.092710428))
 			})
 		})
 
@@ -614,7 +614,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.CalmarRatio(9)).Should(BeNumerically("~", 1.13367347))
+				Expect(perf.CalmarRatio(9, portfolio.STRATEGY)).Should(BeNumerically("~", 1.13367347))
 			})
 		})
 
@@ -626,118 +626,158 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
-						Value:         10_000.00,
-						RiskFreeValue: 10_000.00,
+						Time:                time.Date(2018, 1, 1, 16, 0, 0, 0, tz),
+						Value:               10_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
-						Value:         9_995.36929844871,
-						RiskFreeValue: 9_921.3630406291,
+						Time:                time.Date(2018, 2, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
-						Value:         9_930.53947673072,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 3, 1, 16, 0, 0, 0, tz),
+						Value:               10_150.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_150.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
-						Value:         9_818.24496411206,
-						RiskFreeValue: 9_724.77064220184,
+						Time:                time.Date(2018, 4, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
-						Value:         9_848.34452419541,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 5, 1, 16, 0, 0, 0, tz),
+						Value:               10_275.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_275.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
-						Value:         9_738.36536235239,
-						RiskFreeValue: 9_947.5753604194,
+						Time:                time.Date(2018, 6, 1, 16, 0, 0, 0, tz),
+						Value:               10_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
-						Value:         9_792.77610557999,
-						RiskFreeValue: 9_868.9384010485,
+						Time:                time.Date(2018, 7, 1, 16, 0, 0, 0, tz),
+						Value:               10_300.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_300.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
-						Value:         9_945.5892567724,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 8, 1, 16, 0, 0, 0, tz),
+						Value:               10_700.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_700.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
-						Value:         9_993.05394767307,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 9, 1, 16, 0, 0, 0, tz),
+						Value:               10_750.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_750.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
-						Value:         10_004.6307015513,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 10, 1, 16, 0, 0, 0, tz),
+						Value:               10_800.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_800.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
-						Value:         10_042.8339893494,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 11, 1, 16, 0, 0, 0, tz),
+						Value:               10_900.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_900.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
-						Value:         10_034.7302616347,
-						RiskFreeValue: 9_633.02752293578,
+						Time:                time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
+						Value:               10_950.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_950.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_462.64744429882,
+						Time:                time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
+						Value:               11_000.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_000.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_528.17824377457,
+						Time:                time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
+						Value:               11_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
-						Value:         9_938.64320444554,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
+						Value:               11_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
-						Value:         9_880.75943505448,
-						RiskFreeValue: 9_554.39056356487,
+						Time:                time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
+						Value:               11_500.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_500.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
-						Value:         9_910.85899513783,
-						RiskFreeValue: 9_515.07208387942,
+						Time:                time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
+						Value:               11_550.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_550.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
-						Value:         9_952.5353090994,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
-						Value:         10_006.946052327,
-						RiskFreeValue: 9_685.45216251638,
+						Time:                time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
+						Value:               11_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
-						Value:         10_070.9662957698,
-						RiskFreeValue: 9_659.23984272608,
+						Time:                time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 				}
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.DownsideDeviation(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.DownsideDeviation(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.DownsideDeviation(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.DownsideDeviation(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have value", func() {
-				Expect(perf.DownsideDeviation(19)).Should(BeNumerically("~", 0.00805711))
+				Expect(perf.DownsideDeviation(19, portfolio.STRATEGY)).Should(BeNumerically("~", 0.01616526))
 			})
 		})
 	})
@@ -1045,23 +1085,23 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.KellerRatio(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.KellerRatio(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.KellerRatio(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.KellerRatio(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have value for 1-yr", func() {
-				Expect(perf.KellerRatio(252)).Should(BeNumerically("~", 0.0771349862))
+				Expect(perf.KellerRatio(252, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0771349862))
 			})
 
 			It("should have value for 3-yr", func() {
-				Expect(perf.KellerRatio(756)).Should(BeNumerically("~", 0.0840169073))
+				Expect(perf.KellerRatio(756, portfolio.STRATEGY)).Should(BeNumerically("~", 0.0840169073))
 			})
 
 			It("should have value for 5-yr", func() {
-				Expect(perf.KellerRatio(1260)).Should(BeNumerically("~", 0.092710428))
+				Expect(perf.KellerRatio(1260, portfolio.STRATEGY)).Should(BeNumerically("~", 0.092710428))
 			})
 		})
 
@@ -1133,7 +1173,7 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should have a value", func() {
-				Expect(perf.KellerRatio(9)).Should(BeNumerically("~", 0.1092621))
+				Expect(perf.KellerRatio(9, portfolio.STRATEGY)).Should(BeNumerically("~", 0.1092621))
 			})
 		})
 
@@ -1332,34 +1372,34 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should be nil for period of 0", func() {
-				Expect(perf.MaxDrawDown(0)).To(BeNil())
+				Expect(perf.MaxDrawDown(0, portfolio.STRATEGY)).To(BeNil())
 			})
 
 			It("should not be nil for period greater than # of measurements", func() {
-				Expect(perf.MaxDrawDown(11)).ToNot(BeNil())
+				Expect(perf.MaxDrawDown(11, portfolio.STRATEGY)).ToNot(BeNil())
 			})
 
 			It("should not be nil for period matching # of measurements", func() {
-				Expect(perf.MaxDrawDown(10)).ToNot(BeNil())
+				Expect(perf.MaxDrawDown(10, portfolio.STRATEGY)).ToNot(BeNil())
 			})
 
 			It("should have drawdown[0] with start date of 2/1/2010", func() {
-				dd := perf.MaxDrawDown(9)
+				dd := perf.MaxDrawDown(9, portfolio.STRATEGY)
 				Expect(dd.Begin).To(Equal(time.Date(2010, 2, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with end date of 4/1/2010", func() {
-				dd := perf.MaxDrawDown(9)
+				dd := perf.MaxDrawDown(9, portfolio.STRATEGY)
 				Expect(dd.End).To(Equal(time.Date(2010, 3, 1, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have drawdown[0] with LossPercent of -.08", func() {
-				dd := perf.MaxDrawDown(9)
+				dd := perf.MaxDrawDown(9, portfolio.STRATEGY)
 				Expect(dd.LossPercent).Should(BeNumerically("~", -0.08909091))
 			})
 
 			It("should have drawdown[0] with Recovery time of 4/1/2010", func() {
-				dd := perf.MaxDrawDown(9)
+				dd := perf.MaxDrawDown(9, portfolio.STRATEGY)
 				Expect(dd.Recovery).To(Equal(time.Date(2010, 4, 1, 16, 0, 0, 0, tz)))
 			})
 		})
@@ -1725,118 +1765,158 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
-						Value:         10_000.00,
-						RiskFreeValue: 10_000.00,
+						Time:                time.Date(2018, 1, 1, 16, 0, 0, 0, tz),
+						Value:               10_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
-						Value:         9_995.36929844871,
-						RiskFreeValue: 9_921.3630406291,
+						Time:                time.Date(2018, 2, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
-						Value:         9_930.53947673072,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 3, 1, 16, 0, 0, 0, tz),
+						Value:               10_150.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_150.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
-						Value:         9_818.24496411206,
-						RiskFreeValue: 9_724.77064220184,
+						Time:                time.Date(2018, 4, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
-						Value:         9_848.34452419541,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 5, 1, 16, 0, 0, 0, tz),
+						Value:               10_275.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_275.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
-						Value:         9_738.36536235239,
-						RiskFreeValue: 9_947.5753604194,
+						Time:                time.Date(2018, 6, 1, 16, 0, 0, 0, tz),
+						Value:               10_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
-						Value:         9_792.77610557999,
-						RiskFreeValue: 9_868.9384010485,
+						Time:                time.Date(2018, 7, 1, 16, 0, 0, 0, tz),
+						Value:               10_300.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_300.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
-						Value:         9_945.5892567724,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 8, 1, 16, 0, 0, 0, tz),
+						Value:               10_700.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_700.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
-						Value:         9_993.05394767307,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 9, 1, 16, 0, 0, 0, tz),
+						Value:               10_750.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_750.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
-						Value:         10_004.6307015513,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 10, 1, 16, 0, 0, 0, tz),
+						Value:               10_800.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_800.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
-						Value:         10_042.8339893494,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 11, 1, 16, 0, 0, 0, tz),
+						Value:               10_900.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_900.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
-						Value:         10_034.7302616347,
-						RiskFreeValue: 9_633.02752293578,
+						Time:                time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
+						Value:               10_950.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_950.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_462.64744429882,
+						Time:                time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
+						Value:               11_000.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_000.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_528.17824377457,
+						Time:                time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
+						Value:               11_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
-						Value:         9_938.64320444554,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
+						Value:               11_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
-						Value:         9_880.75943505448,
-						RiskFreeValue: 9_554.39056356487,
+						Time:                time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
+						Value:               11_500.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_500.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
-						Value:         9_910.85899513783,
-						RiskFreeValue: 9_515.07208387942,
+						Time:                time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
+						Value:               11_550.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_550.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
-						Value:         9_952.5353090994,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
-						Value:         10_006.946052327,
-						RiskFreeValue: 9_685.45216251638,
+						Time:                time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
+						Value:               11_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
-						Value:         10_070.9662957698,
-						RiskFreeValue: 9_659.23984272608,
+						Time:                time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 				}
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.SharpeRatio(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.SharpeRatio(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.SharpeRatio(19)).Should(BeNumerically("~", 4.82091768))
+				Expect(perf.SharpeRatio(19, portfolio.STRATEGY)).Should(BeNumerically("~", 1.934508623))
 			})
 		})
 	})
@@ -1847,118 +1927,158 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
-						Value:         10_000.00,
-						RiskFreeValue: 10_000.00,
+						Time:                time.Date(2018, 1, 1, 16, 0, 0, 0, tz),
+						Value:               10_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
-						Value:         9_995.36929844871,
-						RiskFreeValue: 9_921.3630406291,
+						Time:                time.Date(2018, 2, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
-						Value:         9_930.53947673072,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 3, 1, 16, 0, 0, 0, tz),
+						Value:               10_150.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_150.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
-						Value:         9_818.24496411206,
-						RiskFreeValue: 9_724.77064220184,
+						Time:                time.Date(2018, 4, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
-						Value:         9_848.34452419541,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 5, 1, 16, 0, 0, 0, tz),
+						Value:               10_275.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_275.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
-						Value:         9_738.36536235239,
-						RiskFreeValue: 9_947.5753604194,
+						Time:                time.Date(2018, 6, 1, 16, 0, 0, 0, tz),
+						Value:               10_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
-						Value:         9_792.77610557999,
-						RiskFreeValue: 9_868.9384010485,
+						Time:                time.Date(2018, 7, 1, 16, 0, 0, 0, tz),
+						Value:               10_300.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_300.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
-						Value:         9_945.5892567724,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 8, 1, 16, 0, 0, 0, tz),
+						Value:               10_700.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_700.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
-						Value:         9_993.05394767307,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 9, 1, 16, 0, 0, 0, tz),
+						Value:               10_750.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_750.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 9, 1, 16, 0, 0, 0, tz),
-						Value:         10_004.6307015513,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 10, 1, 16, 0, 0, 0, tz),
+						Value:               10_800.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_800.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 10, 1, 16, 0, 0, 0, tz),
-						Value:         10_042.8339893494,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 11, 1, 16, 0, 0, 0, tz),
+						Value:               10_900.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_900.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 11, 1, 16, 0, 0, 0, tz),
-						Value:         10_034.7302616347,
-						RiskFreeValue: 9_633.02752293578,
+						Time:                time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
+						Value:               10_950.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_950.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2019, 12, 1, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_462.64744429882,
+						Time:                time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
+						Value:               11_000.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_000.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 1, 1, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_528.17824377457,
+						Time:                time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
+						Value:               11_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 2, 1, 16, 0, 0, 0, tz),
-						Value:         9_938.64320444554,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
+						Value:               11_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 3, 1, 16, 0, 0, 0, tz),
-						Value:         9_880.75943505448,
-						RiskFreeValue: 9_554.39056356487,
+						Time:                time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
+						Value:               11_500.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_500.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 4, 1, 16, 0, 0, 0, tz),
-						Value:         9_910.85899513783,
-						RiskFreeValue: 9_515.07208387942,
+						Time:                time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
+						Value:               11_550.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_550.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 5, 1, 16, 0, 0, 0, tz),
-						Value:         9_952.5353090994,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 6, 1, 16, 0, 0, 0, tz),
-						Value:         10_006.946052327,
-						RiskFreeValue: 9_685.45216251638,
+						Time:                time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
+						Value:               11_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2020, 7, 1, 16, 0, 0, 0, tz),
-						Value:         10_070.9662957698,
-						RiskFreeValue: 9_659.23984272608,
+						Time:                time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 				}
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.Skew(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.SharpeRatio(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.Skew(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.Skew(19)).Should(BeNumerically("~", -0.29798929))
+				Expect(perf.Skew(19, portfolio.STRATEGY)).Should(BeNumerically("~", 0.86379712))
 			})
 		})
 	})
@@ -1969,118 +2089,158 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
-						Value:         10_000.00,
-						RiskFreeValue: 10_000.00,
+						Time:                time.Date(2018, 1, 1, 16, 0, 0, 0, tz),
+						Value:               10_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
-						Value:         9_995.36929844871,
-						RiskFreeValue: 9_921.3630406291,
+						Time:                time.Date(2018, 2, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
-						Value:         9_930.53947673072,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 3, 1, 16, 0, 0, 0, tz),
+						Value:               10_150.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_150.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
-						Value:         9_818.24496411206,
-						RiskFreeValue: 9_724.77064220184,
+						Time:                time.Date(2018, 4, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
-						Value:         9_848.34452419541,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 5, 1, 16, 0, 0, 0, tz),
+						Value:               10_275.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_275.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
-						Value:         9_738.36536235239,
-						RiskFreeValue: 9_947.5753604194,
+						Time:                time.Date(2018, 6, 1, 16, 0, 0, 0, tz),
+						Value:               10_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
-						Value:         9_792.77610557999,
-						RiskFreeValue: 9_868.9384010485,
+						Time:                time.Date(2018, 7, 1, 16, 0, 0, 0, tz),
+						Value:               10_300.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_300.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
-						Value:         9_945.5892567724,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 8, 1, 16, 0, 0, 0, tz),
+						Value:               10_700.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_700.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
-						Value:         9_993.05394767307,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 9, 1, 16, 0, 0, 0, tz),
+						Value:               10_750.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_750.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
-						Value:         10_004.6307015513,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 10, 1, 16, 0, 0, 0, tz),
+						Value:               10_800.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_800.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
-						Value:         10_042.8339893494,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 11, 1, 16, 0, 0, 0, tz),
+						Value:               10_900.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_900.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
-						Value:         10_034.7302616347,
-						RiskFreeValue: 9_633.02752293578,
+						Time:                time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
+						Value:               10_950.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_950.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_462.64744429882,
+						Time:                time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
+						Value:               11_000.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_000.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_528.17824377457,
+						Time:                time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
+						Value:               11_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
-						Value:         9_938.64320444554,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
+						Value:               11_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
-						Value:         9_880.75943505448,
-						RiskFreeValue: 9_554.39056356487,
+						Time:                time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
+						Value:               11_500.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_500.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
-						Value:         9_910.85899513783,
-						RiskFreeValue: 9_515.07208387942,
+						Time:                time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
+						Value:               11_550.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_550.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
-						Value:         9_952.5353090994,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
-						Value:         10_006.946052327,
-						RiskFreeValue: 9_685.45216251638,
+						Time:                time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
+						Value:               11_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
-						Value:         10_070.9662957698,
-						RiskFreeValue: 9_659.23984272608,
+						Time:                time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 				}
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.SortinoRatio(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.SortinoRatio(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.SortinoRatio(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.SortinoRatio(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.SortinoRatio(19)).Should(BeNumerically("~", 4.27863817))
+				Expect(perf.SortinoRatio(19, portfolio.STRATEGY)).Should(BeNumerically("~", 5.66738124))
 			})
 		})
 	})
@@ -2091,118 +2251,158 @@ var _ = Describe("Metrics", func() {
 				perf = &portfolio.Performance{}
 				perf.Measurements = []*portfolio.PerformanceMeasurement{
 					{
-						Time:          time.Date(2018, 12, 3, 16, 0, 0, 0, tz),
-						Value:         10_000.00,
-						RiskFreeValue: 10_000.00,
+						Time:                time.Date(2018, 1, 1, 16, 0, 0, 0, tz),
+						Value:               10_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 4, 16, 0, 0, 0, tz),
-						Value:         9_995.36929844871,
-						RiskFreeValue: 9_921.3630406291,
+						Time:                time.Date(2018, 2, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 05, 16, 0, 0, 0, tz),
-						Value:         9_930.53947673072,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 3, 1, 16, 0, 0, 0, tz),
+						Value:               10_150.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_150.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 06, 16, 0, 0, 0, tz),
-						Value:         9_818.24496411206,
-						RiskFreeValue: 9_724.77064220184,
+						Time:                time.Date(2018, 4, 1, 16, 0, 0, 0, tz),
+						Value:               10_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 07, 16, 0, 0, 0, tz),
-						Value:         9_848.34452419541,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 5, 1, 16, 0, 0, 0, tz),
+						Value:               10_275.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_275.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 10, 16, 0, 0, 0, tz),
-						Value:         9_738.36536235239,
-						RiskFreeValue: 9_947.5753604194,
+						Time:                time.Date(2018, 6, 1, 16, 0, 0, 0, tz),
+						Value:               10_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 11, 16, 0, 0, 0, tz),
-						Value:         9_792.77610557999,
-						RiskFreeValue: 9_868.9384010485,
+						Time:                time.Date(2018, 7, 1, 16, 0, 0, 0, tz),
+						Value:               10_300.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_300.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 12, 16, 0, 0, 0, tz),
-						Value:         9_945.5892567724,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 8, 1, 16, 0, 0, 0, tz),
+						Value:               10_700.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_700.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 13, 16, 0, 0, 0, tz),
-						Value:         9_993.05394767307,
-						RiskFreeValue: 9_711.66448230669,
+						Time:                time.Date(2018, 9, 1, 16, 0, 0, 0, tz),
+						Value:               10_750.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_750.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 14, 16, 0, 0, 0, tz),
-						Value:         10_004.6307015513,
-						RiskFreeValue: 9_750.98296199214,
+						Time:                time.Date(2018, 10, 1, 16, 0, 0, 0, tz),
+						Value:               10_800.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_800.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 17, 16, 0, 0, 0, tz),
-						Value:         10_042.8339893494,
-						RiskFreeValue: 9_777.19528178244,
+						Time:                time.Date(2018, 11, 1, 16, 0, 0, 0, tz),
+						Value:               10_900.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_900.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 18, 16, 0, 0, 0, tz),
-						Value:         10_034.7302616347,
-						RiskFreeValue: 9_633.02752293578,
+						Time:                time.Date(2018, 12, 1, 16, 0, 0, 0, tz),
+						Value:               10_950.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 10_950.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 19, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_462.64744429882,
+						Time:                time.Date(2019, 1, 1, 16, 0, 0, 0, tz),
+						Value:               11_000.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_000.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 20, 16, 0, 0, 0, tz),
-						Value:         10_067.1451724937,
-						RiskFreeValue: 9_528.17824377457,
+						Time:                time.Date(2019, 2, 1, 16, 0, 0, 0, tz),
+						Value:               11_100.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_100.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 21, 16, 0, 0, 0, tz),
-						Value:         9_938.64320444554,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 3, 1, 16, 0, 0, 0, tz),
+						Value:               11_200.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_200.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 24, 16, 0, 0, 0, tz),
-						Value:         9_880.75943505448,
-						RiskFreeValue: 9_554.39056356487,
+						Time:                time.Date(2019, 4, 1, 16, 0, 0, 0, tz),
+						Value:               11_500.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_500.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 26, 16, 0, 0, 0, tz),
-						Value:         9_910.85899513783,
-						RiskFreeValue: 9_515.07208387942,
+						Time:                time.Date(2019, 5, 1, 16, 0, 0, 0, tz),
+						Value:               11_550.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_550.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 27, 16, 0, 0, 0, tz),
-						Value:         9_952.5353090994,
-						RiskFreeValue: 9_541.28440366972,
+						Time:                time.Date(2019, 6, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 28, 16, 0, 0, 0, tz),
-						Value:         10_006.946052327,
-						RiskFreeValue: 9_685.45216251638,
+						Time:                time.Date(2019, 7, 1, 16, 0, 0, 0, tz),
+						Value:               11_400.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_400.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 					{
-						Time:          time.Date(2018, 12, 31, 16, 0, 0, 0, tz),
-						Value:         10_070.9662957698,
-						RiskFreeValue: 9_659.23984272608,
+						Time:                time.Date(2019, 8, 1, 16, 0, 0, 0, tz),
+						Value:               11_600.00,
+						RiskFreeValue:       10_000.00,
+						StrategyGrowthOf10K: 11_600.00,
+						RiskFreeGrowthOf10K: 10_000.00,
 					},
 				}
 			})
 
 			It("should be NaN for period of 0", func() {
-				Expect(math.IsNaN(perf.StdDev(0))).Should(BeTrue())
+				Expect(math.IsNaN(perf.StdDev(0, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should be NaN for period greater than # of measurements", func() {
-				Expect(math.IsNaN(perf.StdDev(2531))).Should(BeTrue())
+				Expect(math.IsNaN(perf.StdDev(2531, portfolio.STRATEGY))).Should(BeTrue())
 			})
 
 			It("should have an annualized value", func() {
-				Expect(perf.StdDev(19)).Should(BeNumerically("~", 0.00715081))
+				Expect(perf.StdDev(19, portfolio.STRATEGY)).Should(BeNumerically("~", 0.04117953))
 			})
 		})
 	})
@@ -2549,11 +2749,11 @@ var _ = Describe("Metrics", func() {
 			})
 
 			It("should only have 10 draw downs returned", func() {
-				Expect(perf.Top10DrawDowns(uint(len(perf.Measurements)) - 1)).To(HaveLen(10))
+				Expect(perf.Top10DrawDowns(uint(len(perf.Measurements))-1, portfolio.STRATEGY)).To(HaveLen(10))
 			})
 
 			It("should be sorted from max to min", func() {
-				ddArr := perf.Top10DrawDowns(uint(len(perf.Measurements)) - 1)
+				ddArr := perf.Top10DrawDowns(uint(len(perf.Measurements))-1, portfolio.STRATEGY)
 				dd0 := ddArr[0]
 				Expect(dd0.Begin).To(Equal(time.Date(2020, 2, 11, 16, 0, 0, 0, tz)))
 				dd1 := ddArr[9]

@@ -116,7 +116,7 @@ var _ = Describe("Portfolio", func() {
 		}
 
 		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DTB3&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
+		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
 		httpmock.RegisterResponder("GET", url,
 			httpmock.NewBytesResponder(200, content))
 
@@ -312,7 +312,9 @@ var _ = Describe("Portfolio", func() {
 				// Monday, August 31, 2020
 				Expect(perf.Measurements[147].Time).To(Equal(time.Date(2020, time.August, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[147].Value).Should(BeNumerically("~", 38298.72266, 1e-5))
-				Expect(perf.Measurements[147].Holdings[0].Shares).Should(BeNumerically("~", 76.85568, 1e-5))
+
+				// Tuesday, September 1, 2020 (NOTE: Holdings lag 1 in measurements)
+				Expect(perf.Measurements[148].Holdings[0].Shares).Should(BeNumerically("~", 76.85568, 1e-5))
 			})
 		})
 

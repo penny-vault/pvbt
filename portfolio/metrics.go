@@ -85,15 +85,15 @@ func (perf *Performance) Alpha(periods uint) float64 {
 // is defined as the period in which a portfolio falls from its previous peak.
 // Draw downs include the time period of the loss, percent of loss, and when
 // the portfolio recovered
-func (perf *Performance) AverageDrawDown(periods uint) float64 {
+func (perf *Performance) AverageDrawDown(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	allDrawDowns := perf.AllDrawDowns(periods)
+	allDrawDowns := perf.AllDrawDowns(periods, kind)
 	dd := make([]float64, len(allDrawDowns))
-	for ii, xx := range perf.AllDrawDowns(periods) {
+	for ii, xx := range allDrawDowns {
 		dd[ii] = xx.LossPercent
 	}
 	return stat.Mean(dd, nil)
@@ -103,7 +103,7 @@ func (perf *Performance) AverageDrawDown(periods uint) float64 {
 // is defined as the period in which a portfolio falls from its previous peak.
 // Draw downs include the time period of the loss, percent of loss, and when
 // the portfolio recovered
-func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
+func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 	allDrawDowns := []*DrawDown{}
 
 	n := len(perf.Measurements)
@@ -122,22 +122,40 @@ func (perf *Performance) AllDrawDowns(periods uint) []*DrawDown {
 
 	m0 := perf.Measurements[startIdx]
 
-	peak := m0.Value
+	var peak float64
+	switch kind {
+	case STRATEGY:
+		peak = m0.Value
+	case BENCHMARK:
+		peak = m0.BenchmarkValue
+	case RISKFREE:
+		peak = m0.RiskFreeValue
+	}
+
 	var drawDown *DrawDown
 	var prev time.Time
 	for _, v := range perf.Measurements[startIdx:] {
-		peak = math.Max(peak, v.Value)
-		diff := v.Value - peak
+		var value float64
+		switch kind {
+		case STRATEGY:
+			value = v.Value
+		case BENCHMARK:
+			value = v.BenchmarkValue
+		case RISKFREE:
+			value = v.RiskFreeValue
+		}
+		peak = math.Max(peak, value)
+		diff := value - peak
 		if diff < 0 {
 			if drawDown == nil {
 				drawDown = &DrawDown{
 					Begin:       prev,
 					End:         v.Time,
-					LossPercent: float64((v.Value / peak) - 1.0),
+					LossPercent: float64((value / peak) - 1.0),
 				}
 			}
 
-			loss := (v.Value/peak - 1.0)
+			loss := (value/peak - 1.0)
 			if loss < drawDown.LossPercent {
 				drawDown.End = v.Time
 				drawDown.LossPercent = float64(loss)
@@ -187,8 +205,8 @@ func (perf *Performance) Beta(periods uint) float64 {
 		return math.NaN()
 	}
 
-	retA := perf.adjustedReturns(periods, STRATEGY)
-	retB := perf.adjustedReturns(periods, BENCHMARK)
+	retA := perf.periodReturns(periods, STRATEGY)
+	retB := perf.periodReturns(periods, BENCHMARK)
 
 	sigma := stat.Covariance(retA, retB, nil)
 	return sigma / stat.Variance(retB, nil)
@@ -199,14 +217,14 @@ func (perf *Performance) Beta(periods uint) float64 {
 // versus its maximum  drawdown. The higher the Calmar ratio, the better
 // the portfolio performed on a risk-adjusted basis during the given time
 // frame, which is typically set at 36 months.
-func (perf *Performance) CalmarRatio(periods uint) float64 {
+func (perf *Performance) CalmarRatio(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	cagr := perf.TWRR(periods, STRATEGY)
-	maxDrawDown := perf.MaxDrawDown(periods)
+	cagr := perf.TWRR(periods, kind)
+	maxDrawDown := perf.MaxDrawDown(periods, kind)
 	if maxDrawDown != nil {
 		return cagr / (-1 * maxDrawDown.LossPercent)
 	} else {
@@ -214,26 +232,25 @@ func (perf *Performance) CalmarRatio(periods uint) float64 {
 	}
 }
 
-// DownsideDeviation compute the standard deviation of negative excess returns
-func (perf *Performance) DownsideDeviation(periods uint) float64 {
+// DownsideDeviation compute the standard deviation of negative
+// excess returns on a monthly basis, result is annualized
+func (perf *Performance) DownsideDeviation(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	excessReturn := perf.excessReturn(periods)
-	if len(excessReturn) <= 0 {
-		return 0.0
-	}
-
+	Rp := perf.monthlyReturns(periods, kind)
+	Rf := perf.monthlyReturns(periods, RISKFREE)
 	downside := 0.0
-	for _, xx := range excessReturn {
-		if xx < 0 {
-			downside += xx * xx // faster than math.Pow
+	for ii := range Rp {
+		excessReturn := Rp[ii] - Rf[ii]
+		if excessReturn < 0 {
+			downside += excessReturn * excessReturn // much faster than math.Pow
 		}
 	}
 
-	return math.Sqrt(downside / float64(n))
+	return math.Sqrt(downside/float64(len(Rp))) * math.Sqrt(12)
 }
 
 // DynamicWithdrawalRate calculates the maximum % that can be withdrawn per year and
@@ -286,8 +303,8 @@ func (perf *Performance) InformationRatio(periods uint) float64 {
 		return math.NaN()
 	}
 
-	Rp := stat.Mean(perf.adjustedReturns(periods, STRATEGY), nil)
-	Rb := stat.Mean(perf.adjustedReturns(periods, BENCHMARK), nil)
+	Rp := stat.Mean(perf.periodReturns(periods, STRATEGY), nil)
+	Rb := stat.Mean(perf.periodReturns(periods, BENCHMARK), nil)
 
 	excessReturn := Rp - Rb
 	trackingError := perf.TrackingError(periods)
@@ -302,17 +319,17 @@ func (perf *Performance) InformationRatio(periods uint) float64 {
 // impact of the return adjustment is amplified.
 //
 // K = R * ( 1 - D / ( 1 - D ) ), if R >= 0% and D <= 50%, and K = 0% otherwise
-func (perf *Performance) KellerRatio(periods uint) float64 {
+func (perf *Performance) KellerRatio(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	cagr := perf.TWRR(periods, STRATEGY)
-	maxDD := perf.MaxDrawDown(periods)
+	cagr := perf.TWRR(periods, kind)
+	maxDD := perf.MaxDrawDown(periods, kind)
 	var d float64
 	if maxDD != nil {
-		d = (perf.MaxDrawDown(periods)).LossPercent
+		d = (perf.MaxDrawDown(periods, kind)).LossPercent
 	} else {
 		d = 0
 	}
@@ -347,7 +364,7 @@ func (perf *Performance) KRatio(periods uint) float64 {
 }
 
 // MaxDrawDown returns the largest drawdown over the given number of periods
-func (perf *Performance) MaxDrawDown(periods uint) *DrawDown {
+func (perf *Performance) MaxDrawDown(periods uint, kind string) *DrawDown {
 	if periods < 1 {
 		return nil
 	}
@@ -357,7 +374,7 @@ func (perf *Performance) MaxDrawDown(periods uint) *DrawDown {
 		periods = uint(n)
 	}
 
-	top10 := perf.Top10DrawDowns(periods)
+	top10 := perf.Top10DrawDowns(periods, kind)
 
 	if len(top10) > 1 {
 		return top10[0]
@@ -526,31 +543,52 @@ func SafeWithdrawalRate(mc [][]float64, inflation float64) float64 {
 // SharpeRatio The ratio is the average return earned in excess of the risk-free
 // rate per unit of volatility or total risk. Volatility is a measure of the price
 // fluctuations of an asset or portfolio.
-// Sharpe = (Rp - Rf) / std * √252
-func (perf *Performance) SharpeRatio(periods uint) float64 {
+//
+// Sharpe = (Rp - Rf) / (annualized std. dev)
+//
+// Monthly values are chosen here to remain consistent with
+// Morningstar and other online data providers.
+func (perf *Performance) SharpeRatio(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	Ap := perf.adjustedReturns(periods, STRATEGY)
-	Rp := stat.Mean(Ap, nil)
-	Rf := stat.Mean(perf.adjustedReturns(periods, RISKFREE), nil)
+	Rp := perf.monthlyReturns(periods, kind)
+	Rf := perf.monthlyReturns(periods, RISKFREE)
+	excessReturn := 1.0
+	for ii := range Rp {
+		excessReturn *= (1.0 + Rp[ii] - Rf[ii])
+	}
+	stdev := stat.StdDev(Rp, nil) * math.Sqrt(12.0)
 
-	excessReturn := Rp - Rf
+	startIdx := (len(perf.Measurements) - int(periods) - 1)
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := len(perf.Measurements) - 1
+	years := toYears(perf.Measurements[endIdx].Time.Sub(perf.Measurements[startIdx].Time))
+	if years > 1.0 {
+		// annualize
+		excessReturn = math.Pow(excessReturn, 1.0/years) - 1.0
+	} else {
+		excessReturn -= 1.0
+	}
 
-	sharpe := excessReturn / perf.StdDev(periods)
-	return sharpe * math.Sqrt(252)
+	sharpe := excessReturn / stdev
+
+	//fmt.Printf("sharpe = %.5f periods = %d excessReturn = %.5f std = %.5f\n", sharpe, periods, excessReturn, stdev)
+	return sharpe
 }
 
 // Skew computes the skew of the portfolio measurements relative to the normal distribution
-func (perf *Performance) Skew(periods uint) float64 {
+func (perf *Performance) Skew(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	rets := perf.monthlyReturn(periods)
+	rets := perf.monthlyReturns(periods, kind)
 	return stat.Skew(rets, nil)
 }
 
@@ -563,44 +601,64 @@ func (perf *Performance) Skew(periods uint) float64 {
 //
 // Calculation is based on this paper by Red Rock Capital
 // http://www.redrockcapital.com/Sortino__A__Sharper__Ratio_Red_Rock_Capital.pdf
-func (perf *Performance) SortinoRatio(periods uint) float64 {
+func (perf *Performance) SortinoRatio(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	Ap := perf.adjustedReturns(periods, STRATEGY)
-	Rp := stat.Mean(Ap, nil)
-	Rf := stat.Mean(perf.adjustedReturns(periods, RISKFREE), nil)
+	Rp := perf.periodReturns(periods, kind)
+	Rf := perf.periodReturns(periods, RISKFREE)
 
-	excessReturn := Rp - Rf
+	excessReturn := 1.0
+	for ii := range Rp {
+		excessReturn *= 1.0 + Rp[ii] - Rf[ii]
+	}
 
-	sortino := excessReturn / perf.DownsideDeviation(periods)
-	return sortino * math.Sqrt(252)
+	startIdx := (len(perf.Measurements) - int(periods) - 1)
+	if startIdx < 0 {
+		startIdx = 0
+	}
+	endIdx := len(perf.Measurements) - 1
+	years := toYears(perf.Measurements[endIdx].Time.Sub(perf.Measurements[startIdx].Time))
+	if years > 1.0 {
+		// annualize
+		excessReturn = math.Pow(excessReturn, 1.0/years) - 1.0
+	} else {
+		excessReturn -= 1.0
+	}
+
+	downsideDeviation := perf.DownsideDeviation(periods, kind)
+	sortino := excessReturn / downsideDeviation
+	//fmt.Printf("sortino = %.5f periods = %d excessReturn = %.5f downsideDeviation = %.5f\n", sortino, periods, excessReturn, downsideDeviation)
+
+	return sortino
 }
 
-// Std standard deviation of portfolio
-func (perf *Performance) StdDev(periods uint) float64 {
+// StdDev calculates the annualized standard deviation based off of
+// the monthly price changes. Monthly values are chosen here to remain
+// consistent with Morningstar and other online data providers.
+func (perf *Performance) StdDev(periods uint, kind string) float64 {
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
 		return math.NaN()
 	}
 
-	rets := perf.adjustedReturns(periods, STRATEGY)
-	return stat.StdDev(rets, nil)
+	rets := perf.monthlyReturns(periods, kind)
+	return stat.StdDev(rets, nil) * math.Sqrt(12.0)
 }
 
 // Top10DrawDowns computes the top 10 portfolio draw downs. A draw down
 // is defined as the period in which a portfolio falls from its previous peak.
 // Draw downs include the time period of the loss, percent of loss, and when
 // the portfolio recovered
-func (perf *Performance) Top10DrawDowns(periods uint) []*DrawDown {
+func (perf *Performance) Top10DrawDowns(periods uint, kind string) []*DrawDown {
 	n := len(perf.Measurements)
 	if len(perf.Measurements) <= 0 || uint(n) < periods {
 		return []*DrawDown{}
 	}
 
-	allDrawDowns := perf.AllDrawDowns(periods)
+	allDrawDowns := perf.AllDrawDowns(periods, kind)
 
 	sort.Slice(allDrawDowns, func(i, j int) bool {
 		return allDrawDowns[i].LossPercent < allDrawDowns[j].LossPercent
@@ -617,8 +675,8 @@ func (perf *Performance) TrackingError(periods uint) float64 {
 		return math.NaN()
 	}
 
-	Rp := perf.adjustedReturns(periods, STRATEGY)
-	Rb := perf.adjustedReturns(periods, BENCHMARK)
+	Rp := perf.periodReturns(periods, STRATEGY)
+	Rb := perf.periodReturns(periods, BENCHMARK)
 
 	excessReturns := make([]float64, len(Rp))
 	for ii := range Rp {
@@ -792,7 +850,7 @@ func (perf *Performance) UlcerIndexPercentile(periods uint, percentile float64) 
 
 // HELPER FUNCTIONS
 
-func (perf *Performance) adjustedReturns(periods uint, kind string) []float64 {
+func (perf *Performance) periodReturns(periods uint, kind string) []float64 {
 	n := len(perf.Measurements)
 	pp := int(periods)
 	rets := make([]float64, 0, periods)
@@ -880,11 +938,11 @@ func dynamicWithdrawalRate(rate float64, inflation float64, mc []float64) float6
 func (perf *Performance) excessReturn(periods uint) []float64 {
 	rets := make([]float64, 0, periods)
 
-	riskFreeRets := perf.adjustedReturns(periods, RISKFREE)
-	portfolioRets := perf.adjustedReturns(periods, STRATEGY)
+	Rp := perf.periodReturns(periods, STRATEGY)
+	Rf := perf.periodReturns(periods, RISKFREE)
 
-	for ii, xx := range portfolioRets {
-		rets = append(rets, xx-riskFreeRets[ii])
+	for ii, xx := range Rp {
+		rets = append(rets, xx-Rf[ii])
 	}
 	return rets
 }
@@ -903,23 +961,33 @@ func minInt(x, y int) int {
 	return y
 }
 
-func (perf *Performance) monthlyReturn(periods uint) []float64 {
-	rets := make([]float64, 0, 600)
-	lastMonth := perf.Measurements[0].Time.Month()
-	last := perf.Measurements[0]
+func (perf *Performance) monthlyReturns(periods uint, kind string) []float64 {
+	rets := make([]float64, 0, 360)
 	m := perf.Measurements
 	startIdx := (len(m) - int(periods) - 1)
 	if startIdx < 0 {
 		startIdx = 0
 	}
+	lastMonth := perf.Measurements[startIdx].Time.Month()
+	last := perf.Measurements[startIdx]
+	prev := perf.Measurements[startIdx]
 	for _, curr := range m[startIdx:] {
 		t := curr.Time
 		if lastMonth != t.Month() {
-			r := (curr.Value / last.Value) - 1.0
-			last = curr
+			var r float64
+			switch kind {
+			case STRATEGY:
+				r = (prev.StrategyGrowthOf10K / last.StrategyGrowthOf10K) - 1.0
+			case BENCHMARK:
+				r = (prev.BenchmarkGrowthOf10K / last.BenchmarkGrowthOf10K) - 1.0
+			case RISKFREE:
+				r = (prev.RiskFreeGrowthOf10K / last.RiskFreeGrowthOf10K) - 1.0
+			}
+			last = prev
 			lastMonth = t.Month()
 			rets = append(rets, r)
 		}
+		prev = curr
 	}
 	return rets
 }
@@ -945,7 +1013,7 @@ func monthlyReturnToAnnual(ts []float64) []float64 {
 // vami returns the hypothetical return of a $1,000 investment over the
 // given number of periods
 func (perf *Performance) vami(periods uint) []float64 {
-	rP := perf.adjustedReturns(periods-1, STRATEGY)
+	rP := perf.periodReturns(periods-1, STRATEGY)
 	v := make([]float64, periods)
 	v[0] = 1000
 	for ii, r := range rP {

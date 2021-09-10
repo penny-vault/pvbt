@@ -66,9 +66,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	pm.dataProxy.End = through
 	pm.dataProxy.Frequency = data.FrequencyDaily
 
-	t1 := time.Now()
+	// t1 := time.Now()
 	quotes, errs := pm.dataProxy.GetMultipleData(symbols...)
-	t2 := time.Now()
+	// t2 := time.Now()
 	if len(errs) > 0 {
 		return nil, errors.New("failed to download data for tickers")
 	}
@@ -79,7 +79,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	}
 
 	// Get benchmark quotes but use adjustedClose prices
-	t3 := time.Now()
+	// t3 := time.Now()
 	metric := pm.dataProxy.Metric
 	pm.dataProxy.Metric = data.MetricAdjustedClose
 	benchmarkEod, err := pm.dataProxy.GetData(p.Benchmark)
@@ -94,9 +94,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	s := benchmarkEod.Series[benchColumn]
 	s.Rename("$BENCHMARK")
 	eod = append(eod, benchmarkEod)
-	t4 := time.Now()
+	// t4 := time.Now()
 
-	t5 := time.Now()
+	// t5 := time.Now()
 	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
 	if err != nil {
 		return nil, err
@@ -105,9 +105,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
 		InPlace: true,
 	})
-	t6 := time.Now()
+	// t6 := time.Now()
 
-	t7 := time.Now()
+	// t7 := time.Now()
 	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
@@ -234,26 +234,12 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				benchmarkValue -= trx.TotalValue
 				if val, ok := holdings["$CASH"]; ok {
 					holdings["$CASH"] = val - trx.TotalValue
-				} else {
-					log.WithFields(log.Fields{
-						"PortfolioID": pm.Portfolio.ID,
-						"TotalValue":  trx.TotalValue,
-						"Date":        trx.Date,
-						"Ticker":      trx.Ticker,
-					}).Warn("insufficient cash position for withdraw transaction")
 				}
 				continue
 			case BuyTransaction:
 				shares += trx.Shares
 				if val, ok := holdings["$CASH"]; ok {
 					holdings["$CASH"] = val - trx.TotalValue
-				} else {
-					log.WithFields(log.Fields{
-						"PortfolioID": pm.Portfolio.ID,
-						"TotalValue":  trx.TotalValue,
-						"Date":        trx.Date,
-						"Ticker":      trx.Ticker,
-					}).Warn("insufficient cash position for buy transaction")
 				}
 				log.Debugf("on %s buy %.2f shares of %s for %.2f @ %.2f per share", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			case DividendTransaction:
@@ -274,8 +260,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				} else {
 					holdings["$CASH"] = trx.TotalValue
 				}
-				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share\n", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
+				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			default:
+				log.Debugf("on %s unrecognized transaction of type %s", trx.Date, trx.Kind)
 				return nil, errors.New("unrecognized transaction type")
 			}
 
@@ -338,14 +325,10 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			lastAssets = currentAssets
 		}
 
-		if prevVal == -1 {
-			prevVal = totalVal
-		} else {
-			// update riskFreeValue
-			rawRate := pm.dataProxy.RiskFreeRate(date)
-			riskFreeRate := rawRate / 100.0 / 12.0
-			riskFreeValue *= (1 + riskFreeRate)
-		}
+		// update riskFreeValue
+		rawRate := pm.dataProxy.RiskFreeRate(date)
+		riskFreeRate := rawRate / 100.0 / 252.0
+		riskFreeValue *= (1 + riskFreeRate)
 
 		prevVal = totalVal
 
@@ -380,10 +363,10 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			measurement.BenchmarkGrowthOf10K = benchGrowth
 
 			rfRate := perf.TWRR(1, RISKFREE)
-			if !math.IsNaN(benchRate) {
+			if !math.IsNaN(rfRate) {
 				riskFreeGrowth *= (1.0 + rfRate)
 			}
-			measurement.RiskFreeGrowthOf10K *= riskFreeGrowth
+			measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 
 			// time-weighted rate of return
 			measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
@@ -430,15 +413,15 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			measurement.BetaTenYear = float32(perf.Beta(2520))
 
 			// ratios
-			measurement.CalmarRatio = float32(perf.CalmarRatio(756))             // 3 year lookback
-			measurement.DownsideDeviation = float32(perf.DownsideDeviation(756)) // 3 year lookback
-			measurement.InformationRatio = float32(perf.InformationRatio(756))   // 3 year lookback
-			measurement.KRatio = float32(perf.KRatio(756))                       // 3 year lookback
-			measurement.KellerRatio = float32(perf.KellerRatio(756))             // 3 year lookback
-			measurement.SharpeRatio = float32(perf.SharpeRatio(63))              // 3 month lookback
-			measurement.SortinoRatio = float32(perf.SortinoRatio(63))            // 3 month lookback
-			measurement.StdDev = float32(perf.StdDev(63))                        // 3 month lookback
-			measurement.TreynorRatio = float32(perf.TreynorRatio(756))
+			measurement.CalmarRatio = float32(perf.CalmarRatio(756, STRATEGY))             // 3 year lookback
+			measurement.DownsideDeviation = float32(perf.DownsideDeviation(756, STRATEGY)) // 3 year lookback
+			measurement.InformationRatio = float32(perf.InformationRatio(756))             // 3 year lookback
+			measurement.KRatio = float32(perf.KRatio(756))                                 // 3 year lookback
+			measurement.KellerRatio = float32(perf.KellerRatio(756, STRATEGY))             // 3 year lookback
+			measurement.SharpeRatio = float32(perf.SharpeRatio(756, STRATEGY))             // 1 year lookback
+			measurement.SortinoRatio = float32(perf.SortinoRatio(756, STRATEGY))           // 1 year lookback
+			measurement.StdDev = float32(perf.StdDev(63, STRATEGY))                        // 3 month lookback
+			measurement.TreynorRatio = float32(perf.TreynorRatio(756))                     // 3 year lookback
 			measurement.UlcerIndex = float32(perf.UlcerIndex())
 		}
 
@@ -479,7 +462,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	}
 
 	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
-	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods)
+	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods, STRATEGY)
 
 	perf.PortfolioReturns = &Returns{
 		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, STRATEGY),
@@ -511,16 +494,16 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 
 	perf.PortfolioMetrics = &Metrics{
 		AlphaSinceInception:             perf.Alpha(sinceInceptionPeriods),
-		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
+		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods, STRATEGY),
 		BetaSinceInception:              perf.Beta(sinceInceptionPeriods),
 		BestYear:                        &bestYearPort,
-		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
+		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods, STRATEGY),
 		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
 		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].Value,
-		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods),
-		Skewness:                        perf.Skew(sinceInceptionPeriods),
-		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods),
-		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods),
+		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods, STRATEGY),
+		Skewness:                        perf.Skew(sinceInceptionPeriods, STRATEGY),
+		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods, STRATEGY),
+		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods, STRATEGY),
 		TotalDeposited:                  perf.Measurements[len(perf.Measurements)-1].TotalDeposited,
 		TotalWithdrawn:                  perf.Measurements[len(perf.Measurements)-1].TotalWithdrawn,
 		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
@@ -532,16 +515,16 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 
 	perf.BenchmarkMetrics = &Metrics{
 		AlphaSinceInception:             math.NaN(), // alpha doesn't make sense for benchmark
-		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods),
+		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods, BENCHMARK),
 		BestYear:                        &bestYearBenchmark,
 		BetaSinceInception:              math.NaN(),
-		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods),
+		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods, BENCHMARK),
 		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
 		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].BenchmarkValue,
-		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods),
-		Skewness:                        perf.Skew(sinceInceptionPeriods),
-		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods),
-		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods),
+		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods, BENCHMARK),
+		Skewness:                        perf.Skew(sinceInceptionPeriods, BENCHMARK),
+		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods, BENCHMARK),
+		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods, BENCHMARK),
 		TotalDeposited:                  math.NaN(),
 		TotalWithdrawn:                  math.NaN(),
 		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
@@ -551,7 +534,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		WorstYear:                       &worstYearBenchmark,
 	}
 
-	monthlyRets := perf.monthlyReturn(sinceInceptionPeriods)
+	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
 	bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
 	perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
 	perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
@@ -568,14 +551,16 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
 		perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
 	}
-	t8 := time.Now()
+	// t8 := time.Now()
 
-	log.WithFields(log.Fields{
-		"QuoteDownload":          t2.Sub(t1).Round(time.Millisecond),
-		"BenchmarkDownload":      t4.Sub(t3).Round(time.Millisecond),
-		"QuoteMerge":             t6.Sub(t5).Round(time.Millisecond),
-		"PerformanceCalculation": t8.Sub(t7).Round(time.Millisecond),
-	}).Info("CalculatePerformance runtime")
+	/*
+		log.WithFields(log.Fields{
+			"QuoteDownload":          t2.Sub(t1).Round(time.Millisecond),
+			"BenchmarkDownload":      t4.Sub(t3).Round(time.Millisecond),
+			"QuoteMerge":             t6.Sub(t5).Round(time.Millisecond),
+			"PerformanceCalculation": t8.Sub(t7).Round(time.Millisecond),
+		}).Info("CalculatePerformance runtime")
+	*/
 
 	return &perf, nil
 }
