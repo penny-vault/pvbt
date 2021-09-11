@@ -785,20 +785,18 @@ func (perf *Performance) UlcerIndex() float64 {
 	m := perf.Measurements
 
 	for _, xx := range m[(len(m) - period):] {
-		lookback = append(lookback, xx.Value)
+		lookback = append(lookback, xx.StrategyGrowthOf10K)
 	}
 
 	// Find max close over period
-	var maxClose float64
-	for _, yy := range lookback {
-		maxClose = math.Max(maxClose, yy)
-	}
-
-	percDD := make([]float64, period)
+	maxClose := lookback[0]
 	var sqSum float64
-	for jj, yy := range lookback {
-		percDD[jj] = ((yy - maxClose) / maxClose) * 100
-		sqSum += math.Pow(percDD[jj], 2)
+	for _, yy := range lookback {
+		if yy > maxClose {
+			maxClose = yy
+		}
+		percentDrawDown := ((yy - maxClose) / maxClose) * 100
+		sqSum += percentDrawDown * percentDrawDown
 	}
 	sqAvg := sqSum / float64(period)
 	return math.Sqrt(sqAvg)

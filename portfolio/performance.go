@@ -152,6 +152,8 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	daysToStartOfMonth := uint(0)
 	daysToStartOfYear := uint(0)
 
+	ytdBench := float32(0.0)
+
 	var last time.Time
 	var lastAssets []*ReportableHolding
 
@@ -369,6 +371,10 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 
 			// time-weighted rate of return
+			if int(daysToStartOfYear) == len(perf.Measurements) {
+				daysToStartOfYear -= 1
+			}
+
 			measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
 			measurement.TWRRWeekToDate = float32(perf.TWRR(daysToStartOfWeek, STRATEGY))
 			measurement.TWRROneWeek = float32(perf.TWRR(5, STRATEGY))
@@ -426,33 +432,29 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		}
 
 		if prevDate.Year() != date.Year() {
-			if prevMeasurement.TWRROneYear > bestYearPort.Return {
-				bestYearPort.Return = prevMeasurement.TWRROneYear
+			if prevMeasurement.TWRRYearToDate > bestYearPort.Return {
+				bestYearPort.Return = prevMeasurement.TWRRYearToDate
 				bestYearPort.Year = uint16(prevDate.Year())
 			}
 
-			if prevMeasurement.TWRROneYear < worstYearPort.Return {
-				worstYearPort.Return = prevMeasurement.TWRROneYear
+			if prevMeasurement.TWRRYearToDate < worstYearPort.Return {
+				worstYearPort.Return = prevMeasurement.TWRRYearToDate
 				worstYearPort.Year = uint16(prevDate.Year())
 			}
 
 			// calculate 1-yr benchmark rate of return
-			numMeasurements := len(perf.Measurements)
-			if numMeasurements > 252 {
+			if ytdBench > bestYearBenchmark.Return {
+				bestYearBenchmark.Return = ytdBench
+				bestYearBenchmark.Year = uint16(prevDate.Year())
+			}
 
-				measYr1 := perf.Measurements[numMeasurements-253]
-				rr := float32((prevMeasurement.BenchmarkGrowthOf10K / measYr1.BenchmarkGrowthOf10K) - 1.0)
-				if rr > bestYearBenchmark.Return {
-					bestYearBenchmark.Return = rr
-					bestYearBenchmark.Year = uint16(prevDate.Year())
-				}
-
-				if rr < worstYearBenchmark.Return {
-					worstYearBenchmark.Return = rr
-					worstYearBenchmark.Year = uint16(prevDate.Year())
-				}
+			if ytdBench < worstYearBenchmark.Return {
+				worstYearBenchmark.Return = ytdBench
+				worstYearBenchmark.Year = uint16(prevDate.Year())
 			}
 		}
+
+		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
 		prevMeasurement = measurement
 		prevDate = date
 
