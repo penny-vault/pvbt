@@ -214,7 +214,7 @@ func (perf *Performance) Beta(periods uint) float64 {
 
 // CalmarRatio is a gauge of the risk adjusted performance of a portfolio.
 // It is a function of  the fund's average compounded annual rate of return
-// versus its maximum  drawdown. The higher the Calmar ratio, the better
+// versus its maximum drawdown. The higher the Calmar ratio, the better
 // the portfolio performed on a risk-adjusted basis during the given time
 // frame, which is typically set at 36 months.
 func (perf *Performance) CalmarRatio(periods uint, kind string) float64 {
