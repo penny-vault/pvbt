@@ -1084,7 +1084,6 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			portfolio_v1
 		WHERE
 			id = ANY ($1) AND user_id=$2`
-		fmt.Printf("pID: %+v \n", portfolioIDs)
 		rows, err = trx.Query(context.Background(), portfolioSQL, portfolioIDs, userID)
 	} else {
 		portfolioSQL := `
@@ -1259,8 +1258,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		start_date=$5,
 		end_date=$6,
 		holdings=$7,
-		notifications=$8,
-		temporary=$9`
+		notifications=$8`
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		log.WithFields(log.Fields{
