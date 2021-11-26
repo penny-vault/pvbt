@@ -141,13 +141,13 @@ var _ = Describe("Adm", func() {
 
 			It("should begin on", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.July, 31, 16, 0, 0, 0, tz)))
+				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.July, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should end on", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[data.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
 			})
 
 			It("should be invested in VFINX to start", func() {

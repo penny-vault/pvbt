@@ -1,0 +1,25 @@
+name = "Momentum Driven Earnings Prediction"
+shortcode = "mdep"
+description = "A strategy that invests directly in stocks based on earnings predictions"
+source = "None"
+version = "1.0.0"
+benchmark = "VFINX"
+
+[arguments.outTicker]
+name = "Out-of-Market Ticker"
+description = "Ticker to use when sentiment model score is below 0"
+typecode = "string"
+default = "VUSTX"
+
+[arguments.numHoldings]
+name = "Number of Holdings"
+description = "Maximum number of stocks to hold at a time"
+typecode = "number"
+default = "100"
+
+[arguments.period]
+name = "Rebalance Frequency"
+description = "Frequency portfolio holdings should be rebalanced"
+typecode = "choice"
+default = "weekly"
+options = ["weekly", "monthly"]

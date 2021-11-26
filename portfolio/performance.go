@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"main/common"
 	"main/data"
 	"main/database"
 	"main/dfextras"
@@ -67,37 +68,26 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	pm.dataProxy.Frequency = data.FrequencyDaily
 
 	// t1 := time.Now()
-	quotes, errs := pm.dataProxy.GetMultipleData(symbols...)
+	eodQuotes, err := pm.dataProxy.GetDataFrame(data.MetricClose, symbols...)
 	// t2 := time.Now()
-	if len(errs) > 0 {
-		return nil, errors.New("failed to download data for tickers")
-	}
-
-	var eod = []*dataframe.DataFrame{}
-	for _, val := range quotes {
-		eod = append(eod, val)
+	if err != nil {
+		return nil, err
 	}
 
 	// Get benchmark quotes but use adjustedClose prices
 	// t3 := time.Now()
-	metric := pm.dataProxy.Metric
-	pm.dataProxy.Metric = data.MetricAdjustedClose
-	benchmarkEod, err := pm.dataProxy.GetData(p.Benchmark)
+	benchmarkEod, err := pm.dataProxy.GetDataFrame(data.MetricAdjustedClose, p.Benchmark)
 	if err != nil {
 		return nil, err
 	}
-	pm.dataProxy.Metric = metric
 	benchColumn, err := benchmarkEod.NameToColumn(p.Benchmark)
 	if err != nil {
 		return nil, err
 	}
 	s := benchmarkEod.Series[benchColumn]
 	s.Rename("$BENCHMARK")
-	eod = append(eod, benchmarkEod)
-	// t4 := time.Now()
 
-	// t5 := time.Now()
-	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
+	err = eodQuotes.AddSeries(s, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -105,9 +95,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
 		InPlace: true,
 	})
-	// t6 := time.Now()
 
-	// t7 := time.Now()
 	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
@@ -162,7 +150,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		if row == nil {
 			break
 		}
-		date := quotes[data.DateIdx].(time.Time)
+		date := quotes[common.DateIdx].(time.Time)
 
 		if last.Weekday() > date.Weekday() {
 			daysToStartOfWeek = 1
@@ -282,6 +270,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			holdings[trx.Ticker] = shares
 		}
 
+		// build justification array
+		justificationArray := pm.justifications[date.String()]
+
 		// update benchmarkShares to reflect any new deposits or withdrawals
 		benchmarkShares = benchmarkValue / quotes["$BENCHMARK"].(float64)
 
@@ -336,6 +327,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,
+			Justification:        justificationArray,
 			Value:                totalVal,
 			BenchmarkValue:       benchmarkValue,
 			RiskFreeValue:        riskFreeValue,
@@ -529,10 +521,6 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods, BENCHMARK),
 		TotalDeposited:                  math.NaN(),
 		TotalWithdrawn:                  math.NaN(),
-		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
-		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
-		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
-		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
 		WorstYear:                       &worstYearBenchmark,
 	}
 
@@ -752,6 +740,7 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		user_id,
 		strategy_value,
 		holdings,
+		justification
 		alpha_1yr,
 		alpha_3yr,
 		alpha_5yr,
@@ -856,7 +845,8 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$53,
 		$54,
 		$55,
-		$56
+		$56,
+		$57
 	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
 	DO UPDATE SET
 		risk_free_value=$3,
@@ -864,57 +854,63 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		total_withdrawn_to_date=$5,
 		strategy_value=$7,
 		holdings=$8,
-		alpha_1yr=$9,
-		alpha_3yr=$10,
-		alpha_5yr=$11,
-		alpha_10yr=$12,
-		beta_1yr=$13,
-		beta_3yr=$14,
-		beta_5yr=$15,
-		beta_10yr=$16,
-		twrr_1d=$17,
-		twrr_1wk=$18,
-		twrr_1mo=$19,
-		twrr_3mo=$20,
-		twrr_1yr=$21,
-		twrr_3yr=$22,
-		twrr_5yr=$23,
-		twrr_10yr=$24,
-		mwrr_1d=$25,
-		mwrr_1wk=$26,
-		mwrr_1mo=$27,
-		mwrr_3mo=$28,
-		mwrr_1yr=$29,
-		mwrr_3yr=$30,
-		mwrr_5yr=$31,
-		mwrr_10yr=$32,
-		active_return_1yr=$33,
-		active_return_3yr=$34,
-		active_return_5yr=$35,
-		active_return_10yr=$36,
-		calmar_ratio=$37,
-		downside_deviation=$38,
-		information_ratio=$39,
-		k_ratio=$40,
-		keller_ratio=$41,
-		sharpe_ratio=$42,
-		sortino_ratio=$43,
-		std_dev=$44,
-		treynor_ratio=$45,
-		ulcer_index=$46,
-		benchmark_value=$47,
-		strategy_growth_of_10k=$48,
-		benchmark_growth_of_10k=$49,
-		risk_free_growth_of_10k=$50,
-		twrr_wtd=$51,
-		twrr_mtd=$52,
-		twrr_ytd=$53,
-		mwrr_wtd=$54,
-		mwrr_mtd=$55,
-		mwrr_ytd=$56`
+		justification=$9,
+		alpha_1yr=$10,
+		alpha_3yr=$11,
+		alpha_5yr=$12,
+		alpha_10yr=$13,
+		beta_1yr=$14,
+		beta_3yr=$15,
+		beta_5yr=$16,
+		beta_10yr=$17,
+		twrr_1d=$18,
+		twrr_1wk=$19,
+		twrr_1mo=$20,
+		twrr_3mo=$21,
+		twrr_1yr=$22,
+		twrr_3yr=$23,
+		twrr_5yr=$24,
+		twrr_10yr=$25,
+		mwrr_1d=$26,
+		mwrr_1wk=$27,
+		mwrr_1mo=$28,
+		mwrr_3mo=$29,
+		mwrr_1yr=$30,
+		mwrr_3yr=$31,
+		mwrr_5yr=$32,
+		mwrr_10yr=$33,
+		active_return_1yr=$34,
+		active_return_3yr=$35,
+		active_return_5yr=$36,
+		active_return_10yr=$37,
+		calmar_ratio=$38,
+		downside_deviation=$39,
+		information_ratio=$40,
+		k_ratio=$41,
+		keller_ratio=$42,
+		sharpe_ratio=$43,
+		sortino_ratio=$44,
+		std_dev=$45,
+		treynor_ratio=$46,
+		ulcer_index=$47,
+		benchmark_value=$48,
+		strategy_growth_of_10k=$49,
+		benchmark_growth_of_10k=$50,
+		risk_free_growth_of_10k=$51,
+		twrr_wtd=$52,
+		twrr_mtd=$53,
+		twrr_ytd=$54,
+		mwrr_wtd=$55,
+		mwrr_mtd=$56,
+		mwrr_ytd=$57`
 
 	for _, m := range p.Measurements {
 		holdings, err := json.Marshal(m.Holdings)
+		if err != nil {
+			return err
+		}
+
+		justification, err := json.Marshal(m.Justification)
 		if err != nil {
 			return err
 		}
@@ -928,54 +924,55 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 			userID,                  // 6
 			m.Value,                 // 7
 			holdings,                // 8
-			m.AlphaOneYear,          // 9
-			m.AlphaThreeYear,        // 10
-			m.AlphaFiveYear,         // 11
-			m.AlphaTenYear,          // 12
-			m.BetaOneYear,           // 13
-			m.BetaThreeYear,         // 14
-			m.BetaFiveYear,          // 15
-			m.BetaTenYear,           // 16
-			m.TWRROneDay,            // 17
-			m.TWRROneWeek,           // 18
-			m.TWRROneMonth,          // 19
-			m.TWRRThreeMonth,        // 20
-			m.TWRROneYear,           // 21
-			m.TWRRThreeYear,         // 22
-			m.TWRRFiveYear,          // 23
-			m.TWRRTenYear,           // 24
-			m.MWRROneDay,            // 25
-			m.MWRROneWeek,           // 26
-			m.MWRROneMonth,          // 27
-			m.MWRRThreeMonth,        // 28
-			m.MWRROneYear,           // 29
-			m.MWRRThreeYear,         // 30
-			m.MWRRFiveYear,          // 31
-			m.MWRRTenYear,           // 32
-			m.ActiveReturnOneYear,   // 33
-			m.ActiveReturnThreeYear, // 34
-			m.ActiveReturnFiveYear,  // 35
-			m.ActiveReturnTenYear,   // 36
-			m.CalmarRatio,           // 37
-			m.DownsideDeviation,     // 38
-			m.InformationRatio,      // 39
-			m.KRatio,                // 40
-			m.KellerRatio,           // 41
-			m.SharpeRatio,           // 42
-			m.SortinoRatio,          // 43
-			m.StdDev,                // 44
-			m.TreynorRatio,          // 45
-			m.UlcerIndex,            // 46
-			m.BenchmarkValue,        // 47
-			m.StrategyGrowthOf10K,   // 48
-			m.BenchmarkGrowthOf10K,  // 49
-			m.RiskFreeGrowthOf10K,   // 50
-			m.TWRRWeekToDate,        // 51
-			m.TWRRMonthToDate,       // 52
-			m.TWRRYearToDate,        // 53
-			m.MWRRWeekToDate,        // 54
-			m.MWRRMonthToDate,       // 55
-			m.MWRRYearToDate,        // 56
+			justification,           // 9
+			m.AlphaOneYear,          // 10
+			m.AlphaThreeYear,        // 11
+			m.AlphaFiveYear,         // 12
+			m.AlphaTenYear,          // 13
+			m.BetaOneYear,           // 14
+			m.BetaThreeYear,         // 15
+			m.BetaFiveYear,          // 16
+			m.BetaTenYear,           // 17
+			m.TWRROneDay,            // 18
+			m.TWRROneWeek,           // 19
+			m.TWRROneMonth,          // 20
+			m.TWRRThreeMonth,        // 21
+			m.TWRROneYear,           // 22
+			m.TWRRThreeYear,         // 23
+			m.TWRRFiveYear,          // 24
+			m.TWRRTenYear,           // 25
+			m.MWRROneDay,            // 26
+			m.MWRROneWeek,           // 27
+			m.MWRROneMonth,          // 28
+			m.MWRRThreeMonth,        // 29
+			m.MWRROneYear,           // 30
+			m.MWRRThreeYear,         // 31
+			m.MWRRFiveYear,          // 32
+			m.MWRRTenYear,           // 33
+			m.ActiveReturnOneYear,   // 34
+			m.ActiveReturnThreeYear, // 35
+			m.ActiveReturnFiveYear,  // 36
+			m.ActiveReturnTenYear,   // 37
+			m.CalmarRatio,           // 38
+			m.DownsideDeviation,     // 39
+			m.InformationRatio,      // 40
+			m.KRatio,                // 41
+			m.KellerRatio,           // 42
+			m.SharpeRatio,           // 43
+			m.SortinoRatio,          // 44
+			m.StdDev,                // 45
+			m.TreynorRatio,          // 46
+			m.UlcerIndex,            // 47
+			m.BenchmarkValue,        // 48
+			m.StrategyGrowthOf10K,   // 49
+			m.BenchmarkGrowthOf10K,  // 50
+			m.RiskFreeGrowthOf10K,   // 51
+			m.TWRRWeekToDate,        // 52
+			m.TWRRMonthToDate,       // 53
+			m.TWRRYearToDate,        // 54
+			m.MWRRWeekToDate,        // 55
+			m.MWRRMonthToDate,       // 56
+			m.MWRRYearToDate,        // 57
 		)
 		if err != nil {
 			log.WithFields(log.Fields{

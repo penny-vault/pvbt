@@ -199,22 +199,17 @@ func (dmio *DualMomentumInOut) downloadPriceData(manager *data.Manager) error {
 	tickers = append(tickers, dmio.bonds...)
 	tickers = append(tickers, dmio.canary...)
 
-	prices, errs := manager.GetMultipleData(tickers...)
+	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
 
-	if len(errs) > 0 {
+	if errs != nil {
 		return errors.New("Failed to download data for tickers")
 	}
 
-	var eod = []*dataframe.DataFrame{}
-	for _, v := range prices {
-		eod = append(eod, v)
-	}
-
-	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), data.DateIdx, eod...)
-	dmio.prices = mergedEod
+	prices, err := dfextras.DropNA(context.Background(), prices)
 	if err != nil {
 		return err
 	}
+	dmio.prices = prices
 
 	return nil
 }

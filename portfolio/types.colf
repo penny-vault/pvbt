@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package portfolio
+package colfer
 
 type Justification struct {
 	Key text
@@ -138,6 +138,7 @@ type PerformanceMeasurement struct {
 	RiskFreeGrowthOf10K  float64
 
 	Holdings       []ReportableHolding
+	Justification  []Justification
 	TotalDeposited float64
 	TotalWithdrawn float64
 
@@ -224,6 +225,7 @@ type Returns struct {
 type PortfolioHoldingItem struct {
 	Time          timestamp
 	Holdings      []ReportableHolding
+	Justification []Justification
 	PercentReturn float64
 	Value         float64
 }

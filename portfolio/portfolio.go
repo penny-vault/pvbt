@@ -26,7 +26,6 @@ import (
 	"main/strategies"
 	"math"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -54,11 +53,11 @@ type PortfolioModel struct {
 	Portfolio *Portfolio
 
 	// private
-	holdings     map[string]float64
-	dataProxy    *data.Manager
-	priceData    map[string]*dataframe.DataFrame
-	dividendData map[string]*dataframe.DataFrame
-	splitData    map[string]*dataframe.DataFrame
+	dataProxy      *data.Manager
+	holdings       map[string]float64
+	justifications map[string][]*Justification
+	dividendData   map[string]*dataframe.DataFrame
+	splitData      map[string]*dataframe.DataFrame
 }
 
 // NewPortfolio create a portfolio
@@ -73,8 +72,9 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 	}
 
 	model := PortfolioModel{
-		Portfolio: &p,
-		dataProxy: manager,
+		Portfolio:      &p,
+		dataProxy:      manager,
+		justifications: make(map[string][]*Justification),
 	}
 
 	model.dataProxy.Begin = startDate
@@ -126,172 +126,9 @@ func buildHoldingsArray(date time.Time, holdings map[string]float64) []*Holding 
 	return holdingArray
 }
 
-// ValueAsOf return the value of the portfolio for the given date
-func (pm *PortfolioModel) ValueAsOf(d time.Time) (float64, error) {
-	// Get last 7 days of values, in case 'd' isn't a market day
-	s := d.AddDate(0, 0, -7)
-	value, err := pm.valueOverPeriod(s, d)
-	sz := len(value)
-	if sz <= 0 {
-		return 0, errors.New("failed to compute value for date")
-	}
-	return value[sz-1].Value, err
-}
-
-func (pm *PortfolioModel) valueOverPeriod(s time.Time, e time.Time) ([]*PerformanceMeasurement, error) {
-	p := pm.Portfolio
-	if len(p.Transactions) == 0 {
-		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
-	}
-
-	pm.dataProxy.Begin = s
-	pm.dataProxy.End = e
-	pm.dataProxy.Frequency = data.FrequencyDaily
-
-	// Get holdings over period
-	holdings, err := pm.holdingsOverPeriod(s, e)
-	if err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
-	// Get a list of all tickers
-	tickerSet := map[string]bool{}
-	for _, v := range holdings {
-		for _, h := range v {
-			tickerSet[h.Ticker] = true
-		}
-	}
-
-	symbols := []string{}
-	for k := range tickerSet {
-		symbols = append(symbols, k)
-	}
-
-	// get quote data
-	quotes, errs := pm.dataProxy.GetMultipleData(symbols...)
-	if len(errs) > 0 {
-		return nil, errors.New("failed to download data for tickers")
-	}
-
-	var eod = []*dataframe.DataFrame{}
-	for _, val := range quotes {
-		eod = append(eod, val)
-	}
-
-	eodQuotes, err := dfextras.Merge(context.TODO(), data.DateIdx, eod...)
-	if err != nil {
-		return nil, err
-	}
-
-	// compute value over period
-	values := []*PerformanceMeasurement{}
-	currHoldings := holdings[s]
-	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-
-	for {
-		row, quotes, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-		date := quotes[data.DateIdx].(time.Time)
-		year, month, day := date.Date()
-		date = time.Date(year, month, day, 0, 0, 0, 0, tz)
-
-		if v, ok := holdings[date]; ok {
-			currHoldings = v
-		}
-
-		// iterate through each holding and add value to get total return
-		totalVal := 0.0
-		for _, holding := range currHoldings {
-			if holding.Ticker == "$CASH" {
-				totalVal += holding.Shares
-			} else if val, ok := quotes[holding.Ticker]; ok {
-				price := val.(float64)
-				totalVal += price * holding.Shares
-			} else {
-				return nil, fmt.Errorf("no quote for symbol: %s", holding.Ticker)
-			}
-		}
-		values = append(values, &PerformanceMeasurement{
-			Time:  date,
-			Value: totalVal,
-		})
-	}
-
-	return values, nil
-}
-
-func (pm *PortfolioModel) holdingsOverPeriod(s time.Time, e time.Time) (map[time.Time][]Holding, error) {
-	currHoldings := map[string]Holding{}
-	periodHoldings := map[time.Time][]Holding{}
-
-	p := pm.Portfolio
-	for _, t := range p.Transactions {
-		if t.Kind == DepositTransaction || t.Kind == WithdrawTransaction {
-			continue
-		}
-
-		if t.Date.After(e) && len(periodHoldings) == 0 {
-			holdings := make([]Holding, 0, len(currHoldings))
-			for _, v := range currHoldings {
-				holdings = append(holdings, v)
-			}
-			periodHoldings[s] = holdings
-			return periodHoldings, nil
-		}
-
-		if t.Date.After(e) {
-			return periodHoldings, nil
-		}
-
-		if h, ok := currHoldings[t.Ticker]; ok {
-			switch t.Kind {
-			case BuyTransaction:
-				h.Shares += t.Shares
-			case SellTransaction:
-				h.Shares -= t.Shares
-			}
-			if h.Shares <= 1e-5 {
-				delete(currHoldings, h.Ticker)
-			} else {
-				currHoldings[t.Ticker] = h
-			}
-		} else {
-			if t.Kind != BuyTransaction {
-				log.Error("Transactions are out of order")
-				return nil, errors.New("transactions are out of order")
-			}
-			currHoldings[t.Ticker] = Holding{
-				Ticker: t.Ticker,
-				Shares: t.Shares,
-			}
-		}
-
-		if (t.Date.After(s) || t.Date.Equal(s)) && (t.Date.Before(e) || t.Date.Equal(e)) {
-			holdings := make([]Holding, 0, len(currHoldings))
-			for _, v := range currHoldings {
-				holdings = append(holdings, v)
-			}
-			periodHoldings[t.Date] = holdings
-		}
-	}
-
-	holdings := make([]Holding, 0, len(currHoldings))
-	for _, v := range currHoldings {
-		holdings = append(holdings, v)
-	}
-	periodHoldings[s] = holdings
-
-	return periodHoldings, nil
-}
-
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64, justification []*Justification, hints map[string]int) error {
+func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64, justification []*Justification) error {
 	p := pm.Portfolio
 	err := pm.FillCorporateActions(date)
 	if err != nil {
@@ -301,6 +138,7 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	nTrx := len(p.Transactions)
 	if nTrx > 0 {
 		lastDate := p.Transactions[nTrx-1].Date
+		//fmt.Printf("%s %s %s\n", p.Transactions[nTrx-1].Date, p.Transactions[nTrx-1].Kind, p.Transactions[nTrx-1].Ticker)
 		if lastDate.After(date) {
 			return fmt.Errorf("cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
 		}
@@ -331,22 +169,13 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	}
 	for k, v := range pm.holdings {
 		if k != "$CASH" {
-			eod := pm.priceData[k]
-			hint := 0
-			if xx, ok := hints[k]; ok {
-				hint = xx
-			}
-			res, hint := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24, hint)
-			hints[k] = hint // maps are always pass by reference
-
-			var price float64
-			if tmp, ok := res[k]; ok {
-				price = tmp.(float64)
-			} else {
+			price, err := pm.dataProxy.Get(date, data.MetricClose, k)
+			if err != nil {
 				log.WithFields(log.Fields{
 					"Symbol": k,
 					"Date":   date,
-				}).Warn("Security purchased before security price was available")
+					"Price":  price,
+				}).Warn("security price data not available.")
 				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 
@@ -360,26 +189,14 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	// get any prices that we haven't already loaded
 	for k := range target {
 		if _, ok := priceMap[k]; !ok {
-			eod := pm.priceData[k]
-
-			hint := 0
-			if xx, ok := hints[k]; ok {
-				hint = xx
-			}
-			res, hint := dfextras.FindNearestTime(eod, date, data.DateIdx, time.Hour*24, hint)
-			hints[k] = hint
-
-			var price float64
-			if tmp, ok := res[k]; ok {
-				price = tmp.(float64)
-			} else {
+			price, err := pm.dataProxy.Get(date, data.MetricClose, k)
+			if err != nil {
 				log.WithFields(log.Fields{
 					"Symbol": k,
 					"Date":   date,
-				}).Debug("Security purchased before security price was available")
+				}).Warn("security price data not available")
 				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
-
 			priceMap[k] = price
 		}
 	}
@@ -576,17 +393,18 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
-//   `target` must have a column named `data.DateIdx` (DATE) and either a string column
+//   `target` must have a column named `common.DateIdx` (DATE) and either a string column
 //   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
 //   the percentages of portfolio to hold
 func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 	p := pm.Portfolio
 
+	fmt.Println("Building target portfolio")
 	if target.NRows() == 0 {
 		return nil
 	}
 
-	timeIdx, err := target.NameToColumn(data.DateIdx)
+	timeIdx, err := target.NameToColumn(common.DateIdx)
 	if err != nil {
 		return err
 	}
@@ -638,35 +456,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 		}
 	}
 
-	symbols := []string{}
-	for k := range assetMap {
-		symbols = append(symbols, k)
-	}
-
-	// t1 := time.Now()
-	pm.dataProxy.Metric = data.MetricClose
-	prices, errs := pm.dataProxy.GetMultipleData(symbols...)
-	if len(errs) != 0 {
-		errorMsgs := make([]string, len(errs))
-		for ii, xx := range errs {
-			errorMsgs[ii] = xx.Error()
-		}
-		log.WithFields(log.Fields{
-			"Error": strings.Join(errorMsgs, ", "),
-		}).Warn("Failed to load data for tickers")
-		return errors.New("failed loading data for tickers")
-	}
-	// extend the price data map
-	if pm.priceData == nil {
-		pm.priceData = make(map[string]*dataframe.DataFrame)
-	}
-	for k, v := range prices {
-		pm.priceData[k] = v
-	}
-	// t2 := time.Now()
-
 	// Create transactions
-	hints := make(map[string]int)
 	// t3 := time.Now()
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	for {
@@ -683,7 +473,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 		for k, v := range val {
 			idx := k.(string)
 			switch idx {
-			case data.DateIdx:
+			case common.DateIdx:
 				date = v.(time.Time)
 			case common.TickerName:
 				symbol = v
@@ -710,6 +500,8 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 			date = date.Add(time.Hour * 16)
 		}
 
+		pm.justifications[date.String()] = justification
+
 		var rebalance map[string]float64
 		if isSingleAsset {
 			strSymbol := symbol.(string)
@@ -719,7 +511,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 			rebalance = symbol.(map[string]float64)
 		}
 
-		err = pm.RebalanceTo(date, rebalance, justification, hints)
+		err = pm.RebalanceTo(date, rebalance, justification)
 		if err != nil {
 			return err
 		}
@@ -784,16 +576,27 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 		return nil // nothing to do
 	}
 
+	frequency := pm.dataProxy.Frequency
+	pm.dataProxy.Frequency = data.FrequencyDaily
 	if len(symbols) > 0 {
-		metric := pm.dataProxy.Metric
-		pm.dataProxy.Metric = data.MetricDividendCash
-		divMap, errs := pm.dataProxy.GetMultipleData(symbols...)
-		if len(errs) > 0 {
+		divMap, errs := pm.dataProxy.GetDataFrame(data.MetricDividendCash, symbols...)
+		if errs != nil {
 			log.Error(errs)
 			return errors.New("failed to download dividend data for tickers")
 		}
-		for k, v := range divMap {
+		dateSeriesIdx := divMap.MustNameToColumn(common.DateIdx)
+		dateSeries := divMap.Series[dateSeriesIdx]
+		for _, series := range divMap.Series {
+			if series.Name() == common.DateIdx {
+				continue
+			}
 			// filter to non 0 values
+			df := dataframe.NewDataFrame(dateSeries.Copy(), series)
+			df, err = dfextras.DropNA(context.Background(), df)
+			if err != nil {
+				return err
+			}
+			k := series.Name()
 			filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 				if vals[k].(float64) == 0.0 {
 					return dataframe.DROP, nil
@@ -801,19 +604,29 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				return dataframe.KEEP, nil
 			})
 
-			dataframe.Filter(context.Background(), v, filterFn, dataframe.FilterOptions{
+			dataframe.Filter(context.Background(), df, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
-			pm.dividendData[k] = v
+			pm.dividendData[k] = df
 		}
 
-		pm.dataProxy.Metric = data.MetricSplitFactor
-		splitMap, errs := pm.dataProxy.GetMultipleData(symbols...)
-		if len(errs) > 0 {
+		splitMap, errs := pm.dataProxy.GetDataFrame(data.MetricSplitFactor, symbols...)
+		dateSeriesIdx = splitMap.MustNameToColumn(common.DateIdx)
+		dateSeries = splitMap.Series[dateSeriesIdx]
+		if errs != nil {
 			log.Error(errs)
 			return errors.New("failed to download split data for tickers")
 		}
-		for k, v := range splitMap {
+		for _, series := range splitMap.Series {
+			if series.Name() == common.DateIdx {
+				continue
+			}
+			df := dataframe.NewDataFrame(dateSeries.Copy(), series)
+			df, err = dfextras.DropNA(context.Background(), df)
+			if err != nil {
+				return err
+			}
+			k := series.Name()
 			// filter to non 1 values
 			filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 				if vals[k].(float64) == 1.0 {
@@ -822,14 +635,13 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				return dataframe.KEEP, nil
 			})
 
-			dataframe.Filter(context.Background(), v, filterFn, dataframe.FilterOptions{
+			dataframe.Filter(context.Background(), df, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
-			pm.splitData[k] = v
+			pm.splitData[k] = df
 		}
-
-		pm.dataProxy.Metric = metric
 	}
+	pm.dataProxy.Frequency = frequency
 
 	addTransactions := make([]*Transaction, 0, 10)
 
@@ -853,7 +665,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				break
 			}
 
-			date := divs[data.DateIdx].(time.Time)
+			date := divs[common.DateIdx].(time.Time)
 			if date.After(from) && date.Before(through) {
 				// it's in range
 				dividend := divs[k].(float64)
@@ -892,7 +704,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				break
 			}
 
-			date := s[data.DateIdx].(time.Time)
+			date := s[common.DateIdx].(time.Time)
 			if date.After(from) && date.Before(through) {
 				// it's in range
 				splitFactor := s[k].(float64)
@@ -1129,10 +941,11 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		}
 
 		pm := &PortfolioModel{
-			Portfolio:    p,
-			dataProxy:    dataProxy,
-			dividendData: make(map[string]*dataframe.DataFrame),
-			splitData:    make(map[string]*dataframe.DataFrame),
+			Portfolio:      p,
+			dataProxy:      dataProxy,
+			justifications: make(map[string][]*Justification),
+			dividendData:   make(map[string]*dataframe.DataFrame),
+			splitData:      make(map[string]*dataframe.DataFrame),
 		}
 
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
@@ -1149,29 +962,6 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		p.CurrentHoldings = buildHoldingsArray(time.Now(), pm.holdings)
 		pm.dataProxy.Begin = p.StartDate
 		pm.dataProxy.End = time.Now()
-
-		pm.dataProxy.Metric = data.MetricClose
-		symbols := make([]string, 0, len(pm.holdings))
-		for k, _ := range pm.holdings {
-			if k != "$CASH" {
-				symbols = append(symbols, k)
-			}
-		}
-		log.WithFields(log.Fields{
-			"Symbols": symbols,
-		}).Info("loading price data for current holdings")
-		prices, errs := pm.dataProxy.GetMultipleData(symbols...)
-		if len(errs) != 0 {
-			errorMsgs := make([]string, len(errs))
-			for ii, xx := range errs {
-				errorMsgs[ii] = xx.Error()
-			}
-			log.WithFields(log.Fields{
-				"Error": strings.Join(errorMsgs, ", "),
-			}).Warn("Failed to load data for tickers")
-			return nil, errors.New("failed loading data for tickers")
-		}
-		pm.priceData = prices
 
 		resultSet = append(resultSet, pm)
 	}

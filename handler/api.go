@@ -193,7 +193,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	ticker := c.Params("ticker")
 
 	if snapToStart {
-		securityStart, err := manager.GetData(ticker)
+		securityStart, err := manager.GetDataFrame(data.MetricAdjustedClose, ticker)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Symbol": ticker,
@@ -202,12 +202,12 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 			return fiber.ErrBadRequest
 		}
 		row := securityStart.Row(0, true, dataframe.SeriesName)
-		startDate = row[data.DateIdx].(time.Time)
+		startDate = row[common.DateIdx].(time.Time)
 	}
 
 	benchmarkTicker := strings.ToUpper(ticker)
 
-	dates := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
+	dates := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
 	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 

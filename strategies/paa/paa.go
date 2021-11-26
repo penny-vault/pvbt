@@ -22,7 +22,6 @@ package paa
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"main/common"
 	"main/data"
@@ -106,25 +105,21 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 func (paa *KellersProtectiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
-	manager.Metric = data.MetricAdjustedClose
 
 	tickers := []string{}
 	tickers = append(tickers, paa.protectiveUniverse...)
 	tickers = append(tickers, paa.riskUniverse...)
 
-	prices, errs := manager.GetMultipleData(tickers...)
-
-	if len(errs) > 0 {
-		return errors.New("failed to download data for tickers")
+	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+	if errs != nil {
+		return fmt.Errorf("failed to download data for tickers: %s", errs)
 	}
 
-	var eod = []*dataframe.DataFrame{}
-	for _, v := range prices {
-		eod = append(eod, v)
+	prices, err := dfextras.DropNA(context.Background(), prices)
+	if err != nil {
+		return err
 	}
-
-	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), data.DateIdx, eod...)
-	paa.prices = mergedEod
+	paa.prices = prices
 	if err != nil {
 		return err
 	}
@@ -315,7 +310,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	}
 	mom.Unlock()
 
-	timeIdx, err := mom.NameToColumn(data.DateIdx)
+	timeIdx, err := mom.NameToColumn(common.DateIdx)
 	if err != nil {
 		log.Error("Time series not set on momentum series")
 	}

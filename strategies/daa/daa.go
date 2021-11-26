@@ -28,7 +28,7 @@ package daa
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"main/common"
 	"main/data"
 	"main/dfextras"
@@ -181,7 +181,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 		targetAssets[*row] = targetMap
 	}
 
-	timeIdx, err := daa.momentum.NameToColumn(data.DateIdx)
+	timeIdx, err := daa.momentum.NameToColumn(common.DateIdx)
 	if err != nil {
 		log.Error("Time series not set on momentum series")
 	}
@@ -194,29 +194,23 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
-	manager.Metric = data.MetricAdjustedClose
 
 	tickers := []string{}
 	tickers = append(tickers, daa.cashUniverse...)
 	tickers = append(tickers, daa.protectiveUniverse...)
 	tickers = append(tickers, daa.riskUniverse...)
 
-	prices, errs := manager.GetMultipleData(tickers...)
+	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
 
-	if len(errs) > 0 {
-		return errors.New("failed to download data for tickers")
+	if errs != nil {
+		return fmt.Errorf("failed to download data for tickers: %s", errs)
 	}
 
-	var eod = []*dataframe.DataFrame{}
-	for _, v := range prices {
-		eod = append(eod, v)
-	}
-
-	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), data.DateIdx, eod...)
-	daa.prices = mergedEod
+	prices, err := dfextras.DropNA(context.Background(), prices)
 	if err != nil {
 		return err
 	}
+	daa.prices = prices
 
 	return nil
 }

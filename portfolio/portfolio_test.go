@@ -130,7 +130,7 @@ var _ = Describe("Portfolio", func() {
 	Describe("with a single holding at a time", func() {
 		Context("is successfully invested", func() {
 			BeforeEach(func() {
-				timeSeries := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
+				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 					time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
@@ -160,8 +160,7 @@ var _ = Describe("Portfolio", func() {
 				target := make(map[string]float64)
 				target["VFINX"] = 1.0
 				justification := make([]*portfolio.Justification, 0)
-				hints := make(map[string]int)
-				err = pm.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification, hints)
+				err = pm.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -264,7 +263,7 @@ var _ = Describe("Portfolio", func() {
 
 		Context("has stocks with splits", func() {
 			BeforeEach(func() {
-				timeSeries2 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 1}, []time.Time{
+				timeSeries2 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, []time.Time{
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
 
@@ -320,7 +319,7 @@ var _ = Describe("Portfolio", func() {
 
 		Context("calculates perfomance through 2020-11-30", func() {
 			BeforeEach(func() {
-				timeSeries := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
+				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 					time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
@@ -383,7 +382,7 @@ var _ = Describe("Portfolio", func() {
 		Describe("with multiple holdings at a time", func() {
 			Context("is successfully invested", func() {
 				BeforeEach(func() {
-					timeSeries := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
+					timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
 						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),

@@ -25,7 +25,6 @@ package adm
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"main/common"
 	"main/data"
@@ -75,70 +74,33 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
-	manager.Metric = data.MetricAdjustedClose
 
 	tickers := []string{}
 	tickers = append(tickers, adm.inTickers...)
-	riskFreeSymbol := "$RATE.GS3M"
+	riskFreeSymbol := "DGS3MO"
 	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
-	prices, errs := manager.GetMultipleData(tickers...)
+	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
 
-	if len(errs) > 0 {
-		return errors.New("failed to download data for tickers")
+	if errs != nil {
+		return fmt.Errorf("failed to download data in adm for tickers: %s", errs)
 	}
 
-	var eod = []*dataframe.DataFrame{}
-	for ii := range adm.inTickers {
-		ticker := adm.inTickers[ii]
-		eod = append(eod, prices[ticker])
+	colNames := make([]string, len(adm.inTickers)+1)
+	colNames[0] = adm.outTicker
+	for ii, t := range adm.inTickers {
+		colNames[ii+1] = t
 	}
-
-	eod = append(eod, prices[adm.outTicker])
-
-	mergedEod, err := dfextras.MergeAndTimeAlign(context.TODO(), data.DateIdx, eod...)
-	adm.prices = mergedEod
+	prices, err := dfextras.DropNA(context.Background(), prices)
 	if err != nil {
 		return err
 	}
 
-	// Get aligned start and end times
-	timeColumn, err := mergedEod.NameToColumn(data.DateIdx, dataframe.Options{})
+	eod, riskFreeRate, err := dfextras.Split(context.Background(), prices, colNames...)
 	if err != nil {
 		return err
 	}
 
-	timeSeries := mergedEod.Series[timeColumn]
-	nrows := timeSeries.NRows(dataframe.Options{})
-	startTime := timeSeries.Value(0, dataframe.Options{}).(time.Time)
-	endTime := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-
-	// Get risk free rate (3-mo T-bill secondary rate)
-	riskFreeRate := prices[riskFreeSymbol]
-
-	// duplicate last row if it doesn't match endTime
-	valueIdx, _ := riskFreeRate.NameToColumn("GS3M")
-	timeSeriesIdx, _ := riskFreeRate.NameToColumn(data.DateIdx)
-	rr := riskFreeRate.Series[valueIdx]
-	nrows = rr.NRows(dataframe.Options{})
-	val := rr.Value(nrows-1, dataframe.Options{}).(float64)
-	timeSeries = riskFreeRate.Series[timeSeriesIdx]
-	timeVal := timeSeries.Value(nrows-1, dataframe.Options{}).(time.Time)
-	if (endTime.Month() != timeVal.Month()) || (endTime.Year() != timeVal.Year()) {
-		riskFreeRate.Append(&dataframe.Options{}, endTime, val)
-	}
-
-	// Align the risk-free rate to match the mergedEod
-	_, err = dfextras.TimeTrim(context.TODO(), riskFreeRate, timeSeriesIdx, startTime, endTime, true)
-	if err != nil {
-		return err
-	}
-
-	timeVal = timeSeries.Value(0, dataframe.Options{}).(time.Time)
-	val = rr.Value(0, dataframe.Options{}).(float64)
-	if startTime.Before(timeVal) {
-		riskFreeRate.Insert(0, &dataframe.Options{}, startTime, val)
-	}
-
+	adm.prices = eod
 	adm.riskFreeRate = riskFreeRate
 
 	return nil
@@ -162,7 +124,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 		return sum, nil
 	})
 
-	dateSeriesIdx, err := adm.prices.NameToColumn(data.DateIdx)
+	dateSeriesIdx, err := adm.prices.NameToColumn(common.DateIdx)
 	if err != nil {
 		return err
 	}
@@ -171,7 +133,7 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 
 	for ii := range adm.prices.Series {
 		name := adm.prices.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, data.DateIdx) != 0 {
+		if strings.Compare(name, common.DateIdx) != 0 {
 			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
 			series = append(series, adm.prices.Series[ii].Copy(), score)
 		}
@@ -249,7 +211,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 
 	// t5 := time.Now()
 	scores := []dataframe.Series{}
-	timeIdx, _ := adm.momentum.NameToColumn(data.DateIdx)
+	timeIdx, _ := adm.momentum.NameToColumn(common.DateIdx)
 
 	// create out-of-market series
 	dfSize := adm.momentum.Series[timeIdx].NRows()
@@ -269,9 +231,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		scores = append(scores, series)
 	}
 	scoresDf := dataframe.NewDataFrame(scores...)
-
-	tmp, _ := dfextras.DropNA(context.TODO(), scoresDf)
-	scoresDf = tmp.(*dataframe.DataFrame)
+	scoresDf, _ = dfextras.DropNA(context.TODO(), scoresDf)
 
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
 	argmax.Rename(common.TickerName)
@@ -279,7 +239,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		return nil, err
 	}
 
-	dateIdx, err := scoresDf.NameToColumn(data.DateIdx)
+	dateIdx, err := scoresDf.NameToColumn(common.DateIdx)
 	if err != nil {
 		return nil, err
 	}

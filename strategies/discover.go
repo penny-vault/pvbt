@@ -22,6 +22,7 @@ import (
 	"main/database"
 	"main/strategies/adm"
 	"main/strategies/daa"
+	"main/strategies/mdep"
 	"main/strategies/paa"
 	"main/strategies/strategy"
 
@@ -46,6 +47,7 @@ func InitializeStrategyMap() {
 	Register("adm", adm.New)
 	Register("daa", daa.New)
 	Register("paa", paa.New)
+	Register("mdep", mdep.New)
 }
 
 func Register(strategyPkg string, factory strategy.StrategyFactory) {
