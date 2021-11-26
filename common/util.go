@@ -30,6 +30,7 @@ import (
 
 const (
 	TickerName = "TICKER"
+	DateIdx    = "DATE"
 )
 
 // Struct used for sorting tickers by a float64 value (i.e. momentum)

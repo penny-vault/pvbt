@@ -15,7 +15,8 @@
 package data
 
 import (
-	"errors"
+	"fmt"
+	"main/common"
 	"math"
 	"strings"
 	"time"
@@ -27,13 +28,11 @@ import (
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string
-	GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
+	GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
 }
 
 type DateProvider interface {
-	LastTradingDayOfWeek(t time.Time) (time.Time, error)
-	LastTradingDayOfMonth(t time.Time) (time.Time, error)
-	LastTradingDayOfYear(t time.Time) (time.Time, error)
+	TradingDays(begin time.Time, end time.Time, frequency string) []time.Time
 }
 
 const (
@@ -41,10 +40,6 @@ const (
 	FrequencyWeekly  = "Weekly"
 	FrequencyMonthly = "Monthly"
 	FrequencyAnnualy = "Annualy"
-)
-
-const (
-	DateIdx = "DATE" // TODO - need to change this to lower-case to reduce chance of it conflicting with a ticker
 )
 
 const (
@@ -67,7 +62,7 @@ type Manager struct {
 	Begin           time.Time
 	End             time.Time
 	Frequency       string
-	Metric          string
+	cache           map[string]float64
 	credentials     map[string]string
 	providers       map[string]Provider
 	dateProvider    DateProvider
@@ -80,7 +75,7 @@ var riskFreeRate *dataframe.DataFrame
 func InitializeDataManager() {
 	fred := NewFred()
 	var err error
-	riskFreeRate, err = fred.GetDataForPeriod("DGS3MO", MetricClose, FrequencyDaily,
+	riskFreeRate, err = fred.GetDataForPeriod([]string{"DGS3MO"}, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -101,19 +96,22 @@ func InitializeDataManager() {
 func NewManager(credentials map[string]string) Manager {
 	var m = Manager{
 		Frequency:   FrequencyMonthly,
+		cache:       make(map[string]float64, 1_000_000),
 		credentials: credentials,
 		providers:   map[string]Provider{},
-		Metric:      MetricClose,
 	}
 
 	// Create Tiingo API
 	if val, ok := credentials["tiingo"]; ok {
 		tiingo := NewTiingo(val)
 		m.RegisterDataProvider(tiingo)
-		m.dateProvider = tiingo
 	} else {
 		log.Warn("No tiingo API key provided")
 	}
+
+	pvdb := NewPVDB()
+	m.RegisterDataProvider(pvdb)
+	m.dateProvider = pvdb
 
 	// Create FRED API
 	fred := NewFred()
@@ -131,7 +129,7 @@ func (m *Manager) RegisterDataProvider(p Provider) {
 func (m *Manager) RiskFreeRate(t time.Time) float64 {
 	start := m.lastRiskFreeIdx
 	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
-	currDate := row[DateIdx].(time.Time)
+	currDate := row[common.DateIdx].(time.Time)
 	// check if the requestsed date is before the last requested date
 	if t.Before(currDate) {
 		start = 0
@@ -148,12 +146,12 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 			break
 		}
 
-		if !math.IsNaN(vals["DGS3MO"].(float64)) {
+		if vals["DGS3MO"] != nil && !math.IsNaN(vals["DGS3MO"].(float64)) {
 			m.lastRiskFreeIdx = *row
 			ret = vals["DGS3MO"].(float64)
 		}
 
-		dt := vals[DateIdx].(time.Time)
+		dt := vals[common.DateIdx].(time.Time)
 		if dt.Equal(t) || dt.After(t) {
 			break
 		}
@@ -162,76 +160,71 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 	return ret
 }
 
-// LastTradingDayOfWeek Get the last trading day of the specified month
-func (m *Manager) LastTradingDayOfWeek(t time.Time) (time.Time, error) {
-	return m.dateProvider.LastTradingDayOfWeek(t)
+// GetDataFrame get a dataframe for the requested symbol
+func (m *Manager) GetDataFrame(metric string, symbols ...string) (*dataframe.DataFrame, error) {
+	res, err := m.providers["security"].GetDataForPeriod(symbols, metric, m.Frequency, m.Begin, m.End)
+	return res, err
 }
 
-// LastTradingDayOfMonth Get the last trading day of the specified month
-func (m *Manager) LastTradingDayOfMonth(t time.Time) (time.Time, error) {
-	return m.dateProvider.LastTradingDayOfMonth(t)
-}
-
-// LastTradingDayOfYear Get the last trading day of the specified year
-func (m *Manager) LastTradingDayOfYear(t time.Time) (time.Time, error) {
-	return m.dateProvider.LastTradingDayOfYear(t)
-}
-
-// GetData get a dataframe for the requested symbol
-func (m *Manager) GetData(symbol string) (*dataframe.DataFrame, error) {
-	kind := "security"
-
-	symbol = strings.ToUpper(symbol)
-
-	if strings.HasPrefix(symbol, "$RATE.") {
-		kind = "rate"
-		symbol = strings.TrimPrefix(symbol, "$RATE.")
+func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols ...string) error {
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	begin = time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, tz)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
+	res, err := m.providers["security"].GetDataForPeriod(symbols, metric, FrequencyDaily, begin, end)
+	if err != nil {
+		log.Warn(err)
+		return err
 	}
 
-	if provider, ok := m.providers[kind]; ok {
-		return provider.GetDataForPeriod(symbol, m.Metric, m.Frequency, m.Begin, m.End)
-	}
+	iterator := res.ValuesIterator(dataframe.ValuesOptions{
+		InitialRow:   0,
+		Step:         1,
+		DontReadLock: true})
 
-	return nil, errors.New("Specified kind '" + kind + "' is not supported")
-}
+	for {
+		row, vals, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
 
-// GetMultipleData get multiple quotes simultaneously
-func (m *Manager) GetMultipleData(symbols ...string) (map[string]*dataframe.DataFrame, []error) {
-	res := make(map[string]*dataframe.DataFrame)
-	ch := make(chan quoteResult)
-	for ii := range symbols {
-		go downloadWorker(ch, strings.ToUpper(symbols[ii]), m)
-	}
-
-	errs := []error{}
-	for range symbols {
-		v := <-ch
-		if v.Err == nil {
-			res[v.Ticker] = v.Data
-		} else {
-			log.WithFields(log.Fields{
-				"Ticker": v.Ticker,
-				"Error":  v.Err,
-			}).Warn("Cannot download ticker data")
-			errs = append(errs, v.Err)
+		d := vals[common.DateIdx].(time.Time)
+		for _, s := range symbols {
+			key := buildHashKey(d, metric, s)
+			if vals[s] != nil {
+				m.cache[key] = vals[s].(float64)
+			} else {
+				log.Warnf("Interface is nil! %s", key)
+				m.cache[key] = math.NaN()
+			}
 		}
 	}
-
-	return res, errs
+	return nil
 }
 
-type quoteResult struct {
-	Ticker string
-	Data   *dataframe.DataFrame
-	Err    error
-}
-
-func downloadWorker(result chan<- quoteResult, symbol string, manager *Manager) {
-	df, err := manager.GetData(symbol)
-	res := quoteResult{
-		Ticker: symbol,
-		Data:   df,
-		Err:    err,
+func (m *Manager) Get(date time.Time, metric string, symbol string) (float64, error) {
+	symbol = strings.ToUpper(symbol)
+	key := buildHashKey(date, metric, symbol)
+	val, ok := m.cache[key]
+	if !ok {
+		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
+		err := m.Fetch(date, end, metric, symbol)
+		if err != nil {
+			return 0, err
+		}
+		val, ok = m.cache[key]
+		if !ok {
+			return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+		}
 	}
-	result <- res
+	return val, nil
+}
+
+func (m *Manager) TradingDays(since time.Time) []time.Time {
+	return m.dateProvider.TradingDays(since, time.Now(), FrequencyDaily)
+}
+
+func buildHashKey(date time.Time, metric string, symbol string) string {
+	// Hash key like 2021340:split:VFINX
+	return fmt.Sprintf("%d%d:%s:%s", date.Year(), date.YearDay(), metric, symbol)
 }

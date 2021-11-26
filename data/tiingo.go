@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"main/common"
+	"main/dfextras"
 	"math"
 	"net/http"
 	"strconv"
@@ -56,7 +58,6 @@ type tiingoJSONResponse struct {
 	SplitFactor float64 `json:"splitFactor"`
 }
 
-// var tiingoTickersURL = "https://apimedia.tiingo.com/docs/tiingo/daily/supported_tickers.zip"
 var tiingoAPI = "https://api.tiingo.com"
 
 // NewTiingo Create a new Tiingo data provider
@@ -178,7 +179,49 @@ func (t *tiingo) DataType() string {
 	return "security"
 }
 
-func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (t *tiingo) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	res := make([]*dataframe.DataFrame, 0, len(symbols))
+	errs := []error{}
+	ch := make(chan quoteResult)
+
+	for idx, chunk := range partitionArray(symbols, 10) {
+		log.Info("GetMultipleData run chunk %d of %d at %s\n", idx, len(symbols)/10, time.Now().Format("15:04:05"))
+		for ii := range chunk {
+			go tiingoDownloadWorker(ch, strings.ToUpper(chunk[ii]), metric, frequency, begin, end, t)
+		}
+
+		for range chunk {
+			v := <-ch
+			if v.Err == nil {
+				res = append(res, v.Data)
+			} else {
+				log.WithFields(log.Fields{
+					"Ticker": v.Ticker,
+					"Error":  v.Err,
+				}).Warn("Cannot download ticker data")
+				errs = append(errs, v.Err)
+			}
+		}
+	}
+
+	if len(errs) != 0 {
+		return nil, errs[0]
+	}
+
+	return dfextras.MergeAndFill(context.Background(), res...)
+}
+
+func tiingoDownloadWorker(result chan<- quoteResult, symbol string, metric string, frequency string, begin time.Time, end time.Time, t *tiingo) {
+	df, err := t.loadDataForPeriod(symbol, metric, frequency, begin, end)
+	res := quoteResult{
+		Ticker: symbol,
+		Data:   df,
+		Err:    err,
+	}
+	result <- res
+}
+
+func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	validFrequencies := map[string]bool{
 		FrequencyDaily:   true,
 		FrequencyWeekly:  true,
@@ -335,7 +378,7 @@ func (t *tiingo) GetDataForPeriod(symbol string, metric string, frequency string
 	}
 
 	timeSeries = res.Series[timeSeriesIdx].Copy()
-	timeSeries.Rename(DateIdx)
+	timeSeries.Rename(common.DateIdx)
 
 	switch metric {
 	case MetricOpen:
