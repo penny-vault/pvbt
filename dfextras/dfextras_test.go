@@ -16,7 +16,7 @@ package dfextras_test
 
 import (
 	"context"
-	"main/data"
+	"main/common"
 	"main/dfextras"
 	"time"
 
@@ -37,14 +37,14 @@ var _ = Describe("Dfextras", func() {
 		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
 		series1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 5}, []float64{1.0, 2.0, 3.0})
 		df1 = dataframe.NewDataFrame(series1)
-		tSeries1 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
+		tSeries1 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
 			time.Date(1982, time.July, 27, 0, 0, 0, 0, tz),
 			time.Date(1983, time.July, 27, 0, 0, 0, 0, tz),
 			time.Date(1984, time.July, 27, 0, 0, 0, 0, tz),
 			time.Date(1985, time.July, 27, 0, 0, 0, 0, tz),
 		})
 		fSeries1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 4}, []float64{1.0, 2.0, 3.0, 4.0})
-		tSeries2 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
+		tSeries2 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
 			time.Date(1984, time.July, 27, 0, 0, 0, 0, tz),
 			time.Date(1985, time.July, 27, 0, 0, 0, 0, tz),
 			time.Date(1986, time.July, 27, 0, 0, 0, 0, tz),
@@ -59,21 +59,20 @@ var _ = Describe("Dfextras", func() {
 	Describe("When given a dataframe", func() {
 		Context("with float64 series containing NaN's", func() {
 			It("should have no NaNs after DropNA is called", func() {
-				tmp, err := dfextras.DropNA(context.TODO(), df1)
-				df3 := tmp.(*dataframe.DataFrame)
+				df3, err := dfextras.DropNA(context.TODO(), df1)
 				Expect(err).To(BeNil())
 				Expect(df3.NRows()).To(Equal(3))
 			})
 		})
 		Context("and merged with another dataframe", func() {
 			It("should have times that cover the full range of both time axis'", func() {
-				newDf, err := dfextras.Merge(context.TODO(), data.DateIdx, df2, df3)
+				newDf, err := dfextras.Merge(context.TODO(), df2, df3)
 				Expect(err).To(BeNil())
 				Expect(newDf.NRows()).To(Equal(6))  // Number of rows should be 6
 				Expect(newDf.Series).To(HaveLen(3)) // Check number of columns
 
 				// Confirm that the timeAxis has all the expected values
-				timeAxisIdx, err := newDf.NameToColumn(data.DateIdx)
+				timeAxisIdx, err := newDf.NameToColumn(common.DateIdx)
 				timeAxis := newDf.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
 				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(1982, time.July, 27, 0, 0, 0, 0, tz)))

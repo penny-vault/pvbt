@@ -18,7 +18,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"main/common"
 	"math"
+	"sort"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -88,39 +90,26 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 	return series, nil
 }
 
-// DropNA remove rows in the series or dataframe that have NA's
-func DropNA(ctx context.Context, sdf interface{}, opts ...dataframe.FilterOptions) (interface{}, error) {
-	switch sdf.(type) {
-	case dataframe.Series:
-		filterFn := dataframe.FilterSeriesFn(func(val interface{}, row, nRows int) (dataframe.FilterAction, error) {
+// DropNA remove rows in the dataframe that have NA's
+func DropNA(ctx context.Context, sdf *dataframe.DataFrame, opts ...dataframe.FilterOptions) (*dataframe.DataFrame, error) {
+	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
+		for _, val := range vals {
+			if val == nil {
+				return dataframe.DROP, nil
+			}
 			if v, ok := val.(float64); ok {
 				if math.IsNaN(v) {
 					return dataframe.DROP, nil
 				}
 			}
-			return dataframe.KEEP, nil
-		})
-		res, err := dataframe.Filter(ctx, sdf, filterFn, opts...)
-		return res, err
-	case *dataframe.DataFrame:
-		filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
-			for _, val := range vals {
-				if val == nil {
-					return dataframe.DROP, nil
-				}
-				if v, ok := val.(float64); ok {
-					if math.IsNaN(v) {
-						return dataframe.DROP, nil
-					}
-				}
-			}
-			return dataframe.KEEP, nil
-		})
-		res, err := dataframe.Filter(ctx, sdf, filterFn, opts...)
-		return res, err
-	default:
-		return nil, errors.New("sdf must be a Series or DataFrame")
+		}
+		return dataframe.KEEP, nil
+	})
+	res, err := dataframe.Filter(ctx, sdf, filterFn, opts...)
+	if res == nil {
+		return nil, err
 	}
+	return res.(*dataframe.DataFrame), err
 }
 
 // Find row with value
@@ -142,7 +131,7 @@ func FindTime(df *dataframe.DataFrame, searchVal time.Time, col string) map[inte
 // FindNearestTime locates the row with the time closest to timeVal, assuming that the
 // input dataframe is sorted in ascending order. Returns nil if there is not a value
 // within at least maxDistance
-func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, maxDistance time.Duration, startHint ...int) (map[interface{}]interface{}, int) {
+func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, maxDistance time.Duration, startHint ...int) (map[interface{}]interface{}, int) {
 	start := 0
 	if len(startHint) > 0 {
 		start = startHint[0]
@@ -155,13 +144,12 @@ func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, col string, max
 	var lastRow map[interface{}]interface{} = nil
 	var hint = start
 	for {
-
 		row, val, _ := iterator(dataframe.SeriesName)
 		if row == nil {
 			break
 		}
 
-		rowTime := val[col].(time.Time)
+		rowTime := val[common.DateIdx].(time.Time)
 		distance := abs(rowTime.Sub(timeVal))
 
 		if lastDistance < distance {
@@ -264,7 +252,8 @@ func Lag(n int, df *dataframe.DataFrame, cols ...string) *dataframe.DataFrame {
 }
 
 // Merge merge multiple dataframes
-func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+	timeAxisName := common.DateIdx
 	unixToInternal := int64((1969*365 + 1969/4 - 1969/100 + 1969/400) * 24 * 60 * 60)
 	startTime := time.Unix(1<<63-1-unixToInternal, 999999999)
 	endTime := time.Time{}
@@ -373,6 +362,102 @@ func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame
 	return finalDf, nil
 }
 
+// MergeAndFill merge multiple dataframes on their time axis. Where there are missing values fill with specified fill value
+// Assumptions:
+//     1) All dataframes must be sampled at the same rate
+//     2) All dataframes must have a time column
+func MergeAndFill(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+	timeAxisName := common.DateIdx
+	// build time axis
+	timeMap := make(map[int64]time.Time)
+	for _, df := range dfs {
+		iterator := df.ValuesIterator(dataframe.ValuesOptions{
+			InitialRow:   0,
+			Step:         1,
+			DontReadLock: true})
+		for {
+			row, vals, _ := iterator(dataframe.SeriesName)
+			if row == nil {
+				break
+			}
+			t := vals[timeAxisName].(time.Time)
+			timeMap[t.Unix()] = t
+		}
+	}
+
+	timeArr := make([]time.Time, 0, len(timeMap))
+	for _, v := range timeMap {
+		timeArr = append(timeArr, v)
+	}
+	sort.Slice(timeArr, func(i, j int) bool {
+		return timeArr[i].Before(timeArr[j])
+	})
+
+	// build series
+	timeAxis := dataframe.NewSeriesTime(timeAxisName, &dataframe.SeriesInit{Size: len(timeArr)}, timeArr)
+	series := []dataframe.Series{timeAxis}
+	for _, df := range dfs {
+		iterator := df.ValuesIterator(dataframe.ValuesOptions{
+			InitialRow:   0,
+			Step:         1,
+			DontReadLock: true})
+		mainIdx := 0
+		lastVal := make(map[string]float64, len(df.Names())-1)
+		seriesVals := make(map[string][]float64, len(df.Names())-1)
+		for _, v := range df.Names() {
+			if v != timeAxisName {
+				seriesVals[v] = make([]float64, len(timeArr))
+				lastVal[v] = math.NaN()
+			}
+		}
+		for {
+			row, vals, _ := iterator(dataframe.SeriesName)
+			if row == nil {
+				break
+			}
+
+			t := vals[timeAxisName].(time.Time)
+			mainT := timeArr[mainIdx]
+
+			for _, v := range df.Names() {
+				if v == timeAxisName {
+					continue
+				}
+				if mainT.Equal(t) {
+					seriesVals[v][mainIdx] = vals[v].(float64)
+					lastVal[v] = vals[v].(float64)
+					mainIdx++
+				} else {
+					for ; mainIdx < len(timeArr); mainIdx++ {
+						mainT = timeArr[mainIdx]
+						if mainT.Equal(t) {
+							seriesVals[v][mainIdx] = vals[v].(float64)
+							lastVal[v] = vals[v].(float64)
+							break
+						} else {
+							seriesVals[v][mainIdx] = lastVal[v]
+						}
+					}
+				}
+			}
+		}
+
+		for _, v := range df.Names() {
+			if v == timeAxisName {
+				continue
+			}
+			for ; mainIdx < len(timeArr); mainIdx++ {
+				seriesVals[v][mainIdx] = lastVal[v]
+			}
+			newSeries := dataframe.NewSeriesFloat64(v, &dataframe.SeriesInit{Size: len(timeArr)}, seriesVals[v])
+			series = append(series, newSeries)
+
+		}
+	}
+
+	return dataframe.NewDataFrame(series...), nil
+}
+
 // MergeAndTimeAlign merge multiple dataframes on their time axis
 // Assumptions:
 //     1) timeAxisName is in all dataframes and refers to a TimeSeries
@@ -380,7 +465,8 @@ func Merge(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame
 //     3) Time series does not begin or end with nil values
 //     4) Time series is sorted ascending
 //     5) Time series must overlap
-func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
+	timeAxisName := common.DateIdx
 	startTime := time.Time{}
 	unixToInternal := int64((1969*365 + 1969/4 - 1969/100 + 1969/400) * 24 * 60 * 60)
 	endTime := time.Unix(1<<63-1-unixToInternal, 999999999)
@@ -422,7 +508,7 @@ func MergeAndTimeAlign(ctx context.Context, timeAxisName string, dfs ...*datafra
 	series := []dataframe.Series{}
 	var alignedTimeSeries dataframe.Series
 	for ii := range dfs {
-		newDf, err := TimeAlign(ctx, dfs[ii], timeAxisMap[ii], startTime, endTime)
+		newDf, err := TimeAlign(ctx, dfs[ii], startTime, endTime)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":  err,
@@ -492,8 +578,32 @@ func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesF
 	return ns, nil
 }
 
+// Split divides the dataframe into two, columns listed go into the first data frame, any remaining
+// columns do into the second data frame. This modifies the original dataframe in place to hold the
+// remaining columns
+func Split(ctx context.Context, df *dataframe.DataFrame, cols ...string) (*dataframe.DataFrame, *dataframe.DataFrame, error) {
+	timeSeries := df.Series[df.MustNameToColumn(common.DateIdx)]
+	df1 := make([]dataframe.Series, 0, len(cols)+1)
+	df1 = append(df1, timeSeries.Copy())
+
+	for _, colName := range cols {
+		colIdx, err := df.NameToColumn(colName)
+		if err != nil {
+			return nil, nil, err
+		}
+		df1 = append(df1, df.Series[colIdx])
+		df.RemoveSeries(colName)
+	}
+
+	return dataframe.NewDataFrame(df1...), df, nil
+}
+
 // TimeAlign truncate df to match specified time range
-func TimeAlign(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time) (*dataframe.DataFrame, error) {
+func TimeAlign(ctx context.Context, df *dataframe.DataFrame, startTime time.Time, endTime time.Time) (*dataframe.DataFrame, error) {
+	timeAxisColumn, err := df.NameToColumn(common.DateIdx)
+	if err != nil {
+		return nil, err
+	}
 	timeSeries := df.Series[timeAxisColumn]
 	startIdx := IndexOf(ctx, startTime, timeSeries, false)
 	endIdx := IndexOf(ctx, endTime, timeSeries, true)
@@ -514,7 +624,7 @@ func TimeAlign(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int,
 }
 
 // TimeTrim trim dataframe to rows within the startTime and endTime range
-func TimeTrim(ctx context.Context, df *dataframe.DataFrame, timeAxisColumn int, startTime time.Time, endTime time.Time, inPlace bool) (*dataframe.DataFrame, error) {
+func TimeTrim(ctx context.Context, df *dataframe.DataFrame, startTime time.Time, endTime time.Time, inPlace bool) (*dataframe.DataFrame, error) {
 	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 		for _, val := range vals {
 			if v, ok := val.(time.Time); ok {

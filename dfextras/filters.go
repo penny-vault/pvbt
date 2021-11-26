@@ -18,7 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"main/data"
+	"main/common"
 	"strings"
 
 	"github.com/rocketlaunchr/dataframe-go"
@@ -45,12 +45,12 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 	seriesMap := make(map[string]*dataframe.SeriesFloat64)
 	filterMap := make(map[string][]float64)
 
-	dateSeries := dataframe.NewSeriesTime(data.DateIdx, nil)
+	dateSeries := dataframe.NewSeriesTime(common.DateIdx, nil)
 
 	// Get list of columns and allocate 1 filter array each
 	for ii := range df.Series {
 		name := df.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, data.DateIdx) != 0 {
+		if strings.Compare(name, common.DateIdx) != 0 {
 			filterMap[name] = make([]float64, lookback)
 			smaName := fmt.Sprintf("%s%s", name, suffix)
 			seriesMap[smaName] = dataframe.NewSeriesFloat64(smaName, nil)
@@ -81,7 +81,7 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 		idx := *row % lookback
 
 		for k, v := range vals {
-			if strings.Compare(k.(string), data.DateIdx) != 0 {
+			if strings.Compare(k.(string), common.DateIdx) != 0 {
 				filterMap[k.(string)][idx] = v.(float64)
 				if !warmup {
 					// out of warmup period; save average to a new row
@@ -116,7 +116,7 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	series := []dataframe.Series{}
 	tickers := []string{}
 
-	dateSeriesIdx, err := eod.NameToColumn(data.DateIdx)
+	dateSeriesIdx, err := eod.NameToColumn(common.DateIdx)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	// Get list of tickers and pre-allocate result series
 	for ii := range eod.Series {
 		name := eod.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, data.DateIdx) != 0 {
+		if strings.Compare(name, common.DateIdx) != 0 {
 			tickers = append(tickers, name)
 			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
 			series = append(series, eod.Series[ii].Copy(), score)

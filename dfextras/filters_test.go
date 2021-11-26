@@ -15,7 +15,7 @@
 package dfextras_test
 
 import (
-	"main/data"
+	"main/common"
 	"main/dfextras"
 	"time"
 
@@ -34,7 +34,7 @@ var _ = Describe("Filters", func() {
 		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
 
 		series1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 4}, []float64{1.0, 2.0, 3.0, 4.0, 5.0})
-		tSeries1 := dataframe.NewSeriesTime(data.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
+		tSeries1 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{
 			time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 			time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 			time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -52,7 +52,7 @@ var _ = Describe("Filters", func() {
 				Expect(sma.NRows()).To(Equal(4))
 
 				// Confirm that the timeAxis has all the expected values
-				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
+				timeAxisIdx, err := sma.NameToColumn(common.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
 				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.February, 1, 0, 0, 0, 0, tz)))
@@ -78,7 +78,7 @@ var _ = Describe("Filters", func() {
 				Expect(sma.NRows()).To(Equal(3))
 
 				// Confirm that the timeAxis has all the expected values
-				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
+				timeAxisIdx, err := sma.NameToColumn(common.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
 				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.March, 1, 0, 0, 0, 0, tz)))
@@ -102,7 +102,7 @@ var _ = Describe("Filters", func() {
 				Expect(sma.NRows()).To(Equal(1))
 
 				// Confirm that the timeAxis has all the expected values
-				timeAxisIdx, err := sma.NameToColumn(data.DateIdx)
+				timeAxisIdx, err := sma.NameToColumn(common.DateIdx)
 				timeAxis := sma.Series[timeAxisIdx]
 				Expect(err).To(BeNil())
 				Expect(timeAxis.Value(0).(time.Time)).Should(Equal(time.Date(2021, time.May, 1, 0, 0, 0, 0, tz)))
