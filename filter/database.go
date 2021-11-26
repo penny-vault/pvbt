@@ -180,15 +180,15 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	var sql string
 	switch frequency {
 	case "annually":
-		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date)", periodReturn, sqlTmp)
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date)", periodReturn, sqlTmp)
 	case "monthly":
-		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
 	case "weekly":
-		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date)", periodReturn, sqlTmp)
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date)", periodReturn, sqlTmp)
 	case "daily":
-		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date)", periodReturn, sqlTmp)
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date)", periodReturn, sqlTmp)
 	default:
-		sql = fmt.Sprintf("SELECT event_date, %s, holdings, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
+		sql = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date)", periodReturn, sqlTmp)
 	}
 
 	trx, _ := database.TrxForUser(f.UserID)
@@ -209,6 +209,56 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	err = json.Unmarshal([]byte(j), &h.Items)
 	if err != nil {
 		return nil, err
+	}
+
+	// adjust justifications
+	if len(h.Items) > 0 {
+		lastHolding := h.Items[0].Holdings
+		lastJustification := h.Items[0].Justification
+		var currJustification []*portfolio.Justification
+		var currHolding []*portfolio.ReportableHolding
+		for _, item := range h.Items {
+			currHolding = item.Holdings
+			currJustification = item.Justification
+			item.Holdings = lastHolding
+			item.Justification = lastJustification
+			lastHolding = currHolding
+			lastJustification = currJustification
+		}
+
+		// add predicted holding item
+		switch frequency {
+		case "annually":
+			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
+				Time:          h.Items[len(h.Items)-1].Time.AddDate(1, 0, 0),
+				Holdings:      lastHolding,
+				Justification: lastJustification,
+			})
+		case "monthly":
+			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
+				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 1, 0),
+				Holdings:      lastHolding,
+				Justification: lastJustification,
+			})
+		case "weekly":
+			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
+				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 7),
+				Holdings:      lastHolding,
+				Justification: lastJustification,
+			})
+		case "daily":
+			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
+				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 1),
+				Holdings:      lastHolding,
+				Justification: lastJustification,
+			})
+		default:
+			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
+				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 1),
+				Holdings:      lastHolding,
+				Justification: lastJustification,
+			})
+		}
 	}
 
 	data, err := h.MarshalBinary()
