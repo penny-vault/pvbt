@@ -17,7 +17,6 @@ package handler
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"main/database"
 	"main/filter"
 	"main/portfolio"
@@ -113,8 +112,6 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 
 	sinceStr := c.Query("since", "0")
 
-	s := time.Now()
-
 	where := make(map[string]string)
 	req := c.Request()
 	req.URI().QueryArgs().VisitAll(func(key, value []byte) {
@@ -146,8 +143,6 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 
 		return fiber.ErrBadRequest
 	}
-	e := time.Now()
-	fmt.Printf("query duration: %.4f\n", e.Sub(s).Seconds())
 
 	return c.Send(data)
 }
