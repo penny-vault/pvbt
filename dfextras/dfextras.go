@@ -251,7 +251,8 @@ func Lag(n int, df *dataframe.DataFrame, cols ...string) *dataframe.DataFrame {
 	return dataframe.NewDataFrame(seriesArr...)
 }
 
-// Merge merge multiple dataframes
+// Merge multiple dataframes according to the time axis; rows that don't have corresponding values in
+// all dataframes are not included.
 func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	timeAxisName := common.DateIdx
 	unixToInternal := int64((1969*365 + 1969/4 - 1969/100 + 1969/400) * 24 * 60 * 60)
