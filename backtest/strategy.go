@@ -41,11 +41,12 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 			return nil, err
 		}
 
+		start := time.Now()
+		pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
+
 		manager.Begin = startDate
 		manager.End = endDate
 
-		start := time.Now()
-		pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
 		pm.Portfolio.StrategyShortcode = shortcode
 		paramsJSON, err := json.Marshal(params)
 		if err != nil {
