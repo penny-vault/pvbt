@@ -55,6 +55,7 @@ type KellersProtectiveAssetAllocation struct {
 	topN               int
 	lookback           int
 	prices             *dataframe.DataFrame
+	momentum           *dataframe.DataFrame
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
@@ -131,10 +132,10 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(manager *data.Man
 func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Manager) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
-	if manager.End == nullTime {
+	if manager.End.Equal(nullTime) {
 		manager.End = time.Now()
 	}
-	if manager.Begin == nullTime {
+	if manager.Begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	} else {
@@ -144,26 +145,46 @@ func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Man
 }
 
 // mom calculates the momentum based on the sma: MOM(L) = p0/SMA(L) - 1
-func (paa *KellersProtectiveAssetAllocation) mom(sma *dataframe.DataFrame) error {
+func (paa *KellersProtectiveAssetAllocation) mom() error {
 	dontLock := dataframe.Options{DontLock: true}
 
+	sma, err := dfextras.SMA(paa.lookback+1, paa.prices)
+	if err != nil {
+		return err
+	}
+
+	// calculate momentum 13, mom13 = (p0 / SMA13) - 1
 	for _, ticker := range paa.allTickers {
 		name := fmt.Sprintf("%s_MOM", ticker)
 		sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 			Size: sma.NRows(dontLock),
 		}), nil)
-		expr := fmt.Sprintf("%s/%s_SMA-1", ticker, ticker)
+		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", ticker, ticker)
 		fn := funcs.RegFunc(expr)
 		err := funcs.Evaluate(context.TODO(), sma, fn, name)
 		if err != nil {
 			return err
 		}
 	}
+
+	series := make([]dataframe.Series, 0, len(paa.allTickers)+1)
+	dateIdx := sma.MustNameToColumn(common.DateIdx)
+	series = append(series, sma.Series[dateIdx].Copy())
+	for _, ticker := range paa.allTickers {
+		name := fmt.Sprintf("%s_MOM", ticker)
+		idx := sma.MustNameToColumn(name)
+		s := sma.Series[idx].Copy()
+		s.Rename(ticker)
+		series = append(series, s)
+	}
+	paa.momentum = dataframe.NewDataFrame(series...)
+
 	return nil
 }
 
 // rank securities based on their momentum scores
-func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]common.PairList, []string) {
+func (paa *KellersProtectiveAssetAllocation) rank() ([]common.PairList, []string) {
+	df := paa.momentum
 	iterator := df.ValuesIterator(dataframe.ValuesOptions{
 		InitialRow:   0,
 		Step:         1,
@@ -183,8 +204,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]co
 		// rank each risky asset if it's momentum is greater than 0
 		sortable := make(common.PairList, 0, len(paa.riskUniverse))
 		for _, ticker := range paa.riskUniverse {
-			momCol := fmt.Sprintf("%s_MOM", ticker)
-			floatVal := vals[momCol].(float64)
+			floatVal := vals[ticker].(float64)
 			if floatVal > 0 {
 				sortable = append(sortable, common.Pair{
 					Key:   ticker,
@@ -201,10 +221,9 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]co
 		// rank each protective asset and select max
 		sortable = make(common.PairList, 0, len(paa.protectiveUniverse))
 		for _, ticker := range paa.protectiveUniverse {
-			momCol := fmt.Sprintf("%s_MOM", ticker)
 			sortable = append(sortable, common.Pair{
 				Key:   ticker,
-				Value: vals[momCol].(float64),
+				Value: vals[ticker].(float64),
 			})
 		}
 
@@ -217,7 +236,7 @@ func (paa *KellersProtectiveAssetAllocation) rank(df *dataframe.DataFrame) ([]co
 }
 
 // buildPortfolio computes the bond fraction at each period and creates a listing of target holdings
-func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.PairList, protectiveSelection []string, mom *dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.PairList, protectiveSelection []string) (*dataframe.DataFrame, error) {
 	// N is the number of assets in the risky universe
 	N := float64(len(paa.riskUniverse))
 
@@ -226,13 +245,14 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 
 	// n is the number of good assets in the risky universe, i.e. number of assets with a positive momentum
 	// calculate for every period
+	mom := paa.momentum
 	name := "paa_n" // name must be lower-case so it won't conflict with potential tickers
 	mom.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 		Size: mom.NRows(),
 	}), nil)
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
 	for idx, x := range paa.riskUniverse {
-		riskUniverseMomNames[idx] = fmt.Sprintf("%s_MOM", x)
+		riskUniverseMomNames[idx] = x
 	}
 	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
 	err := funcs.Evaluate(context.TODO(), mom, fn, name,
@@ -322,16 +342,11 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	series = append(series, targetSeries)
 
 	for _, ticker := range paa.allTickers {
-		colIdx, err := mom.NameToColumn(fmt.Sprintf("%s_MOM", ticker))
-		if err != nil {
-			return nil, err
-		}
-
+		colIdx := mom.MustNameToColumn(ticker)
 		col := mom.Series[colIdx]
 		col.Lock()
 		newCol := col.Copy()
 		col.Unlock()
-		newCol.Rename(ticker)
 		series = append(series, newCol)
 	}
 
@@ -373,29 +388,13 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*da
 		return nil, err
 	}
 
-	df, err := dfextras.SMA(paa.lookback-1, paa.prices)
-	if err != nil {
+	if err := paa.mom(); err != nil {
 		return nil, err
 	}
 
-	// offset the *_SMA columns by 1-month
-	smaCols := make([]string, 0, len(paa.allTickers))
-	for _, ticker := range paa.allTickers {
-		smaCols = append(smaCols, fmt.Sprintf("%s_SMA", ticker))
-	}
+	riskRanked, protectiveSelection := paa.rank()
 
-	df = dfextras.Lag(1, df, smaCols...)
-	dfextras.DropNA(context.TODO(), df, dataframe.FilterOptions{
-		InPlace: true,
-	})
-
-	if err := paa.mom(df); err != nil {
-		return nil, err
-	}
-
-	riskRanked, protectiveSelection := paa.rank(df)
-
-	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection, df)
+	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection)
 	if err != nil {
 		return nil, err
 	}
