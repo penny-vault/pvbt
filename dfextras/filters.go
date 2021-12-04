@@ -16,7 +16,6 @@ package dfextras
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"main/common"
 	"strings"
@@ -37,9 +36,8 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 		suffix = colSuffix[0]
 	}
 
-	if (lookback > df.NRows()) ||
-		(lookback <= 0) {
-		return nil, errors.New("lookback must be: 0 < lookback <= df.NRows()")
+	if (lookback > df.NRows()) || (lookback <= 0) {
+		return nil, fmt.Errorf("lookback must be: 0 < lookback <= df.NRows() [%d]", df.NRows())
 	}
 
 	seriesMap := make(map[string]*dataframe.SeriesFloat64)
