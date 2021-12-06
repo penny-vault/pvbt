@@ -18,17 +18,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"main/common"
 	"main/data"
 	"main/database"
-	"main/dfextras"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
-	"github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -48,55 +46,15 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		ComputedOn:  time.Now(),
 	}
 
-	// Get a list of symbols that data should be pulled for
-	uniqueSymbols := make(map[string]bool, len(pm.holdings)+1)
-	uniqueSymbols[p.Benchmark] = true
-	for _, trx := range p.Transactions {
-		if trx.Ticker != "" && trx.Ticker != "$CASH" {
-			uniqueSymbols[trx.Ticker] = true
-		}
-	}
-
-	symbols := make([]string, 0, len(uniqueSymbols))
-	for k := range uniqueSymbols {
-		symbols = append(symbols, k)
-	}
-
 	// Calculate performance
 	pm.dataProxy.Begin = p.StartDate
 	pm.dataProxy.End = through
 	pm.dataProxy.Frequency = data.FrequencyDaily
 
 	// t1 := time.Now()
-	eodQuotes, err := pm.dataProxy.GetDataFrame(data.MetricClose, symbols...)
+	tradingDays := pm.dataProxy.TradingDays(p.StartDate, through)
 	// t2 := time.Now()
-	if err != nil {
-		return nil, err
-	}
 
-	// Get benchmark quotes but use adjustedClose prices
-	// t3 := time.Now()
-	benchmarkEod, err := pm.dataProxy.GetDataFrame(data.MetricAdjustedClose, p.Benchmark)
-	if err != nil {
-		return nil, err
-	}
-	benchColumn, err := benchmarkEod.NameToColumn(p.Benchmark)
-	if err != nil {
-		return nil, err
-	}
-	s := benchmarkEod.Series[benchColumn]
-	s.Rename("$BENCHMARK")
-
-	err = eodQuotes.AddSeries(s, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	dfextras.DropNA(context.TODO(), eodQuotes, dataframe.FilterOptions{
-		InPlace: true,
-	})
-
-	iterator := eodQuotes.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
 	holdings := make(map[string]float64)
@@ -145,13 +103,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	var last time.Time
 	var lastAssets []*ReportableHolding
 
-	for {
-		row, quotes, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-		date := quotes[common.DateIdx].(time.Time)
-
+	for _, date := range tradingDays {
 		if last.Weekday() > date.Weekday() {
 			daysToStartOfWeek = 1
 		} else {
@@ -173,7 +125,11 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		last = date
 
 		if benchmarkShares != 0.0 {
-			benchmarkValue = benchmarkShares * quotes["$BENCHMARK"].(float64)
+			benchmarkPrice, err := pm.dataProxy.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+			if err != nil {
+				log.Error(err)
+			}
+			benchmarkValue = benchmarkShares * benchmarkPrice
 		}
 
 		// check if this is the current year
@@ -274,18 +230,32 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		justificationArray := pm.justifications[date.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals
-		benchmarkShares = benchmarkValue / quotes["$BENCHMARK"].(float64)
+		benchmarkPrice, err := pm.dataProxy.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		if err != nil {
+			log.Error(err)
+		}
+		if math.IsNaN(benchmarkPrice) {
+			log.Warnf("Benchmark %s is NaN", pm.Portfolio.Benchmark)
+		}
+		benchmarkShares = benchmarkValue / benchmarkPrice
 
 		// iterate through each holding and add value to get total return
 		totalVal = 0.0
 		for symbol, qty := range holdings {
 			if symbol == "$CASH" {
+				if math.IsNaN(qty) {
+					log.Warn("Cash position is NaN")
+				}
 				totalVal += qty
-			} else if val, ok := quotes[symbol]; ok {
-				price := val.(float64)
-				totalVal += price * qty
 			} else {
-				return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+				price, err := pm.dataProxy.Get(date, data.MetricClose, symbol)
+				if err != nil {
+					return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+				}
+				if math.IsNaN(price) {
+					log.Warnf("Price is NaN for %s", symbol)
+				}
+				totalVal += price * qty
 			}
 		}
 
@@ -296,13 +266,12 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			var value float64
 			if symbol == "$CASH" {
 				value = qty
-			} else if val, ok := quotes[symbol]; ok {
-				price := val.(float64)
-				if qty > 1.0e-5 {
-					value = price * qty
+			} else if qty > 1.0e-5 {
+				price, err := pm.dataProxy.Get(date, data.MetricClose, symbol)
+				if err != nil {
+					return nil, fmt.Errorf("no quote for symbol: %s", symbol)
 				}
-			} else {
-				return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+				value = price * qty
 			}
 			if qty > 1.0e-5 {
 				currentAssets = append(currentAssets, &ReportableHolding{
@@ -324,6 +293,11 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		riskFreeValue *= (1 + riskFreeRate)
 
 		prevVal = totalVal
+
+		// ensure that holdings are sorted
+		sort.Slice(lastAssets, func(i, j int) bool {
+			return lastAssets[i].Ticker < lastAssets[j].Ticker
+		})
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,

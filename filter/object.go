@@ -177,8 +177,14 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 		periodReturn = "twrr_mtd"
 	}
 
+	holdingsAtPeriodStart := make([]*portfolio.ReportableHolding, 0)
+	justificationAtPeriodStart := make([]*portfolio.Justification, 0)
+
+	holdings := portfolio.PortfolioHoldingItemList{
+		Items: make([]*portfolio.PortfolioHoldingItem, 0, len(f.Performance.Measurements)),
+	}
+
 	// filter measurements by where
-	filtered := make([]*portfolio.PerformanceMeasurement, 0, len(f.Performance.Measurements))
 	var last *portfolio.PerformanceMeasurement
 	added := false
 	for _, meas := range f.Performance.Measurements {
@@ -187,31 +193,81 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 		case "annually":
 			if last == nil {
 				if meas.Time.After(since) {
-					filtered = append(filtered, meas)
+					holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+						Time:          meas.Time,
+						Holdings:      meas.Holdings,
+						Justification: meas.Justification,
+						PercentReturn: getValue(meas, periodReturn),
+						Value:         meas.Value,
+					})
 					added = true
 				}
 			} else if last.Time.Year() != meas.Time.Year() && meas.Time.After(since) {
-				filtered = append(filtered, last)
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          last.Time,
+					Holdings:      holdingsAtPeriodStart,
+					Justification: justificationAtPeriodStart,
+					PercentReturn: getValue(last, periodReturn),
+					Value:         last.Value,
+				})
+				holdingsAtPeriodStart = meas.Holdings
+				justificationAtPeriodStart = last.Justification
 				added = true
 			}
 		case "monthly":
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
-				filtered = append(filtered, last)
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          last.Time,
+					Holdings:      holdingsAtPeriodStart,
+					Justification: justificationAtPeriodStart,
+					PercentReturn: getValue(last, periodReturn),
+					Value:         last.Value,
+				})
+
+				holdingsAtPeriodStart = meas.Holdings
+				justificationAtPeriodStart = last.Justification
+
 				added = true
 			}
 		case "weekly":
 			if last != nil && meas.Time.Weekday() < last.Time.Weekday() && meas.Time.After(since) {
-				filtered = append(filtered, last)
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          last.Time,
+					Holdings:      holdingsAtPeriodStart,
+					Justification: justificationAtPeriodStart,
+					PercentReturn: getValue(last, periodReturn),
+					Value:         last.Value,
+				})
+
+				holdingsAtPeriodStart = meas.Holdings
+				justificationAtPeriodStart = last.Justification
+
 				added = true
 			}
 		case "daily":
 			if meas.Time.After(since) {
-				filtered = append(filtered, meas)
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          meas.Time,
+					Holdings:      meas.Holdings,
+					Justification: meas.Justification,
+					PercentReturn: getValue(meas, periodReturn),
+					Value:         meas.Value,
+				})
 				added = true
 			}
 		default: // monthly
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
-				filtered = append(filtered, last)
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          last.Time,
+					Holdings:      holdingsAtPeriodStart,
+					Justification: justificationAtPeriodStart,
+					PercentReturn: getValue(last, periodReturn),
+					Value:         last.Value,
+				})
+
+				holdingsAtPeriodStart = meas.Holdings
+				justificationAtPeriodStart = last.Justification
+
 				added = true
 			}
 		}
@@ -220,62 +276,50 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 
 	// add the last measurement if it wasn't already added
 	if !added {
-		filtered = append(filtered, last)
-	}
-
-	meas := portfolio.PortfolioHoldingItemList{
-		Items: make([]*portfolio.PortfolioHoldingItem, len(filtered)),
-	}
-
-	lastHolding := make([]*portfolio.ReportableHolding, 0)
-	lastJustification := make([]*portfolio.Justification, 0)
-	for idx, xx := range filtered {
-		meas.Items[idx] = &portfolio.PortfolioHoldingItem{
-			Time:          xx.Time,
-			Holdings:      lastHolding,
-			Justification: lastJustification,
-			PercentReturn: getValue(xx, periodReturn),
-			Value:         xx.Value,
-		}
-		lastHolding = xx.Holdings
-		lastJustification = xx.Justification
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          last.Time,
+			Holdings:      holdingsAtPeriodStart,
+			Justification: justificationAtPeriodStart,
+			PercentReturn: getValue(last, periodReturn),
+			Value:         last.Value,
+		})
 	}
 
 	// add predicted holding item
 	switch frequency {
 	case "annually":
-		meas.Items = append(meas.Items, &portfolio.PortfolioHoldingItem{
-			Time:          meas.Items[len(meas.Items)-1].Time.AddDate(1, 0, 0),
-			Holdings:      lastHolding,
-			Justification: lastJustification,
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(1, 0, 0),
+			Holdings:      last.Holdings,
+			Justification: last.Justification,
 		})
 	case "monthly":
-		meas.Items = append(meas.Items, &portfolio.PortfolioHoldingItem{
-			Time:          meas.Items[len(meas.Items)-1].Time.AddDate(0, 1, 0),
-			Holdings:      lastHolding,
-			Justification: lastJustification,
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 1, 0),
+			Holdings:      last.Holdings,
+			Justification: last.Justification,
 		})
 	case "weekly":
-		meas.Items = append(meas.Items, &portfolio.PortfolioHoldingItem{
-			Time:          meas.Items[len(meas.Items)-1].Time.AddDate(0, 0, 7),
-			Holdings:      lastHolding,
-			Justification: lastJustification,
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 7),
+			Holdings:      last.Holdings,
+			Justification: last.Justification,
 		})
 	case "daily":
-		meas.Items = append(meas.Items, &portfolio.PortfolioHoldingItem{
-			Time:          meas.Items[len(meas.Items)-1].Time.AddDate(0, 0, 1),
-			Holdings:      lastHolding,
-			Justification: lastJustification,
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 1),
+			Holdings:      last.Holdings,
+			Justification: last.Justification,
 		})
 	default:
-		meas.Items = append(meas.Items, &portfolio.PortfolioHoldingItem{
-			Time:          meas.Items[len(meas.Items)-1].Time.AddDate(0, 0, 1),
-			Holdings:      lastHolding,
-			Justification: lastJustification,
+		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 1),
+			Holdings:      last.Holdings,
+			Justification: last.Justification,
 		})
 	}
 
-	return meas.MarshalBinary()
+	return holdings.MarshalBinary()
 }
 
 func (f *FilterObject) GetTransactions(since time.Time) ([]byte, error) {

@@ -220,8 +220,8 @@ func (m *Manager) Get(date time.Time, metric string, symbol string) (float64, er
 	return val, nil
 }
 
-func (m *Manager) TradingDays(since time.Time) []time.Time {
-	return m.dateProvider.TradingDays(since, time.Now(), FrequencyDaily)
+func (m *Manager) TradingDays(since time.Time, through time.Time) []time.Time {
+	return m.dateProvider.TradingDays(since, through, FrequencyDaily)
 }
 
 func buildHashKey(date time.Time, metric string, symbol string) string {
