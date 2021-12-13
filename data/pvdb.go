@@ -283,3 +283,93 @@ func (p *pvdb) GetDataForPeriod(symbols []string, metric string, frequency strin
 
 	return df, err
 }
+
+func (p *pvdb) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	trx, err := database.TrxForUser("pvuser")
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Symbol": symbol,
+			"Metric": metric,
+			"Error":  err,
+		}).Warn("Failed to load eod prices -- could not get a database transaction")
+		return math.NaN(), err
+	}
+
+	// build SQL query
+	var columns string
+	var adjusted bool
+	switch metric {
+	case MetricOpen:
+		columns = "open AS val"
+	case MetricHigh:
+		columns = "high AS val"
+	case MetricLow:
+		columns = "low AS val"
+	case MetricClose:
+		columns = "close AS val"
+	case MetricVolume:
+		columns = "(volume::double precision) AS val"
+	case MetricAdjustedOpen:
+		columns = "open AS val, dividend, split_factor"
+		adjusted = true
+	case MetricAdjustedHigh:
+		columns = "high AS val, dividend, split_factor"
+		adjusted = true
+	case MetricAdjustedLow:
+		columns = "low AS val, dividend, split_factor"
+		adjusted = true
+	case MetricAdjustedClose:
+		columns = "close AS val, dividend, split_factor"
+		adjusted = true
+	case MetricDividendCash:
+		columns = "dividend AS val"
+	case MetricSplitFactor:
+		columns = "split_factor AS val"
+	default:
+		trx.Rollback(context.Background())
+		return math.NaN(), errors.New("un-supported metric")
+	}
+
+	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod_v1 WHERE ticker=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
+
+	// execute the query
+	rows, err := trx.Query(context.Background(), sql, symbol, before)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Symbol": symbol,
+			"Metric": metric,
+			"Error":  err,
+		}).Warn("Failed to load eod prices -- db query failed")
+		trx.Rollback(context.Background())
+		return math.NaN(), err
+	}
+
+	var date time.Time
+	var ticker string
+	var val float64
+	var div float64
+	var split float64
+
+	for rows.Next() {
+		if adjusted {
+			err = rows.Scan(&date, &ticker, &val, &div, &split)
+		} else {
+			err = rows.Scan(&date, &ticker, &val)
+		}
+		if err != nil {
+			log.WithFields(log.Fields{
+				"Symbol": symbol,
+				"Metric": metric,
+				"Error":  err,
+			}).Warn("Failed to load eod prices -- db query scan failed")
+			trx.Rollback(context.Background())
+			return math.NaN(), err
+		}
+
+		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
+	}
+
+	trx.Commit(context.Background())
+	return val, err
+}

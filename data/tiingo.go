@@ -179,6 +179,65 @@ func (t *tiingo) DataType() string {
 	return "security"
 }
 
+func (t *tiingo) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+	// build URL to get data
+	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?endDate=%s&token=%s", tiingoAPI, symbol, before.Format("2006-01-02"), t.apikey)
+	// t1 = time.Now()
+	resp, err := http.Get(url)
+	// t2 = time.Now()
+
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Url":    url,
+			"Symbol": symbol,
+			"Metric": metric,
+			"Error":  err,
+		}).Warn("Failed to load eod prices")
+		return math.NaN(), err
+	}
+
+	m := make([]tiingoJSONResponse, 0)
+	err = json.NewDecoder(resp.Body).Decode(&m)
+	if err != nil {
+		return math.NaN(), err
+	}
+
+	err = nil
+
+	if len(m) == 0 {
+		return math.NaN(), errors.New("no results returned")
+	}
+
+	last := m[len(m)-1]
+
+	switch metric {
+	case MetricOpen:
+		return last.Open, nil
+	case MetricHigh:
+		return last.High, nil
+	case MetricLow:
+		return last.Low, nil
+	case MetricClose:
+		return last.Close, nil
+	case MetricVolume:
+		return float64(last.Volume), nil
+	case MetricAdjustedOpen:
+		return last.AdjOpen, nil
+	case MetricAdjustedHigh:
+		return last.AdjHigh, nil
+	case MetricAdjustedLow:
+		return last.AdjLow, nil
+	case MetricAdjustedClose:
+		return last.AdjClose, nil
+	case MetricDividendCash:
+		return last.DivCash, nil
+	case MetricSplitFactor:
+		return last.SplitFactor, nil
+	default:
+		return math.NaN(), errors.New("un-supported metric")
+	}
+}
+
 func (t *tiingo) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	res := make([]*dataframe.DataFrame, 0, len(symbols))
 	errs := []error{}

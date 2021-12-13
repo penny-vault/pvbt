@@ -17,6 +17,7 @@ package data
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"main/common"
@@ -45,6 +46,10 @@ func NewFred() *fred {
 
 func (f *fred) DataType() string {
 	return "rate"
+}
+
+func (f *fred) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+	return math.NaN(), errors.New("Function not implemented")
 }
 
 func (f *fred) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {

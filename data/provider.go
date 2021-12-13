@@ -29,6 +29,7 @@ import (
 type Provider interface {
 	DataType() string
 	GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
+	GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error)
 }
 
 type DateProvider interface {
@@ -63,6 +64,7 @@ type Manager struct {
 	End             time.Time
 	Frequency       string
 	cache           map[string]float64
+	lastCache       map[string]float64
 	credentials     map[string]string
 	providers       map[string]Provider
 	dateProvider    DateProvider
@@ -97,6 +99,7 @@ func NewManager(credentials map[string]string) Manager {
 	var m = Manager{
 		Frequency:   FrequencyMonthly,
 		cache:       make(map[string]float64, 1_000_000),
+		lastCache:   make(map[string]float64, 10_000),
 		credentials: credentials,
 		providers:   map[string]Provider{},
 	}
@@ -193,7 +196,6 @@ func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols .
 			if vals[s] != nil {
 				m.cache[key] = vals[s].(float64)
 			} else {
-				log.Warnf("Interface is nil! %s", key)
 				m.cache[key] = math.NaN()
 			}
 		}
@@ -216,6 +218,21 @@ func (m *Manager) Get(date time.Time, metric string, symbol string) (float64, er
 		if !ok {
 			return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
 		}
+	}
+	return val, nil
+}
+
+func (m *Manager) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+	symbol = strings.ToUpper(symbol)
+	var err error
+	val, ok := m.lastCache[symbol]
+	if !ok {
+		val, err = m.providers["security"].GetLatestDataBefore(symbol, metric, before)
+		if err != nil {
+			log.Warn(err)
+			return math.NaN(), err
+		}
+		m.lastCache[symbol] = val
 	}
 	return val, nil
 }
