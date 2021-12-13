@@ -245,16 +245,22 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			if symbol == "$CASH" {
 				if math.IsNaN(qty) {
 					log.Warn("Cash position is NaN")
+				} else {
+					totalVal += qty
 				}
-				totalVal += qty
 			} else {
 				price, err := pm.dataProxy.Get(date, data.MetricClose, symbol)
 				if err != nil {
 					return nil, fmt.Errorf("no quote for symbol: %s", symbol)
 				}
 				if math.IsNaN(price) {
-					log.Warnf("Price is NaN for %s", symbol)
+					price, err = pm.dataProxy.GetLatestDataBefore(symbol, data.MetricClose, date)
+					//log.Warnf("Price is NaN for %s; last price = %.2f", symbol, price)
+					if err != nil {
+						return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+					}
 				}
+
 				totalVal += price * qty
 			}
 		}
