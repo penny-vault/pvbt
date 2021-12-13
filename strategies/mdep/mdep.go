@@ -191,18 +191,15 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	// build target portfolio
 	targetAssets := make([]interface{}, 0, 600)
 	targetDates := make([]interface{}, 0, 600)
-	invested := false
 	nextDateIdx := 0
 	for _, s := range crashDetection {
 		if s.StormGuardArmor <= 0 {
-			if invested {
-				targetMap := map[string]float64{
-					mdep.OutTicker: 1.0,
-				}
-				targetDates = append(targetDates, s.EventDate)
-				targetAssets = append(targetAssets, targetMap)
-				invested = false
+			targetMap := map[string]float64{
+				mdep.OutTicker: 1.0,
 			}
+			targetDates = append(targetDates, s.EventDate)
+			targetAssets = append(targetAssets, targetMap)
+			continue
 		}
 
 		for nextDateIdx < len(dates) && dates[nextDateIdx].Before(s.EventDate) {
@@ -236,7 +233,6 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 			targetDates = append(targetDates, s.EventDate)
 			targetAssets = append(targetAssets, targetMap)
-			invested = true
 
 			nextDateIdx++
 		}
