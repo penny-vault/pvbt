@@ -156,7 +156,7 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f for date %s", total, date)
 	}
 
-	// get the cash position of the portfolio
+	// cash position of the portfolio
 	var cash float64
 	if currCash, ok := pm.holdings["$CASH"]; ok {
 		cash += currCash
@@ -181,7 +181,9 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 
 			log.Debugf("[Retrieve price data] Date = %s, Ticker = %s, Price = %.5f, Value = %.5f", date, k, price, v*price)
 
-			securityValue += v * price
+			if !math.IsNaN(price) {
+				securityValue += v * price
+			}
 			priceMap[k] = price
 		}
 	}
@@ -224,18 +226,26 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 		}
 
 		if _, ok := target[k]; !ok {
+			price := priceMap[k]
+			if math.IsNaN(priceMap[k]) {
+				log.Warnf("%s price is not known - writing off asset", k)
+				price = 0.0
+				fmt.Printf("\tcash = %.2f  v = %.2f  price = %.2f\n", cash, v, price)
+			}
 			trxId, _ := uuid.New().MarshalBinary()
 			t := Transaction{
 				ID:            trxId,
 				Date:          date,
 				Ticker:        k,
 				Kind:          SellTransaction,
-				PricePerShare: priceMap[k],
+				PricePerShare: price,
 				Shares:        v,
-				TotalValue:    v * priceMap[k],
+				TotalValue:    v * price,
 				Justification: justification,
 				Source:        SourceName,
 			}
+
+			cash += v * price
 
 			err := computeTransactionSourceID(&t)
 			if err != nil {
@@ -256,14 +266,23 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 		// is this security currently held and should we sell it?
 		if holding, ok := pm.holdings[k]; ok {
 			targetDollars := investable * v
+			price := priceMap[k]
 			currentDollars := holding * priceMap[k]
 			if (targetDollars / priceMap[k]) > 1.0e-5 {
-				newHoldings[k] = targetDollars / priceMap[k]
+				if !math.IsNaN(price) {
+					newHoldings[k] = targetDollars / price
+				}
 			}
 			if targetDollars < currentDollars {
 				// Need to sell to target amount
+				if math.IsNaN(price) {
+					log.Fatalf("No known price for asset %s; Cannot sell partial", k)
+					price = 0.0
+					newHoldings[k] = 0.0
+				}
+
 				toSellDollars := currentDollars - targetDollars
-				toSellShares := toSellDollars / priceMap[k]
+				toSellShares := toSellDollars / price
 				if toSellDollars <= 1.0e-5 {
 					log.WithFields(log.Fields{
 						"Ticker": k,
@@ -280,10 +299,14 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 					Date:          date,
 					Ticker:        k,
 					Kind:          SellTransaction,
-					PricePerShare: priceMap[k],
+					PricePerShare: price,
 					Shares:        toSellShares,
 					TotalValue:    toSellDollars,
 					Justification: justification,
+				}
+
+				if !math.IsNaN(toSellDollars) {
+					cash += toSellDollars
 				}
 
 				err := computeTransactionSourceID(&t)
@@ -297,11 +320,10 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 				}
 
 				sells = append(sells, &t)
-			}
-			if targetDollars > currentDollars {
+			} else if targetDollars > currentDollars {
 				// Need to buy to target amount
 				toBuyDollars := targetDollars - currentDollars
-				toBuyShares := toBuyDollars / priceMap[k]
+				toBuyShares := toBuyDollars / price
 
 				if toBuyShares <= 1.0e-5 {
 					log.WithFields(log.Fields{
@@ -311,6 +333,14 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 						"TotalValue": toBuyDollars,
 						"Date":       date,
 					}).Warn("Refusing to buy 0 shares")
+				} else if math.IsNaN(price) {
+					log.WithFields(log.Fields{
+						"Ticker":     k,
+						"Kind":       "BuyTransaction",
+						"Shares":     v,
+						"TotalValue": toBuyDollars,
+						"Date":       date,
+					}).Warn("Refusing to buy shares of asset with unknown price")
 				} else {
 					trxId, _ := uuid.New().MarshalBinary()
 					t := Transaction{
@@ -318,10 +348,16 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 						Date:          date,
 						Ticker:        k,
 						Kind:          BuyTransaction,
-						PricePerShare: priceMap[k],
+						PricePerShare: price,
 						Shares:        toBuyShares,
 						TotalValue:    toBuyDollars,
 						Justification: justification,
+					}
+
+					if math.IsNaN(toBuyDollars) {
+						log.Warnf("toBuyDollars is NaN %s\n", k)
+					} else {
+						cash -= toBuyDollars
 					}
 
 					log.Debugf("[Buy additional shares] Date = %s, Ticker = %s, Price = %.5f, Shares = %.5f, Value = %.5f", date, k, priceMap[k], toBuyShares, toBuyDollars)
@@ -342,7 +378,8 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 		} else {
 			// this is a new position
 			value := investable * v
-			shares := value / priceMap[k]
+			price := priceMap[k]
+			shares := value / price
 
 			if shares <= 1.0e-5 {
 				log.WithFields(log.Fields{
@@ -352,6 +389,14 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 					"TotalValue": value,
 					"Date":       date,
 				}).Warn("Refusing to buy 0 shares")
+			} else if math.IsNaN(price) {
+				log.WithFields(log.Fields{
+					"Ticker":     k,
+					"Kind":       "BuyTransaction",
+					"Shares":     v,
+					"TotalValue": value,
+					"Date":       date,
+				}).Warn("Refusing to buy shares of asset with unknown price")
 			} else {
 				newHoldings[k] = shares
 				trxId, _ := uuid.New().MarshalBinary()
@@ -360,12 +405,13 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 					Date:          date,
 					Ticker:        k,
 					Kind:          BuyTransaction,
-					PricePerShare: priceMap[k],
+					PricePerShare: price,
 					Shares:        shares,
 					TotalValue:    value,
 					Justification: justification,
 				}
 
+				cash -= value
 				log.Debugf("[Buy new holding] Date = %s, Ticker = %s, Price = %.5f, Shares = %.5f, Value = %.5f", date, k, priceMap[k], shares, value)
 
 				err := computeTransactionSourceID(&t)
@@ -385,6 +431,9 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
+	if cash > 1.0e-05 {
+		newHoldings["$CASH"] = cash
+	}
 	pm.holdings = newHoldings
 
 	p.CurrentHoldings = buildHoldingsArray(date, newHoldings)
