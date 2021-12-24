@@ -188,7 +188,7 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 	argumentsMap := make(map[string]interface{})
 	for k, v := range strat.Arguments {
 		var output interface{}
-		if v.Typecode == "string" {
+		if v.Typecode == "string" || v.Typecode == "choice" {
 			output = v.Default
 		} else {
 			json.Unmarshal([]byte(v.Default), &output)
