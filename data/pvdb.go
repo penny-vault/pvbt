@@ -112,6 +112,18 @@ func (p *pvdb) DataType() string {
 func (p *pvdb) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	tradingDays := p.TradingDays(begin, end, frequency)
 
+	// ensure symbols is a unique set
+	uniqueSymbols := make(map[string]bool, len(symbols))
+	for _, v := range symbols {
+		uniqueSymbols[v] = true
+	}
+	symbols = make([]string, len(uniqueSymbols))
+	j := 0
+	for k := range uniqueSymbols {
+		symbols[j] = k
+		j++
+	}
+
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
