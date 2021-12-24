@@ -723,7 +723,7 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		user_id,
 		strategy_value,
 		holdings,
-		justification
+		justification,
 		alpha_1yr,
 		alpha_3yr,
 		alpha_5yr,
