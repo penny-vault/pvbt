@@ -45,7 +45,7 @@ func GetStrategy(c *fiber.Ctx) error {
 	return fiber.ErrNotFound
 }
 
-// RunStrategy execute strategy
+// RunStrategy executes the strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
 	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
