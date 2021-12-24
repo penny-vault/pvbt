@@ -279,6 +279,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				}
 				value = price * qty
 			}
+			if math.IsNaN(value) {
+				value = 0.0
+			}
 			if qty > 1.0e-5 {
 				currentAssets = append(currentAssets, &ReportableHolding{
 					Ticker:           symbol,
