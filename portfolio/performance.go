@@ -887,12 +887,16 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	for _, m := range p.Measurements {
 		holdings, err := json.Marshal(m.Holdings)
 		if err != nil {
-			return err
+			for _, holding := range m.Holdings {
+				log.Error(fmt.Sprintf("[%s] %.2f shares (%.2f%%) = $%.2f", holding.Ticker, holding.Shares, holding.PercentPortfolio, holding.Value))
+			}
+			return fmt.Errorf("failed to serialize holdings: %s", err)
 		}
 
 		justification, err := json.Marshal(m.Justification)
 		if err != nil {
-			return err
+			log.Debug(fmt.Sprintf("%+v", m.Justification))
+			return fmt.Errorf("failed to serialize justification: %s", err)
 		}
 
 		_, err = trx.Exec(context.Background(), sql,
