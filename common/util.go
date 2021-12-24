@@ -130,18 +130,25 @@ func SetupLogging() {
 
 	switch level {
 	case "debug":
+		log.Info("Setting logging level to debug")
 		log.SetLevel(log.DebugLevel)
 	case "error":
+		log.Info("Setting logging level to error")
 		log.SetLevel(log.ErrorLevel)
 	case "fatal":
+		log.Info("Setting logging level to fatal")
 		log.SetLevel(log.FatalLevel)
 	case "info":
+		log.Info("Setting logging level to info")
 		log.SetLevel(log.InfoLevel)
 	case "panic":
+		log.Info("Setting logging level to panic")
 		log.SetLevel(log.PanicLevel)
 	case "trace":
+		log.Info("Setting logging level to trace")
 		log.SetLevel(log.TraceLevel)
 	case "warning":
+		log.Info("Setting logging level to warning")
 		log.SetLevel(log.WarnLevel)
 	default:
 		log.SetLevel(log.WarnLevel)
