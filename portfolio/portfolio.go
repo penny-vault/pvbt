@@ -16,6 +16,7 @@ package portfolio
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -812,7 +813,7 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
-				"Portfolio": p.ID,
+				"Portfolio": hex.EncodeToString(p.ID),
 				"Strategy":  p.StrategyShortcode,
 			}).Error("failed to run portfolio strategy")
 			return err
@@ -822,7 +823,7 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
-				"Portfolio": p.ID,
+				"Portfolio": hex.EncodeToString(p.ID),
 				"Strategy":  p.StrategyShortcode,
 			}).Error("failed to apply target portfolio")
 			return err
@@ -1127,6 +1128,14 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 
 func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	p := pm.Portfolio
+	log.WithFields(log.Fields{
+		"PortfolioID":       hex.EncodeToString(p.ID),
+		"PortfolioName":     p.Name,
+		"Strategy":          p.StrategyShortcode,
+		"StrategyArguments": p.StrategyArguments,
+		"NumTransactions":   len(p.Transactions),
+	}).Info("Saving portfolio transactions")
+
 	transactionSQL := `
 	INSERT INTO portfolio_transaction_v1 (
 		"id",
