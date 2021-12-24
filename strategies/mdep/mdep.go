@@ -57,7 +57,7 @@ const (
 	MONTHLY = "monthly"
 )
 
-// New Construct a new Accelerating Dual Momentum strategy
+// New Construct a new Momentum Driven Earnings Prediction (MDEP) strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	numHoldings := 100
 	if err := json.Unmarshal(args["numHoldings"], &numHoldings); err != nil {
@@ -73,7 +73,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 	outTicker = strings.ToUpper(outTicker)
 
-	var period string
+	period := "weekly"
 	if err := json.Unmarshal(args["period"], &period); err != nil {
 		return nil, err
 	}
