@@ -229,6 +229,10 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				holdings[trx.Ticker] = shares
 			}
 		}
+
+		log.Debugf("Date: %s", date)
+		for ticker, holding := range holdings {
+			log.Debugf("\tHolding: %s = %.2f", ticker, holding)
 		}
 
 		// build justification array
