@@ -223,7 +223,12 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				shares = 0
 			}
 
-			holdings[trx.Ticker] = shares
+			if shares == 0 {
+				delete(holdings, trx.Ticker)
+			} else {
+				holdings[trx.Ticker] = shares
+			}
+		}
 		}
 
 		// build justification array
