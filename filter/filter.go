@@ -65,6 +65,7 @@ func getPerformance(portfolioID string) *portfolio.Performance {
 
 func New(portfolioID string, userID string) FilterInterface {
 	var perf *portfolio.Performance
+
 	port := getPortfolio(portfolioID)
 	if port != nil {
 		perf = getPerformance(portfolioID)
