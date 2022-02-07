@@ -36,6 +36,7 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksUrl string) {
 	// Portfolio
 	portfolio := api.Group("/portfolio")
 	portfolio.Get("/", middleware.PVAuth(jwks, jwksUrl), handler.ListPortfolios)
+	portfolio.Post("/", middleware.PVAuth(jwks, jwksUrl), handler.CreatePortfolio)
 	portfolio.Get("/:id", middleware.PVAuth(jwks, jwksUrl), handler.GetPortfolio)
 	portfolio.Patch("/:id", middleware.PVAuth(jwks, jwksUrl), handler.UpdatePortfolio)
 	portfolio.Delete("/:id", middleware.PVAuth(jwks, jwksUrl), handler.DeletePortfolio)
