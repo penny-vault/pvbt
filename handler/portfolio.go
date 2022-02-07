@@ -20,6 +20,7 @@ import (
 	"main/database"
 	"main/filter"
 	"main/portfolio"
+	"math"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -35,11 +36,80 @@ type PortfolioResponse struct {
 	Strategy           string                 `json:"strategy"`
 	Arguments          map[string]interface{} `json:"arguments"`
 	StartDate          int64                  `json:"startDate"`
+	BenchmarkTicker    string                 `json:"benchmarkTicker"`
 	YTDReturn          sql.NullFloat64        `json:"ytdReturn"`
 	CAGRSinceInception sql.NullFloat64        `json:"cagrSinceInception"`
 	Notifications      int                    `json:"notifications"`
 	Created            int64                  `json:"created"`
 	LastChanged        int64                  `json:"lastChanged"`
+}
+
+func CreatePortfolio(c *fiber.Ctx) error {
+	userID := c.Locals("userID").(string)
+	portfolioID := uuid.New()
+
+	portfolioParams := PortfolioResponse{
+		ID: portfolioID,
+	}
+
+	if err := json.Unmarshal(c.Body(), &portfolioParams); err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Error("unable to deserialize portfolio params")
+		return fiber.ErrBadRequest
+	}
+
+	jsonArgs, err := json.Marshal(portfolioParams.Arguments)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Error("unable to re-serialize json arguments")
+		return fiber.ErrBadRequest
+	}
+
+	portfolioSQL := `INSERT INTO portfolio_v1 ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"$CASH": 10000}')`
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "GetPortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Error("unable to get database transaction for user")
+		return fiber.ErrServiceUnavailable
+	}
+	_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, portfolioParams.Name, portfolioParams.Strategy, jsonArgs, portfolioParams.BenchmarkTicker, time.Unix(portfolioParams.StartDate, 0), userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "CreatePortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Warn("could not save new portfolio")
+		trx.Rollback(context.Background())
+		return fiber.ErrNotFound
+	}
+
+	depositTransactionSQL := `INSERT INTO portfolio_transaction_v1 ("portfolio_id", "event_date", "num_shares", "price_per_share", "source", "ticker", "total_value", "transaction_type", "user_id") VALUES ($1, $2, 10000, 1, 'PV', '$CASH', 10000, 'DEPOSIT', $3)`
+	_, err = trx.Exec(context.Background(), depositTransactionSQL, portfolioID, time.Unix(portfolioParams.StartDate, 0), userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":    "CreatePortfolio",
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Warn("could not save new portfolio transaction")
+		trx.Rollback(context.Background())
+		return fiber.ErrNotFound
+	}
+	trx.Commit(context.Background())
+	return c.JSON(portfolioParams)
 }
 
 // GetPortfolio get a portfolio
@@ -76,6 +146,14 @@ func GetPortfolio(c *fiber.Ctx) error {
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
+	if math.IsNaN(p.YTDReturn.Float64) || math.IsInf(p.YTDReturn.Float64, 0) {
+		p.YTDReturn.Float64 = 0
+		p.YTDReturn.Valid = false
+	}
+	if math.IsNaN(p.CAGRSinceInception.Float64) || math.IsInf(p.CAGRSinceInception.Float64, 0) {
+		p.CAGRSinceInception.Float64 = 0
+		p.CAGRSinceInception.Valid = false
+	}
 	trx.Commit(context.Background())
 	return c.JSON(p)
 }
@@ -98,12 +176,24 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	return c.JSON(p)
+
+	data, err := p.MarshalBinary()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Endpoint":       "GetPortfolioPerformance",
+			"Error":          err,
+			"PortfolioIDStr": portfolioIDStr,
+			"Code":           "Could not marshal performance to binary",
+		})
+	}
+	return c.Send(data)
 }
 
 func GetPortfolioMeasurements(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
+
+	log.Println("Retrieving portfolio measurements!")
 
 	f := filter.New(portfolioID, userID)
 
@@ -207,7 +297,6 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 		log.WithFields(log.Fields{
 			"Error": err,
 		}).Warn("could not retrieve transactions")
-
 		return fiber.ErrBadRequest
 	}
 
@@ -251,6 +340,14 @@ func ListPortfolios(c *fiber.Ctx) error {
 				"Query":    portfolioSQL,
 			}).Warn("ListPortfolio scan failed")
 			continue
+		}
+		if math.IsNaN(p.YTDReturn.Float64) || math.IsInf(p.YTDReturn.Float64, 0) {
+			p.YTDReturn.Float64 = 0
+			p.YTDReturn.Valid = false
+		}
+		if math.IsNaN(p.CAGRSinceInception.Float64) || math.IsInf(p.CAGRSinceInception.Float64, 0) {
+			p.CAGRSinceInception.Float64 = 0
+			p.CAGRSinceInception.Valid = false
 		}
 
 		portfolios = append(portfolios, p)
