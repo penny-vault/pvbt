@@ -16,6 +16,7 @@ package portfolio
 
 import (
 	"context"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -286,12 +287,15 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 				toSellShares := toSellDollars / price
 				if toSellDollars <= 1.0e-5 {
 					log.WithFields(log.Fields{
-						"Ticker": k,
-						"Kind":   "SellTransaction",
-						"Shares": toSellShares,
-						"Date":   date,
-					}).Warn("holdings are out of sync - refusing to sell 0 shares")
-					return errors.New("holdings are out of sync, cannot rebalance portfolio")
+						"Ticker":         k,
+						"Kind":           "SellTransaction",
+						"Shares":         toSellShares,
+						"Date":           date,
+						"Price":          price,
+						"CurrentDollars": currentDollars,
+						"TargetDollars":  targetDollars,
+					}).Warn("refusing to sell 0 shares")
+					return errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
 				}
 
 				trxId, _ := uuid.New().MarshalBinary()
@@ -791,7 +795,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 // from the portfolio end date to `through`
 func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 	p := pm.Portfolio
-	pm.dataProxy.Begin = p.EndDate
+	pm.dataProxy.Begin = p.EndDate.AddDate(0, 0, 1)
 	pm.dataProxy.End = through
 	pm.dataProxy.Frequency = data.FrequencyDaily
 
@@ -891,9 +895,17 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	transactions := make([]*Transaction, 0, 1000)
 	for rows.Next() {
 		t := Transaction{}
-		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &t.CompositeFIGI,
-			&t.Justification, &t.Kind, &t.Memo, &t.PricePerShare, &t.Shares, &t.Source,
-			&t.SourceID, &t.Tags, &t.TaxDisposition, &t.Ticker, &t.TotalValue)
+
+		var compositeFIGI sql.NullString
+		var memo sql.NullString
+		var taxDisposition sql.NullString
+
+		var pricePerShare sql.NullFloat64
+		var shares sql.NullFloat64
+
+		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &compositeFIGI,
+			&t.Justification, &t.Kind, &memo, &pricePerShare, &shares, &t.Source,
+			&t.SourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":       err,
@@ -904,6 +916,24 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 			trx.Rollback(context.Background())
 			return err
 		}
+
+		if compositeFIGI.Valid {
+			t.CompositeFIGI = compositeFIGI.String
+		}
+		if memo.Valid {
+			t.Memo = memo.String
+		}
+		if taxDisposition.Valid {
+			t.TaxDisposition = taxDisposition.String
+		}
+
+		if pricePerShare.Valid {
+			t.PricePerShare = pricePerShare.Float64
+		}
+		if shares.Valid {
+			t.Shares = shares.Float64
+		}
+
 		transactions = append(transactions, &t)
 	}
 	p.Transactions = transactions
@@ -999,6 +1029,9 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		}
 
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
+		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+		p.StartDate = p.StartDate.In(tz)
+		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"UserID":      userID,
