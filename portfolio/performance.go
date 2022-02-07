@@ -517,11 +517,12 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	}
 
 	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
-	bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
-	perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
-	perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
-	perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
-
+	if len(monthlyRets) > 0 {
+		bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
+		perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
+		perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
+		perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
+	}
 	if currYearStartValue <= 0 {
 		perf.PortfolioReturns.MWRRYTD = 0.0
 		perf.PortfolioReturns.TWRRYTD = 0.0
@@ -552,7 +553,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 // LOAD
 
 func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
-	portfolioSQL := `SELECT performance_json FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT performance_bytes FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -570,7 +571,9 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 	p := Performance{
 		PortfolioID: binaryID,
 	}
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&p)
+
+	var data []byte
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&data)
 
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -578,12 +581,6 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 			"PortfolioID": portfolioID,
 			"UserID":      userID,
 		}).Warn("query database for performance failed")
-		trx.Rollback(context.Background())
-		return nil, err
-	}
-
-	if err := p.loadMeasurementsFromDB(trx, userID); err != nil {
-		// logged from loadMeasurementsFromDB
 		trx.Rollback(context.Background())
 		return nil, err
 	}
@@ -596,12 +593,14 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		}).Warn("commit transaction failed")
 		return nil, err
 	}
+
+	p.UnmarshalBinary(data)
 	return &p, nil
 }
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
 func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
-	measurementSQL := "SELECT extract(epoch from event_date), value, risk_free_value, holdings, percent_return FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	measurementSQL := "SELECT extract(epoch from event_date), strategy_value, risk_free_value, holdings, percent_return FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
 	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
