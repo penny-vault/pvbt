@@ -16,6 +16,7 @@ package strategies
 
 import (
 	"context"
+	"database/sql"
 	"embed"
 	"fmt"
 	"io/ioutil"
@@ -25,6 +26,7 @@ import (
 	"main/strategies/mdep"
 	"main/strategies/paa"
 	"main/strategies/strategy"
+	"math"
 
 	"github.com/pelletier/go-toml/v2"
 	log "github.com/sirupsen/logrus"
@@ -123,6 +125,14 @@ func LoadStrategyMetricsFromDb() {
 		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolio_v1 WHERE user_id='pvuser' AND name=$1", strat.Name)
 		s := strategy.StrategyMetrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
+
+		metrics := []*sql.NullFloat64{&s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception}
+		for _, m := range metrics {
+			if math.IsNaN(m.Float64) || math.IsInf(m.Float64, 0) {
+				m.Float64 = 0
+				m.Valid = false
+			}
+		}
 
 		if err != nil {
 			log.WithFields(log.Fields{
