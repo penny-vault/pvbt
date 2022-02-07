@@ -99,6 +99,7 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
+			p[0].LoadTransactionsFromDB()
 			portfolios = append(portfolios, p[0])
 		} else {
 			// load portfolio ids from database
@@ -137,7 +138,7 @@ var updateCmd = &cobra.Command{
 					if err != nil {
 						log.Fatal(err)
 					}
-
+					p[0].LoadTransactionsFromDB()
 					portfolios = append(portfolios, p[0])
 				}
 			}
