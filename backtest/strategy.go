@@ -54,7 +54,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 			return nil, err
 		}
 		pm.Portfolio.StrategyArguments = string(paramsJSON)
-		target, err := stratObject.Compute(manager)
+		target, predictedAssets, err := stratObject.Compute(manager)
 		if err != nil {
 			log.Warn(err)
 			return nil, err
@@ -62,6 +62,7 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 		stop := time.Now()
 		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
 
+		pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
 		start = time.Now()
 		if err := pm.TargetPortfolio(target); err != nil {
 			log.Warn(err)

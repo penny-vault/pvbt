@@ -91,7 +91,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
+func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	// Ensure time range is valid
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -104,14 +104,14 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	var startDate time.Time
 	err = db.QueryRow(context.Background(), "SELECT min(event_date) FROM zacks_financials_v1").Scan(&startDate)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if startDate.After(manager.Begin) {
@@ -124,7 +124,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	dates := make([]time.Time, 0, 600)
 	tradeDays, err := manager.GetDataFrame(data.MetricAdjustedClose, "VFINX")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	switch mdep.Period {
@@ -176,13 +176,13 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	crashDetection := make([]*sentiment, 0, 600)
 	rows, err := db.Query(context.Background(), "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators_v1 WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	for rows.Next() {
 		var newSentiment sentiment
 		err := rows.Scan(&newSentiment.EventDate, &newSentiment.StormGuardArmor)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		newSentiment.EventDate = time.Date(newSentiment.EventDate.Year(), newSentiment.EventDate.Month(), newSentiment.EventDate.Day(), 16, 0, 0, 0, tz)
 		crashDetection = append(crashDetection, &newSentiment)
@@ -193,14 +193,16 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	targetDates := make([]interface{}, 0, 600)
 	nextDateIdx := 0
 	for _, s := range crashDetection {
-		if s.StormGuardArmor <= 0 {
-			targetMap := map[string]float64{
-				mdep.OutTicker: 1.0,
+		/*
+			if s.StormGuardArmor <= 0 {
+				targetMap := map[string]float64{
+					mdep.OutTicker: 1.0,
+				}
+				targetDates = append(targetDates, s.EventDate)
+				targetAssets = append(targetAssets, targetMap)
+				continue
 			}
-			targetDates = append(targetDates, s.EventDate)
-			targetAssets = append(targetAssets, targetMap)
-			continue
-		}
+		*/
 
 		for nextDateIdx < len(dates) && dates[nextDateIdx].Before(s.EventDate) {
 			nextDateIdx++
@@ -215,14 +217,14 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 			//rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND market_cap_mil>=100 AND percent_rating_change_4wk >= 0 AND percent_change_q1_est >= 0 AND event_date=$1 ORDER BY percent_rating_change_4wk desc, percent_change_q1_est desc, market_cap_mil desc LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
 			rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			for rows.Next() {
 				cnt++
 				var ticker string
 				err := rows.Scan(&ticker)
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				targetMap[ticker] = 0.0
 			}
@@ -242,5 +244,5 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
 
-	return targetPortfolio, nil
+	return targetPortfolio, nil, nil
 }

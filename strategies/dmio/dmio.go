@@ -174,8 +174,7 @@ func NewDualMomentumInOut(args map[string]json.RawMessage) (strategy.Strategy, e
 		return nil, err
 	}
 
-	var dmio strategy.Strategy
-	dmio = &DualMomentumInOut{
+	var dmio strategy.Strategy = &DualMomentumInOut{
 		stocks:          stocks,
 		bonds:           bonds,
 		canary:          canary,
@@ -202,7 +201,7 @@ func (dmio *DualMomentumInOut) downloadPriceData(manager *data.Manager) error {
 	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
-		return errors.New("Failed to download data for tickers")
+		return errors.New("failed to download data for tickers")
 	}
 
 	prices, err := dfextras.DropNA(context.Background(), prices)
@@ -246,13 +245,13 @@ func (dmio *DualMomentumInOut) calculateSignal() error {
 }
 
 // Compute signal
-func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
+func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
-	if manager.End == nullTime {
+	if manager.End.Equal(nullTime) {
 		manager.End = time.Now()
 	}
-	if manager.Begin == nullTime {
+	if manager.Begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	} else {
@@ -264,13 +263,13 @@ func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFr
 
 	err := dmio.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	err = dmio.calculateSignal()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return dmio.targetPortfolio, nil
+	return dmio.targetPortfolio, nil, nil
 }

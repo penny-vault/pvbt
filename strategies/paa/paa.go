@@ -380,24 +380,24 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 }
 
 // Compute signal
-func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
+func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	paa.validateTimeRange(manager)
 
 	err := paa.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if err := paa.mom(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	riskRanked, protectiveSelection := paa.rank()
 
 	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return targetPortfolio, nil
+	return targetPortfolio, nil, nil
 }

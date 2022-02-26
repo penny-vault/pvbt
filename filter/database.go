@@ -172,7 +172,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sqlTmp, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
+	sqlTmp, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date", "LEAD(justification) OVER (ORDER BY event_date) as next_justification"}, where, "event_date DESC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err
@@ -181,15 +181,15 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	var querySQL string
 	switch frequency {
 	case "annually":
-		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value, next_justification FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	case "monthly":
-		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value, next_justification FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	case "weekly":
-		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value, next_justification FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	case "daily":
-		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value, next_justification FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	default:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, holdings, justification, strategy_value, next_justification FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	}
 
 	trx, _ := database.TrxForUser(f.UserID)
@@ -203,11 +203,16 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 		Items: make([]*portfolio.PortfolioHoldingItem, 0, 100),
 	}
 
+	var useJustification sql.NullString
+
 	for rows.Next() {
 		var item portfolio.PortfolioHoldingItem
 		var holdings sql.NullString
 		var justification sql.NullString
-		err := rows.Scan(&item.Time, &item.PercentReturn, &holdings, &justification, &item.Value)
+		var nextJustification sql.NullString
+
+		item.Predicted = false
+		err := rows.Scan(&item.Time, &item.PercentReturn, &holdings, &justification, &item.Value, &nextJustification)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error": err,
@@ -225,7 +230,15 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 			}
 		}
 
-		if justification.Valid {
+		if useJustification.Valid {
+			err := json.Unmarshal([]byte(useJustification.String), &item.Justification)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"EventDate": item.Time,
+					"Error":     err,
+				}).Error("Could not unmarshal justification")
+			}
+		} else if justification.Valid {
 			err := json.Unmarshal([]byte(justification.String), &item.Justification)
 			if err != nil {
 				log.WithFields(log.Fields{
@@ -235,58 +248,20 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 			}
 		}
 
+		useJustification = nextJustification
+
 		h.Items = append(h.Items, &item)
 	}
 
-	// adjust justifications
-	if len(h.Items) > 0 {
-		lastHolding := h.Items[0].Holdings
-		lastJustification := h.Items[0].Justification
-		var currJustification []*portfolio.Justification
-		var currHolding []*portfolio.ReportableHolding
-		for _, item := range h.Items {
-			currHolding = item.Holdings
-			currJustification = item.Justification
-			item.Holdings = lastHolding
-			item.Justification = lastJustification
-			lastHolding = currHolding
-			lastJustification = currJustification
-		}
-
-		// add predicted holding item
-		switch frequency {
-		case "annually":
-			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
-				Time:          h.Items[len(h.Items)-1].Time.AddDate(1, 0, 0),
-				Holdings:      lastHolding,
-				Justification: lastJustification,
-			})
-		case "monthly":
-			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
-				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 1, 0),
-				Holdings:      lastHolding,
-				Justification: lastJustification,
-			})
-		case "weekly":
-			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
-				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 7),
-				Holdings:      lastHolding,
-				Justification: lastJustification,
-			})
-		case "daily":
-			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
-				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 1),
-				Holdings:      lastHolding,
-				Justification: lastJustification,
-			})
-		default:
-			h.Items = append(h.Items, &portfolio.PortfolioHoldingItem{
-				Time:          h.Items[len(h.Items)-1].Time.AddDate(0, 0, 1),
-				Holdings:      lastHolding,
-				Justification: lastJustification,
-			})
-		}
+	// add predicted holding item
+	var predicted portfolio.PortfolioHoldingItem
+	var predictedRaw []byte
+	trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio_v1 WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
+	err = predicted.UnmarshalBinary(predictedRaw)
+	if err != nil {
+		return nil, err
 	}
+	h.Items = append(h.Items, &predicted)
 
 	data, err := h.MarshalBinary()
 	return data, err

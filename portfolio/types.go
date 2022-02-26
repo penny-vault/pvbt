@@ -214,6 +214,8 @@ type Transaction struct {
 
 	Memo string
 
+	Predicted bool
+
 	PricePerShare float64
 
 	Shares float64
@@ -339,20 +341,25 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 		i += copy(buf[i:], o.Memo)
 	}
 
-	if v := o.PricePerShare; v != 0 {
+	if o.Predicted {
 		buf[i] = 8
-		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
-		i += 9
+		i++
 	}
 
-	if v := o.Shares; v != 0 {
+	if v := o.PricePerShare; v != 0 {
 		buf[i] = 9
 		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
 		i += 9
 	}
 
-	if l := len(o.Source); l != 0 {
+	if v := o.Shares; v != 0 {
 		buf[i] = 10
+		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
+		i += 9
+	}
+
+	if l := len(o.Source); l != 0 {
+		buf[i] = 11
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -366,7 +373,7 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.SourceID); l != 0 {
-		buf[i] = 11
+		buf[i] = 12
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -380,7 +387,7 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.Tags); l != 0 {
-		buf[i] = 12
+		buf[i] = 13
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -404,7 +411,7 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.TaxDisposition); l != 0 {
-		buf[i] = 13
+		buf[i] = 14
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -418,7 +425,7 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.Ticker); l != 0 {
-		buf[i] = 14
+		buf[i] = 15
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -432,7 +439,7 @@ func (o *Transaction) MarshalTo(buf []byte) int {
 	}
 
 	if v := o.TotalValue; v != 0 {
-		buf[i] = 15
+		buf[i] = 16
 		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
 		i += 9
 	}
@@ -520,6 +527,10 @@ func (o *Transaction) MarshalLen() (int, error) {
 		for l += x + 2; x >= 0x80; l++ {
 			x >>= 7
 		}
+	}
+
+	if o.Predicted {
+		l++
 	}
 
 	if o.PricePerShare != 0 {
@@ -871,12 +882,10 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 	}
 
 	if header == 8 {
-		start := i
-		i += 8
 		if i >= len(data) {
 			goto eof
 		}
-		o.PricePerShare = math.Float64frombits(intconv.Uint64(data[start:]))
+		o.Predicted = true
 		header = data[i]
 		i++
 	}
@@ -887,12 +896,23 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.Shares = math.Float64frombits(intconv.Uint64(data[start:]))
+		o.PricePerShare = math.Float64frombits(intconv.Uint64(data[start:]))
 		header = data[i]
 		i++
 	}
 
 	if header == 10 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.Shares = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 11 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -931,7 +951,7 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 11 {
+	if header == 12 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -972,7 +992,7 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 12 {
+	if header == 13 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -1045,7 +1065,7 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 13 {
+	if header == 14 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -1084,7 +1104,7 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 14 {
+	if header == 15 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -1123,7 +1143,7 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 15 {
+	if header == 16 {
 		start := i
 		i += 8
 		if i >= len(data) {
@@ -1373,11 +1393,15 @@ type Portfolio struct {
 
 	StrategyArguments string
 
+	Schedule string
+
 	Notifications int32
 
 	Transactions []*Transaction
 
 	CurrentHoldings []*Holding
+
+	PredictedAssets *PortfolioHoldingItem
 }
 
 // MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
@@ -1501,13 +1525,27 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 		i += copy(buf[i:], o.StrategyArguments)
 	}
 
+	if l := len(o.Schedule); l != 0 {
+		buf[i] = 8
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.Schedule)
+	}
+
 	if v := o.Notifications; v != 0 {
 		x := uint32(v)
 		if v >= 0 {
-			buf[i] = 8
+			buf[i] = 9
 		} else {
 			x = ^x + 1
-			buf[i] = 8 | 0x80
+			buf[i] = 9 | 0x80
 		}
 		i++
 		for x >= 0x80 {
@@ -1520,7 +1558,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.Transactions); l != 0 {
-		buf[i] = 9
+		buf[i] = 10
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -1540,7 +1578,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.CurrentHoldings); l != 0 {
-		buf[i] = 10
+		buf[i] = 11
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -1557,6 +1595,12 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 			}
 			i += v.MarshalTo(buf[i:])
 		}
+	}
+
+	if v := o.PredictedAssets; v != nil {
+		buf[i] = 12
+		i++
+		i += v.MarshalTo(buf[i:])
 	}
 
 	buf[i] = 0x7f
@@ -1639,6 +1683,15 @@ func (o *Portfolio) MarshalLen() (int, error) {
 		}
 	}
 
+	if x := len(o.Schedule); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.Schedule exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
 	if v := o.Notifications; v != 0 {
 		x := uint32(v)
 		if v < 0 {
@@ -1693,6 +1746,14 @@ func (o *Portfolio) MarshalLen() (int, error) {
 		if l > ColferSizeMax {
 			return 0, ColferMax(fmt.Sprintf("colfer: struct portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
 		}
+	}
+
+	if v := o.PredictedAssets; v != nil {
+		vl, err := v.MarshalLen()
+		if err != nil {
+			return 0, err
+		}
+		l += vl + 1
 	}
 
 	if l > ColferSizeMax {
@@ -2001,6 +2062,45 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 	}
 
 	if header == 8 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio.Schedule size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.Schedule = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 9 {
 		if i+1 >= len(data) {
 			i++
 			goto eof
@@ -2028,7 +2128,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 
 		header = data[i]
 		i++
-	} else if header == 8|0x80 {
+	} else if header == 9|0x80 {
 		if i+1 >= len(data) {
 			i++
 			goto eof
@@ -2058,7 +2158,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 9 {
+	if header == 10 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -2111,7 +2211,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 10 {
+	if header == 11 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -2156,6 +2256,24 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 			i += n
 		}
 		o.CurrentHoldings = a
+
+		if i >= len(data) {
+			goto eof
+		}
+		header = data[i]
+		i++
+	}
+
+	if header == 12 {
+		o.PredictedAssets = new(PortfolioHoldingItem)
+		n, err := o.PredictedAssets.Unmarshal(data[i:])
+		if err != nil {
+			if err == io.EOF && len(data) >= ColferSizeMax {
+				return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Portfolio size exceeds %d bytes", ColferSizeMax))
+			}
+			return 0, err
+		}
+		i += n
 
 		if i >= len(data) {
 			goto eof
@@ -6326,6 +6444,8 @@ type PortfolioHoldingItem struct {
 	PercentReturn float64
 
 	Value float64
+
+	Predicted bool
 }
 
 // MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
@@ -6402,6 +6522,11 @@ func (o *PortfolioHoldingItem) MarshalTo(buf []byte) int {
 		i += 9
 	}
 
+	if o.Predicted {
+		buf[i] = 5
+		i++
+	}
+
 	buf[i] = 0x7f
 	i++
 	return i
@@ -6472,6 +6597,10 @@ func (o *PortfolioHoldingItem) MarshalLen() (int, error) {
 
 	if o.Value != 0 {
 		l += 9
+	}
+
+	if o.Predicted {
+		l++
 	}
 
 	if l > ColferSizeMax {
@@ -6647,6 +6776,15 @@ func (o *PortfolioHoldingItem) Unmarshal(data []byte) (int, error) {
 			goto eof
 		}
 		o.Value = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 5 {
+		if i >= len(data) {
+			goto eof
+		}
+		o.Predicted = true
 		header = data[i]
 		i++
 	}

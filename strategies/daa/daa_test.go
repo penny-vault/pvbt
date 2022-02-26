@@ -132,7 +132,7 @@ var _ = Describe("Daa", func() {
 			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				target, err = strat.Compute(&manager)
+				target, _, err = strat.Compute(&manager)
 			})
 
 			It("should not error", func() {

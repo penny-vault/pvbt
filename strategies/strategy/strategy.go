@@ -17,6 +17,7 @@ package strategy
 import (
 	"database/sql"
 	"main/data"
+	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
@@ -64,11 +65,20 @@ type StrategyInfo struct {
 	Benchmark       string                       `json:"benchmark"`
 	Arguments       map[string]Argument          `json:"arguments"`
 	Suggested       map[string]map[string]string `json:"suggestedParams"`
+	Schedule        string                       `json:"Schedule"`
 	Metrics         StrategyMetrics              `json:"metrics"`
 	Factory         StrategyFactory              `json:"-"`
 }
 
+type Prediction struct {
+	TradeDate     time.Time
+	Target        map[string]float64
+	Justification map[string]float64
+}
+
 // Strategy an investing strategy
 type Strategy interface {
-	Compute(manager *data.Manager) (*dataframe.DataFrame, error)
+	// Compute calculates the list of historical trades and returns a dataframe. Additionally, it
+	// returns a dataframe that indicates what assets to hold at the next trading time.
+	Compute(manager *data.Manager) (*dataframe.DataFrame, *Prediction, error)
 }

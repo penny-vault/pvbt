@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package colfer
+package portfolio
 
 type Justification struct {
 	Key text
@@ -28,6 +28,7 @@ type Transaction struct {
 	Justification  []Justification
 	Kind           text
 	Memo           text
+	Predicted      bool
 	PricePerShare  float64
 	Shares         float64
 	Source         text
@@ -53,9 +54,11 @@ type Portfolio struct {
 	Benchmark         text
 	StrategyShortcode text
 	StrategyArguments text
+	Schedule          text
 	Notifications     int32
 	Transactions      []Transaction
 	CurrentHoldings   []Holding
+	PredictedAssets   PortfolioHoldingItem
 }
 
 type DrawDown struct {
@@ -228,6 +231,7 @@ type PortfolioHoldingItem struct {
 	Justification []Justification
 	PercentReturn float64
 	Value         float64
+	Predicted     bool
 }
 
 type PortfolioHoldingItemList struct {

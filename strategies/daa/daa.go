@@ -216,7 +216,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End == nullTime {
@@ -232,17 +232,17 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dat
 
 	err := daa.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Compute momentum scores
 	momentum, err := dfextras.Momentum13612(daa.prices)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	daa.momentum = momentum
 	daa.findTopTRiskAssets()
 
-	return daa.targetPortfolio, nil
+	return daa.targetPortfolio, nil, nil
 }

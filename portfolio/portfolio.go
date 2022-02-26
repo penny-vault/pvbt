@@ -56,6 +56,7 @@ type PortfolioModel struct {
 
 	// private
 	dataProxy      *data.Manager
+	value          float64
 	holdings       map[string]float64
 	justifications map[string][]*Justification
 	dividendData   map[string]*dataframe.DataFrame
@@ -206,6 +207,7 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	}
 
 	investable := cash + securityValue
+	pm.value = investable
 
 	// process all targets
 	sells := make([]*Transaction, 0, 10)
@@ -791,6 +793,33 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 	return nil
 }
 
+// BuildPredictedHoldings creates a PortfolioHoldingItem from a date, target map, and justification map
+func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, justificationMap map[string]float64) *PortfolioHoldingItem {
+	holdings := make([]*ReportableHolding, 0, len(target))
+	for k, v := range target {
+		h := ReportableHolding{
+			Ticker:           k,
+			Shares:           v * 100.0,
+			PercentPortfolio: float32(v),
+		}
+		holdings = append(holdings, &h)
+	}
+	justification := make([]*Justification, 0, len(justificationMap))
+	for k, v := range justificationMap {
+		j := Justification{
+			Key:   k,
+			Value: v,
+		}
+		justification = append(justification, &j)
+	}
+	return &PortfolioHoldingItem{
+		Time:          tradeDate,
+		Holdings:      holdings,
+		Justification: justification,
+		Predicted:     true,
+	}
+}
+
 // UpdateTransactions calculates new transactions based on the portfolio strategy
 // from the portfolio end date to `through`
 func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
@@ -813,7 +842,7 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 			return err
 		}
 
-		targetPortfolio, err := stratObject.Compute(pm.dataProxy)
+		targetPortfolio, predictedAssets, err := stratObject.Compute(pm.dataProxy)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
@@ -824,6 +853,9 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 		}
 
 		err = pm.TargetPortfolio(targetPortfolio)
+
+		pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,

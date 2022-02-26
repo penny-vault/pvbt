@@ -30,6 +30,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
+	"main/tradecron"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ type AcceleratingDualMomentum struct {
 	outTicker    string
 	riskFreeRate *dataframe.DataFrame
 	momentum     *dataframe.DataFrame
+	schedule     *tradecron.TradeCron
 }
 
 // New Construct a new Accelerating Dual Momentum strategy
@@ -63,9 +65,15 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 	outTicker = strings.ToUpper(outTicker)
 
+	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	if err != nil {
+		return nil, err
+	}
+
 	var adm strategy.Strategy = &AcceleratingDualMomentum{
 		inTickers: inTickers,
 		outTicker: outTicker,
+		schedule:  schedule,
 	}
 
 	return adm, nil
@@ -182,8 +190,9 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 	return nil
 }
 
-// Compute signal
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.DataFrame, error) {
+// Compute signal for strategy and return list of positions along with the next predicted
+// set of assets to hold
+func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -200,7 +209,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 	// t1 := time.Now()
 	err := adm.downloadPriceData(manager)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// t2 := time.Now()
 
@@ -236,12 +245,12 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
 	argmax.Rename(common.TickerName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	dateIdx, err := scoresDf.NameToColumn(common.DateIdx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	timeSeries := scoresDf.Series[dateIdx].Copy()
 	targetPortfolioSeries := make([]dataframe.Series, 0, len(scores))
@@ -254,6 +263,34 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		}
 	}
 	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
+
+	// compute the predicted asset
+	var predictedPortfolio *strategy.Prediction
+	if targetPortfolio.NRows() >= 2 {
+		lastRow := targetPortfolio.Row(targetPortfolio.NRows()-1, true, dataframe.SeriesName)
+		predictedJustification := make(map[string]float64, len(lastRow)-1)
+		for k, v := range lastRow {
+			if k != common.TickerName && k != common.DateIdx {
+				predictedJustification[k.(string)] = v.(float64)
+			}
+		}
+
+		lastTradeDate := lastRow[common.DateIdx].(time.Time)
+		nextTradeDate := adm.schedule.Next(lastTradeDate)
+		if !lastTradeDate.Equal(nextTradeDate) {
+			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
+		}
+
+		predictedPortfolio = &strategy.Prediction{
+			TradeDate: nextTradeDate,
+			Target: map[string]float64{
+				lastRow[common.TickerName].(string): 1.0,
+			},
+			Justification: predictedJustification,
+		}
+
+	}
+
 	// t6 := time.Now()
 
 	/*
@@ -264,5 +301,5 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 		}).Info("ADM calculation runtimes")
 	*/
 
-	return targetPortfolio, nil
+	return targetPortfolio, predictedPortfolio, nil
 }
