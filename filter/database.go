@@ -256,11 +256,25 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	// add predicted holding item
 	var predicted portfolio.PortfolioHoldingItem
 	var predictedRaw []byte
-	trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio_v1 WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
-	err = predicted.UnmarshalBinary(predictedRaw)
+	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio_v1 WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
+
 	if err != nil {
+		log.Warn(err)
 		return nil, err
 	}
+	err = predicted.UnmarshalBinary(predictedRaw)
+	if err != nil {
+		log.Warn(err)
+		return nil, err
+	}
+
+	switch frequency {
+	case "annually":
+		predicted.Time = predicted.Time.AddDate(1, 0, 0)
+	case "monthly":
+		predicted.Time = predicted.Time.AddDate(0, 1, 0)
+	}
+
 	h.Items = append(h.Items, &predicted)
 
 	data, err := h.MarshalBinary()
