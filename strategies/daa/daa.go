@@ -33,6 +33,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
+	"main/tradecron"
 	"math"
 	"sort"
 	"time"
@@ -45,14 +46,19 @@ import (
 
 // KellersDefensiveAssetAllocation strategy type
 type KellersDefensiveAssetAllocation struct {
+	// arguments
+	breadth            float64
 	cashUniverse       []string
 	protectiveUniverse []string
 	riskUniverse       []string
-	breadth            float64
 	topT               int64
-	targetPortfolio    *dataframe.DataFrame
-	prices             *dataframe.DataFrame
+
+	// class variables
 	momentum           *dataframe.DataFrame
+	predictedPortfolio *strategy.Prediction
+	prices             *dataframe.DataFrame
+	schedule           *tradecron.TradeCron
+	targetPortfolio    *dataframe.DataFrame
 }
 
 type momScore struct {
@@ -96,15 +102,45 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
+	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	if err != nil {
+		return nil, err
+	}
+
 	var daa strategy.Strategy = &KellersDefensiveAssetAllocation{
 		cashUniverse:       cashUniverse,
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,
 		breadth:            breadth,
 		topT:               topT,
+		schedule:           schedule,
 	}
 
 	return daa, nil
+}
+
+func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
+	// Load EOD quotes for in tickers
+	manager.Frequency = data.FrequencyMonthly
+
+	tickers := []string{}
+	tickers = append(tickers, daa.cashUniverse...)
+	tickers = append(tickers, daa.protectiveUniverse...)
+	tickers = append(tickers, daa.riskUniverse...)
+
+	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+
+	if errs != nil {
+		return fmt.Errorf("failed to download data for tickers: %s", errs)
+	}
+
+	prices, err := dfextras.DropNA(context.Background(), prices)
+	if err != nil {
+		return err
+	}
+	daa.prices = prices
+
+	return nil
 }
 
 func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
@@ -191,38 +227,38 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	daa.targetPortfolio = dataframe.NewDataFrame(timeSeries, targetSeries)
 }
 
-func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
-	// Load EOD quotes for in tickers
-	manager.Frequency = data.FrequencyMonthly
+func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
+	if daa.targetPortfolio.NRows() >= 2 {
+		lastRow := daa.targetPortfolio.Row(daa.targetPortfolio.NRows()-1, true, dataframe.SeriesName)
+		predictedJustification := make(map[string]float64, len(lastRow)-1)
+		for k, v := range lastRow {
+			if k != common.TickerName && k != common.DateIdx {
+				predictedJustification[k.(string)] = v.(float64)
+			}
+		}
 
-	tickers := []string{}
-	tickers = append(tickers, daa.cashUniverse...)
-	tickers = append(tickers, daa.protectiveUniverse...)
-	tickers = append(tickers, daa.riskUniverse...)
+		lastTradeDate := lastRow[common.DateIdx].(time.Time)
+		nextTradeDate := daa.schedule.Next(lastTradeDate)
+		if !lastTradeDate.Equal(nextTradeDate) {
+			daa.targetPortfolio.Remove(daa.targetPortfolio.NRows() - 1)
+		}
 
-	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
-
-	if errs != nil {
-		return fmt.Errorf("failed to download data for tickers: %s", errs)
+		daa.predictedPortfolio = &strategy.Prediction{
+			TradeDate:     nextTradeDate,
+			Target:        lastRow[common.TickerName].(map[string]float64),
+			Justification: predictedJustification,
+		}
 	}
-
-	prices, err := dfextras.DropNA(context.Background(), prices)
-	if err != nil {
-		return err
-	}
-	daa.prices = prices
-
-	return nil
 }
 
 // Compute signal
 func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
-	if manager.End == nullTime {
+	if manager.End.Equal(nullTime) {
 		manager.End = time.Now()
 	}
-	if manager.Begin == nullTime {
+	if manager.Begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	} else {
@@ -244,5 +280,8 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dat
 	daa.momentum = momentum
 	daa.findTopTRiskAssets()
 
-	return daa.targetPortfolio, nil, nil
+	// compute the predicted asset
+	daa.setPredictedPortfolio()
+
+	return daa.targetPortfolio, daa.predictedPortfolio, nil
 }

@@ -43,7 +43,7 @@ var backtestCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		tradecron.InitTradeCron()
+		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()

@@ -24,6 +24,7 @@ import (
 	"main/middleware"
 	"main/router"
 	"main/strategies"
+	"main/tradecron"
 	"os"
 	"os/signal"
 	"runtime/pprof"
@@ -91,6 +92,8 @@ var serveCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
+
+		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()

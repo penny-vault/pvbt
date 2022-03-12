@@ -33,6 +33,7 @@ import (
 	"main/data"
 	"main/database"
 	"main/strategies/strategy"
+	"main/tradecron"
 	"strings"
 	"time"
 
@@ -45,6 +46,7 @@ type MomentumDrivenEarningsPrediction struct {
 	NumHoldings int
 	OutTicker   string
 	Period      string
+	schedule    *tradecron.TradeCron
 }
 
 type sentiment struct {
@@ -244,5 +246,24 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
 
-	return targetPortfolio, nil, nil
+	// Get predicted portfolio
+	var ticker string
+	predictedTarget := make(map[string]float64)
+	rows, err = db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+	if err != nil {
+		return nil, nil, err
+	}
+	for rows.Next() {
+		rows.Scan(&ticker)
+		predictedTarget[ticker] = 1.0 / float64(mdep.NumHoldings)
+	}
+
+	nextTradeDate := mdep.schedule.Next(time.Now())
+	predictedPortfolio := &strategy.Prediction{
+		TradeDate:     nextTradeDate,
+		Target:        predictedTarget,
+		Justification: make(map[string]float64),
+	}
+
+	return targetPortfolio, predictedPortfolio, nil
 }

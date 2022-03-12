@@ -286,38 +286,15 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 	}
 
 	// add predicted holding item
+	predicted := f.Portfolio.PredictedAssets
 	switch frequency {
 	case "annually":
-		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(1, 0, 0),
-			Holdings:      f.Performance.CurrentAssets,
-			Justification: last.Justification,
-		})
+		predicted.Time = predicted.Time.AddDate(1, 0, 0)
 	case "monthly":
-		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 1, 0),
-			Holdings:      f.Performance.CurrentAssets,
-			Justification: last.Justification,
-		})
-	case "weekly":
-		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 7),
-			Holdings:      f.Performance.CurrentAssets,
-			Justification: last.Justification,
-		})
-	case "daily":
-		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 1),
-			Holdings:      f.Performance.CurrentAssets,
-			Justification: last.Justification,
-		})
-	default:
-		holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-			Time:          holdings.Items[len(holdings.Items)-1].Time.AddDate(0, 0, 1),
-			Holdings:      f.Performance.CurrentAssets,
-			Justification: last.Justification,
-		})
+		predicted.Time = predicted.Time.AddDate(0, 1, 0)
 	}
+
+	holdings.Items = append(holdings.Items, predicted)
 
 	return holdings.MarshalBinary()
 }

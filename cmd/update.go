@@ -24,6 +24,7 @@ import (
 	"main/portfolio"
 	"main/strategies"
 	"main/strategies/strategy"
+	"main/tradecron"
 	"strings"
 	"time"
 
@@ -61,6 +62,8 @@ var updateCmd = &cobra.Command{
 				log.Fatal(err)
 			}
 		}
+
+		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()

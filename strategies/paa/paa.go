@@ -27,6 +27,7 @@ import (
 	"main/data"
 	"main/dfextras"
 	"main/strategies/strategy"
+	"main/tradecron"
 	"sort"
 	"strings"
 	"time"
@@ -56,6 +57,7 @@ type KellersProtectiveAssetAllocation struct {
 	lookback           int
 	prices             *dataframe.DataFrame
 	momentum           *dataframe.DataFrame
+	schedule           *tradecron.TradeCron
 }
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
@@ -91,6 +93,11 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	allTickers = append(allTickers, riskUniverse...)
 	allTickers = append(allTickers, protectiveUniverse...)
 
+	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	if err != nil {
+		return nil, err
+	}
+
 	var paa strategy.Strategy = &KellersProtectiveAssetAllocation{
 		protectiveUniverse: protectiveUniverse,
 		riskUniverse:       riskUniverse,
@@ -98,6 +105,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		protectionFactor:   protectionFactor,
 		lookback:           lookback,
 		topN:               topN,
+		schedule:           schedule,
 	}
 
 	return paa, nil
@@ -379,6 +387,33 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	return targetPortfolio, nil
 }
 
+func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(targetPortfolio *dataframe.DataFrame) *strategy.Prediction {
+	var predictedPortfolio *strategy.Prediction
+	if targetPortfolio.NRows() >= 2 {
+		lastRow := targetPortfolio.Row(targetPortfolio.NRows()-1, true, dataframe.SeriesName)
+		predictedJustification := make(map[string]float64, len(lastRow)-1)
+		for k, v := range lastRow {
+			if k != common.TickerName && k != common.DateIdx {
+				predictedJustification[k.(string)] = v.(float64)
+			}
+		}
+
+		lastTradeDate := lastRow[common.DateIdx].(time.Time)
+		nextTradeDate := paa.schedule.Next(lastTradeDate)
+		if !lastTradeDate.Equal(nextTradeDate) {
+			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
+		}
+
+		predictedPortfolio = &strategy.Prediction{
+			TradeDate:     nextTradeDate,
+			Target:        lastRow[common.TickerName].(map[string]float64),
+			Justification: predictedJustification,
+		}
+	}
+
+	return predictedPortfolio
+}
+
 // Compute signal
 func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	paa.validateTimeRange(manager)
@@ -399,5 +434,7 @@ func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*da
 		return nil, nil, err
 	}
 
-	return targetPortfolio, nil, nil
+	predictedPortfolio := paa.calculatePredictedPortfolio(targetPortfolio)
+
+	return targetPortfolio, predictedPortfolio, nil
 }

@@ -52,8 +52,8 @@ var marketExtendedOpenHour = 7
 var marketExtendedOpenMin = 0
 var marketExtendedCloseHour = 20
 
-// InitTradeCron initializes the TradeCron system
-func InitTradeCron() {
+// InitializeTradeCron initializes the TradeCron system
+func InitializeTradeCron() {
 	nyc, _ = time.LoadLocation("America/New_York")
 }
 

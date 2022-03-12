@@ -288,7 +288,6 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 			},
 			Justification: predictedJustification,
 		}
-
 	}
 
 	// t6 := time.Now()
