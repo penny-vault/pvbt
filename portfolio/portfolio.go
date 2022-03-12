@@ -1143,7 +1143,8 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		"holdings",
 		"notifications",
 		"temporary",
-		"user_id"
+		"user_id",
+		"predicted_bytes"
 	) VALUES (
 		$1,
 		$2,
@@ -1154,7 +1155,8 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		$7,
 		$8,
 		$9,
-		$10
+		$10,
+		$11
 	) ON CONFLICT ON CONSTRAINT portfolio_v1_pkey
 	DO UPDATE SET
 		name=$2,
@@ -1163,7 +1165,8 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		start_date=$5,
 		end_date=$6,
 		holdings=$7,
-		notifications=$8`
+		notifications=$8,
+		predicted_bytes=$11`
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -1175,8 +1178,17 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		trx.Rollback(context.Background())
 		return err
 	}
+	predictedBytes, err := p.PredictedAssets.MarshalBinary()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"PortfolioID": p.ID,
+			"Strategy":    p.StrategyShortcode,
+			"Error":       err,
+			"Query":       portfolioSQL,
+		}).Warn("Could not marshal predicted bytes")
+	}
 	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
-		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID)
+		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"PortfolioID": p.ID,
