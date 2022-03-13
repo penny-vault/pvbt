@@ -40,8 +40,17 @@ func NewPVDB() *pvdb {
 
 // TradingDays returns a list of trading days between begin and end
 func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []time.Time {
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	res := make([]time.Time, 0, 252)
+	if end.Before(begin) {
+		log.WithFields(log.Fields{
+			"Begin":     begin,
+			"End":       end,
+			"Frequency": frequency,
+		}).Warn("end before begin in call to TradingDays")
+		return res
+	}
+
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -49,7 +58,22 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 		}).Error("could not get transaction when querying trading days")
 	}
 
-	rows, err := trx.Query(context.Background(), "SELECT trading_day FROM trading_days_v1 WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", begin, end)
+	searchBegin := begin
+	searchEnd := end
+
+	switch frequency {
+	case FrequencyMonthly:
+		searchBegin = searchBegin.AddDate(0, -1, 0)
+		searchEnd = searchEnd.AddDate(0, 1, 0)
+	case FrequencyAnnualy:
+		searchBegin = searchBegin.AddDate(-1, 0, 0)
+		searchEnd = searchEnd.AddDate(1, 0, 0)
+	default:
+		searchBegin = searchBegin.AddDate(0, 0, -7)
+		searchEnd = searchEnd.AddDate(0, 0, 7)
+	}
+
+	rows, err := trx.Query(context.Background(), "SELECT trading_day FROM trading_days_v1 WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
@@ -74,6 +98,7 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 		return res
 	}
 
+	fmt.Printf("%+v %+v == %+v\n", searchBegin, searchEnd, res)
 	for idx, xx := range res[:len(res)-1] {
 		next := res[idx+1]
 
@@ -99,8 +124,17 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 	if !lastDay.Equal(days[len(days)-1]) {
 		days = append(days, res[cnt])
 	}
+
+	// final filter to actual days
+	daysFiltered := make([]time.Time, 0, 252)
+	for _, d := range days {
+		if d.Equal(begin) || d.Equal(end) || (d.Before(end) && d.After(begin)) {
+			daysFiltered = append(daysFiltered, d)
+		}
+	}
+
 	trx.Commit(context.Background())
-	return days
+	return daysFiltered
 }
 
 // Provider functions

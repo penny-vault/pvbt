@@ -825,6 +825,16 @@ func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, just
 func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 	p := pm.Portfolio
 	pm.dataProxy.Begin = p.EndDate.AddDate(0, 0, 1)
+
+	if through.Before(pm.dataProxy.Begin) {
+		log.WithFields(log.Fields{
+			"Begin":       pm.dataProxy.Begin,
+			"End":         through,
+			"PortfolioID": hex.EncodeToString(pm.Portfolio.ID),
+		}).Error("cannot update portfolio dates are out of order")
+		return fmt.Errorf("cannot update portfolio, through must be greater than %s", pm.dataProxy.Begin)
+	}
+
 	pm.dataProxy.End = through
 	pm.dataProxy.Frequency = data.FrequencyDaily
 

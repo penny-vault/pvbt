@@ -266,7 +266,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 
 	// compute the predicted asset
 	var predictedPortfolio *strategy.Prediction
-	if targetPortfolio.NRows() >= 2 {
+	if targetPortfolio.NRows() >= 1 {
 		lastRow := targetPortfolio.Row(targetPortfolio.NRows()-1, true, dataframe.SeriesName)
 		predictedJustification := make(map[string]float64, len(lastRow)-1)
 		for k, v := range lastRow {

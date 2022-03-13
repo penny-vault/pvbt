@@ -160,7 +160,11 @@ var updateCmd = &cobra.Command{
 			}).Info("updating portfolio")
 
 			pm.LoadTransactionsFromDB()
-			pm.UpdateTransactions(dt)
+			err = pm.UpdateTransactions(dt)
+			if err != nil {
+				// NOTE: error is logged by caller
+				continue
+			}
 			perf, err := pm.CalculatePerformance(dt)
 			if err != nil {
 				log.WithFields(log.Fields{
