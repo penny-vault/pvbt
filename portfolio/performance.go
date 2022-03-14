@@ -16,6 +16,7 @@ package portfolio
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"main/data"
@@ -34,6 +35,7 @@ import (
 
 // CalculatePerformance calculates various performance metrics of portfolio
 func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance, error) {
+	log.Debugf("Calculate performance through %s for portfolio %s\n", through, hex.EncodeToString(pm.Portfolio.ID))
 	p := pm.Portfolio
 	if len(p.Transactions) == 0 {
 		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
@@ -81,13 +83,13 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 	}
 	prevDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	prevMeasurement := PerformanceMeasurement{}
-	var totalVal float64
+	var totalVal float64 = 0
+	var benchmarkValue float64 = 0
 	var currYearStartValue float64 = -1
 	var riskFreeValue float64 = 0
 
 	depositedToDate := 0.0
 	withdrawnToDate := 0.0
-	benchmarkValue := 10_000.0
 	benchmarkShares := 0.0
 
 	stratGrowth := 10_000.0
@@ -145,18 +147,6 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			// test if date is Before the trx.Date - if it is then break
 			if date.Before(trx.Date) {
 				break
-			}
-
-			if trx.Kind == DepositTransaction || trx.Kind == WithdrawTransaction {
-				switch trx.Kind {
-				case DepositTransaction:
-					depositedToDate += trx.TotalValue
-					riskFreeValue += trx.TotalValue
-				case WithdrawTransaction:
-					withdrawnToDate += trx.TotalValue
-					riskFreeValue -= trx.TotalValue
-				}
-				continue
 			}
 
 			shares := 0.0
@@ -346,19 +336,19 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		if len(perf.Measurements) >= 2 {
 			// Growth of 10k
 			stratRate := perf.TWRR(1, STRATEGY)
-			if !math.IsNaN(stratRate) {
+			if !math.IsNaN(stratRate) && !math.IsInf(stratRate, 1) {
 				stratGrowth *= (1.0 + stratRate)
 			}
 			measurement.StrategyGrowthOf10K = stratGrowth
 
 			benchRate := perf.TWRR(1, BENCHMARK)
-			if !math.IsNaN(benchRate) {
+			if !math.IsNaN(benchRate) && !math.IsInf(benchRate, 1) {
 				benchGrowth *= (1.0 + benchRate)
 			}
 			measurement.BenchmarkGrowthOf10K = benchGrowth
 
 			rfRate := perf.TWRR(1, RISKFREE)
-			if !math.IsNaN(rfRate) {
+			if !math.IsNaN(rfRate) && !math.IsInf(rfRate, 1) {
 				riskFreeGrowth *= (1.0 + rfRate)
 			}
 			measurement.RiskFreeGrowthOf10K = riskFreeGrowth
