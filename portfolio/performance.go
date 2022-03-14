@@ -241,10 +241,19 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		// update benchmarkShares to reflect any new deposits or withdrawals
 		benchmarkPrice, err := pm.dataProxy.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 		if err != nil {
-			log.Error(err)
+			log.WithFields(log.Fields{
+				"BenchmarkTicker": pm.Portfolio.Benchmark,
+				"Date":            date,
+				"Error":           err,
+				"Metric":          "AdjustedClose",
+			}).Error("Error when fetching benchmark data")
 		}
 		if math.IsNaN(benchmarkPrice) {
-			log.Warnf("Benchmark %s is NaN", pm.Portfolio.Benchmark)
+			log.WithFields(log.Fields{
+				"BenchmarkTicker": pm.Portfolio.Benchmark,
+				"Date":            date,
+				"Metric":          "AdjustedClose",
+			}).Warn("Benchmark is NaN")
 		}
 		benchmarkShares = benchmarkValue / benchmarkPrice
 
