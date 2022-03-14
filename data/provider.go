@@ -179,6 +179,13 @@ func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols .
 		return err
 	}
 
+	log.WithFields(log.Fields{
+		"Tickers": symbols,
+		"Begin":   begin,
+		"End":     end,
+		"Metric":  metric,
+	}).Debug("Fetching stock prices")
+
 	iterator := res.ValuesIterator(dataframe.ValuesOptions{
 		InitialRow:   0,
 		Step:         1,
@@ -196,6 +203,12 @@ func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols .
 			if vals[s] != nil {
 				m.cache[key] = vals[s].(float64)
 			} else {
+				log.WithFields(log.Fields{
+					"Date":   d,
+					"Metric": metric,
+					"Symbol": s,
+					"Key":    key,
+				}).Warn("Setting cache key to NaN")
 				m.cache[key] = math.NaN()
 			}
 		}
