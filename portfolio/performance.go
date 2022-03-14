@@ -421,7 +421,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				bestYearPort.Year = uint16(prevDate.Year())
 			}
 
-			if prevMeasurement.TWRRYearToDate < worstYearPort.Return {
+			if prevMeasurement.TWRRYearToDate < worstYearPort.Return && prevMeasurement.TWRRYearToDate != 0.0 {
 				worstYearPort.Return = prevMeasurement.TWRRYearToDate
 				worstYearPort.Year = uint16(prevDate.Year())
 			}
