@@ -824,7 +824,8 @@ func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, just
 // from the portfolio end date to `through`
 func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 	p := pm.Portfolio
-	pm.dataProxy.Begin = p.EndDate.AddDate(0, 0, 1)
+	pm.dataProxy.Begin = p.EndDate.AddDate(0, -6, 1)
+	startDate := p.EndDate.AddDate(0, 0, 1)
 
 	if through.Before(pm.dataProxy.Begin) {
 		log.WithFields(log.Fields{
@@ -862,10 +863,17 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 			return err
 		}
 
+		// thin the targetPortfolio to only include info on or after the startDate
+		_, err = dfextras.TimeTrim(context.Background(), targetPortfolio, startDate, through, true)
+		if err != nil {
+			log.WithFields(log.Fields{
+				"StartDate": startDate,
+				"EndDate":   through,
+				"Error":     err,
+			}).Error("could not trim target portfolio to date range")
+		}
+
 		err = pm.TargetPortfolio(targetPortfolio)
-
-		pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
-
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":     err,
@@ -874,6 +882,9 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 			}).Error("failed to apply target portfolio")
 			return err
 		}
+
+		pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+		p.EndDate = through
 	} else {
 		log.WithFields(log.Fields{
 			"Portfolio": p.ID,
