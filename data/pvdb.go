@@ -93,16 +93,13 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 
 	cnt := len(res) - 1
 	days := make([]time.Time, 0, 252)
-	if frequency == FrequencyDaily {
-		trx.Commit(context.Background())
-		return res
-	}
 
-	fmt.Printf("%+v %+v == %+v\n", searchBegin, searchEnd, res)
 	for idx, xx := range res[:len(res)-1] {
 		next := res[idx+1]
 
 		switch frequency {
+		case FrequencyDaily:
+			days = append(days, xx)
 		case FrequencyWeekly:
 			_, week := xx.ISOWeek()
 			_, nextWeek := next.ISOWeek()
