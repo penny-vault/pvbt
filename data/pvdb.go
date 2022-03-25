@@ -21,6 +21,8 @@ import (
 	"main/common"
 	"main/database"
 	"math"
+	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -93,6 +95,12 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 
 	cnt := len(res) - 1
 	days := make([]time.Time, 0, 252)
+
+	if len(res) == 0 {
+		log.Error("Could not load trading days")
+		debug.PrintStack()
+		os.Exit(-1)
+	}
 
 	for idx, xx := range res[:len(res)-1] {
 		next := res[idx+1]
