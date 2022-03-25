@@ -222,9 +222,10 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	}
 
 	// calculate the portfolio's performance
-	performance, err := p.CalculatePerformance(manager.End)
+	performance := portfolio.NewPerformance(p.Portfolio)
+	err = performance.CalculateThrough(p, manager.End)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return fiber.ErrBadRequest
 	}
 

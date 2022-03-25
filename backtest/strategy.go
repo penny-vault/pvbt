@@ -74,7 +74,8 @@ func New(shortcode string, params map[string]json.RawMessage, startDate time.Tim
 
 		// calculate the portfolio's performance
 		start = time.Now()
-		performance, err := pm.CalculatePerformance(manager.End)
+		performance := portfolio.NewPerformance(pm.Portfolio)
+		err = performance.CalculateThrough(pm, manager.End)
 		if err != nil {
 			log.Warn(err)
 			return nil, err

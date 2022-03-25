@@ -165,7 +165,24 @@ var updateCmd = &cobra.Command{
 				// NOTE: error is logged by caller
 				continue
 			}
-			perf, err := pm.CalculatePerformance(dt)
+
+			// Try and load from the DB
+			var perf *portfolio.Performance
+			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
+			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"Error":       err,
+					"PortfolioID": hex.EncodeToString(pm.Portfolio.ID),
+				}).Warn("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
+
+				// just create a new performance record
+				perf = portfolio.NewPerformance(pm.Portfolio)
+			} else {
+				perf.LoadMeasurementsFromDB(pm.Portfolio.UserID)
+			}
+
+			err = perf.CalculateThrough(pm, dt)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error": err,

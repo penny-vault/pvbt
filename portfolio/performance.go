@@ -33,77 +33,208 @@ import (
 
 // METHODS
 
-// CalculatePerformance calculates various performance metrics of portfolio
-func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance, error) {
-	log.Debugf("Calculate performance through %s for portfolio %s\n", through, hex.EncodeToString(pm.Portfolio.ID))
-	p := pm.Portfolio
-	if len(p.Transactions) == 0 {
-		return nil, errors.New("cannot calculate performance for portfolio with no transactions")
-	}
-
+func NewPerformance(p *Portfolio) *Performance {
 	perf := Performance{
-		PortfolioID: p.ID,
-		PeriodStart: p.StartDate,
-		PeriodEnd:   through,
-		ComputedOn:  time.Now(),
+		BenchmarkMetrics: &Metrics{
+			AlphaSinceInception:                   math.NaN(),
+			AvgDrawDown:                           math.NaN(),
+			BetaSinceInception:                    math.NaN(),
+			DownsideDeviationSinceInception:       math.NaN(),
+			ExcessKurtosisSinceInception:          math.NaN(),
+			FinalBalance:                          math.NaN(),
+			SharpeRatioSinceInception:             math.NaN(),
+			Skewness:                              math.NaN(),
+			SortinoRatioSinceInception:            math.NaN(),
+			StdDevSinceInception:                  math.NaN(),
+			TotalDeposited:                        0.0,
+			TotalWithdrawn:                        0.0,
+			UlcerIndexAvg:                         math.NaN(),
+			UlcerIndexP50:                         math.NaN(),
+			UlcerIndexP90:                         math.NaN(),
+			UlcerIndexP99:                         math.NaN(),
+			DynamicWithdrawalRateSinceInception:   math.NaN(),
+			PerpetualWithdrawalRateSinceInception: math.NaN(),
+			SafeWithdrawalRateSinceInception:      math.NaN(),
+			BestYear: &AnnualReturn{
+				Year:   0,
+				Return: -99999,
+			},
+			WorstYear: &AnnualReturn{
+				Year:   0,
+				Return: 99999,
+			},
+		},
+		ComputedOn:   time.Now(),
+		Measurements: make([]*PerformanceMeasurement, 0, 2520),
+		PeriodStart:  p.StartDate,
+		PortfolioID:  p.ID,
+		PortfolioMetrics: &Metrics{
+			AlphaSinceInception:                   math.NaN(),
+			AvgDrawDown:                           math.NaN(),
+			BetaSinceInception:                    math.NaN(),
+			DownsideDeviationSinceInception:       math.NaN(),
+			ExcessKurtosisSinceInception:          math.NaN(),
+			FinalBalance:                          math.NaN(),
+			SharpeRatioSinceInception:             math.NaN(),
+			Skewness:                              math.NaN(),
+			SortinoRatioSinceInception:            math.NaN(),
+			StdDevSinceInception:                  math.NaN(),
+			TotalDeposited:                        0.0,
+			TotalWithdrawn:                        0.0,
+			UlcerIndexAvg:                         math.NaN(),
+			UlcerIndexP50:                         math.NaN(),
+			UlcerIndexP90:                         math.NaN(),
+			UlcerIndexP99:                         math.NaN(),
+			DynamicWithdrawalRateSinceInception:   math.NaN(),
+			PerpetualWithdrawalRateSinceInception: math.NaN(),
+			SafeWithdrawalRateSinceInception:      math.NaN(),
+			BestYear: &AnnualReturn{
+				Year:   0,
+				Return: -99999,
+			},
+			WorstYear: &AnnualReturn{
+				Year:   0,
+				Return: 99999,
+			},
+		},
 	}
 
-	// Calculate performance
-	pm.dataProxy.Begin = p.StartDate
-	pm.dataProxy.End = through
-	pm.dataProxy.Frequency = data.FrequencyDaily
+	return &perf
+}
+
+// transactionIndexForDate find the transaction index that has the earliest date on or after dt
+func (pm *PortfolioModel) transactionIndexForDate(dt time.Time) int {
+	// TODO update to Binary Search
+	for idx, val := range pm.Portfolio.Transactions {
+		if dt.Equal(val.Date) || dt.After(val.Date) {
+			return idx
+		}
+	}
+	return 0
+}
+
+func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
+	// TODO update to Binary Search
+	for _, val := range perf.Measurements {
+		if val.Time.Year() == dt.Year() {
+			return val.Value
+		}
+	}
+	return 0.0
+}
+
+// updateMetrics calculates individual metrics for the BENCHMARK and STRATEGY
+func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods uint, kind string) {
+	metrics.AvgDrawDown = perf.AverageDrawDown(sinceInceptionPeriods, kind)
+	metrics.DownsideDeviationSinceInception = perf.DownsideDeviation(sinceInceptionPeriods, kind)
+	metrics.SharpeRatioSinceInception = perf.SharpeRatio(sinceInceptionPeriods, kind)
+	metrics.Skewness = perf.Skew(sinceInceptionPeriods, kind)
+	metrics.SortinoRatioSinceInception = perf.SortinoRatio(sinceInceptionPeriods, kind)
+	metrics.StdDevSinceInception = perf.StdDev(sinceInceptionPeriods, kind)
+
+	switch kind {
+	case STRATEGY:
+		metrics.AlphaSinceInception = perf.Alpha(sinceInceptionPeriods)
+		metrics.BetaSinceInception = perf.Beta(sinceInceptionPeriods)
+		metrics.ExcessKurtosisSinceInception = perf.ExcessKurtosis(sinceInceptionPeriods)
+		metrics.FinalBalance = perf.Measurements[len(perf.Measurements)-1].Value
+		metrics.TotalDeposited = perf.Measurements[len(perf.Measurements)-1].TotalDeposited
+		metrics.TotalWithdrawn = perf.Measurements[len(perf.Measurements)-1].TotalWithdrawn
+		metrics.UlcerIndexAvg = perf.AvgUlcerIndex(sinceInceptionPeriods)
+		metrics.UlcerIndexP50 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .5)
+		metrics.UlcerIndexP90 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .9)
+		metrics.UlcerIndexP99 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .99)
+	case BENCHMARK:
+		metrics.FinalBalance = perf.Measurements[len(perf.Measurements)-1].BenchmarkValue
+	}
+}
+
+// CalculateThrough computes performance metrics for the given portfolio until `through`
+func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time) error {
+	p := pm.Portfolio
+	dataManager := pm.dataProxy
+
+	// make sure we can check the data
+	if len(p.Transactions) == 0 {
+		return errors.New("cannot calculate performance for portfolio with no transactions")
+	}
 
 	// t1 := time.Now()
-	tradingDays := pm.dataProxy.TradingDays(p.StartDate, through)
+	tradingDays := dataManager.TradingDays(p.StartDate, through)
 	// t2 := time.Now()
 
 	trxIdx := 0
 	numTrxs := len(p.Transactions)
+
+	var prevMeasurement *PerformanceMeasurement
+	if len(perf.Measurements) == 0 {
+		prevMeasurement = &PerformanceMeasurement{
+			StrategyGrowthOf10K:  10_000,
+			BenchmarkGrowthOf10K: 10_000,
+			RiskFreeGrowthOf10K:  10_000,
+			TotalDeposited:       0,
+			TotalWithdrawn:       0,
+			Value:                0,
+			BenchmarkValue:       0,
+		}
+	} else {
+		prevMeasurement = perf.Measurements[len(perf.Measurements)-1]
+	}
+
+	calculationStart := prevMeasurement.Time.AddDate(0, 0, 1)
+
+	log.Infof("Calculate performance from %s through %s for portfolio %s\n", calculationStart, through, hex.EncodeToString(pm.Portfolio.ID))
+
 	holdings := make(map[string]float64)
-	nYears := int(math.Ceil(through.Sub(p.StartDate).Hours() / (24 * 365)))
-	perf.Measurements = make([]*PerformanceMeasurement, 0, 252*nYears)
-	var prevVal float64 = -1
+	for _, holding := range prevMeasurement.Holdings {
+		holdings[holding.Ticker] = holding.Shares
+	}
+
+	var prevVal float64 = prevMeasurement.Value
+
 	today := time.Now()
 	currYear := today.Year()
-	bestYearPort := AnnualReturn{
-		Year:   0,
-		Return: -99999,
+
+	prevDate := prevMeasurement.Time
+
+	var totalVal float64 = prevMeasurement.Value
+	var benchmarkValue float64 = prevMeasurement.BenchmarkValue
+	var currYearStartValue float64 = perf.ValueAtYearStart(calculationStart)
+	var riskFreeValue float64 = prevMeasurement.RiskFreeValue
+
+	depositedToDate := prevMeasurement.TotalDeposited
+	withdrawnToDate := prevMeasurement.TotalWithdrawn
+
+	// compute # of shares held for benchmark
+	var benchmarkShares float64
+	if len(perf.Measurements) > 0 {
+		benchmarkPrice, err := dataManager.Get(prevMeasurement.Time, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		if err != nil {
+			log.Error(err)
+		}
+		benchmarkShares = benchmarkValue / benchmarkPrice
+	} else {
+		benchmarkShares = 0
 	}
-	worstYearPort := AnnualReturn{
-		Year:   0,
-		Return: 99999,
+
+	stratGrowth := prevMeasurement.StrategyGrowthOf10K
+	benchGrowth := prevMeasurement.BenchmarkGrowthOf10K
+	riskFreeGrowth := prevMeasurement.RiskFreeGrowthOf10K
+
+	startOfWeek := calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1)
+	daysToStartOfWeek := uint(trxIdx - pm.transactionIndexForDate(startOfWeek))
+	startOfMonth := calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1)
+	daysToStartOfMonth := uint(trxIdx - pm.transactionIndexForDate(startOfMonth))
+	startOfYear := calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1)
+	daysToStartOfYear := uint(trxIdx - pm.transactionIndexForDate(startOfYear))
+
+	var ytdBench float32 = 0.0
+	if len(perf.Measurements) > 0 {
+		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
 	}
-	bestYearBenchmark := AnnualReturn{
-		Year:   0,
-		Return: -99999,
-	}
-	worstYearBenchmark := AnnualReturn{
-		Year:   0,
-		Return: 99999,
-	}
-	prevDate := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
-	prevMeasurement := PerformanceMeasurement{}
-	var totalVal float64 = 0
-	var benchmarkValue float64 = 0
-	var currYearStartValue float64 = -1
-	var riskFreeValue float64 = 0
 
-	depositedToDate := 0.0
-	withdrawnToDate := 0.0
-	benchmarkShares := 0.0
-
-	stratGrowth := 10_000.0
-	benchGrowth := 10_000.0
-	riskFreeGrowth := 10_000.0
-
-	daysToStartOfWeek := uint(0)
-	daysToStartOfMonth := uint(0)
-	daysToStartOfYear := uint(0)
-
-	ytdBench := float32(0.0)
-
-	var last time.Time
-	var lastAssets []*ReportableHolding
+	last := prevMeasurement.Time
+	lastAssets := prevMeasurement.Holdings
 
 	for _, date := range tradingDays {
 		if last.Weekday() > date.Weekday() {
@@ -127,7 +258,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		last = date
 
 		if benchmarkShares != 0.0 {
-			benchmarkPrice, err := pm.dataProxy.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+			benchmarkPrice, err := dataManager.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 			if err != nil {
 				log.Error(err)
 			}
@@ -199,7 +330,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			default:
 				log.Debugf("on %s unrecognized transaction of type %s", trx.Date, trx.Kind)
-				return nil, errors.New("unrecognized transaction type")
+				return errors.New("unrecognized transaction type")
 			}
 
 			if val, ok := holdings["$CASH"]; ok {
@@ -229,7 +360,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		justificationArray := pm.justifications[date.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals
-		benchmarkPrice, err := pm.dataProxy.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		benchmarkPrice, err := dataManager.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"BenchmarkTicker": pm.Portfolio.Benchmark,
@@ -257,15 +388,15 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 					totalVal += qty
 				}
 			} else {
-				price, err := pm.dataProxy.Get(date, data.MetricClose, symbol)
+				price, err := dataManager.Get(date, data.MetricClose, symbol)
 				if err != nil {
-					return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+					return fmt.Errorf("no quote for symbol: %s", symbol)
 				}
 				if math.IsNaN(price) {
-					price, err = pm.dataProxy.GetLatestDataBefore(symbol, data.MetricClose, date)
+					price, err = dataManager.GetLatestDataBefore(symbol, data.MetricClose, date)
 					//log.Warnf("Price is NaN for %s; last price = %.2f", symbol, price)
 					if err != nil {
-						return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+						return fmt.Errorf("no quote for symbol: %s", symbol)
 					}
 				}
 
@@ -281,9 +412,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 			if symbol == "$CASH" {
 				value = qty
 			} else if qty > 1.0e-5 {
-				price, err := pm.dataProxy.Get(date, data.MetricClose, symbol)
+				price, err := dataManager.Get(date, data.MetricClose, symbol)
 				if err != nil {
-					return nil, fmt.Errorf("no quote for symbol: %s", symbol)
+					return fmt.Errorf("no quote for symbol: %s", symbol)
 				}
 				value = price * qty
 			}
@@ -305,7 +436,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		}
 
 		// update riskFreeValue
-		rawRate := pm.dataProxy.RiskFreeRate(date)
+		rawRate := dataManager.RiskFreeRate(date)
 		riskFreeRate := rawRate / 100.0 / 252.0
 		riskFreeValue *= (1 + riskFreeRate)
 
@@ -415,30 +546,30 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		}
 
 		if prevDate.Year() != date.Year() {
-			if prevMeasurement.TWRRYearToDate > bestYearPort.Return {
-				bestYearPort.Return = prevMeasurement.TWRRYearToDate
-				bestYearPort.Year = uint16(prevDate.Year())
+			if prevMeasurement.TWRRYearToDate > perf.PortfolioMetrics.BestYear.Return {
+				perf.PortfolioMetrics.BestYear.Return = prevMeasurement.TWRRYearToDate
+				perf.PortfolioMetrics.BestYear.Year = uint16(prevDate.Year())
 			}
 
-			if prevMeasurement.TWRRYearToDate < worstYearPort.Return && prevMeasurement.TWRRYearToDate != 0.0 {
-				worstYearPort.Return = prevMeasurement.TWRRYearToDate
-				worstYearPort.Year = uint16(prevDate.Year())
+			if prevMeasurement.TWRRYearToDate < perf.PortfolioMetrics.WorstYear.Return && prevMeasurement.TWRRYearToDate != 0.0 {
+				perf.PortfolioMetrics.WorstYear.Return = prevMeasurement.TWRRYearToDate
+				perf.PortfolioMetrics.WorstYear.Year = uint16(prevDate.Year())
 			}
 
 			// calculate 1-yr benchmark rate of return
-			if ytdBench > bestYearBenchmark.Return {
-				bestYearBenchmark.Return = ytdBench
-				bestYearBenchmark.Year = uint16(prevDate.Year())
+			if ytdBench > perf.BenchmarkMetrics.BestYear.Return {
+				perf.BenchmarkMetrics.BestYear.Return = ytdBench
+				perf.BenchmarkMetrics.BestYear.Year = uint16(prevDate.Year())
 			}
 
-			if ytdBench < worstYearBenchmark.Return {
-				worstYearBenchmark.Return = ytdBench
-				worstYearBenchmark.Year = uint16(prevDate.Year())
+			if ytdBench < perf.BenchmarkMetrics.WorstYear.Return {
+				perf.BenchmarkMetrics.WorstYear.Return = ytdBench
+				perf.BenchmarkMetrics.WorstYear.Year = uint16(prevDate.Year())
 			}
 		}
 
 		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
-		prevMeasurement = measurement
+		prevMeasurement = &measurement
 		prevDate = date
 
 		if date.Before(today) || date.Equal(today) {
@@ -477,43 +608,9 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		TWRRTenYear:        perf.TWRR(2520, BENCHMARK),
 	}
 
-	perf.PortfolioMetrics = &Metrics{
-		AlphaSinceInception:             perf.Alpha(sinceInceptionPeriods),
-		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods, STRATEGY),
-		BetaSinceInception:              perf.Beta(sinceInceptionPeriods),
-		BestYear:                        &bestYearPort,
-		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods, STRATEGY),
-		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
-		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].Value,
-		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods, STRATEGY),
-		Skewness:                        perf.Skew(sinceInceptionPeriods, STRATEGY),
-		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods, STRATEGY),
-		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods, STRATEGY),
-		TotalDeposited:                  perf.Measurements[len(perf.Measurements)-1].TotalDeposited,
-		TotalWithdrawn:                  perf.Measurements[len(perf.Measurements)-1].TotalWithdrawn,
-		UlcerIndexAvg:                   perf.AvgUlcerIndex(sinceInceptionPeriods),
-		UlcerIndexP50:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .5),
-		UlcerIndexP90:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .9),
-		UlcerIndexP99:                   perf.UlcerIndexPercentile(sinceInceptionPeriods, .99),
-		WorstYear:                       &worstYearPort,
-	}
-
-	perf.BenchmarkMetrics = &Metrics{
-		AlphaSinceInception:             math.NaN(), // alpha doesn't make sense for benchmark
-		AvgDrawDown:                     perf.AverageDrawDown(sinceInceptionPeriods, BENCHMARK),
-		BestYear:                        &bestYearBenchmark,
-		BetaSinceInception:              math.NaN(),
-		DownsideDeviationSinceInception: perf.DownsideDeviation(sinceInceptionPeriods, BENCHMARK),
-		ExcessKurtosisSinceInception:    perf.ExcessKurtosis(sinceInceptionPeriods),
-		FinalBalance:                    perf.Measurements[len(perf.Measurements)-1].BenchmarkValue,
-		SharpeRatioSinceInception:       perf.SharpeRatio(sinceInceptionPeriods, BENCHMARK),
-		Skewness:                        perf.Skew(sinceInceptionPeriods, BENCHMARK),
-		SortinoRatioSinceInception:      perf.SortinoRatio(sinceInceptionPeriods, BENCHMARK),
-		StdDevSinceInception:            perf.StdDev(sinceInceptionPeriods, BENCHMARK),
-		TotalDeposited:                  math.NaN(),
-		TotalWithdrawn:                  math.NaN(),
-		WorstYear:                       &worstYearBenchmark,
-	}
+	// Update Strategy Metrics
+	perf.updateMetrics(perf.PortfolioMetrics, sinceInceptionPeriods, STRATEGY)
+	perf.updateMetrics(perf.BenchmarkMetrics, sinceInceptionPeriods, BENCHMARK)
 
 	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
 	if len(monthlyRets) > 0 {
@@ -533,6 +630,13 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
 		perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
 	}
+
+	// Set period end to last measurement
+	if len(perf.Measurements) > 0 {
+		perf.PeriodStart = perf.Measurements[0].Time
+		perf.PeriodEnd = perf.Measurements[len(perf.Measurements)-1].Time
+	}
+
 	// t8 := time.Now()
 
 	/*
@@ -544,7 +648,7 @@ func (pm *PortfolioModel) CalculatePerformance(through time.Time) (*Performance,
 		}).Info("CalculatePerformance runtime")
 	*/
 
-	return &perf, nil
+	return nil
 }
 
 // DATABASE
@@ -567,9 +671,13 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 	if err != nil {
 		return nil, err
 	}
-	p := Performance{
-		PortfolioID: binaryID,
+
+	portfolio := &Portfolio{
+		ID:        binaryID,
+		StartDate: time.Now(),
 	}
+
+	p := NewPerformance(portfolio)
 
 	var data []byte
 	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&data)
@@ -593,13 +701,31 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 		return nil, err
 	}
 
-	p.UnmarshalBinary(data)
-	return &p, nil
+	if err := p.UnmarshalBinary(data); err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": portfolioID,
+			"UserID":      userID,
+		}).Warn("unmarshal data failed")
+		return nil, err
+	}
+
+	return p, nil
 }
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
-func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
-	measurementSQL := "SELECT extract(epoch from event_date), strategy_value, risk_free_value, holdings, percent_return FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+func (p *Performance) LoadMeasurementsFromDB(userID string) error {
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"Error":       err,
+			"PortfolioID": hex.EncodeToString(p.PortfolioID),
+			"UserID":      userID,
+		}).Error("unable to get database transaction for user")
+		return err
+	}
+
+	measurementSQL := "SELECT event_date, strategy_value, risk_free_value, holdings, benchmark_value, strategy_growth_of_10k, benchmark_growth_of_10k, risk_free_growth_of_10k, total_deposited_to_date, total_withdrawn_to_date FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
 	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -615,7 +741,7 @@ func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
 	measurements := make([]*PerformanceMeasurement, 0, 1000)
 	for rows.Next() {
 		m := PerformanceMeasurement{}
-		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings)
+		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.BenchmarkValue, &m.StrategyGrowthOf10K, &m.BenchmarkGrowthOf10K, &m.RiskFreeGrowthOf10K, &m.TotalDeposited, &m.TotalWithdrawn)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Error":       err,
@@ -629,6 +755,8 @@ func (p *Performance) loadMeasurementsFromDB(trx pgx.Tx, userID string) error {
 		measurements = append(measurements, &m)
 	}
 	p.Measurements = measurements
+
+	trx.Commit(context.Background())
 	return nil
 }
 
@@ -838,61 +966,7 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$56,
 		$57
 	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
-	DO UPDATE SET
-		risk_free_value=$3,
-		total_deposited_to_date=$4,
-		total_withdrawn_to_date=$5,
-		strategy_value=$7,
-		holdings=$8,
-		justification=$9,
-		alpha_1yr=$10,
-		alpha_3yr=$11,
-		alpha_5yr=$12,
-		alpha_10yr=$13,
-		beta_1yr=$14,
-		beta_3yr=$15,
-		beta_5yr=$16,
-		beta_10yr=$17,
-		twrr_1d=$18,
-		twrr_1wk=$19,
-		twrr_1mo=$20,
-		twrr_3mo=$21,
-		twrr_1yr=$22,
-		twrr_3yr=$23,
-		twrr_5yr=$24,
-		twrr_10yr=$25,
-		mwrr_1d=$26,
-		mwrr_1wk=$27,
-		mwrr_1mo=$28,
-		mwrr_3mo=$29,
-		mwrr_1yr=$30,
-		mwrr_3yr=$31,
-		mwrr_5yr=$32,
-		mwrr_10yr=$33,
-		active_return_1yr=$34,
-		active_return_3yr=$35,
-		active_return_5yr=$36,
-		active_return_10yr=$37,
-		calmar_ratio=$38,
-		downside_deviation=$39,
-		information_ratio=$40,
-		k_ratio=$41,
-		keller_ratio=$42,
-		sharpe_ratio=$43,
-		sortino_ratio=$44,
-		std_dev=$45,
-		treynor_ratio=$46,
-		ulcer_index=$47,
-		benchmark_value=$48,
-		strategy_growth_of_10k=$49,
-		benchmark_growth_of_10k=$50,
-		risk_free_growth_of_10k=$51,
-		twrr_wtd=$52,
-		twrr_mtd=$53,
-		twrr_ytd=$54,
-		mwrr_wtd=$55,
-		mwrr_mtd=$56,
-		mwrr_ytd=$57`
+	DO NOTHING`
 
 	for _, m := range p.Measurements {
 		holdings, err := json.Marshal(m.Holdings)

@@ -193,8 +193,6 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
 
-	log.Println("Retrieving portfolio measurements!")
-
 	f := filter.New(portfolioID, userID)
 
 	field1 := c.Query("field1", "strategy_growth_of_10k")

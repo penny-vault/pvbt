@@ -300,7 +300,7 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
-				perf, err = pm.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				err = perf.CalculateThrough(pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 				Expect(err).NotTo(HaveOccurred())
 
 				// Friday, August 28, 2020
@@ -338,7 +338,8 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.Frequency = data.FrequencyDaily
 
 				pm.TargetPortfolio(df)
-				perf, err = pm.CalculatePerformance(time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				perf = portfolio.NewPerformance(pm.Portfolio)
+				err = perf.CalculateThrough(pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 			})
 
 			It("should not error", func() {
