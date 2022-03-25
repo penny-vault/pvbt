@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -61,6 +62,10 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal(err)
 			}
+
+			// convert to EST
+			nyc, _ := time.LoadLocation("America/New_York")
+			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 18, 0, 0, 0, nyc)
 		}
 
 		tradecron.InitializeTradeCron()
