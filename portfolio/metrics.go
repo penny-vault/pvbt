@@ -497,6 +497,9 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 // MWRRYtd calculates the money weighted YTD return
 func (perf *Performance) MWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
+	if len(perf.Measurements) == int(periods) {
+		periods -= 1
+	}
 	return perf.MWRR(periods, kind)
 }
 
@@ -754,6 +757,9 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 // TWRRYtd calculates the time-weighted YTD return
 func (perf *Performance) TWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
+	if len(perf.Measurements) == int(periods) {
+		periods -= 1
+	}
 	return perf.TWRR(periods, kind)
 }
 

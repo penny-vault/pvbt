@@ -190,16 +190,12 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		holdings[holding.Ticker] = holding.Shares
 	}
 
-	var prevVal float64 = prevMeasurement.Value
-
 	today := time.Now()
-	currYear := today.Year()
 
 	prevDate := prevMeasurement.Time
 
 	var totalVal float64 = prevMeasurement.Value
 	var benchmarkValue float64 = prevMeasurement.BenchmarkValue
-	var currYearStartValue float64 = perf.ValueAtYearStart(calculationStart)
 	var riskFreeValue float64 = prevMeasurement.RiskFreeValue
 
 	depositedToDate := prevMeasurement.TotalDeposited
@@ -263,11 +259,6 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 				log.Error(err)
 			}
 			benchmarkValue = benchmarkShares * benchmarkPrice
-		}
-
-		// check if this is the current year
-		if date.Year() == currYear && currYearStartValue == -1.0 {
-			currYearStartValue = prevVal
 		}
 
 		// update holdings?
@@ -439,8 +430,6 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		rawRate := dataManager.RiskFreeRate(date)
 		riskFreeRate := rawRate / 100.0 / 252.0
 		riskFreeValue *= (1 + riskFreeRate)
-
-		prevVal = totalVal
 
 		// ensure that holdings are sorted
 		sort.Slice(lastAssets, func(i, j int) bool {
@@ -619,17 +608,11 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
 		perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
 	}
-	if currYearStartValue <= 0 {
-		perf.PortfolioReturns.MWRRYTD = 0.0
-		perf.PortfolioReturns.TWRRYTD = 0.0
-		perf.BenchmarkReturns.MWRRYTD = 0.0
-		perf.BenchmarkReturns.TWRRYTD = 0.0
-	} else {
-		perf.PortfolioReturns.MWRRYTD = perf.MWRRYtd(STRATEGY)
-		perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
-		perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
-		perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
-	}
+
+	perf.PortfolioReturns.MWRRYTD = perf.MWRRYtd(STRATEGY)
+	perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
+	perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
+	perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
 
 	// Set period end to last measurement
 	if len(perf.Measurements) > 0 {
