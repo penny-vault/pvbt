@@ -261,9 +261,11 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 
 	switch frequency {
 	case "annually":
-		predicted.Time = predicted.Time.AddDate(1, 0, 0)
+		nyc, _ := time.LoadLocation("America/New_York")
+		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
 	case "monthly":
-		predicted.Time = predicted.Time.AddDate(0, 1, 0)
+		nyc, _ := time.LoadLocation("America/New_York")
+		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
 	}
 
 	h.Items = append(h.Items, &predicted)
