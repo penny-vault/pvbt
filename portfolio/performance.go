@@ -159,13 +159,6 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		return errors.New("cannot calculate performance for portfolio with no transactions")
 	}
 
-	// t1 := time.Now()
-	tradingDays := dataManager.TradingDays(p.StartDate, through)
-	// t2 := time.Now()
-
-	trxIdx := 0
-	numTrxs := len(p.Transactions)
-
 	var prevMeasurement *PerformanceMeasurement
 	if len(perf.Measurements) == 0 {
 		prevMeasurement = &PerformanceMeasurement{
@@ -182,9 +175,20 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 	}
 
 	calculationStart := prevMeasurement.Time.AddDate(0, 0, 1)
+	if calculationStart.Before(p.StartDate) {
+		calculationStart = p.StartDate
+	}
 
 	log.Infof("Calculate performance from %s through %s for portfolio %s\n", calculationStart, through, hex.EncodeToString(pm.Portfolio.ID))
 
+	// Get the days performance should be calculated on
+	tradingDays := dataManager.TradingDays(calculationStart, through)
+
+	// get transaction start index
+	trxIdx := pm.transactionIndexForDate(calculationStart)
+	numTrxs := len(p.Transactions)
+
+	// fill holdings
 	holdings := make(map[string]float64)
 	for _, holding := range prevMeasurement.Holdings {
 		holdings[holding.Ticker] = holding.Shares
