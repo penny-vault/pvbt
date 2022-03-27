@@ -138,7 +138,7 @@ func LoadStrategyMetricsFromDb() {
 			log.WithFields(log.Fields{
 				"Strategy": strat.Shortcode,
 				"Error":    err,
-			}).Error("failed to lookup strategy portfolio in database")
+			}).Warn("failed to lookup strategy portfolio in database")
 			trx.Rollback(context.Background())
 			continue
 		}
