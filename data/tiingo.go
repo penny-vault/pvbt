@@ -244,7 +244,7 @@ func (t *tiingo) GetDataForPeriod(symbols []string, metric string, frequency str
 	ch := make(chan quoteResult)
 
 	for idx, chunk := range partitionArray(symbols, 10) {
-		log.Info("GetMultipleData run chunk %d of %d at %s\n", idx, len(symbols)/10, time.Now().Format("15:04:05"))
+		log.Infof("GetMultipleData run chunk %d of %d at %s\n", idx, len(symbols)/10, time.Now().Format("15:04:05"))
 		for ii := range chunk {
 			go tiingoDownloadWorker(ch, strings.ToUpper(chunk[ii]), metric, frequency, begin, end, t)
 		}
