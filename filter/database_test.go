@@ -17,7 +17,7 @@ package filter_test
 import (
 	"main/filter"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
