@@ -184,10 +184,13 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 		Items: make([]*portfolio.PortfolioHoldingItem, 0, len(f.Performance.Measurements)),
 	}
 
+	nyc, _ := time.LoadLocation("America/New_York")
+
 	// filter measurements by where
 	var last *portfolio.PerformanceMeasurement
 	added := false
 	for _, meas := range f.Performance.Measurements {
+		meas.Time = meas.Time.In(nyc)
 		added = false
 		switch frequency {
 		case "annually":

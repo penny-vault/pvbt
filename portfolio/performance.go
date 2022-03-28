@@ -105,12 +105,20 @@ func NewPerformance(p *Portfolio) *Performance {
 // transactionIndexForDate find the transaction index that has the earliest date on or after dt
 func (pm *PortfolioModel) transactionIndexForDate(dt time.Time) int {
 	// TODO update to Binary Search
-	for idx, val := range pm.Portfolio.Transactions {
-		if dt.Equal(val.Date) || dt.After(val.Date) {
+	var val *Transaction
+	idx := 0
+
+	// There are a number of cases to consider here:
+	// 1) dt is before all transactions
+	// 2) dt is somewhere within the transaction stream
+	for idx, val = range pm.Portfolio.Transactions {
+		if dt.Equal(val.Date) || dt.Before(val.Date) {
 			return idx
 		}
 	}
-	return 0
+
+	// 3) dt is after all transactions
+	return idx + 1
 }
 
 func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
@@ -179,6 +187,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		calculationStart = p.StartDate
 	}
 
+	// calculationStart should be at midnight nyc
+	nyc, _ := time.LoadLocation("America/New_York")
+	calculationStart = time.Date(calculationStart.Year(), calculationStart.Month(), calculationStart.Day(), 0, 0, 0, 0, nyc)
+
 	log.Infof("Calculate performance from %s through %s for portfolio %s\n", calculationStart, through, hex.EncodeToString(pm.Portfolio.ID))
 
 	// Get the days performance should be calculated on
@@ -187,6 +199,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
 	numTrxs := len(p.Transactions)
+
+	if trxIdx < len(p.Transactions) {
+		log.Debugf("Starting from transactions[%d] = %+v", trxIdx, p.Transactions[trxIdx])
+	}
 
 	// fill holdings
 	holdings := make(map[string]float64)
@@ -234,9 +250,12 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 	}
 
 	last := prevMeasurement.Time
-	lastAssets := prevMeasurement.Holdings
 
 	for _, date := range tradingDays {
+		// measurements should be at 23:59:59.999999999
+		tradingDate := date
+		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999_999_999, nyc)
+
 		if last.Weekday() > date.Weekday() {
 			daysToStartOfWeek = 1
 		} else {
@@ -266,6 +285,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		}
 
 		// update holdings?
+		log.Debugf("Trade date %s", date)
 		for ; trxIdx < numTrxs; trxIdx++ {
 			trx := p.Transactions[trxIdx]
 
@@ -275,10 +295,13 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 				break
 			}
 
+			log.Debugf("Processing trasaction %d: %+v", trxIdx, p.Transactions[trxIdx])
+
 			shares := 0.0
 			if val, ok := holdings[trx.Ticker]; ok {
 				shares = val
 			}
+
 			switch trx.Kind {
 			case DepositTransaction:
 				depositedToDate += trx.TotalValue
@@ -324,7 +347,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 				}
 				log.Debugf("on %s sell %.2f shares of %s for %.2f @ %.2f per share", trx.Date, trx.Shares, trx.Ticker, trx.TotalValue, trx.PricePerShare)
 			default:
-				log.Debugf("on %s unrecognized transaction of type %s", trx.Date, trx.Kind)
+				log.Warnf("on %s unrecognized transaction of type %s", trx.Date, trx.Kind)
 				return errors.New("unrecognized transaction type")
 			}
 
@@ -352,7 +375,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		}
 
 		// build justification array
-		justificationArray := pm.justifications[date.String()]
+		justificationArray := pm.justifications[tradingDate.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals
 		benchmarkPrice, err := dataManager.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
@@ -426,18 +449,14 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 			}
 		}
 
-		if lastAssets == nil {
-			lastAssets = currentAssets
-		}
-
 		// update riskFreeValue
 		rawRate := dataManager.RiskFreeRate(date)
 		riskFreeRate := rawRate / 100.0 / 252.0
 		riskFreeValue *= (1 + riskFreeRate)
 
 		// ensure that holdings are sorted
-		sort.Slice(lastAssets, func(i, j int) bool {
-			return lastAssets[i].Ticker < lastAssets[j].Ticker
+		sort.Slice(currentAssets, func(i, j int) bool {
+			return currentAssets[i].Ticker < currentAssets[j].Ticker
 		})
 
 		measurement := PerformanceMeasurement{
@@ -449,12 +468,11 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 			StrategyGrowthOf10K:  stratGrowth,
 			BenchmarkGrowthOf10K: benchGrowth,
 			RiskFreeGrowthOf10K:  riskFreeGrowth,
-			Holdings:             lastAssets,
+			Holdings:             currentAssets,
 			TotalDeposited:       depositedToDate,
 			TotalWithdrawn:       withdrawnToDate,
 		}
 
-		lastAssets = currentAssets
 		perf.Measurements = append(perf.Measurements, &measurement)
 
 		if len(perf.Measurements) >= 2 {
