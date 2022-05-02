@@ -32,7 +32,7 @@ type Transaction struct {
 	PricePerShare  float64
 	Shares         float64
 	Source         text
-	SourceID       binary
+	SourceID       text
 	Tags           []text
 	TaxDisposition text
 	Ticker         text

@@ -222,7 +222,7 @@ type Transaction struct {
 
 	Source string
 
-	SourceID []byte
+	SourceID string
 
 	Tags []string
 
@@ -978,15 +978,13 @@ func (o *Transaction) Unmarshal(data []byte) (int, error) {
 		if x > uint(ColferSizeMax) {
 			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Transaction.SourceID size %d exceeds %d bytes", x, ColferSizeMax))
 		}
-		v := make([]byte, int(x))
 
 		start := i
-		i += len(v)
+		i += int(x)
 		if i >= len(data) {
 			goto eof
 		}
-		copy(v, data[start:i])
-		o.SourceID = v
+		o.SourceID = string(data[start:i])
 
 		header = data[i]
 		i++
