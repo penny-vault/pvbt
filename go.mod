@@ -53,6 +53,8 @@ require (
 	google.golang.org/protobuf v1.28.0
 )
 
+require github.com/robfig/cron/v3 v3.0.1
+
 require (
 	github.com/apache/arrow/go/arrow v0.0.0-20200730104253-651201b0f516 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
@@ -85,7 +87,6 @@ require (
 	github.com/pelletier/go-toml v1.9.4 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
-	github.com/robfig/cron/v3 v3.0.1 // indirect
 	github.com/rocketlaunchr/mysql-go v1.1.3 // indirect
 	github.com/sandertv/go-formula/v2 v2.0.0-alpha.7 // indirect
 	github.com/spf13/afero v1.8.2 // indirect
