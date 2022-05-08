@@ -1375,6 +1375,6 @@ func computeTransactionSourceID(t *Transaction) error {
 		return errors.New("generate hash failed -- couldn't read 16 bytes from digest")
 	}
 
-	t.SourceID = buf
+	t.SourceID = hex.EncodeToString(buf)
 	return nil
 }
