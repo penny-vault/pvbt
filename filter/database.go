@@ -118,7 +118,7 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sql, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{}, where, "event_date ASC")
+	sql, args, err := BuildQuery("portfolio_measurement", fields, []string{}, where, "event_date ASC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err
@@ -172,7 +172,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sqlTmp, args, err := BuildQuery("portfolio_measurement_v1", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
+	sqlTmp, args, err := BuildQuery("portfolio_measurement", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err
@@ -247,7 +247,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	// add predicted holding item
 	var predicted portfolio.PortfolioHoldingItem
 	var predictedRaw []byte
-	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio_v1 WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
+	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
 
 	if err != nil {
 		log.Warn(err)
@@ -285,7 +285,7 @@ func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sqlQuery, args, err := BuildQuery("portfolio_transaction_v1", fields, []string{}, where, "event_date ASC")
+	sqlQuery, args, err := BuildQuery("portfolio_transaction", fields, []string{}, where, "event_date ASC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err

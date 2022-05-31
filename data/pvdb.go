@@ -75,7 +75,7 @@ func (p *pvdb) TradingDays(begin time.Time, end time.Time, frequency string) []t
 		searchEnd = searchEnd.AddDate(0, 0, 7)
 	}
 
-	rows, err := trx.Query(context.Background(), "SELECT trading_day FROM trading_days_v1 WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
+	rows, err := trx.Query(context.Background(), "SELECT trading_day FROM trading_days WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error": err,
@@ -223,7 +223,7 @@ func (p *pvdb) GetDataForPeriod(symbols []string, metric string, frequency strin
 	}
 	tickerArgs := strings.Join(tickerSet, ", ")
 
-	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod_v1 WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", columns, tickerArgs)
+	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", columns, tickerArgs)
 
 	// execute the query
 	rows, err := trx.Query(context.Background(), sql, args...)
@@ -382,7 +382,7 @@ func (p *pvdb) GetLatestDataBefore(symbol string, metric string, before time.Tim
 		return math.NaN(), errors.New("un-supported metric")
 	}
 
-	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod_v1 WHERE ticker=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
+	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod WHERE ticker=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
 
 	// execute the query
 	rows, err := trx.Query(context.Background(), sql, symbol, before)

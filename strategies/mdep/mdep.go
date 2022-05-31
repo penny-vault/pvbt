@@ -111,7 +111,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	var startDate time.Time
-	err = db.QueryRow(context.Background(), "SELECT min(event_date) FROM zacks_financials_v1").Scan(&startDate)
+	err = db.QueryRow(context.Background(), "SELECT min(event_date) FROM zacks_financials").Scan(&startDate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -176,7 +176,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 	// load market sentiment scores
 	crashDetection := make([]*sentiment, 0, 600)
-	rows, err := db.Query(context.Background(), "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators_v1 WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
+	rows, err := db.Query(context.Background(), "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,8 +216,8 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 			s.EventDate.Day() == dates[nextDateIdx].Day() {
 			targetMap := make(map[string]float64)
 			cnt := 0
-			//rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND market_cap_mil>=100 AND percent_rating_change_4wk >= 0 AND percent_change_q1_est >= 0 AND event_date=$1 ORDER BY percent_rating_change_4wk desc, percent_change_q1_est desc, market_cap_mil desc LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
-			rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+			//rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND market_cap_mil>=100 AND percent_rating_change_4wk >= 0 AND percent_change_q1_est >= 0 AND event_date=$1 ORDER BY percent_rating_change_4wk desc, percent_change_q1_est desc, market_cap_mil desc LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+			rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -249,7 +249,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 	// Get predicted portfolio
 	var ticker string
 	predictedTarget := make(map[string]float64)
-	rows, err = db.Query(context.Background(), "SELECT ticker FROM zacks_financials_v1 WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+	rows, err = db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
 	if err != nil {
 		return nil, nil, err
 	}

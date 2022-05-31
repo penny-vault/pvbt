@@ -661,7 +661,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 // LOAD
 
 func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
-	portfolioSQL := `SELECT performance_bytes FROM portfolio_v1 WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT performance_bytes FROM portfolio WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -730,7 +730,7 @@ func (p *Performance) LoadMeasurementsFromDB(userID string) error {
 		return err
 	}
 
-	measurementSQL := "SELECT event_date, strategy_value, risk_free_value, holdings, benchmark_value, strategy_growth_of_10k, benchmark_growth_of_10k, risk_free_growth_of_10k, total_deposited_to_date, total_withdrawn_to_date FROM portfolio_measurement_v1 WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	measurementSQL := "SELECT event_date, strategy_value, risk_free_value, holdings, benchmark_value, strategy_growth_of_10k, benchmark_growth_of_10k, risk_free_growth_of_10k, total_deposited_to_date, total_withdrawn_to_date FROM portfolio_measurement WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
 	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -794,7 +794,7 @@ func (p *Performance) Save(userID string) error {
 }
 
 func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
-	sql := `UPDATE portfolio_v1 SET
+	sql := `UPDATE portfolio SET
 		performance_bytes=$2,
 		ytd_return=$3,
 		cagr_since_inception=$4,
@@ -854,7 +854,7 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 }
 
 func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
-	sql := `INSERT INTO portfolio_measurement_v1 (
+	sql := `INSERT INTO portfolio_measurement (
 		event_date,
 		portfolio_id,
 		risk_free_value,
@@ -970,7 +970,7 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 		$55,
 		$56,
 		$57
-	) ON CONFLICT ON CONSTRAINT portfolio_measurement_v1_pkey
+	) ON CONFLICT ON CONSTRAINT portfolio_measurement_pkey
 	DO NOTHING`
 
 	for _, m := range p.Measurements {

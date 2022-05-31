@@ -930,7 +930,7 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 		tax_type,
 		ticker,
 		total_value
-	FROM portfolio_transaction_v1
+	FROM portfolio_transaction
 	WHERE portfolio_id=$1 AND user_id=$2
 	ORDER BY sequence_num`
 	rows, err := trx.Query(context.Background(), transactionSQL, p.ID, p.UserID)
@@ -1026,7 +1026,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			notifications,
 			benchmark
 		FROM
-			portfolio_v1
+			portfolio
 		WHERE
 			id = ANY ($1) AND user_id=$2`
 		rows, err = trx.Query(context.Background(), portfolioSQL, portfolioIDs, userID)
@@ -1045,7 +1045,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			notifications,
 			benchmark
 		FROM
-			portfolio_v1
+			portfolio
 		WHERE
 			user_id=$1`
 		rows, err = trx.Query(context.Background(), portfolioSQL, userID)
@@ -1154,7 +1154,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 	temporary := !permanent
 	p := pm.Portfolio
 	portfolioSQL := `
-	INSERT INTO portfolio_v1 (
+	INSERT INTO portfolio (
 		"id",
 		"name",
 		"strategy_shortcode",
@@ -1178,7 +1178,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		$9,
 		$10,
 		$11
-	) ON CONFLICT ON CONSTRAINT portfolio_v1_pkey
+	) ON CONFLICT ON CONSTRAINT portfolio_pkey
 	DO UPDATE SET
 		name=$2,
 		strategy_shortcode=$3,
@@ -1235,7 +1235,7 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	}).Info("Saving portfolio transactions")
 
 	transactionSQL := `
-	INSERT INTO portfolio_transaction_v1 (
+	INSERT INTO portfolio_transaction (
 		"id",
 		"portfolio_id",
 		"transaction_type",
@@ -1275,7 +1275,7 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 		$17,
 		$18,
 		$19
-	) ON CONFLICT ON CONSTRAINT portfolio_transaction_v1_pkey
+	) ON CONFLICT ON CONSTRAINT portfolio_transaction_pkey
  	DO UPDATE SET
 		transaction_type=$3,
 		cleared=$4,
@@ -1375,6 +1375,6 @@ func computeTransactionSourceID(t *Transaction) error {
 		return errors.New("generate hash failed -- couldn't read 16 bytes from digest")
 	}
 
-	t.SourceID = buf
+	t.SourceID = hex.EncodeToString(buf)
 	return nil
 }

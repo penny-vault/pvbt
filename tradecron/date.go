@@ -68,9 +68,9 @@ func LoadMarketHolidays() error {
 	}
 
 	if lastHolidayLoad.After(time.Date(1929, 1, 1, 0, 0, 0, 0, nyc)) {
-		rows, err = trx.Query(context.Background(), "SELECT event_date FROM market_holidays_v1 WHERE event_date > $1 ORDER BY event_date ASC", lastHolidayLoad)
+		rows, err = trx.Query(context.Background(), "SELECT event_date FROM market_holidays WHERE event_date > $1 ORDER BY event_date ASC", lastHolidayLoad)
 	} else {
-		rows, err = trx.Query(context.Background(), "SELECT event_date FROM market_holidays_v1 ORDER BY event_date ASC")
+		rows, err = trx.Query(context.Background(), "SELECT event_date FROM market_holidays ORDER BY event_date ASC")
 	}
 
 	if err != nil {
