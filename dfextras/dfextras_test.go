@@ -16,9 +16,10 @@ package dfextras_test
 
 import (
 	"context"
-	"main/common"
-	"main/dfextras"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/dfextras"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

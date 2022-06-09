@@ -21,7 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"main/portfolio"
+	"github.com/penny-vault/pv-api/portfolio"
 )
 
 var _ = Describe("Metrics", func() {

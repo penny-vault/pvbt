@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"main/data"
+	"github.com/penny-vault/pv-api/data"
 )
 
 var _ = Describe("Provider", func() {

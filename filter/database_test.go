@@ -15,7 +15,7 @@
 package filter_test
 
 import (
-	"main/filter"
+	"github.com/penny-vault/pv-api/filter"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

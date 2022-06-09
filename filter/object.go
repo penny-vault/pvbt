@@ -15,9 +15,10 @@
 package filter
 
 import (
-	"main/portfolio"
 	"math"
 	"time"
+
+	"github.com/penny-vault/pv-api/portfolio"
 )
 
 type FilterObject struct {

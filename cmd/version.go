@@ -16,7 +16,8 @@ package cmd
 
 import (
 	"fmt"
-	"main/common"
+
+	"github.com/penny-vault/pv-api/common"
 
 	"github.com/spf13/cobra"
 )

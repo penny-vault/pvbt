@@ -18,15 +18,16 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"main/backtest"
-	"main/data"
-	"main/database"
-	"main/portfolio"
-	"main/strategies"
-	"main/strategies/strategy"
-	"main/tradecron"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/backtest"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/penny-vault/pv-api/strategies"
+	"github.com/penny-vault/pv-api/strategies/strategy"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/google/uuid"
 	log "github.com/sirupsen/logrus"
@@ -82,15 +83,16 @@ var updateCmd = &cobra.Command{
 		dataManager := data.NewManager(credentials)
 
 		strategies.LoadStrategyMetricsFromDb()
-		for _, strat := range strategies.StrategyList {
-			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
-				log.WithFields(log.Fields{
-					"Strategy": strat.Shortcode,
-				}).Info("create portfolio for strategy")
-				createStrategyPortfolio(strat, &dataManager)
+		/*
+			for _, strat := range strategies.StrategyList {
+				if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
+					log.WithFields(log.Fields{
+						"Strategy": strat.Shortcode,
+					}).Info("create portfolio for strategy")
+					createStrategyPortfolio(strat, &dataManager)
+				}
 			}
-		}
-
+		*/
 		// get a list of portfolio id's to update
 		portfolios := make([]*portfolio.PortfolioModel, 0, 100)
 		if PortfolioID != "" {
@@ -194,6 +196,14 @@ var updateCmd = &cobra.Command{
 				}).Error("error while calculating portfolio performance -- refusing to save")
 				continue
 			}
+
+			/*
+				fmt.Printf("Performance from %s through %s\n", perf.PeriodStart, perf.PeriodEnd)
+				for idx, m := range perf.Measurements {
+					fmt.Printf("%d) %s\t%.2f\n", idx, m.Time, m.Value)
+				}
+			*/
+
 			err = pm.Save(pm.Portfolio.UserID)
 			if err != nil {
 				log.WithFields(log.Fields{

@@ -16,8 +16,9 @@ package cmd
 
 import (
 	"context"
-	"main/database"
 	"time"
+
+	"github.com/penny-vault/pv-api/data/database"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

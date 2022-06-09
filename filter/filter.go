@@ -16,9 +16,10 @@ package filter
 
 import (
 	"fmt"
-	"main/common"
-	"main/portfolio"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/portfolio"
 
 	log "github.com/sirupsen/logrus"
 )

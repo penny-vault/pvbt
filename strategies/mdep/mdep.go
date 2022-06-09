@@ -29,13 +29,14 @@ package mdep
 import (
 	"context"
 	"errors"
-	"main/common"
-	"main/data"
-	"main/database"
-	"main/strategies/strategy"
-	"main/tradecron"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/strategies/strategy"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/goccy/go-json"
 

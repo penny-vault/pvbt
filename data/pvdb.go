@@ -18,13 +18,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"main/common"
-	"main/database"
 	"math"
 	"os"
 	"runtime/debug"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data/database"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"

@@ -24,9 +24,9 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/rocketlaunchr/dataframe-go"
 
-	"main/common"
-	"main/data"
-	"main/portfolio"
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/portfolio"
 )
 
 var _ = Describe("Portfolio", func() {

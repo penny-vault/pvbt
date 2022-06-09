@@ -29,14 +29,15 @@ package daa
 import (
 	"context"
 	"fmt"
-	"main/common"
-	"main/data"
-	"main/dfextras"
-	"main/strategies/strategy"
-	"main/tradecron"
 	"math"
 	"sort"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/strategies/strategy"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/goccy/go-json"
 

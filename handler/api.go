@@ -18,13 +18,14 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
-	"main/common"
-	"main/data"
-	"main/portfolio"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/portfolio"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"

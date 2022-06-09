@@ -17,10 +17,11 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"main/data"
-	"main/database"
-	"main/strategies"
-	"main/tradecron"
+
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/strategies"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"

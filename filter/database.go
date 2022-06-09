@@ -19,10 +19,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"main/database"
-	"main/portfolio"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/portfolio"
 
 	"github.com/goccy/go-json"
 

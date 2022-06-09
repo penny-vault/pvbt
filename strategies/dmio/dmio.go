@@ -24,12 +24,13 @@ package dmio
 import (
 	"context"
 	"errors"
-	"main/common"
-	"main/data"
-	"main/dfextras"
-	"main/strategies/strategy"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/strategies/strategy"
 
 	"github.com/goccy/go-json"
 

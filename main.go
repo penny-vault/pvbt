@@ -16,7 +16,8 @@ package main
 
 import (
 	"fmt"
-	"main/cmd"
+
+	"github.com/penny-vault/pv-api/cmd"
 
 	"github.com/spf13/viper"
 )

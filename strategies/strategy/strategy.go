@@ -16,8 +16,9 @@ package strategy
 
 import (
 	"database/sql"
-	"main/data"
 	"time"
+
+	"github.com/penny-vault/pv-api/data"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"

@@ -18,7 +18,8 @@ import (
 	"bytes"
 	"compress/gzip"
 	"encoding/hex"
-	"main/common"
+
+	"github.com/penny-vault/pv-api/common"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"

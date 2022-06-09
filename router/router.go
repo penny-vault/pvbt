@@ -15,8 +15,8 @@
 package router
 
 import (
-	"main/handler"
-	"main/middleware"
+	"github.com/penny-vault/pv-api/handler"
+	"github.com/penny-vault/pv-api/middleware"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"

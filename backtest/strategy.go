@@ -18,11 +18,12 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"main/data"
-	"main/database"
-	"main/portfolio"
-	"main/strategies"
 	"time"
+
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/penny-vault/pv-api/strategies"
 
 	"github.com/goccy/go-json"
 	log "github.com/sirupsen/logrus"

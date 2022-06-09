@@ -17,12 +17,13 @@ package handler
 import (
 	"encoding/hex"
 	"fmt"
-	"main/backtest"
-	"main/common"
-	"main/data"
-	"main/strategies"
 	"runtime/debug"
 	"time"
+
+	"github.com/penny-vault/pv-api/backtest"
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/strategies"
 
 	"github.com/goccy/go-json"
 

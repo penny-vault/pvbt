@@ -19,11 +19,12 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"main/data"
-	"main/database"
 	"math"
 	"sort"
 	"time"
+
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"

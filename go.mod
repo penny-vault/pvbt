@@ -1,6 +1,6 @@
 // +heroku goVersion go1.18
 
-module main
+module github.com/penny-vault/pv-api
 
 go 1.18
 

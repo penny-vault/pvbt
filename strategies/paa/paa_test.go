@@ -17,10 +17,11 @@ package paa_test
 import (
 	"fmt"
 	"io/ioutil"
-	"main/common"
-	"main/data"
-	"main/strategies/paa"
 	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/strategies/paa"
 
 	"github.com/goccy/go-json"
 	"github.com/rocketlaunchr/dataframe-go"

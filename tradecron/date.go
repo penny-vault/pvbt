@@ -17,9 +17,10 @@ package tradecron
 import (
 	"context"
 	"fmt"
-	"main/database"
 	"strings"
 	"time"
+
+	"github.com/penny-vault/pv-api/data/database"
 
 	"github.com/jackc/pgx/v4"
 	"github.com/robfig/cron/v3"

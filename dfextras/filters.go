@@ -17,8 +17,9 @@ package dfextras
 import (
 	"context"
 	"fmt"
-	"main/common"
 	"strings"
+
+	"github.com/penny-vault/pv-api/common"
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
