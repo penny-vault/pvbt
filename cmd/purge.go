@@ -70,7 +70,7 @@ var purgeCmd = &cobra.Command{
 			}
 
 			var cnt int64
-			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolio WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
+			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error": err,
@@ -86,7 +86,7 @@ var purgeCmd = &cobra.Command{
 				"User":                 u,
 			}).Info("number of expired portfolios")
 
-			_, err = trx.Exec(context.Background(), "DELETE FROM portfolio WHERE temporary=true AND created < $1", maxAge)
+			_, err = trx.Exec(context.Background(), "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error": err,

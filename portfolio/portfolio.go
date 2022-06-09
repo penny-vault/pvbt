@@ -930,7 +930,7 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 		tax_type,
 		ticker,
 		total_value
-	FROM portfolio_transaction
+	FROM portfolio_transactions
 	WHERE portfolio_id=$1 AND user_id=$2
 	ORDER BY sequence_num`
 	rows, err := trx.Query(context.Background(), transactionSQL, p.ID, p.UserID)
@@ -1154,7 +1154,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 	temporary := !permanent
 	p := pm.Portfolio
 	portfolioSQL := `
-	INSERT INTO portfolio (
+	INSERT INTO portfolios (
 		"id",
 		"name",
 		"strategy_shortcode",
@@ -1178,7 +1178,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		$9,
 		$10,
 		$11
-	) ON CONFLICT ON CONSTRAINT portfolio_pkey
+	) ON CONFLICT ON CONSTRAINT portfolios_pkey
 	DO UPDATE SET
 		name=$2,
 		strategy_shortcode=$3,
@@ -1235,7 +1235,7 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	}).Info("Saving portfolio transactions")
 
 	transactionSQL := `
-	INSERT INTO portfolio_transaction (
+	INSERT INTO portfolio_transactions (
 		"id",
 		"portfolio_id",
 		"transaction_type",

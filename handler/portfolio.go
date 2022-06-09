@@ -73,7 +73,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	portfolioSQL := `INSERT INTO portfolio ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"$CASH": 10000}')`
+	portfolioSQL := `INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"$CASH": 10000}')`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -96,7 +96,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrNotFound
 	}
 
-	depositTransactionSQL := `INSERT INTO portfolio_transaction ("portfolio_id", "event_date", "num_shares", "price_per_share", "source", "ticker", "total_value", "transaction_type", "user_id") VALUES ($1, $2, 10000, 1, 'PV', '$CASH', 10000, 'DEPOSIT', $3)`
+	depositTransactionSQL := `INSERT INTO portfolio_transactions ("portfolio_id", "event_date", "num_shares", "price_per_share", "source", "ticker", "total_value", "transaction_type", "user_id") VALUES ($1, $2, 10000, 1, 'PV', '$CASH', 10000, 'DEPOSIT', $3)`
 	_, err = trx.Exec(context.Background(), depositTransactionSQL, portfolioID, time.Unix(portfolioParams.StartDate, 0), userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -122,7 +122,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 	userID := c.Locals("userID").(string)
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -305,7 +305,7 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 func ListPortfolios(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE user_id=$1 AND temporary=false ORDER BY name, created`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -392,7 +392,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrServiceUnavailable
 	}
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolio WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
 	p := PortfolioResponse{}
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
@@ -464,7 +464,7 @@ func DeletePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrServiceUnavailable
 	}
 
-	deleteSQL := "DELETE FROM portfolio WHERE id=$1 AND user_id=$2"
+	deleteSQL := "DELETE FROM portfolios WHERE id=$1 AND user_id=$2"
 	_, err = trx.Exec(context.Background(), deleteSQL, portfolioID, userID)
 	if err != nil {
 		log.WithFields(log.Fields{

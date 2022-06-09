@@ -172,7 +172,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sqlTmp, args, err := BuildQuery("portfolio_measurement", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
+	sqlTmp, args, err := BuildQuery("portfolio_measurements", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
 	if err != nil {
 		log.Warn(err)
 		return nil, err
@@ -247,7 +247,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	// add predicted holding item
 	var predicted portfolio.PortfolioHoldingItem
 	var predictedRaw []byte
-	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolio WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
+	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolios WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
 
 	if err != nil {
 		log.Warn(err)

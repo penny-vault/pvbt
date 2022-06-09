@@ -264,6 +264,7 @@ func (p *pvdb) GetDataForPeriod(symbols []string, metric string, frequency strin
 		}
 		if err != nil {
 			log.WithFields(log.Fields{
+				"Query":     sql,
 				"Symbol":    symbols,
 				"Metric":    metric,
 				"Frequency": frequency,
