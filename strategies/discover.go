@@ -25,6 +25,7 @@ import (
 	"main/strategies/daa"
 	"main/strategies/mdep"
 	"main/strategies/paa"
+	"main/strategies/seek"
 	"main/strategies/strategy"
 	"math"
 
@@ -48,8 +49,9 @@ var StrategyMetricsMap = make(map[string]strategy.StrategyMetrics)
 func InitializeStrategyMap() {
 	Register("adm", adm.New)
 	Register("daa", daa.New)
-	Register("paa", paa.New)
 	Register("mdep", mdep.New)
+	Register("paa", paa.New)
+	Register("seek", seek.New)
 }
 
 func Register(strategyPkg string, factory strategy.StrategyFactory) {
@@ -122,7 +124,7 @@ func LoadStrategyMetricsFromDb() {
 			}).Fatal("unable to get database transaction for user")
 		}
 
-		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolio WHERE user_id='pvuser' AND name=$1", strat.Name)
+		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolios WHERE user_id='pvuser' AND name=$1", strat.Name)
 		s := strategy.StrategyMetrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
 

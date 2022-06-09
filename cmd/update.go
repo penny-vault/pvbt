@@ -123,7 +123,7 @@ var updateCmd = &cobra.Command{
 					log.Fatal(err)
 				}
 
-				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolio")
+				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios")
 				if err != nil {
 					log.Fatal(err)
 				}
