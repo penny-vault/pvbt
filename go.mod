@@ -52,6 +52,8 @@ require (
 	google.golang.org/protobuf v1.28.0
 )
 
+require github.com/robfig/cron/v3 v3.0.1
+
 require (
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/robfig/cron/v3 v3.0.1
