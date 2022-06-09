@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/common/loki"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/jwks"
-	"github.com/penny-vault/pv-api/loki"
 	"github.com/penny-vault/pv-api/middleware"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
