@@ -16,6 +16,7 @@
 package strategy
 
 import (
+	"context"
 	"database/sql"
 	"time"
 
@@ -82,5 +83,5 @@ type Prediction struct {
 type Strategy interface {
 	// Compute calculates the list of historical trades and returns a dataframe. Additionally, it
 	// returns a dataframe that indicates what assets to hold at the next trading time.
-	Compute(manager *data.Manager) (*dataframe.DataFrame, *Prediction, error)
+	Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *Prediction, error)
 }

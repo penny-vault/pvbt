@@ -37,8 +37,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
@@ -121,7 +123,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return daa, nil
 }
 
-func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
+func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -130,13 +132,13 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(manager *data.Mana
 	tickers = append(tickers, daa.protectiveUniverse...)
 	tickers = append(tickers, daa.riskUniverse...)
 
-	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
 		return fmt.Errorf("failed to download data for tickers: %s", errs)
 	}
 
-	prices, err := dfextras.DropNA(context.Background(), prices)
+	prices, err := dfextras.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -254,7 +256,10 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "daa.Compute")
+	defer span.End()
+
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -268,7 +273,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(manager *data.Manager) (*dat
 		manager.Begin = manager.Begin.AddDate(0, -12, 0)
 	}
 
-	err := daa.downloadPriceData(manager)
+	err := daa.downloadPriceData(ctx, manager)
 	if err != nil {
 		return nil, nil, err
 	}

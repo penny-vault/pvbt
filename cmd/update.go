@@ -168,7 +168,7 @@ var updateCmd = &cobra.Command{
 			}).Info("updating portfolio")
 
 			pm.LoadTransactionsFromDB()
-			err = pm.UpdateTransactions(dt)
+			err = pm.UpdateTransactions(context.Background(), dt)
 			if err != nil {
 				// NOTE: error is logged by caller
 				continue
@@ -190,7 +190,7 @@ var updateCmd = &cobra.Command{
 				perf.LoadMeasurementsFromDB(pm.Portfolio.UserID)
 			}
 
-			err = perf.CalculateThrough(pm, dt)
+			err = perf.CalculateThrough(context.Background(), pm, dt)
 			if err != nil {
 				log.WithFields(log.Fields{
 					"Error": err,
@@ -249,7 +249,7 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 	params := make(map[string]json.RawMessage)
 	json.Unmarshal(arguments, &params)
 
-	b, err := backtest.New(strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
+	b, err := backtest.New(context.Background(), strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Shortcode":    strat.Shortcode,

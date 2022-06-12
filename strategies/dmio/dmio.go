@@ -31,7 +31,9 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
@@ -189,7 +191,7 @@ func NewDualMomentumInOut(args map[string]json.RawMessage) (strategy.Strategy, e
 	return dmio, nil
 }
 
-func (dmio *DualMomentumInOut) downloadPriceData(manager *data.Manager) error {
+func (dmio *DualMomentumInOut) downloadPriceData(ctx context.Context, manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -200,13 +202,13 @@ func (dmio *DualMomentumInOut) downloadPriceData(manager *data.Manager) error {
 	tickers = append(tickers, dmio.bonds...)
 	tickers = append(tickers, dmio.canary...)
 
-	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
 		return errors.New("failed to download data for tickers")
 	}
 
-	prices, err := dfextras.DropNA(context.Background(), prices)
+	prices, err := dfextras.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -247,7 +249,10 @@ func (dmio *DualMomentumInOut) calculateSignal() error {
 }
 
 // Compute signal
-func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (dmio *DualMomentumInOut) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "dmio.Compute")
+	defer span.End()
+
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -263,7 +268,7 @@ func (dmio *DualMomentumInOut) Compute(manager *data.Manager) (*dataframe.DataFr
 
 	manager.Frequency = data.FrequencyDaily
 
-	err := dmio.downloadPriceData(manager)
+	err := dmio.downloadPriceData(ctx, manager)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -24,6 +24,8 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"go.opentelemetry.io/otel"
 
 	log "github.com/sirupsen/logrus"
 
@@ -94,6 +96,9 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 
 // DropNA remove rows in the dataframe that have NA's
 func DropNA(ctx context.Context, sdf *dataframe.DataFrame, opts ...dataframe.FilterOptions) (*dataframe.DataFrame, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "dfextras.DropNA")
+	defer span.End()
+
 	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 		for _, val := range vals {
 			if val == nil {
@@ -628,6 +633,9 @@ func TimeAlign(ctx context.Context, df *dataframe.DataFrame, startTime time.Time
 
 // TimeTrim trim dataframe to rows within the startTime and endTime range
 func TimeTrim(ctx context.Context, df *dataframe.DataFrame, startTime time.Time, endTime time.Time, inPlace bool) (*dataframe.DataFrame, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "dfextras.TimeTrim")
+	defer span.End()
+
 	filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
 		for _, val := range vals {
 			if v, ok := val.(time.Time); ok {

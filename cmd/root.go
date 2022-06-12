@@ -69,6 +69,10 @@ func init() {
 	rootCmd.PersistentFlags().String("log-loki-url", "", "Loki server to send log messages to, if blank don't send to Loki")
 	viper.BindPFlag("log.loki_url", serveCmd.Flags().Lookup("log-loki-url"))
 
+	viper.BindEnv("log.otlp_url", "OTLP_URL")
+	rootCmd.PersistentFlags().String("log-otlp-url", "", "OTLP server to send traces to, if blank don't send traces")
+	viper.BindPFlag("log.otlp_url", serveCmd.Flags().Lookup("log-otlp-url"))
+
 	rootCmd.PersistentFlags().BoolVar(&Profile, "cpu-profile", false, "Run pprof and save in profile.out")
 	rootCmd.PersistentFlags().BoolVar(&Trace, "trace", false, "Trace program execution and save in trace.out")
 }

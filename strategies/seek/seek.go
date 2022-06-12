@@ -34,8 +34,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
@@ -93,7 +95,10 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (seek *SeekingAlphaQuant) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.Compute")
+	defer span.End()
+
 	// Ensure time range is valid
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -111,7 +116,7 @@ func (seek *SeekingAlphaQuant) Compute(manager *data.Manager) (*dataframe.DataFr
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	var startDate time.Time
-	err = db.QueryRow(context.Background(), "SELECT min(event_date) FROM seeking_alpha").Scan(&startDate)
+	err = db.QueryRow(ctx, "SELECT min(event_date) FROM seeking_alpha").Scan(&startDate)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -125,7 +130,7 @@ func (seek *SeekingAlphaQuant) Compute(manager *data.Manager) (*dataframe.DataFr
 
 	// get a list of dates to invest in
 	dates := make([]time.Time, 0, 600)
-	tradeDays := manager.TradingDays(manager.Begin, manager.End)
+	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End)
 	if err != nil {
 		return nil, nil, err
 	}

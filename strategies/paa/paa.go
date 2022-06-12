@@ -31,8 +31,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 	log "github.com/sirupsen/logrus"
@@ -113,7 +115,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return paa, nil
 }
 
-func (paa *KellersProtectiveAssetAllocation) downloadPriceData(manager *data.Manager) error {
+func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -121,12 +123,12 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(manager *data.Man
 	tickers = append(tickers, paa.protectiveUniverse...)
 	tickers = append(tickers, paa.riskUniverse...)
 
-	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 	if errs != nil {
 		return fmt.Errorf("failed to download data for tickers: %s", errs)
 	}
 
-	prices, err := dfextras.DropNA(context.Background(), prices)
+	prices, err := dfextras.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -417,10 +419,13 @@ func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(targetP
 }
 
 // Compute signal
-func (paa *KellersProtectiveAssetAllocation) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (paa *KellersProtectiveAssetAllocation) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "paa.Compute")
+	defer span.End()
+
 	paa.validateTimeRange(manager)
 
-	err := paa.downloadPriceData(manager)
+	err := paa.downloadPriceData(ctx, manager)
 	if err != nil {
 		return nil, nil, err
 	}

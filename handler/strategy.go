@@ -16,6 +16,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"runtime/debug"
@@ -24,7 +25,11 @@ import (
 	"github.com/penny-vault/pv-api/backtest"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/goccy/go-json"
 
@@ -49,9 +54,28 @@ func GetStrategy(c *fiber.Ctx) error {
 
 // RunStrategy executes the strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
+	attrs := opentelemetry.SpanAttributesFromFiber(c)
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(context.Background(), "RunStrategy", trace.WithAttributes(attrs...))
+	defer span.End()
+
 	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
+
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "pv.shortcode",
+			Value: attribute.StringValue(shortcode),
+		},
+		attribute.KeyValue{
+			Key:   "pv.StartDate",
+			Value: attribute.StringValue(startDateStr),
+		},
+		attribute.KeyValue{
+			Key:   "pv.EndDate",
+			Value: attribute.StringValue(endDateStr),
+		},
+	)
 
 	var startDate time.Time
 	var endDate time.Time
@@ -114,7 +138,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	b, err := backtest.New(shortcode, params, startDate, endDate, &manager)
+	b, err := backtest.New(ctx, shortcode, params, startDate, endDate, &manager)
 	if err != nil {
 		if err.Error() == "strategy not found" {
 			return fiber.ErrNotFound

@@ -26,6 +26,9 @@ import (
 
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
@@ -160,7 +163,10 @@ func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods u
 }
 
 // CalculateThrough computes performance metrics for the given portfolio until `through`
-func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time) error {
+func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioModel, through time.Time) error {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
+	defer span.End()
+
 	p := pm.Portfolio
 	dataManager := pm.dataProxy
 
@@ -196,7 +202,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 	log.Infof("Calculate performance from %s through %s for portfolio %s\n", calculationStart, through, hex.EncodeToString(pm.Portfolio.ID))
 
 	// Get the days performance should be calculated on
-	tradingDays := dataManager.TradingDays(calculationStart, through)
+	tradingDays := dataManager.TradingDays(ctx, calculationStart, through)
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
@@ -226,8 +232,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 	// compute # of shares held for benchmark
 	var benchmarkShares float64
 	if len(perf.Measurements) > 0 {
-		benchmarkPrice, err := dataManager.Get(prevMeasurement.Time, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		benchmarkPrice, err := dataManager.Get(ctx, prevMeasurement.Time, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "could not get benchmark eod prices")
 			log.Error(err)
 		}
 		benchmarkShares = benchmarkValue / benchmarkPrice
@@ -279,8 +287,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		last = date
 
 		if benchmarkShares != 0.0 {
-			benchmarkPrice, err := dataManager.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+			benchmarkPrice, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "could not get benchmark prices from pvdb")
 				log.Error(err)
 			}
 			benchmarkValue = benchmarkShares * benchmarkPrice
@@ -380,8 +390,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		justificationArray := pm.justifications[tradingDate.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals
-		benchmarkPrice, err := dataManager.Get(date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		benchmarkPrice, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "error when fetching benchmark adjusted close prices")
 			log.WithFields(log.Fields{
 				"BenchmarkTicker": pm.Portfolio.Benchmark,
 				"Date":            date,
@@ -408,14 +420,18 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 					totalVal += qty
 				}
 			} else {
-				price, err := dataManager.Get(date, data.MetricClose, symbol)
+				price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "no quote for symbol")
 					return fmt.Errorf("no quote for symbol: %s", symbol)
 				}
 				if math.IsNaN(price) {
-					price, err = dataManager.GetLatestDataBefore(symbol, data.MetricClose, date)
+					price, err = dataManager.GetLatestDataBefore(ctx, symbol, data.MetricClose, date)
 					//log.Warnf("Price is NaN for %s; last price = %.2f", symbol, price)
 					if err != nil {
+						span.RecordError(err)
+						span.SetStatus(codes.Error, "no quote for symbol")
 						return fmt.Errorf("no quote for symbol: %s", symbol)
 					}
 				}
@@ -432,8 +448,10 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 			if symbol == "$CASH" {
 				value = qty
 			} else if qty > 1.0e-5 {
-				price, err := dataManager.Get(date, data.MetricClose, symbol)
+				price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
 				if err != nil {
+					span.RecordError(err)
+					span.SetStatus(codes.Error, "no quote for symbol")
 					return fmt.Errorf("no quote for symbol: %s", symbol)
 				}
 				value = price * qty
@@ -452,7 +470,7 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		}
 
 		// update riskFreeValue
-		rawRate := dataManager.RiskFreeRate(date)
+		rawRate := dataManager.RiskFreeRate(ctx, date)
 		riskFreeRate := rawRate / 100.0 / 252.0
 		riskFreeValue *= (1 + riskFreeRate)
 
@@ -643,17 +661,6 @@ func (perf *Performance) CalculateThrough(pm *PortfolioModel, through time.Time)
 		perf.PeriodStart = perf.Measurements[0].Time
 		perf.PeriodEnd = perf.Measurements[len(perf.Measurements)-1].Time
 	}
-
-	// t8 := time.Now()
-
-	/*
-		log.WithFields(log.Fields{
-			"QuoteDownload":          t2.Sub(t1).Round(time.Millisecond),
-			"BenchmarkDownload":      t4.Sub(t3).Round(time.Millisecond),
-			"QuoteMerge":             t6.Sub(t5).Round(time.Millisecond),
-			"PerformanceCalculation": t8.Sub(t7).Round(time.Millisecond),
-		}).Info("CalculatePerformance runtime")
-	*/
 
 	return nil
 }

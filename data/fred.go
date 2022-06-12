@@ -29,6 +29,8 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"go.opentelemetry.io/otel"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	imports "github.com/rocketlaunchr/dataframe-go/imports"
@@ -50,11 +52,14 @@ func (f *fred) DataType() string {
 	return "rate"
 }
 
-func (f *fred) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+func (f *fred) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
 	return math.NaN(), errors.New("Function not implemented")
 }
 
-func (f *fred) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (f *fred) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.GetDataForPeriod")
+	defer span.End()
+
 	res := make([]*dataframe.DataFrame, 0, len(symbols))
 	errs := []error{}
 	ch := make(chan quoteResult)
@@ -82,7 +87,7 @@ func (f *fred) GetDataForPeriod(symbols []string, metric string, frequency strin
 		return nil, errs[0]
 	}
 
-	return dfextras.MergeAndFill(context.Background(), res...)
+	return dfextras.MergeAndFill(ctx, res...)
 }
 
 func fredDownloadWorker(result chan<- quoteResult, symbol string, metric string, frequency string, begin time.Time, end time.Time, f *fred) {

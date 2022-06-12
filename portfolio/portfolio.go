@@ -30,7 +30,11 @@ import (
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
@@ -133,9 +137,12 @@ func buildHoldingsArray(date time.Time, holdings map[string]float64) []*Holding 
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64, justification []*Justification) error {
+func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, target map[string]float64, justification []*Justification) error {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "RebalanceTo")
+	defer span.End()
+
 	p := pm.Portfolio
-	err := pm.FillCorporateActions(date)
+	err := pm.FillCorporateActions(ctx, date)
 	if err != nil {
 		return err
 	}
@@ -174,8 +181,10 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	}
 	for k, v := range pm.holdings {
 		if k != "$CASH" {
-			price, err := pm.dataProxy.Get(date, data.MetricClose, k)
+			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "security price data not available")
 				log.WithFields(log.Fields{
 					"Symbol": k,
 					"Date":   date,
@@ -196,8 +205,10 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 	// get any prices that we haven't already loaded
 	for k := range target {
 		if _, ok := priceMap[k]; !ok {
-			price, err := pm.dataProxy.Get(date, data.MetricClose, k)
+			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "security price data not available")
 				log.WithFields(log.Fields{
 					"Symbol": k,
 					"Date":   date,
@@ -454,16 +465,25 @@ func (pm *PortfolioModel) RebalanceTo(date time.Time, target map[string]float64,
 //   `target` must have a column named `common.DateIdx` (DATE) and either a string column
 //   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
 //   the percentages of portfolio to hold
-func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
+func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
+	defer span.End()
+
 	p := pm.Portfolio
 
-	fmt.Println("Building target portfolio")
+	log.Info("Building target portfolio")
 	if target.NRows() == 0 {
 		return nil
 	}
 
 	timeIdx, err := target.NameToColumn(common.DateIdx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invest target portfolio failed")
+
+		log.WithFields(log.Fields{
+			"OriginalError": err,
+		}).Warn("could not find date index in data frame")
 		return err
 	}
 
@@ -476,6 +496,17 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 		p.EndDate = now
 	}
 
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "StartDate",
+			Value: attribute.StringValue(p.StartDate.Format("2006-01-02")),
+		},
+		attribute.KeyValue{
+			Key:   "EndDate",
+			Value: attribute.StringValue(p.EndDate.Format("2006-01-02")),
+		},
+	)
+
 	// Adjust first transaction to the target portfolio's first date if
 	// there are no other transactions in the portfolio
 	if len(p.Transactions) == 1 {
@@ -485,6 +516,12 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 
 	tickerSeriesIdx, err := target.NameToColumn(common.TickerName)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invest target portfolio failed")
+
+		log.WithFields(log.Fields{
+			"OriginalError": err,
+		}).Warn(err)
 		return fmt.Errorf("missing required column: %s", common.TickerName)
 	}
 
@@ -569,7 +606,7 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 			rebalance = symbol.(map[string]float64)
 		}
 
-		err = pm.RebalanceTo(date, rebalance, justification)
+		err = pm.RebalanceTo(ctx, date, rebalance, justification)
 		if err != nil {
 			return err
 		}
@@ -589,7 +626,10 @@ func (pm *PortfolioModel) TargetPortfolio(target *dataframe.DataFrame) error {
 
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
-func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
+func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time.Time) error {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
+	defer span.End()
+
 	p := pm.Portfolio
 	// nothing to do if there are no transactions
 	n := len(p.Transactions)
@@ -637,7 +677,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 	frequency := pm.dataProxy.Frequency
 	pm.dataProxy.Frequency = data.FrequencyDaily
 	if len(symbols) > 0 {
-		divMap, errs := pm.dataProxy.GetDataFrame(data.MetricDividendCash, symbols...)
+		divMap, errs := pm.dataProxy.GetDataFrame(ctx, data.MetricDividendCash, symbols...)
 		if errs != nil {
 			log.Error(errs)
 			return errors.New("failed to download dividend data for tickers")
@@ -662,13 +702,13 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				return dataframe.KEEP, nil
 			})
 
-			dataframe.Filter(context.Background(), df, filterFn, dataframe.FilterOptions{
+			dataframe.Filter(ctx, df, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
 			pm.dividendData[k] = df
 		}
 
-		splitMap, errs := pm.dataProxy.GetDataFrame(data.MetricSplitFactor, symbols...)
+		splitMap, errs := pm.dataProxy.GetDataFrame(ctx, data.MetricSplitFactor, symbols...)
 		dateSeriesIdx = splitMap.MustNameToColumn(common.DateIdx)
 		dateSeries = splitMap.Series[dateSeriesIdx]
 		if errs != nil {
@@ -680,7 +720,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				continue
 			}
 			df := dataframe.NewDataFrame(dateSeries.Copy(), series)
-			df, err = dfextras.DropNA(context.Background(), df)
+			df, err = dfextras.DropNA(ctx, df)
 			if err != nil {
 				return err
 			}
@@ -693,7 +733,7 @@ func (pm *PortfolioModel) FillCorporateActions(through time.Time) error {
 				return dataframe.KEEP, nil
 			})
 
-			dataframe.Filter(context.Background(), df, filterFn, dataframe.FilterOptions{
+			dataframe.Filter(ctx, df, filterFn, dataframe.FilterOptions{
 				InPlace: true,
 			})
 			pm.splitData[k] = df
@@ -824,12 +864,16 @@ func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, just
 
 // UpdateTransactions calculates new transactions based on the portfolio strategy
 // from the portfolio end date to `through`
-func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
+func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.Time) error {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "portfolio.UpdateTransactions")
+	defer span.End()
+
 	p := pm.Portfolio
 	pm.dataProxy.Begin = p.EndDate.AddDate(0, -6, 1)
 	startDate := p.EndDate.AddDate(0, 0, 1)
 
 	if through.Before(pm.dataProxy.Begin) {
+		span.SetStatus(codes.Error, "cannot update portfolio due to dates being out of order")
 		log.WithFields(log.Fields{
 			"Begin":       pm.dataProxy.Begin,
 			"End":         through,
@@ -844,56 +888,66 @@ func (pm *PortfolioModel) UpdateTransactions(through time.Time) error {
 	arguments := make(map[string]json.RawMessage)
 	json.Unmarshal([]byte(p.StrategyArguments), &arguments)
 
-	if strategy, ok := strategies.StrategyMap[p.StrategyShortcode]; ok {
-		stratObject, err := strategy.Factory(arguments)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":     err,
-				"Portfolio": p.ID,
-				"Strategy":  p.StrategyShortcode,
-			}).Error("failed to initialize portfolio strategy")
-			return err
-		}
-
-		targetPortfolio, predictedAssets, err := stratObject.Compute(pm.dataProxy)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":     err,
-				"Portfolio": hex.EncodeToString(p.ID),
-				"Strategy":  p.StrategyShortcode,
-			}).Error("failed to run portfolio strategy")
-			return err
-		}
-
-		// thin the targetPortfolio to only include info on or after the startDate
-		_, err = dfextras.TimeTrim(context.Background(), targetPortfolio, startDate, through, true)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"StartDate": startDate,
-				"EndDate":   through,
-				"Error":     err,
-			}).Error("could not trim target portfolio to date range")
-		}
-
-		err = pm.TargetPortfolio(targetPortfolio)
-		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":     err,
-				"Portfolio": hex.EncodeToString(p.ID),
-				"Strategy":  p.StrategyShortcode,
-			}).Error("failed to apply target portfolio")
-			return err
-		}
-
-		pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
-		p.EndDate = through
-	} else {
+	strategy, ok := strategies.StrategyMap[p.StrategyShortcode]
+	if !ok {
+		span.SetStatus(codes.Error, "strategy not found")
 		log.WithFields(log.Fields{
 			"Portfolio": p.ID,
 			"Strategy":  p.StrategyShortcode,
 		}).Error("portfolio strategy not found")
 		return errors.New("strategy not found")
 	}
+
+	stratObject, err := strategy.Factory(arguments)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to initialize portfolio strategy")
+		log.WithFields(log.Fields{
+			"Error":     err,
+			"Portfolio": p.ID,
+			"Strategy":  p.StrategyShortcode,
+		}).Error("failed to initialize portfolio strategy")
+		return err
+	}
+
+	targetPortfolio, predictedAssets, err := stratObject.Compute(ctx, pm.dataProxy)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to execute portfolio strategy")
+		log.WithFields(log.Fields{
+			"Error":     err,
+			"Portfolio": hex.EncodeToString(p.ID),
+			"Strategy":  p.StrategyShortcode,
+		}).Error("failed to run portfolio strategy")
+		return err
+	}
+
+	// thin the targetPortfolio to only include info on or after the startDate
+	_, err = dfextras.TimeTrim(ctx, targetPortfolio, startDate, through, true)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not trim target portfolio to date range")
+		log.WithFields(log.Fields{
+			"StartDate": startDate,
+			"EndDate":   through,
+			"Error":     err,
+		}).Error("could not trim target portfolio to date range")
+	}
+
+	err = pm.TargetPortfolio(ctx, targetPortfolio)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to apply target porfolio")
+		log.WithFields(log.Fields{
+			"Error":     err,
+			"Portfolio": hex.EncodeToString(p.ID),
+			"Strategy":  p.StrategyShortcode,
+		}).Error("failed to apply target portfolio")
+		return err
+	}
+
+	pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+	p.EndDate = through
 
 	return nil
 }
@@ -1277,7 +1331,7 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 		$17,
 		$18,
 		$19
-	) ON CONFLICT ON CONSTRAINT portfolio_transaction_pkey
+	) ON CONFLICT ON CONSTRAINT portfolio_transactions_pkey
  	DO UPDATE SET
 		transaction_type=$3,
 		cleared=$4,

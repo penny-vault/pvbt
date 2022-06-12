@@ -23,8 +23,12 @@ import (
 
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/goccy/go-json"
 	log "github.com/sirupsen/logrus"
@@ -35,70 +39,69 @@ type Backtest struct {
 	Performance    *portfolio.Performance
 }
 
-func New(shortcode string, params map[string]json.RawMessage, startDate time.Time, endDate time.Time, manager *data.Manager) (*Backtest, error) {
-	if strat, ok := strategies.StrategyMap[shortcode]; ok {
-		stratObject, err := strat.Factory(params)
-		if err != nil {
-			log.Warn(err)
-			return nil, err
-		}
+func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, startDate time.Time, endDate time.Time, manager *data.Manager) (*Backtest, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "backtest.New")
+	defer span.End()
 
-		start := time.Now()
-		pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
+	span.SetAttributes(attribute.KeyValue{
+		Key:   "shortcode",
+		Value: attribute.StringValue(shortcode),
+	})
 
-		manager.Begin = startDate
-		manager.End = endDate
-
-		pm.Portfolio.StrategyShortcode = shortcode
-		paramsJSON, err := json.Marshal(params)
-		if err != nil {
-			log.Warn(err)
-			return nil, err
-		}
-		pm.Portfolio.StrategyArguments = string(paramsJSON)
-		target, predictedAssets, err := stratObject.Compute(manager)
-		if err != nil {
-			log.Warn(err)
-			return nil, err
-		}
-		stop := time.Now()
-		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
-
-		pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
-		start = time.Now()
-		if err := pm.TargetPortfolio(target); err != nil {
-			log.Warn(err)
-			return nil, err
-		}
-
-		stop = time.Now()
-		targetPortfolioDur := stop.Sub(start).Round(time.Millisecond)
-
-		// calculate the portfolio's performance
-		start = time.Now()
-		performance := portfolio.NewPerformance(pm.Portfolio)
-		err = performance.CalculateThrough(pm, manager.End)
-		if err != nil {
-			log.Warn(err)
-			return nil, err
-		}
-		stop = time.Now()
-		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
-
-		log.WithFields(log.Fields{
-			"StratCalcDur":       stratComputeDur,
-			"TargetPortfolioDur": targetPortfolioDur,
-			"PerfCalcDur":        calcPerfDur,
-		}).Info("Backtest runtime performance")
-
-		backtest := &Backtest{
-			PortfolioModel: pm,
-			Performance:    performance,
-		}
-		return backtest, nil
+	strat, ok := strategies.StrategyMap[shortcode]
+	if !ok {
+		span.SetStatus(codes.Error, "strategy not found")
+		return nil, errors.New("strategy not found")
 	}
 
-	return nil, errors.New("strategy not found")
+	stratObject, err := strat.Factory(params)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not create strategy")
+		return nil, err
+	}
+
+	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
+
+	manager.Begin = startDate
+	manager.End = endDate
+
+	pm.Portfolio.StrategyShortcode = shortcode
+	paramsJSON, err := json.Marshal(params)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not marshal strategy params")
+		return nil, err
+	}
+	pm.Portfolio.StrategyArguments = string(paramsJSON)
+	target, predictedAssets, err := stratObject.Compute(ctx, manager)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not compute strategy portfolio")
+		return nil, err
+	}
+
+	pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+	if err := pm.TargetPortfolio(ctx, target); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invest target portfolio failed")
+		return nil, err
+	}
+
+	// calculate the portfolio's performance
+	performance := portfolio.NewPerformance(pm.Portfolio)
+	err = performance.CalculateThrough(ctx, pm, manager.End)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "calculate portfolio performance failed")
+		return nil, err
+	}
+
+	backtest := &Backtest{
+		PortfolioModel: pm,
+		Performance:    performance,
+	}
+	return backtest, nil
 }
 
 // Save the backtest to the Database

@@ -18,6 +18,7 @@ package handler
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/hex"
 	"runtime"
 	"strconv"
@@ -195,7 +196,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	ticker := c.Params("ticker")
 
 	if snapToStart {
-		securityStart, err := manager.GetDataFrame(data.MetricAdjustedClose, ticker)
+		securityStart, err := manager.GetDataFrame(context.Background(), data.MetricAdjustedClose, ticker)
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Symbol": ticker,
@@ -214,7 +215,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
 	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)
-	err = p.TargetPortfolio(targetPortfolio)
+	err = p.TargetPortfolio(context.Background(), targetPortfolio)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"Error":      err,
@@ -225,7 +226,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 
 	// calculate the portfolio's performance
 	performance := portfolio.NewPerformance(p.Portfolio)
-	err = performance.CalculateThrough(p, manager.End)
+	err = performance.CalculateThrough(context.Background(), p, manager.End)
 	if err != nil {
 		log.Error(err)
 		return fiber.ErrBadRequest

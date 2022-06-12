@@ -16,6 +16,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/signal"
@@ -29,6 +30,7 @@ import (
 	"github.com/penny-vault/pv-api/jwks"
 	"github.com/penny-vault/pv-api/middleware"
 	"github.com/penny-vault/pv-api/observability/loki"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -89,13 +91,29 @@ var serveCmd = &cobra.Command{
 		}
 		log.Info("Initialized logging")
 
-		// setup database
-		err := database.Connect()
+		// setup open telemetry
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer cancel()
+
+		shutdown, err := opentelemetry.Setup()
 		if err != nil {
 			log.Fatal(err)
 		}
+		defer func() {
+			if err := shutdown(ctx); err != nil {
+				log.Fatal("failed to shutdown TracerProvider: %w", err)
+			}
+		}()
+		log.Info("Initialized open telemetry")
+
+		// setup database
+		if err := database.Connect(); err != nil {
+			log.Fatal(err)
+		}
+		log.Info("Connected to database")
 
 		tradecron.InitializeTradeCron()
+		log.Info("Initialized TradeCron service")
 
 		// Initialize data framework
 		data.InitializeDataManager()

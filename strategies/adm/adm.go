@@ -33,8 +33,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
@@ -81,7 +83,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return adm, nil
 }
 
-func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) error {
+func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, manager *data.Manager) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -89,7 +91,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	tickers = append(tickers, adm.inTickers...)
 	riskFreeSymbol := "DGS3MO"
 	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
-	prices, errs := manager.GetDataFrame(data.MetricAdjustedClose, tickers...)
+	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
 		return fmt.Errorf("failed to download data in adm for tickers: %s", errs)
@@ -100,12 +102,12 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(manager *data.Manager) er
 	for ii, t := range adm.inTickers {
 		colNames[ii+1] = t
 	}
-	prices, err := dfextras.DropNA(context.Background(), prices)
+	prices, err := dfextras.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
 
-	eod, riskFreeRate, err := dfextras.Split(context.Background(), prices, colNames...)
+	eod, riskFreeRate, err := dfextras.Split(ctx, prices, colNames...)
 	if err != nil {
 		return err
 	}
@@ -194,7 +196,10 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
-func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
+	defer span.End()
+
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -209,7 +214,7 @@ func (adm *AcceleratingDualMomentum) Compute(manager *data.Manager) (*dataframe.
 	}
 
 	// t1 := time.Now()
-	err := adm.downloadPriceData(manager)
+	err := adm.downloadPriceData(ctx, manager)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -36,8 +36,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
@@ -95,7 +97,10 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.Compute")
+	defer span.End()
+
 	// Ensure time range is valid
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -126,7 +131,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 	// get a list of dates to invest in
 	dates := make([]time.Time, 0, 600)
-	tradeDays, err := manager.GetDataFrame(data.MetricAdjustedClose, "VFINX")
+	tradeDays, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, "VFINX")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,7 +183,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(manager *data.Manager) (*d
 
 	// load market sentiment scores
 	crashDetection := make([]*sentiment, 0, 600)
-	rows, err := db.Query(context.Background(), "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
+	rows, err := db.Query(ctx, "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
 	if err != nil {
 		return nil, nil, err
 	}

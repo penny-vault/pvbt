@@ -16,12 +16,15 @@
 package data
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"go.opentelemetry.io/otel"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
@@ -30,12 +33,12 @@ import (
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string
-	GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
-	GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error)
+	GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
+	GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error)
 }
 
 type DateProvider interface {
-	TradingDays(begin time.Time, end time.Time, frequency string) []time.Time
+	TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency string) []time.Time
 }
 
 const (
@@ -77,9 +80,9 @@ var riskFreeRate *dataframe.DataFrame
 
 // InitializeDataManager download risk free data
 func InitializeDataManager() {
-	fred := NewFred()
+	pvdb := NewPVDB()
 	var err error
-	riskFreeRate, err = fred.GetDataForPeriod([]string{"DGS3MO"}, MetricClose, FrequencyDaily,
+	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), []string{"DGS3MO"}, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -131,7 +134,10 @@ func (m *Manager) RegisterDataProvider(p Provider) {
 }
 
 // RiskFreeRate Get the risk free rate for given date
-func (m *Manager) RiskFreeRate(t time.Time) float64 {
+func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.RiskFreeRate")
+	defer span.End()
+
 	start := m.lastRiskFreeIdx
 	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
 	currDate := row[common.DateIdx].(time.Time)
@@ -166,16 +172,19 @@ func (m *Manager) RiskFreeRate(t time.Time) float64 {
 }
 
 // GetDataFrame get a dataframe for the requested symbol
-func (m *Manager) GetDataFrame(metric string, symbols ...string) (*dataframe.DataFrame, error) {
-	res, err := m.providers["security"].GetDataForPeriod(symbols, metric, m.Frequency, m.Begin, m.End)
+func (m *Manager) GetDataFrame(ctx context.Context, metric string, symbols ...string) (*dataframe.DataFrame, error) {
+	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, m.Frequency, m.Begin, m.End)
 	return res, err
 }
 
-func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols ...string) error {
+func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric string, symbols ...string) error {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.Fetch")
+	defer span.End()
+
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	begin = time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, tz)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
-	res, err := m.providers["security"].GetDataForPeriod(symbols, metric, FrequencyDaily, begin, end)
+	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, FrequencyDaily, begin, end)
 	if err != nil {
 		log.Warn(err)
 		return err
@@ -218,14 +227,17 @@ func (m *Manager) Fetch(begin time.Time, end time.Time, metric string, symbols .
 	return nil
 }
 
-func (m *Manager) Get(date time.Time, metric string, symbol string) (float64, error) {
+func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol string) (float64, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.Get")
+	defer span.End()
+
 	symbol = strings.ToUpper(symbol)
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
 	if !ok {
 		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
-		err := m.Fetch(date, end, metric, symbol)
+		err := m.Fetch(ctx, date, end, metric, symbol)
 		if err != nil {
 			return 0, err
 		}
@@ -237,12 +249,15 @@ func (m *Manager) Get(date time.Time, metric string, symbol string) (float64, er
 	return val, nil
 }
 
-func (m *Manager) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.GetLatestDataBefore")
+	defer span.End()
+
 	symbol = strings.ToUpper(symbol)
 	var err error
 	val, ok := m.lastCache[symbol]
 	if !ok {
-		val, err = m.providers["security"].GetLatestDataBefore(symbol, metric, before)
+		val, err = m.providers["security"].GetLatestDataBefore(ctx, symbol, metric, before)
 		if err != nil {
 			log.Warn(err)
 			return math.NaN(), err
@@ -252,8 +267,8 @@ func (m *Manager) GetLatestDataBefore(symbol string, metric string, before time.
 	return val, nil
 }
 
-func (m *Manager) TradingDays(since time.Time, through time.Time) []time.Time {
-	return m.dateProvider.TradingDays(since, through, FrequencyDaily)
+func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time) []time.Time {
+	return m.dateProvider.TradingDays(ctx, since, through, FrequencyDaily)
 }
 
 func buildHashKey(date time.Time, metric string, symbol string) string {

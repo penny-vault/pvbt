@@ -16,6 +16,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -76,7 +77,7 @@ var backtestCmd = &cobra.Command{
 			return
 		}
 
-		target, predicted, err := strategy.Compute(&dataManager)
+		target, predicted, err := strategy.Compute(context.Background(), &dataManager)
 		if err != nil {
 			log.Error("Could not compute strategy positions")
 			log.Error(err)

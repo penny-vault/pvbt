@@ -30,6 +30,10 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	"github.com/goccy/go-json"
 
@@ -73,12 +77,28 @@ func NewTiingo(key string) *tiingo {
 // Date provider functions
 
 // LastTradingDay return the last trading day for the requested frequency
-func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time, error) {
+func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequency string) (time.Time, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.LastTradingDay")
+	defer span.End()
+
 	symbol := "SPY"
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
 
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "Url",
+			Value: attribute.StringValue(fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency)),
+		},
+		attribute.KeyValue{
+			Key:   "Symbol",
+			Value: attribute.StringValue(symbol),
+		},
+	)
+
 	resp, err := http.Get(url)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "tiingo http request failed")
 		log.WithFields(log.Fields{
 			"Function":  "data/tiingo.go:LastTradingDay",
 			"ForDate":   forDate,
@@ -89,6 +109,11 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 	}
 
 	if resp.StatusCode >= 400 {
+		span.SetAttributes(attribute.KeyValue{
+			Key:   "StatusCode",
+			Value: attribute.IntValue(resp.StatusCode),
+		})
+		span.SetStatus(codes.Error, "tiingo returned invalid response code")
 		log.WithFields(log.Fields{
 			"Function":   "data/tiingo.go:LastTradingDay",
 			"ForDate":    forDate,
@@ -102,6 +127,8 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not read tiingo body")
 		log.WithFields(log.Fields{
 			"Function":  "data/tiingo.go:LastTradingDay",
 			"ForDate":   forDate,
@@ -115,6 +142,8 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 	jsonResp := []tiingoJSONResponse{}
 	err = json.Unmarshal(body, &jsonResp)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not unmarshal json")
 		log.WithFields(log.Fields{
 			"Function":  "data/tiingo.go:LastTradingDay",
 			"ForDate":   forDate,
@@ -133,6 +162,7 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 	if len(jsonResp) > 0 {
 		dtParts := strings.Split(jsonResp[0].Date, "T")
 		if len(dtParts) == 0 {
+			span.SetStatus(codes.Error, "invalid date format")
 			log.WithFields(log.Fields{
 				"Function":  "data/tiingo.go:LastTradingDay",
 				"ForDate":   forDate,
@@ -144,6 +174,8 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 		}
 		lastDay, err := time.ParseInLocation("2006-01-02", dtParts[0], tz)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "cannot parse date string")
 			log.WithFields(log.Fields{
 				"Function":   "data/tiingo.go:LastTradingDay",
 				"ForDate":    forDate,
@@ -161,18 +193,18 @@ func (t *tiingo) LastTradingDay(forDate time.Time, frequency string) (time.Time,
 }
 
 // LastTradingDayOfWeek return the last trading day of the week
-func (t *tiingo) LastTradingDayOfWeek(forDate time.Time) (time.Time, error) {
-	return t.LastTradingDay(forDate, "weekly")
+func (t *tiingo) LastTradingDayOfWeek(ctx context.Context, forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(ctx, forDate, "weekly")
 }
 
 // LastTradingDayOfMonth return the last trading day of the month
-func (t *tiingo) LastTradingDayOfMonth(forDate time.Time) (time.Time, error) {
-	return t.LastTradingDay(forDate, "monthly")
+func (t *tiingo) LastTradingDayOfMonth(ctx context.Context, forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(ctx, forDate, "monthly")
 }
 
 // LastTradingDayOfYear return the last trading day of the year
-func (t *tiingo) LastTradingDayOfYear(forDate time.Time) (time.Time, error) {
-	return t.LastTradingDay(forDate, "annually")
+func (t *tiingo) LastTradingDayOfYear(ctx context.Context, forDate time.Time) (time.Time, error) {
+	return t.LastTradingDay(ctx, forDate, "annually")
 }
 
 // Provider functions
@@ -181,7 +213,10 @@ func (t *tiingo) DataType() string {
 	return "security"
 }
 
-func (t *tiingo) GetLatestDataBefore(symbol string, metric string, before time.Time) (float64, error) {
+func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.GetLatestDataBefore")
+	defer span.End()
+
 	// build URL to get data
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?endDate=%s&token=%s", tiingoAPI, symbol, before.Format("2006-01-02"), t.apikey)
 	// t1 = time.Now()
@@ -201,12 +236,15 @@ func (t *tiingo) GetLatestDataBefore(symbol string, metric string, before time.T
 	m := make([]tiingoJSONResponse, 0)
 	err = json.NewDecoder(resp.Body).Decode(&m)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not decode JSON")
 		return math.NaN(), err
 	}
 
 	err = nil
 
 	if len(m) == 0 {
+		span.SetStatus(codes.Error, "no results returned")
 		return math.NaN(), errors.New("no results returned")
 	}
 
@@ -236,11 +274,15 @@ func (t *tiingo) GetLatestDataBefore(symbol string, metric string, before time.T
 	case MetricSplitFactor:
 		return last.SplitFactor, nil
 	default:
+		span.SetStatus(codes.Error, "un-supported metric")
 		return math.NaN(), errors.New("un-supported metric")
 	}
 }
 
-func (t *tiingo) GetDataForPeriod(symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (t *tiingo) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.GetDataForPeriod")
+	defer span.End()
+
 	res := make([]*dataframe.DataFrame, 0, len(symbols))
 	errs := []error{}
 	ch := make(chan quoteResult)
@@ -269,7 +311,7 @@ func (t *tiingo) GetDataForPeriod(symbols []string, metric string, frequency str
 		return nil, errs[0]
 	}
 
-	return dfextras.MergeAndFill(context.Background(), res...)
+	return dfextras.MergeAndFill(ctx, res...)
 }
 
 func tiingoDownloadWorker(result chan<- quoteResult, symbol string, metric string, frequency string, begin time.Time, end time.Time, t *tiingo) {
@@ -289,8 +331,6 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 		FrequencyMonthly: true,
 		FrequencyAnnualy: true,
 	}
-
-	// var t1, t2, t3, t4 time.Time
 
 	if _, ok := validFrequencies[frequency]; !ok {
 		log.WithFields(log.Fields{
@@ -327,9 +367,7 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 	}).Debug("load data from tiingo")
 
 	if !ok {
-		// t1 = time.Now()
 		resp, err := http.Get(url)
-		// t2 = time.Now()
 
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -373,7 +411,6 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 			}).Warn("Failed to load eod prices")
 			return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 		}
-		// t3 = time.Now()
 
 		floatConverter := imports.Converter{
 			ConcreteType: float64(0),
@@ -418,7 +455,6 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 				"splitFactor": floatConverter,
 			},
 		})
-		// t4 = time.Now()
 
 		if err != nil {
 			return nil, err
@@ -518,15 +554,6 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 
 	valueSeries.Rename(symbol)
 	df := dataframe.NewDataFrame(timeSeries, valueSeries)
-
-	/*
-		log.WithFields(log.Fields{
-			"HttpRequest": t2.Sub(t1).Round(time.Millisecond),
-			"ParseCSV":    t4.Sub(t3).Round(time.Millisecond),
-			"Symbol":      symbol,
-			"Frequency":   frequency,
-		}).Debug("TargetPortfolio runtimes")
-	*/
 
 	return df, err
 }
