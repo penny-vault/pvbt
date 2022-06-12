@@ -36,10 +36,10 @@ import (
 const (
 	binaryName   = "pvapi"
 	packageName  = "."
-	noGitLdflags = "-X main/common.buildDate=$BUILD_DATE"
+	noGitLdflags = "-X github.com/penny-vault/pv-api/common.buildDate=$BUILD_DATE"
 )
 
-var ldflags = "-X main/common.commitHash=$COMMIT_HASH -X main/common.buildDate=$BUILD_DATE"
+var ldflags = "-X github.com/penny-vault/pv-api/common.commitHash=$COMMIT_HASH -X github.com/penny-vault/pv-api/common.buildDate=$BUILD_DATE"
 
 // allow user to override go executable by running as GOEXE=xxx make ... on unix-like systems
 var goexe = "go"
@@ -263,7 +263,7 @@ func runWith(env map[string]string, cmd string, inArgs ...interface{}) error {
 }
 
 var (
-	pkgPrefixLen = len("main")
+	pkgPrefixLen = len("github.com/penny-vault/pv-api")
 	pkgs         []string
 	pkgsInit     sync.Once
 )
