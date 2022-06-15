@@ -53,7 +53,7 @@ func (f *fred) DataType() string {
 }
 
 func (f *fred) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
-	return math.NaN(), errors.New("Function not implemented")
+	return math.NaN(), errors.New("function not implemented")
 }
 
 func (f *fred) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {

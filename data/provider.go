@@ -25,6 +25,8 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	log "github.com/sirupsen/logrus"
@@ -80,7 +82,7 @@ var riskFreeRate *dataframe.DataFrame
 
 // InitializeDataManager download risk free data
 func InitializeDataManager() {
-	pvdb := NewPVDB()
+	pvdb := NewPVDB(map[string]float64{}, buildHashKey)
 	var err error
 	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), []string{"DGS3MO"}, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
@@ -117,7 +119,7 @@ func NewManager(credentials map[string]string) Manager {
 		log.Warn("No tiingo API key provided")
 	}
 
-	pvdb := NewPVDB()
+	pvdb := NewPVDB(m.cache, buildHashKey)
 	m.RegisterDataProvider(pvdb)
 	m.dateProvider = pvdb
 
@@ -135,9 +137,6 @@ func (m *Manager) RegisterDataProvider(p Provider) {
 
 // RiskFreeRate Get the risk free rate for given date
 func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.RiskFreeRate")
-	defer span.End()
-
 	start := m.lastRiskFreeIdx
 	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
 	currDate := row[common.DateIdx].(time.Time)
@@ -178,7 +177,7 @@ func (m *Manager) GetDataFrame(ctx context.Context, metric string, symbols ...st
 }
 
 func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric string, symbols ...string) error {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.Fetch")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "provider.Fetch")
 	defer span.End()
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
@@ -190,12 +189,24 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 		return err
 	}
 
-	log.WithFields(log.Fields{
-		"Tickers": symbols,
-		"Begin":   begin,
-		"End":     end,
-		"Metric":  metric,
-	}).Debug("Fetching stock prices")
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "Begin",
+			Value: attribute.StringValue(begin.Format("2006-01-02")),
+		},
+		attribute.KeyValue{
+			Key:   "End",
+			Value: attribute.StringValue(end.Format("2006-01-02")),
+		},
+		attribute.KeyValue{
+			Key:   "Symbols",
+			Value: attribute.StringSliceValue(symbols),
+		},
+		attribute.KeyValue{
+			Key:   "Metric",
+			Value: attribute.StringValue(metric),
+		},
+	)
 
 	iterator := res.ValuesIterator(dataframe.ValuesOptions{
 		InitialRow:   0,
@@ -214,6 +225,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 			if vals[s] != nil {
 				m.cache[key] = vals[s].(float64)
 			} else {
+				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
 				log.WithFields(log.Fields{
 					"Date":   d,
 					"Metric": metric,
@@ -224,27 +236,28 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 			}
 		}
 	}
+
 	return nil
 }
 
 func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol string) (float64, error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.Get")
-	defer span.End()
-
 	symbol = strings.ToUpper(symbol)
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
 	if !ok {
-		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
-		err := m.Fetch(ctx, date, end, metric, symbol)
-		if err != nil {
-			return 0, err
-		}
-		val, ok = m.cache[key]
-		if !ok {
-			return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
-		}
+		return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+		/*
+			tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+			end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
+			err := m.Fetch(ctx, date, end, metric, symbol)
+			if err != nil {
+				return 0, err
+			}
+			val, ok = m.cache[key]
+			if !ok {
+				return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+			}
+		*/
 	}
 	return val, nil
 }
@@ -269,6 +282,16 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric
 
 func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time) []time.Time {
 	return m.dateProvider.TradingDays(ctx, since, through, FrequencyDaily)
+}
+
+func (m *Manager) HashLen() int {
+	return len(m.cache)
+}
+
+func (m *Manager) HashSize() int {
+	keySize := 19
+	valSize := 8
+	return (len(m.cache) * keySize) + (len(m.cache) * valSize)
 }
 
 func buildHashKey(date time.Time, metric string, symbol string) string {

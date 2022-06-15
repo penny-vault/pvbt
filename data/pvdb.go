@@ -36,11 +36,16 @@ import (
 )
 
 type pvdb struct {
+	cache    map[string]float64
+	hashFunc func(date time.Time, metric string, symbol string) string
 }
 
 // NewPVDB Create a new PVDB data provider
-func NewPVDB() *pvdb {
-	return &pvdb{}
+func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric string, symbol string) string) *pvdb {
+	return &pvdb{
+		cache:    cache,
+		hashFunc: hashFunc,
+	}
 }
 
 // Date provider functions
@@ -196,6 +201,7 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	// build SQL query
 	var columns string
 	var adjusted bool
+	rawMetric := metric
 	switch metric {
 	case MetricOpen:
 		columns = "open AS val"
@@ -210,15 +216,19 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	case MetricAdjustedOpen:
 		columns = "open AS val, dividend, split_factor"
 		adjusted = true
+		rawMetric = MetricOpen
 	case MetricAdjustedHigh:
 		columns = "high AS val, dividend, split_factor"
 		adjusted = true
+		rawMetric = MetricHigh
 	case MetricAdjustedLow:
 		columns = "low AS val, dividend, split_factor"
 		adjusted = true
+		rawMetric = MetricLow
 	case MetricAdjustedClose:
 		columns = "close AS val, dividend, split_factor"
 		adjusted = true
+		rawMetric = MetricClose
 	case MetricDividendCash:
 		columns = "dividend AS val"
 	case MetricSplitFactor:
@@ -281,6 +291,9 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		} else {
 			err = rows.Scan(&date, &ticker, &val)
 		}
+
+		p.cache[p.hashFunc(date, rawMetric, ticker)] = val
+
 		if err != nil {
 			log.WithFields(log.Fields{
 				"Query":     sql,
@@ -315,6 +328,10 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		}
 
 		valMap[ticker] = v2
+		if adjusted {
+			p.cache[p.hashFunc(date, metric, ticker)] = v2
+		}
+
 		lastDate = date
 	}
 

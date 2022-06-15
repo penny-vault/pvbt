@@ -141,6 +141,13 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "RebalanceTo")
 	defer span.End()
 
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "date",
+			Value: attribute.StringValue(date.Format("2006-01-02")),
+		},
+	)
+
 	p := pm.Portfolio
 	err := pm.FillCorporateActions(ctx, date)
 	if err != nil {
@@ -472,6 +479,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 	p := pm.Portfolio
 
 	log.Info("Building target portfolio")
+	log.Infof("EOD price cache size %d MB", pm.dataProxy.HashSize()/(1024.0*1024.0))
 	if target.NRows() == 0 {
 		return nil
 	}
