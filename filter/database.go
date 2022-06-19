@@ -232,7 +232,6 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 		}
 
 		if lastJustification.Valid {
-			fmt.Printf("\tJustification is valid: %s\n", lastJustification.String)
 			err := json.Unmarshal([]byte(lastJustification.String), &item.Justification)
 			if err != nil {
 				log.WithFields(log.Fields{

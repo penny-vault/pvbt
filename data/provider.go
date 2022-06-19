@@ -51,18 +51,14 @@ const (
 )
 
 const (
-	MetricOpen           = "Open"
-	MetricLow            = "Low"
-	MetricHigh           = "High"
-	MetricClose          = "Close"
-	MetricVolume         = "Volume"
-	MetricAdjustedOpen   = "AdjustedOpen"
-	MetricAdjustedLow    = "AdjustedLow"
-	MetricAdjustedHigh   = "AdjustedHigh"
-	MetricAdjustedClose  = "AdjustedClose"
-	MetricAdjustedVolume = "AdjustedVolume"
-	MetricDividendCash   = "DividendCash"
-	MetricSplitFactor    = "SplitFactor"
+	MetricOpen          = "Open"
+	MetricLow           = "Low"
+	MetricHigh          = "High"
+	MetricClose         = "Close"
+	MetricVolume        = "Volume"
+	MetricAdjustedClose = "AdjustedClose"
+	MetricDividendCash  = "DividendCash"
+	MetricSplitFactor   = "SplitFactor"
 )
 
 // Manager data manager type
@@ -245,7 +241,8 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
 	if !ok {
-		return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+		return math.NaN(), nil
+		// return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
 		/*
 			tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 			end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)

@@ -69,6 +69,11 @@ type PortfolioModel struct {
 	splitData      map[string]*dataframe.DataFrame
 }
 
+type Period struct {
+	Begin time.Time
+	End   time.Time
+}
+
 // NewPortfolio create a portfolio
 func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *PortfolioModel {
 	id, _ := uuid.New().MarshalBinary()
@@ -466,6 +471,74 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 	p.CurrentHoldings = buildHoldingsArray(date, newHoldings)
 
 	return nil
+}
+
+// BuildAssetPlan scans the dataframe and builds a map on asset of the time frame the asset is held in the portfolio
+func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string]*Period {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "BuildAssetPlan")
+	defer span.End()
+
+	plan := map[string]*Period{}
+
+	tickerSeriesIdx, err := target.NameToColumn(common.TickerName)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invest target portfolio failed")
+
+		log.WithFields(log.Fields{
+			"OriginalError": err,
+		}).Warn(err)
+		return plan
+	}
+
+	// check series type
+	isSingleAsset := false
+	series := target.Series[tickerSeriesIdx]
+	if series.Type() == "string" {
+		isSingleAsset = true
+	}
+
+	// Get price data
+	iterator := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
+	for {
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		date := val[common.DateIdx].(time.Time)
+
+		if isSingleAsset {
+			ticker := val[common.TickerName].(string)
+			period, ok := plan[ticker]
+			if !ok {
+				period = &Period{
+					Begin: date,
+				}
+				plan[ticker] = period
+			}
+			if period.End.Before(date) {
+				period.End = date
+			}
+		} else {
+			// it's multi-asset which means a map of tickers
+			assetMap := val[common.TickerName].(map[string]float64)
+			for ticker, _ := range assetMap {
+				period, ok := plan[ticker]
+				if !ok {
+					period = &Period{
+						Begin: date,
+					}
+					plan[ticker] = period
+				}
+				if period.End.Before(date) {
+					period.End = date
+				}
+			}
+		}
+	}
+
+	return plan
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.

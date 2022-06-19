@@ -261,12 +261,6 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 		return last.Close, nil
 	case MetricVolume:
 		return float64(last.Volume), nil
-	case MetricAdjustedOpen:
-		return last.AdjOpen, nil
-	case MetricAdjustedHigh:
-		return last.AdjHigh, nil
-	case MetricAdjustedLow:
-		return last.AdjLow, nil
 	case MetricAdjustedClose:
 		return last.AdjClose, nil
 	case MetricDividendCash:
@@ -506,24 +500,6 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 		valueSeriesIdx, err := res.NameToColumn("volume")
 		if err != nil {
 			return nil, errors.New("volume metric not found")
-		}
-		valueSeries = res.Series[valueSeriesIdx].Copy()
-	case MetricAdjustedOpen:
-		valueSeriesIdx, err := res.NameToColumn("adjOpen")
-		if err != nil {
-			return nil, errors.New("adjusted open metric not found")
-		}
-		valueSeries = res.Series[valueSeriesIdx].Copy()
-	case MetricAdjustedHigh:
-		valueSeriesIdx, err := res.NameToColumn("adjHigh")
-		if err != nil {
-			return nil, errors.New("adjusted high metric not found")
-		}
-		valueSeries = res.Series[valueSeriesIdx].Copy()
-	case MetricAdjustedLow:
-		valueSeriesIdx, err := res.NameToColumn("adjLow")
-		if err != nil {
-			return nil, errors.New("adjusted low metric not found")
 		}
 		valueSeries = res.Series[valueSeriesIdx].Copy()
 	case MetricAdjustedClose:

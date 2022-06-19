@@ -27,6 +27,7 @@ package adm
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -36,12 +37,16 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
 	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/rocketlaunchr/dataframe-go/exports"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
+
+	log "github.com/sirupsen/logrus"
 )
 
 type AcceleratingDualMomentum struct {
@@ -118,7 +123,10 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 	return nil
 }
 
-func (adm *AcceleratingDualMomentum) computeScores() error {
+func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.computeScores")
+	defer span.End()
+
 	nrows := adm.prices.NRows(dataframe.Options{})
 	periods := []int{1, 3, 6}
 	series := []dataframe.Series{}
@@ -180,15 +188,19 @@ func (adm *AcceleratingDualMomentum) computeScores() error {
 		ticker := adm.inTickers[ii]
 		for _, jj := range periods {
 			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
-			funcs.Evaluate(context.TODO(), adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
+			funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
 		}
 	}
 
-	// compute average scores
 	for ii := range adm.inTickers {
 		ticker := adm.inTickers[ii]
 		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
-		funcs.Evaluate(context.TODO(), adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker))
+		funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker))
+	}
+
+	// compute average scores
+	if viper.GetBool("debug.dump_csv") {
+		adm.writeDataFramesToCSV()
 	}
 
 	return nil
@@ -213,19 +225,14 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		manager.Begin = manager.Begin.AddDate(0, -6, 0)
 	}
 
-	// t1 := time.Now()
 	err := adm.downloadPriceData(ctx, manager)
 	if err != nil {
 		return nil, nil, err
 	}
-	// t2 := time.Now()
 
 	// Compute momentum scores
-	// t3 := time.Now()
-	adm.computeScores()
-	// t4 := time.Now()
+	adm.computeScores(ctx)
 
-	// t5 := time.Now()
 	scores := []dataframe.Series{}
 	timeIdx, _ := adm.momentum.NameToColumn(common.DateIdx)
 
@@ -297,15 +304,42 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		}
 	}
 
-	// t6 := time.Now()
-
-	/*
-		log.WithFields(log.Fields{
-			"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
-			"ScoreCalculation":   t4.Sub(t3).Round(time.Millisecond),
-			"PortfolioSelection": t6.Sub(t5).Round(time.Millisecond),
-		}).Info("ADM calculation runtimes")
-	*/
-
 	return targetPortfolio, predictedPortfolio, nil
+}
+
+func (adm *AcceleratingDualMomentum) writeDataFramesToCSV() {
+	ctx := context.Background()
+
+	// momentum
+	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		log.Errorf("error writing opening adm_momentum.csv %s", err.Error())
+		return
+	}
+	if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
+		log.Errorf("error writing adm momentum to csv %s", err.Error())
+		return
+	}
+
+	// prices
+	fh, err = os.OpenFile("adm_prices.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		log.Errorf("error writing opening adm_prices.csv %s", err.Error())
+		return
+	}
+	if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
+		log.Errorf("error writing adm prices to csv %s", err.Error())
+		return
+	}
+
+	// riskfree
+	fh, err = os.OpenFile("adm_riskfreerate.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
+	if err != nil {
+		log.Errorf("error writing opening adm_riskfreerate.csv %s", err.Error())
+		return
+	}
+	if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
+		log.Errorf("error writing adm riskfreerate to csv %s", err.Error())
+		return
+	}
 }

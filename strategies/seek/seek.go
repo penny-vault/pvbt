@@ -28,6 +28,7 @@ package seek
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -51,15 +52,57 @@ type SeekingAlphaQuant struct {
 	schedule    *tradecron.TradeCron
 }
 
-type sentiment struct {
-	EventDate       time.Time
-	StormGuardArmor float64
+type Period struct {
+	Asset string
+	Begin time.Time
+	End   time.Time
+}
+
+type Cluster struct {
+	Begin   time.Time
+	End     time.Time
+	Members []*Period
+}
+
+type ByStartDur []*Period
+
+func (a ByStartDur) Len() int      { return len(a) }
+func (a ByStartDur) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a ByStartDur) Less(i, j int) bool {
+	aDur := a[i].End.Sub(a[i].Begin)
+	bDur := a[j].End.Sub(a[j].Begin)
+	if a[i].Begin.Equal(a[j].Begin) {
+		return aDur < bDur
+	}
+
+	return a[i].Begin.Before(a[j].Begin)
 }
 
 const (
 	WEEKLY  = "weekly"
 	MONTHLY = "monthly"
 )
+
+func absDur(value time.Duration) time.Duration {
+	if value < 0 {
+		return -value
+	}
+	return value
+}
+
+func minTime(a, b time.Time) time.Time {
+	if b.Before(a) {
+		return b
+	}
+	return a
+}
+
+func maxTime(a, b time.Time) time.Time {
+	if b.After(a) {
+		return b
+	}
+	return a
+}
 
 // New Construct a new Momentum Driven Earnings Prediction (seek) strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
@@ -224,5 +267,105 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		Justification: make(map[string]float64),
 	}
 
+	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
+	prepopulateDataCache(ctx, coveredPeriods, manager)
+
 	return targetPortfolio, predictedPortfolio, nil
+}
+
+// prepopulateDataCache loads asset eod prices into the in-memory cache
+func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.Manager) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
+	defer span.End()
+
+	s := time.Now()
+	for _, v := range covered {
+		fmt.Printf("%s\t%s\t%s\n", v.Asset, v.Begin.Format("2006-01-02"), v.End.Format("2006-01-02"))
+		manager.Begin = v.Begin
+		manager.End = v.End
+		manager.GetDataFrame(ctx, data.MetricAdjustedClose, v.Asset)
+	}
+	e := time.Now()
+
+	fmt.Printf("Elapsed: %s", e.Sub(s))
+}
+
+// findCoveredPeriods creates periods that each assets stock prices should be downloaded
+func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Period {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "buildQueryPlan")
+	defer span.End()
+
+	coveredPeriods := make([]*Period, 0, target.NRows())
+	activeAssets := make(map[string]*Period)
+	var pendingClose map[string]*Period
+
+	tickerSeriesIdx := target.MustNameToColumn(common.TickerName)
+
+	// check series type
+	isSingleAsset := false
+	series := target.Series[tickerSeriesIdx]
+	if series.Type() == "string" {
+		isSingleAsset = true
+	}
+
+	// Create a map of asset time periods
+	iterator := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
+	for {
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		date := val[common.DateIdx].(time.Time)
+
+		pendingClose = activeAssets
+		activeAssets = make(map[string]*Period)
+
+		if isSingleAsset {
+			ticker := val[common.TickerName].(string)
+			period, ok := pendingClose[ticker]
+			if !ok {
+				period = &Period{
+					Asset: ticker,
+					Begin: date,
+				}
+			} else {
+				delete(pendingClose, ticker)
+			}
+			if period.End.Before(date) {
+				period.End = date.AddDate(0, 0, 7)
+			}
+			activeAssets[ticker] = period
+		} else {
+			// it's multi-asset which means a map of tickers
+			assetMap := val[common.TickerName].(map[string]float64)
+			for ticker, _ := range assetMap {
+				period, ok := pendingClose[ticker]
+				if !ok {
+					period = &Period{
+						Asset: ticker,
+						Begin: date,
+					}
+				} else {
+					delete(pendingClose, ticker)
+				}
+				if period.End.Before(date) {
+					period.End = date.AddDate(0, 0, 8)
+				}
+				activeAssets[ticker] = period
+			}
+		}
+
+		// any assets that remain in pending close should be added to covered periods
+		for _, v := range pendingClose {
+			coveredPeriods = append(coveredPeriods, v)
+		}
+	}
+
+	// any remaining assets should be added to coveredPeriods
+	for _, v := range activeAssets {
+		coveredPeriods = append(coveredPeriods, v)
+	}
+
+	return coveredPeriods
 }

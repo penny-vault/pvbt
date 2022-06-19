@@ -200,39 +200,23 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 
 	// build SQL query
 	var columns string
-	var adjusted bool
-	rawMetric := metric
 	switch metric {
 	case MetricOpen:
-		columns = "open AS val"
+		columns = "open AS val, close, adj_close"
 	case MetricHigh:
-		columns = "high AS val"
+		columns = "high AS val, close, adj_close"
 	case MetricLow:
-		columns = "low AS val"
+		columns = "low AS val, close, adj_close"
 	case MetricClose:
-		columns = "close AS val"
+		columns = "close AS val, close, adj_close"
 	case MetricVolume:
-		columns = "(volume::double precision) AS val"
-	case MetricAdjustedOpen:
-		columns = "open AS val, dividend, split_factor"
-		adjusted = true
-		rawMetric = MetricOpen
-	case MetricAdjustedHigh:
-		columns = "high AS val, dividend, split_factor"
-		adjusted = true
-		rawMetric = MetricHigh
-	case MetricAdjustedLow:
-		columns = "low AS val, dividend, split_factor"
-		adjusted = true
-		rawMetric = MetricLow
+		columns = "(volume::double precision) AS val, close, adj_close"
 	case MetricAdjustedClose:
-		columns = "close AS val, dividend, split_factor"
-		adjusted = true
-		rawMetric = MetricClose
+		columns = "adj_close AS val, close, adj_close"
 	case MetricDividendCash:
-		columns = "dividend AS val"
+		columns = "dividend AS val, close, adj_close"
 	case MetricSplitFactor:
-		columns = "split_factor AS val"
+		columns = "split_factor AS val, close, adj_close"
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
 		trx.Rollback(ctx)
@@ -280,19 +264,24 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	var lastDate time.Time
 	var ticker string
 	var val float64
-	var div float64
-	var split float64
+	var close float64
+	var adjClose float64
 
 	symbolCnt := len(symbols)
 
 	for rows.Next() {
-		if adjusted {
-			err = rows.Scan(&date, &ticker, &val, &div, &split)
-		} else {
-			err = rows.Scan(&date, &ticker, &val)
-		}
+		err = rows.Scan(&date, &ticker, &val, &close, &adjClose)
 
-		p.cache[p.hashFunc(date, rawMetric, ticker)] = val
+		p.cache[p.hashFunc(date, metric, ticker)] = val
+		switch metric {
+		case MetricClose:
+			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose
+		case MetricAdjustedClose:
+			p.cache[p.hashFunc(date, MetricClose, ticker)] = close
+		default:
+			p.cache[p.hashFunc(date, MetricClose, ticker)] = close
+			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose
+		}
 
 		if err != nil {
 			log.WithFields(log.Fields{
@@ -308,17 +297,6 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 			return nil, err
 		}
 
-		v2 := val / adjustFactor[ticker]
-		if adjusted {
-			// CRSP adjustment calculations
-			// see: http://crsp.org/products/documentation/crsp-calculations
-			if val > 0 {
-				adjustFactor[ticker] *= (1 + (div / val)) * split
-			} else {
-				adjustFactor[ticker] = 1
-			}
-		}
-
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
 		dateHash := date.Year()*1000 + date.YearDay()
 		valMap, ok := vals[dateHash]
@@ -327,10 +305,7 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 			vals[dateHash] = valMap
 		}
 
-		valMap[ticker] = v2
-		if adjusted {
-			p.cache[p.hashFunc(date, metric, ticker)] = v2
-		}
+		valMap[ticker] = val
 
 		lastDate = date
 	}
@@ -391,7 +366,6 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 
 	// build SQL query
 	var columns string
-	var adjusted bool
 	switch metric {
 	case MetricOpen:
 		columns = "open AS val"
@@ -403,18 +377,8 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 		columns = "close AS val"
 	case MetricVolume:
 		columns = "(volume::double precision) AS val"
-	case MetricAdjustedOpen:
-		columns = "open AS val, dividend, split_factor"
-		adjusted = true
-	case MetricAdjustedHigh:
-		columns = "high AS val, dividend, split_factor"
-		adjusted = true
-	case MetricAdjustedLow:
-		columns = "low AS val, dividend, split_factor"
-		adjusted = true
 	case MetricAdjustedClose:
-		columns = "close AS val, dividend, split_factor"
-		adjusted = true
+		columns = "adj_close AS val"
 	case MetricDividendCash:
 		columns = "dividend AS val"
 	case MetricSplitFactor:
@@ -444,15 +408,9 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 	var date time.Time
 	var ticker string
 	var val float64
-	var div float64
-	var split float64
 
 	for rows.Next() {
-		if adjusted {
-			err = rows.Scan(&date, &ticker, &val, &div, &split)
-		} else {
-			err = rows.Scan(&date, &ticker, &val)
-		}
+		err = rows.Scan(&date, &ticker, &val)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "db scan failed")
