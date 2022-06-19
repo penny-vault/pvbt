@@ -16,6 +16,7 @@
 package daa_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -134,7 +135,7 @@ var _ = Describe("Daa", func() {
 			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				target, _, err = strat.Compute(&manager)
+				target, _, err = strat.Compute(context.Background(), &manager)
 			})
 
 			It("should not error", func() {

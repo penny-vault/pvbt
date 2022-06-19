@@ -16,6 +16,7 @@
 package data_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -67,27 +68,30 @@ var _ = Describe("Provider", func() {
 	Describe("When data framework is initialized", func() {
 		Context("with the DGS3MO data", func() {
 			It("should be able to retrieve the risk free rate", func() {
-				rate := dataProxy.RiskFreeRate(time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
+				ctx := context.Background()
+				rate := dataProxy.RiskFreeRate(ctx, time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 10.66, 1e-2))
 
-				rate = dataProxy.RiskFreeRate(time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
+				rate = dataProxy.RiskFreeRate(ctx, time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 7.81, 1e-2))
 
 			})
 
 			It("should be able to retrieve the risk free rate for out-of-order dates", func() {
-				rate := dataProxy.RiskFreeRate(time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
+				ctx := context.Background()
+				rate := dataProxy.RiskFreeRate(ctx, time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 10.66, 1e-2))
 
-				rate = dataProxy.RiskFreeRate(time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
+				rate = dataProxy.RiskFreeRate(ctx, time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 7.81, 1e-2))
 
-				rate = dataProxy.RiskFreeRate(time.Date(1983, 1, 18, 0, 0, 0, 0, tz))
+				rate = dataProxy.RiskFreeRate(ctx, time.Date(1983, 1, 18, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 7.64, 1e-2))
 			})
 
 			It("should be able to retrieve the risk free rate on days FRED returns NaN", func() {
-				rate := dataProxy.RiskFreeRate(time.Date(2019, 1, 1, 0, 0, 0, 0, tz))
+				ctx := context.Background()
+				rate := dataProxy.RiskFreeRate(ctx, time.Date(2019, 1, 1, 0, 0, 0, 0, tz))
 				Expect(rate).Should(BeNumerically("~", 2.4, 1e-2))
 			})
 

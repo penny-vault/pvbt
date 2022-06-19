@@ -16,6 +16,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"time"
@@ -150,7 +151,7 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				err = pm.TargetPortfolio(df)
+				err = pm.TargetPortfolio(context.Background(), df)
 			})
 
 			It("should not error", func() {
@@ -161,7 +162,7 @@ var _ = Describe("Portfolio", func() {
 				target := make(map[string]float64)
 				target["VFINX"] = 1.0
 				justification := make([]*portfolio.Justification, 0)
-				err = pm.RebalanceTo(time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
+				err = pm.RebalanceTo(context.Background(), time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
 				Expect(err).To(HaveOccurred())
 			})
 
@@ -264,6 +265,7 @@ var _ = Describe("Portfolio", func() {
 
 		Context("has stocks with splits", func() {
 			BeforeEach(func() {
+				ctx := context.Background()
 				timeSeries2 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, []time.Time{
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
@@ -279,9 +281,9 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				err = pm.TargetPortfolio(df)
+				err = pm.TargetPortfolio(ctx, df)
 				if err == nil {
-					pm.FillCorporateActions(time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
+					pm.FillCorporateActions(ctx, time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
 				}
 			})
 
@@ -301,7 +303,7 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
-				err = perf.CalculateThrough(pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 				Expect(err).NotTo(HaveOccurred())
 
 				// Friday, August 28, 2020
@@ -338,9 +340,9 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				pm.TargetPortfolio(df)
+				pm.TargetPortfolio(context.Background(), df)
 				perf = portfolio.NewPerformance(pm.Portfolio)
-				err = perf.CalculateThrough(pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
+				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 			})
 
 			It("should not error", func() {
@@ -412,7 +414,7 @@ var _ = Describe("Portfolio", func() {
 					dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 					dataProxy.Frequency = data.FrequencyDaily
 
-					err = pm.TargetPortfolio(df)
+					err = pm.TargetPortfolio(context.Background(), df)
 				})
 
 				It("should not error", func() {
