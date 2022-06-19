@@ -34,7 +34,7 @@ import (
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	imports "github.com/rocketlaunchr/dataframe-go/imports"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 var fredURL = "https://fred.stlouisfed.org"
@@ -74,10 +74,7 @@ func (f *fred) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 			if v.Err == nil {
 				res = append(res, v.Data)
 			} else {
-				log.WithFields(log.Fields{
-					"Ticker": v.Ticker,
-					"Error":  v.Err,
-				}).Warn("Cannot download ticker data")
+				log.Warn().Err(err).Str("Ticker", v.Ticker).Msg("Cannot download ticker data")
 				errs = append(errs, v.Err)
 			}
 		}
@@ -103,7 +100,6 @@ func fredDownloadWorker(result chan<- quoteResult, symbol string, metric string,
 func (f *fred) loadDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	// build URL to get data
 	url := fmt.Sprintf("%s/graph/fredgraph.csv?mode=fred&id=%s&cosd=%s&coed=%s&fq=%s&fam=avg", fredURL, symbol, begin.Format("2006-01-02"), end.Format("2006-01-02"), frequency)
-	//log.Printf("Download from FRED: %s\n", url)
 
 	resp, err := http.Get(url)
 

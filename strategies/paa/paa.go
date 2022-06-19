@@ -37,7 +37,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
@@ -344,7 +344,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 
 	timeIdx, err := mom.NameToColumn(common.DateIdx)
 	if err != nil {
-		log.Error("Time series not set on momentum series")
+		log.Error().Err(err).Msg("time series not set on momentum series")
 	}
 	timeSeries := mom.Series[timeIdx].Copy()
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)

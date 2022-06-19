@@ -19,13 +19,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/tradecron"
+	"github.com/rs/zerolog/log"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -43,14 +44,15 @@ var backtestCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("could not connect to database")
+			os.Exit(1)
 		}
 
 		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()
-		log.Info("Initialized data framework")
+		log.Info().Msg("initialized data framework")
 
 		// initialize strategies
 		strategies.InitializeStrategyMap()
@@ -65,22 +67,19 @@ var backtestCmd = &cobra.Command{
 		var arguments map[string]json.RawMessage
 		err = json.Unmarshal([]byte(args[1]), &arguments)
 		if err != nil {
-			log.Error("Could not unmarshal json")
-			log.Error(err)
+			log.Error().Err(err).Msg("Could not unmarshal json")
 			return
 		}
 
 		strategy, err := strat.Factory(arguments)
 		if err != nil {
-			log.Error("Could not create strategy")
-			log.Error(err)
+			log.Error().Err(err).Msg("Could not create strategy")
 			return
 		}
 
 		target, predicted, err := strategy.Compute(context.Background(), &dataManager)
 		if err != nil {
-			log.Error("Could not compute strategy positions")
-			log.Error(err)
+			log.Error().Err(err).Msg("Could not compute strategy positions")
 			return
 		}
 

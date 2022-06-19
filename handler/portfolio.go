@@ -21,15 +21,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/filter"
 	"github.com/penny-vault/pv-api/portfolio"
-
-	"github.com/goccy/go-json"
-
-	"github.com/gofiber/fiber/v2"
-	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type PortfolioResponse struct {
@@ -54,46 +52,28 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		ID: portfolioID,
 	}
 
+	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID.String()).Str("UserID", userID).Logger()
+
 	if err := json.Unmarshal(c.Body(), &portfolioParams); err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "GetPortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Error("unable to deserialize portfolio params")
+		subLog.Error().Err(err).Msg("unable to deserialize portfolio params")
 		return fiber.ErrBadRequest
 	}
 
 	jsonArgs, err := json.Marshal(portfolioParams.Arguments)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "GetPortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Error("unable to re-serialize json arguments")
+		subLog.Error().Err(err).Msg("unable to re-serialize json arguments")
 		return fiber.ErrBadRequest
 	}
 
 	portfolioSQL := `INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"$CASH": 10000}')`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "GetPortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 	_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, portfolioParams.Name, portfolioParams.Strategy, jsonArgs, portfolioParams.BenchmarkTicker, time.Unix(portfolioParams.StartDate, 0), userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "CreatePortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Warn("could not save new portfolio")
+		subLog.Warn().Err(err).Msg("could not save new portfolio")
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
@@ -101,12 +81,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	depositTransactionSQL := `INSERT INTO portfolio_transactions ("portfolio_id", "event_date", "num_shares", "price_per_share", "source", "ticker", "total_value", "transaction_type", "user_id") VALUES ($1, $2, 10000, 1, 'PV', '$CASH', 10000, 'DEPOSIT', $3)`
 	_, err = trx.Exec(context.Background(), depositTransactionSQL, portfolioID, time.Unix(portfolioParams.StartDate, 0), userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "CreatePortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Warn("could not save new portfolio transaction")
+		subLog.Warn().Err(err).Msg("could not save new portfolio transaction")
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
@@ -121,30 +96,20 @@ func CreatePortfolio(c *fiber.Ctx) error {
 // @Param id path string true "id of porfolio to retrieve"
 func GetPortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
-
 	userID := c.Locals("userID").(string)
+	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID).Str("UserID", userID).Logger()
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "GetPortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
 	p := PortfolioResponse{}
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "GetPortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-			"UserID":      userID,
-		}).Warn("could not scan row from db into Performance struct")
+		subLog.Warn().Err(err).Msg("could not scan row from db into Performance struct")
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
@@ -162,13 +127,10 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 func GetPortfolioPerformance(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
+	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("Endpoint", "GetPortfolioPerformance").Logger()
 	portfolioID, err := uuid.Parse(portfolioIDStr)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":       "GetPortfolioPerformance",
-			"Error":          err,
-			"PortfolioIDStr": portfolioIDStr,
-		}).Warn("failed to parse portfolio id")
+		subLog.Warn().Err(err).Msg("failed to parse portfolio id")
 		return fiber.ErrBadRequest
 	}
 
@@ -181,12 +143,7 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 
 	data, err := p.MarshalBinary()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":       "GetPortfolioPerformance",
-			"Error":          err,
-			"PortfolioIDStr": portfolioIDStr,
-			"Code":           "Could not marshal performance to binary",
-		})
+		subLog.Warn().Err(err).Msg("could not marshal performance to binary")
 	}
 	return c.Send(data)
 }
@@ -194,6 +151,8 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 func GetPortfolioMeasurements(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
+
+	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Logger()
 
 	f := filter.New(portfolioID, userID)
 
@@ -218,19 +177,13 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":      err,
-				"DateString": sinceStr,
-			}).Warn("could not parse date string")
+			subLog.Warn().Err(err).Msg("could not parse date string")
 		}
 	}
 
 	data, err := f.GetMeasurements(field1, field2, since)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not retrieve measurements")
-
+		subLog.Warn().Err(err).Msg("could not retrieve measurements")
 		return fiber.ErrBadRequest
 	}
 
@@ -240,11 +193,12 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 func GetPortfolioHoldings(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
 	userID := c.Locals("userID").(string)
+	frequency := c.Query("frequency", "monthly")
+	sinceStr := c.Query("since", "0")
+	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("UserID", userID).Str("Frequency", frequency).Str("Since", sinceStr).Logger()
 
 	f := filter.New(portfolioIDStr, userID)
 
-	frequency := c.Query("frequency", "monthly")
-	sinceStr := c.Query("since", "0")
 	var since time.Time
 	if sinceStr == "0" {
 		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
@@ -252,19 +206,13 @@ func GetPortfolioHoldings(c *fiber.Ctx) error {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":      err,
-				"DateString": sinceStr,
-			}).Warn("could not parse date string")
+			subLog.Warn().Err(err).Msg("could not parse since string")
 		}
 	}
 
 	data, err := f.GetHoldings(frequency, since)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not retrieve holdings")
-
+		subLog.Warn().Err(err).Msg("could not retrieve holdings")
 		return fiber.ErrBadRequest
 	}
 
@@ -274,10 +222,10 @@ func GetPortfolioHoldings(c *fiber.Ctx) error {
 func GetPortfolioTransactions(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
 	userID := c.Locals("userID").(string)
-
+	sinceStr := c.Query("since", "0")
+	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("UserID", userID).Str("Since", sinceStr).Logger()
 	f := filter.New(portfolioIDStr, userID)
 
-	sinceStr := c.Query("since", "0")
 	var since time.Time
 	if sinceStr == "0" {
 		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
@@ -285,18 +233,13 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":      err,
-				"DateString": sinceStr,
-			}).Warn("could not parse date string")
+			subLog.Warn().Err(err).Msg("could not parse date string")
 		}
 	}
 
 	data, err := f.GetTransactions(since)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not retrieve transactions")
+		subLog.Warn().Err(err).Msg("could not retrieve transactions")
 		return fiber.ErrBadRequest
 	}
 
@@ -306,25 +249,18 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 // ListPortfolios list all portfolios for logged in user
 func ListPortfolios(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
+	subLog := log.With().Str("UserID", userID).Str("Endpoint", "ListPortfolios").Logger()
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "ListPortfolios",
-			"Error":    err,
-			"UserID":   userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 
 	rows, err := trx.Query(context.Background(), portfolioSQL, userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "ListPortfolios",
-			"Error":    err,
-			"Query":    portfolioSQL,
-		}).Warn("ListPortfolio failed")
+		subLog.Warn().Err(err).Str("Query", portfolioSQL).Msg("datdabase query failed")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
@@ -334,11 +270,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 		p := PortfolioResponse{}
 		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Endpoint": "ListPortfolios",
-				"Error":    err,
-				"Query":    portfolioSQL,
-			}).Warn("ListPortfolio scan failed")
+			subLog.Warn().Err(err).Str("Query", portfolioSQL).Msg("ListPortfolio scan failed")
 			continue
 		}
 		if math.IsNaN(p.YTDReturn.Float64) || math.IsInf(p.YTDReturn.Float64, 0) {
@@ -355,11 +287,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 
 	err = rows.Err()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "ListPortfolio",
-			"Error":    err,
-			"Query":    portfolioSQL,
-		}).Warn("ListPortfolio failed")
+		subLog.Warn().Str("Query", portfolioSQL).Msg("ListPortfolio failed")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
@@ -373,24 +301,17 @@ func ListPortfolios(c *fiber.Ctx) error {
 func UpdatePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
+	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "UpdatePortfolio").Logger()
 
 	params := PortfolioResponse{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "UpdatePortfolio",
-			"Error":       err,
-			"PortfolioID": portfolioID,
-		}).Warn("UpdatePortfolio bad request")
+		subLog.Warn().Err(err).Msg("unmarshal request JSON failed")
 		return fiber.ErrBadRequest
 	}
 
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "UpdatePortfolio",
-			"Error":    err,
-			"UserID":   userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 
@@ -399,13 +320,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	p := PortfolioResponse{}
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "UpdatePortfolio",
-			"PortfolioID": portfolioID,
-			"Error":       err,
-			"Body":        string(c.Body()),
-			"Query":       portfolioSQL,
-		}).Warn("UpdatePortfolio failed")
+		subLog.Warn().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("select portfolio info failed")
 		trx.Rollback(context.Background())
 		return fiber.ErrNotFound
 	}
@@ -421,28 +336,16 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	updateSQL := `UPDATE portfolio SET name=$1, notifications=$2 WHERE id=$3 AND user_id=$4`
 	_, err = trx.Exec(context.Background(), updateSQL, params.Name, params.Notifications, portfolioID, userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "UpdatePortfolio",
-			"PortfolioID": portfolioID,
-			"Error":       err,
-			"Body":        string(c.Body()),
-			"Query":       portfolioSQL,
-		}).Warnf("UpdatePortfolio SQL update failed")
+		subLog.Warn().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("update portfolio statistics failed")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
 
-	row = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
 	p = PortfolioResponse{}
-	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).
+		Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint":    "UpdatePortfolio",
-			"PortfolioID": portfolioID,
-			"Error":       err,
-			"Body":        string(c.Body()),
-			"Query":       portfolioSQL,
-		}).Warnf("UpdatePortfolio failed")
+		subLog.Warn().Err(err).Str("Query", portfolioSQL).Bytes("Body", c.Body()).Msg("sacn portfolio statistics failed")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
@@ -455,36 +358,25 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 func DeletePortfolio(c *fiber.Ctx) error {
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
+	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "DeletePortfolio").Logger()
 
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "DeletePortfolio",
-			"Error":    err,
-			"UserID":   userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Msg("could not get database transaction")
 		return fiber.ErrServiceUnavailable
 	}
 
 	deleteSQL := "DELETE FROM portfolios WHERE id=$1 AND user_id=$2"
 	_, err = trx.Exec(context.Background(), deleteSQL, portfolioID, userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "DeletePortfolio",
-			"Query":    deleteSQL,
-			"Error":    err,
-		}).Warn("DeletePortfolio failed")
+		subLog.Warn().Str("Query", deleteSQL).Err(err).Msg("could not delete portfolio from db")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Endpoint": "DeletePortfolio",
-			"Query":    deleteSQL,
-			"Error":    err,
-		}).Warn("DeletePortfolio failed")
+		subLog.Error().Err(err).Str("Query", deleteSQL).Msg("could not commit transaction")
 		trx.Rollback(context.Background())
 		return fiber.ErrInternalServerError
 	}

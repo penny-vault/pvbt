@@ -39,7 +39,7 @@ import (
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	imports "github.com/rocketlaunchr/dataframe-go/imports"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type tiingo struct {
@@ -81,6 +81,8 @@ func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequenc
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.LastTradingDay")
 	defer span.End()
 
+	subLog := log.With().Str("Frequency", frequency).Time("ForDate", forDate).Logger()
+
 	symbol := "SPY"
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?startDate=%s&endDate=%s&resampleFreq=%s&token=%s", tiingoAPI, symbol, forDate.Format("2006-01-02"), forDate.Format("2006-01-02"), frequency, t.apikey)
 
@@ -98,13 +100,9 @@ func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequenc
 	resp, err := http.Get(url)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "tiingo http request failed")
-		log.WithFields(log.Fields{
-			"Function":  "data/tiingo.go:LastTradingDay",
-			"ForDate":   forDate,
-			"Frequency": frequency,
-			"Error":     err,
-		}).Error("HTTP error response")
+		msg := "tiingo http request failed"
+		span.SetStatus(codes.Error, msg)
+		subLog.Error().Err(err).Msg(msg)
 		return time.Time{}, err
 	}
 
@@ -113,14 +111,9 @@ func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequenc
 			Key:   "StatusCode",
 			Value: attribute.IntValue(resp.StatusCode),
 		})
-		span.SetStatus(codes.Error, "tiingo returned invalid response code")
-		log.WithFields(log.Fields{
-			"Function":   "data/tiingo.go:LastTradingDay",
-			"ForDate":    forDate,
-			"Frequency":  frequency,
-			"StatusCode": resp.StatusCode,
-			"Error":      err,
-		}).Error("HTTP error response")
+		msg := "tiingo returned invalid response code"
+		span.SetStatus(codes.Error, msg)
+		subLog.Error().Int("HTTPResponseStatusCode", resp.StatusCode).Msg(msg)
 		return time.Time{}, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 	}
 
@@ -128,14 +121,9 @@ func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequenc
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "could not read tiingo body")
-		log.WithFields(log.Fields{
-			"Function":  "data/tiingo.go:LastTradingDay",
-			"ForDate":   forDate,
-			"Frequency": frequency,
-			"Body":      string(body),
-			"Error":     err,
-		}).Error("Failed to read HTTP body")
+		msg := "could not read tiingo body"
+		span.SetStatus(codes.Error, msg)
+		subLog.Error().Bytes("Body", body).Err(err).Msg(msg)
 		return time.Time{}, err
 	}
 
@@ -143,46 +131,32 @@ func (t *tiingo) LastTradingDay(ctx context.Context, forDate time.Time, frequenc
 	err = json.Unmarshal(body, &jsonResp)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "could not unmarshal json")
-		log.WithFields(log.Fields{
-			"Function":  "data/tiingo.go:LastTradingDay",
-			"ForDate":   forDate,
-			"Frequency": frequency,
-			"Body":      string(body),
-			"Error":     err,
-		}).Error("Failed to parse JSON")
+		msg := "could not unmarshal json"
+		span.SetStatus(codes.Error, msg)
+		subLog.Error().Err(err).Bytes("Body", body).Msg(msg)
 		return time.Time{}, err
 	}
 
 	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
 	if err != nil {
+		subLog.Error().Err(err).Msg("could not load nyc timezone")
 		return time.Time{}, err
 	}
 
 	if len(jsonResp) > 0 {
 		dtParts := strings.Split(jsonResp[0].Date, "T")
 		if len(dtParts) == 0 {
-			span.SetStatus(codes.Error, "invalid date format")
-			log.WithFields(log.Fields{
-				"Function":  "data/tiingo.go:LastTradingDay",
-				"ForDate":   forDate,
-				"Frequency": frequency,
-				"DateStr":   jsonResp[0].Date,
-				"Error":     err,
-			}).Error("Invalid date format")
-			return time.Time{}, errors.New("invalid date format")
+			msg := "invalid date format"
+			span.SetStatus(codes.Error, msg)
+			subLog.Error().Str("DateStr", jsonResp[0].Date).Msg(msg)
+			return time.Time{}, errors.New(msg)
 		}
 		lastDay, err := time.ParseInLocation("2006-01-02", dtParts[0], tz)
 		if err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "cannot parse date string")
-			log.WithFields(log.Fields{
-				"Function":   "data/tiingo.go:LastTradingDay",
-				"ForDate":    forDate,
-				"Frequency":  frequency,
-				"StatusCode": resp.StatusCode,
-				"Error":      err,
-			}).Error("Cannot parse date")
+			msg := "cannot parse date string"
+			span.SetStatus(codes.Error, msg)
+			subLog.Error().Err(err).Int("HTTPResponseStatusCode", resp.StatusCode).Msg(msg)
 			return time.Time{}, err
 		}
 
@@ -217,6 +191,8 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.GetLatestDataBefore")
 	defer span.End()
 
+	subLog := log.With().Str("Symbol", symbol).Str("Metric", metric).Time("Before", before).Logger()
+
 	// build URL to get data
 	url := fmt.Sprintf("%s/tiingo/daily/%s/prices?endDate=%s&token=%s", tiingoAPI, symbol, before.Format("2006-01-02"), t.apikey)
 	// t1 = time.Now()
@@ -224,12 +200,7 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 	// t2 = time.Now()
 
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Url":    url,
-			"Symbol": symbol,
-			"Metric": metric,
-			"Error":  err,
-		}).Warn("Failed to load eod prices")
+		subLog.Warn().Str("Url", url).Msg("failed to load eod prices")
 		return math.NaN(), err
 	}
 
@@ -237,7 +208,9 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 	err = json.NewDecoder(resp.Body).Decode(&m)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "could not decode JSON")
+		msg := "could not decode JSON"
+		span.SetStatus(codes.Error, msg)
+		subLog.Error().Err(err).Msg(msg)
 		return math.NaN(), err
 	}
 
@@ -245,6 +218,7 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 
 	if len(m) == 0 {
 		span.SetStatus(codes.Error, "no results returned")
+		subLog.Error().Msg("no results returned")
 		return math.NaN(), errors.New("no results returned")
 	}
 
@@ -269,6 +243,7 @@ func (t *tiingo) GetLatestDataBefore(ctx context.Context, symbol string, metric 
 		return last.SplitFactor, nil
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
+		subLog.Error().Msg("un-supported metric")
 		return math.NaN(), errors.New("un-supported metric")
 	}
 }
@@ -277,12 +252,14 @@ func (t *tiingo) GetDataForPeriod(ctx context.Context, symbols []string, metric 
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "tiingo.GetDataForPeriod")
 	defer span.End()
 
+	subLog := log.With().Strs("Symbols", symbols).Str("Metric", metric).Str("Frequency", frequency).Time("Begin", begin).Time("End", end).Logger()
+
 	res := make([]*dataframe.DataFrame, 0, len(symbols))
 	errs := []error{}
 	ch := make(chan quoteResult)
 
 	for idx, chunk := range partitionArray(symbols, 10) {
-		log.Infof("GetMultipleData run chunk %d of %d at %s\n", idx, len(symbols)/10, time.Now().Format("15:04:05"))
+		subLog.Info().Int("Chunk", idx).Int("TotalChunks", len(symbols)/10).Msg("GetMultipleData run chunk")
 		for ii := range chunk {
 			go tiingoDownloadWorker(ch, strings.ToUpper(chunk[ii]), metric, frequency, begin, end, t)
 		}
@@ -292,10 +269,7 @@ func (t *tiingo) GetDataForPeriod(ctx context.Context, symbols []string, metric 
 			if v.Err == nil {
 				res = append(res, v.Data)
 			} else {
-				log.WithFields(log.Fields{
-					"Ticker": v.Ticker,
-					"Error":  v.Err,
-				}).Warn("Cannot download ticker data")
+				subLog.Warn().Err(v.Err).Str("Ticker", v.Ticker).Msg("cannot download ticker data")
 				errs = append(errs, v.Err)
 			}
 		}
@@ -319,6 +293,7 @@ func tiingoDownloadWorker(result chan<- quoteResult, symbol string, metric strin
 }
 
 func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+	subLog := log.With().Str("Symbol", symbol).Str("Metric", metric).Str("Frequency", frequency).Time("Begin", begin).Time("End", end).Logger()
 	validFrequencies := map[string]bool{
 		FrequencyDaily:   true,
 		FrequencyWeekly:  true,
@@ -327,13 +302,7 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 	}
 
 	if _, ok := validFrequencies[frequency]; !ok {
-		log.WithFields(log.Fields{
-			"Frequency": frequency,
-			"Symbol":    symbol,
-			"Metric":    metric,
-			"StartTime": begin.String(),
-			"EndTime":   end.String(),
-		}).Debug("Invalid frequency provided")
+		subLog.Debug().Msg("invalid frequency provided")
 		return nil, fmt.Errorf("invalid frequency '%s'", frequency)
 	}
 
@@ -351,58 +320,25 @@ func (t *tiingo) loadDataForPeriod(symbol string, metric string, frequency strin
 	res, ok := t.cache[url]
 	t.lock.RUnlock()
 
-	log.WithFields(log.Fields{
-		"symbol":    symbol,
-		"metric":    metric,
-		"frequency": frequency,
-		"begin":     begin,
-		"end":       end,
-		"cached":    ok,
-	}).Debug("load data from tiingo")
+	subLog.Debug().Bool("Cached", ok).Msg("load data from tiingo")
 
 	if !ok {
 		resp, err := http.Get(url)
 
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Url":       url,
-				"Symbol":    symbol,
-				"Metric":    metric,
-				"Frequency": frequency,
-				"StartTime": begin.String(),
-				"EndTime":   end.String(),
-				"Error":     err,
-			}).Warn("Failed to load eod prices")
+			subLog.Warn().Err(err).Str("Url", url).Msg("failed to load eod prices")
 			return nil, err
 		}
 
 		defer resp.Body.Close()
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Url":        url,
-				"Symbol":     symbol,
-				"Metric":     metric,
-				"Frequency":  frequency,
-				"StartTime":  begin.String(),
-				"EndTime":    end.String(),
-				"Error":      err,
-				"StatusCode": resp.StatusCode,
-			}).Warn("Failed to load eod prices -- reading body failed")
+			subLog.Warn().Err(err).Str("Url", url).Int("HTTPResponseStatusCode", resp.StatusCode).Msg("read eod price body failed")
 			return nil, err
 		}
 
 		if resp.StatusCode >= 400 {
-			log.WithFields(log.Fields{
-				"Url":        url,
-				"Symbol":     symbol,
-				"Metric":     metric,
-				"Frequency":  frequency,
-				"StartTime":  begin.String(),
-				"EndTime":    end.String(),
-				"Body":       string(body),
-				"StatusCode": resp.StatusCode,
-			}).Warn("Failed to load eod prices")
+			subLog.Warn().Err(err).Str("Url", url).Int("HTTPResponseStatusCode", resp.StatusCode).Bytes("Body", body).Msg("tiingo request failed")
 			return nil, fmt.Errorf("HTTP request returned invalid status code: %d", resp.StatusCode)
 		}
 

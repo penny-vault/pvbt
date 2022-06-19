@@ -23,7 +23,7 @@ import (
 
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -33,29 +33,23 @@ var pool *pgxpool.Pool
 
 func createUser(userID string) error {
 	if userID == "" {
-		log.Error("userID cannot be an empty string")
+		log.Error().Msg("userID cannot be an empty string")
 		return errors.New("userID cannot be an empty string")
 	}
 
-	log.WithFields(log.Fields{
-		"UserID": userID,
-	}).Info("creating new role")
+	subLog := log.With().Str("UserID", userID).Logger()
+	subLog.Info().Msg("creating new role")
+
 	trx, err := pool.Begin(context.Background())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-		}).Error("could not create new transaction")
+		subLog.Error().Err(err).Msg("could not create new transaction")
 		return err
 	}
 
 	// Make sure the current role is pvapi
 	_, err = trx.Exec(context.Background(), "SET ROLE pvapi")
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-		}).Error("could not switch to pvapi role")
+		subLog.Error().Err(err).Msg("could not switch to pvapi role")
 		trx.Rollback(context.Background())
 		return err
 	}
@@ -68,11 +62,7 @@ func createUser(userID string) error {
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		trx.Rollback(context.Background())
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-			"Query":  sql,
-		}).Error("failed to create role")
+		subLog.Error().Err(err).Str("Query", sql).Msg("failed to create role")
 		return err
 	}
 
@@ -83,21 +73,14 @@ func createUser(userID string) error {
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		trx.Rollback(context.Background())
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-			"Query":  sql,
-		}).Error("failed to grant priveleges to role")
+		subLog.Error().Err(err).Str("Query", sql).Msg("failed to grant priveleges to role")
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
 		trx.Rollback(context.Background())
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-		}).Error("failed to commit changes")
+		subLog.Error().Err(err).Msg("failed to commit changes")
 		return err
 	}
 
@@ -127,16 +110,15 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 		return nil, err
 	}
 
+	subLog := log.With().Str("UserID", userID).Logger()
+
 	// set user
 	ident := pgx.Identifier{userID}
 	sql := fmt.Sprintf("SET ROLE %s", ident.Sanitize())
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		// user doesn't exist -- create it
-		log.WithFields(log.Fields{
-			"UserID": userID,
-			"Error":  err,
-		}).Warn("role does not exist")
+		subLog.Warn().Err(err).Msg("role does not exist")
 		trx.Rollback(context.Background())
 		err = createUser(userID)
 		if err != nil {
@@ -164,10 +146,7 @@ func GetUsers() ([]string, error) {
 	SELECT oid::regrole::text AS rolename FROM cte;`
 	rows, err := trx.Query(context.Background(), sql, "pvapi")
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"Query": sql,
-		}).Warn("get list of database roles failed")
+		log.Warn().Err(err).Str("Query", sql).Msg("get list of database roles failed")
 		trx.Rollback(context.Background())
 		return nil, err
 	}
@@ -177,10 +156,7 @@ func GetUsers() ([]string, error) {
 		var roleName string
 		err := rows.Scan(&roleName)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error": err,
-				"Query": sql,
-			}).Warn("GetUser scan failed")
+			log.Warn().Err(err).Str("Query", sql).Msg("GetUser scan failed")
 			continue
 		}
 
@@ -193,10 +169,7 @@ func GetUsers() ([]string, error) {
 
 	err = rows.Err()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"Query": sql,
-		}).Warn("GetUser query read failed")
+		log.Warn().Err(err).Str("Query", sql).Msg("GetUser query read failed")
 		trx.Rollback(context.Background())
 		return nil, err
 	}

@@ -22,7 +22,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/penny-vault/pv-api/common"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 
 	"go.opentelemetry.io/otel"
@@ -62,7 +62,7 @@ func Setup() (func(context.Context) error, error) {
 	var client otlptrace.Client
 
 	if viper.GetBool("oltp.http") {
-		log.Info("Using HTTP(s) for OLTP connection")
+		log.Info().Msg("using HTTP(s) for OLTP connection")
 		client = otlptracehttp.NewClient(
 			otlptracehttp.WithEndpoint(viper.GetString("otlp.endpoint")),
 			otlptracehttp.WithHeaders(viper.GetStringMapString("otlp.headers")),

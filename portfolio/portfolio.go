@@ -39,7 +39,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/rocketlaunchr/dataframe-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/zeebo/blake3"
 )
 
@@ -109,12 +109,7 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 
 	err := computeTransactionSourceID(&t)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":             err,
-			"TransactionDate":   startDate,
-			"TransactionTicker": "$CASH",
-			"TransactionType":   DepositTransaction,
-		}).Warn("couldn't compute SourceID for initial deposit")
+		log.Warn().Err(err).Time("TransactionDate", startDate).Str("TransactionTicker", "$CASH").Str("TransactionType", DepositTransaction).Msg("couldn't compute SourceID for initial deposit")
 	}
 	p.Transactions = append(p.Transactions, &t)
 	model.holdings = map[string]float64{
@@ -197,15 +192,11 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "security price data not available")
-				log.WithFields(log.Fields{
-					"Symbol": k,
-					"Date":   date,
-					"Price":  price,
-				}).Warn("security price data not available.")
+				log.Warn().Str("Symbol", k).Time("Date", date).Float64("Price", price).Msg("security price data not available.")
 				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 
-			log.Debugf("[Retrieve price data] Date = %s, Ticker = %s, Price = %.5f, Value = %.5f", date, k, price, v*price)
+			log.Debug().Time("Date", date).Str("Ticker", k).Float64("Price", price).Float64("Value", v*price).Msg("Retrieve price data")
 
 			if !math.IsNaN(price) {
 				securityValue += v * price
@@ -221,10 +212,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 			if err != nil {
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "security price data not available")
-				log.WithFields(log.Fields{
-					"Symbol": k,
-					"Date":   date,
-				}).Warn("security price data not available")
+				log.Warn().Err(err).Str("Symbol", k).Time("Date", date).Msg("security price data not available")
 				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
 			}
 			priceMap[k] = price
@@ -245,21 +233,15 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 		}
 
 		if v <= 1.0e-5 {
-			log.WithFields(log.Fields{
-				"Ticker":   k,
-				"Kind":     "SellTransaction",
-				"Shares":   v,
-				"Holdings": pm.holdings,
-			}).Warn("holdings are out of sync")
+			log.Warn().Str("Ticker", k).Str("Kind", "SellTransaction").Float64("Shares", v).Msg("holdings are out of sync")
 			return errors.New("holdings are out of sync, cannot rebalance portfolio")
 		}
 
 		if _, ok := target[k]; !ok {
 			price := priceMap[k]
 			if math.IsNaN(priceMap[k]) {
-				log.Warnf("%s price is not known - writing off asset", k)
+				log.Warn().Float64("Cash", cash).Float64("Shares", v).Str("Ticker", k).Msg("price is not known - writing off asset")
 				price = 0.0
-				fmt.Printf("\tcash = %.2f  v = %.2f  price = %.2f\n", cash, v, price)
 			}
 			trxId, _ := uuid.New().MarshalBinary()
 			t := Transaction{
@@ -278,12 +260,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 
 			err := computeTransactionSourceID(&t)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error":             err,
-					"TransactionDate":   date,
-					"TransactionTicker": k,
-					"TransactionType":   SellTransaction,
-				}).Warn("couldn't compute SourceID for transaction")
+				log.Warn().Err(err).Time("TransactionDate", date).Str("TransactionTicker", k).Str("TransactionType", SellTransaction).Msg("couldn't compute SourceID for transaction")
 			}
 
 			sells = append(sells, &t)
@@ -305,7 +282,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 			if targetDollars < currentDollars {
 				// Need to sell to target amount
 				if math.IsNaN(price) {
-					log.Fatalf("No known price for asset %s; Cannot sell partial", k)
+					log.Error().Str("Ticker", k).Msg("No known price for asset; Cannot sell partial")
 					price = 0.0
 					newHoldings[k] = 0.0
 				}
@@ -313,15 +290,15 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				toSellDollars := currentDollars - targetDollars
 				toSellShares := toSellDollars / price
 				if toSellDollars <= 1.0e-5 {
-					log.WithFields(log.Fields{
-						"Ticker":         k,
-						"Kind":           "SellTransaction",
-						"Shares":         toSellShares,
-						"Date":           date,
-						"Price":          price,
-						"CurrentDollars": currentDollars,
-						"TargetDollars":  targetDollars,
-					}).Warn("refusing to sell 0 shares")
+					log.Error().
+						Str("Ticker", k).
+						Str("Kind", "SellTransaction").
+						Float64("Shares", toSellShares).
+						Time("Date", date).
+						Float64("Price", price).
+						Float64("CurrentDollars", currentDollars).
+						Float64("TargetDollars", targetDollars).
+						Msg("refusing to sell 0 shares")
 					return errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
 				}
 
@@ -343,12 +320,12 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 
 				err := computeTransactionSourceID(&t)
 				if err != nil {
-					log.WithFields(log.Fields{
-						"Error":             err,
-						"TransactionDate":   date,
-						"TransactionTicker": k,
-						"TransactionType":   SellTransaction,
-					}).Warn("couldn't compute SourceID for transaction")
+					log.Error().
+						Err(err).
+						Time("TransactionDate", date).
+						Str("TransactionTicker", k).
+						Str("TransactionType", SellTransaction).
+						Msg("couldn't compute SourceID for transaction")
 				}
 
 				sells = append(sells, &t)
@@ -357,22 +334,11 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				toBuyDollars := targetDollars - currentDollars
 				toBuyShares := toBuyDollars / price
 
+				subLog := log.With().Str("Ticker", k).Str("Kind", "BuyTransaction").Float64("Shares", v).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
 				if toBuyShares <= 1.0e-5 {
-					log.WithFields(log.Fields{
-						"Ticker":     k,
-						"Kind":       "BuyTransaction",
-						"Shares":     v,
-						"TotalValue": toBuyDollars,
-						"Date":       date,
-					}).Warn("Refusing to buy 0 shares")
+					subLog.Warn().Msg("refusing to buy 0 shares")
 				} else if math.IsNaN(price) {
-					log.WithFields(log.Fields{
-						"Ticker":     k,
-						"Kind":       "BuyTransaction",
-						"Shares":     v,
-						"TotalValue": toBuyDollars,
-						"Date":       date,
-					}).Warn("Refusing to buy shares of asset with unknown price")
+					subLog.Warn().Msg("refusing to buy shares of asset with unknown price")
 				} else {
 					trxId, _ := uuid.New().MarshalBinary()
 					t := Transaction{
@@ -387,21 +353,16 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 					}
 
 					if math.IsNaN(toBuyDollars) {
-						log.Warnf("toBuyDollars is NaN %s\n", k)
+						subLog.Warn().Msg("toBuyDollars is NaN")
 					} else {
 						cash -= toBuyDollars
 					}
 
-					log.Debugf("[Buy additional shares] Date = %s, Ticker = %s, Price = %.5f, Shares = %.5f, Value = %.5f", date, k, priceMap[k], toBuyShares, toBuyDollars)
+					subLog.Debug().Msg("Buy additional shares")
 
 					err := computeTransactionSourceID(&t)
 					if err != nil {
-						log.WithFields(log.Fields{
-							"Error":             err,
-							"TransactionDate":   date,
-							"TransactionTicker": k,
-							"TransactionType":   BuyTransaction,
-						}).Warn("couldn't compute SourceID for transaction")
+						subLog.Warn().Err(err).Msg("couldn't compute SourceID for transaction")
 					}
 
 					buys = append(buys, &t)
@@ -413,22 +374,11 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 			price := priceMap[k]
 			shares := value / price
 
+			subLog := log.With().Str("Ticker", k).Str("Kind", "BuyTransaction").Float64("Shares", v).Float64("TotalValue", value).Time("Date", date).Logger()
 			if shares <= 1.0e-5 {
-				log.WithFields(log.Fields{
-					"Ticker":     k,
-					"Kind":       "BuyTransaction",
-					"Shares":     v,
-					"TotalValue": value,
-					"Date":       date,
-				}).Warn("Refusing to buy 0 shares")
+				subLog.Warn().Msg("refusing to buy 0 shares")
 			} else if math.IsNaN(price) {
-				log.WithFields(log.Fields{
-					"Ticker":     k,
-					"Kind":       "BuyTransaction",
-					"Shares":     v,
-					"TotalValue": value,
-					"Date":       date,
-				}).Warn("Refusing to buy shares of asset with unknown price")
+				subLog.Warn().Msg("refusing to buy shares of asset with unknown price")
 			} else {
 				newHoldings[k] = shares
 				trxId, _ := uuid.New().MarshalBinary()
@@ -444,16 +394,11 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				}
 
 				cash -= value
-				log.Debugf("[Buy new holding] Date = %s, Ticker = %s, Price = %.5f, Shares = %.5f, Value = %.5f", date, k, priceMap[k], shares, value)
+				subLog.Debug().Msg("buy new holding")
 
 				err := computeTransactionSourceID(&t)
 				if err != nil {
-					log.WithFields(log.Fields{
-						"Error":             err,
-						"TransactionDate":   date,
-						"TransactionTicker": k,
-						"TransactionType":   BuyTransaction,
-					}).Warn("couldn't compute SourceID for transaction")
+					subLog.Warn().Msg("couldn't compute SourceID for transaction")
 				}
 
 				buys = append(buys, &t)
@@ -484,10 +429,7 @@ func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")
-
-		log.WithFields(log.Fields{
-			"OriginalError": err,
-		}).Warn(err)
+		log.Warn().Err(err).Msg("invest target portfolio failed")
 		return plan
 	}
 
@@ -551,8 +493,8 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 
 	p := pm.Portfolio
 
-	log.Info("Building target portfolio")
-	log.Infof("EOD price cache size %d MB", pm.dataProxy.HashSize()/(1024.0*1024.0))
+	log.Info().Msg("building target portfolio")
+	log.Info().Int("CacheSizeMB", pm.dataProxy.HashSize()/(1024.0*1024.0)).Msg("EOD price cache size")
 	if target.NRows() == 0 {
 		return nil
 	}
@@ -561,10 +503,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")
-
-		log.WithFields(log.Fields{
-			"OriginalError": err,
-		}).Warn("could not find date index in data frame")
+		log.Warn().Msg("could not find date index in data frame")
 		return err
 	}
 
@@ -599,10 +538,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")
-
-		log.WithFields(log.Fields{
-			"OriginalError": err,
-		}).Warn(err)
+		log.Warn().Err(err).Str("FieldName", common.TickerName).Msg("target portfolio does not have required field")
 		return fmt.Errorf("missing required column: %s", common.TickerName)
 	}
 
@@ -692,16 +628,6 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 			return err
 		}
 	}
-	// t4 := time.Now()
-
-	/*
-		log.WithFields(log.Fields{
-			"QuoteDownload":      t2.Sub(t1).Round(time.Millisecond),
-			"CreateTransactions": t4.Sub(t3).Round(time.Millisecond),
-			"NumRebalances":      target.NRows(),
-		}).Info("TargetPortfolio runtimes")
-	*/
-
 	return nil
 }
 
@@ -730,10 +656,7 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 	through = through.AddDate(0, 0, 1)
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
-		log.WithFields(log.Fields{
-			"Through": through,
-			"Start":   from,
-		}).Warn("start date occurs after through date")
+		log.Warn().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
 		return errors.New("start date occurs after through date")
 	}
 
@@ -760,7 +683,6 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 	if len(symbols) > 0 {
 		divMap, errs := pm.dataProxy.GetDataFrame(ctx, data.MetricDividendCash, symbols...)
 		if errs != nil {
-			log.Error(errs)
 			return errors.New("failed to download dividend data for tickers")
 		}
 		dateSeriesIdx := divMap.MustNameToColumn(common.DateIdx)
@@ -793,7 +715,6 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 		dateSeriesIdx = splitMap.MustNameToColumn(common.DateIdx)
 		dateSeries = splitMap.Series[dateSeriesIdx]
 		if errs != nil {
-			log.Error(errs)
 			return errors.New("failed to download split data for tickers")
 		}
 		for _, series := range splitMap.Series {
@@ -955,11 +876,11 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 
 	if through.Before(pm.dataProxy.Begin) {
 		span.SetStatus(codes.Error, "cannot update portfolio due to dates being out of order")
-		log.WithFields(log.Fields{
-			"Begin":       pm.dataProxy.Begin,
-			"End":         through,
-			"PortfolioID": hex.EncodeToString(pm.Portfolio.ID),
-		}).Error("cannot update portfolio dates are out of order")
+		log.Error().
+			Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
+			Time("Begin", pm.dataProxy.Begin).
+			Time("End", through).
+			Msg("cannot update portfolio dates are out of order")
 		return fmt.Errorf("cannot update portfolio, through must be greater than %s", pm.dataProxy.Begin)
 	}
 
@@ -972,10 +893,10 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 	strategy, ok := strategies.StrategyMap[p.StrategyShortcode]
 	if !ok {
 		span.SetStatus(codes.Error, "strategy not found")
-		log.WithFields(log.Fields{
-			"Portfolio": p.ID,
-			"Strategy":  p.StrategyShortcode,
-		}).Error("portfolio strategy not found")
+		log.Error().
+			Str("Portfolio", hex.EncodeToString(p.ID)).
+			Str("Strategy", p.StrategyShortcode).
+			Msg("portfolio strategy not found")
 		return errors.New("strategy not found")
 	}
 
@@ -983,11 +904,11 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to initialize portfolio strategy")
-		log.WithFields(log.Fields{
-			"Error":     err,
-			"Portfolio": p.ID,
-			"Strategy":  p.StrategyShortcode,
-		}).Error("failed to initialize portfolio strategy")
+		log.Error().
+			Err(err).
+			Str("PortfolioID", hex.EncodeToString(p.ID)).
+			Str("Strategy", p.StrategyShortcode).
+			Msg("failed to initialize portfolio strategy")
 		return err
 	}
 
@@ -995,11 +916,11 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to execute portfolio strategy")
-		log.WithFields(log.Fields{
-			"Error":     err,
-			"Portfolio": hex.EncodeToString(p.ID),
-			"Strategy":  p.StrategyShortcode,
-		}).Error("failed to run portfolio strategy")
+		log.Error().
+			Err(err).
+			Str("PortfolioID", hex.EncodeToString(p.ID)).
+			Str("Strategy", p.StrategyShortcode).
+			Msg("failed to run portfolio strategy")
 		return err
 	}
 
@@ -1008,22 +929,20 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not trim target portfolio to date range")
-		log.WithFields(log.Fields{
-			"StartDate": startDate,
-			"EndDate":   through,
-			"Error":     err,
-		}).Error("could not trim target portfolio to date range")
+		log.Error().Err(err).
+			Time("StartDate", startDate).
+			Time("EndDate", through).
+			Msg("could not trim target portfolio to date range")
 	}
 
 	err = pm.TargetPortfolio(ctx, targetPortfolio)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to apply target porfolio")
-		log.WithFields(log.Fields{
-			"Error":     err,
-			"Portfolio": hex.EncodeToString(p.ID),
-			"Strategy":  p.StrategyShortcode,
-		}).Error("failed to apply target portfolio")
+		log.Error().Err(err).
+			Str("PortfolioID", hex.EncodeToString(p.ID)).
+			Str("Strategy", p.StrategyShortcode).
+			Msg("failed to apply target portfolio")
 		return err
 	}
 
@@ -1041,11 +960,10 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	p := pm.Portfolio
 	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": p.ID,
-			"UserID":      p.UserID,
-		}).Error("unable to get database transaction object")
+		log.Error().Err(err).
+			Str("PortfolioID", hex.EncodeToString(p.ID)).
+			Str("UserID", p.UserID).
+			Msg("unable to get database transaction object")
 		return nil
 	}
 
@@ -1072,12 +990,11 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	ORDER BY sequence_num`
 	rows, err := trx.Query(context.Background(), transactionSQL, p.ID, p.UserID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": p.ID,
-			"UserID":      p.UserID,
-			"Query":       transactionSQL,
-		}).Warn("could not load portfolio transactions from database")
+		log.Error().Err(err).
+			Str("PortfolioID", hex.EncodeToString(p.ID)).
+			Str("UserID", p.UserID).
+			Str("Query", transactionSQL).
+			Msg("could not load portfolio transactions from database")
 		trx.Rollback(context.Background())
 		return err
 	}
@@ -1097,12 +1014,11 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 			&t.Justification, &t.Kind, &memo, &pricePerShare, &shares, &t.Source,
 			&t.SourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":       err,
-				"PortfolioID": p.ID,
-				"UserID":      p.UserID,
-				"Query":       transactionSQL,
-			}).Warn("failed scanning row into transaction fields")
+			log.Warn().Err(err).
+				Str("PortfolioID", hex.EncodeToString(p.ID)).
+				Str("UserID", p.UserID).
+				Str("Query", transactionSQL).
+				Msg("failed scanning row into transaction fields")
 			trx.Rollback(context.Background())
 			return err
 		}
@@ -1131,19 +1047,14 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 }
 
 func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*PortfolioModel, error) {
+	subLog := log.With().Str("UserID", userID).Strs("PortfolioIDs", portfolioIDs).Logger()
 	if userID == "" {
-		log.WithFields(log.Fields{
-			"PortfolioID": portfolioIDs,
-			"UserID":      userID,
-		}).Error("userID cannot be an empty string")
+		subLog.Error().Msg("userID cannot be an empty string")
 		return nil, errors.New("userID cannot be an empty string")
 	}
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-		}).Error("failed to create database transaction for user")
+		subLog.Error().Msg("failed to create database transaction for user")
 		return nil, err
 	}
 
@@ -1189,11 +1100,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	}
 
 	if err != nil {
-		log.WithFields(log.Fields{
-			"UserID":      userID,
-			"PortfolioID": portfolioIDs,
-			"Error":       err,
-		}).Warn("could not load portfolio from database")
+		subLog.Warn().Err(err).Msg("could not load portfolio from database")
 		trx.Rollback(context.Background())
 		return nil, err
 	}
@@ -1223,11 +1130,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		p.StartDate = p.StartDate.In(tz)
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"UserID":      userID,
-				"PortfolioID": portfolioIDs,
-				"Error":       err,
-			}).Warn("could not load portfolio from database")
+			subLog.Warn().Err(err).Msg("could not load portfolio from database")
 			trx.Rollback(context.Background())
 			return nil, err
 		}
@@ -1252,34 +1155,25 @@ func (pm *PortfolioModel) Save(userID string) error {
 	p := pm.Portfolio
 	p.UserID = userID
 
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
+
 	// Save to database
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":  err,
-			"UserID": userID,
-		}).Error("unable to get database transaction for user")
+		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
 	err = pm.SaveWithTransaction(trx, userID, false)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-		}).Warn("failed to create portfolio transactions")
+		subLog.Error().Err(err).Msg("failed to create portfolio transactions")
 		trx.Rollback(context.Background())
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-		}).Warn("failed to commit portfolio transaction")
+		subLog.Error().Err(err).Msg("failed to commit portfolio transaction")
 		trx.Rollback(context.Background())
 		return err
 	}
@@ -1290,6 +1184,7 @@ func (pm *PortfolioModel) Save(userID string) error {
 func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) error {
 	temporary := !permanent
 	p := pm.Portfolio
+	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
 	portfolioSQL := `
 	INSERT INTO portfolios (
 		"id",
@@ -1327,33 +1222,18 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		predicted_bytes=$11`
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-			"Query":       portfolioSQL,
-		}).Warn("failed to marshal holdings")
+		subLog.Error().Err(err).Msg("failed to marshal holdings")
 		trx.Rollback(context.Background())
 		return err
 	}
 	predictedBytes, err := p.PredictedAssets.MarshalBinary()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-			"Query":       portfolioSQL,
-		}).Warn("Could not marshal predicted bytes")
+		subLog.Error().Err(err).Msg("Could not marshal predicted bytes")
 	}
 	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
 		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"PortfolioID": p.ID,
-			"Strategy":    p.StrategyShortcode,
-			"Error":       err,
-			"Query":       portfolioSQL,
-		}).Warn("failed to save portfolio")
+		subLog.Error().Err(err).Str("Query", portfolioSQL).Msg("failed to save portfolio")
 		trx.Rollback(context.Background())
 		return err
 	}
@@ -1363,13 +1243,14 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 
 func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	p := pm.Portfolio
-	log.WithFields(log.Fields{
-		"PortfolioID":       hex.EncodeToString(p.ID),
-		"PortfolioName":     p.Name,
-		"Strategy":          p.StrategyShortcode,
-		"StrategyArguments": p.StrategyArguments,
-		"NumTransactions":   len(p.Transactions),
-	}).Info("Saving portfolio transactions")
+
+	log.Info().
+		Str("PortfolioID", hex.EncodeToString(p.ID)).
+		Str("PortfolioName", p.Name).
+		Str("Strategy", p.StrategyShortcode).
+		Str("StrategyArguments", p.StrategyArguments).
+		Int("NumTransactions", len(p.Transactions)).
+		Msg("Saving portfolio transactions")
 
 	transactionSQL := `
 	INSERT INTO portfolio_transactions (
@@ -1434,11 +1315,11 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 	now := time.Now()
 	for idx, t := range p.Transactions {
 		if t.Date.After(now) {
-			log.WithFields(log.Fields{
-				"TransactionID":   t.ID,
-				"TransactionDate": t.Date,
-				"Now":             now,
-			}).Info("Not saving transaction because it is in the future")
+			log.Info().
+				Str("TransactionID", hex.EncodeToString(t.ID)).
+				Time("TransactionDate", t.Date).
+				Time("Now", now).
+				Msg("not saving transaction because it is in the future")
 		}
 		if t.TaxDisposition == "" {
 			t.TaxDisposition = "TAXABLE"
@@ -1465,12 +1346,11 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 			userID,           // 19
 		)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"PortfolioID":   p.ID,
-				"TransactionID": t.ID,
-				"Error":         err,
-				"Query":         transactionSQL,
-			}).Warn("failed to save portfolio")
+			log.Warn().Err(err).
+				Str("PortfolioID", hex.EncodeToString(p.ID)).
+				Str("TransactionID", hex.EncodeToString(t.ID)).
+				Str("Query", transactionSQL).
+				Msg("failed to save portfolio")
 			trx.Rollback(context.Background())
 			return err
 		}

@@ -29,7 +29,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // Provider interface for retrieving quotes
@@ -83,16 +83,14 @@ func InitializeDataManager() {
 	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), []string{"DGS3MO"}, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Fatal("Cannot load risk free rate")
+		log.Fatal().Err(err).Msg("cannot load risk free rate")
 	}
 
 	// schedule a timer to update riskFreeRate in 24 hours
 	refreshTimer := time.NewTimer(24 * time.Hour)
 	go func() {
 		<-refreshTimer.C
-		log.Info("Refreshing risk free rate")
+		log.Info().Msg("refreshing risk free rate")
 		InitializeDataManager()
 	}()
 }
@@ -112,7 +110,7 @@ func NewManager(credentials map[string]string) Manager {
 		tiingo := NewTiingo(val)
 		m.RegisterDataProvider(tiingo)
 	} else {
-		log.Warn("No tiingo API key provided")
+		log.Warn().Msg("no tiingo API key provided")
 	}
 
 	pvdb := NewPVDB(m.cache, buildHashKey)
@@ -181,7 +179,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
 	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, FrequencyDaily, begin, end)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Err(err).Msg("could not retrieve security eod prices")
 		return err
 	}
 
@@ -222,12 +220,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 				m.cache[key] = vals[s].(float64)
 			} else {
 				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
-				log.WithFields(log.Fields{
-					"Date":   d,
-					"Metric": metric,
-					"Symbol": s,
-					"Key":    key,
-				}).Warn("Setting cache key to NaN")
+				log.Warn().Time("Date", d).Str("Metric", metric).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
 				m.cache[key] = math.NaN()
 			}
 		}
@@ -269,7 +262,7 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric
 	if !ok {
 		val, err = m.providers["security"].GetLatestDataBefore(ctx, symbol, metric, before)
 		if err != nil {
-			log.Warn(err)
+			log.Warn().Err(err).Msg("get latest data before failed")
 			return math.NaN(), err
 		}
 		m.lastCache[symbol] = val

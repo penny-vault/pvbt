@@ -26,12 +26,12 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/goccy/go-json"
-	log "github.com/sirupsen/logrus"
 )
 
 type Backtest struct {
@@ -109,41 +109,25 @@ func (b *Backtest) Save(userID string, permanent bool) error {
 	start := time.Now()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": hex.EncodeToString(b.PortfolioModel.Portfolio.ID),
-			"UserID":      userID,
-		}).Error("unable to get database transaction for user")
+		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("unable to get database transaction for user")
 		return err
 	}
 
 	err = b.PortfolioModel.SaveWithTransaction(trx, userID, permanent)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": hex.EncodeToString(b.PortfolioModel.Portfolio.ID),
-			"UserID":      userID,
-		}).Error("could not save portfolio")
+		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save portfolio")
 		return err
 	}
 
 	err = b.Performance.SaveWithTransaction(trx, userID)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": hex.EncodeToString(b.PortfolioModel.Portfolio.ID),
-			"UserID":      userID,
-		}).Error("could not save performance measurements")
+		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save performance measurement")
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":       err,
-			"PortfolioID": hex.EncodeToString(b.PortfolioModel.Portfolio.ID),
-			"UserID":      userID,
-		}).Error("could not commit database transaction")
+		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not commit database transaction")
 		return err
 	}
 
@@ -151,15 +135,10 @@ func (b *Backtest) Save(userID string, permanent bool) error {
 	saveDur := stop.Sub(start).Round(time.Millisecond)
 
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("failed to save performance measurements to DB")
+		log.Warn().Err(err).Msg("failed to save performance measurements to DB")
 		return err
 	}
 
-	log.WithFields(log.Fields{
-		"Dur": saveDur,
-	}).Info("Saved to DB")
-
+	log.Info().Dur("Duration", saveDur).Msg("saved to DB")
 	return nil
 }

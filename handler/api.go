@@ -25,14 +25,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/gofiber/fiber/v2"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
-
-	"github.com/goccy/go-json"
-	"github.com/gofiber/fiber/v2"
 	"github.com/rocketlaunchr/dataframe-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // ApiKey returns a hex-encoded JSON string containing the userID and tiingoToken
@@ -48,9 +47,7 @@ func ApiKey(c *fiber.Ctx) error {
 
 	jsonPVToken, err := json.Marshal(pvToken)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not encode pvToken")
+		log.Warn().Err(err).Msg("could not encode pvToken")
 		return fiber.ErrBadRequest
 	}
 
@@ -59,25 +56,19 @@ func ApiKey(c *fiber.Ctx) error {
 	zw := gzip.NewWriter(&buf)
 	_, err = zw.Write(jsonPVToken)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not gzip data")
+		log.Warn().Err(err).Msg("could not gzip data")
 		return fiber.ErrInternalServerError
 	}
 
 	if err := zw.Close(); err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not gzip data")
+		log.Warn().Err(err).Msg("could not close gzipper")
 		return fiber.ErrInternalServerError
 	}
 
 	// encrypt it
 	encryptedToken, err := common.Encrypt(buf.Bytes())
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Warn("could not encrypt data")
+		log.Warn().Err(err).Msg("could not encrypt data")
 		return fiber.ErrBadRequest
 	}
 
@@ -98,9 +89,7 @@ func Ping(c *fiber.Ctx) error {
 	var response PingResponse
 	now, err := time.Now().MarshalText()
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Error("error while getting time in ping")
+		log.Error().Err(err).Msg("error while getting time in ping")
 		response = PingResponse{
 			Status:  "error",
 			Message: err.Error(),
@@ -121,25 +110,20 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	startDateStr := c.Query("startDate", "1990-01-01")
 	endDateStr := c.Query("endDate", "now")
 
+	subLog := log.With().Str("StartDateStr", startDateStr).Str("EndDateStr", endDateStr).Logger()
+
 	var startDate time.Time
 	var endDate time.Time
 
 	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Timezone": "America/New_York",
-			"Error":    err,
-		}).Warn("Could not load timezone")
+		subLog.Warn().Err(err).Msg("could not load nyc timezone")
 		return fiber.ErrInternalServerError
 	}
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"StartDateStr": startDateStr,
-			"EndDateStr":   endDateStr,
-			"Error":        err,
-		}).Error("Cannoy parse start date query parameter")
+		subLog.Error().Err(err).Msg("cannot parse start date query parameter")
 		return fiber.ErrNotAcceptable
 	}
 
@@ -151,11 +135,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		var err error
 		endDate, err = time.ParseInLocation("2006-01-02", endDateStr, tz)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"StartDateStr": startDateStr,
-				"EndDateStr":   endDateStr,
-				"Error":        err,
-			}).Error("Cannoy parse end date query parameter")
+			subLog.Error().Err(err).Msg("cannot parse end date query parameter")
 			return fiber.ErrNotAcceptable
 		}
 	}
@@ -164,10 +144,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		if err := recover(); err != nil {
 			stackSlice := make([]byte, 1024)
 			runtime.Stack(stackSlice, false)
-			log.WithFields(log.Fields{
-				"error":      err,
-				"StackTrace": string(stackSlice),
-			}).Error("Caught panic in /v1/benchmark")
+			subLog.Error().Stack().Msg("caught panic in /v1/benchmark")
 			resp = fiber.ErrInternalServerError
 		}
 	}()
@@ -183,13 +160,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 
 	snapToStart, err := strconv.ParseBool(c.Query("snapToStart", "true"))
 	if err != nil {
-		log.WithFields(
-			log.Fields{
-				"Error":       err,
-				"StatusCode":  fiber.ErrBadRequest,
-				"SnapToStart": c.Query("snapToStart"),
-				"Uri":         "/v1/benchmark",
-			}).Warn("/v1/benchmark called with invalid snapToStart")
+		subLog.Warn().Int("StatusCode", fiber.ErrBadRequest.Code).Err(err).Str("SnapToStart", c.Query("snapToStart")).Str("Uri", "/v1/benchmark").Msg("/v1/benchmark called with invalid snapToStart")
 		return fiber.ErrBadRequest
 	}
 
@@ -198,10 +169,6 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	if snapToStart {
 		securityStart, err := manager.GetDataFrame(context.Background(), data.MetricAdjustedClose, ticker)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Symbol": ticker,
-				"Error":  err,
-			}).Warn("Could not load symbol data")
 			return fiber.ErrBadRequest
 		}
 		row := securityStart.Row(0, true, dataframe.SeriesName)
@@ -217,10 +184,6 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)
 	err = p.TargetPortfolio(context.Background(), targetPortfolio)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error":      err,
-			"StatusCode": fiber.ErrBadRequest,
-		}).Warn("Error creating target portfolio")
 		return fiber.ErrBadRequest
 	}
 
@@ -228,7 +191,6 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	performance := portfolio.NewPerformance(p.Portfolio)
 	err = performance.CalculateThrough(context.Background(), p, manager.End)
 	if err != nil {
-		log.Error(err)
 		return fiber.ErrBadRequest
 	}
 

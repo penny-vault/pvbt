@@ -29,7 +29,6 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/jwks"
 	"github.com/penny-vault/pv-api/middleware"
-	"github.com/penny-vault/pv-api/observability/loki"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
@@ -38,10 +37,9 @@ import (
 	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-
-	log "github.com/sirupsen/logrus"
 )
 
 func init() {
@@ -60,7 +58,7 @@ var serveCmd = &cobra.Command{
 		if Profile {
 			f, err := os.Create("profile.out")
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Msg("could not create profile.out")
 			}
 			pprof.StartCPUProfile(f)
 			defer pprof.StopCPUProfile()
@@ -69,27 +67,26 @@ var serveCmd = &cobra.Command{
 		if Trace {
 			f, err := os.Create("trace.out")
 			if err != nil {
-				log.Fatalf("failed to create trace output file: %v", err)
+				log.Error().Err(err).Msg("failed to create trace output file")
+				os.Exit(1)
 			}
 			defer func() {
 				if err := f.Close(); err != nil {
-					log.Fatalf("failed to close trace file: %v", err)
+					log.Error().Err(err).Msg("failed to close trace file")
+					os.Exit(1)
 				}
 			}()
 
 			if err := trace.Start(f); err != nil {
-				log.Fatalf("failed to start trace: %v", err)
+				log.Error().Err(err).Msg("failed to start trace")
+				os.Exit(1)
 			}
 			defer trace.Stop()
 		}
 
 		common.SetupLogging()
 		common.SetupCache()
-		loki_url := viper.GetString("log.loki_url")
-		if loki_url != "" {
-			loki.Init()
-		}
-		log.Info("Initialized logging")
+		log.Info().Msg("initialized logging")
 
 		// setup open telemetry
 		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
@@ -97,27 +94,30 @@ var serveCmd = &cobra.Command{
 
 		shutdown, err := opentelemetry.Setup()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("opentelemetry setup failed")
+			os.Exit(1)
 		}
 		defer func() {
 			if err := shutdown(ctx); err != nil {
-				log.Fatal("failed to shutdown TracerProvider: %w", err)
+				log.Error().Err(err).Msg("failed to shutdown trace provider")
+				os.Exit(1)
 			}
 		}()
-		log.Info("Initialized open telemetry")
+		log.Info().Msg("initialized open telemetry")
 
 		// setup database
 		if err := database.Connect(); err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("database connection failed")
+			os.Exit(1)
 		}
-		log.Info("Connected to database")
+		log.Info().Msg("connected to database")
 
 		tradecron.InitializeTradeCron()
-		log.Info("Initialized TradeCron service")
+		log.Info().Msg("initialized TradeCron service")
 
 		// Initialize data framework
 		data.InitializeDataManager()
-		log.Info("Initialized data framework")
+		log.Info().Msg("initialized data framework")
 
 		// Create new Fiber instance
 		app := fiber.New()
@@ -130,7 +130,8 @@ var serveCmd = &cobra.Command{
 			fmt.Printf("Received signal: '%s'; shutting down...\n", sig.String())
 			err = app.Shutdown()
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Msg("app shutdown failed")
+				os.Exit(1)
 			}
 		}()
 
@@ -163,7 +164,8 @@ var serveCmd = &cobra.Command{
 		// Start server on http://${heroku-url}:${port}
 		err = app.Listen(":" + viper.GetString("server.port"))
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("app.Listen returned an error")
+			os.Exit(1)
 		}
 	},
 }

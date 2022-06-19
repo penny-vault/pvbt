@@ -17,11 +17,12 @@ package cmd
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/rs/zerolog/log"
 
-	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -45,7 +46,8 @@ var purgeCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("could not connect to database")
+			os.Exit(1)
 		}
 
 		userList := make([]string, 0)
@@ -63,47 +65,32 @@ var purgeCmd = &cobra.Command{
 		maxAge := time.Now().Add(maxAgeDuration)
 
 		for _, u := range userList {
+			subLog := log.With().Str("User", u).Logger()
 			trx, err := database.TrxForUser(u)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-					"User":  u,
-				}).Error("could not get database transaction")
+				subLog.Error().Err(err).Msg("could not get database transaction")
 			}
 
 			var cnt int64
 			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-					"User":  u,
-				}).Error("could not get expired portfolio count")
+				subLog.Error().Err(err).Msg("could not get expired portfolio count")
 				trx.Rollback(context.Background())
 				continue
 			}
 
-			log.WithFields(log.Fields{
-				"NumExpiredPortfolios": cnt,
-				"MaxAge":               maxAge,
-				"User":                 u,
-			}).Info("number of expired portfolios")
+			subLog.Info().Int64("NumExpiredPortfolios", cnt).Time("MaxAge", maxAge).Msg("number of expired portfolios")
 
 			_, err = trx.Exec(context.Background(), "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-					"User":  u,
-				}).Error("could not delete portfolios")
+				subLog.Error().Err(err).Msg("could not delete portfolios")
 				trx.Rollback(context.Background())
 				continue
 			}
 
 			err = trx.Commit(context.Background())
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-					"User":  u,
-				}).Error("could not delete portfolios")
+				subLog.Error().Err(err).Msg("could not delete portfolios")
 			}
 		}
 	},
