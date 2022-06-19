@@ -5,10 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
-### Fixed
-- When pvapi was running for a long time (>24 hrs) risk free rate data would become
-  out-dated. Set a refresh timer every 24 hours to update this data
-- Periodic refresh of JSON Web Key Set incase it is invalidated
+### Added
+- Additional metrics in strategy list API; including: max draw down, downside risk, std. deviation, and more
+- OpenAPI 3.0 documentation
+- Keller's Protective Asset Allocation strategy (PAA)
+- OpenTelemetry tracing
+- Seeking Alpha SEEK algorithm
+- MDEP algorithm
 
 ### Changed
 - /v1/ api now returns the current time in it's message
@@ -16,10 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switch to faster JSON serializer/deserializer: goccy/go-json, in some cases
   it is up to 2x faster
 
-### Added
-- Additional metrics in strategy list API; including: max draw down, downside risk, std. deviation, and more
-- OpenAPI 3.0 documentation
-- Keller's Protective Asset Allocation strategy (PAA)
+### Fixed
+- When pvapi was running for a long time (>24 hrs) risk free rate data would become
+  out-dated. Set a refresh timer every 24 hours to update this data
+- Periodic refresh of JSON Web Key Set incase it is invalidated
 
 ## [0.3.1] - 2021-02-28
 ### Fixed
@@ -57,9 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock data retrieval interface
 - Acclerating Dual Momentum strategy
 
-[0.3.2]: https://github.com/jdfergason/pv-api/releases/tag/v0.3.2
-[0.3.1]: https://github.com/jdfergason/pv-api/releases/tag/v0.3.1
-[0.3.0]: https://github.com/jdfergason/pv-api/releases/tag/v0.3.0
-[0.2.0]: https://github.com/jdfergason/pv-api/releases/tag/v0.2.0
-[0.1.1]: https://github.com/jdfergason/pv-api/releases/tag/v0.1.1
-[0.1.0]: https://github.com/jdfergason/pv-api/releases/tag/v0.1.0
+[0.3.2]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.2
+[0.3.1]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.1
+[0.3.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.0
+[0.2.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.2.0
+[0.1.1]: https://github.com/penny-vault/pv-api/releases/tag/v0.1.1
+[0.1.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.1.0
