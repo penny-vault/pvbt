@@ -62,6 +62,7 @@ require (
 
 require (
 	cloud.google.com/go v0.102.1 // indirect
+	github.com/Masterminds/semver/v3 v3.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/frankban/quicktest v1.14.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
