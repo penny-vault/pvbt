@@ -331,6 +331,7 @@ func version() *semver.Version {
 
 		// plus up minor and annotate with meta-data
 		minor++
+		patch = 0
 		newVer = fmt.Sprintf("%d.%d.%d-dev+%s", major, minor, patch, params["hash"])
 	} else {
 		// could not find a version, this must be a new development, use 0.0.0
@@ -352,10 +353,10 @@ func flagEnv() map[string]string {
 
 func buildTimeVariables() map[string]string {
 	return map[string]string{
-		"pkginfo.BuildDate":  time.Now().Format("2006-01-02T15:04:05Z0700"),
-		"pkginfo.CommitHash": gitHash(),
+		"pkginfo.BuildDate":   time.Now().Format("2006-01-02T15:04:05Z0700"),
+		"pkginfo.CommitHash":  gitHash(),
 		"pkginfo.ProgramName": binaryName,
-		"pkginfo.Version":    version().String(),
+		"pkginfo.Version":     version().String(),
 	}
 }
 
