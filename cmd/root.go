@@ -19,7 +19,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/pkginfo"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -79,7 +79,7 @@ func init() {
 
 var rootCmd = &cobra.Command{
 	Use:     "pvapi",
-	Version: common.CurrentVersion.String(),
+	Version: pkginfo.Version,
 	Short:   "Penny Vault is a quantitaive investment package",
 	Long:    `A fast and flexible quantitative investment platform that can backtest and execute investment strategies.`,
 }
