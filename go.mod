@@ -72,6 +72,7 @@ require (
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
 	github.com/ompluscator/dynamic-struct v1.3.0 // indirect
+	github.com/pashagolub/pgxmock v1.6.0 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/rocketlaunchr/dbq/v2 v2.6.0 // indirect
 	github.com/rogpeppe/fastuuid v1.2.0 // indirect
