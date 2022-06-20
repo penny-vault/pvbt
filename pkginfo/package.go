@@ -1,4 +1,4 @@
-// Copyright 2021-2022
+// Copyright 2022
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -12,14 +12,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+package pkginfo
 
-package common
-
-// CurrentVersion represents the current build version.
-// This is the only one in the system
-var CurrentVersion = Version{
-	Major:  1,
-	Minor:  0,
-	Patch:  0,
-	Suffix: "dev",
-}
+var (
+	BuildDate   string
+	CommitHash  string
+	ProgramName string
+	Version     string
+)
