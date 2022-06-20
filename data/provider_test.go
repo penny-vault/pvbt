@@ -24,18 +24,26 @@ import (
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pashagolub/pgxmock"
 
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
 )
 
 var _ = Describe("Provider", func() {
 	var (
 		dataProxy data.Manager
 		tz        *time.Location
+		dbPool      pgxmock.PgxConnIface
 	)
 
 	BeforeEach(func() {
 		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+
+		var err error
+		dbPool, err = pgxmock.NewConn()
+		Expect(err).To(BeNil())
+		database.SetPool(dbPool)
 
 		content, err := ioutil.ReadFile("testdata/VFINX.csv")
 		if err != nil {
@@ -63,6 +71,10 @@ var _ = Describe("Provider", func() {
 		dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 		dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 		dataProxy.Frequency = data.FrequencyMonthly
+	})
+
+	AfterEach(func ()  {
+		dbPool.Close(context.Background())
 	})
 
 	Describe("When data framework is initialized", func() {

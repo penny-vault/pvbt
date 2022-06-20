@@ -27,9 +27,15 @@ import (
 	"github.com/spf13/viper"
 )
 
+// types
+
+type PgxIface interface {
+	Begin(context.Context) (pgx.Tx, error)
+}
+
 // Private
 
-var pool *pgxpool.Pool
+var pool PgxIface
 
 func createUser(userID string) error {
 	if userID == "" {
@@ -106,15 +112,20 @@ func createUser(userID string) error {
 
 // Public
 
+func SetPool(myPool PgxIface) {
+	pool = myPool
+}
+
 func Connect() error {
 	var err error
-	pool, err = pgxpool.Connect(context.Background(), viper.GetString("database.url"))
+	myPool, err := pgxpool.Connect(context.Background(), viper.GetString("database.url"))
 	if err != nil {
 		return err
 	}
-	if err = pool.Ping(context.Background()); err != nil {
+	if err = myPool.Ping(context.Background()); err != nil {
 		return err
 	}
+	pool = myPool
 	return nil
 }
 
