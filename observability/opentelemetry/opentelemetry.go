@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/pkginfo"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 
@@ -48,7 +48,7 @@ func Setup() (func(context.Context) error, error) {
 			// the service name used to display traces in backends
 			semconv.ServiceNameKey.String("pvapi"),
 			// service version
-			semconv.ServiceVersionKey.String(common.CurrentVersion.String()),
+			semconv.ServiceVersionKey.String(pkginfo.Version),
 		),
 	)
 	if err != nil {
