@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // NewLogger creates a new middleware handler
@@ -56,35 +56,34 @@ func NewLogger() fiber.Handler {
 		// Set latency stop time
 		stop = time.Now()
 
-		entry := log.WithFields(log.Fields{
-			"StatusCode":        c.Response().StatusCode(),
-			"Latency":           stop.Sub(start).Round(time.Millisecond),
-			"IP":                c.IP(),
-			"Method":            c.Method(),
-			"Path":              c.Path(),
-			"Referer":           c.Get(fiber.HeaderReferer),
-			"Protocol":          c.Protocol(),
-			"XForwardedFor":     c.Get(fiber.HeaderXForwardedFor),
-			"Host":              c.Hostname(),
-			"URL":               c.OriginalURL(),
-			"UserAgent":         c.Get(fiber.HeaderUserAgent),
-			"NumBytesReceived":  len(c.Request().Body()),
-			"NumBytesSent":      len(c.Response().Body()),
-			"Route":             c.Route().Path,
-			"RequestBody":       string(c.Body()),
-			"QueryStringParams": c.Request().URI().QueryArgs().String(),
-		})
+		subLog := log.With().
+			Int("StatusCode", c.Response().StatusCode()).
+			Dur("Latency", stop.Sub(start).Round(time.Millisecond)).
+			Str("IP", c.IP()).
+			Str("Method", c.Method()).
+			Str("Path", c.Path()).
+			Str("Referer", c.Get(fiber.HeaderReferer)).
+			Str("Protocol", c.Protocol()).
+			Str("XForwardedFor", c.Get(fiber.HeaderXForwardedFor)).
+			Str("Host", c.Hostname()).
+			Str("URL", c.OriginalURL()).
+			Str("UserAgent", c.Get(fiber.HeaderUserAgent)).
+			Int("NumBytesReceived", len(c.Request().Body())).
+			Int("NumBytesSent", len(c.Response().Body())).
+			Str("Route", c.Route().Path).
+			Bytes("RequestBody", c.Body()).
+			Str("QueryStringParams", c.Request().URI().QueryArgs().String()).Logger()
 
 		code := c.Response().StatusCode()
 		switch {
 		case code >= fiber.StatusOK && code < fiber.StatusMultipleChoices:
-			entry.Info("Processed HTTP request")
+			subLog.Info().Msg("Processed HTTP request")
 		case code >= fiber.StatusMultipleChoices && code < fiber.StatusBadRequest:
-			entry.Info("Forward HTTP request")
+			subLog.Info().Msg("Forward HTTP request")
 		case code >= fiber.StatusBadRequest && code < fiber.StatusInternalServerError:
-			entry.Warn("Bad HTTP request")
+			subLog.Warn().Msg("Bad HTTP request")
 		default:
-			entry.Error("Internal Server Error")
+			subLog.Error().Msg("Internal Server Error")
 		}
 
 		return nil

@@ -23,15 +23,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/penny-vault/pv-api/data/database"
-	"github.com/penny-vault/pv-api/portfolio"
-
 	"github.com/goccy/go-json"
-
 	"github.com/jackc/pgsql"
 	"github.com/jackc/pgx/v4"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/rs/zerolog/log"
 )
 
 type FilterDatabase struct {
@@ -120,16 +117,15 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sql, args, err := BuildQuery("portfolio_measurement", fields, []string{}, where, "event_date ASC")
+	sql, args, err := BuildQuery("portfolio_measurements", fields, []string{}, where, "event_date ASC")
 	if err != nil {
-		log.Warn(err)
 		return nil, err
 	}
 
 	trx, _ := database.TrxForUser(f.UserID)
 	rows, err := trx.Query(context.Background(), sql, args...)
 	if err != nil {
-		log.Warn(err)
+		log.Warn().Err(err).Str("Query", sql).Msg("portfolio_measurements query failed")
 		return nil, err
 	}
 
@@ -143,7 +139,7 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 
 		err := rows.Scan(&item.Time, &item.Value1, &item.Value2)
 		if err != nil {
-			log.Warn(err)
+			log.Warn().Err(err).Msg("row scan faile")
 			return nil, err
 		}
 		meas.Items = append(meas.Items, &item)
@@ -155,6 +151,8 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 
 func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte, error) {
 	where := make(map[string]string)
+
+	subLog := log.With().Str("Frequency", frequency).Time("Since", since).Logger()
 
 	var periodReturn string
 	switch frequency {
@@ -176,7 +174,6 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 
 	sqlTmp, args, err := BuildQuery("portfolio_measurements", fields, []string{"LEAD(event_date) OVER (ORDER BY event_date) as next_date"}, where, "event_date DESC")
 	if err != nil {
-		log.Warn(err)
 		return nil, err
 	}
 
@@ -197,7 +194,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	trx, _ := database.TrxForUser(f.UserID)
 	rows, err := trx.Query(context.Background(), querySQL, args...)
 	if err != nil {
-		log.Warn(err)
+		subLog.Warn().Err(err).Msg("get measurements database query failed")
 		return nil, err
 	}
 
@@ -215,29 +212,21 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 		item.Predicted = false
 		err := rows.Scan(&item.Time, &item.PercentReturn, &holdings, &justification, &item.Value)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error": err,
-			}).Error("Could not create PortfolioHoldingItem")
+			subLog.Error().Err(err).Msg("could not create PortfolioHoldingItem")
 			return nil, err
 		}
 
 		if holdings.Valid {
 			err := json.Unmarshal([]byte(holdings.String), &item.Holdings)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"EventDate": item.Time,
-					"Error":     err,
-				}).Error("Could not unmarshal json holdings")
+				subLog.Error().Err(err).Time("EventDate", item.Time).Msg("could not unmarshal json holdings")
 			}
 		}
 
 		if lastJustification.Valid {
 			err := json.Unmarshal([]byte(lastJustification.String), &item.Justification)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"EventDate": item.Time,
-					"Error":     err,
-				}).Error("Could not unmarshal justification")
+				subLog.Error().Err(err).Time("EventDate", item.Time).Msg("could not unmarshal justification")
 			}
 		}
 
@@ -251,12 +240,12 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	err = trx.QueryRow(context.Background(), "SELECT predicted_bytes FROM portfolios WHERE id=$1", f.PortfolioID).Scan(&predictedRaw)
 
 	if err != nil {
-		log.Warn(err)
+		subLog.Warn().Err(err).Msg("query predicted value failed")
 		return nil, err
 	}
 	err = predicted.UnmarshalBinary(predictedRaw)
 	if err != nil {
-		log.Warn(err)
+		subLog.Warn().Err(err).Msg("failed to unmarshal predicted data structure")
 		return nil, err
 	}
 
@@ -276,6 +265,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 }
 
 func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
+	subLog := log.With().Time("Since", since).Logger()
 	where := make(map[string]string)
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 
@@ -286,16 +276,15 @@ func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
 
-	sqlQuery, args, err := BuildQuery("portfolio_transaction", fields, []string{}, where, "event_date ASC")
+	sqlQuery, args, err := BuildQuery("portfolio_transactions", fields, []string{}, where, "event_date ASC")
 	if err != nil {
-		log.Warn(err)
 		return nil, err
 	}
 
 	trx, _ := database.TrxForUser(f.UserID)
 	rows, err := trx.Query(context.Background(), sqlQuery, args...)
 	if err != nil {
-		log.Warn(err)
+		subLog.Warn().Err(err).Msg("portfolio_transactions query failed")
 		return nil, err
 	}
 
@@ -308,9 +297,7 @@ func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
 		err := rows.Scan(&trx.Date, &trx.ID, &trx.Cleared, &trx.Commission, &trx.CompositeFIGI, &trx.Justification, &trx.Kind, &trx.Memo, &trx.PricePerShare, &trx.Shares, &trx.Source, &trx.SourceID, &trx.Tags, &trx.TaxDisposition, &trx.Ticker, &trx.TotalValue)
 		trx.Date = time.Date(trx.Date.Year(), trx.Date.Month(), trx.Date.Day(), 16, 0, 0, 0, tz)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error": err,
-			}).Info("Error scanning transaction")
+			subLog.Error().Err(err).Msg("error scanning transaction")
 		}
 		h.Items = append(h.Items, &trx)
 	}

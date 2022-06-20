@@ -31,22 +31,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
-	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel"
-
-	"github.com/goccy/go-json"
-
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/exports"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
 )
 
 type AcceleratingDualMomentum struct {
@@ -313,33 +310,33 @@ func (adm *AcceleratingDualMomentum) writeDataFramesToCSV() {
 	// momentum
 	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Errorf("error writing opening adm_momentum.csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_momentum.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
-		log.Errorf("error writing adm momentum to csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
 		return
 	}
 
 	// prices
 	fh, err = os.OpenFile("adm_prices.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Errorf("error writing opening adm_prices.csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_prices.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
-		log.Errorf("error writing adm prices to csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
 		return
 	}
 
 	// riskfree
 	fh, err = os.OpenFile("adm_riskfreerate.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Errorf("error writing opening adm_riskfreerate.csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
-		log.Errorf("error writing adm riskfreerate to csv %s", err.Error())
+		log.Error().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
 		return
 	}
 }

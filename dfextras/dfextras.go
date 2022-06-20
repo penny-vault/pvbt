@@ -25,9 +25,8 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-
-	log "github.com/sirupsen/logrus"
 
 	"github.com/rocketlaunchr/dataframe-go"
 )
@@ -518,10 +517,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 	for ii := range dfs {
 		newDf, err := TimeAlign(ctx, dfs[ii], startTime, endTime)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Error":  err,
-				"Method": "MergeAndTimeAlign:TimeAlign",
-			}).Error("time align failed")
+			log.Error().Err(err).Msg("time align failed")
 			return nil, err
 		}
 

@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
-	"runtime/debug"
 	"strings"
 	"time"
 
@@ -32,7 +30,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	dataframe "github.com/rocketlaunchr/dataframe-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type pvdb struct {
@@ -55,22 +53,18 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
+	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", frequency).Logger()
+
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
-		log.WithFields(log.Fields{
-			"Begin":     begin,
-			"End":       end,
-			"Frequency": frequency,
-		}).Warn("end before begin in call to TradingDays")
+		subLog.Warn().Msg("end before begin in call to TradingDays")
 		return res
 	}
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Error("could not get transaction when querying trading days")
+		subLog.Error().Err(err).Msg("could not get transaction when querying trading days")
 	}
 
 	searchBegin := begin
@@ -92,16 +86,12 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "database query failed")
-		log.WithFields(log.Fields{
-			"Error": err,
-		}).Error("could not query trading days")
+		subLog.Error().Err(err).Msg("could not query trading days")
 	}
 	for rows.Next() {
 		var dt time.Time
 		if err = rows.Scan(&dt); err != nil {
-			log.WithFields(log.Fields{
-				"Error": err,
-			}).Error("could not scan trading day value")
+			log.Error().Err(err).Msg("could not SCAN DB result")
 		} else {
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 			res = append(res, dt)
@@ -113,9 +103,7 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
-		log.Error("Could not load trading days")
-		debug.PrintStack()
-		os.Exit(-1)
+		log.Fatal().Stack().Msg("could not load trading days")
 	}
 
 	for idx, xx := range res[:len(res)-1] {
@@ -168,6 +156,8 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
+	subLog := log.With().Strs("Symbols", symbols).Str("Metric", metric).Str("Frequency", frequency).Time("StartTime", begin).Time("EndTime", end).Logger()
+
 	tradingDays := p.TradingDays(ctx, begin, end, frequency)
 
 	// ensure symbols is a unique set
@@ -186,15 +176,9 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to load eod prices -- could not get a database transaction")
-		log.WithFields(log.Fields{
-			"Symbol":    symbols,
-			"Metric":    metric,
-			"Frequency": frequency,
-			"StartTime": begin.String(),
-			"EndTime":   end.String(),
-			"Error":     err,
-		}).Warn("Failed to load eod prices -- could not get a database transaction")
+		msg := "failed to load eod prices -- could not get a database transaction"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Err(err).Msg(msg)
 		return nil, err
 	}
 
@@ -240,15 +224,9 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	rows, err := trx.Query(ctx, sql, args...)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to load eod prices -- db query failed")
-		log.WithFields(log.Fields{
-			"Symbol":    symbols,
-			"Metric":    metric,
-			"Frequency": frequency,
-			"StartTime": begin.String(),
-			"EndTime":   end.String(),
-			"Error":     err,
-		}).Warn("Failed to load eod prices -- db query failed")
+		msg := "failed to load eod prices -- db query failed"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Err(err).Msg(msg)
 		trx.Rollback(context.Background())
 		return nil, err
 	}
@@ -284,15 +262,7 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		}
 
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Query":     sql,
-				"Symbol":    symbols,
-				"Metric":    metric,
-				"Frequency": frequency,
-				"StartTime": begin.String(),
-				"EndTime":   end.String(),
-				"Error":     err,
-			}).Warn("Failed to load eod prices -- db query scan failed")
+			subLog.Warn().Err(err).Msg("failed to load eod prices -- db query scan failed")
 			trx.Rollback(context.Background())
 			return nil, err
 		}
@@ -350,17 +320,15 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetLatestDataBefore")
 	defer span.End()
+	subLog := log.With().Str("Symbol", symbol).Str("Metric", metric).Time("Before", before).Logger()
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "could not get a database transaction")
-		log.WithFields(log.Fields{
-			"Symbol": symbol,
-			"Metric": metric,
-			"Error":  err,
-		}).Warn("Failed to load eod prices -- could not get a database transaction")
+		msg := "could not get a database transaction"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Err(err).Msg(msg)
 		return math.NaN(), err
 	}
 
@@ -385,6 +353,7 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 		columns = "split_factor AS val"
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
+		subLog.Error().Msg("un-supported metric requested")
 		trx.Rollback(ctx)
 		return math.NaN(), errors.New("un-supported metric")
 	}
@@ -395,12 +364,9 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 	rows, err := trx.Query(ctx, sql, symbol, before)
 	if err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "db query failed")
-		log.WithFields(log.Fields{
-			"Symbol": symbol,
-			"Metric": metric,
-			"Error":  err,
-		}).Warn("Failed to load eod prices -- db query failed")
+		msg := "db query failed"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Err(err).Msg(msg)
 		trx.Rollback(ctx)
 		return math.NaN(), err
 	}
@@ -413,12 +379,9 @@ func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 		err = rows.Scan(&date, &ticker, &val)
 		if err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "db scan failed")
-			log.WithFields(log.Fields{
-				"Symbol": symbol,
-				"Metric": metric,
-				"Error":  err,
-			}).Warn("Failed to load eod prices -- db query scan failed")
+			msg := "db scan failed"
+			span.SetStatus(codes.Error, msg)
+			subLog.Warn().Err(err).Msg(msg)
 			trx.Rollback(context.Background())
 			return math.NaN(), err
 		}

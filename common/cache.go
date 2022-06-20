@@ -17,12 +17,13 @@ package common
 
 import (
 	"context"
+	"os"
 	"time"
 
 	"github.com/go-redis/redis/v8"
 	lru "github.com/hashicorp/golang-lru"
-	log "github.com/sirupsen/logrus"
 
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
 
@@ -35,7 +36,8 @@ func SetupCache() {
 	if viper.GetBool("cache.redis") {
 		opt, err := redis.ParseURL(viper.GetString("cache.redis_url"))
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("could not parse redis URL")
+			os.Exit(1)
 		}
 
 		rdb = redis.NewClient(opt)
@@ -43,7 +45,8 @@ func SetupCache() {
 
 	cache, err = lru.New(viper.GetInt("cache.local_size"))
 	if err != nil {
-		log.Fatal(err)
+		log.Error().Err(err).Msg("could not create LRU cache")
+		os.Exit(1)
 	}
 }
 

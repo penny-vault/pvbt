@@ -21,8 +21,7 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/portfolio"
-
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 type FilterInterface interface {
@@ -33,14 +32,12 @@ type FilterInterface interface {
 
 func getPortfolio(portfolioID string) *portfolio.Portfolio {
 	raw, _ := common.CacheGet(portfolioID)
+	subLog := log.With().Str("PortfolioID", portfolioID).Logger()
 	if len(raw) > 0 {
 		port := portfolio.Portfolio{}
 		_, err := port.Unmarshal(raw)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"PortfolioID": portfolioID,
-				"Error":       err,
-			}).Error("failed to deserialize portfolio")
+			subLog.Error().Err(err).Msg("failed to deserialize portfolio")
 			return nil
 		}
 		return &port
@@ -49,15 +46,13 @@ func getPortfolio(portfolioID string) *portfolio.Portfolio {
 }
 
 func getPerformance(portfolioID string) *portfolio.Performance {
+	subLog := log.With().Str("PortfolioID", portfolioID).Logger()
 	raw, _ := common.CacheGet(fmt.Sprintf("%s:performance", portfolioID))
 	if len(raw) > 0 {
 		perf := portfolio.Performance{}
 		_, err := perf.Unmarshal(raw)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"PortfolioID": portfolioID,
-				"Error":       err,
-			}).Error("failed to deserialize portfolio")
+			subLog.Error().Err(err).Msg("failed to deserialize portfolio")
 			return nil
 		}
 		return &perf

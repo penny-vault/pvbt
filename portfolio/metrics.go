@@ -21,7 +21,7 @@ import (
 	"sort"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -1030,7 +1030,7 @@ func (perf *Performance) vami(periods uint) []float64 {
 // xirr returns the Internal Rate of Return (IRR) for an irregular series of cash flows
 func xirr(cashflows []cashflow) float64 {
 	if len(cashflows) == 0 {
-		log.Error("cashflows cannot be 0")
+		log.Error().Msg("cashflows cannot be 0")
 		return 0
 	}
 

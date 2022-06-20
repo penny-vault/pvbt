@@ -45,7 +45,7 @@ import (
 	"github.com/goccy/go-json"
 
 	"github.com/rocketlaunchr/dataframe-go"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 // KellersDefensiveAssetAllocation strategy type
@@ -223,7 +223,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 
 	timeIdx, err := daa.momentum.NameToColumn(common.DateIdx)
 	if err != nil {
-		log.Error("Time series not set on momentum series")
+		log.Error().Err(err).Msg("time series not set on momentum series")
 	}
 	timeSeries := daa.momentum.Series[timeIdx]
 

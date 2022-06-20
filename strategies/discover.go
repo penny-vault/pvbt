@@ -32,7 +32,7 @@ import (
 	"github.com/penny-vault/pv-api/strategies/strategy"
 
 	"github.com/pelletier/go-toml/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 )
 
 //go:embed **/*.md **/*.toml
@@ -59,20 +59,15 @@ func InitializeStrategyMap() {
 func Register(strategyPkg string, factory strategy.StrategyFactory) {
 	// read description
 	fn := fmt.Sprintf("%s/description.md", strategyPkg)
+	subLog := log.With().Str("FileName", fn).Logger()
 	file, err := resources.Open(fn)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"File":  fn,
-		}).Error("failed to open file")
+		subLog.Error().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
 	doc, err := ioutil.ReadAll(file)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"File":  fn,
-		}).Error("failed to read file")
+		subLog.Error().Err(err).Msg("failed to read file")
 	}
 	longDescription := string(doc)
 
@@ -80,27 +75,18 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 	fn = fmt.Sprintf("%s/strategy.toml", strategyPkg)
 	file, err = resources.Open(fn)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"File":  fn,
-		}).Error("failed to open file")
+		subLog.Error().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
 	doc, err = ioutil.ReadAll(file)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"File":  fn,
-		}).Error("failed to read file")
+		subLog.Error().Err(err).Msg("failed to read file")
 	}
 
 	var strat strategy.StrategyInfo
 	err = toml.Unmarshal(doc, &strat)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Error": err,
-			"File":  fn,
-		}).Error("failed to parse toml file")
+		subLog.Error().Err(err).Msg("failed to parse toml file")
 	}
 
 	strat.LongDescription = longDescription
@@ -112,18 +98,14 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
-	log.Info("refreshing portfolio metrics")
+	log.Info().Msg("refreshing portfolio metrics")
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
 
 		// load results from the database
 		trx, err := database.TrxForUser("pvuser")
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Endpoint": "UpdatePortfolio",
-				"Error":    err,
-				"UserID":   "pvuser",
-			}).Fatal("unable to get database transaction for user")
+			log.Fatal().Str("Endpoint", "UpdatePortfolio").Str("UserID", "pvuser").Msg("unable to get database transaction for user")
 		}
 
 		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolios WHERE user_id='pvuser' AND name=$1", strat.Name)
@@ -139,10 +121,9 @@ func LoadStrategyMetricsFromDb() {
 		}
 
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Strategy": strat.Shortcode,
-				"Error":    err,
-			}).Warn("failed to lookup strategy portfolio in database")
+			log.Warn().Err(err).
+				Str("Strategy", strat.Shortcode).
+				Msg("failed to lookup strategy portfolio in database")
 			trx.Rollback(context.Background())
 			continue
 		}

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"strings"
 	"time"
 
@@ -31,7 +32,7 @@ import (
 	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/google/uuid"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -52,7 +53,8 @@ var updateCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Fatal(err)
+			log.Error().Err(err).Msg("database connection failed")
+			os.Exit(1)
 		}
 
 		// get time
@@ -62,7 +64,8 @@ var updateCmd = &cobra.Command{
 		} else {
 			dt, err = time.Parse("2006-01-02", ToDate)
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Str("InputStr", ToDate).Msg("could not parse to date - expected format 2006-01-02")
+				os.Exit(1)
 			}
 
 			// convert to EST
@@ -74,7 +77,7 @@ var updateCmd = &cobra.Command{
 
 		// Initialize data framework
 		data.InitializeDataManager()
-		log.Info("Initialized data framework")
+		log.Info().Msg("initialized data framework")
 
 		// initialize strategies
 		strategies.InitializeStrategyMap()
@@ -87,9 +90,7 @@ var updateCmd = &cobra.Command{
 		/*
 			for _, strat := range strategies.StrategyList {
 				if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
-					log.WithFields(log.Fields{
-						"Strategy": strat.Shortcode,
-					}).Info("create portfolio for strategy")
+					log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
 					createStrategyPortfolio(strat, &dataManager)
 				}
 			}
@@ -99,7 +100,8 @@ var updateCmd = &cobra.Command{
 		if PortfolioID != "" {
 			portfolioParts := strings.Split(PortfolioID, ":")
 			if len(portfolioParts) != 2 {
-				log.Fatal("Must specify portfolioID as {userID}:{portfolioID}")
+				log.Error().Str("InputStr", PortfolioID).Int("LenPortfolioParts", len(portfolioParts)).Msg("must specify portfolioID as {userID}:{portfolioID}")
+				os.Exit(1)
 			}
 			u := portfolioParts[0]
 			pIDStr := portfolioParts[1]
@@ -108,7 +110,8 @@ var updateCmd = &cobra.Command{
 			}
 			p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Msg("could not load portfolio from DB")
+				os.Exit(1)
 			}
 			p[0].LoadTransactionsFromDB()
 			portfolios = append(portfolios, p[0])
@@ -117,28 +120,28 @@ var updateCmd = &cobra.Command{
 			users, err := database.GetUsers()
 			users = append(users, "pvuser")
 			if err != nil {
-				log.Fatal(err)
+				log.Error().Err(err).Msg("could not load users from database")
+				os.Exit(1)
 			}
 
 			for _, u := range users {
 				trx, err := database.TrxForUser(u)
 				if err != nil {
-					log.Fatal(err)
+					log.Error().Err(err).Str("User", u).Msg("could not create trasnaction for user")
+					os.Exit(1)
 				}
 
 				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios")
 				if err != nil {
-					log.Fatal(err)
+					log.Error().Err(err).Msg("could not get portfolio IDs")
+					os.Exit(1)
 				}
 
 				for rows.Next() {
 					var pIDStr string
 					err := rows.Scan(&pIDStr)
 					if err != nil {
-						log.WithFields(log.Fields{
-							"Error": err,
-							"User":  u,
-						}).Warn("get portfolio ids failed")
+						log.Warn().Err(err).Str("User", u).Msg("get portfolio ids failed")
 						continue
 					}
 
@@ -147,7 +150,8 @@ var updateCmd = &cobra.Command{
 					}
 					p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 					if err != nil {
-						log.Fatal(err)
+						log.Error().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
+						os.Exit(1)
 					}
 					p[0].LoadTransactionsFromDB()
 					portfolios = append(portfolios, p[0])
@@ -155,17 +159,11 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
-		log.WithFields(log.Fields{
-			"NumPortfolios": len(portfolios),
-			"Date":          dt,
-		}).Info("updating portfolios")
+		log.Info().Int("NumPortfolios", len(portfolios)).Time("Date", dt).Msg("updating portfolios")
 
 		for _, pm := range portfolios {
-			log.WithFields(log.Fields{
-				"PortfolioID": hex.EncodeToString(pm.Portfolio.ID),
-				"StartDate":   pm.Portfolio.StartDate.Format("2006-01-02"),
-				"EndDate":     pm.Portfolio.EndDate.Format("2006-01-02"),
-			}).Info("updating portfolio")
+			subLog := log.With().Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
+			subLog.Info().Msg("updating portfolio")
 
 			pm.LoadTransactionsFromDB()
 			err = pm.UpdateTransactions(context.Background(), dt)
@@ -179,11 +177,7 @@ var updateCmd = &cobra.Command{
 			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
 			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error":       err,
-					"PortfolioID": hex.EncodeToString(pm.Portfolio.ID),
-				}).Warn("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
-
+				subLog.Warn().Err(err).Msg("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
 				// just create a new performance record
 				perf = portfolio.NewPerformance(pm.Portfolio)
 			} else {
@@ -192,9 +186,7 @@ var updateCmd = &cobra.Command{
 
 			err = perf.CalculateThrough(context.Background(), pm, dt)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-				}).Error("error while calculating portfolio performance -- refusing to save")
+				subLog.Error().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
 				continue
 			}
 
@@ -207,16 +199,12 @@ var updateCmd = &cobra.Command{
 
 			err = pm.Save(pm.Portfolio.UserID)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-				}).Error("error while saving portfolio updates")
+				subLog.Error().Err(err).Msg("error while saving portfolio updates")
 				continue
 			}
 			err = perf.Save(pm.Portfolio.UserID)
 			if err != nil {
-				log.WithFields(log.Fields{
-					"Error": err,
-				}).Error("error while saving portfolio measurements")
+				subLog.Error().Err(err).Msg("error while saving portfolio measurements")
 			}
 		}
 	},
@@ -224,6 +212,8 @@ var updateCmd = &cobra.Command{
 
 func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager) error {
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+
+	subLog := log.With().Str("Shortcode", strat.Shortcode).Str("StrategyName", strat.Name).Logger()
 
 	// build arguments
 	argumentsMap := make(map[string]interface{})
@@ -238,11 +228,7 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 	}
 	arguments, err := json.Marshal(argumentsMap)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Shortcode":    strat.Shortcode,
-			"StrategyName": strat.Name,
-			"Error":        err,
-		}).Warn("Unable to build arguments for metrics calculation")
+		subLog.Warn().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err
 	}
 
@@ -251,11 +237,7 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 
 	b, err := backtest.New(context.Background(), strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Shortcode":    strat.Shortcode,
-			"StrategyName": strat.Name,
-			"Error":        err,
-		}).Warn("Unable to build arguments for metrics calculation")
+		subLog.Warn().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err
 	}
 
