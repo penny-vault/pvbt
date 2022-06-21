@@ -64,7 +64,7 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
-		subLog.Error().Err(err).Msg("could not get transaction when querying trading days")
+		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
 	}
 
 	searchBegin := begin
@@ -86,12 +86,12 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "database query failed")
-		subLog.Error().Err(err).Msg("could not query trading days")
+		subLog.Error().Err(err).Stack().Msg("could not query trading days")
 	}
 	for rows.Next() {
 		var dt time.Time
 		if err = rows.Scan(&dt); err != nil {
-			log.Error().Err(err).Msg("could not SCAN DB result")
+			log.Error().Err(err).Stack().Msg("could not SCAN DB result")
 		} else {
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 			res = append(res, dt)
