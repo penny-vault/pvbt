@@ -17,50 +17,63 @@ package data_test
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 	"time"
 
-	"github.com/jarcoal/httpmock"
+	"github.com/jackc/pgconn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
 
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/pgxmockhelper"
 )
 
 var _ = Describe("Provider", func() {
 	var (
+		ctx       context.Context
 		dataProxy data.Manager
+		dbPool    pgxmock.PgxConnIface
 		tz        *time.Location
-		dbPool      pgxmock.PgxConnIface
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
-
 		var err error
+		tz, err = time.LoadLocation("America/New_York") // New York is the reference time
+		Expect(err).To(BeNil())
+
+		ctx = context.Background()
+
 		dbPool, err = pgxmock.NewConn()
 		Expect(err).To(BeNil())
 		database.SetPool(dbPool)
 
-		content, err := ioutil.ReadFile("testdata/VFINX.csv")
-		if err != nil {
-			panic(err)
-		}
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1980-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
+		// setup database expectations
 
-		content, err = ioutil.ReadFile("testdata/riskfree.csv")
-		if err != nil {
-			panic(err)
-		}
+		// Expect trading days transaction and query
+		dbPool.ExpectBegin()
+		// NOTE: pgconn.CommandTag is ignored
+		dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 
-		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
-		httpmock.RegisterResponder("GET", url,
-			httpmock.NewBytesResponder(200, content))
+		rows, err := pgxmockhelper.RowsFromCSV("../testdata/tradingdays.csv", map[string]string{
+			"trade_day": "date",
+		})
+		Expect(err).To(BeNil())
+		dbPool.ExpectQuery("SELECT").WillReturnRows(rows)
+
+		// Expect dataframe transaction and query
+		dbPool.ExpectBegin()
+		// NOTE: pgconn.CommandTag is ignored
+		dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+
+		rows, err = pgxmockhelper.RowsFromCSV("../testdata/riskfree.csv", map[string]string{
+			"event_date": "date",
+			"val":        "float64",
+			"close":      "float64",
+			"adj_close":  "float64",
+		})
+		Expect(err).To(BeNil())
+		dbPool.ExpectQuery("SELECT").WillReturnRows(rows)
 
 		data.InitializeDataManager()
 
@@ -73,40 +86,35 @@ var _ = Describe("Provider", func() {
 		dataProxy.Frequency = data.FrequencyMonthly
 	})
 
-	AfterEach(func ()  {
+	AfterEach(func() {
 		dbPool.Close(context.Background())
 	})
 
+	DescribeTable("Requesting the risk free rate",
+		func(year, month, day int, riskFreeRate float64) {
+			rate := dataProxy.RiskFreeRate(ctx, time.Date(year, time.Month(month), day, 0, 0, 0, 0, tz))
+			Expect(rate).Should(BeNumerically("~", riskFreeRate, 1e-2))
+		},
+		Entry("When the date is before first available data", 1980, 1, 1, .05),
+		Entry("When the date is the first available data", 1980, 1, 2, .05),
+		Entry("When the date is a random day in the middle of the dataset", 1982, 7, 27, 11.12),
+		Entry("When the date is the last available date in the dataset", 2022, 6, 16, 1.74),
+		Entry("When the date is after the last available date", 2022, 6, 17, 1.74),
+		Entry("When the date is on a day where FRED returns NaN", 2019, 1, 1, 2.42),
+	)
+
 	Describe("When data framework is initialized", func() {
 		Context("with the DGS3MO data", func() {
-			It("should be able to retrieve the risk free rate", func() {
-				ctx := context.Background()
-				rate := dataProxy.RiskFreeRate(ctx, time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 10.66, 1e-2))
-
-				rate = dataProxy.RiskFreeRate(ctx, time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 7.81, 1e-2))
-
-			})
-
 			It("should be able to retrieve the risk free rate for out-of-order dates", func() {
-				ctx := context.Background()
 				rate := dataProxy.RiskFreeRate(ctx, time.Date(1982, 7, 27, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 10.66, 1e-2))
+				Expect(rate).Should(BeNumerically("~", 11.12, 1e-2))
 
 				rate = dataProxy.RiskFreeRate(ctx, time.Date(1984, 12, 18, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 7.81, 1e-2))
+				Expect(rate).Should(BeNumerically("~", 8.08, 1e-2))
 
 				rate = dataProxy.RiskFreeRate(ctx, time.Date(1983, 1, 18, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 7.64, 1e-2))
+				Expect(rate).Should(BeNumerically("~", 7.9, 1e-2))
 			})
-
-			It("should be able to retrieve the risk free rate on days FRED returns NaN", func() {
-				ctx := context.Background()
-				rate := dataProxy.RiskFreeRate(ctx, time.Date(2019, 1, 1, 0, 0, 0, 0, tz))
-				Expect(rate).Should(BeNumerically("~", 2.4, 1e-2))
-			})
-
 		})
 	})
 })
