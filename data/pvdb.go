@@ -64,7 +64,7 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
-		subLog.Error().Err(err).Msg("could not get transaction when querying trading days")
+		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
 	}
 
 	searchBegin := begin
@@ -86,12 +86,12 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "database query failed")
-		subLog.Error().Err(err).Msg("could not query trading days")
+		subLog.Error().Err(err).Stack().Msg("could not query trading days")
 	}
 	for rows.Next() {
 		var dt time.Time
 		if err = rows.Scan(&dt); err != nil {
-			log.Error().Err(err).Msg("could not SCAN DB result")
+			log.Error().Err(err).Stack().Msg("could not SCAN DB result")
 		} else {
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 			res = append(res, dt)
@@ -129,13 +129,18 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		}
 	}
 
+	daysFiltered := make([]time.Time, 0, 252)
 	lastDay := res[cnt]
+	if len(days) == 0 {
+		subLog.Error().Msg("days array is empty")
+		return daysFiltered
+	}
+
 	if !lastDay.Equal(days[len(days)-1]) {
 		days = append(days, res[cnt])
 	}
 
 	// final filter to actual days
-	daysFiltered := make([]time.Time, 0, 252)
 	for _, d := range days {
 		if d.Equal(begin) || d.Equal(end) || (d.Before(end) && d.After(begin)) {
 			daysFiltered = append(daysFiltered, d)

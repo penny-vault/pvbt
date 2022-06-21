@@ -27,6 +27,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 	"github.com/spf13/viper"
 )
 
@@ -151,15 +152,31 @@ func SetupLogging() {
 	output := viper.GetString("log.output")
 	switch output {
 	case "stdout":
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+		if viper.GetBool("log.pretty") {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stdout})
+		} else {
+			log.Logger = log.Output(os.Stdout)
+		}
 	case "stderr":
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		if viper.GetBool("log.pretty") {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		} else {
+			log.Logger = log.Output(os.Stderr)
+		}
 	default:
 		fh, err := os.OpenFile(output, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 		if err != nil {
 			panic(err)
 		}
 		defer fh.Close()
-		log.Logger = log.Output(zerolog.ConsoleWriter{Out: fh})
+		if viper.GetBool("log.pretty") {
+			log.Logger = log.Output(zerolog.ConsoleWriter{Out: fh})
+		} else {
+			log.Logger = log.Output(fh)
+		}
 	}
+
+	// setup stack marshaler
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+
 }
