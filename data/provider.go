@@ -129,12 +129,13 @@ func (m *Manager) RegisterDataProvider(p Provider) {
 	m.providers[p.DataType()] = p
 }
 
-// RiskFreeRate Get the risk free rate for given date
+// RiskFreeRate Get the risk free rate for given date, if the specific date requested
+// is not available then the closest available value is returned
 func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 	start := m.lastRiskFreeIdx
 	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
 	currDate := row[common.DateIdx].(time.Time)
-	// check if the requestsed date is before the last requested date
+	// check if the requested date is before the last requested date
 	if t.Before(currDate) {
 		start = 0
 	}
