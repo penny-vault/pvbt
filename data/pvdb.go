@@ -129,13 +129,18 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		}
 	}
 
+	daysFiltered := make([]time.Time, 0, 252)
 	lastDay := res[cnt]
+	if len(days) == 0 {
+		subLog.Error().Msg("days array is empty")
+		return daysFiltered
+	}
+
 	if !lastDay.Equal(days[len(days)-1]) {
 		days = append(days, res[cnt])
 	}
 
 	// final filter to actual days
-	daysFiltered := make([]time.Time, 0, 252)
 	for _, d := range days {
 		if d.Equal(begin) || d.Equal(end) || (d.Before(end) && d.After(begin)) {
 			daysFiltered = append(daysFiltered, d)
