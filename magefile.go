@@ -96,7 +96,7 @@ func testGoFlags() string {
 
 // Run tests
 func Test() error {
-	fmt.Println("Go Test")
+	fmt.Println("Running Ginkgo tests ...")
 	env := map[string]string{"GOFLAGS": testGoFlags()}
 	return runCmd(env, ginkgoexe, "./...", buildFlags(), "-tags", buildTags())
 }

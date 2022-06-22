@@ -154,11 +154,11 @@ var _ = Describe("Portfolio", func() {
 				err = pm.TargetPortfolio(context.Background(), df)
 			})
 
-			It("should not error", func() {
+			It("should not error", Pending, func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should error if trying to rebalance on a date when transactions have already occurred", func() {
+			It("should error if trying to rebalance on a date when transactions have already occurred", Pending, func() {
 				target := make(map[string]float64)
 				target["VFINX"] = 1.0
 				justification := make([]*portfolio.Justification, 0)
@@ -166,11 +166,11 @@ var _ = Describe("Portfolio", func() {
 				Expect(err).To(HaveOccurred())
 			})
 
-			It("should have transactions", func() {
+			It("should have transactions", Pending, func() {
 				Expect(p.Transactions).To(HaveLen(11))
 			})
 
-			It("first transaction should be a deposit", func() {
+			It("first transaction should be a deposit", Pending, func() {
 				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 1, 31, 0, 0, 0, 0, tz)))
 				Expect(p.Transactions[0].Ticker).To(Equal("$CASH"))
@@ -178,7 +178,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
 			})
 
-			It("second transaction should be a buy of VFINX", func() {
+			It("second transaction should be a buy of VFINX", Pending, func() {
 				Expect(p.Transactions[1].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[1].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
@@ -186,7 +186,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
 			})
 
-			It("should have a transaction on 2018-03-23 for the VFINX dividend", func() {
+			It("should have a transaction on 2018-03-23 for the VFINX dividend", Pending, func() {
 				Expect(p.Transactions[2].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[2].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[2].Date).To(Equal(time.Date(2018, 3, 23, 16, 0, 0, 0, tz)))
@@ -194,7 +194,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[2].TotalValue).Should(BeNumerically("~", 39.38755, 1e-5))
 			})
 
-			It("should have a transaction on 2018-06-27 for the VFINX dividend", func() {
+			It("should have a transaction on 2018-06-27 for the VFINX dividend", Pending, func() {
 				Expect(p.Transactions[3].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[3].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[3].Date).To(Equal(time.Date(2018, 6, 27, 16, 0, 0, 0, tz)))
@@ -202,7 +202,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[3].TotalValue).Should(BeNumerically("~", 42.09336, 1e-5))
 			})
 
-			It("should have a transaction on 2018-09-25 for the VFINX dividend", func() {
+			It("should have a transaction on 2018-09-25 for the VFINX dividend", Pending, func() {
 				Expect(p.Transactions[4].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[4].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[4].Date).To(Equal(time.Date(2018, 9, 25, 16, 0, 0, 0, tz)))
@@ -210,7 +210,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[4].TotalValue).Should(BeNumerically("~", 44.08248, 1e-5))
 			})
 
-			It("should have a transaction on 2018-12-14 for the VFINX dividend", func() {
+			It("should have a transaction on 2018-12-14 for the VFINX dividend", Pending, func() {
 				Expect(p.Transactions[5].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[5].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[5].Date).To(Equal(time.Date(2018, 12, 14, 16, 0, 0, 0, tz)))
@@ -218,7 +218,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[5].TotalValue).Should(BeNumerically("~", 46.90327, 1e-5))
 			})
 
-			It("should have a transaction on 2019-01-31 SELL of VFINX", func() {
+			It("should have a transaction on 2019-01-31 SELL of VFINX", Pending, func() {
 				Expect(p.Transactions[6].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[6].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[6].Date).To(Equal(time.Date(2019, 1, 31, 16, 0, 0, 0, tz)))
@@ -227,7 +227,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[6].TotalValue).Should(BeNumerically("~", 9579.94788, 1e-5))
 			})
 
-			It("should have a transaction on 2019-01-31 BUY of PRIDX", func() {
+			It("should have a transaction on 2019-01-31 BUY of PRIDX", Pending, func() {
 				Expect(p.Transactions[7].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[7].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[7].Date).To(Equal(time.Date(2019, 1, 31, 16, 0, 0, 0, tz)))
@@ -236,7 +236,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[7].TotalValue).Should(BeNumerically("~", 9752.41453, 1e-5))
 			})
 
-			It("should have a transaction on 2019-12-17 for the PRIDX dividend", func() {
+			It("should have a transaction on 2019-12-17 for the PRIDX dividend", Pending, func() {
 				Expect(p.Transactions[8].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[8].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[8].Date).To(Equal(time.Date(2019, 12, 17, 16, 0, 0, 0, tz)))
@@ -244,7 +244,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[8].TotalValue).Should(BeNumerically("~", 164.82494, 1e-5))
 			})
 
-			It("should have a transaction on 2020-01-31 SELL of PRIDX", func() {
+			It("should have a transaction on 2020-01-31 SELL of PRIDX", Pending, func() {
 				Expect(p.Transactions[9].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[9].Ticker).To(Equal("PRIDX"))
 				Expect(p.Transactions[9].Date).To(Equal(time.Date(2020, 1, 31, 16, 0, 0, 0, tz)))
@@ -253,7 +253,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[9].TotalValue).Should(BeNumerically("~", 10960.04284, 1e-5))
 			})
 
-			It("should have a transaction on 2020-01-31 BUY of VFINX", func() {
+			It("should have a transaction on 2020-01-31 BUY of VFINX", Pending, func() {
 				Expect(p.Transactions[10].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[10].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[10].Date).To(Equal(time.Date(2020, 1, 31, 16, 0, 0, 0, tz)))
@@ -287,22 +287,22 @@ var _ = Describe("Portfolio", func() {
 				}
 			})
 
-			It("should not error", func() {
+			It("should not error", Pending, func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have transactions", func() {
+			It("should have transactions", Pending, func() {
 				Expect(p.Transactions).To(HaveLen(3))
 			})
 
-			It("third transaction should be a SPLIT on 2020-08-31", func() {
+			It("third transaction should be a SPLIT on 2020-08-31", Pending, func() {
 				Expect(p.Transactions[2].Kind).To(Equal(portfolio.SplitTransaction))
 				Expect(p.Transactions[2].Ticker).To(Equal("TSLA"))
 				Expect(p.Transactions[2].Date).To(Equal(time.Date(2020, 8, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[2].Shares).Should(BeNumerically("~", 76.85568, 1e-5))
 			})
 
-			It("shouldn't change value after SPLIT on 2020-08-31", func() {
+			It("shouldn't change value after SPLIT on 2020-08-31", Pending, func() {
 				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 				Expect(err).NotTo(HaveOccurred())
 
@@ -345,40 +345,40 @@ var _ = Describe("Portfolio", func() {
 				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 			})
 
-			It("should not error", func() {
+			It("should not error", Pending, func() {
 				Expect(err).NotTo(HaveOccurred())
 			})
 
-			It("should have performance measurements", func() {
+			It("should have performance measurements", Pending, func() {
 				Expect(perf.Measurements).To(HaveLen(714))
 			})
 
-			It("should have a balance of $10,000 on Jan 31, 2018", func() {
+			It("should have a balance of $10,000 on Jan 31, 2018", Pending, func() {
 				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
 			})
 
-			It("should have a balance of $10,000 on Jan 31, 2018", func() {
+			It("should have a balance of $10,000 on Jan 31, 2018", Pending, func() {
 				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
 			})
-			It("value should not be calculated on non-trading days", func() {
+			It("value should not be calculated on non-trading days", Pending, func() {
 				Expect(perf.Measurements[3].Time).To(Equal(time.Date(2018, 2, 5, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[3].Value).Should(BeNumerically("~", 9382.18611, 1e-5))
 				Expect(perf.Measurements[3].BenchmarkValue).Should(BeNumerically("~", 9382.18611, 1e-5))
 			})
 
-			It("value should include the dividend released on 2018-03-23", func() {
+			It("value should include the dividend released on 2018-03-23", Pending, func() {
 				Expect(perf.Measurements[36].Time).To(Equal(time.Date(2018, 3, 23, 16, 0, 0, 0, tz)))
 				Expect(perf.Measurements[36].Value).Should(BeNumerically("~", 9195.83397, 1e-5))
 				Expect(perf.Measurements[36].BenchmarkValue).Should(BeNumerically("~", 9195.83397, 1e-5))
 			})
 
-			It("should have a final measurement on November 30, 2020", func() {
+			It("should have a final measurement on November 30, 2020", Pending, func() {
 				Expect(perf.Measurements[713].Time).To(Equal(time.Date(2020, 11, 30, 16, 0, 0, 0, tz)))
 			})
 		})
@@ -417,15 +417,15 @@ var _ = Describe("Portfolio", func() {
 					err = pm.TargetPortfolio(context.Background(), df)
 				})
 
-				It("should not error", func() {
+				It("should not error", Pending, func() {
 					Expect(err).NotTo(HaveOccurred())
 				})
 
-				It("should have transactions", func() {
+				It("should have transactions", Pending, func() {
 					Expect(p.Transactions).To(HaveLen(30))
 				})
 
-				It("should have strictly increasing transaction dates", func() {
+				It("should have strictly increasing transaction dates", Pending, func() {
 					last := p.Transactions[0].Date
 					for _, trx := range p.Transactions {
 						Expect(trx.Date).Should(BeTemporally(">=", last))
@@ -433,7 +433,7 @@ var _ = Describe("Portfolio", func() {
 					}
 				})
 
-				It("first transaction should be a deposit", func() {
+				It("first transaction should be a deposit", Pending, func() {
 					Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 					Expect(p.Transactions[0].Date).Should(BeTemporally("==", time.Date(2018, 1, 31, 0, 0, 0, 0, tz)))
 					Expect(p.Transactions[0].Ticker).To(Equal("$CASH"))
@@ -441,7 +441,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
 				})
 
-				It("should buy VFINX on 2018-01-31", func() {
+				It("should buy VFINX on 2018-01-31", Pending, func() {
 					Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[1].Kind).To(Equal(portfolio.BuyTransaction))
 					Expect(p.Transactions[1].Ticker).To(Equal("VFINX"))
@@ -450,7 +450,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
 				})
 
-				It("should sell 75 percent of VFINX on 2019-01-31", func() {
+				It("should sell 75 percent of VFINX on 2019-01-31", Pending, func() {
 					Expect(p.Transactions[6].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[6].Kind).To(Equal(portfolio.SellTransaction))
 					Expect(p.Transactions[6].Ticker).To(Equal("VFINX"))
@@ -459,7 +459,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[6].TotalValue).Should(BeNumerically("~", 7141.84424, 1e-5))
 				})
 
-				It("should invest 50 percent of the portfolio in PRIDX on 2019-01-31", func() {
+				It("should invest 50 percent of the portfolio in PRIDX on 2019-01-31", Pending, func() {
 					// Buy PRIDX
 					// Order of purchases within a given day are not guaranteed
 					pridxIdx := 7
@@ -473,7 +473,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[pridxIdx].TotalValue).Should(BeNumerically("~", 4876.20727, 1e-5))
 				})
 
-				It("should invest 25 percent of the portfolio in VUSTX on 2019-01-31", func() {
+				It("should invest 25 percent of the portfolio in VUSTX on 2019-01-31", Pending, func() {
 					// Buy VUSTX
 					// Order of purchases within a given day are not guaranteed
 					vustxIdx := 8
@@ -488,7 +488,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2438.10363, 1e-5))
 				})
 
-				It("should have a dividend for VUSTX on 2019-02-28", func() {
+				It("should have a dividend for VUSTX on 2019-02-28", Pending, func() {
 					Expect(p.Transactions[9].Date).To(Equal(time.Date(2019, 02, 28, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[9].Kind).To(Equal(portfolio.DividendTransaction))
 					Expect(p.Transactions[9].Ticker).To(Equal("VUSTX"))
@@ -496,7 +496,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[9].TotalValue).Should(BeNumerically("~", 5.1765, 1e-5))
 				})
 
-				It("should have a dividend for VFINX on 2019-03-20", func() {
+				It("should have a dividend for VFINX on 2019-03-20", Pending, func() {
 					Expect(p.Transactions[10].Date).To(Equal(time.Date(2019, 03, 20, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[10].Kind).To(Equal(portfolio.DividendTransaction))
 					Expect(p.Transactions[10].Ticker).To(Equal("VFINX"))
@@ -504,7 +504,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[10].TotalValue).Should(BeNumerically("~", 13.55998, 1e-5))
 				})
 
-				It("should have a dividend for VUSTX on 2019-03-29", func() {
+				It("should have a dividend for VUSTX on 2019-03-29", Pending, func() {
 					Expect(p.Transactions[11].Date).To(Equal(time.Date(2019, 03, 29, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[11].Kind).To(Equal(portfolio.DividendTransaction))
 					Expect(p.Transactions[11].Ticker).To(Equal("VUSTX"))
@@ -512,7 +512,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[11].TotalValue).Should(BeNumerically("~", 5.96163, 1e-5))
 				})
 
-				It("should sell VUSTX holdings on 2020-01-31", func() {
+				It("should sell VUSTX holdings on 2020-01-31", Pending, func() {
 					// Sell VUSTX
 					// Order of sell transactions on a given day are not ordered -- check the order
 					vustxIdx := 27
@@ -527,7 +527,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2888.30995, 1e-2))
 				})
 
-				It("should sell VFINX holdings on 2020-01-31", func() {
+				It("should sell VFINX holdings on 2020-01-31", Pending, func() {
 					// Sell VFINX
 					// Order of sell transactions on a given day are not ordered -- check the order
 					vfinxIdx := 28
@@ -541,7 +541,7 @@ var _ = Describe("Portfolio", func() {
 					Expect(p.Transactions[vfinxIdx].TotalValue).Should(BeNumerically("~", 2906.78214, 1e-2))
 				})
 
-				It("should invest 100 percent of the portfolio in PRIDX on 2020-01-31", func() {
+				It("should invest 100 percent of the portfolio in PRIDX on 2020-01-31", Pending, func() {
 					// Buy PRIDX
 					Expect(p.Transactions[29].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 					Expect(p.Transactions[29].Kind).To(Equal(portfolio.BuyTransaction))
