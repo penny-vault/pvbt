@@ -377,8 +377,9 @@ func runCmd(env map[string]string, cmd string, args ...interface{}) error {
 	}
 	output, err := sh.OutputWith(env, cmd, argsToStrings(args...)...)
 	if err != nil {
-		fmt.Fprint(os.Stderr, output)
+		fmt.Fprint(os.Stderr, err.Error())
 	}
+	fmt.Println(output)
 
 	return err
 }

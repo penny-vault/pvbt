@@ -24,27 +24,36 @@ import (
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pashagolub/pgxmock"
 	"github.com/rocketlaunchr/dataframe-go"
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 )
 
 var _ = Describe("Portfolio", func() {
 	var (
-		pm *portfolio.PortfolioModel
-		p  *portfolio.Portfolio
-		df *dataframe.DataFrame
-
+		ctx       context.Context
 		dataProxy data.Manager
-		tz        *time.Location
-		perf      *portfolio.Performance
+		dbPool    pgxmock.PgxConnIface
+		df        *dataframe.DataFrame
 		err       error
+		p         *portfolio.Portfolio
+		perf      *portfolio.Performance
+		pm        *portfolio.PortfolioModel
+		tz        *time.Location
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+		tz, err = time.LoadLocation("America/New_York") // New York is the reference time
+		Expect(err).To(BeNil())
+		ctx = context.Background()
+
+		dbPool, err = pgxmock.NewConn()
+		Expect(err).To(BeNil())
+		database.SetPool(dbPool)
 
 		// TSLA daily
 		content, err := ioutil.ReadFile("testdata/TSLA_19800101_20210101_daily.csv")
@@ -130,7 +139,7 @@ var _ = Describe("Portfolio", func() {
 	})
 
 	Describe("with a single holding at a time", func() {
-		Context("is successfully invested", func() {
+		Context("is successfully invested in target portfolio", func() {
 			BeforeEach(func() {
 				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),

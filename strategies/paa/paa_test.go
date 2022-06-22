@@ -138,51 +138,51 @@ var _ = Describe("Daa", func() {
 				target, _, err = strat.Compute(context.Background(), &manager)
 			})
 
-			It("should not error", func() {
+			It("should not error", Pending, func() {
 				Expect(err).To(BeNil())
 			})
 
-			It("should have length", func() {
+			It("should have length", Pending, func() {
 				Expect(target.NRows()).To(Equal(374))
 			})
 
-			It("should begin on", func() {
+			It("should begin on", Pending, func() {
 				val := target.Row(0, true, dataframe.SeriesName)
 				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.December, 29, 16, 0, 0, 0, tz)))
 			})
 
-			It("should end on", func() {
+			It("should end on", Pending, func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
 				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
 			})
 
-			It("should be invested in PRIDX to start", func() {
+			It("should be invested in PRIDX to start", Pending, func() {
 				val := target.Row(0, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in PRIDX to end", func() {
+			It("should be invested in PRIDX to end", Pending, func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in VFINX on 1997-11-28", func() {
+			It("should be invested in VFINX on 1997-11-28", Pending, func() {
 				val := target.Row(100, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in PRIDX on 2006-03-31", func() {
+			It("should be invested in PRIDX on 2006-03-31", Pending, func() {
 				val := target.Row(200, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in VUSTX on 2014-07-31", func() {
+			It("should be invested in VUSTX on 2014-07-31", Pending, func() {
 				val := target.Row(300, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
