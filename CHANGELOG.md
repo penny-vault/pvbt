@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Upgraded all libraries, including go-fiber to 2.13.0
 - Switch to faster JSON serializer/deserializer: goccy/go-json, in some cases
   it is up to 2x faster
+- Portfolio metrics are now computed using daily values (was formerly monthly)
+- Default data provider is now PVDB not Tiingo (to support strategies that invest in a large
+  number of securities)
 
 ### Fixed
 - When pvapi was running for a long time (>24 hrs) risk free rate data would become
