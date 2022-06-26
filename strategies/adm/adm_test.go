@@ -17,24 +17,25 @@ package adm_test
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 	"time"
 
+	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/strategies/adm"
 
 	"github.com/goccy/go-json"
 	"github.com/rocketlaunchr/dataframe-go"
 
-	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Adm", func() {
 	var (
+		dbPool  pgxmock.PgxConnIface
 		strat   *adm.AcceleratingDualMomentum
 		manager data.Manager
 		tz      *time.Location
@@ -58,70 +59,16 @@ var _ = Describe("Adm", func() {
 			"tiingo": "TEST",
 		})
 
-		content, err := ioutil.ReadFile("../testdata/TB3MS.csv")
-		if err != nil {
-			panic(err)
-		}
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=GS3M&cosd=1979-07-01&coed=2021-01-01&fq=Monthly&fam=avg",
-			httpmock.NewBytesResponder(200, content))
+		dbPool, err = pgxmock.NewConn()
+		Expect(err).To(BeNil())
+		database.SetPool(dbPool)
 
-		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VUSTX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VFINX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VFINX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/PRIDX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1979-07-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/PRIDX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1989-07-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/riskfree.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
-		httpmock.RegisterResponder("GET", url,
-			httpmock.NewBytesResponder(200, content))
+		// Expect trading days transaction and query
+		pgxmockhelper.MockDBEodQuery(dbPool, "riskfree.csv",
+			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
+		pgxmockhelper.MockDBCorporateQuery(dbPool, "riskfree_corporate.csv",
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
 	})
@@ -131,10 +78,15 @@ var _ = Describe("Adm", func() {
 			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
+
+				pgxmockhelper.CheckDBQuery2(dbPool, "vfinx.csv",
+					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC))
+
 				target, _, err = strat.Compute(context.Background(), &manager)
 			})
 
-			It("should not error", Pending, func() {
+			It("should not error", func() {
 				Expect(err).To(BeNil())
 			})
 
