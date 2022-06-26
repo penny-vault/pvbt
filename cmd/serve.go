@@ -67,19 +67,16 @@ var serveCmd = &cobra.Command{
 		if Trace {
 			f, err := os.Create("trace.out")
 			if err != nil {
-				log.Error().Err(err).Msg("failed to create trace output file")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("failed to create trace output file")
 			}
 			defer func() {
 				if err := f.Close(); err != nil {
-					log.Error().Err(err).Msg("failed to close trace file")
-					os.Exit(1)
+					log.Fatal().Err(err).Msg("failed to close trace file")
 				}
 			}()
 
 			if err := trace.Start(f); err != nil {
-				log.Error().Err(err).Msg("failed to start trace")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("failed to start trace")
 			}
 			defer trace.Stop()
 		}
@@ -94,21 +91,18 @@ var serveCmd = &cobra.Command{
 
 		shutdown, err := opentelemetry.Setup()
 		if err != nil {
-			log.Error().Err(err).Msg("opentelemetry setup failed")
-			os.Exit(1)
+			log.Fatal().Err(err).Msg("opentelemetry setup failed")
 		}
 		defer func() {
 			if err := shutdown(ctx); err != nil {
-				log.Error().Err(err).Msg("failed to shutdown trace provider")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("failed to shutdown trace provider")
 			}
 		}()
 		log.Info().Msg("initialized open telemetry")
 
 		// setup database
 		if err := database.Connect(); err != nil {
-			log.Error().Err(err).Msg("database connection failed")
-			os.Exit(1)
+			log.Fatal().Err(err).Msg("database connection failed")
 		}
 		log.Info().Msg("connected to database")
 
@@ -130,8 +124,7 @@ var serveCmd = &cobra.Command{
 			fmt.Printf("Received signal: '%s'; shutting down...\n", sig.String())
 			err = app.Shutdown()
 			if err != nil {
-				log.Error().Err(err).Msg("app shutdown failed")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("app shutdown failed")
 			}
 		}()
 
@@ -164,8 +157,7 @@ var serveCmd = &cobra.Command{
 		// Start server on http://${heroku-url}:${port}
 		err = app.Listen(":" + viper.GetString("server.port"))
 		if err != nil {
-			log.Error().Err(err).Msg("app.Listen returned an error")
-			os.Exit(1)
+			log.Fatal().Err(err).Msg("app.Listen returned an error")
 		}
 	},
 }

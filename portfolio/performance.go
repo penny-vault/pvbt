@@ -266,6 +266,8 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 
 	last := prevMeasurement.Time
 
+	log.Info().Time("First", tradingDays[0]).Time("Last", tradingDays[len(tradingDays)-1]).Msg("Date range for calculate performance")
+
 	for _, date := range tradingDays {
 		// measurements should be at 23:59:59.999999999
 		tradingDate := date
@@ -386,7 +388,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 		}
 
 		for ticker, holding := range holdings {
-			log.Debug().Time("Date", date).Str("Ticker", ticker).Float64("HOlding", holding).Msg("holding")
+			log.Debug().Time("Date", date).Str("Ticker", ticker).Float64("Holding", holding).Msg("holding")
 		}
 
 		// build justification array

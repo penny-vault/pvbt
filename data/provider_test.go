@@ -19,7 +19,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgconn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
@@ -49,34 +48,12 @@ var _ = Describe("Provider", func() {
 		database.SetPool(dbPool)
 
 		// setup database expectations
-
-		// Expect trading days transaction and query
-		dbPool.ExpectBegin()
-		// NOTE: pgconn.CommandTag is ignored
-		dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-
-		rows, err := pgxmockhelper.RowsFromCSV("../testdata/tradingdays.csv", map[string]string{
-			"trade_day": "date",
-		})
-		Expect(err).To(BeNil())
-		dbPool.ExpectQuery("SELECT").WillReturnRows(rows)
-
-		// Expect dataframe transaction and query
-		dbPool.ExpectBegin()
-		// NOTE: pgconn.CommandTag is ignored
-		dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-
-		rows, err = pgxmockhelper.RowsFromCSV("../testdata/riskfree.csv", map[string]string{
-			"event_date": "date",
-			"val":        "float64",
-			"close":      "float64",
-			"adj_close":  "float64",
-		})
-		Expect(err).To(BeNil())
-		dbPool.ExpectQuery("SELECT").WillReturnRows(rows)
-
+		pgxmockhelper.MockDBEodQuery(dbPool, "../testdata/riskfree.csv",
+			time.Date(1969, 12, 25, 0, 0, 0, 0, tz), time.Date(2022, 6, 16, 0, 0, 0, 0, tz),
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2022, 6, 16, 0, 0, 0, 0, time.UTC))
+		pgxmockhelper.MockDBCorporateQuery(dbPool, "../testdata/riskfree_corporate.csv",
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
-
 		dataProxy = data.NewManager(map[string]string{
 			"tiingo": "TEST",
 		})

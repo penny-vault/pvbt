@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jackc/pgtype"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
@@ -33,23 +34,27 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type pvdb struct {
-	cache    map[string]float64
-	hashFunc func(date time.Time, metric string, symbol string) string
+type Pvdb struct {
+	cache     map[string]float64
+	Dividends map[string][]*Measurement
+	Splits    map[string][]*Measurement
+	hashFunc  func(date time.Time, metric string, symbol string) string
 }
 
 // NewPVDB Create a new PVDB data provider
-func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric string, symbol string) string) *pvdb {
-	return &pvdb{
-		cache:    cache,
-		hashFunc: hashFunc,
+func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric string, symbol string) string) *Pvdb {
+	return &Pvdb{
+		cache:     cache,
+		hashFunc:  hashFunc,
+		Dividends: make(map[string][]*Measurement),
+		Splits:    make(map[string][]*Measurement),
 	}
 }
 
 // Date provider functions
 
 // TradingDays returns a list of trading days between begin and end
-func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency string) []time.Time {
+func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency string) []time.Time {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
@@ -103,7 +108,7 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
-		log.Fatal().Stack().Msg("could not load trading days")
+		log.Panic().Stack().Msg("could not load trading days")
 	}
 
 	for idx, xx := range res[:len(res)-1] {
@@ -153,11 +158,11 @@ func (p *pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 // Provider functions
 
-func (p *pvdb) DataType() string {
+func (p *Pvdb) DataType() string {
 	return "security"
 }
 
-func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
@@ -188,30 +193,6 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	}
 
 	// build SQL query
-	var columns string
-	switch metric {
-	case MetricOpen:
-		columns = "open AS val, close, adj_close"
-	case MetricHigh:
-		columns = "high AS val, close, adj_close"
-	case MetricLow:
-		columns = "low AS val, close, adj_close"
-	case MetricClose:
-		columns = "close AS val, close, adj_close"
-	case MetricVolume:
-		columns = "(volume::double precision) AS val, close, adj_close"
-	case MetricAdjustedClose:
-		columns = "adj_close AS val, close, adj_close"
-	case MetricDividendCash:
-		columns = "dividend AS val, close, adj_close"
-	case MetricSplitFactor:
-		columns = "split_factor AS val, close, adj_close"
-	default:
-		span.SetStatus(codes.Error, "un-supported metric")
-		trx.Rollback(ctx)
-		return nil, errors.New("un-supported metric")
-	}
-
 	args := make([]interface{}, len(symbols)+2)
 	args[0] = begin
 	args[1] = end
@@ -222,8 +203,7 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		args[idx+2] = ticker
 	}
 	tickerArgs := strings.Join(tickerSet, ", ")
-
-	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", columns, tickerArgs)
+	sql := fmt.Sprintf("SELECT event_date, ticker, close, adj_close FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", tickerArgs)
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, args...)
@@ -238,36 +218,25 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 
 	// build the dataframe
 	vals := make(map[int]map[string]float64, len(symbols))
-	adjustFactor := make(map[string]float64, len(symbols))
-	for _, s := range symbols {
-		adjustFactor[s] = 1.0
-	}
 
 	var date time.Time
 	var lastDate time.Time
 	var ticker string
-	var val float64
 	var close float64
-	var adjClose float64
+	var adjClose pgtype.Float8
 
 	symbolCnt := len(symbols)
 
 	for rows.Next() {
-		err = rows.Scan(&date, &ticker, &val, &close, &adjClose)
+		err = rows.Scan(&date, &ticker, &close, &adjClose)
 
-		p.cache[p.hashFunc(date, metric, ticker)] = val
-		switch metric {
-		case MetricClose:
-			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose
-		case MetricAdjustedClose:
-			p.cache[p.hashFunc(date, MetricClose, ticker)] = close
-		default:
-			p.cache[p.hashFunc(date, MetricClose, ticker)] = close
-			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose
+		p.cache[p.hashFunc(date, MetricClose, ticker)] = close
+		if adjClose.Status == pgtype.Present {
+			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose.Float
 		}
 
 		if err != nil {
-			subLog.Warn().Err(err).Msg("failed to load eod prices -- db query scan failed")
+			subLog.Error().Err(err).Msg("failed to load eod prices -- db query scan failed")
 			trx.Rollback(context.Background())
 			return nil, err
 		}
@@ -280,10 +249,23 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 			vals[dateHash] = valMap
 		}
 
-		valMap[ticker] = val
+		switch metric {
+		case MetricClose:
+			valMap[ticker] = close
+		case MetricAdjustedClose:
+			valMap[ticker] = adjClose.Float
+		default:
+			span.SetStatus(codes.Error, "un-supported metric")
+			trx.Rollback(ctx)
+			log.Panic().Str("Metric", metric).Msg("Unsupported metric type")
+			return nil, errors.New("un-supported metric")
+		}
 
 		lastDate = date
 	}
+
+	// preload splits & divs
+	p.preloadCorporateActions(ctx, symbols, begin)
 
 	series := make([]dataframe.Series, 0, symbolCnt+1)
 	series = append(series, dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: len(tradingDays)}, tradingDays))
@@ -322,7 +304,88 @@ func (p *pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 	return df, err
 }
 
-func (p *pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
+func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, start time.Time) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
+	defer span.End()
+
+	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	corporateTickerSet := make([]string, 0, len(tickerSet))
+	for _, ticker := range tickerSet {
+		if _, ok := p.Dividends[ticker]; !ok {
+			corporateTickerSet = append(corporateTickerSet, ticker)
+			p.Dividends[ticker] = make([]*Measurement, 0)
+			p.Splits[ticker] = make([]*Measurement, 0)
+		}
+	}
+
+	if len(corporateTickerSet) == 0 {
+		log.Debug().Strs("Tickers", tickerSet).Msg("skipping preload of corporate actions because there are no additional tickers to preload")
+		return // nothing needs to be loaded
+	}
+
+	log.Debug().Time("Start", start).Strs("Tickers", tickerSet).Msg("pre-load from corporate actions")
+
+	subLog := log.With().Strs("Symbols", corporateTickerSet).Time("StartTime", start).Logger()
+
+	corporateTickerArgs := strings.Join(corporateTickerSet, ", ")
+	sql := fmt.Sprintf("SELECT event_date, ticker, dividend, split_factor FROM eod WHERE ticker IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, ticker", corporateTickerArgs)
+
+	trx, err := database.TrxForUser("pvuser")
+	if err != nil {
+		span.RecordError(err)
+		msg := "failed to get transaction for preloading corporate actions"
+		span.SetStatus(codes.Error, msg)
+		log.Warn().Err(err).Msg(msg)
+		return
+	}
+
+	// execute the query
+	rows, err := trx.Query(ctx, sql, start)
+	if err != nil {
+		span.RecordError(err)
+		msg := "failed to load eod prices -- db query failed"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Err(err).Msg(msg)
+		trx.Rollback(context.Background())
+		return
+	}
+
+	var date time.Time
+	var ticker string
+	var dividend float64
+	var splitFactor float64
+
+	for rows.Next() {
+		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
+		if err != nil {
+			subLog.Error().Err(err).Msg("failed to load corporate actions -- db query scan failed")
+			trx.Rollback(context.Background())
+			return
+		}
+
+		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
+		divs := p.Dividends[ticker]
+		if dividend != 0.0 {
+			divs = append(divs, &Measurement{
+				Date:  date,
+				Value: dividend,
+			})
+		}
+
+		splits := p.Splits[ticker]
+		if splitFactor != 1.0 {
+			splits = append(splits, &Measurement{
+				Date:  date,
+				Value: splitFactor,
+			})
+		}
+
+		p.Dividends[ticker] = divs
+		p.Splits[ticker] = splits
+	}
+}
+
+func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetLatestDataBefore")
 	defer span.End()
 	subLog := log.With().Str("Symbol", symbol).Str("Metric", metric).Time("Before", before).Logger()

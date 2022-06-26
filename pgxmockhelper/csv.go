@@ -16,32 +16,33 @@
 package pgxmockhelper
 
 import (
-	"errors"
 	"io/ioutil"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
 	"github.com/rs/zerolog/log"
 )
 
-var (
-	ErrInsufficientLines    error = errors.New("input files must have at least 3 lines (header + content + trailing new line)")
-	ErrNoTrailingNewLine    error = errors.New("missing trailing newline")
-	ErrTypeConversionFailed error = errors.New("type conversion failed")
-)
+type CSVRows struct {
+	rows    [][]any
+	header  []string
+	dateCol int
+}
 
-// RowsFromCSV reads the specified CSV file and returns pgxrows. `typeMap` allows optional type
-// conversions otherwise all values are returned as strings. CSV parsing is simple - first row
-// must be a header, columns are not surrounded by quotes,
-func RowsFromCSV(csvFn string, typeMap map[string]string) (*pgxmock.Rows, error) {
+func NewCSVRows(csvFn string, typeMap map[string]string) *CSVRows {
+	subLog := log.With().Str("CsvFn", csvFn).Logger()
+
+	rows := &CSVRows{
+		dateCol: -1,
+		rows:    make([][]any, 0),
+	}
 	rawData, err := ioutil.ReadFile(csvFn)
 	if err != nil {
-		return nil, err
+		subLog.Panic().Err(err).Msg("could not read file")
 	}
-
-	subLog := log.With().Str("CsvFn", csvFn).Logger()
 
 	// break raw data into an array of lines
 	lines := strings.Split(string(rawData), "\n")
@@ -49,43 +50,38 @@ func RowsFromCSV(csvFn string, typeMap map[string]string) (*pgxmock.Rows, error)
 	// sanity checks:
 	// - array length is at least 3 (header + content + trailing newline)
 	// - make sure last line ends in newline
-	if len(lines) < 3 {
-		subLog.Error().Int("NumLines", len(lines)).Msg("input file does not have enough lines, need at least 3 (header + content + trailing new line)")
-		return nil, ErrInsufficientLines
+	if len(lines) < 2 {
+		subLog.Panic().Int("NumLines", len(lines)).Msg("input file does not have enough lines, need at least 2 (header + trailing new line)")
 	}
 	if lines[len(lines)-1] != "" {
-		subLog.Error().Msg("input file is missing a trailing new line")
-		return nil, ErrNoTrailingNewLine
+		subLog.Panic().Msg("input file is missing a trailing new line")
 	}
 
 	// parse header
 	headerRaw := lines[0]
 	lines = lines[1 : len(lines)-1] // discard first and last rows
-	header := strings.Split(headerRaw, ",")
-
-	// create rows structure
-	rows := pgxmock.NewRows(header)
+	rows.header = strings.Split(headerRaw, ",")
 
 	// parse each line and create a row
 	for _, ll := range lines {
-		cols := make([]any, len(header))
+		cols := make([]any, len(rows.header))
 		parts := strings.Split(ll, ",")
 		for idx, val := range parts {
-			colName := header[idx]
+			colName := rows.header[idx]
 			if typeConv, ok := typeMap[colName]; ok {
 				switch typeConv {
 				case "date":
 					parsed, err := time.Parse("2006-01-02", val)
 					if err != nil {
-						log.Error().Err(err).Str("Val", val).Msg("could not convert val to datetime of format 2006-01-02")
-						return nil, ErrTypeConversionFailed
+						subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to datetime of format 2006-01-02")
 					}
+					// put in proper timezone
 					cols[idx] = parsed
+					rows.dateCol = idx
 				case "float64":
 					parsed, err := strconv.ParseFloat(val, 64)
 					if err != nil {
-						log.Error().Err(err).Str("Val", val).Msg("could not convert val to float64")
-						return nil, ErrTypeConversionFailed
+						subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to float64")
 					}
 					cols[idx] = parsed
 				default:
@@ -96,8 +92,78 @@ func RowsFromCSV(csvFn string, typeMap map[string]string) (*pgxmock.Rows, error)
 				cols[idx] = val
 			}
 		}
-		rows = rows.AddRow(cols...)
+		rows.rows = append(rows.rows, cols)
 	}
 
-	return rows, nil
+	return rows
+}
+
+func (csvRows *CSVRows) Between(a time.Time, b time.Time) *CSVRows {
+	newRows := make([][]any, 0, len(csvRows.rows))
+	if len(csvRows.rows) == 0 {
+		return csvRows
+	}
+	if csvRows.dateCol == -1 {
+		log.Panic().Time("a", a).Time("b", b).Msg("no date column found")
+	}
+	for _, row := range csvRows.rows {
+		t := row[csvRows.dateCol].(time.Time)
+		if (t.Before(b) || t.Equal(b)) && (t.After(a) || t.Equal(a)) {
+			newRows = append(newRows, row)
+		}
+	}
+	csvRows.rows = newRows
+	return csvRows
+}
+
+func (csvRows *CSVRows) Rows() *pgxmock.Rows {
+	r := pgxmock.NewRows(csvRows.header)
+	for _, row := range csvRows.rows {
+		r.AddRow(row...)
+	}
+	return r
+}
+
+func MockDBEodQuery(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
+		NewCSVRows("../testdata/tradingdays.csv", map[string]string{
+			"trade_day": "date",
+		}).Between(d1, d2).Rows())
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT event_date, ticker, close, adj_close FROM eod").WillReturnRows(
+		NewCSVRows(fn, map[string]string{
+			"event_date": "date",
+			"close":      "float64",
+			"adj_close":  "float64",
+		}).Between(d3, d4).Rows())
+}
+
+func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn string, d1, d2 time.Time) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT event_date, ticker, dividend, split_factor FROM eod").WillReturnRows(
+		NewCSVRows(fn, map[string]string{
+			"event_date":   "date",
+			"dividend":     "float64",
+			"split_factor": "float64",
+		}).Between(d1, d2).Rows())
+}
+
+func CheckDBQuery1(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+}
+
+func CheckDBQuery2(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
+		NewCSVRows("../testdata/tradingdays.csv", map[string]string{
+			"trade_day": "date",
+		}).Between(d1, d2).Rows())
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 }

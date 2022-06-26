@@ -61,6 +61,11 @@ const (
 	MetricSplitFactor   = "SplitFactor"
 )
 
+type Measurement struct {
+	Date  time.Time
+	Value float64
+}
+
 // Manager data manager type
 type Manager struct {
 	Begin           time.Time
@@ -83,7 +88,7 @@ func InitializeDataManager() {
 	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), []string{"DGS3MO"}, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
-		log.Fatal().Err(err).Msg("cannot load risk free rate")
+		log.Panic().Err(err).Msg("cannot load risk free rate")
 	}
 
 	// schedule a timer to update riskFreeRate in 24 hours
@@ -122,6 +127,18 @@ func NewManager(credentials map[string]string) Manager {
 	m.RegisterDataProvider(fred)
 
 	return m
+}
+
+// Get dividend map
+func (m *Manager) GetDividends() map[string][]*Measurement {
+	pvdb := m.providers["security"].(*Pvdb)
+	return pvdb.Dividends
+}
+
+// Get splits map
+func (m *Manager) GetSplits() map[string][]*Measurement {
+	pvdb := m.providers["security"].(*Pvdb)
+	return pvdb.Splits
 }
 
 // RegisterDataProvider add a data provider to the system
@@ -180,7 +197,6 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
 	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, FrequencyDaily, begin, end)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not retrieve security eod prices")
 		return err
 	}
 
@@ -235,20 +251,16 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
 	if !ok {
-		return math.NaN(), nil
-		// return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
-		/*
-			tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-			end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
-			err := m.Fetch(ctx, date, end, metric, symbol)
-			if err != nil {
-				return 0, err
-			}
-			val, ok = m.cache[key]
-			if !ok {
-				return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
-			}
-		*/
+		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
+		err := m.Fetch(ctx, date, end, metric, symbol)
+		if err != nil {
+			return 0, err
+		}
+		val, ok = m.cache[key]
+		if !ok {
+			return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+		}
 	}
 	return val, nil
 }

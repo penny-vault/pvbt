@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"strings"
 	"time"
 
@@ -53,8 +52,7 @@ var updateCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Error().Err(err).Msg("database connection failed")
-			os.Exit(1)
+			log.Fatal().Err(err).Msg("database connection failed")
 		}
 
 		// get time
@@ -64,8 +62,7 @@ var updateCmd = &cobra.Command{
 		} else {
 			dt, err = time.Parse("2006-01-02", ToDate)
 			if err != nil {
-				log.Error().Err(err).Str("InputStr", ToDate).Msg("could not parse to date - expected format 2006-01-02")
-				os.Exit(1)
+				log.Fatal().Err(err).Str("InputStr", ToDate).Msg("could not parse to date - expected format 2006-01-02")
 			}
 
 			// convert to EST
@@ -100,8 +97,7 @@ var updateCmd = &cobra.Command{
 		if PortfolioID != "" {
 			portfolioParts := strings.Split(PortfolioID, ":")
 			if len(portfolioParts) != 2 {
-				log.Error().Str("InputStr", PortfolioID).Int("LenPortfolioParts", len(portfolioParts)).Msg("must specify portfolioID as {userID}:{portfolioID}")
-				os.Exit(1)
+				log.Fatal().Str("InputStr", PortfolioID).Int("LenPortfolioParts", len(portfolioParts)).Msg("must specify portfolioID as {userID}:{portfolioID}")
 			}
 			u := portfolioParts[0]
 			pIDStr := portfolioParts[1]
@@ -110,8 +106,7 @@ var updateCmd = &cobra.Command{
 			}
 			p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 			if err != nil {
-				log.Error().Err(err).Msg("could not load portfolio from DB")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("could not load portfolio from DB")
 			}
 			p[0].LoadTransactionsFromDB()
 			portfolios = append(portfolios, p[0])
@@ -120,21 +115,18 @@ var updateCmd = &cobra.Command{
 			users, err := database.GetUsers()
 			users = append(users, "pvuser")
 			if err != nil {
-				log.Error().Err(err).Msg("could not load users from database")
-				os.Exit(1)
+				log.Fatal().Err(err).Msg("could not load users from database")
 			}
 
 			for _, u := range users {
 				trx, err := database.TrxForUser(u)
 				if err != nil {
-					log.Error().Err(err).Str("User", u).Msg("could not create trasnaction for user")
-					os.Exit(1)
+					log.Fatal().Err(err).Str("User", u).Msg("could not create trasnaction for user")
 				}
 
 				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios")
 				if err != nil {
-					log.Error().Err(err).Msg("could not get portfolio IDs")
-					os.Exit(1)
+					log.Fatal().Err(err).Msg("could not get portfolio IDs")
 				}
 
 				for rows.Next() {
@@ -150,8 +142,7 @@ var updateCmd = &cobra.Command{
 					}
 					p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 					if err != nil {
-						log.Error().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
-						os.Exit(1)
+						log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
 					}
 					p[0].LoadTransactionsFromDB()
 					portfolios = append(portfolios, p[0])
