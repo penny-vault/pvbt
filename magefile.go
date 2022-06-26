@@ -97,7 +97,20 @@ func testGoFlags() string {
 // Run tests
 func Test() error {
 	fmt.Println("Running Ginkgo tests ...")
-	env := map[string]string{"GOFLAGS": testGoFlags()}
+
+	// set testdir
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("could not get working directory")
+		os.Exit(1)
+	}
+	testDir := filepath.Join(wd, "testdata")
+
+	env := map[string]string{
+		"GOFLAGS":             testGoFlags(),
+		"PVAPI_TEST_DATA_DIR": testDir,
+	}
 	return runCmd(env, ginkgoexe, "./...", buildFlags(), "-tags", buildTags())
 }
 
