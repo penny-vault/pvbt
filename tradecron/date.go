@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/penny-vault/pv-api/data/database"
-
 	"github.com/jackc/pgx/v4"
+	"github.com/penny-vault/pv-api/data/database"
 	"github.com/robfig/cron/v3"
+	"github.com/rs/zerolog/log"
 )
 
 type CronMode int16
@@ -44,7 +44,6 @@ type TradeCron struct {
 
 var holidays map[int][]time.Time
 var lastHolidayLoad time.Time
-var nyc *time.Location
 
 var marketOpenHour = 9
 var marketOpenMin = 30
@@ -53,15 +52,15 @@ var marketExtendedOpenHour = 7
 var marketExtendedOpenMin = 0
 var marketExtendedCloseHour = 20
 
-// InitializeTradeCron initializes the TradeCron system
-func InitializeTradeCron() {
-	nyc, _ = time.LoadLocation("America/New_York")
-}
-
 // LoadMarketHolidays retrieves market holidays from the database
 func LoadMarketHolidays() error {
 	var rows pgx.Rows
 	var err error
+
+	var nyc *time.Location
+	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
+		log.Panic().Err(err).Msg("could not load nyc timezone")
+	}
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
@@ -99,6 +98,12 @@ func LoadMarketHolidays() error {
 
 // IsMarketHoliday returns true if the specified date is a market holiday
 func IsMarketHoliday(t time.Time) bool {
+	var nyc *time.Location
+	var err error
+	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
+		log.Panic().Err(err).Msg("could not load nyc timezone")
+	}
+
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, nyc)
 	for _, day := range holidays[t.Year()] {
 		if d.Equal(day) {
@@ -136,6 +141,12 @@ func NextMonth(t time.Time) time.Time {
 
 // MonthEnd returns the last trading day of the specified month
 func MonthEnd(t time.Time) time.Time {
+	var nyc *time.Location
+	var err error
+	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
+		log.Panic().Err(err).Msg("could not load nyc timezone")
+	}
+
 	firstOfMonth := time.Date(t.Year(), t.Month(), 1, marketCloseHour, 0, 0, 0, nyc)
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 
@@ -202,6 +213,12 @@ func New(scheduleStr string, mode CronMode) (*TradeCron, error) {
 
 // Next returns the next tradeable date
 func (tc *TradeCron) Next(forDate time.Time) time.Time {
+	var nyc *time.Location
+	var err error
+	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
+		log.Panic().Err(err).Msg("could not load nyc timezone")
+	}
+
 	switch tc.Flag {
 	case "@monthend":
 		// get last trading day of month

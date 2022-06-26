@@ -17,7 +17,6 @@ package cmd
 
 import (
 	"context"
-	"os"
 	"time"
 
 	"github.com/penny-vault/pv-api/data/database"
@@ -46,8 +45,7 @@ var purgeCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Error().Err(err).Msg("could not connect to database")
-			os.Exit(1)
+			log.Panic().Err(err).Msg("could not connect to database")
 		}
 
 		userList := make([]string, 0)

@@ -19,12 +19,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
@@ -44,11 +42,8 @@ var backtestCmd = &cobra.Command{
 		// setup database
 		err := database.Connect()
 		if err != nil {
-			log.Error().Err(err).Msg("could not connect to database")
-			os.Exit(1)
+			log.Panic().Err(err).Msg("could not connect to database")
 		}
-
-		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()

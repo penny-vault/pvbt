@@ -20,9 +20,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog/log"
 )
 
 func TestDfextras(t *testing.T) {
+	log.Logger = log.Output(GinkgoWriter)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Dfextras Suite")
 }

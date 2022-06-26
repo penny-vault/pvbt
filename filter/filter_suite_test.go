@@ -20,18 +20,11 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog/log"
 )
 
-var _ = BeforeSuite(func() {
-})
-
-var _ = BeforeEach(func() {
-})
-
-var _ = AfterSuite(func() {
-})
-
 func TestPortfolio(t *testing.T) {
+	log.Logger = log.Output(GinkgoWriter)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Filter Suite")
 }

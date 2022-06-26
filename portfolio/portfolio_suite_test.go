@@ -18,28 +18,13 @@ package portfolio_test
 import (
 	"testing"
 
-	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog/log"
 )
 
-var _ = BeforeSuite(func() {
-	//	log.SetLevel(log.DebugLevel)
-
-	// block all HTTP requests
-	httpmock.Activate()
-})
-
-var _ = BeforeEach(func() {
-	// remove any mocks
-	httpmock.Reset()
-})
-
-var _ = AfterSuite(func() {
-	httpmock.DeactivateAndReset()
-})
-
 func TestPortfolio(t *testing.T) {
+	log.Logger = log.Output(GinkgoWriter)
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Portfolio Suite")
 }

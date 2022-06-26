@@ -65,8 +65,6 @@ type PortfolioModel struct {
 	value          float64
 	holdings       map[string]float64
 	justifications map[string][]*Justification
-	dividendData   map[string]*dataframe.DataFrame
-	splitData      map[string]*dataframe.DataFrame
 }
 
 type Period struct {
@@ -116,9 +114,6 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 		"$CASH": initial,
 	}
 
-	model.dividendData = make(map[string]*dataframe.DataFrame)
-	model.splitData = make(map[string]*dataframe.DataFrame)
-
 	return &model
 }
 
@@ -157,8 +152,8 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 	nTrx := len(p.Transactions)
 	if nTrx > 0 {
 		lastDate := p.Transactions[nTrx-1].Date
-		//fmt.Printf("%s %s %s\n", p.Transactions[nTrx-1].Date, p.Transactions[nTrx-1].Kind, p.Transactions[nTrx-1].Ticker)
 		if lastDate.After(date) {
+			log.Error().Time("Date", date).Time("LastTransactionDate", lastDate).Msg("cannot rebalance portfolio when date is before last transaction date")
 			return fmt.Errorf("cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
 		}
 	}
@@ -172,6 +167,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 	// Allow for floating point error
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
+		log.Error().Float64("TotalPercentAllocated", total).Time("Date", date).Msg("TotalPercentAllocated must equal 1.0")
 		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f for date %s", total, date)
 	}
 
@@ -496,6 +492,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 	log.Info().Msg("building target portfolio")
 	log.Info().Int("CacheSizeMB", pm.dataProxy.HashSize()/(1024.0*1024.0)).Msg("EOD price cache size")
 	if target.NRows() == 0 {
+		log.Warn().Msg("target rows = 0; nothing to do!")
 		return nil
 	}
 
@@ -634,7 +631,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
 func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time.Time) error {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
 	defer span.End()
 
 	p := pm.Portfolio
@@ -650,6 +647,8 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 		return err
 	}
 
+	log.Debug().Time("Through", through).Msg("evaluating corporate actions")
+
 	// remove time and move to midnight the next day... this
 	// ensures that the search is inclusive of through
 	through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
@@ -661,16 +660,10 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 	}
 
 	// Load split & dividend history
-	symbols := []string{}
 	cnt := 0
 	for k := range pm.holdings {
 		if k != "$CASH" {
 			cnt++
-			// NOTE: splitData and dividendData are always updated in sync so they
-			// always match
-			if _, ok := pm.dividendData[k]; !ok {
-				symbols = append(symbols, k)
-			}
 		}
 	}
 
@@ -678,155 +671,73 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 		return nil // nothing to do
 	}
 
-	frequency := pm.dataProxy.Frequency
-	pm.dataProxy.Frequency = data.FrequencyDaily
-	if len(symbols) > 0 {
-		divMap, errs := pm.dataProxy.GetDataFrame(ctx, data.MetricDividendCash, symbols...)
-		if errs != nil {
-			return errors.New("failed to download dividend data for tickers")
-		}
-		dateSeriesIdx := divMap.MustNameToColumn(common.DateIdx)
-		dateSeries := divMap.Series[dateSeriesIdx]
-		for _, series := range divMap.Series {
-			if series.Name() == common.DateIdx {
-				continue
-			}
-			// filter to non 0 values
-			df := dataframe.NewDataFrame(dateSeries.Copy(), series)
-			df, err = dfextras.DropNA(context.Background(), df)
-			if err != nil {
-				return err
-			}
-			k := series.Name()
-			filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
-				if vals[k].(float64) == 0.0 {
-					return dataframe.DROP, nil
-				}
-				return dataframe.KEEP, nil
-			})
-
-			dataframe.Filter(ctx, df, filterFn, dataframe.FilterOptions{
-				InPlace: true,
-			})
-			pm.dividendData[k] = df
-		}
-
-		splitMap, errs := pm.dataProxy.GetDataFrame(ctx, data.MetricSplitFactor, symbols...)
-		dateSeriesIdx = splitMap.MustNameToColumn(common.DateIdx)
-		dateSeries = splitMap.Series[dateSeriesIdx]
-		if errs != nil {
-			return errors.New("failed to download split data for tickers")
-		}
-		for _, series := range splitMap.Series {
-			if series.Name() == common.DateIdx {
-				continue
-			}
-			df := dataframe.NewDataFrame(dateSeries.Copy(), series)
-			df, err = dfextras.DropNA(ctx, df)
-			if err != nil {
-				return err
-			}
-			k := series.Name()
-			// filter to non 1 values
-			filterFn := dataframe.FilterDataFrameFn(func(vals map[interface{}]interface{}, row, nRows int) (dataframe.FilterAction, error) {
-				if vals[k].(float64) == 1.0 {
-					return dataframe.DROP, nil
-				}
-				return dataframe.KEEP, nil
-			})
-
-			dataframe.Filter(ctx, df, filterFn, dataframe.FilterOptions{
-				InPlace: true,
-			})
-			pm.splitData[k] = df
-		}
-	}
-	pm.dataProxy.Frequency = frequency
-
 	addTransactions := make([]*Transaction, 0, 10)
 
+	myDividends := pm.dataProxy.GetDividends()
+	mySplits := pm.dataProxy.GetSplits()
+
+	// for each holding check if there are splits
 	for k := range pm.holdings {
 		if k == "$CASH" {
 			continue
 		}
 
 		// do dividends
-		iterator := pm.dividendData[k].ValuesIterator(
-			dataframe.ValuesOptions{
-				InitialRow:   0,
-				Step:         1,
-				DontReadLock: false,
-			},
-		)
-
-		for {
-			row, divs, _ := iterator(dataframe.SeriesName)
-			if row == nil {
-				break
-			}
-
-			date := divs[common.DateIdx].(time.Time)
-			if date.After(from) && date.Before(through) {
-				// it's in range
-				dividend := divs[k].(float64)
-				nShares := pm.holdings[k]
-				totalValue := nShares * dividend
-				// there is a dividend, record it
-				trxId, _ := uuid.New().MarshalBinary()
-				t := Transaction{
-					ID:            trxId,
-					Date:          date,
-					Ticker:        k,
-					Kind:          DividendTransaction,
-					PricePerShare: 1.0,
-					TotalValue:    totalValue,
-					Justification: nil,
+		if divs, ok := myDividends[k]; ok {
+			for _, d := range divs {
+				date := d.Date
+				if date.After(from) && date.Before(through) {
+					// it's in range
+					dividend := d.Value
+					nShares := pm.holdings[k]
+					totalValue := nShares * dividend
+					// there is a dividend, record it
+					trxId, _ := uuid.New().MarshalBinary()
+					t := Transaction{
+						ID:            trxId,
+						Date:          date,
+						Ticker:        k,
+						Kind:          DividendTransaction,
+						PricePerShare: 1.0,
+						TotalValue:    totalValue,
+						Justification: nil,
+					}
+					// update cash position in holdings
+					pm.holdings["$CASH"] += nShares * dividend
+					computeTransactionSourceID(&t)
+					addTransactions = append(addTransactions, &t)
 				}
-				// update cash position in holdings
-				pm.holdings["$CASH"] += nShares * dividend
-				computeTransactionSourceID(&t)
-				addTransactions = append(addTransactions, &t)
 			}
 		}
 
 		// do splits
-		iterator = pm.splitData[k].ValuesIterator(
-			dataframe.ValuesOptions{
-				InitialRow:   0,
-				Step:         1,
-				DontReadLock: false,
-			},
-		)
 
-		for {
-			row, s, _ := iterator(dataframe.SeriesName)
-			if row == nil {
-				break
-			}
+		if splits, ok := mySplits[k]; ok {
+			for _, s := range splits {
+				date := s.Date
+				if date.After(from) && date.Before(through) {
+					// it's in range
+					splitFactor := s.Value
+					nShares := pm.holdings[k]
+					shares := splitFactor * nShares
+					// there is a split, record it
+					trxId, _ := uuid.New().MarshalBinary()
+					t := Transaction{
+						ID:            trxId,
+						Date:          date,
+						Ticker:        k,
+						Kind:          SplitTransaction,
+						PricePerShare: 0.0,
+						Shares:        shares,
+						TotalValue:    0,
+						Justification: nil,
+					}
+					computeTransactionSourceID(&t)
+					addTransactions = append(addTransactions, &t)
 
-			date := s[common.DateIdx].(time.Time)
-			if date.After(from) && date.Before(through) {
-				// it's in range
-				splitFactor := s[k].(float64)
-				nShares := pm.holdings[k]
-				shares := splitFactor * nShares
-				// there is a split, record it
-				trxId, _ := uuid.New().MarshalBinary()
-				t := Transaction{
-					ID:            trxId,
-					Date:          date,
-					Ticker:        k,
-					Kind:          SplitTransaction,
-					PricePerShare: 0.0,
-					Shares:        shares,
-					TotalValue:    0,
-					Justification: nil,
+					// update holdings
+					pm.holdings[k] = shares
 				}
-				computeTransactionSourceID(&t)
-				addTransactions = append(addTransactions, &t)
-
-				// update holdings
-				pm.holdings[k] = shares
 			}
 		}
 	}
@@ -1121,8 +1032,6 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			Portfolio:      p,
 			dataProxy:      dataProxy,
 			justifications: make(map[string][]*Justification),
-			dividendData:   make(map[string]*dataframe.DataFrame),
-			splitData:      make(map[string]*dataframe.DataFrame),
 		}
 
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)

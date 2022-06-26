@@ -44,6 +44,7 @@ const (
 
 // allow user to override go executable by running as GOEXE=xxx make ... on unix-like systems
 var goexe = "go"
+var ginkgoexe = "ginkgo"
 
 func init() {
 	if exe := os.Getenv("GOEXE"); exe != "" {
@@ -95,9 +96,9 @@ func testGoFlags() string {
 
 // Run tests
 func Test() error {
-	fmt.Println("Go Test")
+	fmt.Println("Running Ginkgo tests ...")
 	env := map[string]string{"GOFLAGS": testGoFlags()}
-	return runCmd(env, goexe, "test", "./...", buildFlags(), "-tags", buildTags())
+	return runCmd(env, ginkgoexe, "./...", buildFlags(), "-tags", buildTags())
 }
 
 // Run tests with race detector
@@ -376,8 +377,9 @@ func runCmd(env map[string]string, cmd string, args ...interface{}) error {
 	}
 	output, err := sh.OutputWith(env, cmd, argsToStrings(args...)...)
 	if err != nil {
-		fmt.Fprint(os.Stderr, output)
+		fmt.Fprint(os.Stderr, err.Error())
 	}
+	fmt.Println(output)
 
 	return err
 }

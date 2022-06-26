@@ -105,7 +105,7 @@ func LoadStrategyMetricsFromDb() {
 		// load results from the database
 		trx, err := database.TrxForUser("pvuser")
 		if err != nil {
-			log.Fatal().Str("Endpoint", "UpdatePortfolio").Str("UserID", "pvuser").Msg("unable to get database transaction for user")
+			log.Panic().Str("Endpoint", "UpdatePortfolio").Str("UserID", "pvuser").Msg("unable to get database transaction for user")
 		}
 
 		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolios WHERE user_id='pvuser' AND name=$1", strat.Name)

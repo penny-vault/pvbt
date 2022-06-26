@@ -16,10 +16,8 @@
 package cmd
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/penny-vault/pv-api/pkginfo"
+	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -86,7 +84,6 @@ var rootCmd = &cobra.Command{
 
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		log.Panic().Err(err).Msg("rootCmd.Execute returned an error")
 	}
 }

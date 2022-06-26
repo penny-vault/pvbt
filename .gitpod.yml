@@ -3,7 +3,7 @@
 # and commit this file to your remote git repository to share the goodness with others.
 
 tasks:
-  - init: go get && go build ./... && go test ./... && make
+  - init: go install -mod=mod github.com/onsi/ginkgo/v2/ginkgo@latest && pushd /workspace/go/bin && curl -L https://github.com/magefile/mage/releases/download/v1.13.0/mage_1.13.0_Linux-64bit.tar.gz | tar xz && popd && go get
     command: go run
 
 

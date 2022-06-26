@@ -17,29 +17,30 @@ package daa_test
 
 import (
 	"context"
-	"fmt"
-	"io/ioutil"
 	"time"
 
+	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/strategies/daa"
 
 	"github.com/goccy/go-json"
 	"github.com/rocketlaunchr/dataframe-go"
 
-	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = Describe("Daa", func() {
 	var (
-		strat   *daa.KellersDefensiveAssetAllocation
-		manager data.Manager
-		tz      *time.Location
-		target  *dataframe.DataFrame
+		dbPool  pgxmock.PgxConnIface
 		err     error
+		manager data.Manager
+		strat   *daa.KellersDefensiveAssetAllocation
+		target  *dataframe.DataFrame
+		tz      *time.Location
 	)
 
 	BeforeEach(func() {
@@ -61,71 +62,16 @@ var _ = Describe("Daa", func() {
 			"tiingo": "TEST",
 		})
 
-		content, err := ioutil.ReadFile("../testdata/TB3MS.csv")
-		if err != nil {
-			panic(err)
-		}
+		dbPool, err = pgxmock.NewConn()
+		Expect(err).To(BeNil())
+		database.SetPool(dbPool)
 
-		httpmock.RegisterResponder("GET", "https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=GS3M&cosd=1979-07-01&coed=2021-01-01&fq=Close&fam=avg",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VUSTX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1979-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VUSTX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VUSTX/prices?startDate=1990-01-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VFINX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1979-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/VFINX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/VFINX/prices?startDate=1990-01-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/PRIDX.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1979-01-01&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/PRIDX_2.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		httpmock.RegisterResponder("GET", "https://api.tiingo.com/tiingo/daily/PRIDX/prices?startDate=1990-01-31&endDate=2021-01-01&format=csv&resampleFreq=Monthly&token=TEST",
-			httpmock.NewBytesResponder(200, content))
-
-		content, err = ioutil.ReadFile("../testdata/riskfree.csv")
-		if err != nil {
-			panic(err)
-		}
-
-		today := time.Now()
-		url := fmt.Sprintf("https://fred.stlouisfed.org/graph/fredgraph.csv?mode=fred&id=DGS3MO&cosd=1970-01-01&coed=%d-%02d-%02d&fq=Daily&fam=avg", today.Year(), today.Month(), today.Day())
-		httpmock.RegisterResponder("GET", url,
-			httpmock.NewBytesResponder(200, content))
+		// Expect trading days transaction and query
+		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
+			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
+		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
+			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
 	})
@@ -135,6 +81,26 @@ var _ = Describe("Daa", func() {
 			BeforeEach(func() {
 				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
+
+				pgxmockhelper.MockDBEodQuery(dbPool,
+					[]string{
+						"vfinx.csv",
+						"pridx.csv",
+						"vustx.csv",
+						"riskfree.csv",
+					},
+					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+
+				pgxmockhelper.MockDBCorporateQuery(dbPool,
+					[]string{
+						"vfinx_corporate.csv",
+						"pridx_corporate.csv",
+						"vustx_corporate.csv",
+						"riskfree_corporate.csv",
+					},
+					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+
 				target, _, err = strat.Compute(context.Background(), &manager)
 			})
 
@@ -148,17 +114,23 @@ var _ = Describe("Daa", func() {
 
 			It("should begin on", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1990, time.January, 31, 16, 0, 0, 0, tz)))
+				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.December, 29, 16, 0, 0, 0, tz)))
 			})
 
 			It("should end on", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2020, time.December, 31, 16, 0, 0, 0, tz)))
 			})
 
-			It("should be invested in VUSTX to start", func() {
+			It("should be invested in PRIDX to start", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
+				t := val[common.TickerName].(map[string]float64)
+				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in VUSTX in the second month after start", func() {
+				val := target.Row(1, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
 			})
@@ -170,19 +142,19 @@ var _ = Describe("Daa", func() {
 				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in PRIDX on 1997-11-28", func() {
+			It("should be invested in VFINX on 1998-04-30", func() {
 				val := target.Row(100, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
-			})
-
-			It("should be invested in VFINX on 2006-03-31", func() {
-				val := target.Row(200, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
 			})
 
-			It("should be invested in VFINX on 2014-07-31", func() {
+			It("should be invested in VUSTX on 2006-03-31", func() {
+				val := target.Row(195, true, dataframe.SeriesName)
+				t := val[common.TickerName].(map[string]float64)
+				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
+			})
+
+			It("should be invested in VFINX on 2014-12-31", func() {
 				val := target.Row(300, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[string]float64)
 				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
