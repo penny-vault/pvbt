@@ -16,7 +16,11 @@
 package pgxmockhelper
 
 import (
+	"errors"
+	"io/fs"
 	"io/ioutil"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -32,7 +36,32 @@ type CSVRows struct {
 	dateCol int
 }
 
+func discoverTestDataPath(fn string) string {
+	// try to figure out testdata path
+	dataDir := os.Getenv("PVAPI_TEST_DATA_DIR")
+	if dataDir != "" {
+		log.Info().Str("TestDataDir", dataDir).Msg("using test data path")
+		return filepath.Join(dataDir, fn)
+	}
+
+	// try to guess based on PWD var
+	dataDir = os.Getenv("PWD")
+	if dataDir != "" {
+		dataDir = filepath.Join(dataDir, "testdata")
+		// check if data dir exists, if it does use it
+		_, err := os.Stat(dataDir)
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Info().Str("TestDataDir", dataDir).Msg("using test data path")
+			return filepath.Join(dataDir, fn)
+		}
+	}
+
+	log.Panic().Msg("could not resolve test data dir")
+	return fn
+}
+
 func NewCSVRows(csvFn string, typeMap map[string]string) *CSVRows {
+	csvFn = discoverTestDataPath(csvFn)
 	subLog := log.With().Str("CsvFn", csvFn).Logger()
 
 	rows := &CSVRows{
