@@ -28,7 +28,6 @@ import (
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/strategies/strategy"
-	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -69,8 +68,6 @@ var updateCmd = &cobra.Command{
 			nyc, _ := time.LoadLocation("America/New_York")
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 18, 0, 0, 0, nyc)
 		}
-
-		tradecron.InitializeTradeCron()
 
 		// Initialize data framework
 		data.InitializeDataManager()

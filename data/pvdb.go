@@ -27,11 +27,10 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/codes"
-
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Pvdb struct {
@@ -323,7 +322,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		return // nothing needs to be loaded
 	}
 
-	log.Debug().Time("Start", start).Strs("Tickers", tickerSet).Msg("pre-load from corporate actions")
+	log.Debug().Time("Start", start).Strs("Tickers", corporateTickerSet).Msg("pre-load from corporate actions")
 
 	subLog := log.With().Strs("Symbols", corporateTickerSet).Time("StartTime", start).Logger()
 

@@ -32,7 +32,6 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
@@ -105,9 +104,6 @@ var serveCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("database connection failed")
 		}
 		log.Info().Msg("connected to database")
-
-		tradecron.InitializeTradeCron()
-		log.Info().Msg("initialized TradeCron service")
 
 		// Initialize data framework
 		data.InitializeDataManager()

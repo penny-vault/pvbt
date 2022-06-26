@@ -48,10 +48,10 @@ var _ = Describe("Provider", func() {
 		database.SetPool(dbPool)
 
 		// setup database expectations
-		pgxmockhelper.MockDBEodQuery(dbPool, "riskfree.csv",
+		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, tz), time.Date(2022, 6, 16, 0, 0, 0, 0, tz),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2022, 6, 16, 0, 0, 0, 0, time.UTC))
-		pgxmockhelper.MockDBCorporateQuery(dbPool, "riskfree_corporate.csv",
+		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
 		dataProxy = data.NewManager(map[string]string{

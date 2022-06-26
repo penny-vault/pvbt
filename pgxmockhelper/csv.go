@@ -40,7 +40,6 @@ func discoverTestDataPath(fn string) string {
 	// try to figure out testdata path
 	dataDir := os.Getenv("PVAPI_TEST_DATA_DIR")
 	if dataDir != "" {
-		log.Info().Str("TestDataDir", dataDir).Msg("using test data path")
 		return filepath.Join(dataDir, fn)
 	}
 
@@ -51,7 +50,6 @@ func discoverTestDataPath(fn string) string {
 		// check if data dir exists, if it does use it
 		_, err := os.Stat(dataDir)
 		if !errors.Is(err, fs.ErrNotExist) {
-			log.Info().Str("TestDataDir", dataDir).Msg("using test data path")
 			return filepath.Join(dataDir, fn)
 		}
 	}
@@ -60,68 +58,72 @@ func discoverTestDataPath(fn string) string {
 	return fn
 }
 
-func NewCSVRows(csvFn string, typeMap map[string]string) *CSVRows {
-	csvFn = discoverTestDataPath(csvFn)
-	subLog := log.With().Str("CsvFn", csvFn).Logger()
+func NewCSVRows(inputs []string, typeMap map[string]string) *CSVRows {
 
 	rows := &CSVRows{
 		dateCol: -1,
 		rows:    make([][]any, 0),
 	}
-	rawData, err := ioutil.ReadFile(csvFn)
-	if err != nil {
-		subLog.Panic().Err(err).Msg("could not read file")
-	}
 
-	// break raw data into an array of lines
-	lines := strings.Split(string(rawData), "\n")
+	for _, csvFn := range inputs {
+		csvFn = discoverTestDataPath(csvFn)
+		subLog := log.With().Str("CsvFn", csvFn).Logger()
 
-	// sanity checks:
-	// - array length is at least 3 (header + content + trailing newline)
-	// - make sure last line ends in newline
-	if len(lines) < 2 {
-		subLog.Panic().Int("NumLines", len(lines)).Msg("input file does not have enough lines, need at least 2 (header + trailing new line)")
-	}
-	if lines[len(lines)-1] != "" {
-		subLog.Panic().Msg("input file is missing a trailing new line")
-	}
+		rawData, err := ioutil.ReadFile(csvFn)
+		if err != nil {
+			subLog.Panic().Err(err).Msg("could not read file")
+		}
 
-	// parse header
-	headerRaw := lines[0]
-	lines = lines[1 : len(lines)-1] // discard first and last rows
-	rows.header = strings.Split(headerRaw, ",")
+		// break raw data into an array of lines
+		lines := strings.Split(string(rawData), "\n")
 
-	// parse each line and create a row
-	for _, ll := range lines {
-		cols := make([]any, len(rows.header))
-		parts := strings.Split(ll, ",")
-		for idx, val := range parts {
-			colName := rows.header[idx]
-			if typeConv, ok := typeMap[colName]; ok {
-				switch typeConv {
-				case "date":
-					parsed, err := time.Parse("2006-01-02", val)
-					if err != nil {
-						subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to datetime of format 2006-01-02")
+		// sanity checks:
+		// - array length is at least 3 (header + content + trailing newline)
+		// - make sure last line ends in newline
+		if len(lines) < 2 {
+			subLog.Panic().Int("NumLines", len(lines)).Msg("input file does not have enough lines, need at least 2 (header + trailing new line)")
+		}
+		if lines[len(lines)-1] != "" {
+			subLog.Panic().Msg("input file is missing a trailing new line")
+		}
+
+		// parse header
+		headerRaw := lines[0]
+		lines = lines[1 : len(lines)-1] // discard first and last rows
+		rows.header = strings.Split(headerRaw, ",")
+
+		// parse each line and create a row
+		for _, ll := range lines {
+			cols := make([]any, len(rows.header))
+			parts := strings.Split(ll, ",")
+			for idx, val := range parts {
+				colName := rows.header[idx]
+				if typeConv, ok := typeMap[colName]; ok {
+					switch typeConv {
+					case "date":
+						parsed, err := time.Parse("2006-01-02", val)
+						if err != nil {
+							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to datetime of format 2006-01-02")
+						}
+						// put in proper timezone
+						cols[idx] = parsed
+						rows.dateCol = idx
+					case "float64":
+						parsed, err := strconv.ParseFloat(val, 64)
+						if err != nil {
+							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to float64")
+						}
+						cols[idx] = parsed
+					default:
+						// no type conversion specified - use as is
+						cols[idx] = val
 					}
-					// put in proper timezone
-					cols[idx] = parsed
-					rows.dateCol = idx
-				case "float64":
-					parsed, err := strconv.ParseFloat(val, 64)
-					if err != nil {
-						subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to float64")
-					}
-					cols[idx] = parsed
-				default:
-					// no type conversion specified - use as is
+				} else {
 					cols[idx] = val
 				}
-			} else {
-				cols[idx] = val
 			}
+			rows.rows = append(rows.rows, cols)
 		}
-		rows.rows = append(rows.rows, cols)
 	}
 
 	return rows
@@ -153,11 +155,11 @@ func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 	return r
 }
 
-func MockDBEodQuery(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-		NewCSVRows("../testdata/tradingdays.csv", map[string]string{
+		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
 			"trade_day": "date",
 		}).Between(d1, d2).Rows())
 	db.ExpectBegin()
@@ -170,7 +172,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time
 		}).Between(d3, d4).Rows())
 }
 
-func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn string, d1, d2 time.Time) {
+func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn []string, d1, d2 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 	db.ExpectQuery("SELECT event_date, ticker, dividend, split_factor FROM eod").WillReturnRows(
@@ -181,16 +183,18 @@ func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn string, d1, d2 time.Time) 
 		}).Between(d1, d2).Rows())
 }
 
-func CheckDBQuery1(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+// Utility functions to help figure out what db expectations should be used
+
+func CheckDBQuery1(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 }
 
-func CheckDBQuery2(db pgxmock.PgxConnIface, fn string, d1, d2, d3, d4 time.Time) {
+func CheckDBQuery2(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-		NewCSVRows("../testdata/tradingdays.csv", map[string]string{
+		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
 			"trade_day": "date",
 		}).Between(d1, d2).Rows())
 	db.ExpectBegin()

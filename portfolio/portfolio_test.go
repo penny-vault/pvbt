@@ -53,10 +53,10 @@ var _ = Describe("Portfolio", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
-		pgxmockhelper.MockDBEodQuery(dbPool, "riskfree.csv",
+		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-		pgxmockhelper.MockDBCorporateQuery(dbPool, "riskfree_corporate.csv",
+		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
 
@@ -88,27 +88,27 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.Frequency = data.FrequencyDaily
 
 				// Expect dataframe transaction and query for VFINX
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2018, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "vfinx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2019, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "pridx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
 
@@ -255,10 +255,10 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "tsla.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "tsla_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"tsla_corporate.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC))
 
 				err = pm.TargetPortfolio(ctx, df)
@@ -283,22 +283,22 @@ var _ = Describe("Portfolio", func() {
 				dbPool.ExpectBegin()
 				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 				dbPool.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-					pgxmockhelper.NewCSVRows("tradingdays.csv", map[string]string{
+					pgxmockhelper.NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
 						"trade_day": "date",
 					}).Between(time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 12, 7, 0, 0, 0, 0, time.UTC)).Rows())
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "vfinx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "tsla.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"},
 					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
 
@@ -340,54 +340,50 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.Frequency = data.FrequencyDaily
 
 				// Expect database transactions
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2018, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "vfinx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2019, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "pridx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
 
 				dbPool.ExpectBegin()
 				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 				dbPool.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-					pgxmockhelper.NewCSVRows("tradingdays.csv", map[string]string{
+					pgxmockhelper.NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
 						"trade_day": "date",
 					}).Between(time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 12, 7, 0, 0, 0, 0, time.UTC)).Rows())
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2018, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 1, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2019, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2019, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC))
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
-					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
-
-				pgxmockhelper.CheckDBQuery1(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
 					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
 
@@ -459,26 +455,26 @@ var _ = Describe("Portfolio", func() {
 				dataProxy.Frequency = data.FrequencyDaily
 
 				// Setup database
-				pgxmockhelper.MockDBEodQuery(dbPool, "vfinx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "vfinx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
 				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VFINX")
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "pridx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "pridx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
 				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "PRIDX")
 
-				pgxmockhelper.MockDBEodQuery(dbPool, "vustx.csv",
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
 					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, "vustx_corporate.csv",
+				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vustx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
 				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VUSTX")
