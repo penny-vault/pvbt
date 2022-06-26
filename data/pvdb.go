@@ -202,7 +202,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		args[idx+2] = ticker
 	}
 	tickerArgs := strings.Join(tickerSet, ", ")
-	sql := fmt.Sprintf("SELECT event_date, ticker, close, adj_close FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", tickerArgs)
+	sql := fmt.Sprintf("SELECT event_date, ticker, close, adj_close::double precision FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", tickerArgs)
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, args...)
@@ -210,7 +210,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		span.RecordError(err)
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Msg(msg)
+		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
 		trx.Rollback(context.Background())
 		return nil, err
 	}
@@ -326,7 +326,15 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 
 	subLog := log.With().Strs("Symbols", corporateTickerSet).Time("StartTime", start).Logger()
 
-	corporateTickerArgs := strings.Join(corporateTickerSet, ", ")
+	args := make([]interface{}, len(corporateTickerSet)+1)
+	args[0] = start
+
+	tickerPlaceholders := make([]string, len(corporateTickerSet))
+	for idx, ticker := range corporateTickerSet {
+		tickerPlaceholders[idx] = fmt.Sprintf("$%d", idx+2)
+		args[idx+1] = ticker
+	}
+	corporateTickerArgs := strings.Join(tickerPlaceholders, ", ")
 	sql := fmt.Sprintf("SELECT event_date, ticker, dividend, split_factor FROM eod WHERE ticker IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, ticker", corporateTickerArgs)
 
 	trx, err := database.TrxForUser("pvuser")
@@ -339,12 +347,12 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 
 	// execute the query
-	rows, err := trx.Query(ctx, sql, start)
+	rows, err := trx.Query(ctx, sql, args...)
 	if err != nil {
 		span.RecordError(err)
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Msg(msg)
+		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
 		trx.Rollback(context.Background())
 		return
 	}
@@ -413,7 +421,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric st
 	case MetricVolume:
 		columns = "(volume::double precision) AS val"
 	case MetricAdjustedClose:
-		columns = "adj_close AS val"
+		columns = "(adj_close::double precision) AS val"
 	case MetricDividendCash:
 		columns = "dividend AS val"
 	case MetricSplitFactor:

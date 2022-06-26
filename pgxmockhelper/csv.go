@@ -164,7 +164,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Ti
 		}).Between(d1, d2).Rows())
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT event_date, ticker, close, adj_close FROM eod").WillReturnRows(
+	db.ExpectQuery("SELECT event_date, ticker, close, adj_close::double precision FROM eod").WillReturnRows(
 		NewCSVRows(fn, map[string]string{
 			"event_date": "date",
 			"close":      "float64",
