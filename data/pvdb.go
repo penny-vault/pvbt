@@ -211,7 +211,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
-		trx.Rollback(context.Background())
+		trx.Rollback(ctx)
 		return nil, err
 	}
 
@@ -236,7 +236,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 
 		if err != nil {
 			subLog.Error().Err(err).Msg("failed to load eod prices -- db query scan failed")
-			trx.Rollback(context.Background())
+			trx.Rollback(ctx)
 			return nil, err
 		}
 
@@ -298,7 +298,9 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	}
 
 	df := dataframe.NewDataFrame(series...)
-	trx.Commit(ctx)
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("error commiting transaction")
+	}
 
 	return df, err
 }
@@ -353,7 +355,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
-		trx.Rollback(context.Background())
+		trx.Rollback(ctx)
 		return
 	}
 
@@ -366,7 +368,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
 		if err != nil {
 			subLog.Error().Err(err).Msg("failed to load corporate actions -- db query scan failed")
-			trx.Rollback(context.Background())
+			trx.Rollback(ctx)
 			return
 		}
 
@@ -389,6 +391,10 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 
 		p.Dividends[ticker] = divs
 		p.Splits[ticker] = splits
+	}
+
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("error commiting transaction")
 	}
 }
 
