@@ -35,30 +35,34 @@ import (
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string
-	GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
-	GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error)
+	GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
+	GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error)
 }
 
 type DateProvider interface {
-	TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency string) []time.Time
+	TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time
 }
 
-const (
-	FrequencyDaily   = "Daily"
-	FrequencyWeekly  = "Weekly"
-	FrequencyMonthly = "Monthly"
-	FrequencyAnnualy = "Annualy"
-)
+type Frequency string
 
 const (
-	MetricOpen          = "Open"
-	MetricLow           = "Low"
-	MetricHigh          = "High"
-	MetricClose         = "Close"
-	MetricVolume        = "Volume"
-	MetricAdjustedClose = "AdjustedClose"
-	MetricDividendCash  = "DividendCash"
-	MetricSplitFactor   = "SplitFactor"
+	FrequencyDaily   Frequency = "Daily"
+	FrequencyWeekly  Frequency = "Weekly"
+	FrequencyMonthly Frequency = "Monthly"
+	FrequencyAnnualy Frequency = "Annualy"
+)
+
+type Metric string
+
+const (
+	MetricOpen          Metric = "Open"
+	MetricLow           Metric = "Low"
+	MetricHigh          Metric = "High"
+	MetricClose         Metric = "Close"
+	MetricVolume        Metric = "Volume"
+	MetricAdjustedClose Metric = "AdjustedClose"
+	MetricDividendCash  Metric = "DividendCash"
+	MetricSplitFactor   Metric = "SplitFactor"
 )
 
 type Measurement struct {
@@ -70,7 +74,7 @@ type Measurement struct {
 type Manager struct {
 	Begin           time.Time
 	End             time.Time
-	Frequency       string
+	Frequency       Frequency
 	cache           map[string]float64
 	lastCache       map[string]float64
 	credentials     map[string]string
@@ -110,21 +114,9 @@ func NewManager(credentials map[string]string) Manager {
 		providers:   map[string]Provider{},
 	}
 
-	// Create Tiingo API
-	if val, ok := credentials["tiingo"]; ok {
-		tiingo := NewTiingo(val)
-		m.RegisterDataProvider(tiingo)
-	} else {
-		log.Warn().Msg("no tiingo API key provided")
-	}
-
 	pvdb := NewPVDB(m.cache, buildHashKey)
 	m.RegisterDataProvider(pvdb)
 	m.dateProvider = pvdb
-
-	// Create FRED API
-	fred := NewFred()
-	m.RegisterDataProvider(fred)
 
 	return m
 }
@@ -183,12 +175,12 @@ func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 }
 
 // GetDataFrame get a dataframe for the requested symbol
-func (m *Manager) GetDataFrame(ctx context.Context, metric string, symbols ...string) (*dataframe.DataFrame, error) {
+func (m *Manager) GetDataFrame(ctx context.Context, metric Metric, symbols ...string) (*dataframe.DataFrame, error) {
 	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, m.Frequency, m.Begin, m.End)
 	return res, err
 }
 
-func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric string, symbols ...string) error {
+func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric Metric, symbols ...string) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "provider.Fetch")
 	defer span.End()
 
@@ -215,7 +207,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 		},
 		attribute.KeyValue{
 			Key:   "Metric",
-			Value: attribute.StringValue(metric),
+			Value: attribute.StringValue(string(metric)),
 		},
 	)
 
@@ -237,7 +229,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 				m.cache[key] = vals[s].(float64)
 			} else {
 				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
-				log.Warn().Time("Date", d).Str("Metric", metric).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
+				log.Warn().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
 				m.cache[key] = math.NaN()
 			}
 		}
@@ -246,7 +238,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	return nil
 }
 
-func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol string) (float64, error) {
+func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, symbol string) (float64, error) {
 	symbol = strings.ToUpper(symbol)
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
@@ -265,7 +257,7 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric string, symbol
 	return val, nil
 }
 
-func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
+func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.GetLatestDataBefore")
 	defer span.End()
 
@@ -283,8 +275,8 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric
 	return val, nil
 }
 
-func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time) []time.Time {
-	return m.dateProvider.TradingDays(ctx, since, through, FrequencyDaily)
+func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time, frequency Frequency) []time.Time {
+	return m.dateProvider.TradingDays(ctx, since, through, frequency)
 }
 
 func (m *Manager) HashLen() int {
@@ -297,7 +289,7 @@ func (m *Manager) HashSize() int {
 	return (len(m.cache) * keySize) + (len(m.cache) * valSize)
 }
 
-func buildHashKey(date time.Time, metric string, symbol string) string {
+func buildHashKey(date time.Time, metric Metric, symbol string) string {
 	// Hash key like 2021340:split:VFINX
 	return fmt.Sprintf("%d%d:%s:%s", date.Year(), date.YearDay(), metric, symbol)
 }

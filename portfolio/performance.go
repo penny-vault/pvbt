@@ -206,7 +206,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 		Msg("calculate performance from")
 
 	// Get the days performance should be calculated on
-	tradingDays := dataManager.TradingDays(ctx, calculationStart, through)
+	tradingDays := dataManager.TradingDays(ctx, calculationStart, through, data.FrequencyDaily)
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)

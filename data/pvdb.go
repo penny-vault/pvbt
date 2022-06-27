@@ -37,11 +37,11 @@ type Pvdb struct {
 	cache     map[string]float64
 	Dividends map[string][]*Measurement
 	Splits    map[string][]*Measurement
-	hashFunc  func(date time.Time, metric string, symbol string) string
+	hashFunc  func(date time.Time, metric Metric, symbol string) string
 }
 
 // NewPVDB Create a new PVDB data provider
-func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric string, symbol string) string) *Pvdb {
+func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metric, symbol string) string) *Pvdb {
 	return &Pvdb{
 		cache:     cache,
 		hashFunc:  hashFunc,
@@ -52,12 +52,12 @@ func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric stri
 
 // Date provider functions
 
-// TradingDays returns a list of trading days between begin and end
-func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency string) []time.Time {
+// TradingDays returns a list of trading days between begin and end at the desired frequency
+func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
-	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", frequency).Logger()
+	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
@@ -161,11 +161,11 @@ func (p *Pvdb) DataType() string {
 	return "security"
 }
 
-func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric string, frequency string, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
-	subLog := log.With().Strs("Symbols", symbols).Str("Metric", metric).Str("Frequency", frequency).Time("StartTime", begin).Time("EndTime", end).Logger()
+	subLog := log.With().Strs("Symbols", symbols).Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
 
 	tradingDays := p.TradingDays(ctx, begin, end, frequency)
 
@@ -256,7 +256,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric st
 		default:
 			span.SetStatus(codes.Error, "un-supported metric")
 			trx.Rollback(ctx)
-			log.Panic().Str("Metric", metric).Msg("Unsupported metric type")
+			log.Panic().Str("Metric", string(metric)).Msg("Unsupported metric type")
 			return nil, errors.New("un-supported metric")
 		}
 
@@ -392,10 +392,10 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 }
 
-func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric string, before time.Time) (float64, error) {
+func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetLatestDataBefore")
 	defer span.End()
-	subLog := log.With().Str("Symbol", symbol).Str("Metric", metric).Time("Before", before).Logger()
+	subLog := log.With().Str("Symbol", symbol).Str("Metric", string(metric)).Time("Before", before).Logger()
 
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")

@@ -21,7 +21,7 @@ import (
 	dataframe "github.com/rocketlaunchr/dataframe-go"
 )
 
-func dateMatchForFrequency(currDate time.Time, nextDate time.Time, frequency string) bool {
+func dateMatchForFrequency(currDate time.Time, nextDate time.Time, frequency Frequency) bool {
 	switch frequency {
 	case FrequencyDaily:
 		return true

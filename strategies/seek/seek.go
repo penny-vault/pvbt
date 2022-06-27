@@ -28,27 +28,26 @@ package seek
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/jackc/pgx/v4"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
-	"go.opentelemetry.io/otel"
-
-	"github.com/goccy/go-json"
-
 	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
 )
 
 type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
-	Period      string
+	Period      data.Frequency
 	schedule    *tradecron.TradeCron
 }
 
@@ -77,11 +76,6 @@ func (a ByStartDur) Less(i, j int) bool {
 
 	return a[i].Begin.Before(a[j].Begin)
 }
-
-const (
-	WEEKLY  = "weekly"
-	MONTHLY = "monthly"
-)
 
 func absDur(value time.Duration) time.Duration {
 	if value < 0 {
@@ -120,18 +114,18 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 	outTicker = strings.ToUpper(outTicker)
 
-	period := "weekly"
+	period := "Weekly"
 	if err := json.Unmarshal(args["period"], &period); err != nil {
 		return nil, err
 	}
-	if (period != WEEKLY) && (period != MONTHLY) {
-		return nil, errors.New("period must be one of 'weekly' or 'monthly'")
+	if (period != string(data.FrequencyWeekly)) && (period != string(data.FrequencyMonthly)) {
+		return nil, errors.New("period must be one of 'Weekly' or 'Monthly'")
 	}
 
 	var seek strategy.Strategy = &SeekingAlphaQuant{
 		NumHoldings: numHoldings,
 		OutTicker:   outTicker,
-		Period:      period,
+		Period:      data.Frequency(period),
 	}
 
 	return seek, nil
@@ -154,13 +148,18 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
+		log.Error().Err(err).Msg("could not start database transaction")
 		return nil, nil, err
 	}
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		log.Panic().Err(err).Msg("cannot load nyc timezone")
+	}
 	var startDate time.Time
 	err = db.QueryRow(ctx, "SELECT min(event_date) FROM seeking_alpha").Scan(&startDate)
 	if err != nil {
+		log.Error().Err(err).Msg("could not get starting event_date database table")
 		return nil, nil, err
 	}
 
@@ -172,59 +171,82 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
-	dates := make([]time.Time, 0, 600)
-	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End)
+	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	switch seek.Period {
-	case WEEKLY:
-		wk := -1
-		for _, curr := range tradeDays {
-			if wk == -1 {
-				_, wk = curr.ISOWeek()
-				dates = append(dates, curr)
-			} else {
-				_, newWk := curr.ISOWeek()
-				if newWk != wk {
-					dates = append(dates, curr)
-				}
-				wk = newWk
-			}
-		}
-	case MONTHLY:
-		month := -1
-		for _, curr := range tradeDays {
-			if month == -1 {
-				month = int(curr.Month())
-				dates = append(dates, curr)
-			} else {
-				newMonth := int(curr.Month())
-				if newMonth != month {
-					dates = append(dates, curr)
-				}
-				month = newMonth
-			}
-		}
+	// build target portfolio
+	targetPortfolio, err := seek.buildTargetPortfolio(ctx, tradeDays, db)
+	if err != nil {
+		return nil, nil, err
 	}
+
+	// Get predicted portfolio
+	predictedPortfolio, err := seek.buildPredictedPortfolio(ctx, tradeDays, db)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
+	prepopulateDataCache(ctx, coveredPeriods, manager)
+
+	log.Info().Msg("SEEK computed")
+
+	return targetPortfolio, predictedPortfolio, nil
+}
+
+func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildPredictedPortfolio")
+	defer span.End()
+	log.Info().Msg("calculating predicted portfolio")
+
+	var ticker string
+	predictedTarget := make(map[string]float64)
+	lastDateIdx := len(tradeDays) - 1
+	rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
+	if err != nil {
+		log.Error().Err(err).Msg("could not query database for SEEK predicted portfolio")
+		return nil, err
+	}
+	for rows.Next() {
+		rows.Scan(&ticker)
+		predictedTarget[ticker] = 1.0 / float64(seek.NumHoldings)
+	}
+
+	//nextTradeDate := seek.schedule.Next(time.Now())
+	predictedPortfolio := &strategy.Prediction{
+		TradeDate:     tradeDays[lastDateIdx],
+		Target:        predictedTarget,
+		Justification: make(map[string]float64),
+	}
+
+	return predictedPortfolio, nil
+}
+func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*dataframe.DataFrame, error) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildTargetPortfolio")
+	defer span.End()
+
+	log.Info().Msg("build SEEK target portfolio")
 
 	// build target portfolio
 	targetAssets := make([]interface{}, 0, 600)
 	targetDates := make([]interface{}, 0, 600)
-	for _, day := range dates {
+	for _, day := range tradeDays {
 		targetMap := make(map[string]float64)
 		cnt := 0
 		rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, seek.NumHoldings)
 		if err != nil {
-			return nil, nil, err
+			log.Error().Err(err).Msg("could not query database for portfolio")
+			return nil, err
 		}
 		for rows.Next() {
 			cnt++
 			var ticker string
 			err := rows.Scan(&ticker)
 			if err != nil {
-				return nil, nil, err
+				log.Error().Err(err).Msg("could not scan result")
+				return nil, err
 			}
 			targetMap[ticker] = 0.0
 		}
@@ -247,30 +269,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
 
-	// Get predicted portfolio
-	var ticker string
-	predictedTarget := make(map[string]float64)
-	lastDateIdx := len(dates) - 1
-	rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", dates[lastDateIdx], seek.NumHoldings)
-	if err != nil {
-		return nil, nil, err
-	}
-	for rows.Next() {
-		rows.Scan(&ticker)
-		predictedTarget[ticker] = 1.0 / float64(seek.NumHoldings)
-	}
-
-	//nextTradeDate := seek.schedule.Next(time.Now())
-	predictedPortfolio := &strategy.Prediction{
-		TradeDate:     dates[lastDateIdx],
-		Target:        predictedTarget,
-		Justification: make(map[string]float64),
-	}
-
-	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
-	prepopulateDataCache(ctx, coveredPeriods, manager)
-
-	return targetPortfolio, predictedPortfolio, nil
+	return targetPortfolio, nil
 }
 
 // prepopulateDataCache loads asset eod prices into the in-memory cache
@@ -278,22 +277,21 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
 	defer span.End()
 
-	s := time.Now()
+	log.Info().Msg("pre-populate data cache")
+
 	for _, v := range covered {
-		fmt.Printf("%s\t%s\t%s\n", v.Asset, v.Begin.Format("2006-01-02"), v.End.Format("2006-01-02"))
 		manager.Begin = v.Begin
 		manager.End = v.End
 		manager.GetDataFrame(ctx, data.MetricAdjustedClose, v.Asset)
 	}
-	e := time.Now()
-
-	fmt.Printf("Elapsed: %s", e.Sub(s))
 }
 
 // findCoveredPeriods creates periods that each assets stock prices should be downloaded
 func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Period {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "buildQueryPlan")
 	defer span.End()
+
+	log.Info().Msg("find covered periods in portfolio plan")
 
 	coveredPeriods := make([]*Period, 0, target.NRows())
 	activeAssets := make(map[string]*Period)
