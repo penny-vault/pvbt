@@ -28,6 +28,7 @@ package seek
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -278,12 +279,34 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	defer span.End()
 
 	log.Info().Msg("pre-populate data cache")
+	tickerSet := make(map[string]bool, len(covered))
 
+	begin := time.Now()
+	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, v := range covered {
-		manager.Begin = v.Begin
-		manager.End = v.End
-		manager.GetDataFrame(ctx, data.MetricAdjustedClose, v.Asset)
+		log.Debug().Str("Asset", v.Asset).Time("Begin", v.Begin).Time("End", v.End).Msg("pre-load asset EOD")
+		tickerSet[v.Asset] = true
+		if begin.After(v.Begin) {
+			begin = v.Begin
+		}
+		if end.Before(v.End) {
+			end = v.End
+		}
 	}
+
+	tickerList := make([]string, len(tickerSet))
+	ii := 0
+	for k := range tickerSet {
+		tickerList[ii] = k
+		ii++
+	}
+
+	manager.Begin = begin
+	manager.End = end
+
+	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
+	manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...)
+	fmt.Println("finished database query")
 }
 
 // findCoveredPeriods creates periods that each assets stock prices should be downloaded
