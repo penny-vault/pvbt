@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/backtest"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -48,6 +49,10 @@ var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update the metrics associated with portfolio's for a given date",
 	Run: func(cmd *cobra.Command, args []string) {
+		common.SetupLogging()
+		common.SetupCache()
+		log.Info().Msg("initialized logging")
+
 		// setup database
 		err := database.Connect()
 		if err != nil {

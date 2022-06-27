@@ -17,7 +17,6 @@ package portfolio
 
 import (
 	"context"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -37,6 +36,7 @@ import (
 	"go.opentelemetry.io/otel/codes"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
@@ -888,8 +888,8 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 		justification,
 		transaction_type,
 		memo,
-		price_per_share,
-		num_shares,
+		price_per_share::double precision,
+		num_shares::double precision,
 		source,
 		source_id,
 		tags,
@@ -914,16 +914,18 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	for rows.Next() {
 		t := Transaction{}
 
-		var compositeFIGI sql.NullString
-		var memo sql.NullString
-		var taxDisposition sql.NullString
+		var compositeFIGI pgtype.Text
+		var memo pgtype.Text
+		var taxDisposition pgtype.Text
 
-		var pricePerShare sql.NullFloat64
-		var shares sql.NullFloat64
+		var pricePerShare pgtype.Float8
+		var shares pgtype.Float8
+
+		var sourceID pgtype.Bytea
 
 		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &compositeFIGI,
 			&t.Justification, &t.Kind, &memo, &pricePerShare, &shares, &t.Source,
-			&t.SourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
+			sourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
 		if err != nil {
 			log.Warn().Err(err).
 				Str("PortfolioID", hex.EncodeToString(p.ID)).
@@ -934,21 +936,23 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 			return err
 		}
 
-		if compositeFIGI.Valid {
+		if compositeFIGI.Status == pgtype.Present {
 			t.CompositeFIGI = compositeFIGI.String
 		}
-		if memo.Valid {
+		if memo.Status == pgtype.Present {
 			t.Memo = memo.String
 		}
-		if taxDisposition.Valid {
+		if taxDisposition.Status == pgtype.Present {
 			t.TaxDisposition = taxDisposition.String
 		}
-
-		if pricePerShare.Valid {
-			t.PricePerShare = pricePerShare.Float64
+		if pricePerShare.Status == pgtype.Present {
+			t.PricePerShare = pricePerShare.Float
 		}
-		if shares.Valid {
-			t.Shares = shares.Float64
+		if shares.Status == pgtype.Present {
+			t.Shares = shares.Float
+		}
+		if sourceID.Status == pgtype.Present {
+			t.SourceID = string(sourceID.Bytes)
 		}
 
 		transactions = append(transactions, &t)
@@ -985,7 +989,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			notifications,
 			benchmark
 		FROM
-			portfolio
+			portfolios
 		WHERE
 			id = ANY ($1) AND user_id=$2`
 		rows, err = trx.Query(context.Background(), portfolioSQL, portfolioIDs, userID)
@@ -1004,7 +1008,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			notifications,
 			benchmark
 		FROM
-			portfolio
+			portfolios
 		WHERE
 			user_id=$1`
 		rows, err = trx.Query(context.Background(), portfolioSQL, userID)
