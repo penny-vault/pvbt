@@ -24,11 +24,15 @@ linters:
   fast: false
 
 linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
   nestif:
     min-complexity: 6
   goheader:
     template-path: code-header-template.txt
-
+  misspell:
+    ignore-words:
+      - strat
 issues:
   exclude-rules:
     # Exclude some linters from running on tests files.
