@@ -45,6 +45,11 @@ import (
 	"go.opentelemetry.io/otel"
 )
 
+var (
+	ErrHoldings      = errors.New("portfolio must contain at least 2 holdings")
+	ErrInvalidPeriod = errors.New("period must be one of 'Weekly' or 'Monthly'")
+)
+
 type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
@@ -78,27 +83,6 @@ func (a ByStartDur) Less(i, j int) bool {
 	return a[i].Begin.Before(a[j].Begin)
 }
 
-func absDur(value time.Duration) time.Duration {
-	if value < 0 {
-		return -value
-	}
-	return value
-}
-
-func minTime(a, b time.Time) time.Time {
-	if b.Before(a) {
-		return b
-	}
-	return a
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if b.After(a) {
-		return b
-	}
-	return a
-}
-
 // New Construct a new Momentum Driven Earnings Prediction (seek) strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	numHoldings := 100
@@ -106,7 +90,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 	if numHoldings < 1 {
-		return nil, errors.New("numHoldings must be > 1")
+		return nil, ErrHoldings
 	}
 
 	var outTicker string
@@ -120,7 +104,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 	if (period != string(data.FrequencyWeekly)) && (period != string(data.FrequencyMonthly)) {
-		return nil, errors.New("period must be one of 'Weekly' or 'Monthly'")
+		return nil, ErrInvalidPeriod
 	}
 
 	var seek strategy.Strategy = &SeekingAlphaQuant{

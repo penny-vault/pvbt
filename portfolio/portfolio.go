@@ -43,6 +43,16 @@ import (
 	"github.com/zeebo/blake3"
 )
 
+var (
+	ErrEmptyUserID       = errors.New("user id empty")
+	ErrStrategyNotFound  = errors.New("strategy not found")
+	ErrHoldings          = errors.New("holdings are out of sync, cannot rebalance portfolio")
+	ErrInvalidSell       = errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
+	ErrTimeInverted      = errors.New("start date occurs after through date")
+	ErrPortfolioNotFound = errors.New("could not find portfolio ID in database")
+	ErrGenerateHash      = errors.New("could not create a new hash")
+)
+
 const (
 	SourceName = "PV"
 )
@@ -230,7 +240,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 
 		if v <= 1.0e-5 {
 			log.Warn().Str("Ticker", k).Str("Kind", "SellTransaction").Float64("Shares", v).Msg("holdings are out of sync")
-			return errors.New("holdings are out of sync, cannot rebalance portfolio")
+			return ErrHoldings
 		}
 
 		if _, ok := target[k]; !ok {
@@ -295,7 +305,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 						Float64("CurrentDollars", currentDollars).
 						Float64("TargetDollars", targetDollars).
 						Msg("refusing to sell 0 shares")
-					return errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
+					return ErrInvalidSell
 				}
 
 				trxId, _ := uuid.New().MarshalBinary()
@@ -656,7 +666,7 @@ func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
 		log.Warn().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
-		return errors.New("start date occurs after through date")
+		return ErrTimeInverted
 	}
 
 	// Load split & dividend history
@@ -808,7 +818,7 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 			Str("Portfolio", hex.EncodeToString(p.ID)).
 			Str("Strategy", p.StrategyShortcode).
 			Msg("portfolio strategy not found")
-		return errors.New("strategy not found")
+		return ErrStrategyNotFound
 	}
 
 	stratObject, err := strategy.Factory(arguments)
@@ -906,7 +916,10 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 			Str("UserID", p.UserID).
 			Str("Query", transactionSQL).
 			Msg("could not load portfolio transactions from database")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
@@ -932,7 +945,10 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 				Str("UserID", p.UserID).
 				Str("Query", transactionSQL).
 				Msg("failed scanning row into transaction fields")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			return err
 		}
 
@@ -965,7 +981,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	subLog := log.With().Str("UserID", userID).Strs("PortfolioIDs", portfolioIDs).Logger()
 	if userID == "" {
 		subLog.Error().Msg("userID cannot be an empty string")
-		return nil, errors.New("userID cannot be an empty string")
+		return nil, ErrEmptyUserID
 	}
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
@@ -1016,7 +1032,10 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 
 	if err != nil {
 		subLog.Warn().Err(err).Msg("could not load portfolio from database")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return nil, err
 	}
 
@@ -1044,7 +1063,10 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
 			subLog.Warn().Err(err).Msg("could not load portfolio from database")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			return nil, err
 		}
 
@@ -1056,7 +1078,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	}
 
 	if len(resultSet) == 0 && len(portfolioIDs) != 0 {
-		return nil, errors.New("requested portfolioID is not in the database")
+		return nil, ErrPortfolioNotFound
 	}
 
 	trx.Commit(context.Background())
@@ -1080,14 +1102,20 @@ func (pm *PortfolioModel) Save(userID string) error {
 	err = pm.SaveWithTransaction(trx, userID, false)
 	if err != nil {
 		subLog.Error().Err(err).Msg("failed to create portfolio transactions")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
 		subLog.Error().Err(err).Msg("failed to commit portfolio transaction")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
@@ -1136,7 +1164,10 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		subLog.Error().Err(err).Msg("failed to marshal holdings")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 	predictedBytes, err := p.PredictedAssets.MarshalBinary()
@@ -1147,7 +1178,10 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
 	if err != nil {
 		subLog.Error().Err(err).Str("Query", portfolioSQL).Msg("failed to save portfolio")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
@@ -1264,7 +1298,10 @@ func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
 				Str("TransactionID", hex.EncodeToString(t.ID)).
 				Str("Query", transactionSQL).
 				Msg("failed to save portfolio")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			return err
 		}
 	}
@@ -1302,7 +1339,7 @@ func computeTransactionSourceID(t *Transaction) error {
 		return err
 	}
 	if n != 16 {
-		return errors.New("generate hash failed -- couldn't read 16 bytes from digest")
+		return ErrGenerateHash
 	}
 
 	t.SourceID = hex.EncodeToString(buf)

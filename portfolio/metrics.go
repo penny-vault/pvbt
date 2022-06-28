@@ -26,12 +26,6 @@ import (
 )
 
 const (
-	irrMaxInterations = 20
-	irrAccuracy       = 1e-7
-	irrInitialGuess   = 0.0
-)
-
-const (
 	STRATEGY  = "STRATEGY"
 	BENCHMARK = "BENCHMARK"
 	RISKFREE  = "RISKFREE"

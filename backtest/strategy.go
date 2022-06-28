@@ -34,6 +34,10 @@ import (
 	"github.com/goccy/go-json"
 )
 
+var (
+	ErrStrategyNotFound = errors.New("strategy not found")
+)
+
 type Backtest struct {
 	PortfolioModel *portfolio.PortfolioModel
 	Performance    *portfolio.Performance
@@ -51,7 +55,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	strat, ok := strategies.StrategyMap[shortcode]
 	if !ok {
 		span.SetStatus(codes.Error, "strategy not found")
-		return nil, errors.New("strategy not found")
+		return nil, ErrStrategyNotFound
 	}
 
 	stratObject, err := strat.Factory(params)

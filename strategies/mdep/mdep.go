@@ -39,11 +39,17 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
+	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 
 	"github.com/goccy/go-json"
 
 	"github.com/rocketlaunchr/dataframe-go"
+)
+
+var (
+	ErrInvalidPeriod = errors.New("invalid period")
+	ErrHoldings      = errors.New("not enough holdings in portfolio")
 )
 
 type MomentumDrivenEarningsPrediction struct {
@@ -70,7 +76,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 	if numHoldings < 1 {
-		return nil, errors.New("numHoldings must be > 1")
+		return nil, ErrHoldings
 	}
 
 	var outTicker string
@@ -84,7 +90,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 	if (period != WEEKLY) && (period != MONTHLY) {
-		return nil, errors.New("period must be one of 'weekly' or 'monthly'")
+		return nil, ErrInvalidPeriod
 	}
 
 	var mdep strategy.Strategy = &MomentumDrivenEarningsPrediction{
@@ -261,7 +267,9 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 		return nil, nil, err
 	}
 	for rows.Next() {
-		rows.Scan(&ticker)
+		if err := rows.Scan(&ticker); err != nil {
+			log.Error().Err(err).Msg("could not scan db val into ticker")
+		}
 		predictedTarget[ticker] = 1.0 / float64(mdep.NumHoldings)
 	}
 

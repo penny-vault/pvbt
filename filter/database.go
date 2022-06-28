@@ -31,6 +31,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	ErrEmptyFrom       = errors.New("strategy not found")
+	ErrMalformedWhere  = errors.New("where clauses must take the form [OP].[value]")
+	ErrUnknownOperator = errors.New("unknown operator")
+)
+
 type FilterDatabase struct {
 	PortfolioID string
 	UserID      string
@@ -38,7 +44,7 @@ type FilterDatabase struct {
 
 func BuildQuery(from string, fields []string, safeFields []string, where map[string]string, order string) (string, []interface{}, error) {
 	if strings.Compare(from, "") == 0 {
-		return "", nil, errors.New("'from' cannot be empty")
+		return "", nil, ErrEmptyFrom
 	}
 	stmt := &pgsql.SelectStatement{}
 	for _, ff := range fields {
@@ -54,7 +60,7 @@ func BuildQuery(from string, fields []string, safeFields []string, where map[str
 	for k, v := range where {
 		p := strings.SplitN(v, ".", 2)
 		if len(p) != 2 {
-			return "", nil, errors.New("where clauses must take the form [OP].[value]")
+			return "", nil, ErrMalformedWhere
 		}
 		op, val := p[0], p[1]
 		k = pgx.Identifier{k}.Sanitize()
@@ -98,7 +104,7 @@ func BuildQuery(from string, fields []string, safeFields []string, where map[str
 		case "not":
 			stmt.Where(fmt.Sprintf("%s not ?", k), val)
 		default:
-			return "", nil, errors.New("unrecognized operator")
+			return "", nil, ErrUnknownOperator
 		}
 	}
 

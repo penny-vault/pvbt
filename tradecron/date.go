@@ -1,4 +1,5 @@
-// Copyright 2022 JD Fergason
+// Copyright 2021-2022
+// SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,6 +17,7 @@ package tradecron
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -26,12 +28,22 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	ErrDurationParseError = errors.New("could not parse duration string")
+)
+
 type CronMode int16
 
 const (
 	RegularHours CronMode = iota
 	ExtendedHours
 	AllHours
+)
+
+const (
+	AtOpen     = "@open"
+	AtClose    = "@close"
+	AtMonthEnd = "@monthend"
 )
 
 type TradeCron struct {
@@ -74,7 +86,9 @@ func LoadMarketHolidays() error {
 	}
 
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback tranasaction")
+		}
 		return err
 	}
 
@@ -92,7 +106,9 @@ func LoadMarketHolidays() error {
 		}
 	}
 
-	trx.Commit(context.Background())
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction")
+	}
 	return nil
 }
 
@@ -131,10 +147,10 @@ func NextMonth(t time.Time) time.Time {
 	y := t.Year()
 	m := t.Month()
 	if m == time.December {
-		y += 1
+		y++
 		m = time.January
 	} else {
-		m += 1
+		m++
 	}
 	return time.Date(y, m, 1, 0, 0, 0, 0, t.Location())
 }
@@ -175,10 +191,10 @@ func New(scheduleStr string, mode CronMode) (*TradeCron, error) {
 
 	identifier := strings.Split(scheduleStr, " ")
 	switch identifier[0] {
-	case "@open":
+	case AtOpen:
 		flag = "@open"
 		schedule, err = specParser.Parse(fmt.Sprintf("%d %d * * *", marketCloseHour, marketOpenHour))
-	case "@close":
+	case AtClose:
 		flag = "@close"
 		schedule, err = specParser.Parse("0 16 * * *")
 	case "@monthend":
@@ -196,7 +212,7 @@ func New(scheduleStr string, mode CronMode) (*TradeCron, error) {
 	if len(identifier) == 2 && flag != "" {
 		offset, err = time.ParseDuration(identifier[1])
 		if err != nil {
-			return nil, fmt.Errorf("could not parse duration %s", err)
+			return nil, ErrDurationParseError
 		}
 	}
 
@@ -220,7 +236,7 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 	}
 
 	switch tc.Flag {
-	case "@monthend":
+	case AtMonthEnd:
 		// get last trading day of month
 		now := forDate.In(nyc)
 		monthend := MonthEnd(now)
@@ -231,7 +247,7 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 			monthend = monthend.Add(tc.Offset)
 		}
 		return monthend
-	case "@open":
+	case AtOpen:
 		t := forDate.In(nyc)
 		if t.After(time.Date(t.Year(), t.Month(), t.Day(), 9, 30, 0, 0, nyc)) {
 			t = t.AddDate(0, 0, 1)
@@ -240,7 +256,7 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 			t = t.AddDate(0, 0, 1)
 		}
 		return t
-	case "@close":
+	case AtClose:
 		t := forDate.In(nyc)
 		if t.After(time.Date(t.Year(), t.Month(), t.Day(), 16, 0, 0, 0, nyc)) {
 			t = t.AddDate(0, 0, 1)

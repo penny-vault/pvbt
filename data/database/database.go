@@ -33,6 +33,10 @@ type PgxIface interface {
 	Begin(context.Context) (pgx.Tx, error)
 }
 
+var (
+	ErrEmptyUserID = errors.New("userID cannot be an empty string")
+)
+
 // Private
 
 var pool PgxIface
@@ -40,7 +44,7 @@ var pool PgxIface
 func createUser(userID string) error {
 	if userID == "" {
 		log.Error().Msg("userID cannot be an empty string")
-		return errors.New("userID cannot be an empty string")
+		return ErrEmptyUserID
 	}
 
 	subLog := log.With().Str("UserID", userID).Logger()
@@ -56,7 +60,9 @@ func createUser(userID string) error {
 	_, err = trx.Exec(context.Background(), "SET ROLE pvapi")
 	if err != nil {
 		subLog.Error().Err(err).Msg("could not switch to pvapi role")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			subLog.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return err
 	}
 
@@ -67,7 +73,9 @@ func createUser(userID string) error {
 	sql := fmt.Sprintf("CREATE ROLE %s WITH nologin IN ROLE pvuser;", ident.Sanitize())
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+		}
 		subLog.Error().Err(err).Str("Query", sql).Msg("failed to create role")
 		return err
 	}
@@ -78,14 +86,18 @@ func createUser(userID string) error {
 	sql = fmt.Sprintf("GRANT %s TO pvapi;", ident.Sanitize())
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
-		trx.Rollback(context.Background())
-		subLog.Error().Err(err).Str("Query", sql).Msg("failed to grant priveleges to role")
+		if err := trx.Rollback(context.Background()); err != nil {
+			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+		}
+		subLog.Error().Err(err).Str("Query", sql).Msg("failed to grant privileges to role")
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+		}
 		subLog.Error().Err(err).Msg("failed to commit changes")
 		return err
 	}
@@ -103,9 +115,11 @@ func Connect() error {
 	var err error
 	myPool, err := pgxpool.Connect(context.Background(), viper.GetString("database.url"))
 	if err != nil {
+		log.Error().Err(err).Msg("could not connect to pool")
 		return err
 	}
 	if err = myPool.Ping(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not ping database server")
 		return err
 	}
 	pool = myPool
@@ -113,7 +127,7 @@ func Connect() error {
 }
 
 // Create a trx with the appropriate user set
-// NOTE: the default use is pvapi which only has enough priveleges to create new roles and switch to them.
+// NOTE: the default use is pvapi which only has enough privileges to create new roles and switch to them.
 // Any kind of real work must be done with a user role which limits access to only that user
 func TrxForUser(userID string) (pgx.Tx, error) {
 	trx, err := pool.Begin(context.Background())
@@ -130,9 +144,13 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 	if err != nil {
 		// user doesn't exist -- create it
 		subLog.Warn().Err(err).Msg("role does not exist")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+			return nil, err
+		}
 		err = createUser(userID)
 		if err != nil {
+			log.Error().Err(err).Msg("could not create user")
 			return nil, err
 		}
 		return TrxForUser(userID)
@@ -158,7 +176,9 @@ func GetUsers() ([]string, error) {
 	rows, err := trx.Query(context.Background(), sql, "pvapi")
 	if err != nil {
 		log.Warn().Err(err).Str("Query", sql).Msg("get list of database roles failed")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback tranasaction")
+		}
 		return nil, err
 	}
 
@@ -181,7 +201,9 @@ func GetUsers() ([]string, error) {
 	err = rows.Err()
 	if err != nil {
 		log.Warn().Err(err).Str("Query", sql).Msg("GetUser query read failed")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback tranasaction")
+		}
 		return nil, err
 	}
 

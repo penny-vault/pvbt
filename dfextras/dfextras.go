@@ -18,7 +18,6 @@ package dfextras
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -29,6 +28,14 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/rocketlaunchr/dataframe-go"
+)
+
+var (
+	ErrTimeAxisInvalidType = errors.New("time-axis column must be of type time.Time")
+	ErrTimeAxisMissing     = errors.New("time-axis column is missing")
+	ErrFuncIsNil           = errors.New("func method cannot be nil")
+	ErrInvalidInput        = errors.New("insufficient number of columns; must contain at-least 2 float64 series")
+	ErrNoOverlap           = errors.New("dataframes do not overlap")
 )
 
 const MaxUint64 = ^uint64(0)
@@ -56,7 +63,7 @@ func ArgMax(ctx context.Context, df *dataframe.DataFrame) (dataframe.Series, err
 	}
 
 	if len(keepSeries) < 2 {
-		return nil, errors.New("DataFrame must contain at-least 2 float64 series")
+		return nil, ErrInvalidInput
 	}
 
 	df1 := dataframe.NewDataFrame(keepSeries...)
@@ -147,7 +154,7 @@ func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, maxDistance tim
 		Step:       1,
 	})
 	lastDistance := time.Duration(MaxInt64)
-	var lastRow map[interface{}]interface{} = nil
+	var lastRow map[interface{}]interface{}
 	var hint = start
 	for {
 		row, val, _ := iterator(dataframe.SeriesName)
@@ -161,9 +168,8 @@ func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, maxDistance tim
 		if lastDistance < distance {
 			if lastDistance <= maxDistance {
 				return lastRow, hint
-			} else {
-				return nil, 0
 			}
+			return nil, 0
 		}
 
 		lastRow = val
@@ -173,9 +179,8 @@ func FindNearestTime(df *dataframe.DataFrame, timeVal time.Time, maxDistance tim
 
 	if lastDistance <= maxDistance {
 		return lastRow, hint
-	} else {
-		return nil, hint
 	}
+	return nil, hint
 }
 
 // IndexOf value v in series
@@ -274,7 +279,7 @@ func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFra
 	for ii := range dfs {
 		jj, err := dfs[ii].NameToColumn(timeAxisName, dontLock)
 		if err != nil {
-			return nil, errors.New("all dataframes must contain the time axis")
+			return nil, ErrTimeAxisMissing
 		}
 
 		timeSeries := dfs[ii].Series[jj]
@@ -287,7 +292,7 @@ func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFra
 				startTimeAxis = timeSeries
 			}
 		} else {
-			return nil, errors.New("timeAxis must refer to a time column")
+			return nil, ErrTimeAxisInvalidType
 		}
 
 		// Check if this is an earlier endTime
@@ -298,7 +303,7 @@ func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFra
 				endTimeAxis = timeSeries
 			}
 		} else {
-			return nil, errors.New("timeAxis must refer to a time column")
+			return nil, ErrTimeAxisInvalidType
 		}
 	}
 
@@ -485,7 +490,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 	for ii := range dfs {
 		jj, err := dfs[ii].NameToColumn(timeAxisName, dontLock)
 		if err != nil {
-			return nil, errors.New("all dataframes must contain the time axis")
+			return nil, ErrTimeAxisMissing
 		}
 
 		timeSeries := dfs[ii].Series[jj]
@@ -497,7 +502,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 				startTime = v
 			}
 		} else {
-			return nil, errors.New("timeAxis must refer to a time column")
+			return nil, ErrTimeAxisInvalidType
 		}
 
 		// Check if this is an earlier endTime
@@ -507,7 +512,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 				endTime = v
 			}
 		} else {
-			return nil, errors.New("timeAxis must refer to a time column")
+			return nil, ErrTimeAxisInvalidType
 		}
 	}
 
@@ -537,7 +542,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 // Rolling aggregate function
 func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesFn) (dataframe.Series, error) {
 	if fn == nil {
-		return nil, errors.New("fn is required")
+		return nil, ErrFuncIsNil
 	}
 
 	s.Lock()
@@ -596,7 +601,9 @@ func Split(ctx context.Context, df *dataframe.DataFrame, cols ...string) (*dataf
 			return nil, nil, err
 		}
 		df1 = append(df1, df.Series[colIdx])
-		df.RemoveSeries(colName)
+		if err := df.RemoveSeries(colName); err != nil {
+			log.Warn().Err(err).Int("ColIdx", colIdx).Str("ColName", colName).Msg("could not remove named series")
+		}
 	}
 
 	return dataframe.NewDataFrame(df1...), df, nil
@@ -613,7 +620,7 @@ func TimeAlign(ctx context.Context, df *dataframe.DataFrame, startTime time.Time
 	endIdx := IndexOf(ctx, endTime, timeSeries, true)
 
 	if startIdx == -1 || endIdx == -1 {
-		return nil, fmt.Errorf("dataframes do not overlap. startIdx=%d  endIdx=%d", startIdx, endIdx)
+		return nil, ErrNoOverlap
 	}
 
 	r := dataframe.Range{

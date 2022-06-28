@@ -20,11 +20,11 @@ import (
 	"math"
 )
 
-type objectiveFunc func(float64) float64
-
-const (
-	machEp = 1.0 / (1 << 53)
+var (
+	ErrDidNotConverge = errors.New("fsolve did not converge")
 )
+
+type objectiveFunc func(float64) float64
 
 // fsolve uses a combination of bisection and false position to find a
 // root of a function within a given interval. This is guaranteed to converge,
@@ -141,5 +141,5 @@ func fsolve(f objectiveFunc, f0 float64) (float64, error) {
 		}
 	}
 
-	return f0, errors.New("fsolve did not converge")
+	return f0, ErrDidNotConverge
 }

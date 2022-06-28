@@ -12,6 +12,6 @@ RUN apk add tzdata && adduser -D pv
 USER pv
 WORKDIR /home/pv
 
-COPY --from=builder /go/src/import-tickers /home/pv
+COPY --from=builder /go/src/pvapi /home/pv
 ENTRYPOINT ["/home/pv/pvapi"]
 CMD ["serve"]

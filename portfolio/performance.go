@@ -36,6 +36,11 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+var (
+	ErrInvalidTransactionType = errors.New("unrecognized transaction type")
+	ErrNoTransactions         = errors.New("portfolio has no transactions")
+)
+
 // METHODS
 
 func NewPerformance(p *Portfolio) *Performance {
@@ -172,7 +177,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 
 	// make sure we can check the data
 	if len(p.Transactions) == 0 {
-		return errors.New("cannot calculate performance for portfolio with no transactions")
+		return ErrNoTransactions
 	}
 
 	var prevMeasurement *PerformanceMeasurement
@@ -226,7 +231,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 
 	prevDate := prevMeasurement.Time
 
-	var totalVal float64 = prevMeasurement.Value
+	var totalVal float64
 	var benchmarkValue float64 = prevMeasurement.BenchmarkValue
 	var riskFreeValue float64 = prevMeasurement.RiskFreeValue
 
@@ -366,7 +371,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioMode
 				log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
 			default:
 				log.Warn().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
-				return errors.New("unrecognized transaction type")
+				return ErrInvalidTransactionType
 			}
 
 			if val, ok := holdings["$CASH"]; ok {
@@ -691,7 +696,10 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 
 	if err != nil {
 		subLog.Warn().Err(err).Msg("query database for performance failed")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return nil, err
 	}
 
@@ -721,7 +729,10 @@ func (p *Performance) LoadMeasurementsFromDB(userID string) error {
 	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
 	if err != nil {
 		subLog.Warn().Err(err).Str("Query", measurementSQL).Msg("failed executing measurement query")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
@@ -731,7 +742,10 @@ func (p *Performance) LoadMeasurementsFromDB(userID string) error {
 		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.BenchmarkValue, &m.StrategyGrowthOf10K, &m.BenchmarkGrowthOf10K, &m.RiskFreeGrowthOf10K, &m.TotalDeposited, &m.TotalWithdrawn)
 		if err != nil {
 			subLog.Warn().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			return err
 		}
 		measurements = append(measurements, &m)
@@ -755,7 +769,10 @@ func (p *Performance) Save(userID string) error {
 	err = p.SaveWithTransaction(trx, userID)
 	if err != nil {
 		subLog.Error().Err(err).Msg("unable to save portfolio transactions")
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
@@ -784,7 +801,10 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	p.Measurements = make([]*PerformanceMeasurement, 0)
 	raw, err := p.MarshalBinary()
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 	p.Measurements = tmp
@@ -810,13 +830,19 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		p.PortfolioMetrics.SortinoRatioSinceInception,
 		p.PortfolioMetrics.UlcerIndexAvg)
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 
 	err = p.saveMeasurements(trx, userID)
 	if err != nil {
-		trx.Rollback(context.Background())
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return err
 	}
 

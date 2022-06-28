@@ -73,7 +73,10 @@ var purgeCmd = &cobra.Command{
 			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
 			if err != nil {
 				subLog.Error().Err(err).Msg("could not get expired portfolio count")
-				trx.Rollback(context.Background())
+				if err := trx.Rollback(context.Background()); err != nil {
+					log.Error().Err(err).Msg("could not rollback transaction")
+				}
+
 				continue
 			}
 
@@ -82,7 +85,10 @@ var purgeCmd = &cobra.Command{
 			_, err = trx.Exec(context.Background(), "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
 			if err != nil {
 				subLog.Error().Err(err).Msg("could not delete portfolios")
-				trx.Rollback(context.Background())
+				if err := trx.Rollback(context.Background()); err != nil {
+					log.Error().Err(err).Msg("could not rollback transaction")
+				}
+
 				continue
 			}
 

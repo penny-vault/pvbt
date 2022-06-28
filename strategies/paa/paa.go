@@ -168,9 +168,12 @@ func (paa *KellersProtectiveAssetAllocation) mom() error {
 	// calculate momentum 13, mom13 = (p0 / SMA13) - 1
 	for _, ticker := range paa.allTickers {
 		name := fmt.Sprintf("%s_MOM", ticker)
-		sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
+		if err := sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 			Size: sma.NRows(dontLock),
-		}), nil)
+		}), nil); err != nil {
+			log.Error().Err(err).Msg("could not add series")
+			return err
+		}
 		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", ticker, ticker)
 		fn := funcs.RegFunc(expr)
 		err := funcs.Evaluate(context.TODO(), sma, fn, name)
@@ -263,9 +266,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 		Size: mom.NRows(),
 	}), nil)
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
-	for idx, x := range paa.riskUniverse {
-		riskUniverseMomNames[idx] = x
-	}
+	copy(riskUniverseMomNames, paa.riskUniverse)
 	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
 	err := funcs.Evaluate(context.TODO(), mom, fn, name,
 		funcs.EvaluateOptions{

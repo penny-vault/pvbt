@@ -27,15 +27,17 @@ import (
 // LoadJWKS retrieves JWKS from auth0 domain
 func SetupJWKS() (*jwk.AutoRefresh, string) {
 	// read remote JWKS
-	jwksUrl := fmt.Sprintf("https://%s/.well-known/jwks.json", viper.GetString("auth0.domain"))
+	jwksURL := fmt.Sprintf("https://%s/.well-known/jwks.json", viper.GetString("auth0.domain"))
 
-	log.Debug().Str("Url", jwksUrl).Msg("reading JWKS")
+	log.Debug().Str("Url", jwksURL).Msg("reading JWKS")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	ar := jwk.NewAutoRefresh(ctx)
-	ar.Configure(jwksUrl)
-	ar.Fetch(ctx, jwksUrl) // perform initial fetch
+	ar.Configure(jwksURL)
+	if _, err := ar.Fetch(ctx, jwksURL); err != nil {
+		log.Panic().Err(err).Msg("could not fetch jwks from auth0")
+	}
 
-	return ar, jwksUrl
+	return ar, jwksURL
 }

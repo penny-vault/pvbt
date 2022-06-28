@@ -33,6 +33,10 @@ import (
 	"go.opentelemetry.io/otel/codes"
 )
 
+var (
+	ErrUnsupportedMetric = errors.New("unsupported metric")
+)
+
 type Pvdb struct {
 	cache     map[string]float64
 	Dividends map[string][]*Measurement
@@ -151,7 +155,9 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		}
 	}
 
-	trx.Commit(ctx)
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction")
+	}
 	return daysFiltered
 }
 
@@ -211,7 +217,10 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
-		trx.Rollback(ctx)
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return nil, err
 	}
 
@@ -236,7 +245,9 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 
 		if err != nil {
 			subLog.Error().Err(err).Msg("failed to load eod prices -- db query scan failed")
-			trx.Rollback(ctx)
+			if err := trx.Rollback(ctx); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
 			return nil, err
 		}
 
@@ -255,9 +266,12 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 			valMap[ticker] = adjClose.Float
 		default:
 			span.SetStatus(codes.Error, "un-supported metric")
-			trx.Rollback(ctx)
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			log.Panic().Str("Metric", string(metric)).Msg("Unsupported metric type")
-			return nil, errors.New("un-supported metric")
+			return nil, ErrUnsupportedMetric
 		}
 
 		lastDate = date
@@ -355,7 +369,9 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
-		trx.Rollback(ctx)
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return
 	}
 
@@ -368,7 +384,10 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
 		if err != nil {
 			subLog.Error().Err(err).Msg("failed to load corporate actions -- db query scan failed")
-			trx.Rollback(ctx)
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			return
 		}
 
@@ -435,8 +454,10 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
 		subLog.Error().Msg("un-supported metric requested")
-		trx.Rollback(ctx)
-		return math.NaN(), errors.New("un-supported metric")
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+		return math.NaN(), ErrUnsupportedMetric
 	}
 
 	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod WHERE ticker=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
@@ -448,7 +469,10 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		msg := "db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Err(err).Msg(msg)
-		trx.Rollback(ctx)
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
+
 		return math.NaN(), err
 	}
 
@@ -463,13 +487,17 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 			msg := "db scan failed"
 			span.SetStatus(codes.Error, msg)
 			subLog.Warn().Err(err).Msg(msg)
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
 			return math.NaN(), err
 		}
 
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
 	}
 
-	trx.Commit(ctx)
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction")
+	}
 	return val, err
 }

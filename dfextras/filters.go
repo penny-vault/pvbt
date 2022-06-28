@@ -17,14 +17,20 @@ package dfextras
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/rs/zerolog/log"
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 	"gonum.org/v1/gonum/stat"
+)
+
+var (
+	ErrInvalidLookback = errors.New("invalid lookback")
 )
 
 // SMA computes the simple moving average of all the columns in df for the specified
@@ -39,7 +45,8 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 	}
 
 	if (lookback > df.NRows()) || (lookback <= 0) {
-		return nil, fmt.Errorf("lookback must be: 0 < lookback <= df.NRows() [%d]", df.NRows())
+		log.Error().Int("Lookback", lookback).Int("NRows", df.NRows()).Msg("lookback must be: 0 < lookback <= df.NRows()")
+		return nil, ErrInvalidLookback
 	}
 
 	seriesMap := make(map[string]*dataframe.SeriesFloat64)
@@ -90,10 +97,8 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 					seriesMap[smaName].Append(stat.Mean(filterMap[name], nil))
 					seriesMap[name].Append(v.(float64))
 				}
-			} else {
-				if !warmup {
-					dateSeries.Append(v)
-				}
+			} else if !warmup {
+				dateSeries.Append(v)
 			}
 		}
 
@@ -156,14 +161,18 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	for _, ticker := range tickers {
 		for _, jj := range periods {
 			fn := funcs.RegFunc(fmt.Sprintf("((%s/%sLAG%d)-1)", ticker, ticker, jj))
-			funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
+			if err := funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
+				log.Error().Err(err).Msg("could not evaluate equation against dataframe")
+			}
 		}
 	}
 
 	// Compute the equal weighted average of the 1-, 3-, 6-, and 12-month momentums
 	for _, ticker := range tickers {
 		fn := funcs.RegFunc(fmt.Sprintf("((12.0*%sMOM1)+(4.0*%sMOM3)+(2.0*%sMOM6)+%sMOM12)*0.25", ticker, ticker, ticker, ticker))
-		funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sSCORE", ticker))
+		if err := funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
+			log.Error().Err(err).Msg("could not evalute expression")
+		}
 	}
 
 	// Build dataseries just from scores
@@ -180,7 +189,9 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	}
 
 	df := dataframe.NewDataFrame(scoresArr...)
-	DropNA(context.TODO(), df, dataframe.FilterOptions{InPlace: true})
+	if _, err := DropNA(context.TODO(), df, dataframe.FilterOptions{InPlace: true}); err != nil {
+		log.Error().Err(err).Msg("could not drop na")
+	}
 
 	return df, nil
 }

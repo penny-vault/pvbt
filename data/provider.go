@@ -17,6 +17,7 @@ package data
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -82,6 +83,10 @@ type Manager struct {
 	dateProvider    DateProvider
 	lastRiskFreeIdx int
 }
+
+var (
+	ErrMetricDoesNotExist = errors.New("requested metric does not exist for symbol on date")
+)
 
 var riskFreeRate *dataframe.DataFrame
 
@@ -251,7 +256,8 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, symbol
 		}
 		val, ok = m.cache[key]
 		if !ok {
-			return 0, fmt.Errorf("could not load %s for symbol %s on %s", metric, symbol, date)
+			log.Error().Str("Metric", string(metric)).Str("Symbol", symbol).Time("Date", date).Msg("could not load metric")
+			return 0, ErrMetricDoesNotExist
 		}
 	}
 	return val, nil

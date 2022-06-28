@@ -124,7 +124,10 @@ func LoadStrategyMetricsFromDb() {
 			log.Warn().Err(err).
 				Str("Strategy", strat.Shortcode).
 				Msg("failed to lookup strategy portfolio in database")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transaction")
+			}
+
 			continue
 		}
 

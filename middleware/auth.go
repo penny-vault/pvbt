@@ -36,10 +36,10 @@ type apiToken struct {
 }
 
 // JWTAuth instantiate JWT auth middleware
-func PVAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
+func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 	jwtMiddleware := jwtware.New(jwtware.Config{
 		Jwks:         jwks,
-		JwksUrl:      jwksUrl,
+		JwksUrl:      jwksURL,
 		ErrorHandler: jwtError,
 		SuccessHandler: func(c *fiber.Ctx) error {
 			return nil
@@ -83,7 +83,10 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksUrl string) fiber.Handler {
 		}
 
 		var v apiToken
-		json.Unmarshal(jsonBytes, &v)
+		if err := json.Unmarshal(jsonBytes, &v); err != nil {
+			log.Warn().Err(err).Msg("could not unmarshal json from apikey - maybe apikey is corrupt?")
+			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
+		}
 		c.Locals("userID", v.userID)
 		c.Locals("tiingoToken", v.tiingo)
 		return c.Next()
@@ -120,12 +123,9 @@ func jwtError(c *fiber.Ctx, err error) error {
 	log.Warn().Err(err).Msg("jwt authentication error")
 
 	if err.Error() == "Missing or malformed JWT" {
-		c.Status(fiber.StatusBadRequest).
+		return c.Status(fiber.StatusBadRequest).
 			JSON(fiber.Map{"status": "error", "message": "Missing or malformed JWT", "data": nil})
-	} else {
-		c.Status(fiber.StatusUnauthorized).
-			JSON(fiber.Map{"status": "error", "message": "Invalid or expired JWT", "data": nil})
 	}
-
-	return err
+	return c.Status(fiber.StatusUnauthorized).
+		JSON(fiber.Map{"status": "error", "message": "Invalid or expired JWT", "data": nil})
 }
