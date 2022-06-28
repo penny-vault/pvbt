@@ -86,14 +86,13 @@ var updateCmd = &cobra.Command{
 		dataManager := data.NewManager(credentials)
 
 		strategies.LoadStrategyMetricsFromDb()
-		/*
-			for _, strat := range strategies.StrategyList {
-				if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
-					log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
-					createStrategyPortfolio(strat, &dataManager)
-				}
+		for _, strat := range strategies.StrategyList {
+			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
+				log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
+				createStrategyPortfolio(strat, &dataManager)
 			}
-		*/
+		}
+
 		// get a list of portfolio id's to update
 		portfolios := make([]*portfolio.PortfolioModel, 0, 100)
 		if PortfolioID != "" {
