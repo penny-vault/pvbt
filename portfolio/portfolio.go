@@ -167,6 +167,121 @@ func (pm *Model) getPortfolioSecuritiesValue(ctx context.Context, date time.Time
 	return securityValue, nil
 }
 
+func createTransaction(date time.Time, asset string, kind string, price float64, shares float64, justification []*Justification) (*Transaction, error) {
+	trxID, err := uuid.New().MarshalBinary()
+	if err != nil {
+		log.Warn().Err(err).Msg("could not marshal uuid to binary")
+		return nil, err
+	}
+	t := Transaction{
+		ID:            trxID,
+		Date:          date,
+		Ticker:        asset,
+		Kind:          kind,
+		PricePerShare: price,
+		Shares:        shares,
+		TotalValue:    shares * price,
+		Justification: justification,
+		Source:        SourceName,
+	}
+
+	err = computeTransactionSourceID(&t)
+	if err != nil {
+		log.Warn().Err(err).Time("TransactionDate", date).Str("TransactionTicker", asset).Str("TransactionType", kind).Msg("couldn't compute SourceID for transaction")
+	}
+
+	return &t, nil
+}
+
+func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, asset string) float64 {
+	price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, asset)
+	if err != nil {
+		log.Warn().Err(err).Str("Asset", asset).Msg("dataProxy.Get returned an error")
+		price = 0.0
+	}
+	if math.IsNaN(price) {
+		log.Warn().Str("Ticker", asset).Msg("price is NaN")
+		price = 0.0
+	}
+	return price
+}
+
+func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset string, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
+	// is this security currently held? If so, do we need to buy more or sell some
+	price := pm.getPriceSafe(ctx, date, asset)
+	if price < 1.0e-5 {
+		log.Error().Float64("Price", price).Msg("cannot purchase an asset when price is 0; skip asset")
+		return nil, 0, ErrSecurityPriceNotAvailable
+	}
+	targetShares := targetDollars / price
+	var t *Transaction
+	var err error
+
+	if currentNumShares, ok := pm.holdings[asset]; ok {
+		currentDollars := currentNumShares * price
+		if targetDollars < currentDollars {
+			// Need to sell to target amount
+			toSellDollars := currentDollars - targetDollars
+			toSellShares := toSellDollars / price
+			if toSellDollars <= 1.0e-5 {
+				log.Error().
+					Str("Ticker", asset).
+					Str("Kind", "SellTransaction").
+					Float64("Shares", toSellShares).
+					Time("Date", date).
+					Float64("Price", price).
+					Float64("CurrentDollars", currentDollars).
+					Float64("TargetDollars", targetDollars).
+					Msg("refusing to sell 0 shares")
+				return nil, 0, ErrInvalidSell
+			}
+
+			t, err = createTransaction(date, asset, SellTransaction, price, toSellShares, justification)
+			if err != nil {
+				return nil, 0, err
+			}
+		} else if targetDollars > currentDollars {
+			// Need to buy to target amount
+			toBuyDollars := targetDollars - currentDollars
+			toBuyShares := toBuyDollars / price
+
+			subLog := log.With().Str("Ticker", asset).Str("Kind", "BuyTransaction").Float64("Shares", toBuyShares).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
+			if toBuyShares <= 1.0e-5 {
+				subLog.Warn().Msg("refusing to buy 0 shares")
+				return nil, 0, ErrRebalancePercentWrong
+			}
+
+			if math.IsNaN(toBuyDollars) {
+				subLog.Warn().Msg("toBuyDollars is NaN")
+				return nil, 0, ErrRebalancePercentWrong
+			}
+
+			t, err = createTransaction(date, asset, BuyTransaction, price, toBuyShares, justification)
+			if err != nil {
+				return nil, 0, err
+			}
+
+			subLog.Debug().Msg("Buy additional shares")
+		}
+	} else {
+		// this is a new position
+		shares := targetDollars / price
+		subLog := log.With().Str("Ticker", asset).Str("Kind", "BuyTransaction").Float64("Shares", shares).Float64("TotalValue", targetDollars).Time("Date", date).Logger()
+		if shares <= 1.0e-5 {
+			subLog.Warn().Msg("refusing to buy 0 shares")
+			return nil, 0, ErrRebalancePercentWrong
+		}
+
+		t, err = createTransaction(date, asset, BuyTransaction, price, shares, justification)
+		if err != nil {
+			return nil, 0, err
+		}
+		subLog.Debug().Msg("buy new holding")
+	}
+
+	return t, targetShares, nil
+}
+
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
 func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[string]float64, justification []*Justification) error {
@@ -231,215 +346,46 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 	buys := make([]*Transaction, 0, 10)
 
 	// sell any holdings that we no longer want
-	for k, v := range pm.holdings {
-		if k == data.CashAsset {
+	for asset, shares := range pm.holdings {
+		if asset == data.CashAsset {
 			continue
 		}
 
-		if v <= 1.0e-5 {
-			log.Warn().Str("Ticker", k).Str("Kind", "SellTransaction").Float64("Shares", v).Msg("holdings are out of sync")
+		if shares <= 1.0e-5 {
+			log.Warn().Str("Ticker", asset).Str("Kind", "SellTransaction").Float64("Shares", shares).Msg("holdings are out of sync")
 			return ErrHoldings
 		}
 
-		if _, ok := target[k]; !ok {
-			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
+		if _, ok := target[asset]; !ok {
+			price := pm.getPriceSafe(ctx, date, asset)
+			t, err := createTransaction(date, asset, SellTransaction, price, shares, justification)
 			if err != nil {
-				log.Warn().Err(err).Str("Asset", k).Msg("could not get price - writing off asset")
-				price = 0.0
-			}
-			if math.IsNaN(price) {
-				log.Warn().Float64("Cash", cash).Float64("Shares", v).Str("Ticker", k).Msg("price is not known - writing off asset")
-				price = 0.0
-			}
-			trxID, err := uuid.New().MarshalBinary()
-			if err != nil {
-				log.Warn().Err(err).Msg("could not marshal uuid to binary")
 				return err
 			}
-			t := Transaction{
-				ID:            trxID,
-				Date:          date,
-				Ticker:        k,
-				Kind:          SellTransaction,
-				PricePerShare: price,
-				Shares:        v,
-				TotalValue:    v * price,
-				Justification: justification,
-				Source:        SourceName,
-			}
-
-			cash += v * price
-
-			err = computeTransactionSourceID(&t)
-			if err != nil {
-				log.Warn().Err(err).Time("TransactionDate", date).Str("TransactionTicker", k).Str("TransactionType", SellTransaction).Msg("couldn't compute SourceID for transaction")
-			}
-
-			sells = append(sells, &t)
+			cash += t.TotalValue
+			sells = append(sells, t)
 		}
 	}
 
+	// purchase holdings based on target
 	newHoldings := make(map[string]float64)
-	for k, v := range target {
-		// is this security currently held and should we sell it?
-		if holding, ok := pm.holdings[k]; ok {
-			targetDollars := investable * v
-
-			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
-			if err != nil {
-				log.Warn().Err(err).Str("Asset", k).Msg("could not get price - writing off asset")
-				price = 0.0
-			}
-
-			currentDollars := holding * price
-			if (targetDollars / price) > 1.0e-5 {
-				if !math.IsNaN(price) {
-					newHoldings[k] = targetDollars / price
-				}
-			}
-
-			if targetDollars < currentDollars {
-				// Need to sell to target amount
-				if math.IsNaN(price) {
-					log.Error().Str("Ticker", k).Msg("No known price for asset; Cannot sell partial")
-					price = 0.0
-					newHoldings[k] = 0.0
-				}
-
-				toSellDollars := currentDollars - targetDollars
-				toSellShares := toSellDollars / price
-				if toSellDollars <= 1.0e-5 {
-					log.Error().
-						Str("Ticker", k).
-						Str("Kind", "SellTransaction").
-						Float64("Shares", toSellShares).
-						Time("Date", date).
-						Float64("Price", price).
-						Float64("CurrentDollars", currentDollars).
-						Float64("TargetDollars", targetDollars).
-						Msg("refusing to sell 0 shares")
-					return ErrInvalidSell
-				}
-
-				trxID, err := uuid.New().MarshalBinary()
-				if err != nil {
-					log.Warn().Err(err).Msg("could not marshal uuid to binary")
-					return err
-				}
-
-				t := Transaction{
-					ID:            trxID,
-					Date:          date,
-					Ticker:        k,
-					Kind:          SellTransaction,
-					PricePerShare: price,
-					Shares:        toSellShares,
-					TotalValue:    toSellDollars,
-					Justification: justification,
-				}
-
-				if !math.IsNaN(toSellDollars) {
-					cash += toSellDollars
-				}
-
-				err = computeTransactionSourceID(&t)
-				if err != nil {
-					log.Error().
-						Err(err).
-						Time("TransactionDate", date).
-						Str("TransactionTicker", k).
-						Str("TransactionType", SellTransaction).
-						Msg("couldn't compute SourceID for transaction")
-				}
-
-				sells = append(sells, &t)
-			} else if targetDollars > currentDollars {
-				// Need to buy to target amount
-				toBuyDollars := targetDollars - currentDollars
-				toBuyShares := toBuyDollars / price
-
-				subLog := log.With().Str("Ticker", k).Str("Kind", "BuyTransaction").Float64("Shares", v).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
-				if toBuyShares <= 1.0e-5 {
-					subLog.Warn().Msg("refusing to buy 0 shares")
-					continue
-				}
-				if math.IsNaN(price) {
-					subLog.Warn().Msg("refusing to buy shares of asset with unknown price")
-					continue
-				}
-				trxID, err := uuid.New().MarshalBinary()
-				if err != nil {
-					log.Warn().Err(err).Msg("could not marshal uuid to binary")
-					return err
-				}
-				t := Transaction{
-					ID:            trxID,
-					Date:          date,
-					Ticker:        k,
-					Kind:          BuyTransaction,
-					PricePerShare: price,
-					Shares:        toBuyShares,
-					TotalValue:    toBuyDollars,
-					Justification: justification,
-				}
-
-				if math.IsNaN(toBuyDollars) {
-					subLog.Warn().Msg("toBuyDollars is NaN")
-				} else {
-					cash -= toBuyDollars
-				}
-
-				subLog.Debug().Msg("Buy additional shares")
-
-				err = computeTransactionSourceID(&t)
-				if err != nil {
-					subLog.Warn().Err(err).Msg("couldn't compute SourceID for transaction")
-				}
-
-				buys = append(buys, &t)
-			}
-		} else {
-			// this is a new position
-			value := investable * v
-			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
-			if err != nil {
-				log.Warn().Err(err).Str("Asset", k).Msg("could not get price - writing off asset")
-				price = 0.0
-			}
-			shares := value / price
-
-			subLog := log.With().Str("Ticker", k).Str("Kind", "BuyTransaction").Float64("Shares", v).Float64("TotalValue", value).Time("Date", date).Logger()
-			if shares <= 1.0e-5 {
-				subLog.Warn().Msg("refusing to buy 0 shares")
-				continue
-			}
-			if math.IsNaN(price) {
-				subLog.Warn().Msg("refusing to buy shares of asset with unknown price")
-				continue
-			}
-			newHoldings[k] = shares
-			trxID, _ := uuid.New().MarshalBinary()
-			t := Transaction{
-				ID:            trxID,
-				Date:          date,
-				Ticker:        k,
-				Kind:          BuyTransaction,
-				PricePerShare: price,
-				Shares:        shares,
-				TotalValue:    value,
-				Justification: justification,
-			}
-
-			cash -= value
-			subLog.Debug().Msg("buy new holding")
-
-			err = computeTransactionSourceID(&t)
-			if err != nil {
-				subLog.Warn().Msg("couldn't compute SourceID for transaction")
-			}
-
-			buys = append(buys, &t)
+	for asset, shares := range target {
+		targetDollars := investable * shares
+		t, numShares, err := pm.modifyPosition(ctx, date, asset, targetDollars, justification)
+		if err != nil {
+			return err
 		}
+
+		switch t.Kind {
+		case SellTransaction:
+			sells = append(sells, t)
+			cash += t.TotalValue
+		case BuyTransaction:
+			buys = append(buys, t)
+			cash -= t.TotalValue
+		}
+
+		newHoldings[asset] = numShares
 	}
 
 	p.Transactions = append(p.Transactions, sells...)

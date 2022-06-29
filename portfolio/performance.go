@@ -168,6 +168,7 @@ func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods u
 }
 
 // CalculateThrough computes performance metrics for the given portfolio until `through`
+//gocyclo:ignore
 func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
 	defer span.End()

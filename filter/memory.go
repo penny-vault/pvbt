@@ -30,6 +30,7 @@ type InMemory struct {
 	Performance *portfolio.Performance
 }
 
+//gocyclo:ignore
 func getValue(m *portfolio.PerformanceMeasurement, field string) float64 {
 	switch field {
 	case "alpha_1yr":
