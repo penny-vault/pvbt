@@ -27,8 +27,8 @@ import (
 	"github.com/rocketlaunchr/dataframe-go"
 )
 
-// StrategyFactory factory method to create strategy
-type StrategyFactory func(map[string]json.RawMessage) (Strategy, error)
+// Factory method implementing the Factory pattern to create a new Strategy object
+type Factory func(map[string]json.RawMessage) (Strategy, error)
 
 // Argument an argument to a strategy
 type Argument struct {
@@ -40,8 +40,8 @@ type Argument struct {
 	Options     []string `json:"options"`
 }
 
-// StrategyMetrics collection of strategy metrics that should be regularly updated
-type StrategyMetrics struct {
+// Metrics collection of strategy metrics that should be regularly updated
+type Metrics struct {
 	ID                 uuid.UUID       `json:"id"`
 	YTDReturn          sql.NullFloat64 `json:"ytdReturn"`
 	CagrSinceInception sql.NullFloat64 `json:"cagrSinceInception"`
@@ -57,8 +57,8 @@ type StrategyMetrics struct {
 	UlcerIndex         sql.NullFloat64 `json:"ulcerIndex"`
 }
 
-// StrategyInfo information about a strategy
-type StrategyInfo struct {
+// Info information about a strategy
+type Info struct {
 	Name            string                       `json:"name"`
 	Shortcode       string                       `json:"shortcode"`
 	Description     string                       `json:"description"`
@@ -69,8 +69,8 @@ type StrategyInfo struct {
 	Arguments       map[string]Argument          `json:"arguments"`
 	Suggested       map[string]map[string]string `json:"suggestedParams"`
 	Schedule        string                       `json:"Schedule"`
-	Metrics         StrategyMetrics              `json:"metrics"`
-	Factory         StrategyFactory              `json:"-"`
+	Metrics         Metrics                      `json:"metrics"`
+	Factory         Factory                      `json:"-"`
 }
 
 type Prediction struct {

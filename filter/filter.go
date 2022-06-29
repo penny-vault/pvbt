@@ -20,13 +20,14 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
 
-type FilterInterface interface {
+type Filterable interface {
 	GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error)
-	GetHoldings(frequency string, since time.Time) ([]byte, error)
+	GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error)
 	GetTransactions(since time.Time) ([]byte, error)
 }
 
@@ -60,19 +61,19 @@ func getPerformance(portfolioID string) *portfolio.Performance {
 	return nil
 }
 
-func New(portfolioID string, userID string) FilterInterface {
+func New(portfolioID string, userID string) Filterable {
 	var perf *portfolio.Performance
 
 	port := getPortfolio(portfolioID)
 	if port != nil {
 		perf = getPerformance(portfolioID)
-		return &FilterObject{
+		return &InMemory{
 			Performance: perf,
 			Portfolio:   port,
 		}
 	}
 
-	db := FilterDatabase{
+	db := Database{
 		PortfolioID: portfolioID,
 		UserID:      userID,
 	}

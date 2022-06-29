@@ -61,12 +61,6 @@ type Period struct {
 	End   time.Time
 }
 
-type Cluster struct {
-	Begin   time.Time
-	End     time.Time
-	Members []*Period
-}
-
 type ByStartDur []*Period
 
 func (a ByStartDur) Len() int      { return len(a) }
@@ -119,6 +113,11 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.Compute")
 	defer span.End()
 
+	nyc, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		log.Panic().Err(err).Msg("cannot load nyc timezone")
+	}
+
 	// Ensure time range is valid
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -129,24 +128,23 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	}
 
+	// Get database transaction
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
 		log.Error().Err(err).Msg("could not start database transaction")
 		return nil, nil, err
 	}
 
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		log.Panic().Err(err).Msg("cannot load nyc timezone")
-	}
+	// get the starting date for ratings
 	var startDate time.Time
-	err = db.QueryRow(ctx, "SELECT min(event_date) FROM seeking_alpha").Scan(&startDate)
+	sql := "SELECT min(event_date) FROM seeking_alpha"
+	err = db.QueryRow(ctx, sql).Scan(&startDate)
 	if err != nil {
-		log.Error().Err(err).Msg("could not get starting event_date database table")
+		log.Error().Err(err).Str("SQL", sql).Msg("could not get starting event_date database table")
 		return nil, nil, err
 	}
 
-	startDate = startDate.In(tz)
+	startDate = startDate.In(nyc)
 	if startDate.After(manager.Begin) {
 		manager.Begin = startDate
 	}
@@ -193,11 +191,13 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 		return nil, err
 	}
 	for rows.Next() {
-		rows.Scan(&ticker)
+		if err := rows.Scan(&ticker); err != nil {
+			log.Error().Err(err).Msg("could not scan rows")
+			return nil, err
+		}
 		predictedTarget[ticker] = 1.0 / float64(seek.NumHoldings)
 	}
 
-	//nextTradeDate := seek.schedule.Next(time.Now())
 	predictedPortfolio := &strategy.Prediction{
 		TradeDate:     tradeDays[lastDateIdx],
 		Target:        predictedTarget,
@@ -206,6 +206,7 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 
 	return predictedPortfolio, nil
 }
+
 func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*dataframe.DataFrame, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildTargetPortfolio")
 	defer span.End()
@@ -287,7 +288,9 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	manager.End = end
 
 	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
-	manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...)
+	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
+		log.Error().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+	}
 	fmt.Println("finished database query")
 }
 
@@ -342,7 +345,7 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 		} else {
 			// it's multi-asset which means a map of tickers
 			assetMap := val[common.TickerName].(map[string]float64)
-			for ticker, _ := range assetMap {
+			for ticker := range assetMap {
 				period, ok := pendingClose[ticker]
 				if !ok {
 					period = &Period{

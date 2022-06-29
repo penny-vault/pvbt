@@ -42,9 +42,13 @@ import (
 )
 
 func init() {
-	viper.BindEnv("server.port", "PORT")
+	if err := viper.BindEnv("server.port", "PORT"); err != nil {
+		log.Panic().Err(err).Msg("could not bind PORT")
+	}
 	serveCmd.Flags().IntP("port", "p", 3000, "Port to run application server on")
-	viper.BindPFlag("server.port", serveCmd.Flags().Lookup("port"))
+	if err := viper.BindPFlag("server.port", serveCmd.Flags().Lookup("port")); err != nil {
+		log.Panic().Err(err).Msg("could not bind port")
+	}
 
 	rootCmd.AddCommand(serveCmd)
 }
@@ -59,7 +63,9 @@ var serveCmd = &cobra.Command{
 			if err != nil {
 				log.Error().Err(err).Msg("could not create profile.out")
 			}
-			pprof.StartCPUProfile(f)
+			if err := pprof.StartCPUProfile(f); err != nil {
+				log.Panic().Err(err).Msg("could not start CPU profile")
+			}
 			defer pprof.StopCPUProfile()
 		}
 
@@ -136,10 +142,10 @@ var serveCmd = &cobra.Command{
 		app.Use(middleware.NewLogger())
 
 		// Configure authentication
-		jwksAutoRefresh, jwksUrl := jwks.SetupJWKS()
+		jwksAutoRefresh, jwksURL := jwks.SetupJWKS()
 
 		// Setup routes
-		router.SetupRoutes(app, jwksAutoRefresh, jwksUrl)
+		router.SetupRoutes(app, jwksAutoRefresh, jwksURL)
 
 		// initialize strategies
 		strategies.InitializeStrategyMap()
@@ -147,7 +153,9 @@ var serveCmd = &cobra.Command{
 		// Get strategy metrics
 		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 		scheduler := gocron.NewScheduler(tz)
-		scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb)
+		if _, err := scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb); err != nil {
+			log.Panic().Err(err).Msg("could not schedule load strategies metrics from DB")
+		}
 		scheduler.StartAsync()
 
 		// Start server on http://${heroku-url}:${port}

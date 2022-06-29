@@ -29,9 +29,13 @@ import (
 var User string
 
 func init() {
-	viper.BindEnv("database.max_temp_portfolio_age_secs", "MAX_PORTFOLIO_AGE_SECS")
+	if err := viper.BindEnv("database.max_temp_portfolio_age_secs", "MAX_PORTFOLIO_AGE_SECS"); err != nil {
+		log.Panic().Err(err).Msg("could not bind database.max_temp_portfolio_age_secs")
+	}
 	purgeCmd.Flags().IntP("max_temp_portfolio_age_secs", "s", 86400, "Maximum temporary portfolio age in seconds")
-	viper.BindPFlag("database.max_temp_portfolio_age_secs", purgeCmd.Flags().Lookup("max_temp_portfolio_age_secs"))
+	if err := viper.BindPFlag("database.max_temp_portfolio_age_secs", purgeCmd.Flags().Lookup("max_temp_portfolio_age_secs")); err != nil {
+		log.Panic().Err(err).Msg("could not bind database.max_temp_portfolio_age_secs")
+	}
 
 	purgeCmd.Flags().StringVar(&User, "user", "", "Only purge portfolios")
 

@@ -30,21 +30,20 @@ package mdep
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/jackc/pgx/v4"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
-	"github.com/penny-vault/pv-api/tradecron"
+	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
-
-	"github.com/goccy/go-json"
-
-	"github.com/rocketlaunchr/dataframe-go"
 )
 
 var (
@@ -55,19 +54,14 @@ var (
 type MomentumDrivenEarningsPrediction struct {
 	NumHoldings int
 	OutTicker   string
-	Period      string
-	schedule    *tradecron.TradeCron
+	Period      data.Frequency
 }
 
-type sentiment struct {
-	EventDate       time.Time
-	StormGuardArmor float64
+type Period struct {
+	Asset string
+	Begin time.Time
+	End   time.Time
 }
-
-const (
-	WEEKLY  = "weekly"
-	MONTHLY = "monthly"
-)
 
 // New Construct a new Momentum Driven Earnings Prediction (MDEP) strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
@@ -85,11 +79,12 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 	outTicker = strings.ToUpper(outTicker)
 
-	period := "weekly"
-	if err := json.Unmarshal(args["period"], &period); err != nil {
+	periodStr := "Weekly"
+	if err := json.Unmarshal(args["period"], &periodStr); err != nil {
 		return nil, err
 	}
-	if (period != WEEKLY) && (period != MONTHLY) {
+	period := data.Frequency(periodStr)
+	if (period != data.FrequencyWeekly) && (period != data.FrequencyMonthly) {
 		return nil, ErrInvalidPeriod
 	}
 
@@ -117,15 +112,19 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	}
 
+	// Get database transaction
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
+		log.Warn().Err(err).Msg("could not get database transaction")
 		return nil, nil, err
 	}
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	// get the starting date for ratings
 	var startDate time.Time
-	err = db.QueryRow(context.Background(), "SELECT min(event_date) FROM zacks_financials").Scan(&startDate)
+	sql := "SELECT min(event_date) FROM zacks_financials"
+	err = db.QueryRow(context.Background(), sql).Scan(&startDate)
 	if err != nil {
+		log.Warn().Err(err).Str("SQL", sql).Msg("could not query database")
 		return nil, nil, err
 	}
 
@@ -136,149 +135,226 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
-	dates := make([]time.Time, 0, 600)
-	tradeDays, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, "VFINX")
+	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	switch mdep.Period {
-	case WEEKLY:
-		iterator := tradeDays.ValuesIterator()
-		wk := -1
-		for {
-			row, val, _ := iterator(dataframe.SeriesName)
-			if row == nil {
-				break
-			}
-
-			curr := val[common.DateIdx].(time.Time)
-			if wk == -1 {
-				_, wk = curr.ISOWeek()
-				dates = append(dates, curr)
-			} else {
-				_, newWk := curr.ISOWeek()
-				if newWk != wk {
-					dates = append(dates, curr)
-				}
-				wk = newWk
-			}
-		}
-	case MONTHLY:
-		iterator := tradeDays.ValuesIterator()
-		month := -1
-		for {
-			row, val, _ := iterator(dataframe.SeriesName)
-			if row == nil {
-				break
-			}
-
-			curr := val[common.DateIdx].(time.Time)
-			if month == -1 {
-				month = int(curr.Month())
-				dates = append(dates, curr)
-			} else {
-				newMonth := int(curr.Month())
-				if newMonth != month {
-					dates = append(dates, curr)
-				}
-				month = newMonth
-			}
-		}
-	}
-
-	// load market sentiment scores
-	crashDetection := make([]*sentiment, 0, 600)
-	rows, err := db.Query(ctx, "SELECT event_date, COALESCE(sg_armor, 0.1) FROM risk_indicators WHERE event_date >= $1 ORDER BY event_date", manager.Begin)
+	// build target portfolio
+	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		return nil, nil, err
 	}
-	for rows.Next() {
-		var newSentiment sentiment
-		err := rows.Scan(&newSentiment.EventDate, &newSentiment.StormGuardArmor)
-		if err != nil {
-			return nil, nil, err
-		}
-		newSentiment.EventDate = time.Date(newSentiment.EventDate.Year(), newSentiment.EventDate.Month(), newSentiment.EventDate.Day(), 16, 0, 0, 0, tz)
-		crashDetection = append(crashDetection, &newSentiment)
+
+	// Get predicted portfolio
+	predictedPortfolio, err := mdep.buildPredictedPortfolio(ctx, tradeDays, db)
+	if err != nil {
+		return nil, nil, err
 	}
+
+	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
+	prepopulateDataCache(ctx, coveredPeriods, manager)
+
+	log.Info().Msg("SEEK computed")
+
+	return targetPortfolio, predictedPortfolio, nil
+}
+
+func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*dataframe.DataFrame, error) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
+	defer span.End()
+
+	log.Info().Msg("build MDEP target portfolio")
 
 	// build target portfolio
 	targetAssets := make([]interface{}, 0, 600)
 	targetDates := make([]interface{}, 0, 600)
-	nextDateIdx := 0
-	for _, s := range crashDetection {
-		/*
-			if s.StormGuardArmor <= 0 {
-				targetMap := map[string]float64{
-					mdep.OutTicker: 1.0,
-				}
-				targetDates = append(targetDates, s.EventDate)
-				targetAssets = append(targetAssets, targetMap)
-				continue
-			}
-		*/
-
-		for nextDateIdx < len(dates) && dates[nextDateIdx].Before(s.EventDate) {
-			nextDateIdx++
+	for _, day := range tradeDays {
+		targetMap := make(map[string]float64)
+		cnt := 0
+		rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, mdep.NumHoldings)
+		if err != nil {
+			log.Error().Err(err).Msg("could not query database for portfolio")
+			return nil, err
 		}
-
-		if nextDateIdx < len(dates) &&
-			s.EventDate.Year() == dates[nextDateIdx].Year() &&
-			s.EventDate.Month() == dates[nextDateIdx].Month() &&
-			s.EventDate.Day() == dates[nextDateIdx].Day() {
-			targetMap := make(map[string]float64)
-			cnt := 0
-			//rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND market_cap_mil>=100 AND percent_rating_change_4wk >= 0 AND percent_change_q1_est >= 0 AND event_date=$1 ORDER BY percent_rating_change_4wk desc, percent_change_q1_est desc, market_cap_mil desc LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
-			rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+		for rows.Next() {
+			cnt++
+			var ticker string
+			err := rows.Scan(&ticker)
 			if err != nil {
-				return nil, nil, err
+				log.Error().Err(err).Msg("could not scan result")
+				return nil, err
 			}
-			for rows.Next() {
-				cnt++
-				var ticker string
-				err := rows.Scan(&ticker)
-				if err != nil {
-					return nil, nil, err
-				}
-				targetMap[ticker] = 0.0
-			}
-			qty := 1.0 / float64(cnt)
-			for k := range targetMap {
-				targetMap[k] = qty
-			}
-
-			targetDates = append(targetDates, s.EventDate)
-			targetAssets = append(targetAssets, targetMap)
-
-			nextDateIdx++
+			targetMap[ticker] = 0.0
 		}
+
+		qty := 1.0 / float64(cnt)
+		for k := range targetMap {
+			targetMap[k] = qty
+		}
+
+		if len(targetMap) == 0 {
+			// nothing to invest in - use cash like asset
+			targetMap["VUSTX"] = 1.0
+		}
+
+		targetDates = append(targetDates, day)
+		targetAssets = append(targetAssets, targetMap)
 	}
 
 	timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: len(targetDates)}, targetDates...)
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
 	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
 
-	// Get predicted portfolio
+	return targetPortfolio, nil
+}
+
+func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
+	defer span.End()
+	log.Info().Msg("calculating predicted portfolio")
+
 	var ticker string
 	predictedTarget := make(map[string]float64)
-	rows, err = db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", dates[nextDateIdx], mdep.NumHoldings)
+	lastDateIdx := len(tradeDays) - 1
+	rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
 	if err != nil {
-		return nil, nil, err
+		log.Error().Err(err).Msg("could not query database for SEEK predicted portfolio")
+		return nil, err
 	}
 	for rows.Next() {
 		if err := rows.Scan(&ticker); err != nil {
-			log.Error().Err(err).Msg("could not scan db val into ticker")
+			log.Error().Err(err).Msg("could not scan rows")
+			return nil, err
 		}
 		predictedTarget[ticker] = 1.0 / float64(mdep.NumHoldings)
 	}
 
-	nextTradeDate := mdep.schedule.Next(time.Now())
 	predictedPortfolio := &strategy.Prediction{
-		TradeDate:     nextTradeDate,
+		TradeDate:     tradeDays[lastDateIdx],
 		Target:        predictedTarget,
 		Justification: make(map[string]float64),
 	}
 
-	return targetPortfolio, predictedPortfolio, nil
+	return predictedPortfolio, nil
+}
+
+// prepopulateDataCache loads asset eod prices into the in-memory cache
+func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.Manager) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
+	defer span.End()
+
+	log.Info().Msg("pre-populate data cache")
+	tickerSet := make(map[string]bool, len(covered))
+
+	begin := time.Now()
+	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, v := range covered {
+		log.Debug().Str("Asset", v.Asset).Time("Begin", v.Begin).Time("End", v.End).Msg("pre-load asset EOD")
+		tickerSet[v.Asset] = true
+		if begin.After(v.Begin) {
+			begin = v.Begin
+		}
+		if end.Before(v.End) {
+			end = v.End
+		}
+	}
+
+	tickerList := make([]string, len(tickerSet))
+	ii := 0
+	for k := range tickerSet {
+		tickerList[ii] = k
+		ii++
+	}
+
+	manager.Begin = begin
+	manager.End = end
+
+	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
+	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
+		log.Error().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+	}
+	fmt.Println("finished database query")
+}
+
+// findCoveredPeriods creates periods that each assets stock prices should be downloaded
+func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Period {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "buildQueryPlan")
+	defer span.End()
+
+	log.Info().Msg("find covered periods in portfolio plan")
+
+	coveredPeriods := make([]*Period, 0, target.NRows())
+	activeAssets := make(map[string]*Period)
+	var pendingClose map[string]*Period
+
+	tickerSeriesIdx := target.MustNameToColumn(common.TickerName)
+
+	// check series type
+	isSingleAsset := false
+	series := target.Series[tickerSeriesIdx]
+	if series.Type() == "string" {
+		isSingleAsset = true
+	}
+
+	// Create a map of asset time periods
+	iterator := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
+	for {
+		row, val, _ := iterator(dataframe.SeriesName)
+		if row == nil {
+			break
+		}
+
+		date := val[common.DateIdx].(time.Time)
+
+		pendingClose = activeAssets
+		activeAssets = make(map[string]*Period)
+
+		if isSingleAsset {
+			ticker := val[common.TickerName].(string)
+			period, ok := pendingClose[ticker]
+			if !ok {
+				period = &Period{
+					Asset: ticker,
+					Begin: date,
+				}
+			} else {
+				delete(pendingClose, ticker)
+			}
+			if period.End.Before(date) {
+				period.End = date.AddDate(0, 0, 7)
+			}
+			activeAssets[ticker] = period
+		} else {
+			// it's multi-asset which means a map of tickers
+			assetMap := val[common.TickerName].(map[string]float64)
+			for ticker := range assetMap {
+				period, ok := pendingClose[ticker]
+				if !ok {
+					period = &Period{
+						Asset: ticker,
+						Begin: date,
+					}
+				} else {
+					delete(pendingClose, ticker)
+				}
+				if period.End.Before(date) {
+					period.End = date.AddDate(0, 0, 8)
+				}
+				activeAssets[ticker] = period
+			}
+		}
+
+		// any assets that remain in pending close should be added to covered periods
+		for _, v := range pendingClose {
+			coveredPeriods = append(coveredPeriods, v)
+		}
+	}
+
+	// any remaining assets should be added to coveredPeriods
+	for _, v := range activeAssets {
+		coveredPeriods = append(coveredPeriods, v)
+	}
+
+	return coveredPeriods
 }

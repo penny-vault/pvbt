@@ -82,7 +82,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	case FrequencyMonthly:
 		searchBegin = searchBegin.AddDate(0, -1, 0)
 		searchEnd = searchEnd.AddDate(0, 1, 0)
-	case FrequencyAnnualy:
+	case FrequencyAnnually:
 		searchBegin = searchBegin.AddDate(-1, 0, 0)
 		searchEnd = searchEnd.AddDate(1, 0, 0)
 	default:
@@ -130,7 +130,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 			if xx.Month() != next.Month() {
 				days = append(days, xx)
 			}
-		case FrequencyAnnualy:
+		case FrequencyAnnually:
 			if xx.Year() != next.Year() {
 				days = append(days, xx)
 			}
@@ -313,7 +313,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 
 	df := dataframe.NewDataFrame(series...)
 	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("error commiting transaction")
+		log.Error().Err(err).Msg("error committing transaction")
 	}
 
 	return df, err
@@ -413,7 +413,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("error commiting transaction")
+		log.Error().Err(err).Msg("error committing transaction")
 	}
 }
 

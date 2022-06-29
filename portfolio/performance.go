@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -39,6 +38,7 @@ import (
 var (
 	ErrInvalidTransactionType = errors.New("unrecognized transaction type")
 	ErrNoTransactions         = errors.New("portfolio has no transactions")
+	ErrSerialize              = errors.New("could not serialize data")
 )
 
 // METHODS
@@ -264,7 +264,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	startOfYear := calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1)
 	daysToStartOfYear := uint(trxIdx - pm.transactionIndexForDate(startOfYear))
 
-	var ytdBench float32 = 0.0
+	var ytdBench float32
 	if len(perf.Measurements) > 0 {
 		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
 	}
@@ -330,31 +330,31 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 				depositedToDate += trx.TotalValue
 				riskFreeValue += trx.TotalValue
 				benchmarkValue += trx.TotalValue
-				if val, ok := holdings["$CASH"]; ok {
-					holdings["$CASH"] = val + trx.TotalValue
+				if val, ok := holdings[data.CashAsset]; ok {
+					holdings[data.CashAsset] = val + trx.TotalValue
 				} else {
-					holdings["$CASH"] = trx.TotalValue
+					holdings[data.CashAsset] = trx.TotalValue
 				}
 				continue
 			case WithdrawTransaction:
 				withdrawnToDate += trx.TotalValue
 				riskFreeValue -= trx.TotalValue
 				benchmarkValue -= trx.TotalValue
-				if val, ok := holdings["$CASH"]; ok {
-					holdings["$CASH"] = val - trx.TotalValue
+				if val, ok := holdings[data.CashAsset]; ok {
+					holdings[data.CashAsset] = val - trx.TotalValue
 				}
 				continue
 			case BuyTransaction:
 				shares += trx.Shares
-				if val, ok := holdings["$CASH"]; ok {
-					holdings["$CASH"] = val - trx.TotalValue
+				if val, ok := holdings[data.CashAsset]; ok {
+					holdings[data.CashAsset] = val - trx.TotalValue
 				}
 				log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
 			case DividendTransaction:
-				if val, ok := holdings["$CASH"]; ok {
-					holdings["$CASH"] = val + trx.TotalValue
+				if val, ok := holdings[data.CashAsset]; ok {
+					holdings[data.CashAsset] = val + trx.TotalValue
 				} else {
-					holdings["$CASH"] = trx.TotalValue
+					holdings[data.CashAsset] = trx.TotalValue
 				}
 				log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
 				continue
@@ -363,10 +363,10 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 				log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
 			case SellTransaction:
 				shares -= trx.Shares
-				if val, ok := holdings["$CASH"]; ok {
-					holdings["$CASH"] = val + trx.TotalValue
+				if val, ok := holdings[data.CashAsset]; ok {
+					holdings[data.CashAsset] = val + trx.TotalValue
 				} else {
-					holdings["$CASH"] = trx.TotalValue
+					holdings[data.CashAsset] = trx.TotalValue
 				}
 				log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
 			default:
@@ -374,9 +374,9 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 				return ErrInvalidTransactionType
 			}
 
-			if val, ok := holdings["$CASH"]; ok {
+			if val, ok := holdings[data.CashAsset]; ok {
 				if val <= 1.0e-5 {
-					delete(holdings, "$CASH")
+					delete(holdings, data.CashAsset)
 				}
 			}
 
@@ -414,7 +414,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		// iterate through each holding and add value to get total return
 		totalVal = 0.0
 		for symbol, qty := range holdings {
-			if symbol == "$CASH" {
+			if symbol == data.CashAsset {
 				if math.IsNaN(qty) {
 					log.Warn().Msg("Cash position is NaN")
 				} else {
@@ -425,15 +425,14 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 				if err != nil {
 					span.RecordError(err)
 					span.SetStatus(codes.Error, "no quote for symbol")
-					return fmt.Errorf("no quote for symbol: %s", symbol)
+					return ErrSecurityPriceNotAvailable
 				}
 				if math.IsNaN(price) {
 					price, err = dataManager.GetLatestDataBefore(ctx, symbol, data.MetricClose, date)
-					//log.Warnf("Price is NaN for %s; last price = %.2f", symbol, price)
 					if err != nil {
 						span.RecordError(err)
 						span.SetStatus(codes.Error, "no quote for symbol")
-						return fmt.Errorf("no quote for symbol: %s", symbol)
+						return ErrSecurityPriceNotAvailable
 					}
 				}
 
@@ -446,14 +445,14 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		currentAssets := make([]*ReportableHolding, 0, len(holdings))
 		for symbol, qty := range holdings {
 			var value float64
-			if symbol == "$CASH" {
+			if symbol == data.CashAsset {
 				value = qty
 			} else if qty > 1.0e-5 {
 				price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
 				if err != nil {
 					span.RecordError(err)
 					span.SetStatus(codes.Error, "no quote for symbol")
-					return fmt.Errorf("no quote for symbol: %s", symbol)
+					return ErrSecurityPriceNotAvailable
 				}
 				value = price * qty
 			}
@@ -518,7 +517,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 			// time-weighted rate of return
 			if int(daysToStartOfYear) == len(perf.Measurements) {
-				daysToStartOfYear -= 1
+				daysToStartOfYear--
 			}
 
 			measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
@@ -717,8 +716,8 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 }
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
-func (p *Performance) LoadMeasurementsFromDB(userID string) error {
-	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(p.PortfolioID)).Logger()
+func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
+	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		subLog.Error().Err(err).Msg("unable to get database transaction for user")
@@ -726,7 +725,7 @@ func (p *Performance) LoadMeasurementsFromDB(userID string) error {
 	}
 
 	measurementSQL := "SELECT event_date, strategy_value, risk_free_value, holdings, benchmark_value, strategy_growth_of_10k, benchmark_growth_of_10k, risk_free_growth_of_10k, total_deposited_to_date, total_withdrawn_to_date FROM portfolio_measurements WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
-	rows, err := trx.Query(context.Background(), measurementSQL, p.PortfolioID, userID)
+	rows, err := trx.Query(context.Background(), measurementSQL, perf.PortfolioID, userID)
 	if err != nil {
 		subLog.Warn().Err(err).Str("Query", measurementSQL).Msg("failed executing measurement query")
 		if err := trx.Rollback(context.Background()); err != nil {
@@ -750,23 +749,25 @@ func (p *Performance) LoadMeasurementsFromDB(userID string) error {
 		}
 		measurements = append(measurements, &m)
 	}
-	p.Measurements = measurements
+	perf.Measurements = measurements
 
-	trx.Commit(context.Background())
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction to the database")
+	}
 	return nil
 }
 
 // SAVE
 
-func (p *Performance) Save(userID string) error {
-	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(p.PortfolioID)).Logger()
+func (perf *Performance) Save(userID string) error {
+	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		subLog.Error().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
-	err = p.SaveWithTransaction(trx, userID)
+	err = perf.SaveWithTransaction(trx, userID)
 	if err != nil {
 		subLog.Error().Err(err).Msg("unable to save portfolio transactions")
 		if err := trx.Rollback(context.Background()); err != nil {
@@ -780,7 +781,7 @@ func (p *Performance) Save(userID string) error {
 	return err
 }
 
-func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
+func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	sql := `UPDATE portfolios SET
 		performance_bytes=$2,
 		ytd_return=$3,
@@ -797,9 +798,9 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		ulcer_index=$14
 	WHERE id=$1`
 
-	tmp := p.Measurements
-	p.Measurements = make([]*PerformanceMeasurement, 0)
-	raw, err := p.MarshalBinary()
+	tmp := perf.Measurements
+	perf.Measurements = make([]*PerformanceMeasurement, 0)
+	raw, err := perf.MarshalBinary()
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
@@ -807,28 +808,28 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 
 		return err
 	}
-	p.Measurements = tmp
+	perf.Measurements = tmp
 
 	maxDrawDown := 0.0
-	if len(p.DrawDowns) > 0 {
-		maxDrawDown = p.DrawDowns[0].LossPercent
+	if len(perf.DrawDowns) > 0 {
+		maxDrawDown = perf.DrawDowns[0].LossPercent
 	}
 
 	_, err = trx.Exec(context.Background(), sql,
-		p.PortfolioID,
+		perf.PortfolioID,
 		raw,
-		p.PortfolioReturns.TWRRYTD,
-		p.PortfolioReturns.TWRRSinceInception,
-		p.PortfolioReturns.TWRRThreeYear,
-		p.PortfolioReturns.TWRRFiveYear,
-		p.PortfolioReturns.TWRRTenYear,
-		p.PortfolioMetrics.StdDevSinceInception,
-		p.PortfolioMetrics.DownsideDeviationSinceInception,
+		perf.PortfolioReturns.TWRRYTD,
+		perf.PortfolioReturns.TWRRSinceInception,
+		perf.PortfolioReturns.TWRRThreeYear,
+		perf.PortfolioReturns.TWRRFiveYear,
+		perf.PortfolioReturns.TWRRTenYear,
+		perf.PortfolioMetrics.StdDevSinceInception,
+		perf.PortfolioMetrics.DownsideDeviationSinceInception,
 		maxDrawDown,
-		p.PortfolioMetrics.AvgDrawDown,
-		p.PortfolioMetrics.SharpeRatioSinceInception,
-		p.PortfolioMetrics.SortinoRatioSinceInception,
-		p.PortfolioMetrics.UlcerIndexAvg)
+		perf.PortfolioMetrics.AvgDrawDown,
+		perf.PortfolioMetrics.SharpeRatioSinceInception,
+		perf.PortfolioMetrics.SortinoRatioSinceInception,
+		perf.PortfolioMetrics.UlcerIndexAvg)
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
@@ -837,7 +838,7 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		return err
 	}
 
-	err = p.saveMeasurements(trx, userID)
+	err = perf.saveMeasurements(trx, userID)
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
@@ -849,7 +850,7 @@ func (p *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	return nil
 }
 
-func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
+func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	sql := `INSERT INTO portfolio_measurements (
 		event_date,
 		portfolio_id,
@@ -969,23 +970,24 @@ func (p *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	) ON CONFLICT ON CONSTRAINT portfolio_measurements_pkey
 	DO NOTHING`
 
-	for _, m := range p.Measurements {
+	for _, m := range perf.Measurements {
 		holdings, err := json.Marshal(m.Holdings)
 		if err != nil {
 			for _, holding := range m.Holdings {
 				log.Error().Str("Ticker", holding.Ticker).Float64("Shares", holding.Shares).Float32("PercentPorfolio", holding.PercentPortfolio).Float64("Value", holding.Value).Msg("holding")
 			}
-			return fmt.Errorf("failed to serialize holdings: %s", err)
+			return ErrSerialize
 		}
 
 		justification, err := json.Marshal(m.Justification)
 		if err != nil {
-			return fmt.Errorf("failed to serialize justification: %s", err)
+			log.Warn().Err(err).Msg("failed to serialize justification")
+			return ErrSerialize
 		}
 
 		_, err = trx.Exec(context.Background(), sql,
 			m.Time,                  // 1
-			p.PortfolioID,           // 2
+			perf.PortfolioID,        // 2
 			m.RiskFreeValue,         // 3
 			m.TotalDeposited,        // 4
 			m.TotalWithdrawn,        // 5

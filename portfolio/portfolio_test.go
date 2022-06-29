@@ -147,7 +147,7 @@ var _ = Describe("Portfolio", func() {
 			It("first transaction should be a deposit", func() {
 				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 				Expect(p.Transactions[0].Date).To(Equal(time.Date(2018, 1, 31, 0, 0, 0, 0, tz)))
-				Expect(p.Transactions[0].Ticker).To(Equal("$CASH"))
+				Expect(p.Transactions[0].Ticker).To(Equal(data.CashAsset))
 				Expect(p.Transactions[0].Shares).To(Equal(10_000.0))
 				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
 			})
@@ -319,7 +319,7 @@ var _ = Describe("Portfolio", func() {
 			})
 		})
 
-		Context("calculates perfomance through 2020-11-30", func() {
+		Context("calculates performance through 2020-11-30", func() {
 			BeforeEach(func() {
 				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
 					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
@@ -461,7 +461,8 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VFINX")
+				_, err := dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VFINX")
+				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
@@ -469,7 +470,8 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "PRIDX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "PRIDX")
+				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
 					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
@@ -477,7 +479,8 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vustx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VUSTX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VUSTX")
+				Expect(err).To(BeNil())
 
 				err = pm.TargetPortfolio(context.Background(), df)
 				Expect(err).To(BeNil())
@@ -498,7 +501,7 @@ var _ = Describe("Portfolio", func() {
 			It("first transaction should be a deposit", func() {
 				Expect(p.Transactions[0].Kind).To(Equal(portfolio.DepositTransaction))
 				Expect(p.Transactions[0].Date).Should(BeTemporally("==", time.Date(2018, 1, 31, 0, 0, 0, 0, tz)))
-				Expect(p.Transactions[0].Ticker).To(Equal("$CASH"))
+				Expect(p.Transactions[0].Ticker).To(Equal(data.CashAsset))
 				Expect(p.Transactions[0].Shares).To(Equal(10_000.0))
 				Expect(p.Transactions[0].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
 			})

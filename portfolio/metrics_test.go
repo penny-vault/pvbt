@@ -54,7 +54,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 4.0
 					benchmarkValue += 3.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -116,7 +116,7 @@ var _ = Describe("Metrics", func() {
 					value += 10.0
 					benchmarkValue += 10.0
 					riskFreeValue += 1.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -464,7 +464,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 10.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -515,7 +515,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 10.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -828,7 +828,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 5.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -1074,7 +1074,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 10.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -1198,7 +1198,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 10.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)
@@ -1666,7 +1666,7 @@ var _ = Describe("Metrics", func() {
 
 					value += 10.0
 					benchmarkValue += 5.0
-					yearDays += 1
+					yearDays++
 					if yearDays == 252 {
 						perf.Measurements[len(perf.Measurements)-1].Time = time.Date(date.Year(), 12, 31, 16, 0, 0, 0, tz)
 						date = time.Date(date.Year()+1, 1, 1, 16, 0, 0, 0, tz)

@@ -33,6 +33,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const (
+	CashAsset = "$CASH"
+)
+
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string
@@ -47,10 +51,10 @@ type DateProvider interface {
 type Frequency string
 
 const (
-	FrequencyDaily   Frequency = "Daily"
-	FrequencyWeekly  Frequency = "Weekly"
-	FrequencyMonthly Frequency = "Monthly"
-	FrequencyAnnualy Frequency = "Annualy"
+	FrequencyDaily    Frequency = "Daily"
+	FrequencyWeekly   Frequency = "Weekly"
+	FrequencyMonthly  Frequency = "Monthly"
+	FrequencyAnnually Frequency = "Annually"
 )
 
 type Metric string

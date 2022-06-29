@@ -37,6 +37,13 @@ var (
 	ErrEmptyUserID = errors.New("userID cannot be an empty string")
 )
 
+const (
+	TWRRYtd    = "twrr_ytd"
+	TWRRMtd    = "twrr_mtd"
+	TWRRWtd    = "twrr_wtd"
+	TWRROneDay = "twrr_1d"
+)
+
 // Private
 
 var pool PgxIface

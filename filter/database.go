@@ -26,6 +26,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgsql"
 	"github.com/jackc/pgx/v4"
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
@@ -37,7 +38,7 @@ var (
 	ErrUnknownOperator = errors.New("unknown operator")
 )
 
-type FilterDatabase struct {
+type Database struct {
 	PortfolioID string
 	UserID      string
 }
@@ -116,7 +117,7 @@ func BuildQuery(from string, fields []string, safeFields []string, where map[str
 	return sql, args, nil
 }
 
-func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error) {
+func (f *Database) GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error) {
 	where := make(map[string]string)
 	fields := []string{"event_date", field1, field2}
 
@@ -155,23 +156,23 @@ func (f *FilterDatabase) GetMeasurements(field1 string, field2 string, since tim
 	return data, err
 }
 
-func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte, error) {
+func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
 	where := make(map[string]string)
 
-	subLog := log.With().Str("Frequency", frequency).Time("Since", since).Logger()
+	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
 
 	var periodReturn string
 	switch frequency {
-	case "annually":
-		periodReturn = "twrr_ytd"
-	case "monthly":
-		periodReturn = "twrr_mtd"
-	case "weekly":
-		periodReturn = "twrr_wtd"
-	case "daily":
-		periodReturn = "twrr_1d"
+	case data.FrequencyAnnually:
+		periodReturn = database.TWRRYtd
+	case data.FrequencyMonthly:
+		periodReturn = database.TWRRMtd
+	case data.FrequencyWeekly:
+		periodReturn = database.TWRRWtd
+	case data.FrequencyDaily:
+		periodReturn = database.TWRROneDay
 	default:
-		periodReturn = "twrr_mtd"
+		periodReturn = database.TWRRMtd
 	}
 	fields := []string{"event_date", "holdings", periodReturn, "justification", "strategy_value"}
 
@@ -185,13 +186,13 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 
 	var querySQL string
 	switch frequency {
-	case "annually":
+	case data.FrequencyAnnually:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
-	case "monthly":
+	case data.FrequencyMonthly:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
-	case "weekly":
+	case data.FrequencyWeekly:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
-	case "daily":
+	case data.FrequencyDaily:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
 	default:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
@@ -255,13 +256,18 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 		return nil, err
 	}
 
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load timezone")
+	}
+
 	switch frequency {
-	case "annually":
-		nyc, _ := time.LoadLocation("America/New_York")
+	case data.FrequencyAnnually:
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
-	case "monthly":
-		nyc, _ := time.LoadLocation("America/New_York")
+	case data.FrequencyMonthly:
 		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
+	default:
+		// no adjustment necessary for other frequencies
 	}
 
 	h.Items = append(h.Items, &predicted)
@@ -270,7 +276,7 @@ func (f *FilterDatabase) GetHoldings(frequency string, since time.Time) ([]byte,
 	return data, err
 }
 
-func (f *FilterDatabase) GetTransactions(since time.Time) ([]byte, error) {
+func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 	subLog := log.With().Time("Since", since).Logger()
 	where := make(map[string]string)
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time

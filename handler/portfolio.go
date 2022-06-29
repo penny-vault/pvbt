@@ -18,12 +18,14 @@ package handler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/filter"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -65,7 +67,7 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	portfolioSQL := `INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"$CASH": 10000}')`
+	portfolioSQL := fmt.Sprintf(`INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"%s": 10000}')`, data.CashAsset)
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		subLog.Error().Err(err).Msg("unable to get database transaction for user")
@@ -91,7 +93,11 @@ func CreatePortfolio(c *fiber.Ctx) error {
 
 		return fiber.ErrNotFound
 	}
-	trx.Commit(context.Background())
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit database transaction")
+	}
+
 	return c.JSON(portfolioParams)
 }
 
@@ -130,7 +136,11 @@ func GetPortfolio(c *fiber.Ctx) error {
 		p.CAGRSinceInception.Float64 = 0
 		p.CAGRSinceInception.Valid = false
 	}
-	trx.Commit(context.Background())
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit database transaction")
+	}
+
 	return c.JSON(p)
 }
 
@@ -202,9 +212,9 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 func GetPortfolioHoldings(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
 	userID := c.Locals("userID").(string)
-	frequency := c.Query("frequency", "monthly")
+	frequency := data.Frequency(c.Query("frequency", "Monthly"))
 	sinceStr := c.Query("since", "0")
-	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("UserID", userID).Str("Frequency", frequency).Str("Since", sinceStr).Logger()
+	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("UserID", userID).Str("Frequency", string(frequency)).Str("Since", sinceStr).Logger()
 
 	f := filter.New(portfolioIDStr, userID)
 
@@ -307,7 +317,9 @@ func ListPortfolios(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	trx.Commit(context.Background())
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit database transaction")
+	}
 	return c.JSON(portfolios)
 }
 
@@ -374,7 +386,9 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	trx.Commit(context.Background())
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit database transaction")
+	}
 	return c.JSON(p)
 }
 

@@ -39,13 +39,13 @@ import (
 var resources embed.FS
 
 // StrategyList List of all strategies
-var StrategyList = []*strategy.StrategyInfo{}
+var StrategyList = []*strategy.Info{}
 
 // StrategyMap Map of strategies
-var StrategyMap = make(map[string]*strategy.StrategyInfo)
+var StrategyMap = make(map[string]*strategy.Info)
 
 // StrategyMetrics map of updated metrics for each strategy - this is used by the StrategyInfo constrcutors and the GetStrategies endpoint
-var StrategyMetricsMap = make(map[string]strategy.StrategyMetrics)
+var StrategyMetricsMap = make(map[string]strategy.Metrics)
 
 // InitializeStrategyMap configure the strategy map
 func InitializeStrategyMap() {
@@ -56,7 +56,7 @@ func InitializeStrategyMap() {
 	Register("seek", seek.New)
 }
 
-func Register(strategyPkg string, factory strategy.StrategyFactory) {
+func Register(strategyPkg string, factory strategy.Factory) {
 	// read description
 	fn := fmt.Sprintf("%s/description.md", strategyPkg)
 	subLog := log.With().Str("FileName", fn).Logger()
@@ -83,7 +83,7 @@ func Register(strategyPkg string, factory strategy.StrategyFactory) {
 		subLog.Error().Err(err).Msg("failed to read file")
 	}
 
-	var strat strategy.StrategyInfo
+	var strat strategy.Info
 	err = toml.Unmarshal(doc, &strat)
 	if err != nil {
 		subLog.Error().Err(err).Msg("failed to parse toml file")
@@ -109,7 +109,7 @@ func LoadStrategyMetricsFromDb() {
 		}
 
 		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolios WHERE user_id='pvuser' AND name=$1", strat.Name)
-		s := strategy.StrategyMetrics{}
+		s := strategy.Metrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
 
 		metrics := []*sql.NullFloat64{&s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception}
@@ -133,6 +133,8 @@ func LoadStrategyMetricsFromDb() {
 
 		StrategyMetricsMap[strat.Shortcode] = s
 		strat.Metrics = s
-		trx.Commit(context.Background())
+		if err := trx.Commit(context.Background()); err != nil {
+			log.Error().Err(err).Msg("could not commit trx to database")
+		}
 	}
 }

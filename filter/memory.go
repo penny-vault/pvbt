@@ -19,10 +19,13 @@ import (
 	"math"
 	"time"
 
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/rs/zerolog/log"
 )
 
-type FilterObject struct {
+type InMemory struct {
 	Portfolio   *portfolio.Portfolio
 	Performance *portfolio.Performance
 }
@@ -138,7 +141,7 @@ func getValue(m *portfolio.PerformanceMeasurement, field string) float64 {
 	}
 }
 
-func (f *FilterObject) GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error) {
+func (f *InMemory) GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error) {
 	fields := []string{field1, field2}
 
 	// filter measurements by where
@@ -164,19 +167,19 @@ func (f *FilterObject) GetMeasurements(field1 string, field2 string, since time.
 	return meas.MarshalBinary()
 }
 
-func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, error) {
+func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
 	var periodReturn string
 	switch frequency {
-	case "annually":
-		periodReturn = "twrr_ytd"
-	case "monthly":
-		periodReturn = "twrr_mtd"
-	case "weekly":
-		periodReturn = "twrr_wtd"
-	case "daily":
-		periodReturn = "twrr_1d"
+	case data.FrequencyAnnually:
+		periodReturn = database.TWRRYtd
+	case data.FrequencyMonthly:
+		periodReturn = database.TWRRMtd
+	case data.FrequencyWeekly:
+		periodReturn = database.TWRRWtd
+	case data.FrequencyDaily:
+		periodReturn = database.TWRROneDay
 	default:
-		periodReturn = "twrr_mtd"
+		periodReturn = database.TWRRMtd
 	}
 
 	holdingsAtPeriodStart := make([]*portfolio.ReportableHolding, 0)
@@ -291,14 +294,18 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 	}
 
 	// add predicted holding item
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load time zone")
+	}
 	predicted := f.Portfolio.PredictedAssets
 	switch frequency {
 	case "annually":
-		nyc, _ := time.LoadLocation("America/New_York")
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
 	case "monthly":
-		nyc, _ := time.LoadLocation("America/New_York")
 		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
+	default:
+		// nothing to be done in default case
 	}
 
 	holdings.Items = append(holdings.Items, predicted)
@@ -306,7 +313,7 @@ func (f *FilterObject) GetHoldings(frequency string, since time.Time) ([]byte, e
 	return holdings.MarshalBinary()
 }
 
-func (f *FilterObject) GetTransactions(since time.Time) ([]byte, error) {
+func (f *InMemory) GetTransactions(since time.Time) ([]byte, error) {
 	// filter transactions
 	filtered := make([]*portfolio.Transaction, 0, len(f.Portfolio.Transactions))
 	for _, xx := range f.Portfolio.Transactions {

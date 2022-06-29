@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	ErrDidNotConverge = errors.New("fsolve did not converge")
+	ErrDidNotConverge = errors.New("did not converge")
 )
 
 type objectiveFunc func(float64) float64

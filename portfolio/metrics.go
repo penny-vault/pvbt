@@ -16,8 +16,9 @@
 package portfolio
 
 import (
+	"crypto/rand"
 	"math"
-	"math/rand"
+	"math/big"
 	"sort"
 	"time"
 
@@ -222,9 +223,8 @@ func (perf *Performance) CalmarRatio(periods uint, kind string) float64 {
 	maxDrawDown := perf.MaxDrawDown(periods, kind)
 	if maxDrawDown != nil {
 		return cagr / (-1 * maxDrawDown.LossPercent)
-	} else {
-		return cagr
 	}
+	return cagr
 }
 
 // DownsideDeviation compute the standard deviation of negative
@@ -257,9 +257,11 @@ func DynamicWithdrawalRate(mc [][]float64, inflation float64) float64 {
 	for ii, xx := range mc {
 		f := func(r float64) float64 { return dynamicWithdrawalRate(r, inflation, xx) - final }
 		x0, err := fsolve(f, .05)
-		if err == nil {
-			rets[ii] = x0
+		if err != nil {
+			log.Warn().Err(err).Msg("fsolve error")
+			continue
 		}
+		rets[ii] = x0
 	}
 	return stat.Mean(rets, nil)
 }
@@ -421,79 +423,77 @@ func (perf *Performance) MWRR(periods uint, kind string) float64 {
 		}
 		if years > 1 {
 			return math.Pow(rate, 1.0/years) - 1.0
-		} else {
-			return rate - 1.0
 		}
-	} else {
-		cashflows := make([]cashflow, 0, 5)
+		return rate - 1.0
+	}
 
-		var val float64
-		switch kind {
-		case STRATEGY:
-			val = float64(perf.Measurements[startIdx].Value) * -1.0
-		case BENCHMARK:
-			val = float64(perf.Measurements[startIdx].BenchmarkValue) * -1.0
-		case RISKFREE:
-			val = float64(perf.Measurements[startIdx].RiskFreeValue) * -1.0
-		}
+	cashflows := make([]cashflow, 0, 5)
 
-		cashflows = append(cashflows, cashflow{
-			date:  perf.Measurements[startIdx].Time,
-			value: val,
-		})
+	var val float64
+	switch kind {
+	case STRATEGY:
+		val = float64(perf.Measurements[startIdx].Value) * -1.0
+	case BENCHMARK:
+		val = float64(perf.Measurements[startIdx].BenchmarkValue) * -1.0
+	case RISKFREE:
+		val = float64(perf.Measurements[startIdx].RiskFreeValue) * -1.0
+	}
 
-		for ii, jj := startIdx, startIdx+1; jj < endIdx; ii, jj = ii+1, jj+1 {
-			m0 := perf.Measurements[ii]
-			m1 := perf.Measurements[jj]
-			deposited := m1.TotalDeposited - m0.TotalDeposited
-			withdrawn := m1.TotalWithdrawn - m0.TotalWithdrawn
-			change := float64(deposited - withdrawn)
-			if math.Abs(change) > 0 {
-				cashflows = append(cashflows, cashflow{
-					date:  perf.Measurements[jj].Time,
-					value: change * -1.0,
-				})
-			}
-		}
+	cashflows = append(cashflows, cashflow{
+		date:  perf.Measurements[startIdx].Time,
+		value: val,
+	})
 
-		switch kind {
-		case STRATEGY:
-			val = perf.Measurements[n-1].Value
-		case BENCHMARK:
-			val = perf.Measurements[n-1].BenchmarkValue
-		case RISKFREE:
-			val = perf.Measurements[n-1].RiskFreeValue
-		}
-
-		cashflows = append(cashflows, cashflow{
-			date:  perf.Measurements[n-1].Time,
-			value: val,
-		})
-
-		// performance optimization when there have been no cashflows over the period
-		if len(cashflows) == 2 {
-			rate = cashflows[1].value / (-1.0 * cashflows[0].value)
-			if years > 1 {
-				return math.Pow(rate, 1.0/years) - 1.0
-			}
-			return rate - 1.0
-		}
-
-		// regular MWRR with XIRR
-		rate = xirr(cashflows) / 100
-		if years < 1 {
-			return math.Pow((1+rate), years) - 1.0
-		} else {
-			return rate
+	for ii, jj := startIdx, startIdx+1; jj < endIdx; ii, jj = ii+1, jj+1 {
+		m0 := perf.Measurements[ii]
+		m1 := perf.Measurements[jj]
+		deposited := m1.TotalDeposited - m0.TotalDeposited
+		withdrawn := m1.TotalWithdrawn - m0.TotalWithdrawn
+		change := float64(deposited - withdrawn)
+		if math.Abs(change) > 0 {
+			cashflows = append(cashflows, cashflow{
+				date:  perf.Measurements[jj].Time,
+				value: change * -1.0,
+			})
 		}
 	}
+
+	switch kind {
+	case STRATEGY:
+		val = perf.Measurements[n-1].Value
+	case BENCHMARK:
+		val = perf.Measurements[n-1].BenchmarkValue
+	case RISKFREE:
+		val = perf.Measurements[n-1].RiskFreeValue
+	}
+
+	cashflows = append(cashflows, cashflow{
+		date:  perf.Measurements[n-1].Time,
+		value: val,
+	})
+
+	// performance optimization when there have been no cashflows over the period
+	if len(cashflows) == 2 {
+		rate = cashflows[1].value / (-1.0 * cashflows[0].value)
+		if years > 1 {
+			return math.Pow(rate, 1.0/years) - 1.0
+		}
+		return rate - 1.0
+	}
+
+	// regular MWRR with XIRR
+	rate = xirr(cashflows) / 100
+	if years < 1 {
+		return math.Pow((1+rate), years) - 1.0
+	}
+	return rate
 }
 
 // MWRRYtd calculates the money weighted YTD return
 func (perf *Performance) MWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
 	if len(perf.Measurements) == int(periods) {
-		periods -= 1
+		periods--
 	}
 	return perf.MWRR(periods, kind)
 }
@@ -530,9 +530,11 @@ func SafeWithdrawalRate(mc [][]float64, inflation float64) float64 {
 	for ii, xx := range mc {
 		f := func(r float64) float64 { return constantWithdrawalRate(r, inflation, xx) }
 		x0, err := fsolve(f, .05)
-		if err == nil {
-			rets[ii] = x0
+		if err != nil {
+			log.Warn().Err(err).Msg("fsolve failed")
+			continue
 		}
+		rets[ii] = x0
 	}
 	swr := stat.Mean(rets, nil)
 	return swr
@@ -575,7 +577,6 @@ func (perf *Performance) SharpeRatio(periods uint, kind string) float64 {
 
 	sharpe := excessReturn / stdev
 
-	//fmt.Printf("sharpe = %.5f periods = %d excessReturn = %.5f std = %.5f\n", sharpe, periods, excessReturn, stdev)
 	return sharpe
 }
 
@@ -628,7 +629,6 @@ func (perf *Performance) SortinoRatio(periods uint, kind string) float64 {
 
 	downsideDeviation := perf.DownsideDeviation(periods, kind)
 	sortino := excessReturn / downsideDeviation
-	//fmt.Printf("sortino = %.5f periods = %d excessReturn = %.5f downsideDeviation = %.5f\n", sortino, periods, excessReturn, downsideDeviation)
 
 	return sortino
 }
@@ -652,7 +652,7 @@ func (perf *Performance) StdDev(periods uint, kind string) float64 {
 // the portfolio recovered
 func (perf *Performance) Top10DrawDowns(periods uint, kind string) []*DrawDown {
 	n := len(perf.Measurements)
-	if len(perf.Measurements) <= 0 || uint(n) < periods {
+	if len(perf.Measurements) == 0 || uint(n) < periods {
 		return []*DrawDown{}
 	}
 
@@ -733,7 +733,7 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 			eValue = e.RiskFreeValue
 		}
 		r0 := (eValue - deposit + withdraw) / sValue
-		rate = rate * r0
+		rate *= r0
 	}
 
 	start := perf.Measurements[startIdx].Time
@@ -753,7 +753,7 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 func (perf *Performance) TWRRYtd(kind string) float64 {
 	periods := perf.ytdPeriods()
 	if len(perf.Measurements) == int(periods) {
-		periods -= 1
+		periods--
 	}
 	return perf.TWRR(periods, kind)
 }
@@ -898,12 +898,16 @@ func CircularBootstrap(timeSeries []float64, blockSize int, n int, m int) [][]fl
 	}
 
 	// sample blocks with replacement
-	rand.Seed(time.Now().UnixNano())
 	result := make([][]float64, n)
+	bigN := big.NewInt(int64(N))
 	for ii := range result {
 		sample := make([]float64, 0, m)
 		for len(sample) < m {
-			sample = append(sample, blocks[rand.Intn(N)]...)
+			idx, err := rand.Int(rand.Reader, bigN)
+			if err != nil {
+				log.Panic().Err(err).Msg("could not get random number")
+			}
+			sample = append(sample, blocks[idx.Int64()]...)
 		}
 		result[ii] = monthlyReturnToAnnual(sample[:m])
 	}
@@ -916,7 +920,7 @@ func constantWithdrawalRate(rate float64, inflation float64, mc []float64) float
 	w := b * rate
 	for _, ret := range mc {
 		b = b*(1.0+ret) - w
-		w = w * (1.0 + inflation)
+		w *= (1.0 + inflation)
 	}
 	return b
 }
@@ -927,7 +931,7 @@ func dynamicWithdrawalRate(rate float64, inflation float64, mc []float64) float6
 	w := w0
 	for _, ret := range mc {
 		b = b*(1.0+ret) - w
-		w0 = w0 * (1.0 + inflation)
+		w0 *= (1.0 + inflation)
 		w = min(w0, b*rate)
 	}
 	return b
@@ -997,7 +1001,7 @@ func monthlyReturnToAnnual(ts []float64) []float64 {
 	val := 1.0
 	res := make([]float64, 0, int(math.Ceil(float64(len(ts))/12.0)))
 	for _, x := range ts {
-		cnt += 1
+		cnt++
 		val *= (1 + x)
 		if cnt == 12 {
 			val -= 1.0
@@ -1064,7 +1068,7 @@ func xirr(cashflows []cashflow) float64 {
 func (perf *Performance) ytdPeriods() uint {
 	today := time.Now()
 	year := today.Year()
-	var periods uint = 0
+	var periods uint
 	for _, x := range perf.Measurements {
 		if year == x.Time.Year() {
 			periods++

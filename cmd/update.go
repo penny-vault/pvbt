@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"strings"
 	"time"
 
@@ -89,7 +90,9 @@ var updateCmd = &cobra.Command{
 		for _, strat := range strategies.StrategyList {
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
 				log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
-				createStrategyPortfolio(strat, &dataManager)
+				if err := createStrategyPortfolio(strat, &dataManager); err != nil {
+					os.Exit(1)
+				}
 			}
 		}
 
@@ -109,7 +112,9 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal().Err(err).Msg("could not load portfolio from DB")
 			}
-			p[0].LoadTransactionsFromDB()
+			if err := p[0].LoadTransactionsFromDB(); err != nil {
+				log.Panic().Err(err).Msg("could not load transactions from database")
+			}
 			portfolios = append(portfolios, p[0])
 		} else {
 			// load portfolio ids from database
@@ -145,7 +150,9 @@ var updateCmd = &cobra.Command{
 					if err != nil {
 						log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
 					}
-					p[0].LoadTransactionsFromDB()
+					if err := p[0].LoadTransactionsFromDB(); err != nil {
+						log.Panic().Err(err).Msg("could not load transactions from database")
+					}
 					portfolios = append(portfolios, p[0])
 				}
 			}
@@ -157,7 +164,12 @@ var updateCmd = &cobra.Command{
 			subLog := log.With().Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
 			subLog.Info().Msg("updating portfolio")
 
-			pm.LoadTransactionsFromDB()
+			err = pm.LoadTransactionsFromDB()
+			if err != nil {
+				// NOTE: error is logged by caller
+				continue
+			}
+
 			err = pm.UpdateTransactions(context.Background(), dt)
 			if err != nil {
 				// NOTE: error is logged by caller
@@ -173,7 +185,10 @@ var updateCmd = &cobra.Command{
 				// just create a new performance record
 				perf = portfolio.NewPerformance(pm.Portfolio)
 			} else {
-				perf.LoadMeasurementsFromDB(pm.Portfolio.UserID)
+				if err := perf.LoadMeasurementsFromDB(pm.Portfolio.UserID); err != nil {
+					log.Error().Err(err).Msg("could not load measurements from database")
+					continue
+				}
 			}
 
 			err = perf.CalculateThrough(context.Background(), pm, dt)
@@ -181,13 +196,6 @@ var updateCmd = &cobra.Command{
 				subLog.Error().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
 				continue
 			}
-
-			/*
-				fmt.Printf("Performance from %s through %s\n", perf.PeriodStart, perf.PeriodEnd)
-				for idx, m := range perf.Measurements {
-					fmt.Printf("%d) %s\t%.2f\n", idx, m.Time, m.Value)
-				}
-			*/
 
 			err = pm.Save(pm.Portfolio.UserID)
 			if err != nil {
@@ -202,7 +210,7 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager) error {
+func createStrategyPortfolio(strat *strategy.Info, manager *data.Manager) error {
 	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 
 	subLog := log.With().Str("Shortcode", strat.Shortcode).Str("StrategyName", strat.Name).Logger()
@@ -214,7 +222,9 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 		if v.Typecode == "string" || v.Typecode == "choice" {
 			output = v.Default
 		} else {
-			json.Unmarshal([]byte(v.Default), &output)
+			if err := json.Unmarshal([]byte(v.Default), &output); err != nil {
+				log.Warn().Err(err).Str("JsonValue", v.Default).Msg("could not unmarshal value")
+			}
 		}
 		argumentsMap[k] = output
 	}
@@ -225,7 +235,10 @@ func createStrategyPortfolio(strat *strategy.StrategyInfo, manager *data.Manager
 	}
 
 	params := make(map[string]json.RawMessage)
-	json.Unmarshal(arguments, &params)
+	if err := json.Unmarshal(arguments, &params); err != nil {
+		log.Error().Err(err).Msg("could not unmarshal strategy arguments")
+		return err
+	}
 
 	b, err := backtest.New(context.Background(), strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
 	if err != nil {

@@ -29,7 +29,7 @@ package daa
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"math"
 	"sort"
 	"time"
@@ -46,6 +46,10 @@ import (
 
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
+)
+
+var (
+	ErrCouldNotRetrieveData = errors.New("could not retrieve eod data")
 )
 
 // KellersDefensiveAssetAllocation strategy type
@@ -135,7 +139,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
-		return fmt.Errorf("failed to download data for tickers: %s", errs)
+		return ErrCouldNotRetrieveData
 	}
 
 	prices, err := dfextras.DropNA(ctx, prices)
@@ -210,11 +214,8 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 				if shares > 1.0e-5 {
 					targetMap[asset] = shares
 				}
-			} else {
-				// skip 0 allocations
-				if w > 1.0e-5 {
-					targetMap[asset] = w
-				}
+			} else if w > 1.0e-5 {
+				targetMap[asset] = w
 			}
 		}
 

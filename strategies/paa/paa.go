@@ -23,24 +23,27 @@ package paa
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	json "github.com/goccy/go-json"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
-	"go.opentelemetry.io/otel"
-
-	"github.com/goccy/go-json"
-	"github.com/rs/zerolog/log"
-
-	"github.com/rocketlaunchr/dataframe-go"
+	dataframe "github.com/rocketlaunchr/dataframe-go"
 	"github.com/rocketlaunchr/dataframe-go/math/funcs"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+)
+
+var (
+	ErrDataRetrievalFailed = errors.New("failed to retrieve data for tickers")
 )
 
 func min(x int, y int) int {
@@ -125,7 +128,7 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 
 	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 	if errs != nil {
-		return fmt.Errorf("failed to download data for tickers: %s", errs)
+		return ErrDataRetrievalFailed
 	}
 
 	prices, err := dfextras.DropNA(ctx, prices)
@@ -262,9 +265,11 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	// calculate for every period
 	mom := paa.momentum
 	name := "paa_n" // name must be lower-case so it won't conflict with potential tickers
-	mom.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
+	if err := mom.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 		Size: mom.NRows(),
-	}), nil)
+	}), nil); err != nil {
+		log.Error().Err(err).Msg("could not add series to momentum dataframe")
+	}
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
 	copy(riskUniverseMomNames, paa.riskUniverse)
 	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
@@ -272,7 +277,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 		funcs.EvaluateOptions{
 			CustomFns: map[string]func(args ...float64) float64{
 				"countPositive": func(args ...float64) float64 {
-					var result float64 = 0.0
+					var result float64
 					for _, x := range args {
 						if x > 0 {
 							result += 1.0
@@ -290,9 +295,11 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	// bf is the bond fraction that should be used in portfolio construction
 	// bf = (N-n) / (N-n1)
 	bfCol := "paa_bf" // name must be lower-case so it won't conflict with potential tickers
-	mom.AddSeries(dataframe.NewSeriesFloat64(bfCol, &dataframe.SeriesInit{
+	if err := mom.AddSeries(dataframe.NewSeriesFloat64(bfCol, &dataframe.SeriesInit{
 		Size: mom.NRows(),
-	}), nil)
+	}), nil); err != nil {
+		log.Error().Err(err).Msg("could not add series to dataframe")
+	}
 	fn = funcs.RegFunc(fmt.Sprintf("min(1.0, (%f - paa_n) / %f)", N, N-n1))
 	err = funcs.Evaluate(context.TODO(), mom, fn, bfCol)
 	if err != nil {

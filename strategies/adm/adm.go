@@ -26,6 +26,7 @@ package adm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -44,6 +45,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
+)
+
+var (
+	ErrCouldNotRetrieveData = errors.New("could not retrieve data")
 )
 
 type AcceleratingDualMomentum struct {
@@ -96,7 +101,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
 	if errs != nil {
-		return fmt.Errorf("failed to download data in adm for tickers: %s", errs)
+		return ErrCouldNotRetrieveData
 	}
 
 	colNames := make([]string, len(adm.inTickers)+1)
@@ -185,14 +190,18 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		ticker := adm.inTickers[ii]
 		for _, jj := range periods {
 			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
-			funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj))
+			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
+				log.Error().Err(err).Msg("could not calculate momentum")
+			}
 		}
 	}
 
 	for ii := range adm.inTickers {
 		ticker := adm.inTickers[ii]
 		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
-		funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker))
+		if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
+			log.Error().Err(err).Msg("could not calculate score")
+		}
 	}
 
 	// compute average scores
@@ -228,7 +237,9 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	}
 
 	// Compute momentum scores
-	adm.computeScores(ctx)
+	if err := adm.computeScores(ctx); err != nil {
+		return nil, nil, err
+	}
 
 	scores := []dataframe.Series{}
 	timeIdx, _ := adm.momentum.NameToColumn(common.DateIdx)
