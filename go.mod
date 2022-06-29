@@ -19,12 +19,8 @@ require (
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jackc/pgsql v0.0.0-20220107225750-271c34d72320
 	github.com/jackc/pgx/v4 v4.16.1
-	github.com/jarcoal/httpmock v1.2.0
 	github.com/jdfergason/jwt/v2 v2.2.6
 	github.com/jmoiron/sqlx v1.3.5 // indirect
-	github.com/juju/errors v0.0.0-20220622220526-54a94488269b // indirect
-	github.com/juju/loggo v0.0.0-20210728185423-eebad3a902c4 // indirect
-	github.com/juju/utils/v2 v2.0.0-20210305225158-eedbe7b6b3e2 // indirect
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.25
 	github.com/magefile/mage v1.13.0
@@ -39,13 +35,13 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
-	github.com/valyala/fasthttp v1.37.0 // indirect
+	github.com/valyala/fasthttp v1.38.0 // indirect
 	github.com/xitongsys/parquet-go v1.6.2 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/exp v0.0.0-20220613132600-b0d781184e0d // indirect
 	golang.org/x/net v0.0.0-20220624214902-1bab6f366d9e // indirect
-	golang.org/x/sys v0.0.0-20220624220833-87e55d714810 // indirect
+	golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gonum.org/v1/gonum v0.11.0
 	google.golang.org/protobuf v1.28.0 // indirect
@@ -83,7 +79,7 @@ require (
 	github.com/xitongsys/parquet-go-source v0.0.0-20220624101223-5cb561a812f4 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.7.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
-	google.golang.org/genproto v0.0.0-20220624142145-8cd45d7dbd1f // indirect
+	google.golang.org/genproto v0.0.0-20220628213854-d9e0b6570c03 // indirect
 )
 
 require (
@@ -105,7 +101,6 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.11.0
 	github.com/jackc/puddle v1.2.1 // indirect
-	github.com/juju/clock v0.0.0-20220203021603-d9deb868a28a // indirect
 	github.com/klauspost/compress v1.15.6 // indirect
 	github.com/klauspost/cpuid/v2 v2.0.14 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
