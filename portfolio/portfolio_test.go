@@ -40,7 +40,7 @@ var _ = Describe("Portfolio", func() {
 		err       error
 		p         *portfolio.Portfolio
 		perf      *portfolio.Performance
-		pm        *portfolio.PortfolioModel
+		pm        *portfolio.Model
 		tz        *time.Location
 	)
 

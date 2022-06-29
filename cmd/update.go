@@ -94,7 +94,7 @@ var updateCmd = &cobra.Command{
 		}
 
 		// get a list of portfolio id's to update
-		portfolios := make([]*portfolio.PortfolioModel, 0, 100)
+		portfolios := make([]*portfolio.Model, 0, 100)
 		if PortfolioID != "" {
 			portfolioParts := strings.Split(PortfolioID, ":")
 			if len(portfolioParts) != 2 {

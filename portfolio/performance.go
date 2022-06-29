@@ -113,7 +113,7 @@ func NewPerformance(p *Portfolio) *Performance {
 }
 
 // transactionIndexForDate find the transaction index that has the earliest date on or after dt
-func (pm *PortfolioModel) transactionIndexForDate(dt time.Time) int {
+func (pm *Model) transactionIndexForDate(dt time.Time) int {
 	// TODO update to Binary Search
 	var val *Transaction
 	idx := 0
@@ -168,7 +168,7 @@ func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods u
 }
 
 // CalculateThrough computes performance metrics for the given portfolio until `through`
-func (perf *Performance) CalculateThrough(ctx context.Context, pm *PortfolioModel, through time.Time) error {
+func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
 	defer span.End()
 

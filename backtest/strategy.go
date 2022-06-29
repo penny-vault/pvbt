@@ -39,7 +39,7 @@ var (
 )
 
 type Backtest struct {
-	PortfolioModel *portfolio.PortfolioModel
+	PortfolioModel *portfolio.Model
 	Performance    *portfolio.Performance
 }
 
@@ -109,30 +109,30 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 }
 
 // Save the backtest to the Database
-func (b *Backtest) Save(userID string, permanent bool) error {
+func (b *Backtest) Save(userID string, permanent bool) {
 	start := time.Now()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("unable to get database transaction for user")
-		return err
+		return
 	}
 
 	err = b.PortfolioModel.SaveWithTransaction(trx, userID, permanent)
 	if err != nil {
 		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save portfolio")
-		return err
+		return
 	}
 
 	err = b.Performance.SaveWithTransaction(trx, userID)
 	if err != nil {
 		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save performance measurement")
-		return err
+		return
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
 		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not commit database transaction")
-		return err
+		return
 	}
 
 	stop := time.Now()
@@ -140,9 +140,8 @@ func (b *Backtest) Save(userID string, permanent bool) error {
 
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to save performance measurements to DB")
-		return err
+		return
 	}
 
 	log.Info().Dur("Duration", saveDur).Msg("saved to DB")
-	return nil
 }

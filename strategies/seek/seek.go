@@ -39,7 +39,6 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -54,7 +53,6 @@ type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
 	Period      data.Frequency
-	schedule    *tradecron.TradeCron
 }
 
 type Period struct {

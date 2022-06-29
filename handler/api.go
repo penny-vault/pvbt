@@ -35,11 +35,11 @@ import (
 )
 
 // ApiKey returns a hex-encoded JSON string containing the userID and tiingoToken
-type ApiKeyResponse struct {
+type APIKeyResponse struct {
 	Token string `json:"token"`
 }
 
-func ApiKey(c *fiber.Ctx) error {
+func APIKey(c *fiber.Ctx) error {
 	// get tiingo token from jwt claims
 	pvToken := make(map[string]string)
 	pvToken["userID"] = c.Locals("userID").(string)
@@ -72,7 +72,7 @@ func ApiKey(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	resp := ApiKeyResponse{
+	resp := APIKeyResponse{
 		Token: hex.EncodeToString(encryptedToken),
 	}
 

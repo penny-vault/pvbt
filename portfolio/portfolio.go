@@ -44,13 +44,16 @@ import (
 )
 
 var (
-	ErrEmptyUserID       = errors.New("user id empty")
-	ErrStrategyNotFound  = errors.New("strategy not found")
-	ErrHoldings          = errors.New("holdings are out of sync, cannot rebalance portfolio")
-	ErrInvalidSell       = errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
-	ErrTimeInverted      = errors.New("start date occurs after through date")
-	ErrPortfolioNotFound = errors.New("could not find portfolio ID in database")
-	ErrGenerateHash      = errors.New("could not create a new hash")
+	ErrEmptyUserID               = errors.New("user id empty")
+	ErrStrategyNotFound          = errors.New("strategy not found")
+	ErrHoldings                  = errors.New("holdings are out of sync, cannot rebalance portfolio")
+	ErrInvalidSell               = errors.New("refusing to sell 0 shares - cannot rebalance portfolio; target allocation broken")
+	ErrTimeInverted              = errors.New("start date occurs after through date")
+	ErrPortfolioNotFound         = errors.New("could not find portfolio ID in database")
+	ErrGenerateHash              = errors.New("could not create a new hash")
+	ErrTransactionsOutOfOrder    = errors.New("transactions would be out-of-order if executed")
+	ErrRebalancePercentWrong     = errors.New("rebalance total must equal 1.0")
+	ErrSecurityPriceNotAvailable = errors.New("security price not available for date")
 )
 
 const (
@@ -66,8 +69,8 @@ const (
 	WithdrawTransaction = "WITHDRAW"
 )
 
-// PortfolioModel stores a portfolio and associated price data that is used for computation
-type PortfolioModel struct {
+// Model stores a portfolio and associated price data that is used for computation
+type Model struct {
 	Portfolio *Portfolio
 
 	// private
@@ -83,7 +86,7 @@ type Period struct {
 }
 
 // NewPortfolio create a portfolio
-func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *PortfolioModel {
+func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *Model {
 	id, _ := uuid.New().MarshalBinary()
 	p := Portfolio{
 		ID:           id,
@@ -93,7 +96,7 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 		StartDate:    startDate,
 	}
 
-	model := PortfolioModel{
+	model := Model{
 		Portfolio:      &p,
 		dataProxy:      manager,
 		justifications: make(map[string][]*Justification),
@@ -142,7 +145,7 @@ func buildHoldingsArray(date time.Time, holdings map[string]float64) []*Holding 
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, target map[string]float64, justification []*Justification) error {
+func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[string]float64, justification []*Justification) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "RebalanceTo")
 	defer span.End()
 
@@ -164,7 +167,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 		lastDate := p.Transactions[nTrx-1].Date
 		if lastDate.After(date) {
 			log.Error().Time("Date", date).Time("LastTransactionDate", lastDate).Msg("cannot rebalance portfolio when date is before last transaction date")
-			return fmt.Errorf("cannot rebalance portfolio on date %s when last existing transaction date is %s", date.String(), lastDate.String())
+			return ErrTransactionsOutOfOrder
 		}
 	}
 
@@ -178,7 +181,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
 		log.Error().Float64("TotalPercentAllocated", total).Time("Date", date).Msg("TotalPercentAllocated must equal 1.0")
-		return fmt.Errorf("rebalance percent total does not equal 1.0, it is %.2f for date %s", total, date)
+		return ErrRebalancePercentWrong
 	}
 
 	// cash position of the portfolio
@@ -199,7 +202,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "security price data not available")
 				log.Warn().Str("Symbol", k).Time("Date", date).Float64("Price", price).Msg("security price data not available.")
-				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
+				return ErrSecurityPriceNotAvailable
 			}
 
 			log.Debug().Time("Date", date).Str("Ticker", k).Float64("Price", price).Float64("Value", v*price).Msg("Retrieve price data")
@@ -219,7 +222,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				span.RecordError(err)
 				span.SetStatus(codes.Error, "security price data not available")
 				log.Warn().Err(err).Str("Symbol", k).Time("Date", date).Msg("security price data not available")
-				return fmt.Errorf("security %s price data not available for date %s", k, date.String())
+				return ErrSecurityPriceNotAvailable
 			}
 			priceMap[k] = price
 		}
@@ -249,9 +252,13 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				log.Warn().Float64("Cash", cash).Float64("Shares", v).Str("Ticker", k).Msg("price is not known - writing off asset")
 				price = 0.0
 			}
-			trxId, _ := uuid.New().MarshalBinary()
+			trxID, err := uuid.New().MarshalBinary()
+			if err != nil {
+				log.Warn().Err(err).Msg("could not marshal uuid to binary")
+				return err
+			}
 			t := Transaction{
-				ID:            trxId,
+				ID:            trxID,
 				Date:          date,
 				Ticker:        k,
 				Kind:          SellTransaction,
@@ -264,7 +271,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 
 			cash += v * price
 
-			err := computeTransactionSourceID(&t)
+			err = computeTransactionSourceID(&t)
 			if err != nil {
 				log.Warn().Err(err).Time("TransactionDate", date).Str("TransactionTicker", k).Str("TransactionType", SellTransaction).Msg("couldn't compute SourceID for transaction")
 			}
@@ -308,9 +315,14 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 					return ErrInvalidSell
 				}
 
-				trxId, _ := uuid.New().MarshalBinary()
+				trxID, err := uuid.New().MarshalBinary()
+				if err != nil {
+					log.Warn().Err(err).Msg("could not marshal uuid to binary")
+					return err
+				}
+
 				t := Transaction{
-					ID:            trxId,
+					ID:            trxID,
 					Date:          date,
 					Ticker:        k,
 					Kind:          SellTransaction,
@@ -324,7 +336,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 					cash += toSellDollars
 				}
 
-				err := computeTransactionSourceID(&t)
+				err = computeTransactionSourceID(&t)
 				if err != nil {
 					log.Error().
 						Err(err).
@@ -346,9 +358,13 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 				} else if math.IsNaN(price) {
 					subLog.Warn().Msg("refusing to buy shares of asset with unknown price")
 				} else {
-					trxId, _ := uuid.New().MarshalBinary()
+					trxID, err := uuid.New().MarshalBinary()
+					if err != nil {
+						log.Warn().Err(err).Msg("could not marshal uuid to binary")
+						return err
+					}
 					t := Transaction{
-						ID:            trxId,
+						ID:            trxID,
 						Date:          date,
 						Ticker:        k,
 						Kind:          BuyTransaction,
@@ -366,7 +382,7 @@ func (pm *PortfolioModel) RebalanceTo(ctx context.Context, date time.Time, targe
 
 					subLog.Debug().Msg("Buy additional shares")
 
-					err := computeTransactionSourceID(&t)
+					err = computeTransactionSourceID(&t)
 					if err != nil {
 						subLog.Warn().Err(err).Msg("couldn't compute SourceID for transaction")
 					}
@@ -493,7 +509,7 @@ func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string
 //   `target` must have a column named `common.DateIdx` (DATE) and either a string column
 //   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
 //   the percentages of portfolio to hold
-func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
+func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
 
@@ -640,7 +656,7 @@ func (pm *PortfolioModel) TargetPortfolio(ctx context.Context, target *dataframe
 
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
-func (pm *PortfolioModel) FillCorporateActions(ctx context.Context, through time.Time) error {
+func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) error {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
 	defer span.End()
 
@@ -787,7 +803,7 @@ func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, just
 
 // UpdateTransactions calculates new transactions based on the portfolio strategy
 // from the portfolio end date to `through`
-func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.Time) error {
+func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "portfolio.UpdateTransactions")
 	defer span.End()
 
@@ -877,7 +893,7 @@ func (pm *PortfolioModel) UpdateTransactions(ctx context.Context, through time.T
 
 // LOAD
 
-func (pm *PortfolioModel) LoadTransactionsFromDB() error {
+func (pm *Model) LoadTransactionsFromDB() error {
 	p := pm.Portfolio
 	trx, err := database.TrxForUser(p.UserID)
 	if err != nil {
@@ -977,7 +993,7 @@ func (pm *PortfolioModel) LoadTransactionsFromDB() error {
 	return nil
 }
 
-func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*PortfolioModel, error) {
+func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*Model, error) {
 	subLog := log.With().Str("UserID", userID).Strs("PortfolioIDs", portfolioIDs).Logger()
 	if userID == "" {
 		subLog.Error().Msg("userID cannot be an empty string")
@@ -1043,7 +1059,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	if sz == 0 {
 		sz = 10
 	}
-	resultSet := make([]*PortfolioModel, 0, sz)
+	resultSet := make([]*Model, 0, sz)
 
 	for rows.Next() {
 		p := &Portfolio{
@@ -1051,7 +1067,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			Transactions: []*Transaction{},
 		}
 
-		pm := &PortfolioModel{
+		pm := &Model{
 			Portfolio:      p,
 			dataProxy:      dataProxy,
 			justifications: make(map[string][]*Justification),
@@ -1086,7 +1102,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 }
 
 // Save portfolio to database along with all transaction data
-func (pm *PortfolioModel) Save(userID string) error {
+func (pm *Model) Save(userID string) error {
 	p := pm.Portfolio
 	p.UserID = userID
 
@@ -1122,7 +1138,7 @@ func (pm *PortfolioModel) Save(userID string) error {
 	return nil
 }
 
-func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) error {
+func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) error {
 	temporary := !permanent
 	p := pm.Portfolio
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
@@ -1188,7 +1204,7 @@ func (pm *PortfolioModel) SaveWithTransaction(trx pgx.Tx, userID string, permane
 	return pm.saveTransactions(trx, userID)
 }
 
-func (pm *PortfolioModel) saveTransactions(trx pgx.Tx, userID string) error {
+func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 	p := pm.Portfolio
 
 	log.Info().

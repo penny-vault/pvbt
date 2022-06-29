@@ -29,7 +29,7 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksUrl string) {
 	// API
 	api := app.Group("/v1", logger.New())
 	api.Get("/", handler.Ping)
-	api.Get("/apikey", middleware.PVAuth(jwks, jwksUrl), handler.ApiKey)
+	api.Get("/apikey", middleware.PVAuth(jwks, jwksUrl), handler.APIKey)
 
 	// Benchmark
 	api.Get("/benchmark/:ticker", middleware.PVAuth(jwks, jwksUrl), handler.Benchmark)
