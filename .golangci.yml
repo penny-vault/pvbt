@@ -1,0 +1,65 @@
+run:
+  timeout: 15m
+  tests: true
+
+linters:
+  enable:
+    - megacheck
+    - govet
+    - goconst
+    - gocritic
+    - gocyclo
+    - goerr113
+    - goheader
+    - gofmt
+    - goimports
+    - revive
+    - misspell
+  disable:
+    - scopelint # Obsolete, using exportloopref instead
+    - durationcheck
+  presets:
+    - bugs
+    - unused
+  fast: false
+
+linters-settings:
+  exhaustive:
+    default-signifies-exhaustive: true
+  nestif:
+    min-complexity: 6
+  misspell:
+    ignore-words:
+      - strat
+  goheader:
+    template: |-
+      Copyright {{year-range}}
+      SPDX-License-Identifier: Apache-2.0
+
+      Licensed under the Apache License, Version 2.0 (the "License");
+      you may not use this file except in compliance with the License.
+      You may obtain a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+      See the License for the specific language governing permissions and
+      limitations under the License.
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files.
+    - path: _test\.go
+      linters:
+        - gocyclo
+        - deadcode
+        - errorlint
+    - path: backblaze/backblaze\.go
+      text: "G401:" # Backblaze uses sha1 for file integrity check
+      linters:
+        - gosec
+    - path: backblaze/backblaze\.go
+      text: "G505:" # Backblaze uses sha1 for file integrity check
+      linters:
+        - gosec

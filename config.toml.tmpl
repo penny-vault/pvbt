@@ -1,0 +1,32 @@
+# Encryption key
+secret_key = "TODO"
+
+[auth0]
+secret = "TODO"
+client_id = "TODO"
+domain = "TODO"
+
+[database]
+url = "TODO"
+max_temp_portfolio_age_secs = 86400
+
+[log]
+level = "warning"
+report_caller = true
+output = "stdout"
+loki_url = ""
+
+[sendgrid]
+apikey = ""
+
+[tiingo]
+system_token = ""
+
+[cache]
+redis = false
+redis_url = "" # redis://<user>:<pass>@localhost:6379/<db>
+local_size = 10 # number of items to cache in local memory
+ttl = 86400 # number of seconds to store in redis cache
+
+[server]
+port = 3000

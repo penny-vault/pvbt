@@ -1,136 +1,173 @@
+// Copyright 2021-2022
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package handler
 
 import (
-	"encoding/json"
-	"main/data"
-	"main/strategies"
-	"runtime/debug"
+	"context"
+	"encoding/hex"
+	"fmt"
 	"time"
 
-	"github.com/dgrijalva/jwt-go"
+	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
-	log "github.com/sirupsen/logrus"
+	"github.com/penny-vault/pv-api/backtest"
+	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"github.com/penny-vault/pv-api/strategies"
+	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ListStrategies get a list of all strategies
 func ListStrategies(c *fiber.Ctx) error {
+	log.Info().Msg("ListStrategies")
 	return c.JSON(strategies.StrategyList)
 }
 
 // GetStrategy get configuration for a specific strategy
 func GetStrategy(c *fiber.Ctx) error {
-	shortcode := c.Params("id")
+	shortcode := c.Params("shortcode")
 	if strategy, ok := strategies.StrategyMap[shortcode]; ok {
 		return c.JSON(strategy)
 	}
 	return fiber.ErrNotFound
 }
 
-// RunStrategy execute strategy
+// RunStrategy executes the strategy
 func RunStrategy(c *fiber.Ctx) (resp error) {
-	shortcode := c.Params("id")
+	attrs := opentelemetry.SpanAttributesFromFiber(c)
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(context.Background(), "RunStrategy", trace.WithAttributes(attrs...))
+	defer span.End()
+
+	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
+
+	subLog := log.With().Str("Shortcode", shortcode).Str("StartDateQueryStr", startDateStr).Str("EndDateQueryStr", endDateStr).Logger()
+
+	span.SetAttributes(
+		attribute.KeyValue{
+			Key:   "pv.shortcode",
+			Value: attribute.StringValue(shortcode),
+		},
+		attribute.KeyValue{
+			Key:   "pv.StartDate",
+			Value: attribute.StringValue(startDateStr),
+		},
+		attribute.KeyValue{
+			Key:   "pv.EndDate",
+			Value: attribute.StringValue(endDateStr),
+		},
+	)
 
 	var startDate time.Time
 	var endDate time.Time
 
-	startDate, err := time.Parse("2006-01-02", startDateStr)
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
 	if err != nil {
-		log.WithFields(log.Fields{
-			"Function":     "handler/strategy.go:RunStrategy",
-			"Strategy":     shortcode,
-			"StartDateStr": startDateStr,
-			"EndDateStr":   endDateStr,
-			"Error":        err,
-		}).Error("Cannoy parse start date query parameter")
+		subLog.Error().Err(err).Msg("could not load nyc timezone")
+		return fiber.ErrInternalServerError
+	}
+
+	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
+	if err != nil {
+		subLog.Warn().Msg("cannot parse start date query parameter")
 		return fiber.ErrNotAcceptable
 	}
 
 	if endDateStr == "now" {
 		endDate = time.Now()
 		year, month, day := endDate.Date()
-		endDate = time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		endDate = time.Date(year, month, day, 0, 0, 0, 0, tz)
 	} else {
 		var err error
-		endDate, err = time.Parse("2006-01-02", endDateStr)
+		endDate, err = time.ParseInLocation("2006-01-02", endDateStr, tz)
 		if err != nil {
-			log.WithFields(log.Fields{
-				"Function":     "handler/strategy.go:RunStrategy",
-				"Strategy":     shortcode,
-				"StartDateStr": startDateStr,
-				"EndDateStr":   endDateStr,
-				"Error":        err,
-			}).Error("Cannoy parse end date query parameter")
+			subLog.Warn().Msg("cannot parse end date query parameter")
 			return fiber.ErrNotAcceptable
 		}
 	}
 
 	defer func() {
 		if err := recover(); err != nil {
-			log.Error(err)
-			debug.PrintStack()
+			log.Error().Stack().Msg("caught exception")
 			resp = fiber.ErrInternalServerError
 		}
 	}()
 
-	if strat, ok := strategies.StrategyMap[shortcode]; ok {
-		credentials := make(map[string]string)
+	credentials := make(map[string]string)
+	credentials["tiingo"] = c.Locals("tiingoToken").(string)
+	manager := data.NewManager(credentials)
 
-		// get tiingo token from jwt claims
-		user := c.Locals("user").(*jwt.Token)
-		claims := user.Claims.(jwt.MapClaims)
-		tiingoToken := claims["https://pennyvault.com/tiingo_token"].(string)
-
-		credentials["tiingo"] = tiingoToken
-		manager := data.NewManager(credentials)
-		manager.Begin = startDate
-		manager.End = endDate
-
-		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal(c.Body(), &params); err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		stratObject, err := strat.Factory(params)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-
-		start := time.Now()
-		p, err := stratObject.Compute(&manager)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-		stop := time.Now()
-		stratComputeDur := stop.Sub(start).Round(time.Millisecond)
-
-		// calculate the portfolio's performance
-		start = time.Now()
-		performance, err := p.CalculatePerformance(manager.End)
-		if err != nil {
-			log.Println(err)
-			return fiber.ErrBadRequest
-		}
-		stop = time.Now()
-		calcPerfDur := stop.Sub(start).Round(time.Millisecond)
-
-		start = time.Now()
-		performance.BuildMetricsBundle()
-		stop = time.Now()
-		metricCalcDur := stop.Sub(start).Round(time.Millisecond)
-
-		log.WithFields(log.Fields{
-			"StratCalcDur":  stratComputeDur,
-			"PerfCalcDur":   calcPerfDur,
-			"MetricCalcDur": metricCalcDur,
-		}).Info("Strategy calculated")
-
-		return c.JSON(performance)
+	params := map[string]json.RawMessage{}
+	if err := json.Unmarshal(c.Body(), &params); err != nil {
+		log.Warn().Err(err).Msg("could not unmarshal body message")
+		return fiber.ErrBadRequest
 	}
 
-	return fiber.ErrNotFound
+	b, err := backtest.New(ctx, shortcode, params, startDate, endDate, &manager)
+	if err != nil {
+		if err.Error() == "strategy not found" {
+			return fiber.ErrNotFound
+		}
+
+		return fiber.ErrBadRequest
+	}
+
+	permanent := false
+	if c.Query("permanent", "false") == "true" {
+		permanent = true
+	}
+	go b.Save(c.Locals("userID").(string), permanent)
+
+	portfolioIDStr := hex.EncodeToString(b.PortfolioModel.Portfolio.ID)
+	serializedPortfolio, err := b.PortfolioModel.Portfolio.MarshalBinary()
+	if err != nil {
+		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
+		return err
+	}
+	err = common.CacheSet(portfolioIDStr, serializedPortfolio)
+	if err != nil {
+		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
+		return err
+	}
+
+	serializedPerformance, err := b.Performance.MarshalBinary()
+	if err != nil {
+		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
+		return err
+	}
+	err = common.CacheSet(fmt.Sprintf("%s:performance", portfolioIDStr), serializedPerformance)
+	if err != nil {
+		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
+		return err
+	}
+
+	measurements := b.Performance.Measurements
+	b.Performance.Measurements = nil // set measurements to nil for serialization
+	serialized, err := b.Performance.MarshalBinary()
+	if err != nil {
+		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for performance")
+		return fiber.ErrInternalServerError
+	}
+	b.Performance.Measurements = measurements
+
+	c.Set("Content-type", "application/x-colfer")
+	return c.Send(serialized)
 }

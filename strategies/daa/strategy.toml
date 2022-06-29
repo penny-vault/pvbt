@@ -1,0 +1,73 @@
+description = 'A strategy that has a built-in crash protection that looks at the "breadth-momentum" of a canary universe.'
+name = "Defensive Asset Allocation"
+shortcode = "daa"
+source = "https=//indexswingtrader.blogspot.com/2018/07/announcing-defensive-asset-allocation.html"
+version = "1.0.1"
+benchmark = "VFINX"
+
+[arguments.riskUniverse]
+name = "Risk Universe"
+default = '["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]'
+description = "List of ETF Mutual Fund or Stock tickers in the 'risk' universe"
+typecode = "[]string"
+
+[arguments.protectiveUniverse]
+name = "Protective Universe"
+default = '["VWO", "AGG"]'
+description = "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash"
+typecode = "[]string"
+
+[arguments.cashUniverse]
+name = "Cash Universe"
+default = '["SHY", "IEF", "LQD"]'
+description = "List of ETF, Mutual Fund, or Stock tickers in the 'cash' universe"
+typecode = "[]string"
+
+[arguments.breadth]
+name = "Breadth"
+description = "Breadth (B) parameter that determines the cash fraction given the canary breadth"
+typecode = "number"
+default = "2"
+advanced = true
+
+[arguments.topT]
+name = "Top T"
+description = "Number of top risk assets to invest in at a time"
+typecode = "number"
+default = "6"
+advanced = true
+
+[suggested.DAA-G12]
+riskUniverse = '["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]'
+protectiveUniverse = '["VWO", "AGG"]'
+cashUniverse = '["SHY", "IEF", "LQD"]'
+breadth = "2"
+topT = "6"
+
+[suggested.DAA-G6]
+riskUniverse = '["SPY", "VEA", "VWO", "LQD", "TLT", "HYG"]'
+protectiveUniverse = '["VWO", "AGG"]'
+cashUniverse = '["SHY", "IEF", "LQD"]'
+breadth = "2"
+topT = "6"
+
+[suggested."DAA1-G4 - Aggressive G4"]
+riskUniverse = '["SPY", "VEA", "VWO", "AGG"]'
+protectiveUniverse = '["VWO", "AGG"]'
+cashUniverse = '["SHV", "IEF", "UST"]'
+breadth = "1"
+topT = "4"
+
+[suggested."DAA1-G12 - Aggressive G12"]
+riskUniverse = '["SPY", "IWM", "QQQ", "VGK", "EWJ", "VWO", "VNQ", "GSG", "GLD", "TLT", "HYG", "LQD"]'
+protectiveUniverse = '["VWO", "AGG"]'
+cashUniverse = '["SHV", "IEF", "UST"]'
+breadth = "1"
+topT = "2"
+
+[suggested."DAA1-U1 - Minimalistic"]
+riskUniverse = '["SPY"]'
+protectiveUniverse = '["VWO", "AGG"]'
+cashUniverse = '["SHV", "IEF", "UST"]'
+breadth = "1"
+topT = "1"

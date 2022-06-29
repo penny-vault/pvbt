@@ -12,12 +12,9 @@
 *.out
 coverage.txt
 
-# Dependency directories (remove the comment below to include it)
-# vendor/
-bin/
+# compiled binaries
+pvapi
 
-# env development files
-sendgrid.env
-auth0.env
-loki.env
-database.env
+# configuration development files
+*.env
+config.toml

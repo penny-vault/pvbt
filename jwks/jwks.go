@@ -1,60 +1,43 @@
+// Copyright 2021-2022
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package jwks
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
-	"os"
 
 	"github.com/lestrrat-go/jwx/jwk"
-	log "github.com/sirupsen/logrus"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
 )
 
-// AuthConfig stores configuration related to JWKS
-type authConfig struct {
-	Domain   string `json:"domain"`
-	Audience string `json:"audience"`
-}
-
-// LoadJWKS load settings from auth.json and retrieve JWKS
-func LoadJWKS() map[string]interface{} {
-	// Load settings
-	jsonFile, err := os.Open("auth.json")
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println("Successfully opened auth.json")
-	// defer the closing of our jsonFile so that we can parse it later on
-	defer jsonFile.Close()
-
-	byteValue, _ := ioutil.ReadAll(jsonFile)
-	var config authConfig
-	json.Unmarshal(byteValue, &config)
-
+// LoadJWKS retrieves JWKS from auth0 domain
+func SetupJWKS() (*jwk.AutoRefresh, string) {
 	// read remote JWKS
-	jwksURL := fmt.Sprintf("https://%s/.well-known/jwks.json", config.Domain)
-	log.Printf("Reading JWKS from %s\n", jwksURL)
+	jwksURL := fmt.Sprintf("https://%s/.well-known/jwks.json", viper.GetString("auth0.domain"))
 
-	set, err := jwk.FetchHTTP(jwksURL)
-	if err != nil {
-		log.Fatal(err)
+	log.Debug().Str("Url", jwksURL).Msg("reading JWKS")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	ar := jwk.NewAutoRefresh(ctx)
+	ar.Configure(jwksURL)
+	if _, err := ar.Fetch(ctx, jwksURL); err != nil {
+		log.Panic().Err(err).Msg("could not fetch jwks from auth0")
 	}
 
-	// reformat to {"kid": "key"}, the format needed by Fiber's JWT middleware
-	res := make(map[string]interface{})
-
-	for iter := set.Iterate(context.TODO()); iter.Next(context.TODO()); {
-		pair := iter.Pair()
-		key := pair.Value.(jwk.Key)
-
-		var raw interface{}
-		if err := key.Raw(&raw); err != nil {
-			log.Fatal(err)
-		}
-		res[key.KeyID()] = raw
-	}
-
-	return res
+	return ar, jwksURL
 }

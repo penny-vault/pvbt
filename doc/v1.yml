@@ -1,0 +1,773 @@
+openapi: '3.0.3'
+servers:
+  - description: Development server
+    url: http://localhost:3000/v1
+  - description: Production server
+    url: https://penny-vault.herokuapp.com/v1
+  - description: Beta server
+    url: https://pv-api-beta.herokuapp.com/v1
+info:
+  version: "1.0.0"
+  title: Penny Vault API
+  description: >-
+    Execute investment strategies and compute portfolio metrics
+paths:
+  /:
+    get:
+      summary: Ping service
+      description: >-
+        ping api to check for liveness and wake-up any sleeping instances
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PingResponse'
+        "500":
+          description: ERROR
+      tags:
+        - utility
+  /benchmark/{ticker}:
+    get:
+      summary: calculate benchmark performance over specified time-frame
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: ticker
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: snapToStart
+          description: >-
+            indicates if data should "snap" to the start of the
+            period or use the exact start date provided
+          schema:
+            type: boolean
+            default: true
+          required: false
+        - in: query
+          name: startDate
+          schema:
+            type: string
+            default: "1990-01-01"
+            example: "2021-06-18"
+          required: false
+          description: >-
+            Date to start benchmark simulation on (yyyy-mm-dd)
+        - in: query
+          name: endDate
+          schema:
+            type: string
+            default: "now"
+          examples:
+            date:
+              value: "2021-06-18"
+              summary: date string as yyyy-mm-dd
+            keyword:
+              value: "now"
+              summary: keyword indicating time, e.g. now
+          required: false
+          description: >-
+            Date to end benchmark simulation on. Entered as a
+            'yyyy-mm-dd' or using the convenience shortcut 'now' to
+            specify the current date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPerformance'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: Benchmark symbol not found
+      tags:
+        - portfolio
+  /portfolio/:
+    get:
+      summary: retrieve a list of portfolios for the logged-in user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+    post:
+      summary: create a new portfolio
+      requestBody:
+        description: New portfolio settings
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Portfolio'
+            example:
+              name: My Portfolio
+              strategy: adm
+              arguments:
+                inTickers:
+                  - VFINX
+                  - SCZ
+                outTicker: VUSTX
+                startDate: 315532800
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+              example:
+                id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+                name: Accelerating Dual Momentum
+                strategy: adm
+                arguments:
+                  inTickers:
+                    - VFINX
+                    - SCZ
+                  outTicker: VUSTX
+                startDate: 315532800
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+  /portfolio/{id}:
+    get:
+      summary: retrieve a specific portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to retrieve
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No portoflio found for specified id
+      tags:
+        - portfolio
+    patch:
+      summary: modify a portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to update
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      requestBody:
+        description: portfolio settings to update
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Portfolio'
+            example:
+              name: My Portfolio Renamed
+              notifications: 4113
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+              example:
+                id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+                name: My Portfolio Renamed
+                strategy: adm
+                arguments:
+                  inTickers:
+                    - VFINX
+                    - SCZ
+                  outTicker: VUSTX
+                startDate: 315532800
+                ytdReturn:
+                  Float64: 0.32
+                  Valid: true
+                cagrSinceInception:
+                  Float64: 0.14323
+                  Valid: true
+                notifications: 4113
+                created: 1625109105
+                lastchanged: 1625109339
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+    delete:
+      summary: delete the portfolio
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          description: the portfolio id to delete
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - portfolio
+  /strategy/:
+    get:
+      summary: retrieve a list of strategies
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Portfolio'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+      tags:
+        - strategy
+  /strategy/{shortcode}:
+    get:
+      summary: retrieve details about a specific strategy
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shortcode
+          description: shortcode of the strategy to retrieve
+          required: true
+          schema:
+            type: string
+          example: adm
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StrategyInfo'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No portoflio found for specified id
+      tags:
+        - strategy
+  /strategy/{shortcode}/execute:
+    get:
+      summary: execute the strategy with given parameters
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: shortcode
+          description: shortcode of the strategy to run
+          required: true
+          schema:
+            type: string
+          example: adm
+        - in: query
+          name: arguments
+          description: JSON arguments for specified strategy
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: startDate
+          description: date to begin simulation on
+          required: false
+          schema:
+            type: string
+            format: date
+            default: '1980-01-01'
+        - in: query
+          name: endDate
+          description: date to finish simulation on
+          required: false
+          schema:
+            type: string
+            format: date
+            example: '2021-07-01'
+            default: current date
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PortfolioPerformance'
+        "400":
+          description: Bad parameters
+        "401":
+          description: Not Authorized
+        "404":
+          description: No strategy found for specified shortcode
+      tags:
+        - strategy
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: apiKey
+      in: query
+      name: apikey
+  schemas:
+    Holding:
+      description: A holding in the portfolio
+      type: object
+      example:
+        ticker: VFINX
+        shares: 10
+        percentPortfolio: 1.0
+        value: 10000.0
+    MetricBundle:
+      description: collection of portfolio metrics
+      type: object
+      example:
+        cagrs:
+          1-yr: 0.3811364073876089
+          10-yr: 0.14472186517787256
+          3-yr: 0.17810447557991638
+          5-yr: 0.17070350884131757
+        drawDowns:
+          begin: 1196380800
+          end: 1235692800
+          lossPercent: -0.5096921151209781
+          recovery: 1346371200
+        sharpeRatio: 0.5691295208327964
+        sortinoRatio: 0.8399589527305837
+        stdDev: 0.14508276256543967
+        ulcerIndexAvg: 11.339463389310689
+      properties:
+        cagrs:
+          type: object
+          properties:
+            1-yr:
+              description: return over most recent 1-yr period
+              type: number
+              format: float
+            3-yr:
+              description: return over most recent 3-yr period
+              type: number
+              format: float
+            5-yr:
+              description: return over most recent 5-yr period
+              type: number
+              format: float
+            10-yr:
+              description: return over most recent 10-yr period
+              type: number
+              format: float
+          required:
+            - 1-yr
+            - 3-yr
+            - 5-yr
+            - 10-yr
+        drawDowns:
+          type: array
+          description: list of top-10 drawdowns over requested period
+          example:
+            begin: 1196380800
+            end: 1235692800
+            lossPercent: -0.5096921151209781
+            recovery: 1346371200
+          items:
+            type: object
+            properties:
+              begin:
+                type: integer
+                format: int64
+                description: unix timestamp of when draw down began
+              end:
+                type: integer
+                format: int64
+                description: unix timestamp of when draw down ended
+              lossPercent:
+                type: number
+                format: float
+                description: percentage lost during draw down
+              recovery:
+                type: number
+                format: int64
+                description: >-
+                  unix timestamp of when portfolio recovered the value it had prior to the draw down
+            required:
+              - begin
+              - end
+              - recovery
+              - lossPercent
+        sharpeRatio:
+          type: number
+          format: float
+          description: >-
+            a measure that indicates the average return minus the risk-free return divided by the standard deviation of return on an investment
+        sortinoRatio:
+          type: number
+          format: float
+          description: >-
+            similar to the sharpe ratio but only takes down side risk into account
+        stdDev:
+          type: number
+          format: float
+          description: >-
+            standard deviation of returns over time period
+        ulcerIndexAvg:
+          type: number
+          format: float
+          description: >-
+            The index increases in value as the price moves farther away from a recent high and falls as the price rises to new highs
+      required:
+        - cagrs
+        - drawDowns
+        - sharpeRatio
+        - sortinoRatio
+        - stdDev
+        - ulcerIndexAvg
+    NullableFloat:
+      type: object
+      properties:
+        Float64:
+          type: number
+          description: Field value
+        Valid:
+          type: boolean
+          description: when false the float value should be considered NaN
+    PingResponse:
+      type: object
+      properties:
+        message:
+          example: API is alive
+          type: string
+        status:
+          example: success
+          type: string
+        time:
+          example: "2021-06-19T08:09:10.115924-05:00"
+          type: string
+      required:
+        - message
+        - status
+        - time
+    Portfolio:
+      description: a portfolio represents a collection of investments and transactions
+      type: object
+      example:
+        id: fa7c7c4d-b00c-40a0-aae2-d5a9f510bf28
+        name: Accelerating Dual Momentum
+        strategy: adm
+        arguments:
+          inTickers:
+            - VFINX
+            - SCZ
+          outTicker: VUSTX
+        startDate: 315532800
+        ytdReturn:
+          Float64: 0
+          Valid: false
+        cagrSinceInception:
+          Float64: 0
+          Valid: false
+        notifications: 4113
+        created: 1625109105
+        lastchanged: 1625109339
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: unique identifier for the portfolio
+        name:
+          type: string
+          description: name of the portfolio
+        strategy:
+          type: string
+          description: shortcode of strategy used with Portfolio
+        arguments:
+          type: object
+          description: strategy specific arguments
+        startDate:
+          type: number
+          description: >-
+            date of first transaction in portfolio as number of seconds
+            since Jan 1, 1970
+        ytdReturn:
+          $ref: '#/components/schemas/NullableFloat'
+          description: percent return YTD of portfolio
+        cagrSinceInception:
+          $ref: '#/components/schemas/NullableFloat'
+          description: Compound annual growth rate (CAGR) of portfolio since startDate
+        notifications:
+          type: number
+          description: integer describing which notifications are enabled for the portoflio
+        created:
+          type: number
+          description: unix timestamp of when portfolio was created
+        lastChanged:
+          type: number
+          description: unix timestamp of when portfolio was last modified
+      required:
+        - name
+        - strategy
+        - arguments
+        - startDate
+    PortfolioList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Portfolio'
+    PortfolioPerformance:
+      description: Performance results of a specific simulation
+      properties:
+          cagrSinceInception:
+              description: compound annual growth rate over whole period
+              type: number
+              format: float
+          computedOn:
+              description: when the performance data was calculated
+              type: integer
+          currentAsset:
+              description: >-
+                asset(s) that are currently held in portfolio, space separated
+              example: VFINX
+              type: string
+          measurements:
+            description: calculation of portfolio value over time
+            example:
+              - justification: {}
+                percentReturn: 0
+                riskFreeValue: 10000
+                time: 617846400
+                value: 10000
+            items:
+              type: object
+              properties:
+                holdings:
+                  description: >-
+                    asset(s) that are held in this measurement, space separated
+                    example: A AAPL
+                  $ref: '#/components/schemas/Holding'
+                justification:
+                  description: >-
+                    per strategy specific field with information justifying the list of holdings. E.g. the adm strategy provides an object with each asset's momentum score
+                  type: object
+                percentReturn:
+                  description: >-
+                    percentage return of portfolio at measurement time
+                  type: number
+                  format: double
+                riskFreeValue:
+                  description: >-
+                    value of portfolio using risk free rate of return
+                  type: number
+                  format: double
+                time:
+                  description: >-
+                    time of measurement as a unix timestamp
+                  type: integer
+                  format: int64
+                value:
+                  description: >-
+                    value of portfolio at time
+                  type: number
+                  format: double
+              required:
+                - time
+                - value
+                - riskFreeValue
+                - holdings
+                - percentReturn
+                - justification
+            type: array
+          metrics:
+            description: collection of metrics calculated on portfolio
+            type: array
+            items:
+              $ref: "#/components/schemas/MetricBundle"
+          periodEnd:
+            type: integer
+            format: int64
+            description: >-
+              unix timestamp of the time when the simulation ended
+          periodStart:
+            type: integer
+            format: int64
+            description: >-
+              unix timestamp of the time when the simulation began
+          totalDeposited:
+            type: number
+            format: float
+            description: >-
+              total deposited in portfolio over simulation period
+          totalWithdrawn:
+            type: number
+            format: float
+            description: >-
+              total withdrawn from portfolio over simulation period
+          transactions:
+            type: array
+            description: transactions over simulation period
+            example:
+              - date: '1989-07-31T00:00:00Z'
+                justification: {}
+                kind: DEPOSIT
+                pricePerShare: 1
+                shares: 10000
+                ticker: $CASH
+                totalValue: 10000
+            items:
+              type: object
+              properties:
+                date:
+                  type: string
+                  example: '1989-07-31T00:00:00Z'
+                  description: ISO-8601 string of date of transaction
+                justification:
+                  description: >-
+                    per strategy specific field with information justifying the list of holdings. E.g. the adm strategy provides an object with each asset's momentum score
+                  type: object
+                kind:
+                  type: string
+                  enum:
+                    - DEPOSIT
+                    - WITHDRAW
+                    - MARKER
+                    - BUY
+                    - SELL
+                  description: transaction type
+                pricePerShare:
+                  type: number
+                  format: int64
+                  description: price paid per share of the security
+                ticker:
+                  type: string
+                  description: ticker of security invested in
+                totalValue:
+                  type: number
+                  format: float
+                  description: >-
+                    total amount of transaction (shares * pricePerShare) + commission
+                commission:
+                  type: number
+                  format: float
+                  description: >-
+                    commission paid on transaction
+              required:
+                - date
+                - ticker
+                - kind
+                - pricePerShare
+                - shares
+                - totalValue
+                - justification
+          ytdReturn:
+            type: number
+            format: float
+            description: YTD return of portfolio
+      required:
+        - periodStart
+        - periodEnd
+        - computedOn
+        - measurements
+        - transactions
+        - cagrSinceInception
+        - ytdReturn
+        - currentAsset
+        - totalDeposited
+        - totalWithdrawn
+        - metrics
+    Status:
+      type: object
+      properties:
+        status:
+          type: string
+          enum:
+            - success
+            - failure
+    StrategyInfo:
+      type: object
+      properties:
+        name:
+          type: string
+        shortcode:
+          type: string
+          description: shortcode of strategy
+        benchmark:
+          type: string
+          description: preferred benchmark for strategy
+        description:
+          type: string
+          description: short-description of strategy
+        longDescription:
+          type: string
+          description: longer description of strategy as markdown
+        source:
+          type: string
+          description: original author of the strategy
+        version:
+          type: string
+          description: version number of strategy implementation
+          example: 1.0.0
+        arguments:
+          type: object
+          description: strategy specific arguments
+        suggestedParams:
+          type: object
+          description: optional list of recommended parameters
+        metrics:
+          $ref: '#/components/schemas/MetricBundle'
+    StrategyInfoList:
+      type: array
+      items:
+        $ref: '#/components/schemas/StrategyInfo'
