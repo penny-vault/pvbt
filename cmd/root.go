@@ -53,7 +53,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind PV_SECRET")
 	}
 	rootCmd.PersistentFlags().String("secret-key", "", "Secret encryption key")
-	if err := viper.BindPFlag("secret_key", rootCmd.Flags().Lookup("secret-key")); err != nil {
+	if err := viper.BindPFlag("secret_key", rootCmd.PersistentFlags().Lookup("secret-key")); err != nil {
 		log.Panic().Err(err).Msg("could not bind secret-key")
 	}
 
@@ -62,7 +62,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind PV_SECRET")
 	}
 	rootCmd.PersistentFlags().String("auth0-secret", "", "Auth0 secret")
-	if err := viper.BindPFlag("auth0.secret", rootCmd.Flags().Lookup("auth0-secret")); err != nil {
+	if err := viper.BindPFlag("auth0.secret", rootCmd.PersistentFlags().Lookup("auth0-secret")); err != nil {
 		log.Panic().Err(err).Msg("could not bind auth0-secret")
 	}
 
@@ -70,7 +70,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind AUTH0_CLIENT_ID")
 	}
 	rootCmd.PersistentFlags().String("auth0-client-id", "", "Auth0 client id")
-	if err := viper.BindPFlag("auth0.client_id", rootCmd.Flags().Lookup("auth0-client-id")); err != nil {
+	if err := viper.BindPFlag("auth0.client_id", rootCmd.PersistentFlags().Lookup("auth0-client-id")); err != nil {
 		log.Panic().Err(err).Msg("could not bind auth0-client-id")
 	}
 
@@ -78,7 +78,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind AUTH0_DOMAIN")
 	}
 	rootCmd.PersistentFlags().String("auth0-domain", "", "Auth0 domain")
-	if err := viper.BindPFlag("auth0.domain", rootCmd.Flags().Lookup("auth0-domain")); err != nil {
+	if err := viper.BindPFlag("auth0.domain", rootCmd.PersistentFlags().Lookup("auth0-domain")); err != nil {
 		log.Panic().Err(err).Msg("could not bind auth0-domain")
 	}
 
@@ -87,7 +87,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind DATABASE_URL")
 	}
 	rootCmd.PersistentFlags().String("database-url", "", "PostgreSQL connection string")
-	if err := viper.BindPFlag("database.url", rootCmd.Flags().Lookup("database-url")); err != nil {
+	if err := viper.BindPFlag("database.url", rootCmd.PersistentFlags().Lookup("database-url")); err != nil {
 		log.Panic().Err(err).Msg("could not bind database-url")
 	}
 
@@ -96,7 +96,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind PV_LOG_LEVEL")
 	}
 	rootCmd.PersistentFlags().String("log-level", "warning", "Logging level")
-	if err := viper.BindPFlag("log.level", rootCmd.Flags().Lookup("log-level")); err != nil {
+	if err := viper.BindPFlag("log.level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-level")
 	}
 
@@ -104,7 +104,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind PV_LOG_REPORT_CALLER")
 	}
 	rootCmd.PersistentFlags().Bool("log-report-caller", false, "Log function name that called log statement")
-	if err := viper.BindPFlag("log.report_caller", rootCmd.Flags().Lookup("log-report-caller")); err != nil {
+	if err := viper.BindPFlag("log.report_caller", rootCmd.PersistentFlags().Lookup("log-report-caller")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-report-caller")
 	}
 
@@ -112,7 +112,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind PV_LOG_OUTPUT")
 	}
 	rootCmd.PersistentFlags().String("log-output", "stdout", "Write logs to specified output one of: file path, `stdout`, or `stderr`")
-	if err := viper.BindPFlag("log.output", rootCmd.Flags().Lookup("log-output")); err != nil {
+	if err := viper.BindPFlag("log.output", rootCmd.PersistentFlags().Lookup("log-output")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-output")
 	}
 
@@ -120,7 +120,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind LOKI_URL")
 	}
 	rootCmd.PersistentFlags().String("log-loki-url", "", "Loki server to send log messages to, if blank don't send to Loki")
-	if err := viper.BindPFlag("log.loki_url", rootCmd.Flags().Lookup("log-loki-url")); err != nil {
+	if err := viper.BindPFlag("log.loki_url", rootCmd.PersistentFlags().Lookup("log-loki-url")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-loki-url")
 	}
 
@@ -128,7 +128,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind OTLP_URL")
 	}
 	rootCmd.PersistentFlags().String("log-otlp-url", "", "OTLP server to send traces to, if blank don't send traces")
-	if err := viper.BindPFlag("log.otlp_url", rootCmd.Flags().Lookup("log-otlp-url")); err != nil {
+	if err := viper.BindPFlag("log.otlp_url", rootCmd.PersistentFlags().Lookup("log-otlp-url")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-otlp-url")
 	}
 
