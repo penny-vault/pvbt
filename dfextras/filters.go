@@ -24,8 +24,8 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/rs/zerolog/log"
 
-	"github.com/rocketlaunchr/dataframe-go"
-	"github.com/rocketlaunchr/dataframe-go/math/funcs"
+	"github.com/jdfergason/dataframe-go"
+	"github.com/jdfergason/dataframe-go/math/funcs"
 	"gonum.org/v1/gonum/stat"
 )
 

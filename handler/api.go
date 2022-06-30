@@ -27,10 +27,10 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
+	"github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
-	"github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
 )
 

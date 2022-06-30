@@ -29,7 +29,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 
-	dataframe "github.com/rocketlaunchr/dataframe-go"
+	dataframe "github.com/jdfergason/dataframe-go"
 	"github.com/rs/zerolog/log"
 )
 

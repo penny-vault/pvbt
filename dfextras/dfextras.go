@@ -27,7 +27,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 
-	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/jdfergason/dataframe-go"
 )
 
 var (

@@ -24,10 +24,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgtype"
+	dataframe "github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
-	dataframe "github.com/rocketlaunchr/dataframe-go"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
