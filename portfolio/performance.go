@@ -41,6 +41,24 @@ var (
 	ErrSerialize              = errors.New("could not serialize data")
 )
 
+type cumulativeSums struct {
+	Deposited      float64
+	BenchmarkValue float64
+	RiskFreeValue  float64
+	TotalValue     float64
+	Withdrawn      float64
+}
+
+type dateBundle struct {
+	DaysToStartOfMonth    uint
+	DaysToStartOfWeek     uint
+	DaysToStartOfYear     uint
+	SinceInceptionPeriods uint
+	StartOfMonth          time.Time
+	StartOfWeek           time.Time
+	StartOfYear           time.Time
+}
+
 // METHODS
 
 func NewPerformance(p *Portfolio) *Performance {
@@ -141,8 +159,208 @@ func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
 	return 0.0
 }
 
+func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings map[string]float64, date time.Time) (float64, error) {
+	totalVal := 0.0
+	for symbol, qty := range holdings {
+		if symbol == data.CashAsset {
+			if math.IsNaN(qty) {
+				log.Warn().Msg("Cash position is NaN")
+			} else {
+				totalVal += qty
+			}
+		} else {
+			price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
+			if err != nil {
+				return totalVal, ErrSecurityPriceNotAvailable
+			}
+			if math.IsNaN(price) {
+				price, err = dataManager.GetLatestDataBefore(ctx, symbol, data.MetricClose, date)
+				if err != nil {
+					return totalVal, ErrSecurityPriceNotAvailable
+				}
+			}
+
+			totalVal += price * qty
+		}
+	}
+
+	return totalVal, nil
+}
+
+func updateDateBundle(bundle *dateBundle, date time.Time, last time.Time) {
+	if last.Weekday() > date.Weekday() {
+		bundle.DaysToStartOfWeek = 1
+	} else {
+		bundle.DaysToStartOfWeek++
+	}
+
+	if last.Month() != date.Month() {
+		bundle.DaysToStartOfMonth = 1
+	} else {
+		bundle.DaysToStartOfMonth++
+	}
+
+	if last.Year() != date.Year() {
+		bundle.DaysToStartOfYear = 1
+	} else {
+		bundle.DaysToStartOfYear++
+	}
+}
+
+func holdingsMapFromMeasurement(measurement *PerformanceMeasurement) map[string]float64 {
+	holdings := make(map[string]float64)
+	for _, holding := range measurement.Holdings {
+		holdings[holding.Ticker] = holding.Shares
+	}
+	return holdings
+}
+
+func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, date time.Time, sums *cumulativeSums) (map[string]float64, int, error) {
+	numTrxs := len(p.Transactions)
+
+	for ; trxIdx < numTrxs; trxIdx++ {
+		trx := p.Transactions[trxIdx]
+
+		// process transactions up to this point in time
+		// test if date is Before the trx.Date - if it is then break
+		if date.Before(trx.Date) {
+			break
+		}
+
+		shares := 0.0
+		if val, ok := holdings[trx.Ticker]; ok {
+			shares = val
+		}
+
+		switch trx.Kind {
+		case DepositTransaction:
+			sums.Deposited += trx.TotalValue
+			sums.RiskFreeValue += trx.TotalValue
+			sums.BenchmarkValue += trx.TotalValue
+			if val, ok := holdings[data.CashAsset]; ok {
+				holdings[data.CashAsset] = val + trx.TotalValue
+			} else {
+				holdings[data.CashAsset] = trx.TotalValue
+			}
+			continue
+		case WithdrawTransaction:
+			sums.Withdrawn += trx.TotalValue
+			sums.RiskFreeValue -= trx.TotalValue
+			sums.BenchmarkValue -= trx.TotalValue
+			if val, ok := holdings[data.CashAsset]; ok {
+				holdings[data.CashAsset] = val - trx.TotalValue
+			}
+			continue
+		case BuyTransaction:
+			shares += trx.Shares
+			if val, ok := holdings[data.CashAsset]; ok {
+				holdings[data.CashAsset] = val - trx.TotalValue
+			}
+			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
+		case DividendTransaction:
+			if val, ok := holdings[data.CashAsset]; ok {
+				holdings[data.CashAsset] = val + trx.TotalValue
+			} else {
+				holdings[data.CashAsset] = trx.TotalValue
+			}
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
+			continue
+		case SplitTransaction:
+			shares = trx.Shares
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
+		case SellTransaction:
+			shares -= trx.Shares
+			if val, ok := holdings[data.CashAsset]; ok {
+				holdings[data.CashAsset] = val + trx.TotalValue
+			} else {
+				holdings[data.CashAsset] = trx.TotalValue
+			}
+			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
+		default:
+			log.Warn().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
+			return holdings, trxIdx, ErrInvalidTransactionType
+		}
+
+		if val, ok := holdings[data.CashAsset]; ok {
+			if val <= 1.0e-5 {
+				delete(holdings, data.CashAsset)
+			}
+		}
+
+		// Protect against floating point noise
+		if shares <= 1.0e-5 {
+			shares = 0
+		}
+
+		if shares == 0 {
+			delete(holdings, trx.Ticker)
+		} else {
+			holdings[trx.Ticker] = shares
+		}
+	}
+
+	return holdings, trxIdx, nil
+}
+
+func calculateShares(ctx context.Context, dataManager *data.Manager, asset string, date time.Time, dollars float64) (float64, error) {
+	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, asset)
+	if err != nil {
+		log.Error().Time("Date", date).Str("Ticker", asset).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
+		return 0, ErrSecurityPriceNotAvailable
+	}
+	if math.IsNaN(price) {
+		log.Warn().Time("Date", date).Str("Ticker", asset).Err(err).Str("Metric", "AdjustedClose").Msg("benchmark value is NaN")
+		return 0, ErrSecurityPriceNotAvailable
+	}
+	return dollars / price, nil
+}
+
+func calculateValue(ctx context.Context, dataManager *data.Manager, asset string, shares float64, date time.Time) float64 {
+	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, asset)
+	if err != nil {
+		log.Error().Err(err).Str("Asset", asset).Time("Date", date).Msg("could not get security prices from pvdb")
+	}
+	return shares * price
+}
+
+func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings map[string]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+	currentAssets := make([]*ReportableHolding, 0, len(holdings))
+	for symbol, qty := range holdings {
+		var value float64
+		if symbol == data.CashAsset {
+			value = qty
+		} else if qty > 1.0e-5 {
+			price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
+			if err != nil {
+				return nil, ErrSecurityPriceNotAvailable
+			}
+			value = price * qty
+		}
+		if math.IsNaN(value) {
+			value = 0.0
+		}
+		if qty > 1.0e-5 {
+			currentAssets = append(currentAssets, &ReportableHolding{
+				Ticker:           symbol,
+				Shares:           qty,
+				PercentPortfolio: float32(value / totalValue),
+				Value:            value,
+			})
+		}
+	}
+
+	// ensure that holdings are sorted
+	sort.Slice(currentAssets, func(i, j int) bool {
+		return currentAssets[i].Ticker < currentAssets[j].Ticker
+	})
+
+	return currentAssets, nil
+}
+
 // updateMetrics calculates individual metrics for the BENCHMARK and STRATEGY
-func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods uint, kind string) {
+func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
+	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
+
 	metrics.AvgDrawDown = perf.AverageDrawDown(sinceInceptionPeriods, kind)
 	metrics.DownsideDeviationSinceInception = perf.DownsideDeviation(sinceInceptionPeriods, kind)
 	metrics.SharpeRatioSinceInception = perf.SharpeRatio(sinceInceptionPeriods, kind)
@@ -162,19 +380,179 @@ func (perf *Performance) updateMetrics(metrics *Metrics, sinceInceptionPeriods u
 		metrics.UlcerIndexP50 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .5)
 		metrics.UlcerIndexP90 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .9)
 		metrics.UlcerIndexP99 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .99)
+		perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods, STRATEGY)
 	case BENCHMARK:
 		metrics.FinalBalance = perf.Measurements[len(perf.Measurements)-1].BenchmarkValue
 	}
+
+	perf.PortfolioReturns = &Returns{
+		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, STRATEGY),
+		MWRROneYear:        perf.MWRR(252, STRATEGY),
+		MWRRThreeYear:      perf.MWRR(756, STRATEGY),
+		MWRRFiveYear:       perf.MWRR(1260, STRATEGY),
+		MWRRTenYear:        perf.MWRR(2520, STRATEGY),
+
+		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, STRATEGY),
+		TWRROneYear:        perf.TWRR(252, STRATEGY),
+		TWRRThreeYear:      perf.TWRR(756, STRATEGY),
+		TWRRFiveYear:       perf.TWRR(1260, STRATEGY),
+		TWRRTenYear:        perf.TWRR(2520, STRATEGY),
+	}
+
+	perf.BenchmarkReturns = &Returns{
+		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, BENCHMARK),
+		MWRROneYear:        perf.MWRR(252, BENCHMARK),
+		MWRRThreeYear:      perf.MWRR(756, BENCHMARK),
+		MWRRFiveYear:       perf.MWRR(1260, BENCHMARK),
+		MWRRTenYear:        perf.MWRR(2520, BENCHMARK),
+
+		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, BENCHMARK),
+		TWRROneYear:        perf.TWRR(252, BENCHMARK),
+		TWRRThreeYear:      perf.TWRR(756, BENCHMARK),
+		TWRRFiveYear:       perf.TWRR(1260, BENCHMARK),
+		TWRRTenYear:        perf.TWRR(2520, BENCHMARK),
+	}
+
+	perf.PortfolioReturns.MWRRYTD = perf.MWRRYtd(STRATEGY)
+	perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
+	perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
+	perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
+}
+
+func getRiskFreeRate(ctx context.Context, dataManager *data.Manager, date time.Time) float64 {
+	rawRate := dataManager.RiskFreeRate(ctx, date)
+	riskFreeRate := rawRate / 100.0 / 252.0
+	return (1 + riskFreeRate)
+}
+
+func (perf *Performance) updateAnnualPerformance(prevDate time.Time, date time.Time, prevMeasurement *PerformanceMeasurement, ytdBench float32) {
+	if prevDate.Year() != date.Year() {
+		if prevMeasurement.TWRRYearToDate > perf.PortfolioMetrics.BestYear.Return {
+			perf.PortfolioMetrics.BestYear.Return = prevMeasurement.TWRRYearToDate
+			perf.PortfolioMetrics.BestYear.Year = uint16(prevDate.Year())
+		}
+
+		if prevMeasurement.TWRRYearToDate < perf.PortfolioMetrics.WorstYear.Return && prevMeasurement.TWRRYearToDate != 0.0 {
+			perf.PortfolioMetrics.WorstYear.Return = prevMeasurement.TWRRYearToDate
+			perf.PortfolioMetrics.WorstYear.Year = uint16(prevDate.Year())
+		}
+
+		// calculate 1-yr benchmark rate of return
+		if ytdBench > perf.BenchmarkMetrics.BestYear.Return {
+			perf.BenchmarkMetrics.BestYear.Return = ytdBench
+			perf.BenchmarkMetrics.BestYear.Year = uint16(prevDate.Year())
+		}
+
+		if ytdBench < perf.BenchmarkMetrics.WorstYear.Return {
+			perf.BenchmarkMetrics.WorstYear.Return = ytdBench
+			perf.BenchmarkMetrics.WorstYear.Year = uint16(prevDate.Year())
+		}
+	}
+}
+
+func (perf *Performance) calculateReturns(measurement *PerformanceMeasurement, dates *dateBundle) {
+	measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
+	measurement.TWRRWeekToDate = float32(perf.TWRR(dates.DaysToStartOfWeek, STRATEGY))
+	measurement.TWRROneWeek = float32(perf.TWRR(5, STRATEGY))
+	measurement.TWRRMonthToDate = float32(perf.TWRR(dates.DaysToStartOfMonth, STRATEGY))
+	measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
+	measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
+	measurement.TWRRYearToDate = float32(perf.TWRR(dates.DaysToStartOfYear, STRATEGY))
+	measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
+	measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
+	measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
+	measurement.TWRRTenYear = float32(perf.TWRR(2520, STRATEGY))
+
+	// money-weighted rate of return
+	measurement.MWRROneDay = float32(perf.MWRR(1, STRATEGY))
+	measurement.MWRRWeekToDate = float32(perf.MWRR(dates.DaysToStartOfWeek, STRATEGY))
+	measurement.MWRROneWeek = float32(perf.MWRR(5, STRATEGY))
+	measurement.MWRRMonthToDate = float32(perf.MWRR(dates.DaysToStartOfMonth, STRATEGY))
+	measurement.MWRROneMonth = float32(perf.MWRR(21, STRATEGY))
+	measurement.MWRRThreeMonth = float32(perf.MWRR(63, STRATEGY))
+	measurement.MWRRYearToDate = float32(perf.MWRR(dates.DaysToStartOfYear, STRATEGY))
+	measurement.MWRROneYear = float32(perf.MWRR(252, STRATEGY))
+	measurement.MWRRThreeYear = float32(perf.MWRR(756, STRATEGY))
+	measurement.MWRRFiveYear = float32(perf.MWRR(1260, STRATEGY))
+	measurement.MWRRTenYear = float32(perf.MWRR(2520, STRATEGY))
+
+	// active return
+	measurement.ActiveReturnOneYear = float32(perf.ActiveReturn(252))
+	measurement.ActiveReturnThreeYear = float32(perf.ActiveReturn(756))
+	measurement.ActiveReturnFiveYear = float32(perf.ActiveReturn(1260))
+	measurement.ActiveReturnTenYear = float32(perf.ActiveReturn(2520))
+
+	// alpha
+	measurement.AlphaOneYear = float32(perf.Alpha(252))
+	measurement.AlphaThreeYear = float32(perf.Alpha(756))
+	measurement.AlphaFiveYear = float32(perf.Alpha(1260))
+	measurement.AlphaTenYear = float32(perf.Alpha(2520))
+}
+
+func (perf *Performance) calculateRiskMeasures(measurement *PerformanceMeasurement) {
+	// beta
+	measurement.BetaOneYear = float32(perf.Beta(252))
+	measurement.BetaThreeYear = float32(perf.Beta(756))
+	measurement.BetaFiveYear = float32(perf.Beta(1260))
+	measurement.BetaTenYear = float32(perf.Beta(2520))
+
+	// ratios
+	measurement.CalmarRatio = float32(perf.CalmarRatio(756, STRATEGY))             // 3 year lookback
+	measurement.DownsideDeviation = float32(perf.DownsideDeviation(756, STRATEGY)) // 3 year lookback
+	measurement.InformationRatio = float32(perf.InformationRatio(756))             // 3 year lookback
+	measurement.KRatio = float32(perf.KRatio(756))                                 // 3 year lookback
+	measurement.KellerRatio = float32(perf.KellerRatio(756, STRATEGY))             // 3 year lookback
+	measurement.SharpeRatio = float32(perf.SharpeRatio(756, STRATEGY))             // 1 year lookback
+	measurement.SortinoRatio = float32(perf.SortinoRatio(756, STRATEGY))           // 1 year lookback
+	measurement.StdDev = float32(perf.StdDev(63, STRATEGY))                        // 3 month lookback
+	measurement.TreynorRatio = float32(perf.TreynorRatio(756))                     // 3 year lookback
+	measurement.UlcerIndex = float32(perf.UlcerIndex())
+}
+
+func (perf *Performance) calculateWithdrawalRates() {
+	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
+	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
+	if len(monthlyRets) > 0 {
+		bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
+		perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
+		perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
+		perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
+	}
+}
+
+func (perf *Performance) calculateGrowthOf10k(measurement *PerformanceMeasurement) {
+	stratGrowth := measurement.StrategyGrowthOf10K
+	benchGrowth := measurement.BenchmarkGrowthOf10K
+	riskFreeGrowth := measurement.RiskFreeGrowthOf10K
+
+	// Growth of 10k
+	stratRate := perf.TWRR(1, STRATEGY)
+	if !math.IsNaN(stratRate) && !math.IsInf(stratRate, 1) {
+		stratGrowth *= (1.0 + stratRate)
+	}
+	measurement.StrategyGrowthOf10K = stratGrowth
+
+	benchRate := perf.TWRR(1, BENCHMARK)
+	if !math.IsNaN(benchRate) && !math.IsInf(benchRate, 1) {
+		benchGrowth *= (1.0 + benchRate)
+	}
+	measurement.BenchmarkGrowthOf10K = benchGrowth
+
+	rfRate := perf.TWRR(1, RISKFREE)
+	if !math.IsNaN(rfRate) && !math.IsInf(rfRate, 1) {
+		riskFreeGrowth *= (1.0 + rfRate)
+	}
+	measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 }
 
 // CalculateThrough computes performance metrics for the given portfolio until `through`
-//gocyclo:ignore
 func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
 	defer span.End()
 
 	p := pm.Portfolio
 	dataManager := pm.dataProxy
+	var err error
 
 	// make sure we can check the data
 	if len(p.Transactions) == 0 {
@@ -212,395 +590,123 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		Msg("calculate performance from")
 
 	// Get the days performance should be calculated on
+	today := time.Now()
+	prevDate := prevMeasurement.Time
 	tradingDays := dataManager.TradingDays(ctx, calculationStart, through, data.FrequencyDaily)
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
-	numTrxs := len(p.Transactions)
-
-	if trxIdx < len(p.Transactions) {
-		log.Debug().Int("TrxIdx", trxIdx).Msg("starting from transactions")
-	}
+	log.Debug().Int("TrxIdx", trxIdx).Msg("starting from transaction index")
 
 	// fill holdings
-	holdings := make(map[string]float64)
-	for _, holding := range prevMeasurement.Holdings {
-		holdings[holding.Ticker] = holding.Shares
+	holdings := holdingsMapFromMeasurement(prevMeasurement)
+
+	sums := &cumulativeSums{
+		TotalValue:     prevMeasurement.Value,
+		BenchmarkValue: prevMeasurement.BenchmarkValue,
+		Deposited:      prevMeasurement.TotalDeposited,
+		RiskFreeValue:  prevMeasurement.RiskFreeValue,
+		Withdrawn:      prevMeasurement.TotalWithdrawn,
 	}
-
-	today := time.Now()
-
-	prevDate := prevMeasurement.Time
-
-	var totalVal float64
-	var benchmarkValue float64 = prevMeasurement.BenchmarkValue
-	var riskFreeValue float64 = prevMeasurement.RiskFreeValue
-
-	depositedToDate := prevMeasurement.TotalDeposited
-	withdrawnToDate := prevMeasurement.TotalWithdrawn
 
 	// compute # of shares held for benchmark
 	var benchmarkShares float64
 	if len(perf.Measurements) > 0 {
-		benchmarkPrice, err := dataManager.Get(ctx, prevMeasurement.Time, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		benchmarkShares, err = calculateShares(ctx, dataManager, pm.Portfolio.Benchmark, prevMeasurement.Time, sums.BenchmarkValue)
 		if err != nil {
 			span.RecordError(err)
 			msg := "could not get benchmark eod prices"
 			span.SetStatus(codes.Error, msg)
 			log.Error().Err(err).Msg(msg)
 		}
-		benchmarkShares = benchmarkValue / benchmarkPrice
-	} else {
-		benchmarkShares = 0
 	}
 
-	stratGrowth := prevMeasurement.StrategyGrowthOf10K
-	benchGrowth := prevMeasurement.BenchmarkGrowthOf10K
-	riskFreeGrowth := prevMeasurement.RiskFreeGrowthOf10K
-
-	startOfWeek := calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1)
-	daysToStartOfWeek := uint(trxIdx - pm.transactionIndexForDate(startOfWeek))
-	startOfMonth := calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1)
-	daysToStartOfMonth := uint(trxIdx - pm.transactionIndexForDate(startOfMonth))
-	startOfYear := calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1)
-	daysToStartOfYear := uint(trxIdx - pm.transactionIndexForDate(startOfYear))
+	dates := &dateBundle{
+		StartOfMonth: calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1),
+		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
+		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
+	}
+	dates.DaysToStartOfMonth = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfMonth))
+	dates.DaysToStartOfWeek = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfWeek))
+	dates.DaysToStartOfYear = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfYear))
 
 	var ytdBench float32
 	if len(perf.Measurements) > 0 {
-		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
+		ytdBench = float32(perf.TWRR(dates.DaysToStartOfYear, BENCHMARK))
 	}
-
-	last := prevMeasurement.Time
 
 	log.Info().Time("First", tradingDays[0]).Time("Last", tradingDays[len(tradingDays)-1]).Msg("Date range for calculate performance")
 
 	for _, date := range tradingDays {
-		// measurements should be at 23:59:59.999999999
 		tradingDate := date
+		// measurements should be at 23:59:59.999999999
 		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999_999_999, nyc)
+		updateDateBundle(dates, date, prevDate)
 
-		if last.Weekday() > date.Weekday() {
-			daysToStartOfWeek = 1
-		} else {
-			daysToStartOfWeek++
-		}
+		sums.BenchmarkValue = calculateValue(ctx, dataManager, pm.Portfolio.Benchmark, benchmarkShares, date)
 
-		if last.Month() != date.Month() {
-			daysToStartOfMonth = 1
-		} else {
-			daysToStartOfMonth++
-		}
-
-		if last.Year() != date.Year() {
-			daysToStartOfYear = 1
-		} else {
-			daysToStartOfYear++
-		}
-
-		last = date
-
-		if benchmarkShares != 0.0 {
-			benchmarkPrice, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
-			if err != nil {
-				span.RecordError(err)
-				msg := "could not get benchmark prices from pvdb"
-				span.SetStatus(codes.Error, msg)
-				log.Error().Err(err).Msg(msg)
-			}
-			benchmarkValue = benchmarkShares * benchmarkPrice
-		}
-
-		// update holdings?
+		// update holdings
 		log.Debug().Time("TradeDate", date).Msg("update holdings for date")
-		for ; trxIdx < numTrxs; trxIdx++ {
-			trx := p.Transactions[trxIdx]
-
-			// process transactions up to this point in time
-			// test if date is Before the trx.Date - if it is then break
-			if date.Before(trx.Date) {
-				break
-			}
-
-			shares := 0.0
-			if val, ok := holdings[trx.Ticker]; ok {
-				shares = val
-			}
-
-			switch trx.Kind {
-			case DepositTransaction:
-				depositedToDate += trx.TotalValue
-				riskFreeValue += trx.TotalValue
-				benchmarkValue += trx.TotalValue
-				if val, ok := holdings[data.CashAsset]; ok {
-					holdings[data.CashAsset] = val + trx.TotalValue
-				} else {
-					holdings[data.CashAsset] = trx.TotalValue
-				}
-				continue
-			case WithdrawTransaction:
-				withdrawnToDate += trx.TotalValue
-				riskFreeValue -= trx.TotalValue
-				benchmarkValue -= trx.TotalValue
-				if val, ok := holdings[data.CashAsset]; ok {
-					holdings[data.CashAsset] = val - trx.TotalValue
-				}
-				continue
-			case BuyTransaction:
-				shares += trx.Shares
-				if val, ok := holdings[data.CashAsset]; ok {
-					holdings[data.CashAsset] = val - trx.TotalValue
-				}
-				log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
-			case DividendTransaction:
-				if val, ok := holdings[data.CashAsset]; ok {
-					holdings[data.CashAsset] = val + trx.TotalValue
-				} else {
-					holdings[data.CashAsset] = trx.TotalValue
-				}
-				log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
-				continue
-			case SplitTransaction:
-				shares = trx.Shares
-				log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
-			case SellTransaction:
-				shares -= trx.Shares
-				if val, ok := holdings[data.CashAsset]; ok {
-					holdings[data.CashAsset] = val + trx.TotalValue
-				} else {
-					holdings[data.CashAsset] = trx.TotalValue
-				}
-				log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
-			default:
-				log.Warn().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
-				return ErrInvalidTransactionType
-			}
-
-			if val, ok := holdings[data.CashAsset]; ok {
-				if val <= 1.0e-5 {
-					delete(holdings, data.CashAsset)
-				}
-			}
-
-			// Protect against floating point noise
-			if shares <= 1.0e-5 {
-				shares = 0
-			}
-
-			if shares == 0 {
-				delete(holdings, trx.Ticker)
-			} else {
-				holdings[trx.Ticker] = shares
-			}
-		}
-
-		for ticker, holding := range holdings {
-			log.Debug().Time("Date", date).Str("Ticker", ticker).Float64("Holding", holding).Msg("holding")
+		holdings, trxIdx, err = processTransactions(p, holdings, trxIdx, date, sums)
+		if err != nil {
+			return err
 		}
 
 		// build justification array
 		justificationArray := pm.justifications[tradingDate.String()]
 
-		// update benchmarkShares to reflect any new deposits or withdrawals
-		benchmarkPrice, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, pm.Portfolio.Benchmark)
+		// update benchmarkShares to reflect any new deposits or withdrawals (BenchmarkValue is updated in processTransactions)
+		benchmarkShares, err = calculateShares(ctx, dataManager, pm.Portfolio.Benchmark, date, sums.BenchmarkValue)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "error when fetching benchmark adjusted close prices")
-			log.Error().Time("Date", date).Str("BenchmarkTicker", pm.Portfolio.Benchmark).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
-		}
-		if math.IsNaN(benchmarkPrice) {
-			log.Warn().Time("Date", date).Str("BenchmarkTicker", pm.Portfolio.Benchmark).Err(err).Str("Metric", "AdjustedClose").Msg("benchmark value is NaN")
-		}
-		benchmarkShares = benchmarkValue / benchmarkPrice
-
-		// iterate through each holding and add value to get total return
-		totalVal = 0.0
-		for symbol, qty := range holdings {
-			if symbol == data.CashAsset {
-				if math.IsNaN(qty) {
-					log.Warn().Msg("Cash position is NaN")
-				} else {
-					totalVal += qty
-				}
-			} else {
-				price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
-				if err != nil {
-					span.RecordError(err)
-					span.SetStatus(codes.Error, "no quote for symbol")
-					return ErrSecurityPriceNotAvailable
-				}
-				if math.IsNaN(price) {
-					price, err = dataManager.GetLatestDataBefore(ctx, symbol, data.MetricClose, date)
-					if err != nil {
-						span.RecordError(err)
-						span.SetStatus(codes.Error, "no quote for symbol")
-						return ErrSecurityPriceNotAvailable
-					}
-				}
-
-				totalVal += price * qty
-			}
+			return err
 		}
 
-		// this is done as a second loop because we need totalVal to be set for
-		// percent calculation
-		currentAssets := make([]*ReportableHolding, 0, len(holdings))
-		for symbol, qty := range holdings {
-			var value float64
-			if symbol == data.CashAsset {
-				value = qty
-			} else if qty > 1.0e-5 {
-				price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
-				if err != nil {
-					span.RecordError(err)
-					span.SetStatus(codes.Error, "no quote for symbol")
-					return ErrSecurityPriceNotAvailable
-				}
-				value = price * qty
-			}
-			if math.IsNaN(value) {
-				value = 0.0
-			}
-			if qty > 1.0e-5 {
-				currentAssets = append(currentAssets, &ReportableHolding{
-					Ticker:           symbol,
-					Shares:           qty,
-					PercentPortfolio: float32(value / totalVal),
-					Value:            value,
-				})
-			}
+		// get value of portfolio
+		sums.TotalValue, err = getHoldingsValue(ctx, dataManager, holdings, date)
+		if err != nil {
+			return err
+		}
+
+		// generate a new list of holdings for current measurement date
+		currentAssets, err := buildHoldingsList(ctx, dataManager, holdings, date, sums.TotalValue)
+		if err != nil {
+			return err
 		}
 
 		// update riskFreeValue
-		rawRate := dataManager.RiskFreeRate(ctx, date)
-		riskFreeRate := rawRate / 100.0 / 252.0
-		riskFreeValue *= (1 + riskFreeRate)
-
-		// ensure that holdings are sorted
-		sort.Slice(currentAssets, func(i, j int) bool {
-			return currentAssets[i].Ticker < currentAssets[j].Ticker
-		})
+		sums.RiskFreeValue *= getRiskFreeRate(ctx, dataManager, date)
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,
 			Justification:        justificationArray,
-			Value:                totalVal,
-			BenchmarkValue:       benchmarkValue,
-			RiskFreeValue:        riskFreeValue,
-			StrategyGrowthOf10K:  stratGrowth,
-			BenchmarkGrowthOf10K: benchGrowth,
-			RiskFreeGrowthOf10K:  riskFreeGrowth,
+			Value:                sums.TotalValue,
+			BenchmarkValue:       sums.BenchmarkValue,
+			RiskFreeValue:        sums.RiskFreeValue,
+			StrategyGrowthOf10K:  prevMeasurement.StrategyGrowthOf10K,
+			BenchmarkGrowthOf10K: prevMeasurement.BenchmarkGrowthOf10K,
+			RiskFreeGrowthOf10K:  prevMeasurement.RiskFreeGrowthOf10K,
 			Holdings:             currentAssets,
-			TotalDeposited:       depositedToDate,
-			TotalWithdrawn:       withdrawnToDate,
+			TotalDeposited:       sums.Deposited,
+			TotalWithdrawn:       sums.Withdrawn,
 		}
 
 		perf.Measurements = append(perf.Measurements, &measurement)
 
 		if len(perf.Measurements) >= 2 {
-			// Growth of 10k
-			stratRate := perf.TWRR(1, STRATEGY)
-			if !math.IsNaN(stratRate) && !math.IsInf(stratRate, 1) {
-				stratGrowth *= (1.0 + stratRate)
-			}
-			measurement.StrategyGrowthOf10K = stratGrowth
-
-			benchRate := perf.TWRR(1, BENCHMARK)
-			if !math.IsNaN(benchRate) && !math.IsInf(benchRate, 1) {
-				benchGrowth *= (1.0 + benchRate)
-			}
-			measurement.BenchmarkGrowthOf10K = benchGrowth
-
-			rfRate := perf.TWRR(1, RISKFREE)
-			if !math.IsNaN(rfRate) && !math.IsInf(rfRate, 1) {
-				riskFreeGrowth *= (1.0 + rfRate)
-			}
-			measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 
 			// time-weighted rate of return
-			if int(daysToStartOfYear) == len(perf.Measurements) {
-				daysToStartOfYear--
+			if int(dates.DaysToStartOfYear) == len(perf.Measurements) {
+				dates.DaysToStartOfYear--
 			}
 
-			measurement.TWRROneDay = float32(perf.TWRR(1, STRATEGY))
-			measurement.TWRRWeekToDate = float32(perf.TWRR(daysToStartOfWeek, STRATEGY))
-			measurement.TWRROneWeek = float32(perf.TWRR(5, STRATEGY))
-			measurement.TWRRMonthToDate = float32(perf.TWRR(daysToStartOfMonth, STRATEGY))
-			measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
-			measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
-			measurement.TWRRYearToDate = float32(perf.TWRR(daysToStartOfYear, STRATEGY))
-			measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
-			measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
-			measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
-			measurement.TWRRTenYear = float32(perf.TWRR(2520, STRATEGY))
-
-			// money-weighted rate of return
-			measurement.MWRROneDay = float32(perf.MWRR(1, STRATEGY))
-			measurement.MWRRWeekToDate = float32(perf.MWRR(daysToStartOfWeek, STRATEGY))
-			measurement.MWRROneWeek = float32(perf.MWRR(5, STRATEGY))
-			measurement.MWRRMonthToDate = float32(perf.MWRR(daysToStartOfMonth, STRATEGY))
-			measurement.MWRROneMonth = float32(perf.MWRR(21, STRATEGY))
-			measurement.MWRRThreeMonth = float32(perf.MWRR(63, STRATEGY))
-			measurement.MWRRYearToDate = float32(perf.MWRR(daysToStartOfYear, STRATEGY))
-			measurement.MWRROneYear = float32(perf.MWRR(252, STRATEGY))
-			measurement.MWRRThreeYear = float32(perf.MWRR(756, STRATEGY))
-			measurement.MWRRFiveYear = float32(perf.MWRR(1260, STRATEGY))
-			measurement.MWRRTenYear = float32(perf.MWRR(2520, STRATEGY))
-
-			// active return
-			measurement.ActiveReturnOneYear = float32(perf.ActiveReturn(252))
-			measurement.ActiveReturnThreeYear = float32(perf.ActiveReturn(756))
-			measurement.ActiveReturnFiveYear = float32(perf.ActiveReturn(1260))
-			measurement.ActiveReturnTenYear = float32(perf.ActiveReturn(2520))
-
-			// alpha
-			measurement.AlphaOneYear = float32(perf.Alpha(252))
-			measurement.AlphaThreeYear = float32(perf.Alpha(756))
-			measurement.AlphaFiveYear = float32(perf.Alpha(1260))
-			measurement.AlphaTenYear = float32(perf.Alpha(2520))
-
-			// beta
-			measurement.BetaOneYear = float32(perf.Beta(252))
-			measurement.BetaThreeYear = float32(perf.Beta(756))
-			measurement.BetaFiveYear = float32(perf.Beta(1260))
-			measurement.BetaTenYear = float32(perf.Beta(2520))
-
-			// ratios
-			measurement.CalmarRatio = float32(perf.CalmarRatio(756, STRATEGY))             // 3 year lookback
-			measurement.DownsideDeviation = float32(perf.DownsideDeviation(756, STRATEGY)) // 3 year lookback
-			measurement.InformationRatio = float32(perf.InformationRatio(756))             // 3 year lookback
-			measurement.KRatio = float32(perf.KRatio(756))                                 // 3 year lookback
-			measurement.KellerRatio = float32(perf.KellerRatio(756, STRATEGY))             // 3 year lookback
-			measurement.SharpeRatio = float32(perf.SharpeRatio(756, STRATEGY))             // 1 year lookback
-			measurement.SortinoRatio = float32(perf.SortinoRatio(756, STRATEGY))           // 1 year lookback
-			measurement.StdDev = float32(perf.StdDev(63, STRATEGY))                        // 3 month lookback
-			measurement.TreynorRatio = float32(perf.TreynorRatio(756))                     // 3 year lookback
-			measurement.UlcerIndex = float32(perf.UlcerIndex())
+			perf.calculateGrowthOf10k(&measurement)
+			perf.calculateReturns(&measurement, dates)
+			perf.calculateRiskMeasures(&measurement)
 		}
 
-		if prevDate.Year() != date.Year() {
-			if prevMeasurement.TWRRYearToDate > perf.PortfolioMetrics.BestYear.Return {
-				perf.PortfolioMetrics.BestYear.Return = prevMeasurement.TWRRYearToDate
-				perf.PortfolioMetrics.BestYear.Year = uint16(prevDate.Year())
-			}
+		perf.updateAnnualPerformance(prevDate, date, prevMeasurement, ytdBench)
+		ytdBench = float32(perf.TWRR(dates.DaysToStartOfYear, BENCHMARK))
 
-			if prevMeasurement.TWRRYearToDate < perf.PortfolioMetrics.WorstYear.Return && prevMeasurement.TWRRYearToDate != 0.0 {
-				perf.PortfolioMetrics.WorstYear.Return = prevMeasurement.TWRRYearToDate
-				perf.PortfolioMetrics.WorstYear.Year = uint16(prevDate.Year())
-			}
-
-			// calculate 1-yr benchmark rate of return
-			if ytdBench > perf.BenchmarkMetrics.BestYear.Return {
-				perf.BenchmarkMetrics.BestYear.Return = ytdBench
-				perf.BenchmarkMetrics.BestYear.Year = uint16(prevDate.Year())
-			}
-
-			if ytdBench < perf.BenchmarkMetrics.WorstYear.Return {
-				perf.BenchmarkMetrics.WorstYear.Return = ytdBench
-				perf.BenchmarkMetrics.WorstYear.Year = uint16(prevDate.Year())
-			}
-		}
-
-		ytdBench = float32(perf.TWRR(daysToStartOfYear, BENCHMARK))
 		prevMeasurement = &measurement
 		prevDate = date
 
@@ -609,53 +715,12 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		}
 	}
 
-	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
-	perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods, STRATEGY)
-
-	perf.PortfolioReturns = &Returns{
-		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, STRATEGY),
-		MWRROneYear:        perf.MWRR(252, STRATEGY),
-		MWRRThreeYear:      perf.MWRR(756, STRATEGY),
-		MWRRFiveYear:       perf.MWRR(1260, STRATEGY),
-		MWRRTenYear:        perf.MWRR(2520, STRATEGY),
-
-		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, STRATEGY),
-		TWRROneYear:        perf.TWRR(252, STRATEGY),
-		TWRRThreeYear:      perf.TWRR(756, STRATEGY),
-		TWRRFiveYear:       perf.TWRR(1260, STRATEGY),
-		TWRRTenYear:        perf.TWRR(2520, STRATEGY),
-	}
-
-	perf.BenchmarkReturns = &Returns{
-		MWRRSinceInception: perf.MWRR(sinceInceptionPeriods, BENCHMARK),
-		MWRROneYear:        perf.MWRR(252, BENCHMARK),
-		MWRRThreeYear:      perf.MWRR(756, BENCHMARK),
-		MWRRFiveYear:       perf.MWRR(1260, BENCHMARK),
-		MWRRTenYear:        perf.MWRR(2520, BENCHMARK),
-
-		TWRRSinceInception: perf.TWRR(sinceInceptionPeriods, BENCHMARK),
-		TWRROneYear:        perf.TWRR(252, BENCHMARK),
-		TWRRThreeYear:      perf.TWRR(756, BENCHMARK),
-		TWRRFiveYear:       perf.TWRR(1260, BENCHMARK),
-		TWRRTenYear:        perf.TWRR(2520, BENCHMARK),
-	}
-
 	// Update Strategy Metrics
-	perf.updateMetrics(perf.PortfolioMetrics, sinceInceptionPeriods, STRATEGY)
-	perf.updateMetrics(perf.BenchmarkMetrics, sinceInceptionPeriods, BENCHMARK)
+	perf.updateSummaryMetrics(perf.PortfolioMetrics, STRATEGY)
+	perf.updateSummaryMetrics(perf.BenchmarkMetrics, BENCHMARK)
 
-	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
-	if len(monthlyRets) > 0 {
-		bootstrap := CircularBootstrap(monthlyRets, 12, 5000, 360)
-		perf.PortfolioMetrics.DynamicWithdrawalRateSinceInception = DynamicWithdrawalRate(bootstrap, 0.03)
-		perf.PortfolioMetrics.PerpetualWithdrawalRateSinceInception = PerpetualWithdrawalRate(bootstrap, 0.03)
-		perf.PortfolioMetrics.SafeWithdrawalRateSinceInception = SafeWithdrawalRate(bootstrap, 0.03)
-	}
-
-	perf.PortfolioReturns.MWRRYTD = perf.MWRRYtd(STRATEGY)
-	perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
-	perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
-	perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
+	// calculate dynamic, perpetual, and safe withdrawal rates
+	perf.calculateWithdrawalRates()
 
 	// Set period end to last measurement
 	if len(perf.Measurements) > 0 {
