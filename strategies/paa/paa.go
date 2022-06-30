@@ -30,14 +30,14 @@ import (
 	"time"
 
 	json "github.com/goccy/go-json"
+	dataframe "github.com/jdfergason/dataframe-go"
+	"github.com/jdfergason/dataframe-go/math/funcs"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dfextras"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
-	dataframe "github.com/rocketlaunchr/dataframe-go"
-	"github.com/rocketlaunchr/dataframe-go/math/funcs"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 )

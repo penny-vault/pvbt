@@ -38,7 +38,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
-	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/jdfergason/dataframe-go"
 	"github.com/rs/zerolog/log"
 	"github.com/zeebo/blake3"
 )

@@ -44,7 +44,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/jdfergason/dataframe-go"
 	"github.com/rs/zerolog/log"
 )
 

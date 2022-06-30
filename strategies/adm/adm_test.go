@@ -27,7 +27,7 @@ import (
 	"github.com/penny-vault/pv-api/strategies/adm"
 
 	"github.com/goccy/go-json"
-	"github.com/rocketlaunchr/dataframe-go"
+	"github.com/jdfergason/dataframe-go"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

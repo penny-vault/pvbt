@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/jdfergason/dataframe-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
@@ -28,7 +29,6 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/strategies/paa"
-	"github.com/rocketlaunchr/dataframe-go"
 )
 
 var _ = Describe("Daa", func() {
