@@ -1,8 +1,7 @@
 # pv-api
 
-[![Build Status](https://travis-ci.com/jdfergason/pv-api.svg?branch=master)](https://travis-ci.com/jdfergason/pv-api)
-[![Go Report Card](https://goreportcard.com/badge/github.com/jdfergason/pv-api)](https://goreportcard.com/report/github.com/jdfergason/pv-api)
-[![codecov](https://codecov.io/gh/jdfergason/pv-api/branch/master/graph/badge.svg?token=L3C272LW9C)](https://codecov.io/gh/jdfergason/pv-api)
+[![Go Report Card](https://goreportcard.com/badge/github.com/jdfergason/pv-api)](https://goreportcard.com/report/github.com/penny-vault/pv-api)
+[![codecov](https://codecov.io/gh/penny-vault/pv-api/branch/master/graph/badge.svg?token=L3C272LW9C)](https://codecov.io/gh/penny-vault/pv-api)
 
 Penny Vault api provides backend functionality for managing a quantiative invesment portfolio. It has functions for:
 

@@ -18,10 +18,8 @@
 package main
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -111,14 +109,28 @@ func Test() error {
 		"GOFLAGS":             testGoFlags(),
 		"PVAPI_TEST_DATA_DIR": testDir,
 	}
-	return runCmd(env, ginkgoexe, "./...", buildFlags(), "-tags", buildTags())
+	return runCmd(env, ginkgoexe, "run", "-r", "--junit-report", "test-report.xml")
 }
 
 // Run tests with race detector
 func TestRace() error {
 	fmt.Println("Go Test Race")
-	env := map[string]string{"GOFLAGS": testGoFlags()}
-	return runCmd(env, goexe, "test", "-race", "./...", buildFlags(), "-tags", buildTags())
+	fmt.Println("Running Ginkgo tests ...")
+
+	// set testdir
+	wd, err := os.Getwd()
+	if err != nil {
+		fmt.Println(err)
+		fmt.Println("could not get working directory")
+		os.Exit(1)
+	}
+	testDir := filepath.Join(wd, "testdata")
+
+	env := map[string]string{
+		"GOFLAGS":             testGoFlags(),
+		"PVAPI_TEST_DATA_DIR": testDir,
+	}
+	return runCmd(env, ginkgoexe, "run", "-r", "--race", "--junit-report", "test-report.xml")
 }
 
 // Run gofmt linter
@@ -183,45 +195,20 @@ func Vet() error {
 // Generate test coverage report
 func TestCoverHTML() error {
 	fmt.Println("Generate Test Coverage HTML")
-
-	const (
-		coverAll = "coverage-all.out"
-		cover    = "coverage.out"
-	)
-	f, err := os.Create(coverAll)
+	// set testdir
+	wd, err := os.Getwd()
 	if err != nil {
-		return err
+		fmt.Println(err)
+		fmt.Println("could not get working directory")
+		os.Exit(1)
 	}
-	defer f.Close()
-	if _, err := f.Write([]byte("mode: count")); err != nil {
-		return err
+	testDir := filepath.Join(wd, "testdata")
+	env := map[string]string{
+		"GOFLAGS":             testGoFlags(),
+		"PVAPI_TEST_DATA_DIR": testDir,
 	}
-
-	pkgs, err := packages()
-	if err != nil {
-		return err
-	}
-	for _, pkg := range pkgs {
-		if err := sh.Run(goexe, "test", "-coverprofile="+cover, "-covermode=count", pkg); err != nil {
-			return err
-		}
-		b, err := ioutil.ReadFile(cover)
-		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return err
-		}
-		idx := bytes.Index(b, []byte{'\n'})
-		b = b[idx+1:]
-		if _, err := f.Write(b); err != nil {
-			return err
-		}
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return sh.Run(goexe, "tool", "cover", "-html="+coverAll)
+	runCmd(env, ginkgoexe, "run", "-r", "--coverprofile=cover.out", "--covermode=count")
+	return sh.Run(goexe, "tool", "cover", "-html=cover.out")
 }
 
 // Helpers
