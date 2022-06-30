@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"runtime/debug"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -107,6 +108,8 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	defer func() {
 		if err := recover(); err != nil {
 			log.Error().Stack().Msg("caught exception")
+			fmt.Println(err)
+			debug.PrintStack()
 			resp = fiber.ErrInternalServerError
 		}
 	}()
