@@ -18,4 +18,4 @@ pvapi
 
 # configuration development files
 *.env
-config.toml
+pvapi.toml
