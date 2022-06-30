@@ -219,7 +219,14 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 
 	if currentNumShares, ok := pm.holdings[asset]; ok {
 		currentDollars := currentNumShares * price
-		if targetDollars < currentDollars {
+		diff := targetDollars - currentDollars
+
+		if math.Abs(diff) < 1.0e-5 {
+			// already hold what we need
+			return nil, targetShares, nil
+		}
+
+		if diff < 0 {
 			// Need to sell to target amount
 			toSellDollars := currentDollars - targetDollars
 			toSellShares := toSellDollars / price
@@ -240,7 +247,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 			if err != nil {
 				return nil, 0, err
 			}
-		} else if targetDollars > currentDollars {
+		} else {
 			// Need to buy to target amount
 			toBuyDollars := targetDollars - currentDollars
 			toBuyShares := toBuyDollars / price
@@ -369,20 +376,22 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 
 	// purchase holdings based on target
 	newHoldings := make(map[string]float64)
-	for asset, shares := range target {
-		targetDollars := investable * shares
+	for asset, targetPercent := range target {
+		targetDollars := investable * targetPercent
 		t, numShares, err := pm.modifyPosition(ctx, date, asset, targetDollars, justification)
 		if err != nil {
 			return err
 		}
 
-		switch t.Kind {
-		case SellTransaction:
-			sells = append(sells, t)
-			cash += t.TotalValue
-		case BuyTransaction:
-			buys = append(buys, t)
-			cash -= t.TotalValue
+		if t != nil {
+			switch t.Kind {
+			case SellTransaction:
+				sells = append(sells, t)
+				cash += t.TotalValue
+			case BuyTransaction:
+				buys = append(buys, t)
+				cash -= t.TotalValue
+			}
 		}
 
 		newHoldings[asset] = numShares
