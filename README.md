@@ -1,5 +1,6 @@
 # pv-api
 
+[![Build](https://github.com/penny-vault/pv-api/actions/workflows/build.yml/badge.svg)](https://github.com/penny-vault/pv-api/actions/workflows/build.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/jdfergason/pv-api)](https://goreportcard.com/report/github.com/penny-vault/pv-api)
 [![codecov](https://codecov.io/gh/penny-vault/pv-api/branch/master/graph/badge.svg?token=L3C272LW9C)](https://codecov.io/gh/penny-vault/pv-api)
 
