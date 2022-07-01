@@ -209,8 +209,9 @@ func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, asset string)
 func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset string, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
 	// is this security currently held? If so, do we need to buy more or sell some
 	price := pm.getPriceSafe(ctx, date, asset)
+	subLog := log.With().Float64("Price", price).Time("Date", date).Str("Asset", asset).Float64("TargetDollars", targetDollars).Logger()
 	if price < 1.0e-5 {
-		log.Error().Float64("Price", price).Msg("cannot purchase an asset when price is 0; skip asset")
+		subLog.Error().Msg("cannot purchase an asset when price is 0; skip asset")
 		return nil, 0, ErrSecurityPriceNotAvailable
 	}
 	targetShares := targetDollars / price
@@ -380,7 +381,8 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 		targetDollars := investable * targetPercent
 		t, numShares, err := pm.modifyPosition(ctx, date, asset, targetDollars, justification)
 		if err != nil {
-			return err
+			// don't fail if position could not be modified, just continue -- writing off asset as $0
+			continue
 		}
 
 		if t != nil {
