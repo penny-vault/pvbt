@@ -139,7 +139,9 @@ func LoadStrategyMetricsFromDb() {
 		strat.Metrics = s
 		if err := trx.Commit(context.Background()); err != nil {
 			log.Error().Err(err).Msg("could not commit trx to database")
-			trx.Rollback(context.Background())
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Err(err).Msg("could not rollback transactions")
+			}
 		}
 	}
 	log.Info().Msg("Finished loading portfolio metrics")
