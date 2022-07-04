@@ -932,7 +932,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 
 		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &compositeFIGI,
 			&t.Justification, &t.Kind, &memo, &pricePerShare, &shares, &t.Source,
-			sourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
+			&sourceID, &t.Tags, &taxDisposition, &t.Ticker, &t.TotalValue)
 		if err != nil {
 			log.Warn().Err(err).
 				Str("PortfolioID", hex.EncodeToString(p.ID)).

@@ -17,9 +17,9 @@ package strategy
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
+	"github.com/jackc/pgtype"
 	"github.com/penny-vault/pv-api/data"
 
 	"github.com/goccy/go-json"
@@ -42,19 +42,19 @@ type Argument struct {
 
 // Metrics collection of strategy metrics that should be regularly updated
 type Metrics struct {
-	ID                 uuid.UUID       `json:"id"`
-	YTDReturn          sql.NullFloat64 `json:"ytdReturn"`
-	CagrSinceInception sql.NullFloat64 `json:"cagrSinceInception"`
-	CagrThreeYr        sql.NullFloat64 `json:"cagr3yr"`
-	CagrFiveYr         sql.NullFloat64 `json:"cagr5yr"`
-	CagrTenYr          sql.NullFloat64 `json:"cagr10yr"`
-	StdDev             sql.NullFloat64 `json:"stdDev"`
-	DownsideDeviation  sql.NullFloat64 `json:"downsideDeviation"`
-	MaxDrawDown        sql.NullFloat64 `json:"maxDrawDown"`
-	AvgDrawDown        sql.NullFloat64 `json:"avgDrawDown"`
-	SharpeRatio        sql.NullFloat64 `json:"sharpeRatio"`
-	SortinoRatio       sql.NullFloat64 `json:"sortinoRatio"`
-	UlcerIndex         sql.NullFloat64 `json:"ulcerIndex"`
+	ID                 uuid.UUID     `json:"id"`
+	YTDReturn          pgtype.Float8 `json:"ytdReturn"`
+	CagrSinceInception pgtype.Float8 `json:"cagrSinceInception"`
+	CagrThreeYr        pgtype.Float4 `json:"cagr3yr"`
+	CagrFiveYr         pgtype.Float4 `json:"cagr5yr"`
+	CagrTenYr          pgtype.Float4 `json:"cagr10yr"`
+	StdDev             pgtype.Float4 `json:"stdDev"`
+	DownsideDeviation  pgtype.Float4 `json:"downsideDeviation"`
+	MaxDrawDown        pgtype.Float4 `json:"maxDrawDown"`
+	AvgDrawDown        pgtype.Float4 `json:"avgDrawDown"`
+	SharpeRatio        pgtype.Float4 `json:"sharpeRatio"`
+	SortinoRatio       pgtype.Float4 `json:"sortinoRatio"`
+	UlcerIndex         pgtype.Float4 `json:"ulcerIndex"`
 }
 
 // Info information about a strategy

@@ -17,12 +17,12 @@ package strategies
 
 import (
 	"context"
-	"database/sql"
 	"embed"
 	"fmt"
 	"io/ioutil"
 	"math"
 
+	"github.com/jackc/pgtype"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/strategies/adm"
 	"github.com/penny-vault/pv-api/strategies/daa"
@@ -98,9 +98,9 @@ func Register(strategyPkg string, factory strategy.Factory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
-	log.Info().Msg("refreshing portfolio metrics")
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
+		log.Info().Str("StrategyName", strat.Name).Msg("Refresh metrics for strategy")
 
 		// load results from the database
 		trx, err := database.TrxForUser("pvuser")
@@ -111,15 +111,6 @@ func LoadStrategyMetricsFromDb() {
 		row := trx.QueryRow(context.Background(), "SELECT id, cagr_3yr, cagr_5yr, cagr_10yr, std_dev, downside_deviation, max_draw_down, avg_draw_down, sharpe_ratio, sortino_ratio, ulcer_index, ytd_return, cagr_since_inception FROM portfolios WHERE user_id='pvuser' AND name=$1", strat.Name)
 		s := strategy.Metrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
-
-		metrics := []*sql.NullFloat64{&s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception}
-		for _, m := range metrics {
-			if math.IsNaN(m.Float64) || math.IsInf(m.Float64, 0) {
-				m.Float64 = 0
-				m.Valid = false
-			}
-		}
-
 		if err != nil {
 			log.Warn().Err(err).
 				Str("Strategy", strat.Shortcode).
@@ -127,14 +118,29 @@ func LoadStrategyMetricsFromDb() {
 			if err := trx.Rollback(context.Background()); err != nil {
 				log.Error().Err(err).Msg("could not rollback transaction")
 			}
-
 			continue
+		}
+
+		for _, m := range []*pgtype.Float4{&s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex} {
+			if m.Status == pgtype.Present && (math.IsNaN(float64(m.Float)) || math.IsInf(float64(m.Float), 0)) {
+				m.Float = 0
+				m.Status = pgtype.Null
+			}
+		}
+
+		for _, m := range []*pgtype.Float8{&s.YTDReturn, &s.CagrSinceInception} {
+			if m.Status == pgtype.Present && (math.IsNaN(float64(m.Float)) || math.IsInf(float64(m.Float), 0)) {
+				m.Float = 0
+				m.Status = pgtype.Null
+			}
 		}
 
 		StrategyMetricsMap[strat.Shortcode] = s
 		strat.Metrics = s
 		if err := trx.Commit(context.Background()); err != nil {
 			log.Error().Err(err).Msg("could not commit trx to database")
+			trx.Rollback(context.Background())
 		}
 	}
+	log.Info().Msg("Finished loading portfolio metrics")
 }

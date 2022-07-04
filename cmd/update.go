@@ -108,10 +108,12 @@ var updateCmd = &cobra.Command{
 			ids := []string{
 				pIDStr,
 			}
+			log.Info().Str("PortfolioID", PortfolioID).Msg("load portfolio from DB")
 			p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 			if err != nil {
 				log.Fatal().Err(err).Msg("could not load portfolio from DB")
 			}
+			log.Info().Msg("load transactions from DB")
 			if err := p[0].LoadTransactionsFromDB(); err != nil {
 				log.Panic().Err(err).Msg("could not load transactions from database")
 			}
@@ -121,24 +123,30 @@ var updateCmd = &cobra.Command{
 			users, err := database.GetUsers()
 			users = append(users, "pvuser")
 			if err != nil {
-				log.Fatal().Err(err).Msg("could not load users from database")
+				log.Panic().Err(err).Msg("could not load users from database")
 			}
 
 			for _, u := range users {
 				trx, err := database.TrxForUser(u)
 				if err != nil {
-					log.Fatal().Err(err).Str("User", u).Msg("could not create trasnaction for user")
+					log.Panic().Err(err).Str("User", u).Msg("could not create trasnaction for user")
 				}
 
-				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios")
+				rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios WHERE temporary='f'")
 				if err != nil {
-					log.Fatal().Err(err).Msg("could not get portfolio IDs")
+					if err := trx.Rollback(context.Background()); err != nil {
+						log.Error().Err(err).Msg("could not rollback transaction")
+					}
+					log.Panic().Err(err).Msg("could not get portfolio IDs")
 				}
 
 				for rows.Next() {
 					var pIDStr string
 					err := rows.Scan(&pIDStr)
 					if err != nil {
+						if err := trx.Rollback(context.Background()); err != nil {
+							log.Error().Err(err).Msg("could not rollback transaction")
+						}
 						log.Warn().Err(err).Str("User", u).Msg("get portfolio ids failed")
 						continue
 					}
@@ -146,11 +154,19 @@ var updateCmd = &cobra.Command{
 					ids := []string{
 						pIDStr,
 					}
+					log.Debug().Str("PortfolioID", pIDStr).Msg("load portfolio from DB")
 					p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 					if err != nil {
+						if err := trx.Rollback(context.Background()); err != nil {
+							log.Error().Err(err).Msg("could not rollback transaction")
+						}
 						log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
 					}
+					log.Debug().Str("PortfolioID", pIDStr).Msg("load transactions from DB")
 					if err := p[0].LoadTransactionsFromDB(); err != nil {
+						if err := trx.Rollback(context.Background()); err != nil {
+							log.Error().Err(err).Msg("could not rollback transaction")
+						}
 						log.Panic().Err(err).Msg("could not load transactions from database")
 					}
 					portfolios = append(portfolios, p[0])
