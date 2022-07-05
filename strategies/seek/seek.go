@@ -267,7 +267,6 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	begin := time.Now()
 	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, v := range covered {
-		log.Debug().Str("Asset", v.Asset).Time("Begin", v.Begin).Time("End", v.End).Msg("pre-load asset EOD")
 		tickerSet[v.Asset] = true
 		if begin.After(v.Begin) {
 			begin = v.Begin
