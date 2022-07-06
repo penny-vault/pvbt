@@ -43,6 +43,52 @@ type Database struct {
 	UserID      string
 }
 
+func setWhere(stmt *pgsql.SelectStatement, op string, field string, val string) error {
+	switch op {
+	case "eq":
+		stmt.Where(fmt.Sprintf("%s = ?", field), val)
+	case "gt":
+		stmt.Where(fmt.Sprintf("%s > ?", field), val)
+	case "gte":
+		stmt.Where(fmt.Sprintf("%s >= ?", field), val)
+	case "lt":
+		stmt.Where(fmt.Sprintf("%s < ?", field), val)
+	case "lte":
+		stmt.Where(fmt.Sprintf("%s <= ?", field), val)
+	case "neq":
+		stmt.Where(fmt.Sprintf("%s <> ?", field), val)
+	case "like":
+		stmt.Where(fmt.Sprintf("%s like ?", field), val)
+	case "ilike":
+		stmt.Where(fmt.Sprintf("%s ilike ?", field), val)
+	case "in":
+		stmt.Where(fmt.Sprintf("%s in ?", field), val)
+	case "is":
+		stmt.Where(fmt.Sprintf("%s is ?", field), val)
+	case "cs":
+		stmt.Where(fmt.Sprintf("%s @> ?", field), val)
+	case "cd":
+		stmt.Where(fmt.Sprintf("%s <@ ?", field), val)
+	case "ov":
+		stmt.Where(fmt.Sprintf("%s && ?", field), val)
+	case "sl":
+		stmt.Where(fmt.Sprintf("%s<<?", field), val)
+	case "sr":
+		stmt.Where(fmt.Sprintf("%s >> ?", field), val)
+	case "nxr":
+		stmt.Where(fmt.Sprintf("%s &< ?", field), val)
+	case "nxl":
+		stmt.Where(fmt.Sprintf("%s &> ?", field), val)
+	case "adj":
+		stmt.Where(fmt.Sprintf("%s -|- ?", field), val)
+	case "not":
+		stmt.Where(fmt.Sprintf("%s not ?", field), val)
+	default:
+		return ErrUnknownOperator
+	}
+	return nil
+}
+
 func BuildQuery(from string, fields []string, safeFields []string, where map[string]string, order string) (string, []interface{}, error) {
 	if strings.Compare(from, "") == 0 {
 		return "", nil, ErrEmptyFrom
@@ -65,47 +111,8 @@ func BuildQuery(from string, fields []string, safeFields []string, where map[str
 		}
 		op, val := p[0], p[1]
 		k = pgx.Identifier{k}.Sanitize()
-		switch op {
-		case "eq":
-			stmt.Where(fmt.Sprintf("%s = ?", k), val)
-		case "gt":
-			stmt.Where(fmt.Sprintf("%s > ?", k), val)
-		case "gte":
-			stmt.Where(fmt.Sprintf("%s >= ?", k), val)
-		case "lt":
-			stmt.Where(fmt.Sprintf("%s < ?", k), val)
-		case "lte":
-			stmt.Where(fmt.Sprintf("%s <= ?", k), val)
-		case "neq":
-			stmt.Where(fmt.Sprintf("%s <> ?", k), val)
-		case "like":
-			stmt.Where(fmt.Sprintf("%s like ?", k), val)
-		case "ilike":
-			stmt.Where(fmt.Sprintf("%s ilike ?", k), val)
-		case "in":
-			stmt.Where(fmt.Sprintf("%s in ?", k), val)
-		case "is":
-			stmt.Where(fmt.Sprintf("%s is ?", k), val)
-		case "cs":
-			stmt.Where(fmt.Sprintf("%s @> ?", k), val)
-		case "cd":
-			stmt.Where(fmt.Sprintf("%s <@ ?", k), val)
-		case "ov":
-			stmt.Where(fmt.Sprintf("%s && ?", k), val)
-		case "sl":
-			stmt.Where(fmt.Sprintf("%s<<?", k), val)
-		case "sr":
-			stmt.Where(fmt.Sprintf("%s >> ?", k), val)
-		case "nxr":
-			stmt.Where(fmt.Sprintf("%s &< ?", k), val)
-		case "nxl":
-			stmt.Where(fmt.Sprintf("%s &> ?", k), val)
-		case "adj":
-			stmt.Where(fmt.Sprintf("%s -|- ?", k), val)
-		case "not":
-			stmt.Where(fmt.Sprintf("%s not ?", k), val)
-		default:
-			return "", nil, ErrUnknownOperator
+		if err := setWhere(stmt, op, k, val); err != nil {
+			return "", nil, err
 		}
 	}
 

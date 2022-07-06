@@ -31,6 +31,9 @@ linters-settings:
   misspell:
     ignore-words:
       - strat
+  gocyclo:
+    # slowly dial down to 15
+    min-complexity: 22
   goheader:
     template: |-
       Copyright {{year-range}}
