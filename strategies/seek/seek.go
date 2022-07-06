@@ -141,6 +141,9 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	err = db.QueryRow(ctx, sql).Scan(&startDate)
 	if err != nil {
 		log.Error().Err(err).Str("SQL", sql).Msg("could not get starting event_date database table")
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
@@ -154,18 +157,27 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	// get a list of dates to invest in
 	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
 	// build target portfolio
 	targetPortfolio, err := seek.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
 	// Get predicted portfolio
 	predictedPortfolio, err := seek.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
@@ -174,6 +186,9 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 
 	log.Info().Msg("SEEK computed")
 
+	if err := db.Commit(ctx); err != nil {
+		log.Warn().Err(err).Msg("could not commit transaction")
+	}
 	return targetPortfolio, predictedPortfolio, nil
 }
 
