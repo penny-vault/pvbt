@@ -258,7 +258,7 @@ func DynamicWithdrawalRate(mc [][]float64, inflation float64) float64 {
 		f := func(r float64) float64 { return dynamicWithdrawalRate(r, inflation, xx) - final }
 		x0, err := fsolve(f, .05)
 		if err != nil {
-			log.Warn().Err(err).Msg("fsolve error")
+			// if it didn't converge just continue
 			continue
 		}
 		rets[ii] = x0

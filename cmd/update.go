@@ -113,10 +113,6 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				log.Fatal().Err(err).Msg("could not load portfolio from DB")
 			}
-			log.Info().Msg("load transactions from DB")
-			if err := p[0].LoadTransactionsFromDB(); err != nil {
-				log.Panic().Err(err).Msg("could not load transactions from database")
-			}
 			portfolios = append(portfolios, p[0])
 		} else {
 			// load portfolio ids from database
@@ -151,9 +147,7 @@ var updateCmd = &cobra.Command{
 						continue
 					}
 
-					ids := []string{
-						pIDStr,
-					}
+					ids := []string{pIDStr}
 					log.Debug().Str("PortfolioID", pIDStr).Msg("load portfolio from DB")
 					p, err := portfolio.LoadFromDB(ids, u, &dataManager)
 					if err != nil {
@@ -162,14 +156,11 @@ var updateCmd = &cobra.Command{
 						}
 						log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
 					}
-					log.Debug().Str("PortfolioID", pIDStr).Msg("load transactions from DB")
-					if err := p[0].LoadTransactionsFromDB(); err != nil {
-						if err := trx.Rollback(context.Background()); err != nil {
-							log.Error().Err(err).Msg("could not rollback transaction")
-						}
-						log.Panic().Err(err).Msg("could not load transactions from database")
-					}
 					portfolios = append(portfolios, p[0])
+				}
+
+				if err := trx.Commit(context.Background()); err != nil {
+					log.Error().Err(err).Msg("could not commit transaction")
 				}
 			}
 		}
@@ -180,12 +171,14 @@ var updateCmd = &cobra.Command{
 			subLog := log.With().Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
 			subLog.Info().Msg("updating portfolio")
 
+			subLog.Debug().Msg("loading transactions from DB")
 			err = pm.LoadTransactionsFromDB()
 			if err != nil {
 				// NOTE: error is logged by caller
 				continue
 			}
 
+			subLog.Debug().Time("Date", dt).Msg("update transactions")
 			err = pm.UpdateTransactions(context.Background(), dt)
 			if err != nil {
 				// NOTE: error is logged by caller
@@ -193,6 +186,7 @@ var updateCmd = &cobra.Command{
 			}
 
 			// Try and load from the DB
+			subLog.Debug().Msg("load portfolio performance")
 			var perf *portfolio.Performance
 			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
 			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
@@ -207,12 +201,14 @@ var updateCmd = &cobra.Command{
 				}
 			}
 
+			subLog.Debug().Time("Date", dt).Msg("calculate performance through")
 			err = perf.CalculateThrough(context.Background(), pm, dt)
 			if err != nil {
 				subLog.Error().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
 				continue
 			}
 
+			subLog.Debug().Msg("saving portfolio to DB")
 			err = pm.Save(pm.Portfolio.UserID)
 			if err != nil {
 				subLog.Error().Err(err).Msg("error while saving portfolio updates")
@@ -222,6 +218,8 @@ var updateCmd = &cobra.Command{
 			if err != nil {
 				subLog.Error().Err(err).Msg("error while saving portfolio measurements")
 			}
+
+			subLog.Debug().Msg("finished updating portfolio")
 		}
 	},
 }
