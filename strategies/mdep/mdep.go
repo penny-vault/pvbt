@@ -125,6 +125,9 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	err = db.QueryRow(context.Background(), sql).Scan(&startDate)
 	if err != nil {
 		log.Warn().Err(err).Str("SQL", sql).Msg("could not query database")
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
@@ -137,25 +140,38 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	// get a list of dates to invest in
 	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
 	// build target portfolio
 	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
 	// Get predicted portfolio
 	predictedPortfolio, err := mdep.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("could not rollback transaction")
+		}
 		return nil, nil, err
 	}
 
 	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
 	prepopulateDataCache(ctx, coveredPeriods, manager)
 
-	log.Info().Msg("SEEK computed")
+	log.Info().Msg("MDEP computed")
+
+	if err := db.Commit(ctx); err != nil {
+		log.Warn().Err(err).Msg("could not commit transaction")
+	}
 
 	return targetPortfolio, predictedPortfolio, nil
 }
@@ -219,7 +235,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 	lastDateIdx := len(tradeDays) - 1
 	rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
 	if err != nil {
-		log.Error().Err(err).Msg("could not query database for SEEK predicted portfolio")
+		log.Error().Err(err).Msg("could not query database for MDEP predicted portfolio")
 		return nil, err
 	}
 	for rows.Next() {
