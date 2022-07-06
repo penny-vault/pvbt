@@ -250,7 +250,6 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	begin := time.Now()
 	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, v := range covered {
-		log.Debug().Str("Asset", v.Asset).Time("Begin", v.Begin).Time("End", v.End).Msg("pre-load asset EOD")
 		tickerSet[v.Asset] = true
 		if begin.After(v.Begin) {
 			begin = v.Begin
@@ -270,7 +269,7 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	manager.Begin = begin
 	manager.End = end
 
-	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
+	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Strs("Tickers", tickerList).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
 		log.Error().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
 	}

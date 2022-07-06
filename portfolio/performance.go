@@ -586,6 +586,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	log.Info().
 		Time("CalculationPeriod.Start", calculationStart).
 		Time("CalculationPeriod.End", through).
+		Str("PortfolioName", pm.Portfolio.Name).
 		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
 		Msg("calculate performance from")
 
@@ -635,7 +636,9 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		ytdBench = float32(perf.TWRR(dates.DaysToStartOfYear, BENCHMARK))
 	}
 
-	log.Info().Time("First", tradingDays[0]).Time("Last", tradingDays[len(tradingDays)-1]).Msg("Date range for calculate performance")
+	if len(tradingDays) > 0 {
+		log.Info().Time("First", tradingDays[0]).Time("Last", tradingDays[len(tradingDays)-1]).Msg("Date range for calculate performance")
+	}
 
 	for _, date := range tradingDays {
 		tradingDate := date
