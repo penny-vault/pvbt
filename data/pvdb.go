@@ -54,66 +54,33 @@ func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metr
 	}
 }
 
+func getTimezone() *time.Location {
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load timezone")
+	}
+	return tz
+}
+
 // Date provider functions
 
-// TradingDays returns a list of trading days between begin and end at the desired frequency
-func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
-	defer span.End()
-
-	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
-
-	res := make([]time.Time, 0, 252)
-	if end.Before(begin) {
-		subLog.Warn().Msg("end before begin in call to TradingDays")
-		return res
-	}
-
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-	trx, err := database.TrxForUser("pvuser")
-	if err != nil {
-		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
-	}
-
-	searchBegin := begin
-	searchEnd := end
-
+func adjustSearchDates(frequency Frequency, begin, end time.Time) (time.Time, time.Time) {
 	switch frequency {
 	case FrequencyMonthly:
-		searchBegin = searchBegin.AddDate(0, -1, 0)
-		searchEnd = searchEnd.AddDate(0, 1, 0)
+		begin = begin.AddDate(0, -1, 0)
+		end = end.AddDate(0, 1, 0)
 	case FrequencyAnnually:
-		searchBegin = searchBegin.AddDate(-1, 0, 0)
-		searchEnd = searchEnd.AddDate(1, 0, 0)
+		begin = begin.AddDate(-1, 0, 0)
+		end = end.AddDate(1, 0, 0)
 	default:
-		searchBegin = searchBegin.AddDate(0, 0, -7)
-		searchEnd = searchEnd.AddDate(0, 0, 7)
+		begin = begin.AddDate(0, 0, -7)
+		end = end.AddDate(0, 0, 7)
 	}
+	return begin, end
+}
 
-	rows, err := trx.Query(ctx, "SELECT trading_day FROM trading_days WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "database query failed")
-		subLog.Error().Err(err).Stack().Msg("could not query trading days")
-	}
-	for rows.Next() {
-		var dt time.Time
-		if err = rows.Scan(&dt); err != nil {
-			log.Error().Err(err).Stack().Msg("could not SCAN DB result")
-		} else {
-			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
-			res = append(res, dt)
-		}
-	}
-
-	cnt := len(res) - 1
+func filterDays(frequency Frequency, res []time.Time) []time.Time {
 	days := make([]time.Time, 0, 252)
-
-	if len(res) == 0 {
-		span.SetStatus(codes.Error, "no trading days found")
-		log.Panic().Stack().Msg("could not load trading days")
-	}
-
 	for idx, xx := range res[:len(res)-1] {
 		next := res[idx+1]
 
@@ -136,6 +103,59 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 			}
 		}
 	}
+	return days
+}
+
+// TradingDays returns a list of trading days between begin and end at the desired frequency
+func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
+	defer span.End()
+
+	tz := getTimezone()
+
+	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
+
+	res := make([]time.Time, 0, 252)
+	if end.Before(begin) {
+		subLog.Warn().Msg("end before begin in call to TradingDays")
+		return res
+	}
+
+	trx, err := database.TrxForUser("pvuser")
+	if err != nil {
+		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
+		return res
+	}
+
+	searchBegin := begin
+	searchEnd := end
+	searchBegin, searchEnd = adjustSearchDates(frequency, searchBegin, searchEnd)
+
+	rows, err := trx.Query(ctx, "SELECT trading_day FROM trading_days WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "database query failed")
+		subLog.Error().Err(err).Stack().Msg("could not query trading days")
+	}
+
+	for rows.Next() {
+		var dt time.Time
+		if err = rows.Scan(&dt); err != nil {
+			log.Error().Err(err).Stack().Msg("could not SCAN DB result")
+		} else {
+			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
+			res = append(res, dt)
+		}
+	}
+
+	cnt := len(res) - 1
+
+	if len(res) == 0 {
+		span.SetStatus(codes.Error, "no trading days found")
+		log.Panic().Stack().Msg("could not load trading days")
+	}
+
+	days := filterDays(frequency, res)
 
 	daysFiltered := make([]time.Time, 0, 252)
 	lastDay := res[cnt]
@@ -156,7 +176,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("could not commit transaction")
+		log.Warn().Err(err).Msg("could not commit transaction")
 	}
 	return daysFiltered
 }
@@ -167,27 +187,69 @@ func (p *Pvdb) DataType() string {
 	return "security"
 }
 
+// uniqueStrings filters a list of string to only unique values
+func uniqueStrings(strs []string) []string {
+	unique := make(map[string]bool, len(strs))
+	for _, v := range strs {
+		unique[v] = true
+	}
+	uniqStrs := make([]string, len(unique))
+	j := 0
+	for k := range unique {
+		uniqStrs[j] = k
+		j++
+	}
+	return uniqStrs
+}
+
+func buildDataFrame(vals map[int]map[string]float64, symbols []string, tradingDays []time.Time, lastDate time.Time) *dataframe.DataFrame {
+	symbolCnt := len(symbols)
+	series := make([]dataframe.Series, 0, symbolCnt+1)
+	series = append(series, dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: len(tradingDays)}, tradingDays))
+
+	// build series
+	vals2 := make(map[string][]float64, symbolCnt)
+	for _, symbol := range symbols {
+		vals2[symbol] = make([]float64, len(tradingDays))
+	}
+
+	for idx, k := range tradingDays {
+		dayData, ok := vals[k.Year()*1000+k.YearDay()]
+		if !ok {
+			dayData = vals[lastDate.Year()*1000+k.YearDay()]
+		}
+
+		for _, symbol := range symbols {
+			v, ok := dayData[symbol]
+			if !ok {
+				vals2[symbol][idx] = math.NaN()
+			} else {
+				vals2[symbol][idx] = v
+			}
+		}
+	}
+
+	// break arrays out of map in order to build the dataframe
+	for _, symbol := range symbols {
+		arr := vals2[symbol]
+		series = append(series, dataframe.NewSeriesFloat64(symbol, &dataframe.SeriesInit{Capacity: len(arr)}, arr))
+	}
+
+	df := dataframe.NewDataFrame(series...)
+	return df
+}
+
 func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
-
+	tz := getTimezone()
 	subLog := log.With().Strs("Symbols", symbols).Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
 
 	tradingDays := p.TradingDays(ctx, begin, end, frequency)
 
 	// ensure symbols is a unique set
-	uniqueSymbols := make(map[string]bool, len(symbols))
-	for _, v := range symbols {
-		uniqueSymbols[v] = true
-	}
-	symbols = make([]string, len(uniqueSymbols))
-	j := 0
-	for k := range uniqueSymbols {
-		symbols[j] = k
-		j++
-	}
+	symbols = uniqueStrings(symbols)
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		span.RecordError(err)
@@ -224,7 +286,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		return nil, err
 	}
 
-	// build the dataframe
+	// parse database rows
 	vals := make(map[int]map[string]float64, len(symbols))
 
 	var date time.Time
@@ -277,53 +339,24 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		lastDate = date
 	}
 
+	if err := trx.Commit(ctx); err != nil {
+		log.Warn().Err(err).Msg("error committing transaction")
+	}
+
 	// preload splits & divs
 	p.preloadCorporateActions(ctx, symbols, begin)
 
-	series := make([]dataframe.Series, 0, symbolCnt+1)
-	series = append(series, dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: len(tradingDays)}, tradingDays))
-
-	// build series
-	vals2 := make(map[string][]float64, symbolCnt)
-	for _, symbol := range symbols {
-		vals2[symbol] = make([]float64, len(tradingDays))
-	}
-
-	for idx, k := range tradingDays {
-		dayData, ok := vals[k.Year()*1000+k.YearDay()]
-		if !ok {
-			dayData = vals[lastDate.Year()*1000+k.YearDay()]
-		}
-
-		for _, symbol := range symbols {
-			v, ok := dayData[symbol]
-			if !ok {
-				vals2[symbol][idx] = math.NaN()
-			} else {
-				vals2[symbol][idx] = v
-			}
-		}
-	}
-
-	// break arrays out of map in order to build the dataframe
-	for _, symbol := range symbols {
-		arr := vals2[symbol]
-		series = append(series, dataframe.NewSeriesFloat64(symbol, &dataframe.SeriesInit{Capacity: len(arr)}, arr))
-	}
-
-	df := dataframe.NewDataFrame(series...)
-	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("error committing transaction")
-	}
-
-	return df, err
+	// build dataframe
+	df := buildDataFrame(vals, symbols, tradingDays, lastDate)
+	return df, nil
 }
 
 func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, start time.Time) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	tz := getTimezone()
+
 	corporateTickerSet := make([]string, 0, len(tickerSet))
 	for _, ticker := range tickerSet {
 		if _, ok := p.Dividends[ticker]; !ok {
@@ -422,7 +455,8 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 	defer span.End()
 	subLog := log.With().Str("Symbol", symbol).Str("Metric", string(metric)).Time("Before", before).Logger()
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	tz := getTimezone()
+
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		span.RecordError(err)

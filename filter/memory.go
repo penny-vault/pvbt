@@ -168,31 +168,20 @@ func (f *InMemory) GetMeasurements(field1 string, field2 string, since time.Time
 	return meas.MarshalBinary()
 }
 
-func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
-	var periodReturn string
-	switch frequency {
-	case data.FrequencyAnnually:
-		periodReturn = database.TWRRYtd
-	case data.FrequencyMonthly:
-		periodReturn = database.TWRRMtd
-	case data.FrequencyWeekly:
-		periodReturn = database.TWRRWtd
-	case data.FrequencyDaily:
-		periodReturn = database.TWRROneDay
-	default:
-		periodReturn = database.TWRRMtd
+func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, periodReturnField string) portfolio.PortfolioHoldingItemList {
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load time zone")
 	}
-
-	holdingsAtPeriodStart := make([]*portfolio.ReportableHolding, 0)
-	justificationAtPeriodStart := make([]*portfolio.Justification, 0)
 
 	holdings := portfolio.PortfolioHoldingItemList{
 		Items: make([]*portfolio.PortfolioHoldingItem, 0, len(f.Performance.Measurements)),
 	}
 
-	nyc, _ := time.LoadLocation("America/New_York")
+	holdingsAtPeriodStart := make([]*portfolio.ReportableHolding, 0)
+	justificationAtPeriodStart := make([]*portfolio.Justification, 0)
 
-	// filter measurements by where
+	// filter measurements by time
 	var last *portfolio.PerformanceMeasurement
 	added := false
 	for _, meas := range f.Performance.Measurements {
@@ -206,7 +195,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 						Time:          meas.Time,
 						Holdings:      meas.Holdings,
 						Justification: meas.Justification,
-						PercentReturn: getValue(meas, periodReturn),
+						PercentReturn: getValue(meas, periodReturnField),
 						Value:         meas.Value,
 					})
 					added = true
@@ -216,7 +205,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 					Time:          last.Time,
 					Holdings:      holdingsAtPeriodStart,
 					Justification: justificationAtPeriodStart,
-					PercentReturn: getValue(last, periodReturn),
+					PercentReturn: getValue(last, periodReturnField),
 					Value:         last.Value,
 				})
 				holdingsAtPeriodStart = meas.Holdings
@@ -229,7 +218,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 					Time:          last.Time,
 					Holdings:      holdingsAtPeriodStart,
 					Justification: justificationAtPeriodStart,
-					PercentReturn: getValue(last, periodReturn),
+					PercentReturn: getValue(last, periodReturnField),
 					Value:         last.Value,
 				})
 
@@ -244,7 +233,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 					Time:          last.Time,
 					Holdings:      holdingsAtPeriodStart,
 					Justification: justificationAtPeriodStart,
-					PercentReturn: getValue(last, periodReturn),
+					PercentReturn: getValue(last, periodReturnField),
 					Value:         last.Value,
 				})
 
@@ -259,7 +248,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 					Time:          meas.Time,
 					Holdings:      meas.Holdings,
 					Justification: meas.Justification,
-					PercentReturn: getValue(meas, periodReturn),
+					PercentReturn: getValue(meas, periodReturnField),
 					Value:         meas.Value,
 				})
 				added = true
@@ -270,7 +259,7 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 					Time:          last.Time,
 					Holdings:      holdingsAtPeriodStart,
 					Justification: justificationAtPeriodStart,
-					PercentReturn: getValue(last, periodReturn),
+					PercentReturn: getValue(last, periodReturnField),
 					Value:         last.Value,
 				})
 
@@ -289,16 +278,37 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 			Time:          last.Time,
 			Holdings:      holdingsAtPeriodStart,
 			Justification: justificationAtPeriodStart,
-			PercentReturn: getValue(last, periodReturn),
+			PercentReturn: getValue(last, periodReturnField),
 			Value:         last.Value,
 		})
 	}
 
-	// add predicted holding item
+	return holdings
+}
+
+func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
 	nyc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		log.Panic().Err(err).Msg("could not load time zone")
 	}
+
+	var periodReturnField string
+	switch frequency {
+	case data.FrequencyAnnually:
+		periodReturnField = database.TWRRYtd
+	case data.FrequencyMonthly:
+		periodReturnField = database.TWRRMtd
+	case data.FrequencyWeekly:
+		periodReturnField = database.TWRRWtd
+	case data.FrequencyDaily:
+		periodReturnField = database.TWRROneDay
+	default:
+		periodReturnField = database.TWRRMtd
+	}
+
+	holdings := f.filterByTime(frequency, since, periodReturnField)
+
+	// add predicted holding item
 	predicted := f.Portfolio.PredictedAssets
 	switch frequency {
 	case "annually":
@@ -310,7 +320,6 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	}
 
 	holdings.Items = append(holdings.Items, predicted)
-
 	return holdings.MarshalBinary()
 }
 
