@@ -168,20 +168,8 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 
 	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
 
-	var periodReturn string
-	switch frequency {
-	case data.FrequencyAnnually:
-		periodReturn = database.TWRRYtd
-	case data.FrequencyMonthly:
-		periodReturn = database.TWRRMtd
-	case data.FrequencyWeekly:
-		periodReturn = database.TWRRWtd
-	case data.FrequencyDaily:
-		periodReturn = database.TWRROneDay
-	default:
-		periodReturn = database.TWRRMtd
-	}
-	fields := []string{"event_date", "holdings", periodReturn, "justification", "strategy_value"}
+	periodReturnField := getPeriodReturnFieldForFrequency(frequency)
+	fields := []string{"event_date", "holdings", periodReturnField, "justification", "strategy_value"}
 
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
 	where["event_date"] = fmt.Sprintf("gte.%s", since.Format("2006-01-02T15:04:05.000000-0200"))
@@ -194,15 +182,15 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	var querySQL string
 	switch frequency {
 	case data.FrequencyAnnually:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	case data.FrequencyMonthly:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	case data.FrequencyWeekly:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	case data.FrequencyDaily:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	default:
-		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturn, sqlTmp)
+		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	}
 
 	trx, _ := database.TrxForUser(f.UserID)

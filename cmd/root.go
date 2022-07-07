@@ -45,52 +45,21 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
-
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is import-tickers.toml)")
 
-	// PV secret key
-	if err := viper.BindEnv("secret_key", "PV_SECRET"); err != nil {
-		log.Panic().Err(err).Msg("could not bind PV_SECRET")
-	}
-	rootCmd.PersistentFlags().String("secret-key", "", "Secret encryption key")
-	if err := viper.BindPFlag("secret_key", rootCmd.PersistentFlags().Lookup("secret-key")); err != nil {
-		log.Panic().Err(err).Msg("could not bind secret-key")
-	}
+	initSecret()
+	initAuth0()
+	initDatabase()
+	initLogging()
+	initProfile()
+}
 
-	// AUTH0
-	if err := viper.BindEnv("auth0.secret", "AUTH0_SECRET"); err != nil {
-		log.Panic().Err(err).Msg("could not bind PV_SECRET")
-	}
-	rootCmd.PersistentFlags().String("auth0-secret", "", "Auth0 secret")
-	if err := viper.BindPFlag("auth0.secret", rootCmd.PersistentFlags().Lookup("auth0-secret")); err != nil {
-		log.Panic().Err(err).Msg("could not bind auth0-secret")
-	}
+func initProfile() {
+	rootCmd.PersistentFlags().BoolVar(&Profile, "cpu-profile", false, "Run pprof and save in profile.out")
+	rootCmd.PersistentFlags().BoolVar(&Trace, "trace", false, "Trace program execution and save in trace.out")
+}
 
-	if err := viper.BindEnv("auth0.client_id", "AUTH0_CLIENT_ID"); err != nil {
-		log.Panic().Err(err).Msg("could not bind AUTH0_CLIENT_ID")
-	}
-	rootCmd.PersistentFlags().String("auth0-client-id", "", "Auth0 client id")
-	if err := viper.BindPFlag("auth0.client_id", rootCmd.PersistentFlags().Lookup("auth0-client-id")); err != nil {
-		log.Panic().Err(err).Msg("could not bind auth0-client-id")
-	}
-
-	if err := viper.BindEnv("auth0.domain", "AUTH0_DOMAIN"); err != nil {
-		log.Panic().Err(err).Msg("could not bind AUTH0_DOMAIN")
-	}
-	rootCmd.PersistentFlags().String("auth0-domain", "", "Auth0 domain")
-	if err := viper.BindPFlag("auth0.domain", rootCmd.PersistentFlags().Lookup("auth0-domain")); err != nil {
-		log.Panic().Err(err).Msg("could not bind auth0-domain")
-	}
-
-	// Database
-	if err := viper.BindEnv("database.url", "DATABASE_URL"); err != nil {
-		log.Panic().Err(err).Msg("could not bind DATABASE_URL")
-	}
-	rootCmd.PersistentFlags().String("database-url", "", "PostgreSQL connection string")
-	if err := viper.BindPFlag("database.url", rootCmd.PersistentFlags().Lookup("database-url")); err != nil {
-		log.Panic().Err(err).Msg("could not bind database-url")
-	}
-
+func initLogging() {
 	// Logging configuration
 	if err := viper.BindEnv("log.level", "PV_LOG_LEVEL"); err != nil {
 		log.Panic().Err(err).Msg("could not bind PV_LOG_LEVEL")
@@ -131,9 +100,55 @@ func init() {
 	if err := viper.BindPFlag("log.otlp_url", rootCmd.PersistentFlags().Lookup("log-otlp-url")); err != nil {
 		log.Panic().Err(err).Msg("could not bind log-otlp-url")
 	}
+}
 
-	rootCmd.PersistentFlags().BoolVar(&Profile, "cpu-profile", false, "Run pprof and save in profile.out")
-	rootCmd.PersistentFlags().BoolVar(&Trace, "trace", false, "Trace program execution and save in trace.out")
+func initDatabase() {
+	// Database
+	if err := viper.BindEnv("database.url", "DATABASE_URL"); err != nil {
+		log.Panic().Err(err).Msg("could not bind DATABASE_URL")
+	}
+	rootCmd.PersistentFlags().String("database-url", "", "PostgreSQL connection string")
+	if err := viper.BindPFlag("database.url", rootCmd.PersistentFlags().Lookup("database-url")); err != nil {
+		log.Panic().Err(err).Msg("could not bind database-url")
+	}
+}
+
+func initSecret() {
+	// PV secret key
+	if err := viper.BindEnv("secret_key", "PV_SECRET"); err != nil {
+		log.Panic().Err(err).Msg("could not bind PV_SECRET")
+	}
+	rootCmd.PersistentFlags().String("secret-key", "", "Secret encryption key")
+	if err := viper.BindPFlag("secret_key", rootCmd.PersistentFlags().Lookup("secret-key")); err != nil {
+		log.Panic().Err(err).Msg("could not bind secret-key")
+	}
+}
+
+func initAuth0() {
+	// AUTH0
+	if err := viper.BindEnv("auth0.secret", "AUTH0_SECRET"); err != nil {
+		log.Panic().Err(err).Msg("could not bind PV_SECRET")
+	}
+	rootCmd.PersistentFlags().String("auth0-secret", "", "Auth0 secret")
+	if err := viper.BindPFlag("auth0.secret", rootCmd.PersistentFlags().Lookup("auth0-secret")); err != nil {
+		log.Panic().Err(err).Msg("could not bind auth0-secret")
+	}
+
+	if err := viper.BindEnv("auth0.client_id", "AUTH0_CLIENT_ID"); err != nil {
+		log.Panic().Err(err).Msg("could not bind AUTH0_CLIENT_ID")
+	}
+	rootCmd.PersistentFlags().String("auth0-client-id", "", "Auth0 client id")
+	if err := viper.BindPFlag("auth0.client_id", rootCmd.PersistentFlags().Lookup("auth0-client-id")); err != nil {
+		log.Panic().Err(err).Msg("could not bind auth0-client-id")
+	}
+
+	if err := viper.BindEnv("auth0.domain", "AUTH0_DOMAIN"); err != nil {
+		log.Panic().Err(err).Msg("could not bind AUTH0_DOMAIN")
+	}
+	rootCmd.PersistentFlags().String("auth0-domain", "", "Auth0 domain")
+	if err := viper.BindPFlag("auth0.domain", rootCmd.PersistentFlags().Lookup("auth0-domain")); err != nil {
+		log.Panic().Err(err).Msg("could not bind auth0-domain")
+	}
 }
 
 // initConfig reads in config file and ENV variables if set.

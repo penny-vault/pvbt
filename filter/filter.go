@@ -21,6 +21,7 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
@@ -79,4 +80,19 @@ func New(portfolioID string, userID string) Filterable {
 	}
 
 	return &db
+}
+
+func getPeriodReturnFieldForFrequency(frequency data.Frequency) string {
+	switch frequency {
+	case data.FrequencyAnnually:
+		return database.TWRRYtd
+	case data.FrequencyMonthly:
+		return database.TWRRMtd
+	case data.FrequencyWeekly:
+		return database.TWRRWtd
+	case data.FrequencyDaily:
+		return database.TWRROneDay
+	default:
+		return database.TWRRMtd
+	}
 }

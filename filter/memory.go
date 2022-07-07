@@ -19,10 +19,9 @@ import (
 	"math"
 	"time"
 
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
-	"github.com/rs/zerolog/log"
 )
 
 type InMemory struct {
@@ -169,10 +168,7 @@ func (f *InMemory) GetMeasurements(field1 string, field2 string, since time.Time
 }
 
 func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, periodReturnField string) portfolio.PortfolioHoldingItemList {
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		log.Panic().Err(err).Msg("could not load time zone")
-	}
+	tz := common.GetTimezone()
 
 	holdings := portfolio.PortfolioHoldingItemList{
 		Items: make([]*portfolio.PortfolioHoldingItem, 0, len(f.Performance.Measurements)),
@@ -185,21 +181,25 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 	var last *portfolio.PerformanceMeasurement
 	added := false
 	for _, meas := range f.Performance.Measurements {
-		meas.Time = meas.Time.In(nyc)
+		meas.Time = meas.Time.In(tz)
 		added = false
+
+		if meas.Time.Before(since) {
+			last = meas
+			continue
+		}
+
 		switch frequency {
-		case "annually":
+		case data.FrequencyAnnually:
 			if last == nil {
-				if meas.Time.After(since) {
-					holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-						Time:          meas.Time,
-						Holdings:      meas.Holdings,
-						Justification: meas.Justification,
-						PercentReturn: getValue(meas, periodReturnField),
-						Value:         meas.Value,
-					})
-					added = true
-				}
+				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+					Time:          meas.Time,
+					Holdings:      meas.Holdings,
+					Justification: meas.Justification,
+					PercentReturn: getValue(meas, periodReturnField),
+					Value:         meas.Value,
+				})
+				added = true
 			} else if last.Time.Year() != meas.Time.Year() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          last.Time,
@@ -212,7 +212,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 				justificationAtPeriodStart = last.Justification
 				added = true
 			}
-		case "monthly":
+		case data.FrequencyMonthly:
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          last.Time,
@@ -227,7 +227,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 
 				added = true
 			}
-		case "weekly":
+		case data.FrequencyWeekly:
 			if last != nil && meas.Time.Weekday() < last.Time.Weekday() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          last.Time,
@@ -242,17 +242,15 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 
 				added = true
 			}
-		case "daily":
-			if meas.Time.After(since) {
-				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
-					Time:          meas.Time,
-					Holdings:      meas.Holdings,
-					Justification: meas.Justification,
-					PercentReturn: getValue(meas, periodReturnField),
-					Value:         meas.Value,
-				})
-				added = true
-			}
+		case data.FrequencyDaily:
+			holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
+				Time:          meas.Time,
+				Holdings:      meas.Holdings,
+				Justification: meas.Justification,
+				PercentReturn: getValue(meas, periodReturnField),
+				Value:         meas.Value,
+			})
+			added = true
 		default: // monthly
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
@@ -286,26 +284,11 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 	return holdings
 }
 
+// GetHoldings returns holdings at the requested `frequency` after `since`
 func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		log.Panic().Err(err).Msg("could not load time zone")
-	}
+	nyc := common.GetTimezone()
 
-	var periodReturnField string
-	switch frequency {
-	case data.FrequencyAnnually:
-		periodReturnField = database.TWRRYtd
-	case data.FrequencyMonthly:
-		periodReturnField = database.TWRRMtd
-	case data.FrequencyWeekly:
-		periodReturnField = database.TWRRWtd
-	case data.FrequencyDaily:
-		periodReturnField = database.TWRROneDay
-	default:
-		periodReturnField = database.TWRRMtd
-	}
-
+	periodReturnField := getPeriodReturnFieldForFrequency(frequency)
 	holdings := f.filterByTime(frequency, since, periodReturnField)
 
 	// add predicted holding item
@@ -323,11 +306,12 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	return holdings.MarshalBinary()
 }
 
+// GetTransactions after since
 func (f *InMemory) GetTransactions(since time.Time) ([]byte, error) {
 	// filter transactions
 	filtered := make([]*portfolio.Transaction, 0, len(f.Portfolio.Transactions))
 	for _, xx := range f.Portfolio.Transactions {
-		if xx.Date.After(since) || xx.Date.Equal(since) {
+		if !xx.Date.Before(since) {
 			filtered = append(filtered, xx)
 		}
 	}
