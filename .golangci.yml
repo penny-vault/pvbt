@@ -33,7 +33,7 @@ linters-settings:
       - strat
   gocyclo:
     # slowly dial down to 15
-    min-complexity: 22
+    min-complexity: 20
   goheader:
     template: |-
       Copyright {{year-range}}

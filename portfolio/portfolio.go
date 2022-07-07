@@ -543,25 +543,6 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFram
 		isSingleAsset = true
 	}
 
-	// Get price data
-	iterator := target.Series[tickerSeriesIdx].ValuesIterator()
-	assetMap := make(map[string]bool)
-	for {
-		row, val, _ := iterator()
-		if row == nil {
-			break
-		}
-
-		if isSingleAsset {
-			assetMap[val.(string)] = true
-		} else {
-			// it's multi-asset which means a map of tickers
-			for ticker := range val.(map[string]float64) {
-				assetMap[ticker] = true
-			}
-		}
-	}
-
 	// Create transactions
 	// t3 := time.Now()
 	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})

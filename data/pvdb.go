@@ -54,14 +54,6 @@ func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metr
 	}
 }
 
-func getTimezone() *time.Location {
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		log.Panic().Err(err).Msg("could not load timezone")
-	}
-	return tz
-}
-
 // Date provider functions
 
 func adjustSearchDates(frequency Frequency, begin, end time.Time) (time.Time, time.Time) {
@@ -111,7 +103,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
-	tz := getTimezone()
+	tz := common.GetTimezone()
 
 	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
 
@@ -242,7 +234,7 @@ func buildDataFrame(vals map[int]map[string]float64, symbols []string, tradingDa
 func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
-	tz := getTimezone()
+	tz := common.GetTimezone()
 	subLog := log.With().Strs("Symbols", symbols).Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
 
 	tradingDays := p.TradingDays(ctx, begin, end, frequency)
@@ -355,7 +347,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
-	tz := getTimezone()
+	tz := common.GetTimezone()
 
 	corporateTickerSet := make([]string, 0, len(tickerSet))
 	for _, ticker := range tickerSet {
@@ -455,7 +447,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 	defer span.End()
 	subLog := log.With().Str("Symbol", symbol).Str("Metric", string(metric)).Time("Before", before).Logger()
 
-	tz := getTimezone()
+	tz := common.GetTimezone()
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {

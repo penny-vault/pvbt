@@ -180,3 +180,11 @@ func SetupLogging() {
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 
 }
+
+func GetTimezone() *time.Location {
+	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load timezone")
+	}
+	return tz
+}
