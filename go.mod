@@ -51,7 +51,7 @@ require (
 	github.com/pashagolub/pgxmock v1.6.0
 	github.com/rs/zerolog v1.27.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.7.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.8.0
 )
 
 require (
