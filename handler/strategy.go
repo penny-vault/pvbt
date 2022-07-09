@@ -59,6 +59,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
+	benchmark := c.Query("benchmark", "VFINX")
 
 	subLog := log.With().Str("Shortcode", shortcode).Str("StartDateQueryStr", startDateStr).Str("EndDateQueryStr", endDateStr).Logger()
 
@@ -124,12 +125,11 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	b, err := backtest.New(ctx, shortcode, params, startDate, endDate, &manager)
+	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate, &manager)
 	if err != nil {
 		if err.Error() == "strategy not found" {
 			return fiber.ErrNotFound
 		}
-
 		return fiber.ErrBadRequest
 	}
 

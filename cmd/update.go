@@ -90,7 +90,7 @@ var updateCmd = &cobra.Command{
 		for _, strat := range strategies.StrategyList {
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
 				log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
-				if err := createStrategyPortfolio(strat, &dataManager); err != nil {
+				if err := createStrategyPortfolio(strat, dt, &dataManager); err != nil {
 					os.Exit(1)
 				}
 			}
@@ -224,9 +224,8 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-func createStrategyPortfolio(strat *strategy.Info, manager *data.Manager) error {
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-
+func createStrategyPortfolio(strat *strategy.Info, endDate time.Time, manager *data.Manager) error {
+	tz := common.GetTimezone()
 	subLog := log.With().Str("Shortcode", strat.Shortcode).Str("StrategyName", strat.Name).Logger()
 
 	// build arguments
@@ -254,7 +253,7 @@ func createStrategyPortfolio(strat *strategy.Info, manager *data.Manager) error 
 		return err
 	}
 
-	b, err := backtest.New(context.Background(), strat.Shortcode, params, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), time.Now(), manager)
+	b, err := backtest.New(context.Background(), strat.Shortcode, params, strat.Benchmark, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), endDate, manager)
 	if err != nil {
 		subLog.Warn().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err
