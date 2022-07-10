@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -593,7 +594,10 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	// Get the days performance should be calculated on
 	today := time.Now()
 	prevDate := prevMeasurement.Time
-	tradingDays := dataManager.TradingDays(ctx, calculationStart, through, data.FrequencyDaily)
+	tradingDays, err := dataManager.TradingDays(ctx, calculationStart, through, data.FrequencyDaily)
+	if err != nil {
+		return err
+	}
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
@@ -709,6 +713,8 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 		perf.updateAnnualPerformance(prevDate, date, prevMeasurement, ytdBench)
 		ytdBench = float32(perf.TWRR(dates.DaysToStartOfYear, BENCHMARK))
+
+		fmt.Printf("%s\t%.2f\t%.2f\n", measurement.Time.Format("2006-01-02"), measurement.StrategyGrowthOf10K, measurement.Value)
 
 		prevMeasurement = &measurement
 		prevDate = date

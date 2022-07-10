@@ -138,7 +138,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
-	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
+	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
