@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"strings"
 	"time"
 
