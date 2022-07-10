@@ -1109,6 +1109,7 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 		"name",
 		"strategy_shortcode",
 		"arguments",
+		"benchmark",
 		"start_date",
 		"end_date",
 		"holdings",
@@ -1127,17 +1128,19 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 		$8,
 		$9,
 		$10,
-		$11
+		$11,
+		$12
 	) ON CONFLICT ON CONSTRAINT portfolios_pkey
 	DO UPDATE SET
 		name=$2,
 		strategy_shortcode=$3,
 		arguments=$4,
-		start_date=$5,
-		end_date=$6,
-		holdings=$7,
-		notifications=$8,
-		predicted_bytes=$11`
+		benchmark=$5,
+		start_date=$6,
+		end_date=$7,
+		holdings=$8,
+		notifications=$9,
+		predicted_bytes=$12`
 	holdings, err := json.Marshal(pm.holdings)
 	if err != nil {
 		subLog.Error().Err(err).Msg("failed to marshal holdings")
@@ -1152,7 +1155,7 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 		subLog.Error().Err(err).Msg("Could not marshal predicted bytes")
 	}
 	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
-		p.StrategyArguments, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
+		p.StrategyArguments, p.Benchmark, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
 	if err != nil {
 		subLog.Error().Err(err).Str("Query", portfolioSQL).Msg("failed to save portfolio")
 		if err := trx.Rollback(context.Background()); err != nil {
