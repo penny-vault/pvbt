@@ -114,25 +114,25 @@ func (b *Backtest) Save(userID string, permanent bool) {
 	start := time.Now()
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
-		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("unable to get database transaction for user")
+		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("unable to get database transaction for user")
 		return
 	}
 
 	err = b.PortfolioModel.SaveWithTransaction(trx, userID, permanent)
 	if err != nil {
-		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save portfolio")
+		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save portfolio")
 		return
 	}
 
 	err = b.Performance.SaveWithTransaction(trx, userID)
 	if err != nil {
-		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save performance measurement")
+		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save performance measurement")
 		return
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
-		log.Error().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not commit database transaction")
+		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not commit database transaction")
 		return
 	}
 
@@ -140,7 +140,7 @@ func (b *Backtest) Save(userID string, permanent bool) {
 	saveDur := stop.Sub(start).Round(time.Millisecond)
 
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to save performance measurements to DB")
+		log.Warn().Stack().Err(err).Msg("failed to save performance measurements to DB")
 		return
 	}
 

@@ -191,7 +191,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		for _, jj := range periods {
 			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
 			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
-				log.Error().Err(err).Msg("could not calculate momentum")
+				log.Error().Stack().Err(err).Msg("could not calculate momentum")
 			}
 		}
 	}
@@ -200,7 +200,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		ticker := adm.inTickers[ii]
 		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
 		if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
-			log.Error().Err(err).Msg("could not calculate score")
+			log.Error().Stack().Err(err).Msg("could not calculate score")
 		}
 	}
 
@@ -321,33 +321,33 @@ func (adm *AcceleratingDualMomentum) writeDataFramesToCSV() {
 	// momentum
 	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Error().Err(err).Str("FileName", "adm_momentum.csv").Msg("error opening file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
-		log.Error().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
 		return
 	}
 
 	// prices
 	fh, err = os.OpenFile("adm_prices.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Error().Err(err).Str("FileName", "adm_prices.csv").Msg("error opening file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
-		log.Error().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
 		return
 	}
 
 	// riskfree
 	fh, err = os.OpenFile("adm_riskfreerate.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
-		log.Error().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error opening file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error opening file")
 		return
 	}
 	if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
-		log.Error().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
+		log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
 		return
 	}
 }

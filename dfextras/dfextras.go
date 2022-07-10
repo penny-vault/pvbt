@@ -522,7 +522,7 @@ func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataf
 	for ii := range dfs {
 		newDf, err := TimeAlign(ctx, dfs[ii], startTime, endTime)
 		if err != nil {
-			log.Error().Err(err).Msg("time align failed")
+			log.Error().Stack().Err(err).Msg("time align failed")
 			return nil, err
 		}
 
@@ -602,7 +602,7 @@ func Split(ctx context.Context, df *dataframe.DataFrame, cols ...string) (*dataf
 		}
 		df1 = append(df1, df.Series[colIdx])
 		if err := df.RemoveSeries(colName); err != nil {
-			log.Warn().Err(err).Int("ColIdx", colIdx).Str("ColName", colName).Msg("could not remove named series")
+			log.Warn().Stack().Err(err).Int("ColIdx", colIdx).Str("ColName", colName).Msg("could not remove named series")
 		}
 	}
 

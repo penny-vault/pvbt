@@ -54,37 +54,37 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 
 		tokenBytes, err := hex.DecodeString(token)
 		if err != nil {
-			log.Warn().Err(err).Msg("could not hex decode apiKey")
+			log.Warn().Stack().Err(err).Msg("could not hex decode apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("could not hex decode apikey")
 		}
 
 		unencryptedBytes, err := common.Decrypt(tokenBytes)
 		if err != nil {
-			log.Warn().Err(err).Msg("could not unencrypt apiKey")
+			log.Warn().Stack().Err(err).Msg("could not unencrypt apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 
 		buf := bytes.NewBuffer(unencryptedBytes)
 		zr, err := gzip.NewReader(buf)
 		if err != nil {
-			log.Warn().Err(err).Msg("could not ungzip apiKey")
+			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 
 		jsonBytes := make([]byte, 0, 100)
 		if _, err := zr.Read(jsonBytes); err != nil {
-			log.Warn().Err(err).Msg("could not ungzip apiKey")
+			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 
 		if err := zr.Close(); err != nil {
-			log.Warn().Err(err).Msg("could not ungzip apiKey")
+			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 
 		var v apiToken
 		if err := json.Unmarshal(jsonBytes, &v); err != nil {
-			log.Warn().Err(err).Msg("could not unmarshal json from apikey - maybe apikey is corrupt?")
+			log.Warn().Stack().Err(err).Msg("could not unmarshal json from apikey - maybe apikey is corrupt?")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 		c.Locals("userID", v.userID)
@@ -111,7 +111,7 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 		if tiingoToken, ok := jwtToken.Get(`https://pennyvault.com/tiingo_token`); ok {
 			c.Locals("tiingoToken", tiingoToken.(string))
 		} else {
-			log.Warn().Msg("jwt token does not have expected claim: https://pennyvault.com/tiingo_token")
+			log.Warn().Stack().Msg("jwt token does not have expected claim: https://pennyvault.com/tiingo_token")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid jwt token")
 		}
 
@@ -120,7 +120,7 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 }
 
 func jwtError(c *fiber.Ctx, err error) error {
-	log.Warn().Err(err).Msg("jwt authentication error")
+	log.Warn().Stack().Err(err).Msg("jwt authentication error")
 
 	if err.Error() == "Missing or malformed JWT" {
 		return c.Status(fiber.StatusBadRequest).

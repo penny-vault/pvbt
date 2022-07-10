@@ -39,7 +39,7 @@ func getPortfolio(portfolioID string) *portfolio.Portfolio {
 		port := portfolio.Portfolio{}
 		_, err := port.Unmarshal(raw)
 		if err != nil {
-			subLog.Error().Err(err).Msg("failed to deserialize portfolio")
+			subLog.Error().Stack().Err(err).Msg("failed to deserialize portfolio")
 			return nil
 		}
 		return &port
@@ -54,7 +54,7 @@ func getPerformance(portfolioID string) *portfolio.Performance {
 		perf := portfolio.Performance{}
 		_, err := perf.Unmarshal(raw)
 		if err != nil {
-			subLog.Error().Err(err).Msg("failed to deserialize portfolio")
+			subLog.Error().Stack().Err(err).Msg("failed to deserialize portfolio")
 			return nil
 		}
 		return &perf

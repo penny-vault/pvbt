@@ -87,7 +87,7 @@ func LoadMarketHolidays() error {
 
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback tranasaction")
+			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return err
 	}
@@ -107,7 +107,7 @@ func LoadMarketHolidays() error {
 	}
 
 	if err := trx.Commit(context.Background()); err != nil {
-		log.Error().Err(err).Msg("could not commit transaction")
+		log.Error().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return nil
 }

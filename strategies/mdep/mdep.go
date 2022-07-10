@@ -115,7 +115,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	// Get database transaction
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
-		log.Warn().Err(err).Msg("could not get database transaction")
+		log.Warn().Stack().Err(err).Msg("could not get database transaction")
 		return nil, nil, err
 	}
 
@@ -124,9 +124,9 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	sql := "SELECT min(event_date) FROM zacks_financials"
 	err = db.QueryRow(context.Background(), sql).Scan(&startDate)
 	if err != nil {
-		log.Warn().Err(err).Str("SQL", sql).Msg("could not query database")
+		log.Warn().Stack().Err(err).Str("SQL", sql).Msg("could not query database")
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -141,7 +141,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -150,7 +150,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -159,7 +159,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	predictedPortfolio, err := mdep.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -170,7 +170,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	log.Info().Msg("MDEP computed")
 
 	if err := db.Commit(ctx); err != nil {
-		log.Warn().Err(err).Msg("could not commit transaction")
+		log.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 
 	return targetPortfolio, predictedPortfolio, nil
@@ -190,7 +190,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 		cnt := 0
 		rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, mdep.NumHoldings)
 		if err != nil {
-			log.Error().Err(err).Msg("could not query database for portfolio")
+			log.Error().Stack().Err(err).Msg("could not query database for portfolio")
 			return nil, err
 		}
 		for rows.Next() {
@@ -198,7 +198,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 			var ticker string
 			err := rows.Scan(&ticker)
 			if err != nil {
-				log.Error().Err(err).Msg("could not scan result")
+				log.Error().Stack().Err(err).Msg("could not scan result")
 				return nil, err
 			}
 			targetMap[ticker] = 0.0
@@ -235,12 +235,12 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 	lastDateIdx := len(tradeDays) - 1
 	rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
 	if err != nil {
-		log.Error().Err(err).Msg("could not query database for MDEP predicted portfolio")
+		log.Error().Stack().Err(err).Msg("could not query database for MDEP predicted portfolio")
 		return nil, err
 	}
 	for rows.Next() {
 		if err := rows.Scan(&ticker); err != nil {
-			log.Error().Err(err).Msg("could not scan rows")
+			log.Error().Stack().Err(err).Msg("could not scan rows")
 			return nil, err
 		}
 		predictedTarget[ticker] = 1.0 / float64(mdep.NumHoldings)
@@ -287,7 +287,7 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 
 	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Strs("Tickers", tickerList).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
-		log.Error().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+		log.Error().Stack().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
 	}
 	fmt.Println("finished database query")
 }

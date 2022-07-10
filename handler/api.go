@@ -47,7 +47,7 @@ func APIKey(c *fiber.Ctx) error {
 
 	jsonPVToken, err := json.Marshal(pvToken)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not encode pvToken")
+		log.Warn().Stack().Err(err).Msg("could not encode pvToken")
 		return fiber.ErrBadRequest
 	}
 
@@ -56,19 +56,19 @@ func APIKey(c *fiber.Ctx) error {
 	zw := gzip.NewWriter(&buf)
 	_, err = zw.Write(jsonPVToken)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not gzip data")
+		log.Warn().Stack().Err(err).Msg("could not gzip data")
 		return fiber.ErrInternalServerError
 	}
 
 	if err := zw.Close(); err != nil {
-		log.Warn().Err(err).Msg("could not close gzipper")
+		log.Warn().Stack().Err(err).Msg("could not close gzipper")
 		return fiber.ErrInternalServerError
 	}
 
 	// encrypt it
 	encryptedToken, err := common.Encrypt(buf.Bytes())
 	if err != nil {
-		log.Warn().Err(err).Msg("could not encrypt data")
+		log.Warn().Stack().Err(err).Msg("could not encrypt data")
 		return fiber.ErrBadRequest
 	}
 
@@ -89,7 +89,7 @@ func Ping(c *fiber.Ctx) error {
 	var response PingResponse
 	now, err := time.Now().MarshalText()
 	if err != nil {
-		log.Error().Err(err).Msg("error while getting time in ping")
+		log.Error().Stack().Err(err).Msg("error while getting time in ping")
 		response = PingResponse{
 			Status:  "error",
 			Message: err.Error(),
@@ -117,13 +117,13 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 
 	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
 	if err != nil {
-		subLog.Warn().Err(err).Msg("could not load nyc timezone")
+		subLog.Warn().Stack().Err(err).Msg("could not load nyc timezone")
 		return fiber.ErrInternalServerError
 	}
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {
-		subLog.Error().Err(err).Msg("cannot parse start date query parameter")
+		subLog.Error().Stack().Err(err).Msg("cannot parse start date query parameter")
 		return fiber.ErrNotAcceptable
 	}
 
@@ -135,7 +135,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		var err error
 		endDate, err = time.ParseInLocation("2006-01-02", endDateStr, tz)
 		if err != nil {
-			subLog.Error().Err(err).Msg("cannot parse end date query parameter")
+			subLog.Error().Stack().Err(err).Msg("cannot parse end date query parameter")
 			return fiber.ErrNotAcceptable
 		}
 	}
@@ -160,7 +160,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 
 	snapToStart, err := strconv.ParseBool(c.Query("snapToStart", "true"))
 	if err != nil {
-		subLog.Warn().Int("StatusCode", fiber.ErrBadRequest.Code).Err(err).Str("SnapToStart", c.Query("snapToStart")).Str("Uri", "/v1/benchmark").Msg("/v1/benchmark called with invalid snapToStart")
+		subLog.Warn().Stack().Int("StatusCode", fiber.ErrBadRequest.Code).Err(err).Str("SnapToStart", c.Query("snapToStart")).Str("Uri", "/v1/benchmark").Msg("/v1/benchmark called with invalid snapToStart")
 		return fiber.ErrBadRequest
 	}
 

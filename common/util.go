@@ -67,19 +67,19 @@ func ArrToUpper(arr []string) {
 func Encrypt(data []byte) ([]byte, error) {
 	key, err := hex.DecodeString(viper.GetString("secret_key"))
 	if err != nil {
-		log.Error().Err(err).Msg("could not unhexlify PV_SECRET")
+		log.Error().Stack().Err(err).Msg("could not unhexlify PV_SECRET")
 		return nil, err
 	}
 
 	block, _ := aes.NewCipher(key)
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		log.Error().Err(err).Msg("could not create cipher")
+		log.Error().Stack().Err(err).Msg("could not create cipher")
 		return nil, err
 	}
 	nonce := make([]byte, gcm.NonceSize())
 	if _, err = io.ReadFull(rand.Reader, nonce); err != nil {
-		log.Error().Err(err).Msg("could not create nonce")
+		log.Error().Stack().Err(err).Msg("could not create nonce")
 		return nil, err
 	}
 	ciphertext := gcm.Seal(nonce, nonce, data, nil)
@@ -90,23 +90,23 @@ func Encrypt(data []byte) ([]byte, error) {
 func Decrypt(data []byte) ([]byte, error) {
 	key, err := hex.DecodeString(viper.GetString("secret_key"))
 	if err != nil {
-		log.Error().Err(err).Msg("could not unhexlify PV_SECRET")
+		log.Error().Stack().Err(err).Msg("could not unhexlify PV_SECRET")
 		return nil, err
 	}
 	block, err := aes.NewCipher(key)
 	if err != nil {
-		log.Error().Err(err).Msg("could not create cipher")
+		log.Error().Stack().Err(err).Msg("could not create cipher")
 	}
 	gcm, err := cipher.NewGCM(block)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not unencrypt data")
+		log.Warn().Stack().Err(err).Msg("could not unencrypt data")
 		return nil, err
 	}
 	nonceSize := gcm.NonceSize()
 	nonce, ciphertext := data[:nonceSize], data[nonceSize:]
 	plaintext, err := gcm.Open(nil, nonce, ciphertext, nil)
 	if err != nil {
-		log.Warn().Err(err).Msg("could not read unencryptd data")
+		log.Warn().Stack().Err(err).Msg("could not read unencryptd data")
 		return nil, err
 	}
 	return plaintext, nil
@@ -178,7 +178,6 @@ func SetupLogging() {
 
 	// setup stack marshaler
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-
 }
 
 func GetTimezone() *time.Location {

@@ -62,12 +62,12 @@ func Register(strategyPkg string, factory strategy.Factory) {
 	subLog := log.With().Str("FileName", fn).Logger()
 	file, err := resources.Open(fn)
 	if err != nil {
-		subLog.Error().Err(err).Msg("failed to open file")
+		subLog.Error().Stack().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
 	doc, err := ioutil.ReadAll(file)
 	if err != nil {
-		subLog.Error().Err(err).Msg("failed to read file")
+		subLog.Error().Stack().Err(err).Msg("failed to read file")
 	}
 	longDescription := string(doc)
 
@@ -75,18 +75,18 @@ func Register(strategyPkg string, factory strategy.Factory) {
 	fn = fmt.Sprintf("%s/strategy.toml", strategyPkg)
 	file, err = resources.Open(fn)
 	if err != nil {
-		subLog.Error().Err(err).Msg("failed to open file")
+		subLog.Error().Stack().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
 	doc, err = ioutil.ReadAll(file)
 	if err != nil {
-		subLog.Error().Err(err).Msg("failed to read file")
+		subLog.Error().Stack().Err(err).Msg("failed to read file")
 	}
 
 	var strat strategy.Info
 	err = toml.Unmarshal(doc, &strat)
 	if err != nil {
-		subLog.Error().Err(err).Msg("failed to parse toml file")
+		subLog.Error().Stack().Err(err).Msg("failed to parse toml file")
 	}
 
 	strat.LongDescription = longDescription
@@ -112,11 +112,11 @@ func LoadStrategyMetricsFromDb() {
 		s := strategy.Metrics{}
 		err = row.Scan(&s.ID, &s.CagrThreeYr, &s.CagrFiveYr, &s.CagrTenYr, &s.StdDev, &s.DownsideDeviation, &s.MaxDrawDown, &s.AvgDrawDown, &s.SharpeRatio, &s.SortinoRatio, &s.UlcerIndex, &s.YTDReturn, &s.CagrSinceInception)
 		if err != nil {
-			log.Warn().Err(err).
+			log.Warn().Stack().Err(err).
 				Str("Strategy", strat.Shortcode).
 				Msg("failed to lookup strategy portfolio in database")
 			if err := trx.Rollback(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not rollback transaction")
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			continue
 		}
@@ -138,9 +138,9 @@ func LoadStrategyMetricsFromDb() {
 		StrategyMetricsMap[strat.Shortcode] = s
 		strat.Metrics = s
 		if err := trx.Commit(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not commit trx to database")
+			log.Error().Stack().Err(err).Msg("could not commit trx to database")
 			if err := trx.Rollback(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not rollback transactions")
+				log.Error().Stack().Err(err).Msg("could not rollback transactions")
 			}
 		}
 	}

@@ -70,15 +70,15 @@ var purgeCmd = &cobra.Command{
 			subLog := log.With().Str("User", u).Logger()
 			trx, err := database.TrxForUser(u)
 			if err != nil {
-				subLog.Error().Err(err).Msg("could not get database transaction")
+				subLog.Error().Stack().Err(err).Msg("could not get database transaction")
 			}
 
 			var cnt int64
 			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
 			if err != nil {
-				subLog.Error().Err(err).Msg("could not get expired portfolio count")
+				subLog.Error().Stack().Err(err).Msg("could not get expired portfolio count")
 				if err := trx.Rollback(context.Background()); err != nil {
-					log.Error().Err(err).Msg("could not rollback transaction")
+					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 
 				continue
@@ -88,9 +88,9 @@ var purgeCmd = &cobra.Command{
 
 			_, err = trx.Exec(context.Background(), "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
 			if err != nil {
-				subLog.Error().Err(err).Msg("could not delete portfolios")
+				subLog.Error().Stack().Err(err).Msg("could not delete portfolios")
 				if err := trx.Rollback(context.Background()); err != nil {
-					log.Error().Err(err).Msg("could not rollback transaction")
+					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 
 				continue
@@ -98,7 +98,7 @@ var purgeCmd = &cobra.Command{
 
 			err = trx.Commit(context.Background())
 			if err != nil {
-				subLog.Error().Err(err).Msg("could not delete portfolios")
+				subLog.Error().Stack().Err(err).Msg("could not delete portfolios")
 			}
 		}
 	},

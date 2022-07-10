@@ -50,7 +50,7 @@ var pool PgxIface
 
 func createUser(userID string) error {
 	if userID == "" {
-		log.Error().Msg("userID cannot be an empty string")
+		log.Error().Stack().Msg("userID cannot be an empty string")
 		return ErrEmptyUserID
 	}
 
@@ -59,16 +59,16 @@ func createUser(userID string) error {
 
 	trx, err := pool.Begin(context.Background())
 	if err != nil {
-		subLog.Error().Err(err).Msg("could not create new transaction")
+		subLog.Error().Stack().Err(err).Msg("could not create new transaction")
 		return err
 	}
 
 	// Make sure the current role is pvapi
 	_, err = trx.Exec(context.Background(), "SET ROLE pvapi")
 	if err != nil {
-		subLog.Error().Err(err).Msg("could not switch to pvapi role")
+		subLog.Error().Stack().Err(err).Msg("could not switch to pvapi role")
 		if err := trx.Rollback(context.Background()); err != nil {
-			subLog.Error().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return err
 	}
@@ -81,9 +81,9 @@ func createUser(userID string) error {
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
-			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
-		subLog.Error().Err(err).Str("Query", sql).Msg("failed to create role")
+		subLog.Error().Stack().Err(err).Str("Query", sql).Msg("failed to create role")
 		return err
 	}
 
@@ -94,18 +94,18 @@ func createUser(userID string) error {
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
-			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
-		subLog.Error().Err(err).Str("Query", sql).Msg("failed to grant privileges to role")
+		subLog.Error().Stack().Err(err).Str("Query", sql).Msg("failed to grant privileges to role")
 		return err
 	}
 
 	err = trx.Commit(context.Background())
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
-			subLog.Error().Err(err).Str("Query", sql).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
-		subLog.Error().Err(err).Msg("failed to commit changes")
+		subLog.Error().Stack().Err(err).Msg("failed to commit changes")
 		return err
 	}
 
@@ -122,11 +122,11 @@ func Connect() error {
 	var err error
 	myPool, err := pgxpool.Connect(context.Background(), viper.GetString("database.url"))
 	if err != nil {
-		log.Error().Err(err).Msg("could not connect to pool")
+		log.Error().Stack().Err(err).Msg("could not connect to pool")
 		return err
 	}
 	if err = myPool.Ping(context.Background()); err != nil {
-		log.Error().Err(err).Msg("could not ping database server")
+		log.Error().Stack().Err(err).Msg("could not ping database server")
 		return err
 	}
 	pool = myPool
@@ -150,14 +150,14 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 	_, err = trx.Exec(context.Background(), sql)
 	if err != nil {
 		// user doesn't exist -- create it
-		subLog.Warn().Err(err).Msg("role does not exist")
+		subLog.Warn().Stack().Err(err).Msg("role does not exist")
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			return nil, err
 		}
 		err = createUser(userID)
 		if err != nil {
-			log.Error().Err(err).Msg("could not create user")
+			log.Error().Stack().Err(err).Msg("could not create user")
 			return nil, err
 		}
 		return TrxForUser(userID)
@@ -182,9 +182,9 @@ func GetUsers() ([]string, error) {
 	SELECT oid::regrole::text AS rolename FROM cte;`
 	rows, err := trx.Query(context.Background(), sql, "pvapi")
 	if err != nil {
-		log.Warn().Err(err).Str("Query", sql).Msg("get list of database roles failed")
+		log.Warn().Stack().Err(err).Str("Query", sql).Msg("get list of database roles failed")
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback tranasaction")
+			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func GetUsers() ([]string, error) {
 		var roleName string
 		err := rows.Scan(&roleName)
 		if err != nil {
-			log.Warn().Err(err).Str("Query", sql).Msg("GetUser scan failed")
+			log.Warn().Stack().Err(err).Str("Query", sql).Msg("GetUser scan failed")
 			continue
 		}
 
@@ -207,9 +207,9 @@ func GetUsers() ([]string, error) {
 
 	err = rows.Err()
 	if err != nil {
-		log.Warn().Err(err).Str("Query", sql).Msg("GetUser query read failed")
+		log.Warn().Stack().Err(err).Str("Query", sql).Msg("GetUser query read failed")
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback tranasaction")
+			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
 	}

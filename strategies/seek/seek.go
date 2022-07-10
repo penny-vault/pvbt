@@ -131,7 +131,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	// Get database transaction
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
-		log.Error().Err(err).Msg("could not start database transaction")
+		log.Error().Stack().Err(err).Msg("could not start database transaction")
 		return nil, nil, err
 	}
 
@@ -140,9 +140,9 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	sql := "SELECT min(event_date) FROM seeking_alpha"
 	err = db.QueryRow(ctx, sql).Scan(&startDate)
 	if err != nil {
-		log.Error().Err(err).Str("SQL", sql).Msg("could not get starting event_date database table")
+		log.Error().Stack().Err(err).Str("SQL", sql).Msg("could not get starting event_date database table")
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -158,7 +158,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -167,7 +167,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	targetPortfolio, err := seek.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -176,7 +176,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	predictedPortfolio, err := seek.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -187,7 +187,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	log.Info().Msg("SEEK computed")
 
 	if err := db.Commit(ctx); err != nil {
-		log.Warn().Err(err).Msg("could not commit transaction")
+		log.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return targetPortfolio, predictedPortfolio, nil
 }
@@ -202,12 +202,12 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	lastDateIdx := len(tradeDays) - 1
 	rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
 	if err != nil {
-		log.Error().Err(err).Msg("could not query database for SEEK predicted portfolio")
+		log.Error().Stack().Err(err).Msg("could not query database for SEEK predicted portfolio")
 		return nil, err
 	}
 	for rows.Next() {
 		if err := rows.Scan(&ticker); err != nil {
-			log.Error().Err(err).Msg("could not scan rows")
+			log.Error().Stack().Err(err).Msg("could not scan rows")
 			return nil, err
 		}
 		predictedTarget[ticker] = 1.0 / float64(seek.NumHoldings)
@@ -236,7 +236,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 		cnt := 0
 		rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, seek.NumHoldings)
 		if err != nil {
-			log.Error().Err(err).Msg("could not query database for portfolio")
+			log.Error().Stack().Err(err).Msg("could not query database for portfolio")
 			return nil, err
 		}
 		for rows.Next() {
@@ -244,7 +244,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 			var ticker string
 			err := rows.Scan(&ticker)
 			if err != nil {
-				log.Error().Err(err).Msg("could not scan result")
+				log.Error().Stack().Err(err).Msg("could not scan result")
 				return nil, err
 			}
 			targetMap[ticker] = 0.0
@@ -303,7 +303,7 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 
 	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
-		log.Error().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+		log.Error().Stack().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
 	}
 	fmt.Println("finished database query")
 }

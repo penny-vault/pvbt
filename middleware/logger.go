@@ -81,9 +81,9 @@ func NewLogger() fiber.Handler {
 		case code >= fiber.StatusMultipleChoices && code < fiber.StatusBadRequest:
 			subLog.Info().Msg("Forward HTTP request")
 		case code >= fiber.StatusBadRequest && code < fiber.StatusInternalServerError:
-			subLog.Warn().Msg("Bad HTTP request")
+			subLog.Warn().Stack().Msg("Bad HTTP request")
 		default:
-			subLog.Error().Msg("Internal Server Error")
+			subLog.Error().Stack().Msg("Internal Server Error")
 		}
 
 		return nil
