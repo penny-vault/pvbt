@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"os"
 	"strings"
 	"time"
 
@@ -91,7 +90,7 @@ var updateCmd = &cobra.Command{
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
 				log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
 				if err := createStrategyPortfolio(strat, dt, &dataManager); err != nil {
-					os.Exit(1)
+					log.Panic().Err(err).Msg("could not create portfolio")
 				}
 			}
 		}
