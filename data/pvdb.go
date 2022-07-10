@@ -35,6 +35,8 @@ import (
 
 var (
 	ErrUnsupportedMetric = errors.New("unsupported metric")
+	ErrInvalidTimeRange  = errors.New("start must be before end")
+	ErrNoTradingDays     = errors.New("no trading days available")
 )
 
 type Pvdb struct {
@@ -99,7 +101,7 @@ func filterDays(frequency Frequency, res []time.Time) []time.Time {
 }
 
 // TradingDays returns a list of trading days between begin and end at the desired frequency
-func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time {
+func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) ([]time.Time, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
@@ -110,13 +112,13 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
 		subLog.Warn().Msg("end before begin in call to TradingDays")
-		return res
+		return res, ErrInvalidTimeRange
 	}
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
-		return res
+		return res, err
 	}
 
 	searchBegin := begin
@@ -128,6 +130,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "database query failed")
 		subLog.Error().Err(err).Stack().Msg("could not query trading days")
+		return res, err
 	}
 
 	for rows.Next() {
@@ -144,7 +147,8 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
-		log.Panic().Stack().Msg("could not load trading days")
+		log.Error().Stack().Msg("could not load trading days")
+		return res, ErrNoTradingDays
 	}
 
 	days := filterDays(frequency, res)
@@ -153,7 +157,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	lastDay := res[cnt]
 	if len(days) == 0 {
 		subLog.Error().Msg("days array is empty")
-		return daysFiltered
+		return daysFiltered, ErrNoTradingDays
 	}
 
 	if !lastDay.Equal(days[len(days)-1]) {
@@ -170,7 +174,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if err := trx.Commit(ctx); err != nil {
 		log.Warn().Err(err).Msg("could not commit transaction")
 	}
-	return daysFiltered
+	return daysFiltered, nil
 }
 
 // Provider functions
@@ -237,7 +241,10 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	tz := common.GetTimezone()
 	subLog := log.With().Strs("Symbols", symbols).Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
 
-	tradingDays := p.TradingDays(ctx, begin, end, frequency)
+	tradingDays, err := p.TradingDays(ctx, begin, end, frequency)
+	if err != nil {
+		return nil, err
+	}
 
 	// ensure symbols is a unique set
 	symbols = uniqueStrings(symbols)

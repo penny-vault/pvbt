@@ -45,7 +45,7 @@ type Provider interface {
 }
 
 type DateProvider interface {
-	TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) []time.Time
+	TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) ([]time.Time, error)
 }
 
 type Frequency string
@@ -285,7 +285,7 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric
 	return val, nil
 }
 
-func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time, frequency Frequency) []time.Time {
+func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time, frequency Frequency) ([]time.Time, error) {
 	return m.dateProvider.TradingDays(ctx, since, through, frequency)
 }
 

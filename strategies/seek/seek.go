@@ -155,7 +155,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
-	tradeDays := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
+	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
