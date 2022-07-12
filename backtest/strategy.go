@@ -95,7 +95,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 
 	// calculate the portfolio's performance
 	performance := portfolio.NewPerformance(pm.Portfolio)
-	err = performance.CalculateThrough(ctx, pm, manager.End)
+	err = performance.CalculateThrough(ctx, pm, endDate)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "calculate portfolio performance failed")
