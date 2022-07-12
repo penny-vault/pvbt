@@ -637,6 +637,8 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return ErrTimeInverted
 	}
 
+	log.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
+
 	// Load split & dividend history
 	cnt := 0
 	for k := range pm.holdings {
@@ -841,6 +843,9 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 			Msg("failed to apply target portfolio")
 		return err
 	}
+
+	// make sure any corporate actions are applied
+	pm.FillCorporateActions(ctx, through)
 
 	pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
 	p.EndDate = through
