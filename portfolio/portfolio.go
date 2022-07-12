@@ -625,8 +625,6 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return err
 	}
 
-	log.Debug().Time("Through", through).Msg("evaluating corporate actions")
-
 	// remove time and move to midnight the next day... this
 	// ensures that the search is inclusive of through
 	through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
@@ -636,6 +634,8 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		log.Warn().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
 		return ErrTimeInverted
 	}
+
+	log.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
 
 	// Load split & dividend history
 	cnt := 0
@@ -766,11 +766,11 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	p := pm.Portfolio
 	pm.dataProxy.Begin = p.EndDate.AddDate(0, -6, 1)
 	startDate := p.EndDate.AddDate(0, 0, 1)
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
 
 	if through.Before(pm.dataProxy.Begin) {
 		span.SetStatus(codes.Error, "cannot update portfolio due to dates being out of order")
-		log.Error().
-			Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
+		subLog.Error().
 			Time("Begin", pm.dataProxy.Begin).
 			Time("End", through).
 			Msg("cannot update portfolio dates are out of order")
@@ -782,17 +782,14 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 
 	arguments := make(map[string]json.RawMessage)
 	if err := json.Unmarshal([]byte(p.StrategyArguments), &arguments); err != nil {
-		log.Error().Err(err).Msg("could not unmarshal strategy arguments")
+		subLog.Error().Err(err).Msg("could not unmarshal strategy arguments")
 		return err
 	}
 
 	strategy, ok := strategies.StrategyMap[p.StrategyShortcode]
 	if !ok {
 		span.SetStatus(codes.Error, "strategy not found")
-		log.Error().
-			Str("Portfolio", hex.EncodeToString(p.ID)).
-			Str("Strategy", p.StrategyShortcode).
-			Msg("portfolio strategy not found")
+		subLog.Error().Msg("portfolio strategy not found")
 		return ErrStrategyNotFound
 	}
 
@@ -800,11 +797,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to initialize portfolio strategy")
-		log.Error().
-			Err(err).
-			Str("PortfolioID", hex.EncodeToString(p.ID)).
-			Str("Strategy", p.StrategyShortcode).
-			Msg("failed to initialize portfolio strategy")
+		subLog.Error().Err(err).Msg("failed to initialize portfolio strategy")
 		return err
 	}
 
@@ -812,11 +805,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to execute portfolio strategy")
-		log.Error().
-			Err(err).
-			Str("PortfolioID", hex.EncodeToString(p.ID)).
-			Str("Strategy", p.StrategyShortcode).
-			Msg("failed to run portfolio strategy")
+		subLog.Error().Err(err).Msg("failed to execute portfolio strategy")
 		return err
 	}
 
@@ -825,7 +814,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not trim target portfolio to date range")
-		log.Error().Err(err).
+		subLog.Error().Err(err).
 			Time("StartDate", startDate).
 			Time("EndDate", through).
 			Msg("could not trim target portfolio to date range")
@@ -835,10 +824,15 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to apply target porfolio")
-		log.Error().Err(err).
-			Str("PortfolioID", hex.EncodeToString(p.ID)).
-			Str("Strategy", p.StrategyShortcode).
-			Msg("failed to apply target portfolio")
+		subLog.Error().Err(err).Msg("failed to apply target portfolio")
+		return err
+	}
+
+	// make sure any corporate actions are applied
+	if err := pm.FillCorporateActions(ctx, through); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "could not update corporate actions")
+		subLog.Error().Err(err).Msg("could not update corporate actions")
 		return err
 	}
 
