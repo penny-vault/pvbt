@@ -625,8 +625,6 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return err
 	}
 
-	log.Debug().Time("Through", through).Msg("evaluating corporate actions")
-
 	// remove time and move to midnight the next day... this
 	// ensures that the search is inclusive of through
 	through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
