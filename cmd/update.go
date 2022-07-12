@@ -88,7 +88,6 @@ var updateCmd = &cobra.Command{
 		strategies.LoadStrategyMetricsFromDb()
 		for _, strat := range strategies.StrategyList {
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
-				log.Info().Str("Strategy", strat.Shortcode).Msg("create portfolio for strategy")
 				if err := createStrategyPortfolio(strat, dt, &dataManager); err != nil {
 					log.Panic().Err(err).Msg("could not create portfolio")
 				}
@@ -112,7 +111,7 @@ var updateCmd = &cobra.Command{
 			subLog.Debug().Time("Date", dt).Msg("update transactions")
 			err = pm.UpdateTransactions(context.Background(), dt)
 			if err != nil {
-				// NOTE: error is logged by caller
+				subLog.Error().Msg("skipping portfolio due to error")
 				continue
 			}
 
@@ -157,7 +156,8 @@ var updateCmd = &cobra.Command{
 
 func createStrategyPortfolio(strat *strategy.Info, endDate time.Time, manager *data.Manager) error {
 	tz := common.GetTimezone()
-	subLog := log.With().Str("Shortcode", strat.Shortcode).Str("StrategyName", strat.Name).Logger()
+	subLog := log.With().Str("Shortcode", strat.Shortcode).Time("EndDate", endDate).Str("StrategyName", strat.Name).Logger()
+	subLog.Info().Msg("create portfolio")
 
 	// build arguments
 	argumentsMap := make(map[string]interface{})
