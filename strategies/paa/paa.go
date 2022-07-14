@@ -411,7 +411,11 @@ func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(targetP
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		nextTradeDate := paa.schedule.Next(lastTradeDate)
+		nextTradeDate, err := paa.schedule.Next(lastTradeDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get next trade date")
+			return nil
+		}
 		if !lastTradeDate.Equal(nextTradeDate) {
 			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
 		}

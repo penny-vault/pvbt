@@ -243,7 +243,11 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		nextTradeDate := daa.schedule.Next(lastTradeDate)
+		nextTradeDate, err := daa.schedule.Next(lastTradeDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get next trade date")
+			return
+		}
 		if !lastTradeDate.Equal(nextTradeDate) {
 			daa.targetPortfolio.Remove(daa.targetPortfolio.NRows() - 1)
 		}

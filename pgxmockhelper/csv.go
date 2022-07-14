@@ -114,6 +114,18 @@ func NewCSVRows(inputs []string, typeMap map[string]string) *CSVRows {
 							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to float64")
 						}
 						cols[idx] = parsed
+					case "bool":
+						parsed, err := strconv.ParseBool(val)
+						if err != nil {
+							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to bool")
+						}
+						cols[idx] = parsed
+					case "int":
+						parsed, err := strconv.ParseInt(val, 10, 32)
+						if err != nil {
+							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to int")
+						}
+						cols[idx] = int(parsed)
 					default:
 						// no type conversion specified - use as is
 						cols[idx] = val

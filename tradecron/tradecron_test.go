@@ -17,14 +17,22 @@ package tradecron_test
 
 import (
 	"errors"
+	"time"
 
+	"github.com/jackc/pgconn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
 
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/tradecron"
 )
+
+func tz() *time.Location {
+	tz, _ := time.LoadLocation("America/New_York")
+	return tz
+}
 
 var _ = Describe("Tradecron", func() {
 	var (
@@ -93,6 +101,77 @@ var _ = Describe("Tradecron", func() {
 		Entry("Both @weekbegin @monthend specified", "@weekbegin @monthend", tradecron.RegularHours, "", "", "", tradecron.ErrConflictingModifiers),
 		Entry("Both @weekend @monthbegin specified", "@weekend @monthbegin", tradecron.RegularHours, "", "", "", tradecron.ErrConflictingModifiers),
 		Entry("Both @weekend @monthend specified", "@weekend @monthend", tradecron.RegularHours, "", "", "", tradecron.ErrConflictingModifiers),
+		Entry("@weekbegin test", "@weekbegin */5", tradecron.RegularHours, "*/5 * * * *", "", "@weekbegin", nil),
 		Entry("Unknown modifier", "@modifier", tradecron.RegularHours, "", "", "", tradecron.ErrUnknownModifier),
+	)
+
+	DescribeTable("when evaluating next trade day",
+		func(spec string, hours tradecron.MarketHours, given time.Time, expected time.Time) {
+			dbPool.ExpectBegin()
+			dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+			dbPool.ExpectQuery("SELECT").WillReturnRows(
+				pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
+					"event_date":  "date",
+					"early_close": "bool",
+					"close_time":  "int",
+				}).Rows())
+			dbPool.ExpectCommit()
+
+			cron, err := tradecron.New(spec, hours)
+			Expect(err).To(BeNil())
+			next, err := cron.Next(given)
+			Expect(err).To(BeNil())
+			Expect(next).To(Equal(expected))
+
+		},
+		Entry("every 5 minutes starting on saturday", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 16, 0, 0, 0, 0, tz()), time.Date(2022, 7, 18, 9, 30, 0, 0, tz())),
+		Entry("every 5 minutes starting on monday at market open", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 18, 9, 30, 0, 0, tz()), time.Date(2022, 7, 18, 9, 35, 0, 0, tz())),
+		Entry("every 5 minutes starting on monday at market close", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 18, 16, 0, 0, 0, tz()), time.Date(2022, 7, 19, 9, 30, 0, 0, tz())),
+		Entry("every 5 minutes starting on monday, extended hours", "*/5 * * * *", tradecron.ExtendedHours, time.Date(2022, 7, 18, 0, 0, 0, 0, tz()), time.Date(2022, 7, 18, 7, 0, 0, 0, tz())),
+		Entry("every 5 minutes starting on monday at market close, extended hours", "*/5 * * * *", tradecron.ExtendedHours, time.Date(2022, 7, 18, 20, 0, 0, 0, tz()), time.Date(2022, 7, 19, 7, 0, 0, 0, tz())),
+		Entry("every 5 minutes starting on July 4th holiday", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 4, 0, 0, 0, 0, tz()), time.Date(2022, 7, 5, 9, 30, 0, 0, tz())),
+		Entry("every 5 minutes starting at early close", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 11, 25, 13, 0, 0, 0, tz()), time.Date(2022, 11, 28, 9, 30, 0, 0, tz())),
+		Entry("month begin", "@monthbegin", tradecron.RegularHours, time.Date(2022, 6, 25, 13, 0, 0, 0, tz()), time.Date(2022, 7, 1, 9, 30, 0, 0, tz())),
+		Entry("month end", "@monthend", tradecron.RegularHours, time.Date(2022, 7, 1, 0, 0, 0, 0, tz()), time.Date(2022, 7, 29, 9, 30, 0, 0, tz())),
+		Entry("week begin", "@weekbegin", tradecron.RegularHours, time.Date(2022, 7, 4, 0, 0, 0, 0, tz()), time.Date(2022, 7, 5, 9, 30, 0, 0, tz())),
+		Entry("week end", "@weekend", tradecron.RegularHours, time.Date(2022, 7, 4, 0, 0, 0, 0, tz()), time.Date(2022, 7, 8, 9, 30, 0, 0, tz())),
+	)
+
+	DescribeTable("when evaluating IsTradeDay",
+		func(spec string, hours tradecron.MarketHours, given time.Time, expected bool) {
+			dbPool.ExpectBegin()
+			dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+			dbPool.ExpectQuery("SELECT").WillReturnRows(
+				pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
+					"event_date":  "date",
+					"early_close": "bool",
+					"close_time":  "int",
+				}).Rows())
+			dbPool.ExpectCommit()
+
+			cron, err := tradecron.New(spec, hours)
+			Expect(err).To(BeNil())
+			tradeDay, err := cron.IsTradeDay(given)
+			Expect(err).To(BeNil())
+			Expect(tradeDay).To(Equal(expected))
+
+		},
+		Entry("every 5 minutes starting on saturday", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 16, 0, 0, 0, 0, tz()), false),
+		Entry("every 5 minutes starting on monday at market open", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 18, 9, 30, 0, 0, tz()), true),
+		Entry("every 5 minutes starting on monday at market close", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 18, 16, 0, 0, 0, tz()), true),
+		Entry("every 5 minutes starting on monday, extended hours", "*/5 * * * *", tradecron.ExtendedHours, time.Date(2022, 7, 18, 0, 0, 0, 0, tz()), true),
+		Entry("every 5 minutes starting on monday at market close, extended hours", "*/5 * * * *", tradecron.ExtendedHours, time.Date(2022, 7, 18, 20, 0, 0, 0, tz()), true),
+		Entry("every 5 minutes starting on July 4th holiday", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 7, 4, 0, 0, 0, 0, tz()), false),
+		Entry("every 5 minutes starting at early close", "*/5 * * * *", tradecron.RegularHours, time.Date(2022, 11, 25, 13, 0, 0, 0, tz()), true),
+		Entry("month begin, date given not month begin", "@monthbegin", tradecron.RegularHours, time.Date(2022, 6, 25, 13, 0, 0, 0, tz()), false),
+		Entry("month begin, date given is month begin", "@monthbegin", tradecron.RegularHours, time.Date(2022, 7, 1, 13, 0, 0, 0, tz()), true),
+		Entry("month end, date given not month end", "@monthend", tradecron.RegularHours, time.Date(2022, 7, 1, 0, 0, 0, 0, tz()), false),
+		Entry("month end, date given is month end", "@monthend", tradecron.RegularHours, time.Date(2022, 7, 29, 9, 30, 0, 0, tz()), true),
+		Entry("week begin, date given is not week begin (holiday)", "@weekbegin", tradecron.RegularHours, time.Date(2022, 7, 4, 0, 0, 0, 0, tz()), false),
+		Entry("week begin, date given is week begin (holiday)", "@weekbegin", tradecron.RegularHours, time.Date(2022, 7, 5, 9, 30, 0, 0, tz()), true),
+		Entry("week begin, date given is not week begin", "@weekbegin", tradecron.RegularHours, time.Date(2022, 7, 1, 0, 0, 0, 0, tz()), false),
+		Entry("week begin, date given is week begin", "@weekbegin", tradecron.RegularHours, time.Date(2022, 7, 11, 9, 30, 0, 0, tz()), true),
+		Entry("week end, date given is not week end", "@weekend", tradecron.RegularHours, time.Date(2022, 7, 6, 0, 0, 0, 0, tz()), false),
+		Entry("week end, date given is week end", "@weekend", tradecron.RegularHours, time.Date(2022, 7, 8, 9, 30, 0, 0, tz()), true),
 	)
 })

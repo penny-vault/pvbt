@@ -40,6 +40,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
+	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 )
@@ -53,6 +54,7 @@ type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
 	Period      data.Frequency
+	cron        *tradecron.TradeCron
 }
 
 type Period struct {
@@ -155,6 +157,9 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
+	// NOTE: trading days always appends the last day, even if it doesn't match
+	// the frequency specification, need to make sure you use tradecron
+	// to check the last date and ensure that it's a tradeable day.
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {

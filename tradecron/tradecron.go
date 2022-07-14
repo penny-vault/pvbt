@@ -33,10 +33,8 @@ const (
 )
 
 type MarketHours struct {
-	OpenHour    int
-	OpenMinute  int
-	CloseHour   int
-	CloseMinute int
+	Open  int
+	Close int
 }
 
 type TradeCron struct {
@@ -45,26 +43,25 @@ type TradeCron struct {
 	TimeSpec       string
 	TimeFlag       string
 	DateFlag       string
+	marketStatus   *MarketStatus
 }
 
 var (
 	RegularHours = MarketHours{
-		OpenHour:    9,
-		OpenMinute:  30,
-		CloseHour:   16,
-		CloseMinute: 0,
+		Open:  930,
+		Close: 1600,
 	}
 	ExtendedHours = MarketHours{
-		OpenHour:    7,
-		OpenMinute:  0,
-		CloseHour:   20,
-		CloseMinute: 0,
+		Open:  700,
+		Close: 2000,
 	}
 )
 
-// TradeCron enables market aware scheduling. It supports the standard
+// TradeCron enables market aware scheduling. It supports schedules via the standard
 // CRON format of: Minutes(Min) Hours(H) DayOfMonth(DoM) Month(M) DayOfWeek(DoW)
 // See: https://en.wikipedia.org/wiki/Cron
+//
+// '*' wildcards only execute during market open hours
 //
 // Additional market-aware modifiers are supported:
 //     @open       - Run at market open; replaces Minute and Hour field
@@ -110,7 +107,7 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 			if timeFlag != "" {
 				return nil, ErrConflictingModifiers
 			}
-			if timeSpec, err = parseTimeRelativeTo(timeSpecTokens, hours.OpenHour, hours.OpenMinute); err != nil {
+			if timeSpec, err = parseTimeRelativeTo(timeSpecTokens, hours.Open/100, hours.Open%100); err != nil {
 				return nil, err
 			}
 			timeFlag = AtOpen
@@ -118,7 +115,7 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 			if timeFlag != "" {
 				return nil, ErrConflictingModifiers
 			}
-			if timeSpec, err = parseTimeRelativeTo(timeSpecTokens, hours.CloseHour, hours.CloseMinute); err != nil {
+			if timeSpec, err = parseTimeRelativeTo(timeSpecTokens, hours.Close/100, hours.Close%100); err != nil {
 				return nil, err
 			}
 			timeFlag = AtClose
@@ -163,88 +160,66 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 		TimeSpec:       timeSpec,
 		DateFlag:       dateFlag,
 		TimeFlag:       timeFlag,
+		marketStatus:   NewMarketStatus(&hours),
 	}
 
 	return tc, err
 }
 
-// Next returns the next tradeable date
-func (tc *TradeCron) Next(forDate time.Time) time.Time {
-	var nyc *time.Location
-	var err error
-	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
-		log.Panic().Err(err).Msg("could not load nyc timezone")
+// IsTradeDay evaluates the given date against the schedule and returns true if the date falls
+// on a trading day according to the schedule. The time portion of the schedule is ignored when
+// evaluating this function
+func (tc *TradeCron) IsTradeDay(forDate time.Time) (bool, error) {
+	t1 := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
+	t2 := t1.AddDate(0, 0, -1)
+	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 23, 59, 59, 0, tc.marketStatus.tz)
+	next, err := tc.Next(t2)
+	if err != nil {
+		log.Error().Err(err).Msg("could not get next tradeable day")
+		return false, err
 	}
+	nextDate := time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
+	return nextDate.Equal(t1), nil
+}
+
+// Next returns the next tradeable date
+func (tc *TradeCron) Next(forDate time.Time) (time.Time, error) {
+	var dt time.Time
+	var err error
 
 	switch tc.DateFlag {
+	case AtWeekBegin:
+		dt, err = tc.marketStatus.NextFirstTradingDayOfWeek(forDate)
+		if err != nil {
+			return dt, err
+		}
+	case AtWeekEnd:
+		dt, err = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
+		if err != nil {
+			return dt, err
+		}
+	case AtMonthBegin:
+		dt, err = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
+		if err != nil {
+			return dt, err
+		}
 	case AtMonthEnd:
-		// get last trading day of month
-		now := forDate.In(nyc)
-		monthend := MonthEnd(now)
-		if now.After(monthend) {
-			now = NextMonth(now)
-			monthend = MonthEnd(now)
+		dt, err = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
+		if err != nil {
+			return dt, err
 		}
-		return monthend
-	case AtOpen:
-		t := forDate.In(nyc)
-		if t.After(time.Date(t.Year(), t.Month(), t.Day(), 9, 30, 0, 0, nyc)) {
-			t = t.AddDate(0, 0, 1)
-		}
-		for !IsTradeDay(t) {
-			t = t.AddDate(0, 0, 1)
-		}
-		return t
-	case AtClose:
-		t := forDate.In(nyc)
-		if t.After(time.Date(t.Year(), t.Month(), t.Day(), 16, 0, 0, 0, nyc)) {
-			t = t.AddDate(0, 0, 1)
-		}
-		for !IsTradeDay(t) {
-			t = t.AddDate(0, 0, 1)
-		}
-		return t
 	default:
-		t := forDate.In(nyc)
-		for !IsTradeDay(t) {
-			t = t.AddDate(0, 0, 1)
-		}
-		t = tc.Schedule.Next(t)
-
-		/*
-			// if the time is outside the execution hours (actual hours depends on mode)
-			switch tc.TimeMode {
-			case RegularHours:
-				marketOpen := time.Date(t.Year(), t.Month(), t.Day(), marketOpenHour, marketOpenMin, 0, 0, nyc)
-				marketClose := time.Date(t.Year(), t.Month(), t.Day(), marketCloseHour, 0, 0, 0, nyc)
-				if t.Before(marketOpen) {
-					// date is before marketOpen snap to marketOpen
-					t = marketOpen
-				} else if t.After(marketClose) {
-					// date is after marketClose, snap to marketOpen for next trade day
-					t = marketOpen
-					t = t.AddDate(0, 0, 1)
-				}
-			case ExtendedHours:
-				marketOpen := time.Date(t.Year(), t.Month(), t.Day(), marketExtendedOpenHour, marketExtendedOpenMin, 0, 0, nyc)
-				marketClose := time.Date(t.Year(), t.Month(), t.Day(), marketExtendedCloseHour, 0, 0, 0, nyc)
-				if t.Before(marketOpen) {
-					// date is before marketOpen snap to marketOpen
-					t = marketOpen
-				} else if t.After(marketClose) {
-					// date is after marketClose, snap to marketOpen for next trade day
-					t = marketOpen
-					t = t.AddDate(0, 0, 1)
-				}
-			default:
-				// don't do anything if all trading hours are allowed
-			}
-		*/
-
-		for !IsTradeDay(t) {
-			t = t.AddDate(0, 0, 1)
-		}
-
-		return t
+		dt = forDate
 	}
+
+	marketOpen := false
+	for !marketOpen {
+		dt = tc.Schedule.Next(dt)
+		marketOpen, err = tc.marketStatus.IsMarketOpen(dt)
+		if err != nil {
+			return dt, err
+		}
+	}
+
+	return dt, nil
 }

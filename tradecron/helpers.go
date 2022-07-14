@@ -19,56 +19,11 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
 
-// IsTradeDay returns true if the specified date is a valid trading day (i.e. not a market holiday or weekend)
-func IsTradeDay(t time.Time) bool {
-	if t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
-		return false
-	}
-
-	if IsMarketHoliday(t) {
-		return false
-	}
-
-	return true
-}
-
-// MonthEnd returns the last trading day of the specified month
-func MonthEnd(t time.Time) time.Time {
-	var nyc *time.Location
-	var err error
-	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
-		log.Panic().Err(err).Msg("could not load nyc timezone")
-	}
-
-	firstOfMonth := time.Date(t.Year(), t.Month(), 1, 16, 0, 0, 0, nyc)
-	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
-
-	for !IsTradeDay(lastOfMonth) {
-		lastOfMonth = lastOfMonth.AddDate(0, 0, -1)
-	}
-
-	return lastOfMonth
-}
-
-// NextMonth returns the first day of the next month
-func NextMonth(t time.Time) time.Time {
-	y := t.Year()
-	m := t.Month()
-	if m == time.December {
-		y++
-		m = time.January
-	} else {
-		m++
-	}
-	return time.Date(y, m, 1, 0, 0, 0, 0, t.Location())
-}
-
-// expandBriefFormat expands a timespec that has fields ommitted for brevity
+// expandBriefFormat expands a timespec that has fields omitted for brevity
 func expandBriefFormat(spec string) string {
 	tokens := strings.Split(spec, " ")
 
@@ -119,14 +74,14 @@ func parseTimeRelativeTo(tokens []string, hours int, minutes int) (string, error
 	// if mins is actually hours, roll over to hours
 	if mins > 59 || mins < -59 {
 		hrs += (mins / 60)
-		mins = mins % 60
+		mins %= 60
 	}
 
 	hrs += hours
 
 	if mins < 0 {
 		mins = 60 + mins
-		hrs -= 1
+		hrs--
 	}
 
 	if hrs < 0 {
