@@ -174,6 +174,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Ti
 		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
 			"trade_day": "date",
 		}).Between(d1, d2).Rows())
+	db.ExpectCommit()
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 	db.ExpectQuery("SELECT event_date, ticker, close, adj_close::double precision FROM eod").WillReturnRows(
@@ -182,6 +183,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Ti
 			"close":      "float64",
 			"adj_close":  "float64",
 		}).Between(d3, d4).Rows())
+	db.ExpectCommit()
 }
 
 func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn []string, d1, d2 time.Time) {
@@ -193,6 +195,7 @@ func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn []string, d1, d2 time.Time
 			"dividend":     "float64",
 			"split_factor": "float64",
 		}).Between(d1, d2).Rows())
+	db.ExpectCommit()
 }
 
 // Utility functions to help figure out what db expectations should be used

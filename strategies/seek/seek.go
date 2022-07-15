@@ -97,7 +97,21 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	if err := json.Unmarshal(args["period"], &period); err != nil {
 		return nil, err
 	}
-	if (period != string(data.FrequencyWeekly)) && (period != string(data.FrequencyMonthly)) {
+
+	var cronspec *tradecron.TradeCron
+	var err error
+	switch data.Frequency(period) {
+	case data.FrequencyMonthly:
+		cronspec, err = tradecron.New("@monthend", tradecron.RegularHours)
+		if err != nil {
+			return nil, err
+		}
+	case data.FrequencyWeekly:
+		cronspec, err = tradecron.New("@weekend", tradecron.RegularHours)
+		if err != nil {
+			return nil, err
+		}
+	default:
 		return nil, ErrInvalidPeriod
 	}
 
@@ -105,6 +119,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		NumHoldings: numHoldings,
 		OutTicker:   outTicker,
 		Period:      data.Frequency(period),
+		cron:        cronspec,
 	}
 
 	return seek, nil

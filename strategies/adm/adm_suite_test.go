@@ -25,6 +25,7 @@ import (
 
 func TestStrategies(t *testing.T) {
 	log.Logger = log.Output(GinkgoWriter)
+	log.Logger = log.With().Caller().Logger()
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "ADM Strategy Suite")
 }
