@@ -40,6 +40,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
+	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 )
@@ -53,6 +54,7 @@ type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
 	Period      data.Frequency
+	schedule    *tradecron.TradeCron
 }
 
 type Period struct {
@@ -95,7 +97,21 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	if err := json.Unmarshal(args["period"], &period); err != nil {
 		return nil, err
 	}
-	if (period != string(data.FrequencyWeekly)) && (period != string(data.FrequencyMonthly)) {
+
+	var cronspec *tradecron.TradeCron
+	var err error
+	switch data.Frequency(period) {
+	case data.FrequencyMonthly:
+		cronspec, err = tradecron.New("@monthend", tradecron.RegularHours)
+		if err != nil {
+			return nil, err
+		}
+	case data.FrequencyWeekly:
+		cronspec, err = tradecron.New("@weekend", tradecron.RegularHours)
+		if err != nil {
+			return nil, err
+		}
+	default:
 		return nil, ErrInvalidPeriod
 	}
 
@@ -103,6 +119,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		NumHoldings: numHoldings,
 		OutTicker:   outTicker,
 		Period:      data.Frequency(period),
+		schedule:    cronspec,
 	}
 
 	return seek, nil
@@ -155,12 +172,29 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	manager.Frequency = data.FrequencyDaily
 
 	// get a list of dates to invest in
+	// NOTE: trading days always appends the last day, even if it doesn't match
+	// the frequency specification, need to make sure you use tradecron
+	// to check the last date and ensure that it's a tradeable day.
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, seek.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
 			log.Error().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
+	}
+	if len(tradeDays) == 0 {
+		log.Info().Msg("no available trading days")
+	} else {
+		endIdx := len(tradeDays) - 1
+		lastDate := tradeDays[endIdx]
+		isTradeDay, err := seek.schedule.IsTradeDay(lastDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not evaluate schedule")
+			return nil, nil, err
+		}
+		if !isTradeDay {
+			tradeDays = tradeDays[:endIdx-1]
+		}
 	}
 
 	// build target portfolio

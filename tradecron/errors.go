@@ -13,19 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package adm_test
+package tradecron
 
-import (
-	"testing"
+import "errors"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/rs/zerolog/log"
+var (
+	ErrConflictingModifiers = errors.New("malformed schedule; conflicting modifiers combined")
+	ErrFieldOutOfBounds     = errors.New("time field out of range")
+	ErrMalformedTimeSpec    = errors.New("time spec malformed")
+	ErrUnknownModifier      = errors.New("unknown modifier specified")
 )
-
-func TestStrategies(t *testing.T) {
-	log.Logger = log.Output(GinkgoWriter)
-	log.Logger = log.With().Caller().Logger()
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "ADM Strategy Suite")
-}

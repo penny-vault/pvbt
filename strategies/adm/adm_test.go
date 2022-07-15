@@ -19,6 +19,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
@@ -97,6 +98,16 @@ var _ = Describe("Adm", func() {
 						"riskfree_corporate.csv",
 					},
 					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+
+				dbPool.ExpectBegin()
+				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+				dbPool.ExpectQuery("SELECT").WillReturnRows(
+					pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
+						"event_date":  "date",
+						"early_close": "bool",
+						"close_time":  "int",
+					}).Rows())
+				dbPool.ExpectCommit()
 
 				target, _, err = strat.Compute(context.Background(), &manager)
 			})

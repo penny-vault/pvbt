@@ -58,6 +58,7 @@ issues:
         - gocyclo
         - deadcode
         - errorlint
+        - goerr113
     - path: backblaze/backblaze\.go
       text: "G401:" # Backblaze uses sha1 for file integrity check
       linters:
