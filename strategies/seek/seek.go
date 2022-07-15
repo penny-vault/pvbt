@@ -54,7 +54,7 @@ type SeekingAlphaQuant struct {
 	NumHoldings int
 	OutTicker   string
 	Period      data.Frequency
-	cron        *tradecron.TradeCron
+	schedule    *tradecron.TradeCron
 }
 
 type Period struct {
@@ -119,7 +119,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		NumHoldings: numHoldings,
 		OutTicker:   outTicker,
 		Period:      data.Frequency(period),
-		cron:        cronspec,
+		schedule:    cronspec,
 	}
 
 	return seek, nil
@@ -181,6 +181,20 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 			log.Error().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
+	}
+	if len(tradeDays) == 0 {
+		log.Info().Msg("no available trading days")
+	} else {
+		endIdx := len(tradeDays) - 1
+		lastDate := tradeDays[endIdx]
+		isTradeDay, err := seek.schedule.IsTradeDay(lastDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not evaluate schedule")
+			return nil, nil, err
+		}
+		if !isTradeDay {
+			tradeDays = tradeDays[:endIdx-1]
+		}
 	}
 
 	// build target portfolio
