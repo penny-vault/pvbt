@@ -108,6 +108,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	tz := common.GetTimezone()
 
 	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
+	subLog.Debug().Msg("getting trading days")
 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
@@ -139,22 +140,22 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	for rows.Next() {
 		var dt time.Time
 		if err = rows.Scan(&dt); err != nil {
-			log.Error().Stack().Err(err).Msg("could not SCAN DB result")
+			subLog.Error().Stack().Err(err).Msg("could not SCAN DB result")
 			if err := trx.Rollback(ctx); err != nil {
 				subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return res, err
-		} else {
-			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
-			res = append(res, dt)
 		}
+
+		dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
+		res = append(res, dt)
 	}
 
 	cnt := len(res) - 1
 
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
-		log.Error().Stack().Msg("could not load trading days")
+		subLog.Error().Stack().Msg("could not load trading days")
 		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
@@ -185,7 +186,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Warn().Stack().Err(err).Msg("could not commit transaction")
+		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return daysFiltered, nil
 }

@@ -298,9 +298,19 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		nextTradeDate := adm.schedule.Next(lastTradeDate)
-		if !lastTradeDate.Equal(nextTradeDate) {
+		isTradeDay, err := adm.schedule.IsTradeDay(lastTradeDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not evaluate trade schedule")
+			return nil, nil, err
+		}
+		if !isTradeDay {
 			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
+		}
+
+		nextTradeDate, err := adm.schedule.Next(lastTradeDate)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get next trade date")
+			return nil, nil, err
 		}
 
 		predictedPortfolio = &strategy.Prediction{

@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package adm_test
+package tradecron_test
 
 import (
 	"testing"
@@ -23,9 +23,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func TestStrategies(t *testing.T) {
+func TestPortfolio(t *testing.T) {
 	log.Logger = log.Output(GinkgoWriter)
-	log.Logger = log.With().Caller().Logger()
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "ADM Strategy Suite")
+	RunSpecs(t, "Tradecron Suite")
 }

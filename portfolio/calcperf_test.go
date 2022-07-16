@@ -38,9 +38,9 @@ var _ = Describe("Portfolio Continuous Update", func() {
 		df        *dataframe.DataFrame
 		err       error
 		p         *portfolio.Portfolio
-		perf      *portfolio.Performance
-		pm        *portfolio.Model
-		tz        *time.Location
+		//perf      *portfolio.Performance
+		pm *portfolio.Model
+		tz *time.Location
 	)
 
 	BeforeEach(func() {
@@ -139,8 +139,9 @@ var _ = Describe("Portfolio Continuous Update", func() {
 
 				err = pm.TargetPortfolio(context.Background(), df)
 				Expect(err).To(BeNil())
-				perf = portfolio.NewPerformance(pm.Portfolio)
-				perf.CalculateThrough(context.Background(), pm, time.Date(2018, time.January, 31, 18, 0, 0, 0, tz))
+				//perf = portfolio.NewPerformance(pm.Portfolio)
+				//err = perf.CalculateThrough(context.Background(), pm, time.Date(2018, time.January, 31, 18, 0, 0, 0, tz))
+				//Expect(err).To(BeNil())
 			})
 
 			It("should have exactly 2 transactions", func() {
