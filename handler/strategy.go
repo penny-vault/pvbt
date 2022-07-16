@@ -83,13 +83,13 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
 	if err != nil {
-		subLog.Error().Err(err).Msg("could not load nyc timezone")
+		subLog.Error().Stack().Err(err).Msg("could not load nyc timezone")
 		return fiber.ErrInternalServerError
 	}
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {
-		subLog.Warn().Msg("cannot parse start date query parameter")
+		subLog.Warn().Stack().Msg("cannot parse start date query parameter")
 		return fiber.ErrNotAcceptable
 	}
 
@@ -101,7 +101,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		var err error
 		endDate, err = time.ParseInLocation("2006-01-02", endDateStr, tz)
 		if err != nil {
-			subLog.Warn().Msg("cannot parse end date query parameter")
+			subLog.Warn().Stack().Msg("cannot parse end date query parameter")
 			return fiber.ErrNotAcceptable
 		}
 	}
@@ -121,7 +121,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	params := map[string]json.RawMessage{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
-		log.Warn().Err(err).Msg("could not unmarshal body message")
+		log.Warn().Stack().Err(err).Msg("could not unmarshal body message")
 		return fiber.ErrBadRequest
 	}
 
@@ -142,23 +142,23 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	portfolioIDStr := hex.EncodeToString(b.PortfolioModel.Portfolio.ID)
 	serializedPortfolio, err := b.PortfolioModel.Portfolio.MarshalBinary()
 	if err != nil {
-		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
+		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
 		return err
 	}
 	err = common.CacheSet(portfolioIDStr, serializedPortfolio)
 	if err != nil {
-		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
+		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
 		return err
 	}
 
 	serializedPerformance, err := b.Performance.MarshalBinary()
 	if err != nil {
-		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
+		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
 		return err
 	}
 	err = common.CacheSet(fmt.Sprintf("%s:performance", portfolioIDStr), serializedPerformance)
 	if err != nil {
-		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
+		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
 		return err
 	}
 
@@ -166,7 +166,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	b.Performance.Measurements = nil // set measurements to nil for serialization
 	serialized, err := b.Performance.MarshalBinary()
 	if err != nil {
-		subLog.Error().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for performance")
+		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for performance")
 		return fiber.ErrInternalServerError
 	}
 	b.Performance.Measurements = measurements

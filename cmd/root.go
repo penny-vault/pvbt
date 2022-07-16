@@ -175,7 +175,7 @@ func initConfig() {
 	if err := viper.ReadInConfig(); err == nil {
 		log.Info().Str("ConfigFile", viper.ConfigFileUsed()).Msg("Loaded config file")
 	} else {
-		log.Error().Err(err).Msg("error reading config file")
+		log.Error().Stack().Err(err).Msg("error reading config file")
 		os.Exit(1)
 	}
 }

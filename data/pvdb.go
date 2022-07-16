@@ -112,13 +112,13 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
-		subLog.Warn().Msg("end before begin in call to TradingDays")
+		subLog.Warn().Stack().Msg("end before begin in call to TradingDays")
 		return res, ErrInvalidTimeRange
 	}
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
-		subLog.Error().Err(err).Stack().Msg("could not get transaction when querying trading days")
+		subLog.Error().Stack().Err(err).Msg("could not get transaction when querying trading days")
 		return res, err
 	}
 
@@ -130,18 +130,25 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "database query failed")
-		subLog.Error().Err(err).Stack().Msg("could not query trading days")
+		subLog.Error().Stack().Err(err).Msg("could not query trading days")
+		if err := trx.Rollback(ctx); err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
 		return res, err
 	}
 
 	for rows.Next() {
 		var dt time.Time
 		if err = rows.Scan(&dt); err != nil {
-			subLog.Error().Err(err).Stack().Msg("could not SCAN DB result")
-		} else {
-			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
-			res = append(res, dt)
+			subLog.Error().Stack().Err(err).Msg("could not SCAN DB result")
+			if err := trx.Rollback(ctx); err != nil {
+				subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+			return res, err
 		}
+
+		dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
+		res = append(res, dt)
 	}
 
 	cnt := len(res) - 1
@@ -149,6 +156,9 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
 		subLog.Error().Stack().Msg("could not load trading days")
+		if err := trx.Rollback(ctx); err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
 		return res, ErrNoTradingDays
 	}
 
@@ -157,7 +167,10 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	daysFiltered := make([]time.Time, 0, 252)
 	lastDay := res[cnt]
 	if len(days) == 0 {
-		subLog.Error().Msg("days array is empty")
+		subLog.Error().Stack().Msg("days array is empty")
+		if err := trx.Rollback(ctx); err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
 		return daysFiltered, ErrNoTradingDays
 	}
 
@@ -173,7 +186,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		subLog.Warn().Err(err).Msg("could not commit transaction")
+		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return daysFiltered, nil
 }
@@ -255,7 +268,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		span.RecordError(err)
 		msg := "failed to load eod prices -- could not get a database transaction"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Msg(msg)
+		subLog.Warn().Stack().Err(err).Msg(msg)
 		return nil, err
 	}
 
@@ -278,9 +291,9 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		span.RecordError(err)
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
+		subLog.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return nil, err
@@ -306,9 +319,9 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		}
 
 		if err != nil {
-			subLog.Error().Err(err).Msg("failed to load eod prices -- db query scan failed")
+			subLog.Error().Stack().Err(err).Msg("failed to load eod prices -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
-				log.Error().Err(err).Msg("could not rollback transaction")
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return nil, err
 		}
@@ -329,7 +342,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		default:
 			span.SetStatus(codes.Error, "un-supported metric")
 			if err := trx.Rollback(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not rollback transaction")
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
 			log.Panic().Str("Metric", string(metric)).Msg("Unsupported metric type")
@@ -340,7 +353,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Warn().Err(err).Msg("error committing transaction")
+		log.Warn().Stack().Err(err).Msg("error committing transaction")
 	}
 
 	// preload splits & divs
@@ -391,7 +404,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		span.RecordError(err)
 		msg := "failed to get transaction for preloading corporate actions"
 		span.SetStatus(codes.Error, msg)
-		log.Warn().Err(err).Msg(msg)
+		log.Warn().Stack().Err(err).Msg(msg)
 		return
 	}
 
@@ -401,9 +414,9 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		span.RecordError(err)
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Str("SQL", sql).Msg(msg)
+		subLog.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
 		if err := trx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return
 	}
@@ -416,9 +429,9 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	for rows.Next() {
 		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
 		if err != nil {
-			subLog.Error().Err(err).Msg("failed to load corporate actions -- db query scan failed")
+			subLog.Error().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
 			if err := trx.Rollback(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not rollback transaction")
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
 			return
@@ -446,7 +459,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("error committing transaction")
+		log.Error().Stack().Err(err).Msg("error committing transaction")
 	}
 }
 
@@ -462,7 +475,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		span.RecordError(err)
 		msg := "could not get a database transaction"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Msg(msg)
+		subLog.Warn().Stack().Err(err).Msg(msg)
 		return math.NaN(), err
 	}
 
@@ -487,9 +500,9 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		columns = "split_factor AS val"
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
-		subLog.Error().Msg("un-supported metric requested")
+		subLog.Error().Stack().Msg("un-supported metric requested")
 		if err := trx.Rollback(ctx); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return math.NaN(), ErrUnsupportedMetric
 	}
@@ -502,9 +515,9 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		span.RecordError(err)
 		msg := "db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Err(err).Msg(msg)
+		subLog.Warn().Stack().Err(err).Msg(msg)
 		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Err(err).Msg("could not rollback transaction")
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return math.NaN(), err
@@ -520,9 +533,9 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 			span.RecordError(err)
 			msg := "db scan failed"
 			span.SetStatus(codes.Error, msg)
-			subLog.Warn().Err(err).Msg(msg)
+			subLog.Warn().Stack().Err(err).Msg(msg)
 			if err := trx.Rollback(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not rollback transaction")
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return math.NaN(), err
 		}
@@ -531,7 +544,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 	}
 
 	if err := trx.Commit(ctx); err != nil {
-		log.Error().Err(err).Msg("could not commit transaction")
+		log.Error().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return val, err
 }

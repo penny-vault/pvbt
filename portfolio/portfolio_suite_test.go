@@ -20,11 +20,17 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog/pkgerrors"
 )
 
 func TestPortfolio(t *testing.T) {
+	// setup logging
+	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
+	log.Logger = log.With().Caller().Logger()
 	log.Logger = log.Output(GinkgoWriter)
+
 	RegisterFailHandler(Fail)
 	RunSpecs(t, "Portfolio Suite")
 }

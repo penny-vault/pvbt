@@ -61,7 +61,7 @@ var serveCmd = &cobra.Command{
 		if Profile {
 			f, err := os.Create("profile.out")
 			if err != nil {
-				log.Error().Err(err).Msg("could not create profile.out")
+				log.Error().Stack().Err(err).Msg("could not create profile.out")
 			}
 			if err := pprof.StartCPUProfile(f); err != nil {
 				log.Panic().Err(err).Msg("could not start CPU profile")

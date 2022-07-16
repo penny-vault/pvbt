@@ -62,19 +62,19 @@ var backtestCmd = &cobra.Command{
 		var arguments map[string]json.RawMessage
 		err = json.Unmarshal([]byte(args[1]), &arguments)
 		if err != nil {
-			log.Error().Err(err).Msg("Could not unmarshal json")
+			log.Error().Stack().Err(err).Msg("Could not unmarshal json")
 			return
 		}
 
 		strategy, err := strat.Factory(arguments)
 		if err != nil {
-			log.Error().Err(err).Msg("Could not create strategy")
+			log.Error().Stack().Err(err).Msg("Could not create strategy")
 			return
 		}
 
 		target, predicted, err := strategy.Compute(context.Background(), &dataManager)
 		if err != nil {
-			log.Error().Err(err).Msg("Could not compute strategy positions")
+			log.Error().Stack().Err(err).Msg("Could not compute strategy positions")
 			return
 		}
 

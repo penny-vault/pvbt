@@ -174,7 +174,7 @@ func (paa *KellersProtectiveAssetAllocation) mom() error {
 		if err := sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 			Size: sma.NRows(dontLock),
 		}), nil); err != nil {
-			log.Error().Err(err).Msg("could not add series")
+			log.Error().Stack().Err(err).Msg("could not add series")
 			return err
 		}
 		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", ticker, ticker)
@@ -268,7 +268,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	if err := mom.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 		Size: mom.NRows(),
 	}), nil); err != nil {
-		log.Error().Err(err).Msg("could not add series to momentum dataframe")
+		log.Error().Stack().Err(err).Msg("could not add series to momentum dataframe")
 	}
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
 	copy(riskUniverseMomNames, paa.riskUniverse)
@@ -298,7 +298,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	if err := mom.AddSeries(dataframe.NewSeriesFloat64(bfCol, &dataframe.SeriesInit{
 		Size: mom.NRows(),
 	}), nil); err != nil {
-		log.Error().Err(err).Msg("could not add series to dataframe")
+		log.Error().Stack().Err(err).Msg("could not add series to dataframe")
 	}
 	fn = funcs.RegFunc(fmt.Sprintf("min(1.0, (%f - paa_n) / %f)", N, N-n1))
 	err = funcs.Evaluate(context.TODO(), mom, fn, bfCol)
@@ -352,7 +352,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 
 	timeIdx, err := mom.NameToColumn(common.DateIdx)
 	if err != nil {
-		log.Error().Err(err).Msg("time series not set on momentum series")
+		log.Error().Stack().Err(err).Msg("time series not set on momentum series")
 	}
 	timeSeries := mom.Series[timeIdx].Copy()
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)

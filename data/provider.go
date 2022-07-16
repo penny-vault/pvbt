@@ -238,7 +238,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 				m.cache[key] = vals[s].(float64)
 			} else {
 				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
-				log.Warn().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
+				log.Warn().Stack().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
 				m.cache[key] = math.NaN()
 			}
 		}
@@ -260,7 +260,7 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, symbol
 		}
 		val, ok = m.cache[key]
 		if !ok {
-			log.Error().Str("Metric", string(metric)).Str("Symbol", symbol).Time("Date", date).Msg("could not load metric")
+			log.Error().Stack().Str("Metric", string(metric)).Str("Symbol", symbol).Time("Date", date).Msg("could not load metric")
 			return 0, ErrMetricDoesNotExist
 		}
 	}
@@ -277,7 +277,7 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric
 	if !ok {
 		val, err = m.providers["security"].GetLatestDataBefore(ctx, symbol, metric, before)
 		if err != nil {
-			log.Warn().Err(err).Msg("get latest data before failed")
+			log.Warn().Stack().Err(err).Msg("get latest data before failed")
 			return math.NaN(), err
 		}
 		m.lastCache[symbol] = val

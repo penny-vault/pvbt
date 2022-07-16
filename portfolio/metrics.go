@@ -531,7 +531,7 @@ func SafeWithdrawalRate(mc [][]float64, inflation float64) float64 {
 		f := func(r float64) float64 { return constantWithdrawalRate(r, inflation, xx) }
 		x0, err := fsolve(f, .05)
 		if err != nil {
-			log.Warn().Err(err).Msg("fsolve failed")
+			log.Warn().Stack().Err(err).Msg("fsolve failed")
 			continue
 		}
 		rets[ii] = x0
@@ -1028,7 +1028,7 @@ func (perf *Performance) vami(periods uint) []float64 {
 // xirr returns the Internal Rate of Return (IRR) for an irregular series of cash flows
 func xirr(cashflows []cashflow) float64 {
 	if len(cashflows) == 0 {
-		log.Error().Msg("cashflows cannot be 0")
+		log.Error().Stack().Msg("cashflows cannot be 0")
 		return 0
 	}
 

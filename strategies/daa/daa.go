@@ -224,7 +224,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 
 	timeIdx, err := daa.momentum.NameToColumn(common.DateIdx)
 	if err != nil {
-		log.Error().Err(err).Msg("time series not set on momentum series")
+		log.Error().Stack().Err(err).Msg("time series not set on momentum series")
 	}
 	timeSeries := daa.momentum.Series[timeIdx]
 

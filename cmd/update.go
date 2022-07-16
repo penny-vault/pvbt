@@ -121,12 +121,12 @@ var updateCmd = &cobra.Command{
 			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
 			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
 			if err != nil {
-				subLog.Warn().Err(err).Msg("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
+				subLog.Warn().Stack().Err(err).Msg("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
 				// just create a new performance record
 				perf = portfolio.NewPerformance(pm.Portfolio)
 			} else {
 				if err := perf.LoadMeasurementsFromDB(pm.Portfolio.UserID); err != nil {
-					log.Error().Err(err).Msg("could not load measurements from database")
+					log.Error().Stack().Err(err).Msg("could not load measurements from database")
 					continue
 				}
 			}
@@ -134,19 +134,19 @@ var updateCmd = &cobra.Command{
 			subLog.Debug().Time("Date", dt).Msg("calculate performance through")
 			err = perf.CalculateThrough(context.Background(), pm, dt)
 			if err != nil {
-				subLog.Error().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
+				subLog.Error().Stack().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
 				continue
 			}
 
 			subLog.Debug().Msg("saving portfolio to DB")
 			err = pm.Save(pm.Portfolio.UserID)
 			if err != nil {
-				subLog.Error().Err(err).Msg("error while saving portfolio updates")
+				subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
 				continue
 			}
 			err = perf.Save(pm.Portfolio.UserID)
 			if err != nil {
-				subLog.Error().Err(err).Msg("error while saving portfolio measurements")
+				subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
 			}
 
 			subLog.Debug().Msg("finished updating portfolio")
@@ -167,26 +167,26 @@ func createStrategyPortfolio(strat *strategy.Info, endDate time.Time, manager *d
 			output = v.Default
 		} else {
 			if err := json.Unmarshal([]byte(v.Default), &output); err != nil {
-				log.Warn().Err(err).Str("JsonValue", v.Default).Msg("could not unmarshal value")
+				log.Warn().Stack().Err(err).Str("JsonValue", v.Default).Msg("could not unmarshal value")
 			}
 		}
 		argumentsMap[k] = output
 	}
 	arguments, err := json.Marshal(argumentsMap)
 	if err != nil {
-		subLog.Warn().Err(err).Msg("unable to build arguments for metrics calculation")
+		subLog.Warn().Stack().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err
 	}
 
 	params := make(map[string]json.RawMessage)
 	if err := json.Unmarshal(arguments, &params); err != nil {
-		log.Error().Err(err).Msg("could not unmarshal strategy arguments")
+		log.Error().Stack().Err(err).Msg("could not unmarshal strategy arguments")
 		return err
 	}
 
 	b, err := backtest.New(context.Background(), strat.Shortcode, params, strat.Benchmark, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), endDate, manager)
 	if err != nil {
-		subLog.Warn().Err(err).Msg("unable to build arguments for metrics calculation")
+		subLog.Warn().Stack().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err
 	}
 
@@ -230,7 +230,7 @@ func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 			rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios WHERE temporary='f'")
 			if err != nil {
 				if err := trx.Rollback(context.Background()); err != nil {
-					log.Error().Err(err).Msg("could not rollback transaction")
+					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 				log.Panic().Err(err).Msg("could not get portfolio IDs")
 			}
@@ -240,9 +240,9 @@ func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 				err := rows.Scan(&pIDStr)
 				if err != nil {
 					if err := trx.Rollback(context.Background()); err != nil {
-						log.Error().Err(err).Msg("could not rollback transaction")
+						log.Error().Stack().Err(err).Msg("could not rollback transaction")
 					}
-					log.Warn().Err(err).Str("User", u).Msg("get portfolio ids failed")
+					log.Warn().Stack().Err(err).Str("User", u).Msg("get portfolio ids failed")
 					continue
 				}
 
@@ -251,7 +251,7 @@ func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 				p, err := portfolio.LoadFromDB(ids, u, dataManager)
 				if err != nil {
 					if err := trx.Rollback(context.Background()); err != nil {
-						log.Error().Err(err).Msg("could not rollback transaction")
+						log.Error().Stack().Err(err).Msg("could not rollback transaction")
 					}
 					log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
 				}
@@ -259,7 +259,7 @@ func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 			}
 
 			if err := trx.Commit(context.Background()); err != nil {
-				log.Error().Err(err).Msg("could not commit transaction")
+				log.Error().Stack().Err(err).Msg("could not commit transaction")
 			}
 		}
 	}
