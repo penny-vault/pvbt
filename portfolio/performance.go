@@ -417,6 +417,28 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 	perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
 	perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
 	perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
+
+	if metrics.BestYear.Year < 1900 && len(perf.Measurements) > 0 {
+		lastMeasurement := perf.Measurements[len(perf.Measurements)-1]
+		metrics.BestYear.Year = uint16(lastMeasurement.Time.Year())
+		switch kind {
+		case STRATEGY:
+			metrics.BestYear.Return = float32(perf.PortfolioReturns.TWRRYTD)
+		case BENCHMARK:
+			metrics.BestYear.Return = float32(perf.BenchmarkReturns.TWRRYTD)
+		}
+	}
+
+	if metrics.WorstYear.Year < 1900 && len(perf.Measurements) > 0 {
+		lastMeasurement := perf.Measurements[len(perf.Measurements)-1]
+		metrics.WorstYear.Year = uint16(lastMeasurement.Time.Year())
+		switch kind {
+		case STRATEGY:
+			metrics.WorstYear.Return = float32(perf.PortfolioReturns.TWRRYTD)
+		case BENCHMARK:
+			metrics.WorstYear.Return = float32(perf.BenchmarkReturns.TWRRYTD)
+		}
+	}
 }
 
 func getRiskFreeRate(ctx context.Context, dataManager *data.Manager, date time.Time) float64 {
