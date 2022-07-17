@@ -186,7 +186,8 @@ func (perf *Performance) AvgUlcerIndex(periods uint) float64 {
 		}
 	}
 
-	return stat.Mean(u, nil)
+	avgUlcerIndex := stat.Mean(u, nil)
+	return avgUlcerIndex
 }
 
 // Beta is a measure of the volatility—or systematic risk—of a security or portfolio

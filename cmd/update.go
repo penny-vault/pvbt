@@ -144,6 +144,7 @@ var updateCmd = &cobra.Command{
 				subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
 				continue
 			}
+			log.Info().Object("PortfolioMetrics", perf.PortfolioMetrics).Msg("Saving portfolio performance")
 			err = perf.Save(pm.Portfolio.UserID)
 			if err != nil {
 				subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")

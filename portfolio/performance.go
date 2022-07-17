@@ -417,6 +417,28 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 	perf.PortfolioReturns.TWRRYTD = perf.TWRRYtd(STRATEGY)
 	perf.BenchmarkReturns.MWRRYTD = perf.MWRRYtd(BENCHMARK)
 	perf.BenchmarkReturns.TWRRYTD = perf.TWRRYtd(BENCHMARK)
+
+	if metrics.BestYear.Year < 1900 && len(perf.Measurements) > 0 {
+		lastMeasurement := perf.Measurements[len(perf.Measurements)-1]
+		metrics.BestYear.Year = uint16(lastMeasurement.Time.Year())
+		switch kind {
+		case STRATEGY:
+			metrics.BestYear.Return = float32(perf.PortfolioReturns.TWRRYTD)
+		case BENCHMARK:
+			metrics.BestYear.Return = float32(perf.BenchmarkReturns.TWRRYTD)
+		}
+	}
+
+	if metrics.WorstYear.Year < 1900 && len(perf.Measurements) > 0 {
+		lastMeasurement := perf.Measurements[len(perf.Measurements)-1]
+		metrics.WorstYear.Year = uint16(lastMeasurement.Time.Year())
+		switch kind {
+		case STRATEGY:
+			metrics.WorstYear.Return = float32(perf.PortfolioReturns.TWRRYTD)
+		case BENCHMARK:
+			metrics.WorstYear.Return = float32(perf.BenchmarkReturns.TWRRYTD)
+		}
+	}
 }
 
 func getRiskFreeRate(ctx context.Context, dataManager *data.Manager, date time.Time) float64 {
@@ -796,7 +818,66 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 		return err
 	}
 
-	measurementSQL := "SELECT event_date, strategy_value, risk_free_value, holdings, benchmark_value, strategy_growth_of_10k, benchmark_growth_of_10k, risk_free_growth_of_10k, total_deposited_to_date, total_withdrawn_to_date FROM portfolio_measurements WHERE portfolio_id=$1 AND user_id=$2 ORDER BY event_date"
+	measurementSQL := `SELECT
+		event_date,
+		holdings,
+		alpha_1yr,
+		alpha_3yr,
+		alpha_5yr,
+		alpha_10yr,
+		beta_1yr,
+		beta_3yr,
+		beta_5yr,
+		beta_10yr,
+		twrr_1d,
+		twrr_wtd,
+		twrr_1wk,
+		twrr_mtd,
+		twrr_1mo,
+		twrr_3mo,
+		twrr_ytd,
+		twrr_1yr,
+		twrr_3yr,
+		twrr_5yr,
+		twrr_10yr,
+		mwrr_1d,
+		mwrr_wtd,
+		mwrr_1wk,
+		mwrr_mtd,
+		mwrr_1mo,
+		mwrr_3mo,
+		mwrr_ytd,
+		mwrr_1yr,
+		mwrr_3yr,
+		mwrr_5yr,
+		mwrr_10yr,
+		active_return_1yr,
+		active_return_3yr,
+		active_return_5yr,
+		active_return_10yr,
+		calmar_ratio,
+		downside_deviation,
+		information_ratio,
+		k_ratio,
+		keller_ratio,
+		sharpe_ratio,
+		sortino_ratio,
+		std_dev,
+		treynor_ratio,
+		ulcer_index,
+		benchmark_value,
+		strategy_growth_of_10k,
+		benchmark_growth_of_10k,
+		risk_free_growth_of_10k,
+		strategy_value,
+		benchmark_value,
+		risk_free_value,
+		total_deposited_to_date,
+		total_withdrawn_to_date,
+		justification
+	FROM portfolio_measurements
+	WHERE portfolio_id=$1 AND user_id=$2
+	ORDER BY event_date`
 	rows, err := trx.Query(context.Background(), measurementSQL, perf.PortfolioID, userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed executing measurement query")
@@ -810,7 +891,63 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	measurements := make([]*PerformanceMeasurement, 0, 1000)
 	for rows.Next() {
 		m := PerformanceMeasurement{}
-		err := rows.Scan(&m.Time, &m.Value, &m.RiskFreeValue, &m.Holdings, &m.BenchmarkValue, &m.StrategyGrowthOf10K, &m.BenchmarkGrowthOf10K, &m.RiskFreeGrowthOf10K, &m.TotalDeposited, &m.TotalWithdrawn)
+		err := rows.Scan(
+			&m.Time,
+			&m.Holdings,
+			&m.AlphaOneYear,
+			&m.AlphaThreeYear,
+			&m.AlphaFiveYear,
+			&m.AlphaTenYear,
+			&m.BetaOneYear,
+			&m.BetaThreeYear,
+			&m.BetaFiveYear,
+			&m.BetaTenYear,
+			&m.TWRROneDay,
+			&m.TWRRWeekToDate,
+			&m.TWRROneWeek,
+			&m.TWRRMonthToDate,
+			&m.TWRROneMonth,
+			&m.TWRRThreeMonth,
+			&m.TWRRYearToDate,
+			&m.TWRROneYear,
+			&m.TWRRThreeYear,
+			&m.TWRRFiveYear,
+			&m.TWRRTenYear,
+			&m.MWRROneDay,
+			&m.MWRRWeekToDate,
+			&m.MWRROneWeek,
+			&m.MWRRMonthToDate,
+			&m.MWRROneMonth,
+			&m.MWRRThreeMonth,
+			&m.MWRRYearToDate,
+			&m.MWRROneYear,
+			&m.MWRRThreeYear,
+			&m.MWRRFiveYear,
+			&m.MWRRTenYear,
+			&m.ActiveReturnOneYear,
+			&m.ActiveReturnThreeYear,
+			&m.ActiveReturnFiveYear,
+			&m.ActiveReturnTenYear,
+			&m.CalmarRatio,
+			&m.DownsideDeviation,
+			&m.InformationRatio,
+			&m.KRatio,
+			&m.KellerRatio,
+			&m.SharpeRatio,
+			&m.SortinoRatio,
+			&m.StdDev,
+			&m.TreynorRatio,
+			&m.UlcerIndex,
+			&m.BenchmarkValue,
+			&m.StrategyGrowthOf10K,
+			&m.BenchmarkGrowthOf10K,
+			&m.RiskFreeGrowthOf10K,
+			&m.Value,
+			&m.BenchmarkValue,
+			&m.RiskFreeValue,
+			&m.TotalDeposited,
+			&m.TotalWithdrawn,
+			&m.Justification)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
 			if err := trx.Rollback(context.Background()); err != nil {
@@ -901,7 +1038,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		perf.PortfolioMetrics.AvgDrawDown,
 		perf.PortfolioMetrics.SharpeRatioSinceInception,
 		perf.PortfolioMetrics.SortinoRatioSinceInception,
-		perf.PortfolioMetrics.UlcerIndexAvg)
+		perf.PortfolioMetrics.UlcerIndexP90)
 	if err != nil {
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
