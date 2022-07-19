@@ -140,7 +140,7 @@ func Connect() error {
 // LogOpenTransactions writes an INFO log for each open transaction
 func LogOpenTransactions() {
 	for k, v := range openTransactions {
-		log.Info().Str("TrxId", k).Str("Caller", v).Msg("open transactions")
+		log.Info().Str("TrxId", k).Str("Caller", v).Msg("open transaction")
 	}
 }
 
