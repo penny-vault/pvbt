@@ -145,7 +145,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -154,7 +154,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -163,7 +163,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	predictedPortfolio, err := mdep.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -171,10 +171,10 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
 	prepopulateDataCache(ctx, coveredPeriods, manager)
 
-	log.Info().Msg("MDEP computed")
+	subLog.Info().Msg("MDEP computed")
 
 	if err := db.Commit(ctx); err != nil {
-		log.Warn().Stack().Err(err).Msg("could not commit transaction")
+		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 
 	return targetPortfolio, predictedPortfolio, nil
