@@ -98,7 +98,7 @@ var updateCmd = &cobra.Command{
 		log.Info().Int("NumPortfolios", len(portfolios)).Time("Date", dt).Msg("updating portfolios")
 
 		for _, pm := range portfolios {
-			subLog := log.With().Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
+			subLog := log.With().Str("PortfolioName", pm.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
 			subLog.Info().Msg("updating portfolio")
 
 			subLog.Debug().Msg("loading transactions from DB")
@@ -225,7 +225,7 @@ func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 		for _, u := range users {
 			trx, err := database.TrxForUser(u)
 			if err != nil {
-				log.Panic().Err(err).Str("User", u).Msg("could not create trasnaction for user")
+				log.Panic().Err(err).Str("User", u).Msg("could not create transaction for user")
 			}
 
 			rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios WHERE temporary='f'")

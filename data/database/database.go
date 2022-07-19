@@ -19,8 +19,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/rs/zerolog/log"
@@ -47,6 +49,7 @@ const (
 // Private
 
 var pool PgxIface
+var openTransactions map[string]string
 
 func createUser(userID string) error {
 	if userID == "" {
@@ -115,6 +118,7 @@ func createUser(userID string) error {
 // Public
 
 func SetPool(myPool PgxIface) {
+	openTransactions = make(map[string]string)
 	pool = myPool
 }
 
@@ -129,11 +133,18 @@ func Connect() error {
 		log.Error().Stack().Err(err).Msg("could not ping database server")
 		return err
 	}
-	pool = myPool
+	SetPool(myPool)
 	return nil
 }
 
-// Create a trx with the appropriate user set
+// LogOpenTransactions writes an INFO log for each open transaction
+func LogOpenTransactions() {
+	for k, v := range openTransactions {
+		log.Info().Str("TrxId", k).Str("Caller", v).Msg("open transaction")
+	}
+}
+
+// TrxForUser creates a transaction with the appropriate user set
 // NOTE: the default use is pvapi which only has enough privileges to create new roles and switch to them.
 // Any kind of real work must be done with a user role which limits access to only that user
 func TrxForUser(userID string) (pgx.Tx, error) {
@@ -142,16 +153,28 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 		return nil, err
 	}
 
+	// record transactions in openTransaction log
+	_, file, lineno, ok := runtime.Caller(1)
+	caller := fmt.Sprintf("[%v] %s:%d", ok, file, lineno)
+	trxID := uuid.New().String()
+	openTransactions[trxID] = caller
+
+	wrappedTrx := &PvDbTx{
+		id:   trxID,
+		user: userID,
+		tx:   trx,
+	}
+
 	subLog := log.With().Str("UserID", userID).Logger()
 
 	// set user
 	ident := pgx.Identifier{userID}
 	sql := fmt.Sprintf("SET ROLE %s", ident.Sanitize())
-	_, err = trx.Exec(context.Background(), sql)
+	_, err = wrappedTrx.Exec(context.Background(), sql)
 	if err != nil {
 		// user doesn't exist -- create it
 		subLog.Warn().Stack().Err(err).Msg("role does not exist")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := wrappedTrx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			return nil, err
 		}
@@ -163,13 +186,14 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 		return TrxForUser(userID)
 	}
 
-	return trx, nil
+	return wrappedTrx, nil
 }
 
 // Get a list of users in the pvapi role
 func GetUsers() ([]string, error) {
 	trx, err := pool.Begin(context.Background())
 	if err != nil {
+		log.Error().Err(err).Msg("could not begin transaction")
 		return nil, err
 	}
 
@@ -212,6 +236,10 @@ func GetUsers() ([]string, error) {
 			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
+	}
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction")
 	}
 
 	return users, nil

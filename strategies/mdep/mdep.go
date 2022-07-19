@@ -30,7 +30,6 @@ package mdep
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -102,6 +101,9 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.Compute")
 	defer span.End()
 
+	subLog := log.With().Str("Strategy", "MDEP").Logger()
+	subLog.Info().Time("Start", manager.Begin).Time("End", manager.End).Msg("computing MDEP strategy")
+
 	// Ensure time range is valid
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -137,11 +139,13 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 
 	manager.Frequency = data.FrequencyDaily
 
+	subLog.Debug().Time("Start", manager.Begin).Time("End", manager.End).Msg("updated time period")
+
 	// get a list of dates to invest in
 	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -150,7 +154,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -159,7 +163,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	predictedPortfolio, err := mdep.buildPredictedPortfolio(ctx, tradeDays, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, nil, err
 	}
@@ -167,10 +171,10 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
 	prepopulateDataCache(ctx, coveredPeriods, manager)
 
-	log.Info().Msg("MDEP computed")
+	subLog.Info().Msg("MDEP computed")
 
 	if err := db.Commit(ctx); err != nil {
-		log.Warn().Stack().Err(err).Msg("could not commit transaction")
+		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 
 	return targetPortfolio, predictedPortfolio, nil
@@ -180,7 +184,8 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
 	defer span.End()
 
-	log.Info().Msg("build MDEP target portfolio")
+	subLog := log.With().Str("Strategy", "MDEP").Logger()
+	subLog.Debug().Msg("build target portfolio")
 
 	// build target portfolio
 	targetAssets := make([]interface{}, 0, 600)
@@ -228,7 +233,9 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
 	defer span.End()
-	log.Info().Msg("calculating predicted portfolio")
+
+	subLog := log.With().Str("Strategy", "MDEP").Logger()
+	subLog.Debug().Msg("calculating predicted portfolio")
 
 	var ticker string
 	predictedTarget := make(map[string]float64)
@@ -260,7 +267,8 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
 	defer span.End()
 
-	log.Info().Msg("pre-populate data cache")
+	subLog := log.With().Str("Strategy", "MDEP").Logger()
+	subLog.Debug().Msg("pre-populate data cache")
 	tickerSet := make(map[string]bool, len(covered))
 
 	begin := time.Now()
@@ -285,11 +293,10 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	manager.Begin = begin
 	manager.End = end
 
-	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Strs("Tickers", tickerList).Msg("querying database for eod")
+	subLog.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Strs("Tickers", tickerList).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
 		log.Error().Stack().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
 	}
-	fmt.Println("finished database query")
 }
 
 // findCoveredPeriods creates periods that each assets stock prices should be downloaded
@@ -297,7 +304,8 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "buildQueryPlan")
 	defer span.End()
 
-	log.Info().Msg("find covered periods in portfolio plan")
+	subLog := log.With().Str("Strategy", "MDEP").Logger()
+	subLog.Debug().Msg("find covered periods in portfolio plan")
 
 	coveredPeriods := make([]*Period, 0, target.NRows())
 	activeAssets := make(map[string]*Period)

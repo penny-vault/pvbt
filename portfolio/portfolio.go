@@ -801,6 +801,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 		return err
 	}
 
+	subLog.Info().Msg("computing portfolio strategy over date period")
 	targetPortfolio, predictedAssets, err := stratObject.Compute(ctx, pm.dataProxy)
 	if err != nil {
 		span.RecordError(err)
@@ -943,6 +944,11 @@ func (pm *Model) LoadTransactionsFromDB() error {
 		transactions = append(transactions, &t)
 	}
 	p.Transactions = transactions
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
+	}
+
 	return nil
 }
 
