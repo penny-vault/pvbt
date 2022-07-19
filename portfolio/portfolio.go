@@ -944,6 +944,11 @@ func (pm *Model) LoadTransactionsFromDB() error {
 		transactions = append(transactions, &t)
 	}
 	p.Transactions = transactions
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
+	}
+
 	return nil
 }
 
