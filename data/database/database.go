@@ -170,6 +170,7 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 func GetUsers() ([]string, error) {
 	trx, err := pool.Begin(context.Background())
 	if err != nil {
+		log.Error().Err(err).Msg("could not begin transaction")
 		return nil, err
 	}
 
@@ -212,6 +213,10 @@ func GetUsers() ([]string, error) {
 			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
+	}
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Err(err).Msg("could not commit transaction")
 	}
 
 	return users, nil
