@@ -966,6 +966,18 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	return nil
 }
 
+// Debugging functions
+
+// LogSummary will log a summary of the performance simulation
+func (perf *Performance) LogSummary() {
+	firstMeas := perf.Measurements[0]
+	lastMeas := perf.Measurements[len(perf.Measurements)-1]
+	log.Info().Time("PeriodStart", perf.PeriodStart).Time("PeriodEnd", perf.PeriodEnd).Time("MeasurementStart", firstMeas.Time).Time("MeasurementEnd", lastMeas.Time).Msg("performance summary")
+	log.Info().Float32("1D", lastMeas.TWRROneDay).Float32("1W", lastMeas.TWRROneWeek).Float32("1M", lastMeas.TWRROneMonth).Float32("WTD", lastMeas.TWRRWeekToDate).Float32("MTD", lastMeas.TWRRMonthToDate).Float32("YTD", lastMeas.TWRRYearToDate).Float32("1Y", lastMeas.TWRROneYear).Float32("3Y", lastMeas.TWRRThreeYear).Float32("5Y", lastMeas.TWRRFiveYear).Float32("10Y", lastMeas.TWRRTenYear).Msg("time-weighted rate of return summary")
+	log.Info().Float32("1D", lastMeas.MWRROneDay).Float32("1W", lastMeas.MWRROneWeek).Float32("1M", lastMeas.MWRROneMonth).Float32("WTD", lastMeas.MWRRWeekToDate).Float32("MTD", lastMeas.MWRRMonthToDate).Float32("YTD", lastMeas.MWRRYearToDate).Float32("1Y", lastMeas.MWRROneYear).Float32("3Y", lastMeas.MWRRThreeYear).Float32("5Y", lastMeas.MWRRFiveYear).Float32("10Y", lastMeas.MWRRTenYear).Msg("money-weighted rate of return summary")
+	log.Info().Float32("Sortino", lastMeas.SortinoRatio).Float32("SharpeRatio", lastMeas.SharpeRatio).Float32("UlcerIndex", lastMeas.UlcerIndex).Msg("risk measures summary")
+}
+
 // SAVE
 
 func (perf *Performance) Save(userID string) error {
