@@ -141,6 +141,9 @@ var updateCmd = &cobra.Command{
 				continue
 			}
 
+			lastTime := perf.Measurements[len(perf.Measurements)-1].Time
+			pm.Portfolio.EndDate = lastTime
+
 			if !testUpdateCMD {
 				subLog.Debug().Msg("saving portfolio to DB")
 				err = pm.Save(pm.Portfolio.UserID)
