@@ -130,6 +130,29 @@ func NewPerformance(p *Portfolio) *Performance {
 	return &perf
 }
 
+// measurementIndexForDate finds the measurement for the requested date
+func (perf *Performance) measurementIndexForDate(dt time.Time) int {
+	// TODO update to Binary Search
+	var val *PerformanceMeasurement
+	idx := 0
+
+	if len(perf.Measurements) == 0 {
+		return -1
+	}
+
+	// There are a number of cases to consider here:
+	// 1) dt is before all measurements
+	// 2) dt is somewhere within the transaction stream
+	for idx, val = range perf.Measurements {
+		if dt.Equal(val.Time) || dt.Before(val.Time) {
+			return idx
+		}
+	}
+
+	// 3) dt is after all transactions
+	return idx
+}
+
 // transactionIndexForDate find the transaction index that has the earliest date on or after dt
 func (pm *Model) transactionIndexForDate(dt time.Time) int {
 	// TODO update to Binary Search
@@ -480,6 +503,7 @@ func (perf *Performance) calculateReturns(measurement *PerformanceMeasurement, d
 	measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
 	measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
 	measurement.TWRRYearToDate = float32(perf.TWRR(dates.DaysToStartOfYear, STRATEGY))
+	log.Debug().Float32("TWRRYearToDate", measurement.TWRRYearToDate).Uint("DaysToStartOfYear", dates.DaysToStartOfYear).Msg("calculating TWRRYearToDate")
 	measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
 	measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
 	measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
@@ -567,6 +591,31 @@ func (perf *Performance) calculateGrowthOf10k(measurement *PerformanceMeasuremen
 	measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 }
 
+func (perf *Performance) initializeDates(calculationStart time.Time) *dateBundle {
+	dates := &dateBundle{
+		StartOfMonth: calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1),
+		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
+		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
+	}
+
+	measurementIndexAtStartOfWeek := perf.measurementIndexForDate(dates.StartOfWeek)
+	measurementIndexAtStartOfMonth := perf.measurementIndexForDate(dates.StartOfMonth)
+	measurementIndexAtStartOfYear := perf.measurementIndexForDate(dates.StartOfYear)
+
+	if measurementIndexAtStartOfWeek >= 0 {
+		dates.DaysToStartOfWeek = uint(len(perf.Measurements) - measurementIndexAtStartOfWeek)
+	}
+
+	if measurementIndexAtStartOfMonth >= 0 {
+		dates.DaysToStartOfMonth = uint(len(perf.Measurements)-measurementIndexAtStartOfMonth) + 1
+	}
+
+	if measurementIndexAtStartOfYear >= 0 {
+		dates.DaysToStartOfYear = uint(len(perf.Measurements)-measurementIndexAtStartOfYear) + 1
+	}
+	return dates
+}
+
 // CalculateThrough computes performance metrics for the given portfolio until `through`
 func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
@@ -647,14 +696,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		}
 	}
 
-	dates := &dateBundle{
-		StartOfMonth: calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1),
-		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
-		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
-	}
-	dates.DaysToStartOfMonth = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfMonth))
-	dates.DaysToStartOfWeek = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfWeek))
-	dates.DaysToStartOfYear = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfYear))
+	dates := perf.initializeDates(calculationStart)
 
 	var ytdBench float32
 	if len(perf.Measurements) > 0 {
@@ -964,6 +1006,18 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to the database")
 	}
 	return nil
+}
+
+// Debugging functions
+
+// LogSummary will log a summary of the performance simulation
+func (perf *Performance) LogSummary() {
+	firstMeas := perf.Measurements[0]
+	lastMeas := perf.Measurements[len(perf.Measurements)-1]
+	log.Info().Time("PeriodStart", perf.PeriodStart).Time("PeriodEnd", perf.PeriodEnd).Time("MeasurementStart", firstMeas.Time).Time("MeasurementEnd", lastMeas.Time).Msg("performance summary")
+	log.Info().Float32("1D", lastMeas.TWRROneDay).Float32("1W", lastMeas.TWRROneWeek).Float32("1M", lastMeas.TWRROneMonth).Float32("WTD", lastMeas.TWRRWeekToDate).Float32("MTD", lastMeas.TWRRMonthToDate).Float32("YTD", lastMeas.TWRRYearToDate).Float32("1Y", lastMeas.TWRROneYear).Float32("3Y", lastMeas.TWRRThreeYear).Float32("5Y", lastMeas.TWRRFiveYear).Float32("10Y", lastMeas.TWRRTenYear).Msg("time-weighted rate of return summary")
+	log.Info().Float32("1D", lastMeas.MWRROneDay).Float32("1W", lastMeas.MWRROneWeek).Float32("1M", lastMeas.MWRROneMonth).Float32("WTD", lastMeas.MWRRWeekToDate).Float32("MTD", lastMeas.MWRRMonthToDate).Float32("YTD", lastMeas.MWRRYearToDate).Float32("1Y", lastMeas.MWRROneYear).Float32("3Y", lastMeas.MWRRThreeYear).Float32("5Y", lastMeas.MWRRFiveYear).Float32("10Y", lastMeas.MWRRTenYear).Msg("money-weighted rate of return summary")
+	log.Info().Float32("Sortino", lastMeas.SortinoRatio).Float32("SharpeRatio", lastMeas.SharpeRatio).Float32("UlcerIndex", lastMeas.UlcerIndex).Msg("risk measures summary")
 }
 
 // SAVE

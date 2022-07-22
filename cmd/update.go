@@ -36,12 +36,15 @@ import (
 	"github.com/spf13/viper"
 )
 
-var PortfolioID string
-var ToDate string
+var updateCmdPortfolioID string
+var updateCmdCalculateToDate string
+var testUpdateCMD bool
 
 func init() {
-	updateCmd.Flags().StringVar(&PortfolioID, "portfolioID", "", "Portfolio to update specified as {userID}:{portfolioID}")
-	updateCmd.Flags().StringVar(&ToDate, "date", "", "Date specified as YYYY-MM-dd to compute measurements through")
+	updateCmd.Flags().StringVar(&updateCmdPortfolioID, "portfolioID", "", "Portfolio to update specified as {userID}:{portfolioID}")
+	updateCmd.Flags().StringVar(&updateCmdCalculateToDate, "date", "", "Date specified as YYYY-MM-dd to compute measurements through")
+	updateCmd.Flags().BoolVarP(&testUpdateCMD, "test", "t", false, "Run update in test mode that does not save results to DB.")
+
 	rootCmd.AddCommand(updateCmd)
 }
 
@@ -61,12 +64,12 @@ var updateCmd = &cobra.Command{
 
 		// get time
 		var dt time.Time
-		if ToDate == "" {
+		if updateCmdCalculateToDate == "" {
 			dt = time.Now()
 		} else {
-			dt, err = time.Parse("2006-01-02", ToDate)
+			dt, err = time.Parse("2006-01-02", updateCmdCalculateToDate)
 			if err != nil {
-				log.Fatal().Err(err).Str("InputStr", ToDate).Msg("could not parse to date - expected format 2006-01-02")
+				log.Fatal().Err(err).Str("InputStr", updateCmdCalculateToDate).Msg("could not parse to date - expected format 2006-01-02")
 			}
 
 			// convert to EST
@@ -87,7 +90,7 @@ var updateCmd = &cobra.Command{
 
 		strategies.LoadStrategyMetricsFromDb()
 		for _, strat := range strategies.StrategyList {
-			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok {
+			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok && !testUpdateCMD {
 				if err := createStrategyPortfolio(strat, dt, &dataManager); err != nil {
 					log.Panic().Err(err).Msg("could not create portfolio")
 				}
@@ -138,16 +141,22 @@ var updateCmd = &cobra.Command{
 				continue
 			}
 
-			subLog.Debug().Msg("saving portfolio to DB")
-			err = pm.Save(pm.Portfolio.UserID)
-			if err != nil {
-				subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
-				continue
-			}
-			log.Info().Object("PortfolioMetrics", perf.PortfolioMetrics).Msg("Saving portfolio performance")
-			err = perf.Save(pm.Portfolio.UserID)
-			if err != nil {
-				subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
+			if !testUpdateCMD {
+				subLog.Debug().Msg("saving portfolio to DB")
+				err = pm.Save(pm.Portfolio.UserID)
+				if err != nil {
+					subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
+					continue
+				}
+				lastMeas := perf.Measurements[len(perf.Measurements)-1]
+				log.Info().Object("PortfolioMetrics", perf.PortfolioMetrics).Time("PerformanceStart", perf.Measurements[0].Time).Time("PerformanceEnd", lastMeas.Time).Msg("Saving portfolio performance")
+				err = perf.Save(pm.Portfolio.UserID)
+				if err != nil {
+					subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
+				}
+			} else {
+				// since we are testing print results out
+				perf.LogSummary()
 			}
 
 			subLog.Debug().Msg("finished updating portfolio")
@@ -198,17 +207,17 @@ func createStrategyPortfolio(strat *strategy.Info, endDate time.Time, manager *d
 func getPortfolios(dataManager *data.Manager) []*portfolio.Model {
 	// get a list of portfolio id's to update
 	portfolios := make([]*portfolio.Model, 0, 100)
-	if PortfolioID != "" {
-		portfolioParts := strings.Split(PortfolioID, ":")
+	if updateCmdPortfolioID != "" {
+		portfolioParts := strings.Split(updateCmdPortfolioID, ":")
 		if len(portfolioParts) != 2 {
-			log.Fatal().Str("InputStr", PortfolioID).Int("LenPortfolioParts", len(portfolioParts)).Msg("must specify portfolioID as {userID}:{portfolioID}")
+			log.Fatal().Str("InputStr", updateCmdPortfolioID).Int("LenPortfolioParts", len(portfolioParts)).Msg("must specify portfolioID as {userID}:{portfolioID}")
 		}
 		u := portfolioParts[0]
 		pIDStr := portfolioParts[1]
 		ids := []string{
 			pIDStr,
 		}
-		log.Info().Str("PortfolioID", PortfolioID).Msg("load portfolio from DB")
+		log.Info().Str("PortfolioID", updateCmdPortfolioID).Msg("load portfolio from DB")
 		p, err := portfolio.LoadFromDB(ids, u, dataManager)
 		if err != nil {
 			log.Fatal().Err(err).Msg("could not load portfolio from DB")
