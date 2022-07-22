@@ -591,6 +591,31 @@ func (perf *Performance) calculateGrowthOf10k(measurement *PerformanceMeasuremen
 	measurement.RiskFreeGrowthOf10K = riskFreeGrowth
 }
 
+func (perf *Performance) initializeDates(calculationStart time.Time) *dateBundle {
+	dates := &dateBundle{
+		StartOfMonth: calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1),
+		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
+		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
+	}
+
+	measurementIndexAtStartOfWeek := perf.measurementIndexForDate(dates.StartOfWeek)
+	measurementIndexAtStartOfMonth := perf.measurementIndexForDate(dates.StartOfMonth)
+	measurementIndexAtStartOfYear := perf.measurementIndexForDate(dates.StartOfYear)
+
+	if measurementIndexAtStartOfWeek >= 0 {
+		dates.DaysToStartOfWeek = uint(len(perf.Measurements) - measurementIndexAtStartOfWeek)
+	}
+
+	if measurementIndexAtStartOfMonth >= 0 {
+		dates.DaysToStartOfMonth = uint(len(perf.Measurements)-measurementIndexAtStartOfMonth) + 1
+	}
+
+	if measurementIndexAtStartOfYear >= 0 {
+		dates.DaysToStartOfYear = uint(len(perf.Measurements)-measurementIndexAtStartOfYear) + 1
+	}
+	return dates
+}
+
 // CalculateThrough computes performance metrics for the given portfolio until `through`
 func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
@@ -671,34 +696,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		}
 	}
 
-	dates := &dateBundle{
-		StartOfMonth: calculationStart.AddDate(0, 0, -1*int(calculationStart.Day())+1),
-		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
-		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
-	}
-
-	measurementIndexAtStartOfWeek := perf.measurementIndexForDate(dates.StartOfWeek)
-	measurementIndexAtStartOfMonth := perf.measurementIndexForDate(dates.StartOfMonth)
-	measurementIndexAtStartOfYear := perf.measurementIndexForDate(dates.StartOfYear)
-
-	if measurementIndexAtStartOfWeek >= 0 {
-		dates.DaysToStartOfWeek = uint(len(perf.Measurements) - measurementIndexAtStartOfWeek)
-	}
-
-	if measurementIndexAtStartOfMonth >= 0 {
-		dates.DaysToStartOfMonth = uint(len(perf.Measurements)-measurementIndexAtStartOfMonth) + 1
-	}
-
-	if measurementIndexAtStartOfYear >= 0 {
-		dates.DaysToStartOfYear = uint(len(perf.Measurements)-measurementIndexAtStartOfYear) + 1
-	}
-
-	if len(perf.Measurements) == 0 {
-		log.Debug().Time("LastMeasurementTime", time.Time{}).Uint("daysToStartOfWeek", dates.DaysToStartOfWeek).Uint("daysToStartOfMonth", dates.DaysToStartOfMonth).Uint("daysToStartOfYear", dates.DaysToStartOfYear).Msg("days calc")
-	} else {
-		measN := perf.Measurements[len(perf.Measurements)-1]
-		log.Debug().Time("LastMeasurementTime", measN.Time).Uint("daysToStartOfWeek", dates.DaysToStartOfWeek).Uint("daysToStartOfMonth", dates.DaysToStartOfMonth).Uint("daysToStartOfYear", dates.DaysToStartOfYear).Msg("days calc")
-	}
+	dates := perf.initializeDates(calculationStart)
 
 	var ytdBench float32
 	if len(perf.Measurements) > 0 {
