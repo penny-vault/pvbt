@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - /v1/ api now returns the current time in it's message
-- Upgraded all libraries, including go-fiber to 2.13.0
+- Upgraded all libraries
 - Switch to faster JSON serializer/deserializer: goccy/go-json, in some cases
   it is up to 2x faster
 - Portfolio metrics are now computed using daily values (was formerly monthly)
