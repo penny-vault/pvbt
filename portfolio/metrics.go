@@ -701,8 +701,10 @@ func (perf *Performance) TreynorRatio(periods uint) float64 {
 
 // TWRR computes the time-weighted rate of return for the specified number of periods
 func (perf *Performance) TWRR(periods uint, kind string) float64 {
+	subLog := log.With().Uint("Periods", periods).Str("kind", kind).Logger()
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
+		subLog.Warn().Int("N Measurements", n).Msg("period out of bounds")
 		return math.NaN()
 	}
 
@@ -712,6 +714,7 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 	startIdx := len(perf.Measurements) - pp - 1
 	endIdx := len(perf.Measurements) - 1
 	if startIdx < 0 {
+		subLog.Warn().Int("StartIdx", startIdx).Msg("TWRR NaN for period due to negative start idx")
 		return math.NaN()
 	}
 
@@ -734,6 +737,9 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 			eValue = e.RiskFreeValue
 		}
 		r0 := (eValue - deposit + withdraw) / sValue
+		if math.IsNaN(r0) {
+			subLog.Warn().Time("sTime", s.Time).Time("eTime", e.Time).Float64("eValue", eValue).Float64("deposit", deposit).Float64("withdraw", withdraw).Float64("sValue", sValue).Msg("r0 is NaN")
+		}
 		rate *= r0
 	}
 
