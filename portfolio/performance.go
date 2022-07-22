@@ -130,6 +130,29 @@ func NewPerformance(p *Portfolio) *Performance {
 	return &perf
 }
 
+// measurementIndexForDate finds the measurement for the requested date
+func (perf *Performance) measurementIndexForDate(dt time.Time) int {
+	// TODO update to Binary Search
+	var val *PerformanceMeasurement
+	idx := 0
+
+	if len(perf.Measurements) == 0 {
+		return -1
+	}
+
+	// There are a number of cases to consider here:
+	// 1) dt is before all measurements
+	// 2) dt is somewhere within the transaction stream
+	for idx, val = range perf.Measurements {
+		if dt.Equal(val.Time) || dt.Before(val.Time) {
+			return idx
+		}
+	}
+
+	// 3) dt is after all transactions
+	return idx
+}
+
 // transactionIndexForDate find the transaction index that has the earliest date on or after dt
 func (pm *Model) transactionIndexForDate(dt time.Time) int {
 	// TODO update to Binary Search
@@ -480,6 +503,7 @@ func (perf *Performance) calculateReturns(measurement *PerformanceMeasurement, d
 	measurement.TWRROneMonth = float32(perf.TWRR(21, STRATEGY))
 	measurement.TWRRThreeMonth = float32(perf.TWRR(63, STRATEGY))
 	measurement.TWRRYearToDate = float32(perf.TWRR(dates.DaysToStartOfYear, STRATEGY))
+	log.Debug().Float32("TWRRYearToDate", measurement.TWRRYearToDate).Uint("DaysToStartOfYear", dates.DaysToStartOfYear).Msg("calculating TWRRYearToDate")
 	measurement.TWRROneYear = float32(perf.TWRR(252, STRATEGY))
 	measurement.TWRRThreeYear = float32(perf.TWRR(756, STRATEGY))
 	measurement.TWRRFiveYear = float32(perf.TWRR(1260, STRATEGY))
@@ -652,9 +676,29 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		StartOfWeek:  calculationStart.AddDate(0, 0, -1*int(calculationStart.Weekday())+1),
 		StartOfYear:  calculationStart.AddDate(0, 0, -1*int(calculationStart.YearDay())+1),
 	}
-	dates.DaysToStartOfMonth = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfMonth))
-	dates.DaysToStartOfWeek = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfWeek))
-	dates.DaysToStartOfYear = uint(trxIdx - pm.transactionIndexForDate(dates.StartOfYear))
+
+	measurementIndexAtStartOfWeek := perf.measurementIndexForDate(dates.StartOfWeek)
+	measurementIndexAtStartOfMonth := perf.measurementIndexForDate(dates.StartOfMonth)
+	measurementIndexAtStartOfYear := perf.measurementIndexForDate(dates.StartOfYear)
+
+	if measurementIndexAtStartOfWeek >= 0 {
+		dates.DaysToStartOfWeek = uint(len(perf.Measurements) - measurementIndexAtStartOfWeek)
+	}
+
+	if measurementIndexAtStartOfMonth >= 0 {
+		dates.DaysToStartOfMonth = uint(len(perf.Measurements)-measurementIndexAtStartOfMonth) + 1
+	}
+
+	if measurementIndexAtStartOfYear >= 0 {
+		dates.DaysToStartOfYear = uint(len(perf.Measurements)-measurementIndexAtStartOfYear) + 1
+	}
+
+	if len(perf.Measurements) == 0 {
+		log.Debug().Time("LastMeasurementTime", time.Time{}).Uint("daysToStartOfWeek", dates.DaysToStartOfWeek).Uint("daysToStartOfMonth", dates.DaysToStartOfMonth).Uint("daysToStartOfYear", dates.DaysToStartOfYear).Msg("days calc")
+	} else {
+		measN := perf.Measurements[len(perf.Measurements)-1]
+		log.Debug().Time("LastMeasurementTime", measN.Time).Uint("daysToStartOfWeek", dates.DaysToStartOfWeek).Uint("daysToStartOfMonth", dates.DaysToStartOfMonth).Uint("daysToStartOfYear", dates.DaysToStartOfYear).Msg("days calc")
+	}
 
 	var ytdBench float32
 	if len(perf.Measurements) > 0 {
