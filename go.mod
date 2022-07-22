@@ -16,7 +16,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/guptarohit/asciigraph v0.5.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
-	github.com/jackc/pgsql v0.0.0-20220107225750-271c34d72320
+	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/jdfergason/jwt/v2 v2.2.6
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
@@ -36,7 +36,7 @@ require (
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+	golang.org/x/sys v0.0.0-20220721230656-c6bc011c0c49 // indirect
 	golang.org/x/text v0.3.7 // indirect
 	gonum.org/v1/gonum v0.11.0
 	google.golang.org/protobuf v1.28.0 // indirect
@@ -60,7 +60,8 @@ require (
 	github.com/frankban/quicktest v1.14.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/btree v1.1.2 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.10.3 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.11.0 // indirect
+	github.com/jackc/pgx/v5 v5.0.0-alpha.5 // indirect
 	github.com/kr/pretty v0.3.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
@@ -74,7 +75,7 @@ require (
 	github.com/xitongsys/parquet-go-source v0.0.0-20220624101223-5cb561a812f4 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.8.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
-	google.golang.org/genproto v0.0.0-20220715211116-798f69b842b9 // indirect
+	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac // indirect
 )
 
 require (
@@ -94,8 +95,8 @@ require (
 	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
 	github.com/jackc/pgtype v1.11.0
-	github.com/jackc/puddle v1.2.1 // indirect
-	github.com/klauspost/compress v1.15.8 // indirect
+	github.com/jackc/puddle v1.2.2-0.20220404125616-4e959849469a // indirect
+	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.1 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
@@ -107,7 +108,7 @@ require (
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/sandertv/go-formula/v2 v2.0.0-alpha.7 // indirect
-	github.com/spf13/afero v1.9.0 // indirect
+	github.com/spf13/afero v1.9.2 // indirect
 	github.com/spf13/jwalterweatherman v1.1.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/subosito/gotenv v1.4.0 // indirect
