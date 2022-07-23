@@ -704,7 +704,6 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 	subLog := log.With().Uint("Periods", periods).Str("kind", kind).Logger()
 	n := len(perf.Measurements)
 	if (periods+1) > uint(n) || periods < 1 {
-		subLog.Warn().Int("N Measurements", n).Msg("period out of bounds")
 		return math.NaN()
 	}
 
