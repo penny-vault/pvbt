@@ -37,7 +37,7 @@ var _ = Describe("Daa", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		err     error
-		manager data.Manager
+		manager *data.Manager
 		strat   *daa.KellersDefensiveAssetAllocation
 		target  *dataframe.DataFrame
 		tz      *time.Location
@@ -58,9 +58,7 @@ var _ = Describe("Daa", func() {
 		}
 		strat = tmp.(*daa.KellersDefensiveAssetAllocation)
 
-		manager = data.NewManager(map[string]string{
-			"tiingo": "TEST",
-		})
+		manager = data.NewManager()
 
 		dbPool, err = pgxmock.NewConn()
 		Expect(err).To(BeNil())
@@ -101,7 +99,7 @@ var _ = Describe("Daa", func() {
 					},
 					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
 
-				target, _, err = strat.Compute(context.Background(), &manager)
+				target, _, err = strat.Compute(context.Background(), manager)
 			})
 
 			It("should not error", func() {

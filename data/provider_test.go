@@ -31,7 +31,7 @@ import (
 var _ = Describe("Provider", func() {
 	var (
 		ctx       context.Context
-		dataProxy data.Manager
+		dataProxy *data.Manager
 		dbPool    pgxmock.PgxConnIface
 		tz        *time.Location
 	)
@@ -54,9 +54,7 @@ var _ = Describe("Provider", func() {
 		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
-		dataProxy = data.NewManager(map[string]string{
-			"tiingo": "TEST",
-		})
+		dataProxy = data.NewManager()
 
 		dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 		dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)

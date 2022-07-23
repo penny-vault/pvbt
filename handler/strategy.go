@@ -115,9 +115,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	credentials := make(map[string]string)
-	credentials["tiingo"] = c.Locals("tiingoToken").(string)
-	manager := data.NewManager(credentials)
+	manager := data.NewManager()
 
 	params := map[string]json.RawMessage{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -125,7 +123,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate, &manager)
+	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate, manager)
 	if err != nil {
 		if err.Error() == "strategy not found" {
 			return fiber.ErrNotFound

@@ -38,7 +38,7 @@ var _ = Describe("Adm", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		strat   *adm.AcceleratingDualMomentum
-		manager data.Manager
+		manager *data.Manager
 		tz      *time.Location
 		target  *dataframe.DataFrame
 		err     error
@@ -56,9 +56,7 @@ var _ = Describe("Adm", func() {
 		tmp, _ := adm.New(params)
 		strat = tmp.(*adm.AcceleratingDualMomentum)
 
-		manager = data.NewManager(map[string]string{
-			"tiingo": "TEST",
-		})
+		manager = data.NewManager()
 
 		dbPool, err = pgxmock.NewConn()
 		Expect(err).To(BeNil())
@@ -109,7 +107,7 @@ var _ = Describe("Adm", func() {
 					}).Rows())
 				dbPool.ExpectCommit()
 
-				target, _, err = strat.Compute(context.Background(), &manager)
+				target, _, err = strat.Compute(context.Background(), manager)
 			})
 
 			It("should not error", func() {

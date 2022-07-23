@@ -82,7 +82,6 @@ type Manager struct {
 	Frequency       Frequency
 	cache           map[string]float64
 	lastCache       map[string]float64
-	credentials     map[string]string
 	providers       map[string]Provider
 	dateProvider    DateProvider
 	lastRiskFreeIdx int
@@ -114,20 +113,19 @@ func InitializeDataManager() {
 }
 
 // NewManager create a new data manager
-func NewManager(credentials map[string]string) Manager {
+func NewManager() *Manager {
 	var m = Manager{
-		Frequency:   FrequencyMonthly,
-		cache:       make(map[string]float64, 1_000_000),
-		lastCache:   make(map[string]float64, 10_000),
-		credentials: credentials,
-		providers:   map[string]Provider{},
+		Frequency: FrequencyMonthly,
+		cache:     make(map[string]float64, 1_000_000),
+		lastCache: make(map[string]float64, 10_000),
+		providers: map[string]Provider{},
 	}
 
 	pvdb := NewPVDB(m.cache, buildHashKey)
 	m.RegisterDataProvider(pvdb)
 	m.dateProvider = pvdb
 
-	return m
+	return &m
 }
 
 // Get dividend map

@@ -34,16 +34,14 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// ApiKey returns a hex-encoded JSON string containing the userID and tiingoToken
+// ApiKey returns a hex-encoded JSON string containing the userID
 type APIKeyResponse struct {
 	Token string `json:"token"`
 }
 
 func APIKey(c *fiber.Ctx) error {
-	// get tiingo token from jwt claims
 	pvToken := make(map[string]string)
 	pvToken["userID"] = c.Locals("userID").(string)
-	pvToken["tiingo"] = c.Locals("tiingoToken").(string)
 
 	jsonPVToken, err := json.Marshal(pvToken)
 	if err != nil {
@@ -149,12 +147,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	credentials := make(map[string]string)
-
-	// get tiingo token from jwt claims
-	credentials["tiingo"] = c.Locals("tiingoToken").(string)
-
-	manager := data.NewManager(credentials)
+	manager := data.NewManager()
 	manager.Begin = startDate
 	manager.End = endDate
 
@@ -181,7 +174,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
-	p := portfolio.NewPortfolio(ticker, startDate, 10000, &manager)
+	p := portfolio.NewPortfolio(ticker, startDate, 10000, manager)
 	err = p.TargetPortfolio(context.Background(), targetPortfolio)
 	if err != nil {
 		return fiber.ErrBadRequest

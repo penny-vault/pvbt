@@ -18,29 +18,28 @@ package portfolio
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"time"
 
+	"github.com/goccy/go-json"
+	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
+	"github.com/jackc/pgx/v4"
+	"github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/dfextras"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
+	"github.com/rs/zerolog/log"
+	"github.com/zeebo/blake3"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgtype"
-	"github.com/jackc/pgx/v4"
-	"github.com/jdfergason/dataframe-go"
-	"github.com/rs/zerolog/log"
-	"github.com/zeebo/blake3"
 )
 
 var (
@@ -938,7 +937,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 			t.Shares = shares.Float
 		}
 		if sourceID.Status == pgtype.Present {
-			t.SourceID = string(sourceID.Bytes)
+			t.SourceID = hex.EncodeToString(sourceID.Bytes)
 		}
 
 		transactions = append(transactions, &t)
@@ -1251,33 +1250,58 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 		if t.TaxDisposition == "" {
 			t.TaxDisposition = "TAXABLE"
 		}
+		var jsonJustification []byte
+		if len(t.Justification) > 0 {
+			var err error
+			jsonJustification, err = json.Marshal(t.Justification)
+			if err != nil {
+				log.Error().Err(err).Msg("could not marshal to JSON the justification array")
+			}
+		}
 		_, err := trx.Exec(context.Background(), transactionSQL,
-			t.ID,             // 1
-			p.ID,             // 2
-			t.Kind,           // 3
-			t.Cleared,        // 4
-			t.Commission,     // 5
-			t.CompositeFIGI,  // 6
-			t.Date,           // 7
-			t.Justification,  // 8
-			t.Memo,           // 9
-			t.PricePerShare,  // 10
-			t.Shares,         // 11
-			t.Source,         // 12
-			t.SourceID,       // 13
-			t.Tags,           // 14
-			t.TaxDisposition, // 15
-			t.Ticker,         // 16
-			t.TotalValue,     // 17
-			idx,              // 18
-			userID,           // 19
+			t.ID,              // 1
+			p.ID,              // 2
+			t.Kind,            // 3
+			t.Cleared,         // 4
+			t.Commission,      // 5
+			t.CompositeFIGI,   // 6
+			t.Date,            // 7
+			jsonJustification, // 8
+			t.Memo,            // 9
+			t.PricePerShare,   // 10
+			t.Shares,          // 11
+			t.Source,          // 12
+			t.SourceID,        // 13
+			t.Tags,            // 14
+			t.TaxDisposition,  // 15
+			t.Ticker,          // 16
+			t.TotalValue,      // 17
+			idx,               // 18
+			userID,            // 19
 		)
 		if err != nil {
 			log.Warn().Stack().Err(err).
 				Str("PortfolioID", hex.EncodeToString(p.ID)).
 				Str("TransactionID", hex.EncodeToString(t.ID)).
 				Str("Query", transactionSQL).
-				Msg("failed to save portfolio")
+				Str("Kind", t.Kind).
+				Bool("Cleared", t.Cleared).
+				Float64("Commission", t.Commission).
+				Str("CompositeFigi", t.CompositeFIGI).
+				Time("Date", t.Date).
+				Bytes("Justification", jsonJustification).
+				Str("Memo", t.Memo).
+				Float64("PricePerShare", t.PricePerShare).
+				Float64("Shares", t.Shares).
+				Str("Source", t.Source).
+				Str("SourceID", t.SourceID).
+				Strs("Tags", t.Tags).
+				Str("TaxDisposition", t.TaxDisposition).
+				Str("Ticker", t.Ticker).
+				Float64("TotalValue", t.TotalValue).
+				Int("Idx", idx).
+				Str("UserID", userID).
+				Msg("failed to save transaction")
 			if err := trx.Rollback(context.Background()); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}

@@ -32,7 +32,6 @@ import (
 
 type apiToken struct {
 	userID string
-	tiingo string
 }
 
 // JWTAuth instantiate JWT auth middleware
@@ -88,7 +87,6 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 		c.Locals("userID", v.userID)
-		c.Locals("tiingoToken", v.tiingo)
 		return c.Next()
 	}
 
@@ -107,14 +105,6 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 		// store user ID and token in c.Locals
 		jwtToken := c.Locals("user").(jwt.Token)
 		c.Locals("userID", jwtToken.Subject())
-
-		if tiingoToken, ok := jwtToken.Get(`https://pennyvault.com/tiingo_token`); ok {
-			c.Locals("tiingoToken", tiingoToken.(string))
-		} else {
-			log.Warn().Stack().Msg("jwt token does not have expected claim: https://pennyvault.com/tiingo_token")
-			return c.Status(fiber.StatusBadRequest).SendString("invalid jwt token")
-		}
-
 		return c.Next()
 	}
 }

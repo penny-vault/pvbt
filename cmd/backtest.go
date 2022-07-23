@@ -17,10 +17,10 @@ package cmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
@@ -29,7 +29,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -54,10 +53,7 @@ var backtestCmd = &cobra.Command{
 
 		// initialize strategies
 		strategies.InitializeStrategyMap()
-
-		credentials := make(map[string]string)
-		credentials["tiingo"] = viper.GetString("tiingo.system_token")
-		dataManager := data.NewManager(credentials)
+		dataManager := data.NewManager()
 
 		strategies.LoadStrategyMetricsFromDb()
 		strat := strategies.StrategyMap[args[0]]
@@ -75,7 +71,7 @@ var backtestCmd = &cobra.Command{
 			return
 		}
 
-		target, predicted, err := strategy.Compute(context.Background(), &dataManager)
+		target, predicted, err := strategy.Compute(context.Background(), dataManager)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Could not compute strategy positions")
 		}
@@ -93,7 +89,7 @@ var backtestCmd = &cobra.Command{
 		fmt.Printf("Predicted Target: %+v\n", predicted.Target)
 		fmt.Printf("Predicted Justification: %+v\n", predicted.Justification)
 
-		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000, &dataManager)
+		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000, dataManager)
 		fmt.Println("Building portfolio...")
 		if err := pm.TargetPortfolio(context.Background(), target); err != nil {
 			log.Fatal().Stack().Err(err).Msg("could not invest portfolio")
