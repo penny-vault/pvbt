@@ -26,7 +26,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-var User string
+var purgeUser string
 
 func init() {
 	if err := viper.BindEnv("database.max_temp_portfolio_age_secs", "MAX_PORTFOLIO_AGE_SECS"); err != nil {
@@ -37,7 +37,7 @@ func init() {
 		log.Panic().Err(err).Msg("could not bind database.max_temp_portfolio_age_secs")
 	}
 
-	purgeCmd.Flags().StringVar(&User, "user", "", "Only purge portfolios")
+	purgeCmd.Flags().StringVar(&purgeUser, "user", "", "Only purge portfolios from specified user")
 
 	rootCmd.AddCommand(purgeCmd)
 }
@@ -55,8 +55,8 @@ var purgeCmd = &cobra.Command{
 		userList := make([]string, 0)
 
 		// build query
-		if User != "" {
-			userList = append(userList, User)
+		if purgeUser != "" {
+			userList = append(userList, purgeUser)
 		} else {
 			// get a list of users from the database
 			users, _ := database.GetUsers()
