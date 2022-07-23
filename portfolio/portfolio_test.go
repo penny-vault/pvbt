@@ -34,7 +34,7 @@ import (
 
 var _ = Describe("Portfolio", func() {
 	var (
-		dataProxy data.Manager
+		dataProxy *data.Manager
 		dbPool    pgxmock.PgxConnIface
 		df        *dataframe.DataFrame
 		err       error
@@ -60,9 +60,7 @@ var _ = Describe("Portfolio", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
 
-		dataProxy = data.NewManager(map[string]string{
-			"tiingo": "TEST",
-		})
+		dataProxy = data.NewManager()
 	})
 
 	Describe("with a single holding at a time", func() {
@@ -81,7 +79,7 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
 				p = pm.Portfolio
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2020, time.January, 31, 0, 0, 0, 0, tz)
@@ -249,7 +247,7 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries2, tickerSeries2)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
 				p = pm.Portfolio
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
@@ -334,7 +332,7 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
 				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.Frequency = data.FrequencyDaily
@@ -448,7 +446,7 @@ var _ = Describe("Portfolio", func() {
 				)
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeriesMulti)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, &dataProxy)
+				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
 				p = pm.Portfolio
 				dataProxy.Begin = time.Date(2018, time.January, 1, 0, 0, 0, 0, tz)
 				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
