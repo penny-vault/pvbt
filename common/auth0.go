@@ -48,7 +48,7 @@ type Auth0User struct {
 	UserMetaData  map[string]interface{} `json:"user_metadata"`
 }
 
-var userMap map[string]Auth0User = make(map[string]Auth0User)
+var userMap = make(map[string]Auth0User)
 
 func getToken() (string, error) {
 	domain := viper.GetString("auth0.domain")

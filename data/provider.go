@@ -82,7 +82,6 @@ type Manager struct {
 	Frequency       Frequency
 	cache           map[string]float64
 	lastCache       map[string]float64
-	credentials     map[string]string
 	providers       map[string]Provider
 	dateProvider    DateProvider
 	lastRiskFreeIdx int

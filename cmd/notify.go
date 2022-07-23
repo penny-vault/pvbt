@@ -106,7 +106,9 @@ var notifyCmd = &cobra.Command{
 					subLog.Error().Err(err).Msg("could not get user contact info")
 					continue
 				}
-				notification.SendEmail(contact.Name, contact.Email)
+				if err := notification.SendEmail(contact.Name, contact.Email); err != nil {
+					subLog.Error().Err(err).Msg("could not send notification")
+				}
 			}
 		}
 	},

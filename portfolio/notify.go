@@ -38,7 +38,7 @@ const (
 	NotifyAnnually NotificationFrequency = 0x00010000
 )
 
-type PortfolioNotification struct {
+type Notification struct {
 	ForDate      time.Time
 	ForFrequency NotificationFrequency
 	Holdings     map[string]float64
@@ -133,10 +133,10 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 	return frequencies
 }
 
-func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*PortfolioNotification {
+func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*Notification {
 	// get notification frequencies for date
 	frequencies := pm.RequestedNotificationsForDate(forDate)
-	notifications := make([]*PortfolioNotification, len(frequencies))
+	notifications := make([]*Notification, len(frequencies))
 
 	// process for each frequency
 	for idx, freq := range frequencies {
@@ -145,7 +145,7 @@ func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*P
 			log.Error().Err(err).Str("NotificationFrequency", freq.String()).Msg("could not retrieve measurement for portfolio")
 			continue
 		}
-		notifications[idx] = &PortfolioNotification{
+		notifications[idx] = &Notification{
 			ForDate:      forDate,
 			ForFrequency: freq,
 			Holdings:     pm.holdings,
@@ -157,7 +157,7 @@ func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*P
 	return notifications
 }
 
-func (n *PortfolioNotification) SendEmail(userFullName string, emailAddress string) error {
+func (n *Notification) SendEmail(userFullName string, emailAddress string) error {
 	subLog := log.With().Str("UserFullName", userFullName).Str("EmailAddress", emailAddress).Str("PortfolioName", n.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(n.Portfolio.ID)).Logger()
 	subLog.Info().Msg("sending notification e-mail")
 	m := mail.NewV3Mail()
