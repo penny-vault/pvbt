@@ -363,10 +363,10 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		params.Notifications = p.Notifications
 	}
 
-	updateSQL := `UPDATE portfolio SET name=$1, notifications=$2 WHERE id=$3 AND user_id=$4`
+	updateSQL := `UPDATE portfolios SET name=$1, notifications=$2 WHERE id=$3 AND user_id=$4`
 	_, err = trx.Exec(context.Background(), updateSQL, params.Name, params.Notifications, portfolioID, userID)
 	if err != nil {
-		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("update portfolio statistics failed")
+		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", updateSQL).Msg("update portfolio settings failed")
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
