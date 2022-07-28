@@ -147,6 +147,8 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		manager.Begin = manager.End.AddDate(-50, 0, 0)
 	}
 
+	database.LogOpenTransactions()
+
 	// Get database transaction
 	db, err := database.TrxForUser("pvuser")
 	if err != nil {
