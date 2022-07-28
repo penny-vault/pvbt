@@ -29,7 +29,9 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksURL string) {
 	// API
 	api := app.Group("/v1", logger.New())
 	api.Get("/", handler.Ping)
-	api.Get("/apikey", middleware.PVAuth(jwks, jwksURL), handler.APIKey)
+	api.Get("/apikey", middleware.PVAuth(jwks, jwksURL), handler.GetAPIKey)
+	api.Get("/announcements", middleware.PVAuth(jwks, jwksURL), handler.GetAnnouncements)
+	api.Get("/activity", middleware.PVAuth(jwks, jwksURL), handler.GetAllActivity)
 
 	// Benchmark
 	api.Get("/benchmark/:ticker", middleware.PVAuth(jwks, jwksURL), handler.Benchmark)
@@ -41,9 +43,10 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksURL string) {
 	portfolio.Get("/:id", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolio)
 	portfolio.Patch("/:id", middleware.PVAuth(jwks, jwksURL), handler.UpdatePortfolio)
 	portfolio.Delete("/:id", middleware.PVAuth(jwks, jwksURL), handler.DeletePortfolio)
-	portfolio.Get("/:id/performance", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioPerformance)
-	portfolio.Get("/:id/measurements", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioMeasurements)
+	portfolio.Get("/:id/activity", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioActivity)
 	portfolio.Get("/:id/holdings", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioHoldings)
+	portfolio.Get("/:id/measurements", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioMeasurements)
+	portfolio.Get("/:id/performance", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioPerformance)
 	portfolio.Get("/:id/transactions", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioTransactions)
 
 	// Strategy

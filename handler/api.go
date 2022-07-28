@@ -39,7 +39,7 @@ type APIKeyResponse struct {
 	Token string `json:"token"`
 }
 
-func APIKey(c *fiber.Ctx) error {
+func GetAPIKey(c *fiber.Ctx) error {
 	pvToken := make(map[string]string)
 	pvToken["userID"] = c.Locals("userID").(string)
 

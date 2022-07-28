@@ -17,14 +17,13 @@ package handler
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"github.com/jackc/pgtype"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/filter"
@@ -39,9 +38,21 @@ type PortfolioResponse struct {
 	Arguments          map[string]interface{} `json:"arguments"`
 	StartDate          int64                  `json:"startDate"`
 	BenchmarkTicker    string                 `json:"benchmarkTicker"`
-	YTDReturn          sql.NullFloat64        `json:"ytdReturn"`
-	CAGRSinceInception sql.NullFloat64        `json:"cagrSinceInception"`
+	Status             string                 `json:"status"`
+	YTDReturn          pgtype.Float8          `json:"ytdReturn"`
+	CAGRSinceInception pgtype.Float8          `json:"cagrSinceInception"`
 	Notifications      int                    `json:"notifications"`
+	Cagr3Year          pgtype.Float4          `json:"cagr3Year"`
+	Cagr5Year          pgtype.Float4          `json:"cagr5Year"`
+	Cagr10Year         pgtype.Float4          `json:"cagr10Year"`
+	StdDev             pgtype.Float4          `json:"stdDev"`
+	DownsideDeviation  pgtype.Float4          `json:"downsideDeviation"`
+	MaxDrawDown        pgtype.Float4          `json:"maxDrawDown"`
+	AvgDrawDown        pgtype.Float4          `json:"avgDrawDown"`
+	SharpeRatio        pgtype.Float4          `json:"sharpeRatio"`
+	SortinoRatio       pgtype.Float4          `json:"sortinoRatio"`
+	UlcerIndex         pgtype.Float4          `json:"ulcerIndex"`
+	NextTradeDate      pgtype.Int4            `json:"nextTradeDate"`
 	Created            int64                  `json:"created"`
 	LastChanged        int64                  `json:"lastChanged"`
 }
@@ -127,14 +138,6 @@ func GetPortfolio(c *fiber.Ctx) error {
 		}
 
 		return fiber.ErrNotFound
-	}
-	if math.IsNaN(p.YTDReturn.Float64) || math.IsInf(p.YTDReturn.Float64, 0) {
-		p.YTDReturn.Float64 = 0
-		p.YTDReturn.Valid = false
-	}
-	if math.IsNaN(p.CAGRSinceInception.Float64) || math.IsInf(p.CAGRSinceInception.Float64, 0) {
-		p.CAGRSinceInception.Float64 = 0
-		p.CAGRSinceInception.Valid = false
 	}
 
 	if err := trx.Commit(context.Background()); err != nil {
@@ -270,7 +273,31 @@ func ListPortfolios(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("UserID", userID).Str("Endpoint", "ListPortfolios").Logger()
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
+	portfolioSQL := `SELECT
+		id,
+		name,
+		strategy_shortcode,
+		arguments,
+		extract(epoch from start_date)::int as start_date,
+		benchmark,
+		ytd_return,
+		cagr_since_inception,
+		notifications,
+		status,
+		cagr_3yr,
+		cagr_5yr,
+		cagr_10yr,
+		std_dev,
+		downside_deviation,
+		max_draw_down,
+		avg_draw_down,
+		sharpe_ratio,
+		sortino_ratio,
+		ulcer_index,
+		extract(epoch from next_trade_date)::int as next_trade_date,
+		extract(epoch from created)::int as created,
+		extract(epoch from lastchanged)::int as lastchanged
+	FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
 	trx, err := database.TrxForUser(userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
@@ -290,18 +317,34 @@ func ListPortfolios(c *fiber.Ctx) error {
 	portfolios := make([]PortfolioResponse, 0, 10)
 	for rows.Next() {
 		p := PortfolioResponse{}
-		err := rows.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+		err := rows.Scan(
+			&p.ID,                 // 0
+			&p.Name,               // 1
+			&p.Strategy,           // 2
+			&p.Arguments,          // 3
+			&p.StartDate,          // 4
+			&p.BenchmarkTicker,    // 5
+			&p.YTDReturn,          // 6
+			&p.CAGRSinceInception, // 7
+			&p.Notifications,      // 8
+			&p.Status,             // 9
+			&p.Cagr3Year,          // 10
+			&p.Cagr5Year,          // 11
+			&p.Cagr10Year,         // 12
+			&p.StdDev,             // 13
+			&p.DownsideDeviation,  // 14
+			&p.MaxDrawDown,        // 15
+			&p.AvgDrawDown,        // 16
+			&p.SharpeRatio,        // 17
+			&p.SortinoRatio,       // 18
+			&p.UlcerIndex,         // 19
+			&p.NextTradeDate,      // 20
+			&p.Created,            // 21
+			&p.LastChanged,        // 22
+		)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("ListPortfolio scan failed")
 			continue
-		}
-		if math.IsNaN(p.YTDReturn.Float64) || math.IsInf(p.YTDReturn.Float64, 0) {
-			p.YTDReturn.Float64 = 0
-			p.YTDReturn.Valid = false
-		}
-		if math.IsNaN(p.CAGRSinceInception.Float64) || math.IsInf(p.CAGRSinceInception.Float64, 0) {
-			p.CAGRSinceInception.Float64 = 0
-			p.CAGRSinceInception.Valid = false
 		}
 
 		portfolios = append(portfolios, p)
