@@ -8,7 +8,7 @@ require (
 	github.com/andybalholm/brotli v1.0.4 // indirect
 	github.com/apache/thrift v0.16.0 // indirect
 	github.com/fsnotify/fsnotify v1.5.4 // indirect
-	github.com/go-co-op/gocron v1.15.1
+	github.com/go-co-op/gocron v1.16.1
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/goccy/go-json v0.9.10
 	github.com/gofiber/fiber/v2 v2.35.0
@@ -50,6 +50,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/pashagolub/pgxmock v1.6.0
 	github.com/rs/zerolog v1.27.0
+	github.com/sendgrid/sendgrid-go v3.11.1+incompatible
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.8.0
 )
@@ -71,7 +72,6 @@ require (
 	github.com/rogpeppe/fastuuid v1.2.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/sendgrid/rest v2.6.9+incompatible // indirect
-	github.com/sendgrid/sendgrid-go v3.11.1+incompatible // indirect
 	github.com/shabbyrobe/xmlwriter v0.0.0-20220218224045-defe0ad214f6 // indirect
 	github.com/tealeg/xlsx/v3 v3.2.4 // indirect
 	github.com/xitongsys/parquet-go-source v0.0.0-20220624101223-5cb561a812f4 // indirect
