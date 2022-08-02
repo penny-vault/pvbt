@@ -27,6 +27,7 @@ import (
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/filter"
+	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
@@ -107,6 +108,11 @@ func CreatePortfolio(c *fiber.Ctx) error {
 
 	if err := trx.Commit(context.Background()); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
+	}
+
+	// create a new portfolio simulation request
+	if err := messenger.CreateSimulationRequest(userID, portfolioID); err != nil {
+		return fiber.ErrFailedDependency
 	}
 
 	return c.JSON(portfolioParams)

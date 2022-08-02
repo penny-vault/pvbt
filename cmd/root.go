@@ -51,6 +51,7 @@ func init() {
 	initAuth0()
 	initDatabase()
 	initLogging()
+	initNats()
 	initProfile()
 }
 
@@ -148,6 +149,48 @@ func initAuth0() {
 	rootCmd.PersistentFlags().String("auth0-domain", "", "Auth0 domain")
 	if err := viper.BindPFlag("auth0.domain", rootCmd.PersistentFlags().Lookup("auth0-domain")); err != nil {
 		log.Panic().Err(err).Msg("could not bind auth0-domain")
+	}
+}
+
+func initNats() {
+	if err := viper.BindEnv("nats.server", "NATS_SERVER"); err != nil {
+		log.Panic().Err(err).Msg("could not bind NATS_SERVER")
+	}
+	rootCmd.PersistentFlags().String("nats-server", "", "URL of nats server")
+	if err := viper.BindPFlag("nats.server", rootCmd.PersistentFlags().Lookup("nats-server")); err != nil {
+		log.Panic().Err(err).Msg("could not bind nats-server")
+	}
+
+	if err := viper.BindEnv("nats.credentials", "NATS_CREDENTIALS"); err != nil {
+		log.Panic().Err(err).Msg("could not bind NATS_CREDENTIALS")
+	}
+	rootCmd.PersistentFlags().String("nats-credentials", "", "credentials to use when connecting to nats")
+	if err := viper.BindPFlag("nats.credentials", rootCmd.PersistentFlags().Lookup("nats-credentials")); err != nil {
+		log.Panic().Err(err).Msg("could not bind nats-credentials")
+	}
+
+	if err := viper.BindEnv("nats.requests_subject", "NATS_REQUESTS_SUBJECT"); err != nil {
+		log.Panic().Err(err).Msg("could not bind NATS_REQUESTS_SUBJECT")
+	}
+	rootCmd.PersistentFlags().String("nats-requests-subject", "portfolios.request", "nats subject that portfolio simulation requests are published to")
+	if err := viper.BindPFlag("nats.requests_subject", rootCmd.PersistentFlags().Lookup("nats-requests-subject")); err != nil {
+		log.Panic().Err(err).Msg("could not bind nats-requests-subject")
+	}
+
+	if err := viper.BindEnv("nats.requests_consumer", "NATS_REQUESTS_CONSUMER"); err != nil {
+		log.Panic().Err(err).Msg("could not bind NATS_REQUESTS_CONSUMER")
+	}
+	rootCmd.PersistentFlags().String("nats-requests-consumer", "", "nats requests consumer")
+	if err := viper.BindPFlag("nats.requests_consumer", rootCmd.PersistentFlags().Lookup("nats-requests-consumer")); err != nil {
+		log.Panic().Err(err).Msg("could not bind nats-requests-consumer")
+	}
+
+	if err := viper.BindEnv("nats.status_subject", "NATS_STATUS_SUBJECT"); err != nil {
+		log.Panic().Err(err).Msg("could not bind NATS_status_SUBJECT")
+	}
+	rootCmd.PersistentFlags().String("nats-status-subject", "portfolios.request", "nats subject that portfolio simulation status is published to")
+	if err := viper.BindPFlag("nats.status_subject", rootCmd.PersistentFlags().Lookup("nats-status-subject")); err != nil {
+		log.Panic().Err(err).Msg("could not bind nats-status-subject")
 	}
 }
 

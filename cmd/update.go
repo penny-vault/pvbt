@@ -18,6 +18,7 @@ package cmd
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -26,6 +27,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/strategies/strategy"
@@ -35,11 +37,13 @@ import (
 
 var updateCmdPortfolioID string
 var updateCmdCalculateToDate string
+var updateCmdFromWorkQueue bool
 var testUpdateCMD bool
 
 func init() {
 	updateCmd.Flags().StringVar(&updateCmdPortfolioID, "portfolioID", "", "Portfolio to update specified as {userID}:{portfolioID}")
 	updateCmd.Flags().StringVar(&updateCmdCalculateToDate, "date", "", "Date specified as YYYY-MM-dd to compute measurements through")
+	updateCmd.Flags().BoolVar(&updateCmdFromWorkQueue, "work-queue", false, "Check for portfolio simulation requests from work queue")
 	updateCmd.Flags().BoolVarP(&testUpdateCMD, "test", "t", false, "Run update in test mode that does not save results to DB.")
 
 	rootCmd.AddCommand(updateCmd)
@@ -70,8 +74,13 @@ var updateCmd = &cobra.Command{
 			}
 
 			// convert to EST
-			nyc, _ := time.LoadLocation("America/New_York")
+			nyc := common.GetTimezone()
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 18, 0, 0, 0, nyc)
+		}
+
+		// initialize message passing interface
+		if err := messenger.Initialize(); err != nil {
+			log.Info().Err(err).Msg("could not initialize message passing interface")
 		}
 
 		// Initialize data framework
@@ -154,6 +163,10 @@ var updateCmd = &cobra.Command{
 				if err != nil {
 					subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
 				}
+
+				nyc := common.GetTimezone()
+				pm.SetStatus(fmt.Sprintf("updated on %s", time.Now().In(nyc).Format("RFC822")))
+				pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"})
 			} else {
 				// since we are testing print results out
 				perf.LogSummary()

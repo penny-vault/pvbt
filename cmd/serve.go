@@ -22,12 +22,12 @@ import (
 	"os/signal"
 	"runtime/pprof"
 	"runtime/trace"
-	"time"
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/jwks"
+	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/middleware"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
@@ -84,6 +84,10 @@ var serveCmd = &cobra.Command{
 				log.Fatal().Err(err).Msg("failed to start trace")
 			}
 			defer trace.Stop()
+		}
+
+		if err := messenger.Initialize(); err != nil {
+			log.Info().Err(err).Msg("could not initialize message passing interface")
 		}
 
 		common.SetupLogging()
@@ -151,7 +155,7 @@ var serveCmd = &cobra.Command{
 		strategies.InitializeStrategyMap()
 
 		// Get strategy metrics
-		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+		tz := common.GetTimezone()
 		scheduler := gocron.NewScheduler(tz)
 		if _, err := scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb); err != nil {
 			log.Panic().Err(err).Msg("could not schedule load strategies metrics from DB")

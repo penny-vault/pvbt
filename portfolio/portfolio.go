@@ -1061,6 +1061,68 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	return resultSet, nil
 }
 
+func (pm *Model) AddActivity(date time.Time, msg string, tags []string) error {
+	p := pm.Portfolio
+	userID := p.UserID
+
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Str("Status", msg).Logger()
+
+	// Save to database
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
+		return err
+	}
+
+	sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
+	if _, err := trx.Exec(context.Background(), sql, userID, p.ID, date, msg, tags); err != nil {
+		subLog.Error().Err(err).Msg("could not create activity")
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+
+		return err
+	}
+
+	return nil
+}
+
+func (pm *Model) SetStatus(msg string) error {
+	p := pm.Portfolio
+	userID := p.UserID
+
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Str("Status", msg).Logger()
+
+	// Save to database
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
+		return err
+	}
+
+	sql := `UPDATE portfolios SET status=$1 WHERE portfolio_id=$2`
+	if _, err := trx.Exec(context.Background(), sql, msg, p.ID); err != nil {
+		subLog.Error().Err(err).Msg("could not update portfolio status")
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 // Save portfolio to database along with all transaction data
 func (pm *Model) Save(userID string) error {
 	p := pm.Portfolio
