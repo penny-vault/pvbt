@@ -21,6 +21,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/goccy/go-json"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
@@ -30,8 +31,6 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
-
-	"github.com/goccy/go-json"
 )
 
 var (
