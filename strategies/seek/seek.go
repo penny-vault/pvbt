@@ -235,7 +235,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 }
 
 func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildPredictedPortfolio")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildPredictedPortfolio")
 	defer span.End()
 
 	subLog := log.With().Str("Strategy", "seek").Logger()
@@ -244,7 +244,7 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	var ticker string
 	predictedTarget := make(map[string]float64)
 	lastDateIdx := len(tradeDays) - 1
-	rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
+	rows, err := db.Query(ctx, "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not query database for SEEK predicted portfolio")
 		return nil, err
@@ -267,7 +267,7 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 }
 
 func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*dataframe.DataFrame, error) {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildTargetPortfolio")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.buildTargetPortfolio")
 	defer span.End()
 
 	subLog := log.With().Str("Strategy", "seek").Logger()
@@ -279,7 +279,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 	for _, day := range tradeDays {
 		targetMap := make(map[string]float64)
 		cnt := 0
-		rows, err := db.Query(context.Background(), "SELECT ticker FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, seek.NumHoldings)
+		rows, err := db.Query(ctx, "SELECT ticker FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, seek.NumHoldings)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not query database for portfolio")
 			return nil, err

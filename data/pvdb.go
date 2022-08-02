@@ -516,7 +516,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		msg := "db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Stack().Err(err).Msg(msg)
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -534,7 +534,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 			msg := "db scan failed"
 			span.SetStatus(codes.Error, msg)
 			subLog.Warn().Stack().Err(err).Msg(msg)
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return math.NaN(), err
