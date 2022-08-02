@@ -16,6 +16,7 @@
 package common
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -60,7 +61,7 @@ func getToken() (string, error) {
 	url := fmt.Sprintf("https://%s/oauth/token", domain)
 	bodyStr := fmt.Sprintf(`grant_type=client_credentials&client_id=%s&client_secret=%s&audience=https://%s/api/v2/`, clientID, secret, domain)
 	body := strings.NewReader(bodyStr)
-	req, err := http.NewRequest("POST", url, body)
+	req, err := http.NewRequestWithContext(context.Background(), "POST", url, body)
 	if err != nil {
 		subLog.Error().Err(err).Msg("cannot build Auth0 Management API access token request")
 		return "", err
@@ -121,7 +122,7 @@ func GetAuth0User(userID string) (*Auth0User, error) {
 
 	encodedUserID := url.QueryEscape(userID)
 	url := fmt.Sprintf("https://%s/api/v2/users/%s", domain, encodedUserID)
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(context.Background(), "GET", url, nil)
 	if err != nil {
 		subLog.Error().Err(err).Msg("Could not create Auth0 user request")
 		return nil, err

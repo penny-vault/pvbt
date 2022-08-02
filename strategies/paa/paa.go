@@ -160,7 +160,7 @@ func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Man
 }
 
 // mom calculates the momentum based on the sma: MOM(L) = p0/SMA(L) - 1
-func (paa *KellersProtectiveAssetAllocation) mom() error {
+func (paa *KellersProtectiveAssetAllocation) mom(ctx context.Context) error {
 	dontLock := dataframe.Options{DontLock: true}
 
 	sma, err := dfextras.SMA(paa.lookback+1, paa.prices)
@@ -179,7 +179,7 @@ func (paa *KellersProtectiveAssetAllocation) mom() error {
 		}
 		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", ticker, ticker)
 		fn := funcs.RegFunc(expr)
-		err := funcs.Evaluate(context.TODO(), sma, fn, name)
+		err := funcs.Evaluate(ctx, sma, fn, name)
 		if err != nil {
 			return err
 		}
@@ -254,7 +254,7 @@ func (paa *KellersProtectiveAssetAllocation) rank() ([]common.PairList, []string
 }
 
 // buildPortfolio computes the bond fraction at each period and creates a listing of target holdings
-func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.PairList, protectiveSelection []string) (*dataframe.DataFrame, error) {
+func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context, riskRanked []common.PairList, protectiveSelection []string) (*dataframe.DataFrame, error) {
 	// N is the number of assets in the risky universe
 	N := float64(len(paa.riskUniverse))
 
@@ -273,7 +273,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
 	copy(riskUniverseMomNames, paa.riskUniverse)
 	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
-	err := funcs.Evaluate(context.TODO(), mom, fn, name,
+	err := funcs.Evaluate(ctx, mom, fn, name,
 		funcs.EvaluateOptions{
 			CustomFns: map[string]func(args ...float64) float64{
 				"countPositive": func(args ...float64) float64 {
@@ -301,7 +301,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 		log.Error().Stack().Err(err).Msg("could not add series to dataframe")
 	}
 	fn = funcs.RegFunc(fmt.Sprintf("min(1.0, (%f - paa_n) / %f)", N, N-n1))
-	err = funcs.Evaluate(context.TODO(), mom, fn, bfCol)
+	err = funcs.Evaluate(ctx, mom, fn, bfCol)
 	if err != nil {
 		return nil, err
 	}
@@ -448,13 +448,13 @@ func (paa *KellersProtectiveAssetAllocation) Compute(ctx context.Context, manage
 		return nil, nil, err
 	}
 
-	if err := paa.mom(); err != nil {
+	if err := paa.mom(ctx); err != nil {
 		return nil, nil, err
 	}
 
 	riskRanked, protectiveSelection := paa.rank()
 
-	targetPortfolio, err := paa.buildPortfolio(riskRanked, protectiveSelection)
+	targetPortfolio, err := paa.buildPortfolio(ctx, riskRanked, protectiveSelection)
 	if err != nil {
 		return nil, nil, err
 	}

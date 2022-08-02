@@ -206,7 +206,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 	// compute average scores
 	if viper.GetBool("debug.dump_csv") {
-		adm.writeDataFramesToCSV()
+		adm.writeDataFramesToCSV(ctx)
 	}
 
 	return nil
@@ -325,9 +325,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (adm *AcceleratingDualMomentum) writeDataFramesToCSV() {
-	ctx := context.Background()
-
+func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
 	// momentum
 	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {
