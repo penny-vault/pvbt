@@ -61,14 +61,14 @@ var _ = Describe("Dfextras", func() {
 	Describe("When given a dataframe", func() {
 		Context("with float64 series containing NaN's", func() {
 			It("should have no NaNs after DropNA is called", func() {
-				df3, err := dfextras.DropNA(context.TODO(), df1)
+				df3, err := dfextras.DropNA(context.Background(), df1)
 				Expect(err).To(BeNil())
 				Expect(df3.NRows()).To(Equal(3))
 			})
 		})
 		Context("and merged with another dataframe", func() {
 			It("should have times that cover the full range of both time axis'", func() {
-				newDf, err := dfextras.Merge(context.TODO(), df2, df3)
+				newDf, err := dfextras.Merge(context.Background(), df2, df3)
 				Expect(err).To(BeNil())
 				Expect(newDf.NRows()).To(Equal(6))  // Number of rows should be 6
 				Expect(newDf.Series).To(HaveLen(3)) // Check number of columns

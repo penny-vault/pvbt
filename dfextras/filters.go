@@ -115,7 +115,7 @@ func SMA(lookback int, df *dataframe.DataFrame, colSuffix ...string) (*dataframe
 }
 
 // Momentum13612 computes the average momentum score over 1-, 3-, 6-, and 12-month periods
-func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
+func Momentum13612(ctx context.Context, eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	nrows := eod.NRows(dataframe.Options{})
 	periods := []int{1, 3, 6, 12}
 	series := []dataframe.Series{}
@@ -161,7 +161,7 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	for _, ticker := range tickers {
 		for _, jj := range periods {
 			fn := funcs.RegFunc(fmt.Sprintf("((%s/%sLAG%d)-1)", ticker, ticker, jj))
-			if err := funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
+			if err := funcs.Evaluate(ctx, mom, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
 				log.Error().Stack().Err(err).Msg("could not evaluate equation against dataframe")
 			}
 		}
@@ -170,7 +170,7 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	// Compute the equal weighted average of the 1-, 3-, 6-, and 12-month momentums
 	for _, ticker := range tickers {
 		fn := funcs.RegFunc(fmt.Sprintf("((12.0*%sMOM1)+(4.0*%sMOM3)+(2.0*%sMOM6)+%sMOM12)*0.25", ticker, ticker, ticker, ticker))
-		if err := funcs.Evaluate(context.TODO(), mom, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
+		if err := funcs.Evaluate(ctx, mom, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
 			log.Error().Stack().Err(err).Msg("could not evalute expression")
 		}
 	}
@@ -189,7 +189,7 @@ func Momentum13612(eod *dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	}
 
 	df := dataframe.NewDataFrame(scoresArr...)
-	if _, err := DropNA(context.TODO(), df, dataframe.FilterOptions{InPlace: true}); err != nil {
+	if _, err := DropNA(ctx, df, dataframe.FilterOptions{InPlace: true}); err != nil {
 		log.Error().Stack().Err(err).Msg("could not drop na")
 	}
 

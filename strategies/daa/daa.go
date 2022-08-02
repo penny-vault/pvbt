@@ -293,7 +293,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager
 	}
 
 	// Compute momentum scores
-	momentum, err := dfextras.Momentum13612(daa.prices)
+	momentum, err := dfextras.Momentum13612(ctx, daa.prices)
 	if err != nil {
 		return nil, nil, err
 	}
