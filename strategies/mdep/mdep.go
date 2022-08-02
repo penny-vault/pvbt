@@ -124,7 +124,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	// get the starting date for ratings
 	var startDate time.Time
 	sql := "SELECT min(event_date) FROM zacks_financials"
-	err = db.QueryRow(context.Background(), sql).Scan(&startDate)
+	err = db.QueryRow(ctx, sql).Scan(&startDate)
 	if err != nil {
 		log.Warn().Stack().Err(err).Str("SQL", sql).Msg("could not query database")
 		if err := db.Rollback(ctx); err != nil {
@@ -193,7 +193,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	for _, day := range tradeDays {
 		targetMap := make(map[string]float64)
 		cnt := 0
-		rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, mdep.NumHoldings)
+		rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, mdep.NumHoldings)
 		if err != nil {
 			log.Error().Stack().Err(err).Msg("could not query database for portfolio")
 			return nil, err
@@ -231,7 +231,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 }
 
 func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
 	defer span.End()
 
 	subLog := log.With().Str("Strategy", "MDEP").Logger()
@@ -240,7 +240,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 	var ticker string
 	predictedTarget := make(map[string]float64)
 	lastDateIdx := len(tradeDays) - 1
-	rows, err := db.Query(context.Background(), "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
+	rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not query database for MDEP predicted portfolio")
 		return nil, err
