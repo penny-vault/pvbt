@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/portfolio"
 )
 
@@ -33,7 +34,7 @@ var _ = Describe("Metrics", func() {
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+		tz = common.GetTimezone()
 	})
 
 	Describe("when calculating active return", func() {

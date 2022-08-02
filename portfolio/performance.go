@@ -23,6 +23,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
@@ -651,7 +652,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	}
 
 	// calculationStart should be at midnight nyc
-	nyc, _ := time.LoadLocation("America/New_York")
+	nyc := common.GetTimezone()
 	calculationStart = time.Date(calculationStart.Year(), calculationStart.Month(), calculationStart.Day(), 0, 0, 0, 0, nyc)
 
 	log.Info().

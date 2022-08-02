@@ -45,8 +45,7 @@ var _ = Describe("Portfolio", func() {
 	)
 
 	BeforeEach(func() {
-		tz, err = time.LoadLocation("America/New_York") // New York is the reference time
-		Expect(err).To(BeNil())
+		tz = common.GetTimezone()
 
 		dbPool, err = pgxmock.NewConn()
 		Expect(err).To(BeNil())

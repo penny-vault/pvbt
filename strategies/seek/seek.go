@@ -132,10 +132,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	subLog := log.With().Str("Strategy", "seek").Logger()
 	subLog.Info().Msg("computing strategy portfolio")
 
-	nyc, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Panic().Err(err).Msg("cannot load nyc timezone")
-	}
+	nyc := common.GetTimezone()
 
 	// Ensure time range is valid
 	nullTime := time.Time{}

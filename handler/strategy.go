@@ -80,12 +80,9 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	var startDate time.Time
 	var endDate time.Time
+	var err error
 
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Error().Stack().Err(err).Msg("could not load nyc timezone")
-		return fiber.ErrInternalServerError
-	}
+	tz := common.GetTimezone()
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {

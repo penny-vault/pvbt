@@ -42,8 +42,7 @@ var _ = Describe("Daa", func() {
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
-
+		tz = common.GetTimezone()
 		jsonParams := `{"riskUniverse": ["VFINX", "PRIDX"], "protectiveUniverse": ["VUSTX"], "protectionFactor": 2, "lookback": 12, "topN": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {

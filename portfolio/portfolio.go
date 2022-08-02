@@ -619,10 +619,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	}
 
 	dt := p.Transactions[n-1].Date
-	tz, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return err
-	}
+	tz := common.GetTimezone()
 
 	// remove time and move to midnight the next day... this
 	// ensures that the search is inclusive of through
@@ -1031,8 +1028,8 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			justifications: make(map[string][]*Justification),
 		}
 
+		tz := common.GetTimezone()
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
-		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 		p.StartDate = p.StartDate.In(tz)
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {

@@ -104,6 +104,7 @@ func Ping(c *fiber.Ctx) error {
 }
 
 func Benchmark(c *fiber.Ctx) (resp error) {
+	var err error
 	// Parse date strings
 	startDateStr := c.Query("startDate", "1990-01-01")
 	endDateStr := c.Query("endDate", "now")
@@ -113,11 +114,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	var startDate time.Time
 	var endDate time.Time
 
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Warn().Stack().Err(err).Msg("could not load nyc timezone")
-		return fiber.ErrInternalServerError
-	}
+	tz := common.GetTimezone()
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {

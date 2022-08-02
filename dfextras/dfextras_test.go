@@ -36,7 +36,7 @@ var _ = Describe("Dfextras", func() {
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
+		tz = common.GetTimezone()
 		series1 := dataframe.NewSeriesFloat64("col1", &dataframe.SeriesInit{Size: 5}, []float64{1.0, 2.0, 3.0})
 		df1 = dataframe.NewDataFrame(series1)
 		tSeries1 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 4}, []time.Time{

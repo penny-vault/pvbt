@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v4"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )
@@ -115,12 +116,7 @@ func (ms *MarketStatus) IsMarketDay(t time.Time) (bool, error) {
 
 // LoadMarketHolidays retrieves market holidays from the database
 func NewMarketStatus(hours *MarketHours) *MarketStatus {
-	var err error
-	var nyc *time.Location
-	if nyc, err = time.LoadLocation("America/New_York"); err != nil {
-		log.Panic().Err(err).Msg("could not load nyc timezone")
-	}
-
+	nyc := common.GetTimezone()
 	return &MarketStatus{
 		holidays:    make(map[int64]int),
 		marketHours: hours,
