@@ -22,6 +22,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/rs/zerolog/log"
 )
 
 type InMemory struct {
@@ -286,6 +287,9 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 
 // GetHoldings returns holdings at the requested `frequency` after `since`
 func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
+	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
+	subLog.Info().Msg("GetHoldings from memory")
+
 	nyc := common.GetTimezone()
 
 	periodReturnField := getPeriodReturnFieldForFrequency(frequency)
@@ -294,9 +298,9 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	// add predicted holding item
 	predicted := f.Portfolio.PredictedAssets
 	switch frequency {
-	case "annually":
+	case data.FrequencyAnnually:
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
-	case "monthly":
+	case data.FrequencyMonthly:
 		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
 	default:
 		// nothing to be done in default case
