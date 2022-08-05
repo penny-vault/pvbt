@@ -24,20 +24,34 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Momentum calculates the average momentum for each asset listed in `Assets` for each
+// lookback period in `Periods` and calculates an indicator based on the weighted
+// momentum if each momentum is positive then indicator = 1; otherwise indicator = 0
 type Momentum struct {
-	Assets []string
+	Assets  []string
+	Periods map[int]float64
+	Manager *data.Manager
 }
 
-func (m *Momentum) IndicatorForPeriod(start time.Time, end time.Time) *dataframe.DataFrame {
-	ctx := context.Background()
-	manager := data.NewManager()
-	manager.Begin = start
-	manager.End = end
+func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
+	origStart := m.Manager.Begin
+	origEnd := m.Manager.End
 
-	df, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, m.Assets...)
+	defer func() {
+		m.Manager.Begin = origStart
+		m.Manager.End = origEnd
+	}()
+
+	m.Manager.Begin = start
+	m.Manager.End = end
+
+	// Add the risk free asset
+	assets := append(m.Assets, "DGS3MO")
+	df, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, assets...)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load data for momentum indicator")
+		return nil, err
 	}
 
-	return df
+	return df, nil
 }
