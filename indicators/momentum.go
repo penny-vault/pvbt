@@ -16,11 +16,28 @@
 package indicators
 
 import (
+	"context"
 	"time"
 
 	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/rs/zerolog/log"
 )
 
-type Indicator interface {
-	IndicatorForPeriod(start time.Time, end time.Time) *dataframe.DataFrame
+type Momentum struct {
+	Assets []string
+}
+
+func (m *Momentum) IndicatorForPeriod(start time.Time, end time.Time) *dataframe.DataFrame {
+	ctx := context.Background()
+	manager := data.NewManager()
+	manager.Begin = start
+	manager.End = end
+
+	df, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, m.Assets...)
+	if err != nil {
+		log.Error().Err(err).Msg("could not load data for momentum indicator")
+	}
+
+	return df
 }
