@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	Series = "indicator"
+	SeriesName = "indicator"
 )
 
 type Indicator interface {

@@ -47,12 +47,8 @@ var _ = Describe("Momentum", func() {
 		manager = data.NewManager()
 
 		momentum = &indicators.Momentum{
-			Assets: []string{"VFINX", "PRIDX"},
-			Periods: map[int]float64{
-				1: .33,
-				3: .33,
-				6: .34,
-			},
+			Assets:  []string{"VFINX", "PRIDX"},
+			Periods: []int{1, 3, 6},
 			Manager: manager,
 		}
 
@@ -115,11 +111,11 @@ var _ = Describe("Momentum", func() {
 			})
 
 			It("should have an indicator for each trading day over the period", func() {
-				Expect(indicator.NRows()).To(Equal(492))
+				Expect(indicator.NRows()).To(Equal(379))
 			})
 
 			It("should have a series named 'Indicator'", func() {
-				_, err := indicator.NameToColumn(indicators.Series)
+				_, err := indicator.NameToColumn(indicators.SeriesName)
 				Expect(err).To(BeNil())
 			})
 
@@ -128,20 +124,32 @@ var _ = Describe("Momentum", func() {
 				Expect(err).To(BeNil())
 			})
 
-			It("should have only 1 or 0's in the 'Indicator' series", func() {
-				iterator := indicator.ValuesIterator(dataframe.ValuesOptions{
-					InitialRow:   0,
-					Step:         1,
-					DontReadLock: true})
-				for {
-					row, vals, _ := iterator(dataframe.SeriesName)
-					if row == nil {
-						break
-					}
+			It("should have correct starting value", func() {
+				row := indicator.Row(0, true)
+				val, ok := row[indicators.SeriesName].(float64)
+				Expect(ok).To(BeTrue())
+				Expect(val).To(BeNumerically("~", 5.7988, .001))
+			})
 
-					valInRange := vals[indicators.Series].(int) == 0 || vals[indicators.Series].(int) == 1
-					Expect(valInRange).To(BeTrue())
-				}
+			It("should have correct starting date", func() {
+				row := indicator.Row(0, true)
+				val, ok := row[common.DateIdx].(time.Time)
+				Expect(ok).To(BeTrue())
+				Expect(val).To(Equal(time.Date(1989, 6, 30, 16, 0, 0, 0, tz)))
+			})
+
+			It("should have correct ending value", func() {
+				row := indicator.Row(378, true)
+				val, ok := row[indicators.SeriesName].(float64)
+				Expect(ok).To(BeTrue())
+				Expect(val).To(BeNumerically("~", 19.4716, .001))
+			})
+
+			It("should have correct ending date", func() {
+				row := indicator.Row(378, true)
+				val, ok := row[common.DateIdx].(time.Time)
+				Expect(ok).To(BeTrue())
+				Expect(val).To(Equal(time.Date(2020, 12, 31, 16, 0, 0, 0, tz)))
 			})
 		})
 	})
