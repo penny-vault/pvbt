@@ -219,28 +219,12 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	}
 
 	// Calculate risk on/off indicator
-	var indicator *dataframe.DataFrame
-	switch seek.RiskIndicator {
-	case "Momentum":
-		subLog.Debug().Msg("get risk on/off indicator")
-		momentum := &indicators.Momentum{
-			Assets:  []string{"VFINX", "PRIDX"},
-			Periods: []int{1, 3, 6},
-			Manager: manager,
+	indicator, err := seek.getRiskOnOffIndicator(ctx, manager)
+	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
-		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
-		if err != nil {
-			subLog.Error().Err(err).Msg("could not get risk on/off indicator")
-			if err := db.Rollback(ctx); err != nil {
-				subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
-			}
-			return nil, nil, err
-		}
-	default:
-		// just construct a series of ones
-		dateSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: 2}, time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
-		indicatorSeries := dataframe.NewSeriesFloat64(indicators.SeriesName, &dataframe.SeriesInit{Capacity: 2}, 1.0, 1.0)
-		indicator = dataframe.NewDataFrame(dateSeries, indicatorSeries)
+		return nil, nil, err
 	}
 
 	// build target portfolio
@@ -270,6 +254,34 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
 	return targetPortfolio, predictedPortfolio, nil
+}
+
+func (seek *SeekingAlphaQuant) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
+	var err error
+	var indicator *dataframe.DataFrame
+
+	subLog := log.With().Str("Strategy", "seek").Logger()
+
+	switch seek.RiskIndicator {
+	case "Momentum":
+		subLog.Debug().Msg("get risk on/off indicator")
+		momentum := &indicators.Momentum{
+			Assets:  []string{"VFINX", "PRIDX"},
+			Periods: []int{1, 3, 6},
+			Manager: manager,
+		}
+		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
+		if err != nil {
+			subLog.Error().Err(err).Msg("could not get risk on/off indicator")
+			return nil, err
+		}
+	default:
+		// just construct a series of ones
+		dateSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: 2}, time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
+		indicatorSeries := dataframe.NewSeriesFloat64(indicators.SeriesName, &dataframe.SeriesInit{Capacity: 2}, 1.0, 1.0)
+		indicator = dataframe.NewDataFrame(dateSeries, indicatorSeries)
+	}
+	return indicator, nil
 }
 
 func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {

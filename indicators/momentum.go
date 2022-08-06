@@ -37,33 +37,10 @@ type Momentum struct {
 	Manager *data.Manager
 }
 
-func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
-	origStart := m.Manager.Begin
-	origEnd := m.Manager.End
-	origFrequency := m.Manager.Frequency
-
-	defer func() {
-		m.Manager.Begin = origStart
-		m.Manager.End = origEnd
-		m.Manager.Frequency = origFrequency
-	}()
-
-	m.Manager.Begin = start
-	m.Manager.End = end
-	m.Manager.Frequency = data.FrequencyMonthly
-
-	// Add the risk free asset
-	assets := append(m.Assets, "DGS3MO")
-
-	// fetch prices
-	prices, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, assets...)
-	if err != nil {
-		log.Error().Err(err).Msg("could not load data for momentum indicator")
-		return nil, err
-	}
-
+func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices *dataframe.DataFrame, rfr dataframe.Series) (*dataframe.DataFrame, error) {
 	nrows := prices.NRows(dataframe.Options{})
 	series := []dataframe.Series{}
+	series = append(series, prices.Series[dateSeriesIdx].Copy())
 
 	aggFn := dfextras.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
 		var sum float64
@@ -76,23 +53,6 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 		return sum, nil
 	})
 
-	// create a new series with date column
-	dateSeriesIdx, err := prices.NameToColumn(common.DateIdx)
-	if err != nil {
-		log.Error().Err(err).Msg("could not get date index")
-		return nil, err
-	}
-
-	dgsIdx, err := prices.NameToColumn("DGS3MO")
-	if err != nil {
-		log.Error().Err(err).Msg("could not get DGS3MO index")
-		return nil, err
-	}
-	rfr := prices.Series[dgsIdx]
-	prices.RemoveSeries("DGS3MO")
-
-	// build series copy
-	series = append(series, prices.Series[dateSeriesIdx].Copy())
 	for ii := range prices.Series {
 		name := prices.Series[ii].Name(dataframe.Options{})
 		if strings.Compare(name, common.DateIdx) != 0 {
@@ -128,6 +88,61 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 
 	series = append(series, dataframe.NewSeriesFloat64(SeriesName, &dataframe.SeriesInit{Size: nrows}))
 	momentum := dataframe.NewDataFrame(series...)
+	return momentum, nil
+}
+
+func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
+	origStart := m.Manager.Begin
+	origEnd := m.Manager.End
+	origFrequency := m.Manager.Frequency
+
+	defer func() {
+		m.Manager.Begin = origStart
+		m.Manager.End = origEnd
+		m.Manager.Frequency = origFrequency
+	}()
+
+	m.Manager.Begin = start
+	m.Manager.End = end
+	m.Manager.Frequency = data.FrequencyMonthly
+
+	// Add the risk free asset
+	assets := make([]string, 0, len(m.Assets)+1)
+	assets = append(assets, "DGS3MO")
+	assets = append(assets, m.Assets...)
+
+	// fetch prices
+	prices, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, assets...)
+	if err != nil {
+		log.Error().Err(err).Msg("could not load data for momentum indicator")
+		return nil, err
+	}
+
+	// create a new series with date column
+	dateSeriesIdx, err := prices.NameToColumn(common.DateIdx)
+	if err != nil {
+		log.Error().Err(err).Msg("could not get date index")
+		return nil, err
+	}
+	dgsIdx, err := prices.NameToColumn("DGS3MO")
+	if err != nil {
+		log.Error().Err(err).Msg("could not get DGS3MO index")
+		return nil, err
+	}
+
+	rfr := prices.Series[dgsIdx]
+
+	if err := prices.RemoveSeries("DGS3MO"); err != nil {
+		log.Error().Err(err).Msg("could not remove DGS3MO series")
+		return nil, err
+	}
+
+	// build copy of dataframe
+	momentum, err := m.buildDataFrame(ctx, dateSeriesIdx, prices, rfr)
+	if err != nil {
+		// already logged
+		return nil, err
+	}
 
 	// run calculations
 	for _, ticker := range m.Assets {
