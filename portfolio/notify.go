@@ -136,23 +136,23 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*Notification {
 	// get notification frequencies for date
 	frequencies := pm.RequestedNotificationsForDate(forDate)
-	notifications := make([]*Notification, len(frequencies))
+	notifications := make([]*Notification, 0, len(frequencies))
 
 	// process for each frequency
-	for idx, freq := range frequencies {
+	for _, freq := range frequencies {
 		measurement, err := LoadMeasurementFromDB(pm.Portfolio.ID, pm.Portfolio.UserID, forDate)
 		if err != nil {
 			log.Error().Err(err).Str("NotificationFrequency", freq.String()).Msg("could not retrieve measurement for portfolio")
 			continue
 		}
-		notifications[idx] = &Notification{
+		notifications = append(notifications, &Notification{
 			ForDate:      forDate,
 			ForFrequency: freq,
 			Holdings:     pm.holdings,
 			Portfolio:    pm.Portfolio,
 			PeriodReturn: getReturnForNotification(measurement, freq),
 			YTDReturn:    perf.PortfolioReturns.TWRRYTD,
-		}
+		})
 	}
 	return notifications
 }
