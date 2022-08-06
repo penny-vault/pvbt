@@ -204,7 +204,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		}
 	}
 
-	// compute average scores
+	// write to csv
 	if viper.GetBool("debug.dump_csv") {
 		adm.writeDataFramesToCSV(ctx)
 	}
