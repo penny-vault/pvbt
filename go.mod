@@ -1,8 +1,8 @@
-// +heroku goVersion go1.18
+// +heroku goVersion go1.19
 
 module github.com/penny-vault/pv-api
 
-go 1.18
+go 1.19
 
 require (
 	github.com/andybalholm/brotli v1.0.4 // indirect

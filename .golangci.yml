@@ -11,8 +11,6 @@ linters:
     - gocyclo
     - goerr113
     - goheader
-    - gofmt
-    - goimports
     - revive
     - misspell
   disable:
