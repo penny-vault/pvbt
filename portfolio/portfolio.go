@@ -667,6 +667,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					totalValue := nShares * dividend
 					// there is a dividend, record it
+					pm.AddActivity(date, fmt.Sprintf("%s paid a %.2f/share dividend", k, dividend), []string{"dividend"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -698,6 +699,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					shares := splitFactor * nShares
 					// there is a split, record it
+					pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
