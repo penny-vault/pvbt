@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -476,9 +476,10 @@ func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
-//   `target` must have a column named `common.DateIdx` (DATE) and either a string column
-//   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
-//   the percentages of portfolio to hold
+//
+//	`target` must have a column named `common.DateIdx` (DATE) and either a string column
+//	or MixedAsset column of map[string]float64 where the keys are the tickers and values are
+//	the percentages of portfolio to hold
 func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
@@ -1375,7 +1376,8 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 // Private API
 
 // computeTransactionSourceID calculates a 16-byte blake3 hash using the date, source,
-//   composite figi, ticker, kind, price per share, shares, and total value
+//
+//	composite figi, ticker, kind, price per share, shares, and total value
 func computeTransactionSourceID(t *Transaction) error {
 	h := blake3.New()
 

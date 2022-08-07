@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -56,6 +56,7 @@ var updateCmd = &cobra.Command{
 		common.SetupLogging()
 		common.SetupCache()
 		log.Info().Msg("initialized logging")
+		nyc := common.GetTimezone()
 
 		// setup database
 		err := database.Connect()
@@ -74,7 +75,6 @@ var updateCmd = &cobra.Command{
 			}
 
 			// convert to EST
-			nyc := common.GetTimezone()
 			dt = time.Date(dt.Year(), dt.Month(), dt.Day(), 18, 0, 0, 0, nyc)
 		}
 
@@ -109,6 +109,10 @@ var updateCmd = &cobra.Command{
 		for _, pm := range portfolios {
 			subLog := log.With().Str("PortfolioName", pm.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
 			subLog.Info().Msg("updating portfolio")
+
+			if err := pm.SetStatus(fmt.Sprintf("calculating... [%s]", time.Now().In(nyc).Format("RFC822"))); err != nil {
+				log.Error().Err(err).Msg("could not set portfolio status")
+			}
 
 			subLog.Debug().Msg("loading transactions from DB")
 			err = pm.LoadTransactionsFromDB()
@@ -164,9 +168,12 @@ var updateCmd = &cobra.Command{
 					subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
 				}
 
-				nyc := common.GetTimezone()
-				pm.SetStatus(fmt.Sprintf("updated on %s", time.Now().In(nyc).Format("RFC822")))
-				pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"})
+				if err := pm.SetStatus(fmt.Sprintf("updated on %s", time.Now().In(nyc).Format("RFC822"))); err != nil {
+					log.Error().Err(err).Msg("could not set portfolio status")
+				}
+				if err := pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"}); err != nil {
+					log.Error().Err(err).Msg("could not set portfolio activity")
+				}
 			} else {
 				// since we are testing print results out
 				perf.LogSummary()

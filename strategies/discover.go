@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"math"
 
 	"github.com/jackc/pgtype"
@@ -65,7 +65,7 @@ func Register(strategyPkg string, factory strategy.Factory) {
 		subLog.Error().Stack().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
-	doc, err := ioutil.ReadAll(file)
+	doc, err := io.ReadAll(file)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to read file")
 	}
@@ -78,7 +78,7 @@ func Register(strategyPkg string, factory strategy.Factory) {
 		subLog.Error().Stack().Err(err).Msg("failed to open file")
 	}
 	defer file.Close()
-	doc, err = ioutil.ReadAll(file)
+	doc, err = io.ReadAll(file)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to read file")
 	}

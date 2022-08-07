@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -19,7 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -80,7 +80,7 @@ func getToken() (string, error) {
 		// NOTE: It's save to ignore the err return here
 		// as we are just formatting an error message for the
 		// already errored out HTTP response
-		respBody, err := ioutil.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
 		if err != nil {
 			subLog.Error().Err(err).Int("StatusCode", resp.StatusCode).Msg("error reading response body")
 		}
@@ -88,7 +88,7 @@ func getToken() (string, error) {
 		return "", ErrAuth0
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		subLog.Error().Err(err).Int("StatusCode", resp.StatusCode).Bytes("Body", respBody).Msg("Failed to read body response when retrieving Auth0 Management API access token")
 		return "", ErrAuth0
@@ -137,12 +137,12 @@ func GetAuth0User(userID string) (*Auth0User, error) {
 
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		respBody, _ := ioutil.ReadAll(resp.Body)
+		respBody, _ := io.ReadAll(resp.Body)
 		subLog.Error().Int("StatusCode", resp.StatusCode).Str("Body", string(respBody)).Msg("User account request failed")
 		return nil, ErrAuth0AccountRequest
 	}
 
-	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	auth0User := Auth0User{}
 	err = json.Unmarshal(respBody, &auth0User)
 	if err != nil {

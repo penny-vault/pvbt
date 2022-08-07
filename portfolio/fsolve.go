@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -29,11 +29,14 @@ type objectiveFunc func(float64) float64
 // fsolve uses a combination of bisection and false position to find a
 // root of a function within a given interval. This is guaranteed to converge,
 // and always keeps a bounding interval, unlike Newton's method. Inputs are:
-//  f:  function to solve root for
-//  f0: initial guess of root
+//
+//	f:  function to solve root for
+//	f0: initial guess of root
+//
 // Returns:
-//  root: root value
-//  err: if an error occurred
+//
+//	root: root value
+//	err: if an error occurred
 func fsolve(f objectiveFunc, f0 float64) (float64, error) {
 	// The false position steps are either unmodified, or modified with the
 	// Anderson-Bjorck method as appropriate. Theoretically, this has a "speed of

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -64,20 +64,21 @@ var (
 // '*' wildcards only execute during market open hours
 //
 // Additional market-aware modifiers are supported:
-//     @open       - Run at market open; replaces Minute and Hour field
-//                   e.g., @open * * *
-//     @close      - Run at market close; replaces Minute and Hour field
-//     @weekbegin  - Run on first trading day of week; replaces DayOfMonth field
-//     @weekend    - Run on last trading day of week; replaces DayOfMonth field
-//     @monthbegin - Run at market open or timespec on first trading day of month
-//     @monthend   - Run at market close or timespec on last trading day of month
+//
+//	@open       - Run at market open; replaces Minute and Hour field
+//	              e.g., @open * * *
+//	@close      - Run at market close; replaces Minute and Hour field
+//	@weekbegin  - Run on first trading day of week; replaces DayOfMonth field
+//	@weekend    - Run on last trading day of week; replaces DayOfMonth field
+//	@monthbegin - Run at market open or timespec on first trading day of month
+//	@monthend   - Run at market close or timespec on last trading day of month
 //
 // Examples:
-//     - every 5 minutes: */5 * * * *
-//     - market open on tuesdays: @open * * 2
-//     - 15 minutes after market open: 15 @open * * *
-//     - market open on first trading day of week: @weekbegin
-//     - market open on last trading day of month: @open @monthend
+//   - every 5 minutes: */5 * * * *
+//   - market open on tuesdays: @open * * 2
+//   - 15 minutes after market open: 15 @open * * *
+//   - market open on first trading day of week: @weekbegin
+//   - market open on last trading day of month: @open @monthend
 func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
