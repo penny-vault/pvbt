@@ -91,7 +91,6 @@ var updateCmd = &cobra.Command{
 		strategies.InitializeStrategyMap()
 
 		dataManager := data.NewManager()
-
 		strategies.LoadStrategyMetricsFromDb()
 		for _, strat := range strategies.StrategyList {
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok && !testUpdateCMD {
@@ -101,86 +100,36 @@ var updateCmd = &cobra.Command{
 			}
 		}
 
-		users := getUsers()
-		users = append(users, "pvuser")
-		portfolios := getPortfolios(updateCmdPortfolioID, users)
-		log.Info().Int("NumPortfolios", len(portfolios)).Time("Date", dt).Msg("updating portfolios")
-
-		for _, pm := range portfolios {
-			subLog := log.With().Str("PortfolioName", pm.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
-			subLog.Info().Msg("updating portfolio")
-
-			if err := pm.SetStatus(fmt.Sprintf("calculating... [%s]", time.Now().In(nyc).Format("RFC822"))); err != nil {
-				log.Error().Err(err).Msg("could not set portfolio status")
-			}
-
-			subLog.Debug().Msg("loading transactions from DB")
-			err = pm.LoadTransactionsFromDB()
-			if err != nil {
-				// NOTE: error is logged by caller
-				continue
-			}
-
-			subLog.Debug().Time("Date", dt).Msg("update transactions")
-			err = pm.UpdateTransactions(context.Background(), dt)
-			if err != nil {
-				subLog.Error().Msg("skipping portfolio due to error")
-				continue
-			}
-
-			// Try and load from the DB
-			subLog.Debug().Msg("load portfolio performance")
-			var perf *portfolio.Performance
-			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
-			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
-			if err != nil {
-				subLog.Warn().Stack().Err(err).Msg("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
-				// just create a new performance record
-				perf = portfolio.NewPerformance(pm.Portfolio)
-			} else {
-				if err := perf.LoadMeasurementsFromDB(pm.Portfolio.UserID); err != nil {
-					log.Error().Stack().Err(err).Msg("could not load measurements from database")
-					continue
-				}
-			}
-
-			subLog.Debug().Time("Date", dt).Msg("calculate performance through")
-			err = perf.CalculateThrough(context.Background(), pm, dt)
-			if err != nil {
-				subLog.Error().Stack().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
-				continue
-			}
-
-			lastTime := perf.Measurements[len(perf.Measurements)-1].Time
-			pm.Portfolio.EndDate = lastTime
-
-			if !testUpdateCMD {
-				subLog.Debug().Msg("saving portfolio to DB")
-				err = pm.Save(pm.Portfolio.UserID)
-				if err != nil {
-					subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
-					continue
-				}
-				lastMeas := perf.Measurements[len(perf.Measurements)-1]
-				log.Info().Object("PortfolioMetrics", perf.PortfolioMetrics).Time("PerformanceStart", perf.Measurements[0].Time).Time("PerformanceEnd", lastMeas.Time).Msg("Saving portfolio performance")
-				err = perf.Save(pm.Portfolio.UserID)
-				if err != nil {
-					subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
-				}
-
-				if err := pm.SetStatus(fmt.Sprintf("updated on %s", time.Now().In(nyc).Format("RFC822"))); err != nil {
-					log.Error().Err(err).Msg("could not set portfolio status")
-				}
-				if err := pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"}); err != nil {
-					log.Error().Err(err).Msg("could not set portfolio activity")
-				}
-			} else {
-				// since we are testing print results out
-				perf.LogSummary()
-			}
-
-			subLog.Debug().Msg("finished updating portfolio")
+		mode := "from-db"
+		if updateCmdFromWorkQueue {
+			mode = "work-queue"
 		}
+
+		var portfolios []*portfolio.Model
+
+		switch mode {
+		case "from-db":
+			users := getUsers()
+			users = append(users, "pvuser")
+			portfolios = getPortfolios(updateCmdPortfolioID, users)
+		case "work-queue":
+			msg, err := messenger.GetSimulationRequest()
+			if err != nil {
+				log.Fatal().Err(err).Msg("error getting work queue update request")
+			}
+			req := messenger.SimulationRequest{}
+			if err := json.Unmarshal(msg.Data, &req); err != nil {
+				log.Fatal().Err(err).Msg("error unmarshalling request json")
+			}
+
+			log.Info().Str("UserID", req.UserID).Str("PortfolioID", req.PortfolioID).Str("RequestTime", req.RequestTime).Msg("got portfolio update request")
+			if portfolios, err = portfolio.LoadFromDB([]string{req.PortfolioID}, req.UserID, dataManager); err != nil {
+				log.Fatal().Err(err).Msg("could not load request portfolio")
+			}
+		}
+
+		log.Info().Int("NumPortfolios", len(portfolios)).Time("Date", dt).Msg("updating portfolios")
+		updatePortfolios(portfolios, dt)
 	},
 }
 
@@ -222,4 +171,84 @@ func createStrategyPortfolio(strat *strategy.Info, endDate time.Time, manager *d
 
 	b.Save("pvuser", true)
 	return nil
+}
+
+func updatePortfolios(portfolios []*portfolio.Model, dt time.Time) {
+	var err error
+	nyc := common.GetTimezone()
+
+	for _, pm := range portfolios {
+		subLog := log.With().Str("PortfolioName", pm.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Time("StartDate", pm.Portfolio.StartDate).Time("EndDate", pm.Portfolio.EndDate).Logger()
+		subLog.Info().Msg("updating portfolio")
+
+		if err := pm.SetStatus(fmt.Sprintf("calculating... [%s]", time.Now().In(nyc).Format("RFC822"))); err != nil {
+			log.Error().Err(err).Msg("could not set portfolio status")
+		}
+
+		subLog.Debug().Msg("loading transactions from DB")
+		err = pm.LoadTransactionsFromDB()
+		if err != nil {
+			// NOTE: error is logged by caller
+			continue
+		}
+
+		subLog.Debug().Time("Date", dt).Msg("update transactions")
+		err = pm.UpdateTransactions(context.Background(), dt)
+		if err != nil {
+			subLog.Error().Msg("skipping portfolio due to error")
+			continue
+		}
+
+		// Try and load from the DB
+		subLog.Debug().Msg("load portfolio performance")
+		var perf *portfolio.Performance
+		portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
+		perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
+		if err != nil {
+			subLog.Warn().Stack().Err(err).Msg("could not load portfolio performance -- may be due to the portfolio's performance never being calculated")
+			// just create a new performance record
+			perf = portfolio.NewPerformance(pm.Portfolio)
+		} else {
+			if err := perf.LoadMeasurementsFromDB(pm.Portfolio.UserID); err != nil {
+				log.Error().Stack().Err(err).Msg("could not load measurements from database")
+				continue
+			}
+		}
+
+		subLog.Debug().Time("Date", dt).Msg("calculate performance through")
+		err = perf.CalculateThrough(context.Background(), pm, dt)
+		if err != nil {
+			subLog.Error().Stack().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
+			continue
+		}
+
+		lastTime := perf.Measurements[len(perf.Measurements)-1].Time
+		pm.Portfolio.EndDate = lastTime
+
+		if !testUpdateCMD {
+			subLog.Debug().Msg("saving portfolio to DB")
+			err = pm.Save(pm.Portfolio.UserID)
+			if err != nil {
+				subLog.Error().Stack().Err(err).Msg("error while saving portfolio updates")
+				continue
+			}
+			lastMeas := perf.Measurements[len(perf.Measurements)-1]
+			log.Info().Object("PortfolioMetrics", perf.PortfolioMetrics).Time("PerformanceStart", perf.Measurements[0].Time).Time("PerformanceEnd", lastMeas.Time).Msg("Saving portfolio performance")
+			err = perf.Save(pm.Portfolio.UserID)
+			if err != nil {
+				subLog.Error().Stack().Err(err).Msg("error while saving portfolio measurements")
+			}
+
+			if err := pm.SetStatus(fmt.Sprintf("updated on %s", time.Now().In(nyc).Format("RFC822"))); err != nil {
+				log.Error().Err(err).Msg("could not set portfolio status")
+			}
+			if err := pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"}); err != nil {
+				log.Error().Err(err).Msg("could not set portfolio activity")
+			}
+		} else {
+			// since we are testing print results out
+			perf.LogSummary()
+		}
+		subLog.Debug().Msg("finished updating portfolio")
+	}
 }

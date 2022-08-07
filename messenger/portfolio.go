@@ -32,8 +32,9 @@ type SimulationRequest struct {
 	RequestTime string `json:"request_time"`
 }
 
-func GetSimulationRequests() (*nats.Msg, error) {
-	sub, err := jetStream.PullSubscribe("test.messages", "test_consumer")
+// GetSimulationRequet returns a single simulation request message
+func GetSimulationRequest() (*nats.Msg, error) {
+	sub, err := jetStream.PullSubscribe(viper.GetString("nats.requests_subject"), viper.GetString("nats.requests_consumer"))
 	if err != nil {
 		log.Error().Err(err).Msg("could not connect to durable consumer")
 		return nil, err
