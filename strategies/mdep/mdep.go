@@ -39,6 +39,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/rs/zerolog/log"
@@ -48,12 +49,14 @@ import (
 var (
 	ErrInvalidPeriod = errors.New("invalid period")
 	ErrHoldings      = errors.New("not enough holdings in portfolio")
+	ErrInvalidRisk   = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
 )
 
 type MomentumDrivenEarningsPrediction struct {
-	NumHoldings int
-	OutTicker   string
-	Period      data.Frequency
+	NumHoldings   int
+	RiskIndicator string
+	OutTicker     string
+	Period        data.Frequency
 }
 
 type Period struct {
@@ -72,6 +75,17 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, ErrHoldings
 	}
 
+	riskIndicator := "None"
+	if err := json.Unmarshal(args["indicator"], &riskIndicator); err != nil {
+		log.Error().Err(err).Msg("unmarshal indicator failed")
+		return nil, err
+	}
+
+	if riskIndicator != "None" && riskIndicator != "Momentum" {
+		log.Error().Str("RiskIndicatorValue", riskIndicator).Msg("Unknown risk indicator type")
+		return nil, ErrInvalidRisk
+	}
+
 	var outTicker string
 	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
 		return nil, err
@@ -88,9 +102,10 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 
 	var mdep strategy.Strategy = &MomentumDrivenEarningsPrediction{
-		NumHoldings: numHoldings,
-		OutTicker:   outTicker,
-		Period:      period,
+		NumHoldings:   numHoldings,
+		OutTicker:     outTicker,
+		RiskIndicator: riskIndicator,
+		Period:        period,
 	}
 
 	return mdep, nil
@@ -150,8 +165,16 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 		return nil, nil, err
 	}
 
+	indicator, err := mdep.getRiskOnOffIndicator(ctx, manager)
+	if err != nil {
+		if err := db.Rollback(ctx); err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+		return nil, nil, err
+	}
+
 	// build target portfolio
-	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, db)
+	targetPortfolio, err := mdep.buildTargetPortfolio(ctx, tradeDays, indicator, db)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
@@ -180,7 +203,62 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*dataframe.DataFrame, error) {
+func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
+	var err error
+	var indicator *dataframe.DataFrame
+
+	subLog := log.With().Str("Strategy", "mdep").Logger()
+
+	switch mdep.RiskIndicator {
+	case "Momentum":
+		subLog.Debug().Msg("get risk on/off indicator")
+		momentum := &indicators.Momentum{
+			Assets:  []string{"VFINX", "PRIDX"},
+			Periods: []int{1, 3, 6},
+			Manager: manager,
+		}
+		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
+		if err != nil {
+			subLog.Error().Err(err).Msg("could not get risk on/off indicator")
+			return nil, err
+		}
+	default:
+		// just construct a series of ones
+		dateSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: 2}, time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
+		indicatorSeries := dataframe.NewSeriesFloat64(indicators.SeriesName, &dataframe.SeriesInit{Capacity: 2}, 1.0, 1.0)
+		indicator = dataframe.NewDataFrame(dateSeries, indicatorSeries)
+	}
+	return indicator, nil
+}
+
+func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[string]float64, error) {
+	subLog := log.With().Str("Strategy", "seek").Logger()
+	targetMap := make(map[string]float64)
+	cnt := 0
+	rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, numAssets)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("could not query database for mdep portfolio")
+		return nil, err
+	}
+	for rows.Next() {
+		cnt++
+		var ticker string
+		err := rows.Scan(&ticker)
+		if err != nil {
+			subLog.Error().Stack().Err(err).Msg("could not scan result")
+			return nil, err
+		}
+		targetMap[ticker] = 0.0
+	}
+
+	qty := 1.0 / float64(cnt)
+	for k := range targetMap {
+		targetMap[k] = qty
+	}
+	return targetMap, nil
+}
+
+func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (*dataframe.DataFrame, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
 	defer span.End()
 
@@ -190,33 +268,46 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	// build target portfolio
 	targetAssets := make([]interface{}, 0, 600)
 	targetDates := make([]interface{}, 0, 600)
+
+	riskIndicator := false
+	riskIdx := 0
+	NRisk := riskOn.NRows()
+
 	for _, day := range tradeDays {
-		targetMap := make(map[string]float64)
-		cnt := 0
-		rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, mdep.NumHoldings)
-		if err != nil {
-			log.Error().Stack().Err(err).Msg("could not query database for portfolio")
-			return nil, err
+		var ok bool
+		var err error
+		var targetMap map[string]float64
+		var riskDate time.Time
+
+		// check if risk indicator should be updated
+		row := riskOn.Row(riskIdx, true)
+		if riskDate, ok = row[common.DateIdx].(time.Time); !ok {
+			subLog.Error().Time("Day", day).Int("RiskIdx", riskIdx).Msg("could not get time for risk index")
 		}
-		for rows.Next() {
-			cnt++
-			var ticker string
-			err := rows.Scan(&ticker)
-			if err != nil {
-				log.Error().Stack().Err(err).Msg("could not scan result")
-				return nil, err
+		if !day.Before(riskDate) {
+			if riskValue, ok := row[indicators.SeriesName].(float64); ok {
+				riskIndicator = riskValue > 0
+			} else {
+				subLog.Error().Time("Day", day).Int("RiskIdx", riskIdx).Msg("could not get risk value for idx")
 			}
-			targetMap[ticker] = 0.0
+			riskIdx++
+			if riskIdx >= NRisk {
+				riskIdx--
+			}
 		}
 
-		qty := 1.0 / float64(cnt)
-		for k := range targetMap {
-			targetMap[k] = qty
+		if riskIndicator {
+			targetMap, err = getMDEPAssets(ctx, day, mdep.NumHoldings, db)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			targetMap = make(map[string]float64)
 		}
 
 		if len(targetMap) == 0 {
 			// nothing to invest in - use cash like asset
-			targetMap["VUSTX"] = 1.0
+			targetMap[mdep.OutTicker] = 1.0
 		}
 
 		targetDates = append(targetDates, day)

@@ -102,7 +102,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 		m.Manager.Frequency = origFrequency
 	}()
 
-	m.Manager.Begin = start
+	m.Manager.Begin = start.AddDate(0, -6, 0)
 	m.Manager.End = end
 	m.Manager.Frequency = data.FrequencyMonthly
 

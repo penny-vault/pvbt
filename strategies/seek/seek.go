@@ -48,6 +48,7 @@ import (
 var (
 	ErrHoldings      = errors.New("portfolio must contain at least 2 holdings")
 	ErrInvalidPeriod = errors.New("period must be one of 'Weekly' or 'Monthly'")
+	ErrInvalidRisk = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
 )
 
 type SeekingAlphaQuant struct {
@@ -123,7 +124,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 	if riskIndicator != "None" && riskIndicator != "Momentum" {
 		log.Error().Str("RiskIndicatorValue", riskIndicator).Msg("Unknown risk indicator type")
-		return nil, err
+		return nil, ErrInvalidRisk
 	}
 
 	var seek strategy.Strategy = &SeekingAlphaQuant{

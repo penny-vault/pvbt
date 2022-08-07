@@ -15,7 +15,14 @@ default = "VUSTX"
 name = "Number of Holdings"
 description = "Maximum number of stocks to hold at a time"
 typecode = "number"
-default = "100"
+default = "50"
+
+[arguments.indicator]
+name = "Risk-On Indicator"
+description = "Indicator to decide when to invest in risky assets vs safe haven assets"
+typecode = "choice"
+default = "None"
+options = ["None", "Momentum"]
 
 [arguments.period]
 name = "Rebalance Frequency"
