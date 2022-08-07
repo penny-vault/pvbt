@@ -168,6 +168,7 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	where := make(map[string]string)
 
 	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
+	subLog.Info().Msg("GetHoldings from database")
 
 	periodReturnField := getPeriodReturnFieldForFrequency(frequency)
 	fields := []string{"event_date", "holdings", periodReturnField, "justification", "strategy_value"}

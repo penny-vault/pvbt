@@ -163,7 +163,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 	for _, ii := range periods {
 		lag := dfextras.Lag(ii, adm.prices)
-		roll, err := dfextras.Rolling(context.TODO(), ii, rfr.Copy(), aggFn)
+		roll, err := dfextras.Rolling(ctx, ii, rfr.Copy(), aggFn)
 
 		if err != nil {
 			return err
@@ -204,9 +204,9 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		}
 	}
 
-	// compute average scores
+	// write to csv
 	if viper.GetBool("debug.dump_csv") {
-		adm.writeDataFramesToCSV()
+		adm.writeDataFramesToCSV(ctx)
 	}
 
 	return nil
@@ -262,9 +262,9 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		scores = append(scores, series)
 	}
 	scoresDf := dataframe.NewDataFrame(scores...)
-	scoresDf, _ = dfextras.DropNA(context.TODO(), scoresDf)
+	scoresDf, _ = dfextras.DropNA(ctx, scoresDf)
 
-	argmax, err := dfextras.ArgMax(context.TODO(), scoresDf)
+	argmax, err := dfextras.ArgMax(ctx, scoresDf)
 	argmax.Rename(common.TickerName)
 	if err != nil {
 		return nil, nil, err
@@ -325,9 +325,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (adm *AcceleratingDualMomentum) writeDataFramesToCSV() {
-	ctx := context.Background()
-
+func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
 	// momentum
 	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
 	if err != nil {

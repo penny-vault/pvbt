@@ -292,7 +292,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -341,7 +341,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 			valMap[ticker] = adjClose.Float
 		default:
 			span.SetStatus(codes.Error, "un-supported metric")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -430,7 +430,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -516,7 +516,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		msg := "db query failed"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Stack().Err(err).Msg(msg)
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -534,7 +534,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 			msg := "db scan failed"
 			span.SetStatus(codes.Error, msg)
 			subLog.Warn().Stack().Err(err).Msg(msg)
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return math.NaN(), err

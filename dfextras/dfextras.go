@@ -588,7 +588,7 @@ func Rolling(ctx context.Context, n int, s dataframe.Series, fn AggregateSeriesF
 }
 
 // Split divides the dataframe into two, columns listed go into the first data frame, any remaining
-// columns do into the second data frame. This modifies the original dataframe in place to hold the
+// columns go into the second data frame. This modifies the original dataframe in place to hold the
 // remaining columns
 func Split(ctx context.Context, df *dataframe.DataFrame, cols ...string) (*dataframe.DataFrame, *dataframe.DataFrame, error) {
 	timeSeries := df.Series[df.MustNameToColumn(common.DateIdx)]
