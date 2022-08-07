@@ -274,10 +274,10 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	NRisk := riskOn.NRows()
 
 	for _, day := range tradeDays {
-		targetMap := make(map[string]float64)
-		var riskDate time.Time
 		var ok bool
 		var err error
+		var targetMap map[string]float64
+		var riskDate time.Time
 
 		// check if risk indicator should be updated
 		row := riskOn.Row(riskIdx, true)
