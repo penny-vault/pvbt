@@ -18,6 +18,7 @@ package handler
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -58,15 +59,124 @@ type PortfolioResponse struct {
 	LastChanged        int64                  `json:"lastChanged"`
 }
 
+func NewPortfolioResponse() PortfolioResponse {
+	return PortfolioResponse{
+		YTDReturn: pgtype.Float8{
+			Status: pgtype.Null,
+		},
+		CAGRSinceInception: pgtype.Float8{
+			Status: pgtype.Null,
+		},
+		Cagr3Year: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		Cagr5Year: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		Cagr10Year: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		StdDev: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		DownsideDeviation: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		MaxDrawDown: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		AvgDrawDown: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		SharpeRatio: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		SortinoRatio: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		UlcerIndex: pgtype.Float4{
+			Status: pgtype.Null,
+		},
+		NextTradeDate: pgtype.Int4{
+			Status: pgtype.Null,
+		},
+	}
+}
+
+func invalidJSONValue[T float32 | float64](val T) bool {
+	return math.IsNaN(float64(val)) || math.IsInf(float64(val), 0)
+}
+
+func (pr *PortfolioResponse) Sanitize() {
+	if invalidJSONValue(pr.YTDReturn.Float) {
+		pr.YTDReturn.Float = 0
+		pr.YTDReturn.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.CAGRSinceInception.Float) {
+		pr.CAGRSinceInception.Float = 0
+		pr.CAGRSinceInception.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.Cagr3Year.Float) {
+		pr.Cagr3Year.Float = 0
+		pr.Cagr3Year.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.Cagr5Year.Float) {
+		pr.Cagr5Year.Float = 0
+		pr.Cagr5Year.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.Cagr10Year.Float) {
+		pr.Cagr10Year.Float = 0
+		pr.Cagr10Year.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.StdDev.Float) {
+		pr.StdDev.Float = 0
+		pr.StdDev.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.DownsideDeviation.Float) {
+		pr.DownsideDeviation.Float = 0
+		pr.DownsideDeviation.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.MaxDrawDown.Float) {
+		pr.MaxDrawDown.Float = 0
+		pr.MaxDrawDown.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.AvgDrawDown.Float) {
+		pr.AvgDrawDown.Float = 0
+		pr.AvgDrawDown.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.SharpeRatio.Float) {
+		pr.SharpeRatio.Float = 0
+		pr.SharpeRatio.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.SortinoRatio.Float) {
+		pr.SortinoRatio.Float = 0
+		pr.SortinoRatio.Status = pgtype.Null
+	}
+
+	if invalidJSONValue(pr.UlcerIndex.Float) {
+		pr.UlcerIndex.Float = 0
+		pr.UlcerIndex.Status = pgtype.Null
+	}
+}
+
 func CreatePortfolio(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	portfolioID := uuid.New()
 
-	portfolioParams := PortfolioResponse{
-		ID: portfolioID,
-	}
-
 	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID.String()).Str("UserID", userID).Logger()
+
+	portfolioParams := NewPortfolioResponse()
+	portfolioParams.ID = portfolioID
 
 	if err := json.Unmarshal(c.Body(), &portfolioParams); err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to deserialize portfolio params")
@@ -135,7 +245,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 		return fiber.ErrServiceUnavailable
 	}
 	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
-	p := PortfolioResponse{}
+	p := NewPortfolioResponse()
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not scan row from db into Performance struct")
@@ -145,6 +255,8 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 		return fiber.ErrNotFound
 	}
+
+	p.Sanitize()
 
 	if err := trx.Commit(context.Background()); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
@@ -322,7 +434,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 
 	portfolios := make([]PortfolioResponse, 0, 10)
 	for rows.Next() {
-		p := PortfolioResponse{}
+		p := NewPortfolioResponse()
 		err := rows.Scan(
 			&p.ID,                 // 0
 			&p.Name,               // 1
@@ -352,7 +464,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 			subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("ListPortfolio scan failed")
 			continue
 		}
-
+		p.Sanitize()
 		portfolios = append(portfolios, p)
 	}
 
@@ -369,6 +481,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 	if err := trx.Commit(context.Background()); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
+
 	return c.JSON(portfolios)
 }
 
@@ -379,7 +492,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "UpdatePortfolio").Logger()
 
-	params := PortfolioResponse{}
+	params := NewPortfolioResponse()
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
 		subLog.Warn().Stack().Err(err).Msg("unmarshal request JSON failed")
 		return fiber.ErrBadRequest
@@ -393,7 +506,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
-	p := PortfolioResponse{}
+	p := NewPortfolioResponse()
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("select portfolio info failed")
@@ -403,6 +516,8 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 		return fiber.ErrNotFound
 	}
+
+	p.Sanitize()
 
 	if params.Name == "" {
 		params.Name = p.Name
@@ -423,7 +538,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
-	p = PortfolioResponse{}
+	p = NewPortfolioResponse()
 	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).
 		Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
@@ -434,6 +549,8 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 		return fiber.ErrInternalServerError
 	}
+
+	p.Sanitize()
 
 	if err := trx.Commit(context.Background()); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
