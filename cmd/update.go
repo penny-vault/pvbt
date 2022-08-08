@@ -260,7 +260,8 @@ func updatePortfolio(pm *portfolio.Model, dt time.Time) error {
 			log.Error().Err(err).Msg("could not set portfolio status")
 			return err
 		}
-		if err := pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"}); err != nil {
+		pm.AddActivity(time.Now().In(nyc), "updated portfolio", []string{"update"})
+		if err := pm.SaveActivities(); err != nil {
 			log.Error().Err(err).Msg("could not set portfolio activity")
 			return err
 		}

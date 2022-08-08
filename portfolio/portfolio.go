@@ -70,6 +70,12 @@ const (
 	WithdrawTransaction = "WITHDRAW"
 )
 
+type Activity struct {
+	Date time.Time
+	Msg  string
+	Tags []string
+}
+
 // Model stores a portfolio and associated price data that is used for computation
 type Model struct {
 	Portfolio *Portfolio
@@ -78,6 +84,7 @@ type Model struct {
 	dataProxy      *data.Manager
 	value          float64
 	holdings       map[string]float64
+	activities     []*Activity
 	justifications map[string][]*Justification
 }
 
@@ -669,9 +676,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					totalValue := nShares * dividend
 					// there is a dividend, record it
-					if err := pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"}); err != nil {
-						subLog.Warn().Err(err).Msg("could not add dividend activity to portfolio")
-					}
+					pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -703,9 +708,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					shares := splitFactor * nShares
 					// there is a split, record it
-					if err := pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"}); err != nil {
-						subLog.Warn().Err(err).Msg("could not add split activity to portfolio")
-					}
+					pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -1067,11 +1070,27 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	return resultSet, nil
 }
 
-func (pm *Model) AddActivity(date time.Time, msg string, tags []string) error {
+func (pm *Model) AddActivity(date time.Time, msg string, tags []string) {
+	if pm.activities == nil {
+		pm.activities = make([]*Activity, 0, 5)
+	}
+
+	pm.activities = append(pm.activities, &Activity{
+		Date: date,
+		Msg:  msg,
+		Tags: tags,
+	})
+}
+
+func (pm *Model) SaveActivities() error {
 	p := pm.Portfolio
 	userID := p.UserID
 
-	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Str("Status", msg).Logger()
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
+
+	if pm.activities == nil {
+		pm.activities = make([]*Activity, 0, 5)
+	}
 
 	// Save to database
 	trx, err := database.TrxForUser(userID)
@@ -1080,13 +1099,16 @@ func (pm *Model) AddActivity(date time.Time, msg string, tags []string) error {
 		return err
 	}
 
-	sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
-	if _, err := trx.Exec(context.Background(), sql, userID, p.ID, date, msg, tags); err != nil {
-		subLog.Error().Err(err).Msg("could not create activity")
-		if err := trx.Rollback(context.Background()); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+	for _, activity := range pm.activities {
+
+		sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
+		if _, err := trx.Exec(context.Background(), sql, userID, p.ID, activity.Date, activity.Msg, activity.Tags); err != nil {
+			subLog.Error().Err(err).Msg("could not create activity")
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+			return err
 		}
-		return err
 	}
 
 	err = trx.Commit(context.Background())
@@ -1138,6 +1160,10 @@ func (pm *Model) Save(userID string) error {
 	p.UserID = userID
 
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
+
+	if err := pm.SaveActivities(); err != nil {
+		subLog.Error().Err(err).Msg("could not save activities")
+	}
 
 	// Save to database
 	trx, err := database.TrxForUser(userID)
