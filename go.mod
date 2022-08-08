@@ -17,7 +17,7 @@ require (
 	github.com/guptarohit/asciigraph v0.5.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
-	github.com/jackc/pgx/v4 v4.16.1
+	github.com/jackc/pgx/v4 v4.17.0
 	github.com/jdfergason/jwt/v2 v2.2.6
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.25
@@ -33,7 +33,7 @@ require (
 	github.com/valyala/fasthttp v1.38.0 // indirect
 	github.com/xitongsys/parquet-go v1.6.2 // indirect
 	github.com/zeebo/blake3 v0.2.3
-	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
+	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
 	golang.org/x/sys v0.0.0-20220721230656-c6bc011c0c49 // indirect
@@ -49,7 +49,7 @@ require (
 	github.com/jdfergason/dataframe-go v0.2.0
 	github.com/nats-io/nats.go v1.16.0
 	github.com/onsi/ginkgo/v2 v2.1.4
-	github.com/pashagolub/pgxmock v1.7.0
+	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.27.0
 	github.com/sendgrid/sendgrid-go v3.11.1+incompatible
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.9.0
@@ -68,6 +68,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/nats-io/nats-server/v2 v2.8.4 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/ompluscator/dynamic-struct v1.3.0 // indirect
@@ -94,12 +95,12 @@ require (
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.12.1
+	github.com/jackc/pgconn v1.13.0
 	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
+	github.com/jackc/pgproto3/v2 v2.3.1 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20200714003250-2b9c44734f2b // indirect
-	github.com/jackc/pgtype v1.11.0
+	github.com/jackc/pgtype v1.12.0
 	github.com/jackc/puddle v1.2.2-0.20220404125616-4e959849469a // indirect
 	github.com/klauspost/compress v1.15.9 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.0 // indirect
