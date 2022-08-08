@@ -619,6 +619,8 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return nil
 	}
 
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
+
 	dt := p.Transactions[n-1].Date
 	tz := common.GetTimezone()
 
@@ -628,11 +630,11 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	through = through.AddDate(0, 0, 1)
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
-		log.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
+		subLog.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
 		return ErrTimeInverted
 	}
 
-	log.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
+	subLog.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
 
 	// Load split & dividend history
 	cnt := 0
@@ -667,7 +669,9 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					totalValue := nShares * dividend
 					// there is a dividend, record it
-					pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
+					if err := pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"}); err != nil {
+						subLog.Warn().Err(err).Msg("could not add dividend activity to portfolio")
+					}
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -699,7 +703,9 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					shares := splitFactor * nShares
 					// there is a split, record it
-					pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
+					if err := pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"}); err != nil {
+						subLog.Warn().Err(err).Msg("could not add split activity to portfolio")
+					}
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,

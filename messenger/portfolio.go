@@ -16,6 +16,7 @@
 package messenger
 
 import (
+	"errors"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -42,7 +43,7 @@ func GetSimulationRequest() (*nats.Msg, error) {
 
 	msgs, err := sub.Fetch(1)
 	if err != nil {
-		if err != nats.ErrTimeout {
+		if errors.Is(err, nats.ErrTimeout) {
 			log.Error().Err(err).Msg("could not fetch new messages")
 		} else {
 			log.Warn().Msg("no requests available in queue")

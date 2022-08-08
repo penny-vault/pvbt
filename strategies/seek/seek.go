@@ -48,7 +48,7 @@ import (
 var (
 	ErrHoldings      = errors.New("portfolio must contain at least 2 holdings")
 	ErrInvalidPeriod = errors.New("period must be one of 'Weekly' or 'Monthly'")
-	ErrInvalidRisk = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
+	ErrInvalidRisk   = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
 )
 
 type SeekingAlphaQuant struct {
