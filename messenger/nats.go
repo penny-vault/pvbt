@@ -31,14 +31,14 @@ func Initialize() error {
 	credentialsFile := viper.GetString("nats.credentials")
 	log.Info().Str("NATSServer", url).Str("Credentials", credentialsFile).Msg("connecting to NATS server")
 	if natsConnection, err = nats.Connect(url, nats.UserCredentials(credentialsFile)); err != nil {
-		log.Error().Err(err).Msg("could not connect to NATS server")
+		log.Fatal().Err(err).Msg("could not connect to NATS server")
 		return err
 	}
 
 	// get jetstream connection
 	jetStream, err = natsConnection.JetStream(nats.PublishAsyncMaxPending(256))
 	if err != nil {
-		log.Error().Err(err).Msg("could not create jetstream context")
+		log.Fatal().Err(err).Msg("could not create jetstream context")
 		return err
 	}
 

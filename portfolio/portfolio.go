@@ -667,7 +667,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					totalValue := nShares * dividend
 					// there is a dividend, record it
-					pm.AddActivity(date, fmt.Sprintf("%s paid a %.2f/share dividend", k, dividend), []string{"dividend"})
+					pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -1077,6 +1077,10 @@ func (pm *Model) AddActivity(date time.Time, msg string, tags []string) error {
 	sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
 	if _, err := trx.Exec(context.Background(), sql, userID, p.ID, date, msg, tags); err != nil {
 		subLog.Error().Err(err).Msg("could not create activity")
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+		return err
 	}
 
 	err = trx.Commit(context.Background())
@@ -1085,7 +1089,6 @@ func (pm *Model) AddActivity(date time.Time, msg string, tags []string) error {
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
-
 		return err
 	}
 
@@ -1105,7 +1108,7 @@ func (pm *Model) SetStatus(msg string) error {
 		return err
 	}
 
-	sql := `UPDATE portfolios SET status=$1 WHERE portfolio_id=$2`
+	sql := `UPDATE portfolios SET status=$1 WHERE id=$2`
 	if _, err := trx.Exec(context.Background(), sql, msg, p.ID); err != nil {
 		subLog.Error().Err(err).Msg("could not update portfolio status")
 	}

@@ -36,13 +36,18 @@ type SimulationRequest struct {
 func GetSimulationRequest() (*nats.Msg, error) {
 	sub, err := jetStream.PullSubscribe(viper.GetString("nats.requests_subject"), viper.GetString("nats.requests_consumer"))
 	if err != nil {
-		log.Error().Err(err).Msg("could not connect to durable consumer")
+		log.Error().Err(err).Msg("could not connect to durable consumer (note: make sure the consumer already exists)")
 		return nil, err
 	}
 
 	msgs, err := sub.Fetch(1)
 	if err != nil {
-		log.Error().Err(err).Msg("could not fetch new messages")
+		if err != nats.ErrTimeout {
+			log.Error().Err(err).Msg("could not fetch new messages")
+		} else {
+			log.Warn().Msg("no requests available in queue")
+			return nil, nil
+		}
 		return nil, err
 	}
 
