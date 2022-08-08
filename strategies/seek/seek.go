@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -48,7 +48,7 @@ import (
 var (
 	ErrHoldings      = errors.New("portfolio must contain at least 2 holdings")
 	ErrInvalidPeriod = errors.New("period must be one of 'Weekly' or 'Monthly'")
-	ErrInvalidRisk = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
+	ErrInvalidRisk   = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
 )
 
 type SeekingAlphaQuant struct {
@@ -146,10 +146,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	subLog := log.With().Str("Strategy", "seek").Logger()
 	subLog.Info().Msg("computing strategy portfolio")
 
-	nyc, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Panic().Err(err).Msg("cannot load nyc timezone")
-	}
+	nyc := common.GetTimezone()
 
 	// Ensure time range is valid
 	nullTime := time.Time{}

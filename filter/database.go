@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,6 +26,7 @@ import (
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgsql"
 	"github.com/jackc/pgx/v4"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -252,11 +253,7 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 		return nil, err
 	}
 
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		log.Panic().Err(err).Msg("could not load timezone")
-	}
-
+	nyc := common.GetTimezone()
 	switch frequency {
 	case data.FrequencyAnnually:
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
@@ -275,8 +272,7 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 	subLog := log.With().Time("Since", since).Logger()
 	where := make(map[string]string)
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
-
+	tz := common.GetTimezone()
 	fields := []string{"event_date", "id", "cleared", "commission", "composite_figi", "justification",
 		"transaction_type", "memo", "price_per_share", "num_shares", "source", "source_id", "tags",
 		"tax_type", "ticker", "total_value"}

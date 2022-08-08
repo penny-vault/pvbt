@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
 
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
@@ -38,7 +39,7 @@ var _ = Describe("Provider", func() {
 
 	BeforeEach(func() {
 		var err error
-		tz, err = time.LoadLocation("America/New_York") // New York is the reference time
+		tz = common.GetTimezone()
 		Expect(err).To(BeNil())
 
 		ctx = context.Background()

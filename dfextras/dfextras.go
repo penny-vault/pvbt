@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -376,8 +376,8 @@ func Merge(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFra
 
 // MergeAndFill merge multiple dataframes on their time axis. Where there are missing values fill with specified fill value
 // Assumptions:
-//     1) All dataframes must be sampled at the same rate
-//     2) All dataframes must have a time column
+//  1. All dataframes must be sampled at the same rate
+//  2. All dataframes must have a time column
 func MergeAndFill(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	timeAxisName := common.DateIdx
 	// build time axis
@@ -472,11 +472,11 @@ func MergeAndFill(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.
 
 // MergeAndTimeAlign merge multiple dataframes on their time axis
 // Assumptions:
-//     1) timeAxisName is in all dataframes and refers to a TimeSeries
-//     2) All dataframes are sampled at the same rate; i.e., if values are taken on the first day of the month then that is the way it is done for all data frames
-//     3) Time series does not begin or end with nil values
-//     4) Time series is sorted ascending
-//     5) Time series must overlap
+//  1. timeAxisName is in all dataframes and refers to a TimeSeries
+//  2. All dataframes are sampled at the same rate; i.e., if values are taken on the first day of the month then that is the way it is done for all data frames
+//  3. Time series does not begin or end with nil values
+//  4. Time series is sorted ascending
+//  5. Time series must overlap
 func MergeAndTimeAlign(ctx context.Context, dfs ...*dataframe.DataFrame) (*dataframe.DataFrame, error) {
 	timeAxisName := common.DateIdx
 	startTime := time.Time{}

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -80,12 +80,9 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	var startDate time.Time
 	var endDate time.Time
+	var err error
 
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Error().Stack().Err(err).Msg("could not load nyc timezone")
-		return fiber.ErrInternalServerError
-	}
+	tz := common.GetTimezone()
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {

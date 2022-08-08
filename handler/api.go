@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,7 +39,7 @@ type APIKeyResponse struct {
 	Token string `json:"token"`
 }
 
-func APIKey(c *fiber.Ctx) error {
+func GetAPIKey(c *fiber.Ctx) error {
 	pvToken := make(map[string]string)
 	pvToken["userID"] = c.Locals("userID").(string)
 
@@ -104,6 +104,7 @@ func Ping(c *fiber.Ctx) error {
 }
 
 func Benchmark(c *fiber.Ctx) (resp error) {
+	var err error
 	// Parse date strings
 	startDateStr := c.Query("startDate", "1990-01-01")
 	endDateStr := c.Query("endDate", "now")
@@ -113,11 +114,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	var startDate time.Time
 	var endDate time.Time
 
-	tz, err := time.LoadLocation("America/New_York") // New York is the reference time
-	if err != nil {
-		subLog.Warn().Stack().Err(err).Msg("could not load nyc timezone")
-		return fiber.ErrInternalServerError
-	}
+	tz := common.GetTimezone()
 
 	startDate, err = time.ParseInLocation("2006-01-02", startDateStr, tz)
 	if err != nil {

@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -42,8 +42,7 @@ var _ = Describe("Daa", func() {
 	)
 
 	BeforeEach(func() {
-		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
-
+		tz = common.GetTimezone()
 		jsonParams := `{"riskUniverse": ["VFINX", "PRIDX"], "protectiveUniverse": ["VUSTX"], "protectionFactor": 2, "lookback": 12, "topN": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {

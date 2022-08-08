@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -191,7 +191,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "provider.Fetch")
 	defer span.End()
 
-	tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+	tz := common.GetTimezone()
 	begin = time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, tz)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
 	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, FrequencyDaily, begin, end)
@@ -250,7 +250,7 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, symbol
 	key := buildHashKey(date, metric, symbol)
 	val, ok := m.cache[key]
 	if !ok {
-		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
+		tz := common.GetTimezone()
 		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
 		err := m.Fetch(ctx, date, end, metric, symbol)
 		if err != nil {

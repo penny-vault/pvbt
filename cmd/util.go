@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,9 +26,10 @@ import (
 )
 
 // getPortoflios retrieves a list of portfolios from the database
-//   dataManager - interface to the database
-//   portfolioID - specified as {userID}:{portfolioID} only pull requested portfolio
-//   userList    - list of users to include portfolios for
+//
+//	dataManager - interface to the database
+//	portfolioID - specified as {userID}:{portfolioID} only pull requested portfolio
+//	userList    - list of users to include portfolios for
 func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 	dataManager := data.NewManager()
 

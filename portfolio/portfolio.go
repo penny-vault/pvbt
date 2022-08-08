@@ -5,7 +5,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-//     http://www.apache.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -70,6 +70,12 @@ const (
 	WithdrawTransaction = "WITHDRAW"
 )
 
+type Activity struct {
+	Date time.Time
+	Msg  string
+	Tags []string
+}
+
 // Model stores a portfolio and associated price data that is used for computation
 type Model struct {
 	Portfolio *Portfolio
@@ -78,6 +84,7 @@ type Model struct {
 	dataProxy      *data.Manager
 	value          float64
 	holdings       map[string]float64
+	activities     []*Activity
 	justifications map[string][]*Justification
 }
 
@@ -476,9 +483,10 @@ func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
-//   `target` must have a column named `common.DateIdx` (DATE) and either a string column
-//   or MixedAsset column of map[string]float64 where the keys are the tickers and values are
-//   the percentages of portfolio to hold
+//
+//	`target` must have a column named `common.DateIdx` (DATE) and either a string column
+//	or MixedAsset column of map[string]float64 where the keys are the tickers and values are
+//	the percentages of portfolio to hold
 func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
@@ -618,11 +626,10 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return nil
 	}
 
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
+
 	dt := p.Transactions[n-1].Date
-	tz, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return err
-	}
+	tz := common.GetTimezone()
 
 	// remove time and move to midnight the next day... this
 	// ensures that the search is inclusive of through
@@ -630,11 +637,11 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	through = through.AddDate(0, 0, 1)
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
-		log.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
+		subLog.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
 		return ErrTimeInverted
 	}
 
-	log.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
+	subLog.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
 
 	// Load split & dividend history
 	cnt := 0
@@ -669,6 +676,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					totalValue := nShares * dividend
 					// there is a dividend, record it
+					pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -700,6 +708,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					nShares := pm.holdings[k]
 					shares := splitFactor * nShares
 					// there is a split, record it
+					pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
 					trxID, _ := uuid.New().MarshalBinary()
 					t := Transaction{
 						ID:            trxID,
@@ -1031,8 +1040,8 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			justifications: make(map[string][]*Justification),
 		}
 
+		tz := common.GetTimezone()
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
-		tz, _ := time.LoadLocation("America/New_York") // New York is the reference time
 		p.StartDate = p.StartDate.In(tz)
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
@@ -1061,12 +1070,100 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 	return resultSet, nil
 }
 
+func (pm *Model) AddActivity(date time.Time, msg string, tags []string) {
+	if pm.activities == nil {
+		pm.activities = make([]*Activity, 0, 5)
+	}
+
+	pm.activities = append(pm.activities, &Activity{
+		Date: date,
+		Msg:  msg,
+		Tags: tags,
+	})
+}
+
+func (pm *Model) SaveActivities() error {
+	p := pm.Portfolio
+	userID := p.UserID
+
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
+
+	if pm.activities == nil {
+		pm.activities = make([]*Activity, 0, 5)
+	}
+
+	// Save to database
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
+		return err
+	}
+
+	for _, activity := range pm.activities {
+
+		sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
+		if _, err := trx.Exec(context.Background(), sql, userID, p.ID, activity.Date, activity.Msg, activity.Tags); err != nil {
+			subLog.Error().Err(err).Msg("could not create activity")
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+			return err
+		}
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+		return err
+	}
+
+	return nil
+}
+
+func (pm *Model) SetStatus(msg string) error {
+	p := pm.Portfolio
+	userID := p.UserID
+
+	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Str("Status", msg).Logger()
+
+	// Save to database
+	trx, err := database.TrxForUser(userID)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
+		return err
+	}
+
+	sql := `UPDATE portfolios SET status=$1 WHERE id=$2`
+	if _, err := trx.Exec(context.Background(), sql, msg, p.ID); err != nil {
+		subLog.Error().Err(err).Msg("could not update portfolio status")
+	}
+
+	err = trx.Commit(context.Background())
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
+		if err := trx.Rollback(context.Background()); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+
+		return err
+	}
+
+	return nil
+}
+
 // Save portfolio to database along with all transaction data
 func (pm *Model) Save(userID string) error {
 	p := pm.Portfolio
 	p.UserID = userID
 
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
+
+	if err := pm.SaveActivities(); err != nil {
+		subLog.Error().Err(err).Msg("could not save activities")
+	}
 
 	// Save to database
 	trx, err := database.TrxForUser(userID)
@@ -1316,7 +1413,8 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 // Private API
 
 // computeTransactionSourceID calculates a 16-byte blake3 hash using the date, source,
-//   composite figi, ticker, kind, price per share, shares, and total value
+//
+//	composite figi, ticker, kind, price per share, shares, and total value
 func computeTransactionSourceID(t *Transaction) error {
 	h := blake3.New()
 
