@@ -49,7 +49,7 @@ require (
 	github.com/jdfergason/dataframe-go v0.2.0
 	github.com/nats-io/nats.go v1.16.0
 	github.com/onsi/ginkgo/v2 v2.1.4
-	github.com/pashagolub/pgxmock v1.7.0
+	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.27.0
 	github.com/sendgrid/sendgrid-go v3.11.1+incompatible
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.9.0
