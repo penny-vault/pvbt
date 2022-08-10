@@ -237,7 +237,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 			// Need to sell to target amount
 			toSellDollars := currentDollars - targetDollars
 			toSellShares := toSellDollars / price
-			if toSellDollars <= 1.0e-5 {
+			if toSellDollars <= 1.0e-5 || toSellShares <= 1.0e-5 {
 				log.Error().Stack().
 					Str("Ticker", asset).
 					Str("Kind", "SellTransaction").
@@ -247,7 +247,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 					Float64("CurrentDollars", currentDollars).
 					Float64("TargetDollars", targetDollars).
 					Msg("refusing to sell 0 shares")
-				return nil, 0, ErrInvalidSell
+				return nil, currentNumShares, nil
 			}
 
 			t, err = createTransaction(date, asset, SellTransaction, price, toSellShares, justification)
@@ -262,12 +262,12 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 			subLog := log.With().Str("Ticker", asset).Str("Kind", "BuyTransaction").Float64("Shares", toBuyShares).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
 			if toBuyShares <= 1.0e-5 {
 				subLog.Warn().Stack().Msg("refusing to buy 0 shares")
-				return nil, 0, ErrRebalancePercentWrong
+				return nil, currentNumShares, nil
 			}
 
 			if math.IsNaN(toBuyDollars) {
 				subLog.Warn().Stack().Msg("toBuyDollars is NaN")
-				return nil, 0, ErrRebalancePercentWrong
+				return nil, 0, ErrSecurityPriceNotAvailable
 			}
 
 			t, err = createTransaction(date, asset, BuyTransaction, price, toBuyShares, justification)
@@ -366,7 +366,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 		}
 
 		if shares <= 1.0e-5 {
-			log.Warn().Stack().Str("Ticker", asset).Str("Kind", "SellTransaction").Float64("Shares", shares).Msg("holdings are out of sync")
+			log.Warn().Stack().Str("Ticker", asset).Float64("Shares", shares).Msg("holdings are out of sync")
 			return ErrHoldings
 		}
 
@@ -388,6 +388,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 		t, numShares, err := pm.modifyPosition(ctx, date, asset, targetDollars, justification)
 		if err != nil {
 			// don't fail if position could not be modified, just continue -- writing off asset as $0
+			log.Warn().Err(err).Time("Date", date).Str("Asset", asset).Msg("writing off asset")
 			continue
 		}
 
