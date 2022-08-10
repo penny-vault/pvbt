@@ -18,6 +18,7 @@ package filter
 import (
 	"context"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgsql"
+	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
@@ -297,15 +299,62 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 	}
 
 	for rows.Next() {
-		var trx portfolio.Transaction
-		err := rows.Scan(&trx.Date, &trx.ID, &trx.Cleared, &trx.Commission, &trx.CompositeFIGI, &trx.Justification, &trx.Kind, &trx.Memo, &trx.PricePerShare, &trx.Shares, &trx.Source, &trx.SourceID, &trx.Tags, &trx.TaxDisposition, &trx.Ticker, &trx.TotalValue)
-		trx.Date = time.Date(trx.Date.Year(), trx.Date.Month(), trx.Date.Day(), 16, 0, 0, 0, tz)
+		var t portfolio.Transaction
+
+		var compositeFIGI pgtype.Text
+		var memo pgtype.Text
+		var taxDisposition pgtype.Text
+		var sourceID pgtype.Bytea
+
+		err := rows.Scan(
+			&t.Date,
+			&t.ID,
+			&t.Cleared,
+			&t.Commission,
+			&compositeFIGI,
+			&t.Justification,
+			&t.Kind,
+			&memo,
+			&t.PricePerShare,
+			&t.Shares,
+			&t.Source,
+			&sourceID,
+			&t.Tags,
+			&taxDisposition,
+			&t.Ticker,
+			&t.TotalValue,
+		)
+
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("error scanning transaction")
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+			return nil, err
 		}
-		h.Items = append(h.Items, &trx)
+
+		if compositeFIGI.Status == pgtype.Present {
+			t.CompositeFIGI = compositeFIGI.String
+		}
+		if memo.Status == pgtype.Present {
+			t.Memo = memo.String
+		}
+		if taxDisposition.Status == pgtype.Present {
+			t.TaxDisposition = taxDisposition.String
+		}
+		if sourceID.Status == pgtype.Present {
+			t.SourceID = hex.EncodeToString(sourceID.Bytes)
+		}
+
+		t.Date = time.Date(t.Date.Year(), t.Date.Month(), t.Date.Day(), 16, 0, 0, 0, tz)
+		h.Items = append(h.Items, &t)
 	}
 
 	data, err := h.MarshalBinary()
+
+	if err := trx.Commit(context.Background()); err != nil {
+		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
+	}
+
 	return data, err
 }
