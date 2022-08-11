@@ -27,3 +27,10 @@ ttl = 86400 # number of seconds to store in redis cache
 
 [server]
 port = 3000
+
+[nats]
+server = "tls://connect.ngs.global"
+credentials = "<path to pvapi.creds>"
+requests_subject = "portfolios.request"
+requests_consumer = "pvapi_requests_consumer"
+status_subject = "portfolios.status"
