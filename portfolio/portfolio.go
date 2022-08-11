@@ -880,7 +880,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 		price_per_share::double precision,
 		num_shares::double precision,
 		source,
-		source_id,
+		encode(source_id, 'hex'),
 		tags,
 		tax_type,
 		ticker,
@@ -913,7 +913,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 		var pricePerShare pgtype.Float8
 		var shares pgtype.Float8
 
-		var sourceID pgtype.Bytea
+		var sourceID pgtype.Text
 
 		err := rows.Scan(&t.ID, &t.Date, &t.Cleared, &t.Commission, &compositeFIGI,
 			&t.Justification, &t.Kind, &memo, &pricePerShare, &shares, &t.Source,
@@ -947,7 +947,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 			t.Shares = shares.Float
 		}
 		if sourceID.Status == pgtype.Present {
-			t.SourceID = hex.EncodeToString(sourceID.Bytes)
+			t.SourceID = sourceID.String
 		}
 
 		transactions = append(transactions, &t)
@@ -1310,7 +1310,7 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 		$10,
 		$11,
 		$12,
-		$13,
+		decode($13, 'hex'),
 		$14,
 		$15,
 		$16,
@@ -1329,7 +1329,7 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 		price_per_share=$10,
 		num_shares=$11,
 		source=$12,
-		source_id=$13,
+		source_id=decode($13, 'hex'),
 		tags=$14,
 		tax_type=$15,
 		ticker=$16,
