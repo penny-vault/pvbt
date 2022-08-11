@@ -153,6 +153,8 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 
 func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	targetAssets := make([]interface{}, daa.momentum.NRows())
+	tArray := make([]interface{}, daa.momentum.NRows())
+	wArray := make([]interface{}, daa.momentum.NRows())
 	iterator := daa.momentum.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
 
 	for {
@@ -182,6 +184,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 				Score:  val[ticker].(float64),
 			}
 		}
+		tArray[*row] = float64(t)
 		sort.Sort(byTicker(riskyScores))
 
 		// get t risk assets
@@ -207,6 +210,11 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 			targetMap[cashAsset] = cf
 		}
 		w := (1.0 - cf) / float64(t)
+		if t == 0 {
+			wArray[*row] = 0
+		} else {
+			wArray[*row] = w
+		}
 
 		for _, asset := range riskAssets {
 			if alloc, ok := targetMap[asset]; ok {
@@ -227,9 +235,54 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 		log.Error().Stack().Err(err).Msg("time series not set on momentum series")
 	}
 	timeSeries := daa.momentum.Series[timeIdx]
-
 	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
-	daa.targetPortfolio = dataframe.NewDataFrame(timeSeries, targetSeries)
+	tSeries := dataframe.NewSeriesFloat64("T", &dataframe.SeriesInit{Size: len(tArray)}, tArray...)
+	wSeries := dataframe.NewSeriesFloat64("W", &dataframe.SeriesInit{Size: len(wArray)}, wArray...)
+
+	series := make([]dataframe.Series, 0, 4+len(daa.riskUniverse)+len(daa.cashUniverse)+len(daa.protectiveUniverse))
+	series = append(series, timeSeries)
+	series = append(series, targetSeries)
+	series = append(series, tSeries)
+	series = append(series, wSeries)
+
+	assetMap := make(map[string]bool)
+	for _, asset := range daa.cashUniverse {
+		if _, ok := assetMap[asset]; ok {
+			continue
+		} else {
+			assetMap[asset] = true
+		}
+		idx, err := daa.momentum.NameToColumn(asset)
+		if err != nil {
+			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
+		}
+		series = append(series, daa.momentum.Series[idx].Copy())
+	}
+	for _, asset := range daa.protectiveUniverse {
+		if _, ok := assetMap[asset]; ok {
+			continue
+		} else {
+			assetMap[asset] = true
+		}
+		idx, err := daa.momentum.NameToColumn(asset)
+		if err != nil {
+			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
+		}
+		series = append(series, daa.momentum.Series[idx].Copy())
+	}
+	for _, asset := range daa.riskUniverse {
+		if _, ok := assetMap[asset]; ok {
+			continue
+		} else {
+			assetMap[asset] = true
+		}
+		idx, err := daa.momentum.NameToColumn(asset)
+		if err != nil {
+			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
+		}
+		series = append(series, daa.momentum.Series[idx].Copy())
+	}
+	daa.targetPortfolio = dataframe.NewDataFrame(series...)
 }
 
 func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
@@ -238,20 +291,13 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 		predictedJustification := make(map[string]float64, len(lastRow)-1)
 		for k, v := range lastRow {
 			if k != common.TickerName && k != common.DateIdx {
-				predictedJustification[k.(string)] = v.(float64)
+				if val, ok := v.(float64); ok {
+					predictedJustification[k.(string)] = val
+				}
 			}
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		isTradeDay, err := daa.schedule.IsTradeDay(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not evaluate trade schedule")
-			return
-		}
-		if !isTradeDay {
-			daa.targetPortfolio.Remove(daa.targetPortfolio.NRows() - 1)
-		}
-
 		nextTradeDate, err := daa.schedule.Next(lastTradeDate)
 		if err != nil {
 			log.Error().Err(err).Msg("could not get next trade date")
