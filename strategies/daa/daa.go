@@ -246,7 +246,13 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	series = append(series, wSeries)
 
 	assetMap := make(map[string]bool)
-	for _, asset := range daa.cashUniverse {
+
+	universe := make([]string, 0, len(daa.cashUniverse)+len(daa.riskUniverse)+len(daa.protectiveUniverse))
+	universe = append(universe, daa.cashUniverse...)
+	universe = append(universe, daa.protectiveUniverse...)
+	universe = append(universe, daa.riskUniverse...)
+
+	for _, asset := range universe {
 		if _, ok := assetMap[asset]; ok {
 			continue
 		} else {
@@ -258,30 +264,7 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 		}
 		series = append(series, daa.momentum.Series[idx].Copy())
 	}
-	for _, asset := range daa.protectiveUniverse {
-		if _, ok := assetMap[asset]; ok {
-			continue
-		} else {
-			assetMap[asset] = true
-		}
-		idx, err := daa.momentum.NameToColumn(asset)
-		if err != nil {
-			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
-		}
-		series = append(series, daa.momentum.Series[idx].Copy())
-	}
-	for _, asset := range daa.riskUniverse {
-		if _, ok := assetMap[asset]; ok {
-			continue
-		} else {
-			assetMap[asset] = true
-		}
-		idx, err := daa.momentum.NameToColumn(asset)
-		if err != nil {
-			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
-		}
-		series = append(series, daa.momentum.Series[idx].Copy())
-	}
+
 	daa.targetPortfolio = dataframe.NewDataFrame(series...)
 }
 
