@@ -6,12 +6,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.4.0] - 2022-08-11
+### Added
 - Additional metrics in strategy list API; including: max draw down, downside risk, std. deviation, and more
 - OpenAPI 3.0 documentation
-- Keller's Protective Asset Allocation strategy (PAA)
 - OpenTelemetry tracing
-- Seeking Alpha SEEK algorithm
-- MDEP algorithm
+- New strategy: Keller's Protective Asset Allocation strategy (PAA)
+- New strategy: Seeking Alpha SEEK algorithm
+- New strategy: Momentum Driven Earnings Prediction algorithm
 
 ### Changed
 - /v1/ api now returns the current time in it's message
@@ -19,8 +32,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Switch to faster JSON serializer/deserializer: goccy/go-json, in some cases
   it is up to 2x faster
 - Portfolio metrics are now computed using daily values (was formerly monthly)
-- Default data provider is now PVDB not Tiingo (to support strategies that invest in a large
+- Data provider is now PVDB not Tiingo (to support strategies that invest in a large
   number of securities)
+
+### Removed
+- Tiingo data provider (all data pulled from pvdb now)
+- FRED data provider (all data pulled from pvdb now)
 
 ### Fixed
 - When pvapi was running for a long time (>24 hrs) risk free rate data would become
@@ -63,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock data retrieval interface
 - Acclerating Dual Momentum strategy
 
+[0.4.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.4.0
 [0.3.2]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.2
 [0.3.1]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.1
 [0.3.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.0
