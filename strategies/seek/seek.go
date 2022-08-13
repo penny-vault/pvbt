@@ -212,7 +212,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 			return nil, nil, err
 		}
 		if !isTradeDay {
-			tradeDays = tradeDays[:endIdx-1]
+			tradeDays = tradeDays[:endIdx]
 		}
 	}
 
