@@ -47,7 +47,13 @@ var _ = Describe("Momentum", func() {
 		manager = data.NewManager()
 
 		momentum = &indicators.Momentum{
-			Assets:  []string{"VFINX", "PRIDX"},
+			Securities: []*data.Security{{
+				Ticker:        "VFINX",
+				CompositeFigi: "BBG000BHTMY2",
+			}, {
+				Ticker:        "PRIDX",
+				CompositeFigi: "BBG000BBVR08",
+			}},
 			Periods: []int{1, 3, 6},
 			Manager: manager,
 		}

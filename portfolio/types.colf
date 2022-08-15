@@ -41,9 +41,10 @@ type Transaction struct {
 }
 
 type Holding struct {
-	Date   timestamp
-	Ticker text
-	Shares float64
+	Date          timestamp
+	CompositeFIGI text
+	Ticker        text
+	Shares        float64
 }
 
 type Portfolio struct {
@@ -204,6 +205,7 @@ type PerformanceMeasurement struct {
 }
 
 type ReportableHolding struct {
+	CompositeFIGI    text
 	Ticker           text
 	Shares           float64
 	PercentPortfolio float32

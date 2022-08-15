@@ -29,12 +29,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Momentum calculates the average momentum for each asset listed in `Assets` for each
-// lookback period in `Periods` and calculates an indicator based on the max momentum of all assets
+// Momentum calculates the average momentum for each security listed in `Securities` for each
+// lookback period in `Periods` and calculates an indicator based on the max momentum of all securities
 type Momentum struct {
-	Assets  []string
-	Periods []int
-	Manager *data.Manager
+	Securities []*data.Security
+	Periods    []int
+	Manager    *data.Manager
 }
 
 func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices *dataframe.DataFrame, rfr dataframe.Series) (*dataframe.DataFrame, error) {
@@ -72,16 +72,16 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 
 		roll.Rename(fmt.Sprintf("RISKFREE%d", ii))
 		series = append(series, roll)
-		for _, ticker := range m.Assets {
-			jj, err := lag.NameToColumn(ticker)
+		for _, security := range m.Securities {
+			jj, err := lag.NameToColumn(security.CompositeFigi)
 			if err != nil {
 				return nil, err
 			}
 			s := lag.Series[jj]
-			name := fmt.Sprintf("%sLAG%d", ticker, ii)
+			name := fmt.Sprintf("%sLAG%d", security.CompositeFigi, ii)
 			s.Rename(name)
 
-			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", ticker, ii), &dataframe.SeriesInit{Size: nrows})
+			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", security.CompositeFigi, ii), &dataframe.SeriesInit{Size: nrows})
 			series = append(series, s, mom)
 		}
 	}
@@ -107,12 +107,15 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	m.Manager.Frequency = data.FrequencyMonthly
 
 	// Add the risk free asset
-	assets := make([]string, 0, len(m.Assets)+1)
-	assets = append(assets, "DGS3MO")
-	assets = append(assets, m.Assets...)
+	securities := make([]*data.Security, 0, len(m.Securities)+1)
+	securities = append(securities, &data.Security{
+		CompositeFigi: "PVGG06TNP6J8",
+		Ticker:        "DGS3MO",
+	})
+	securities = append(securities, m.Securities...)
 
 	// fetch prices
-	prices, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, assets...)
+	prices, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, securities...)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load data for momentum indicator")
 		return nil, err
@@ -124,7 +127,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 		log.Error().Err(err).Msg("could not get date index")
 		return nil, err
 	}
-	dgsIdx, err := prices.NameToColumn("DGS3MO")
+	dgsIdx, err := prices.NameToColumn("PVGG06TNP6J8")
 	if err != nil {
 		log.Error().Err(err).Msg("could not get DGS3MO index")
 		return nil, err
@@ -132,7 +135,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 
 	rfr := prices.Series[dgsIdx]
 
-	if err := prices.RemoveSeries("DGS3MO"); err != nil {
+	if err := prices.RemoveSeries("PVGG06TNP6J8"); err != nil {
 		log.Error().Err(err).Msg("could not remove DGS3MO series")
 		return nil, err
 	}
@@ -145,21 +148,21 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	}
 
 	// run calculations
-	for _, ticker := range m.Assets {
+	for _, security := range m.Securities {
 		for _, jj := range m.Periods {
-			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
-			if err := funcs.Evaluate(ctx, momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
+			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
+			if err := funcs.Evaluate(ctx, momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
 				log.Error().Stack().Err(err).Msg("could not calculate momentum")
 				return nil, err
 			}
 		}
 	}
 
-	cols := make([]string, 0, len(m.Assets))
-	for _, ticker := range m.Assets {
-		scoreName := fmt.Sprintf("%sSCORE", ticker)
+	cols := make([]string, 0, len(m.Securities))
+	for _, security := range m.Securities {
+		scoreName := fmt.Sprintf("%sSCORE", security.CompositeFigi)
 		cols = append(cols, scoreName)
-		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
+		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
 		if err := funcs.Evaluate(ctx, momentum, fn, scoreName); err != nil {
 			log.Error().Stack().Err(err).Msg("could not calculate score")
 			return nil, err

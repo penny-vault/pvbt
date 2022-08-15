@@ -458,7 +458,22 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err := dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VFINX")
+				vfinxSecurity := &data.Security{
+					CompositeFigi: "BBG000BHTMY2",
+					Ticker:        "VFINX",
+				}
+
+				pridxSecurity := &data.Security{
+					CompositeFigi: "BBG000BBVR08",
+					Ticker:        "PRIDX",
+				}
+
+				vustxSecurity := &data.Security{
+					CompositeFigi: "BBG000BCKYB1",
+					Ticker:        "VUSTX",
+				}
+
+				_, err := dataProxy.GetDataFrame(context.Background(), data.MetricClose, vfinxSecurity)
 				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
@@ -467,7 +482,7 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "PRIDX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, pridxSecurity)
 				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
@@ -476,7 +491,7 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vustx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VUSTX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, vustxSecurity)
 				Expect(err).To(BeNil())
 
 				err = pm.TargetPortfolio(context.Background(), df)

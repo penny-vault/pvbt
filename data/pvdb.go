@@ -43,11 +43,11 @@ type Pvdb struct {
 	cache     map[string]float64
 	Dividends map[string][]*Measurement
 	Splits    map[string][]*Measurement
-	hashFunc  func(date time.Time, metric Metric, symbol string) string
+	hashFunc  func(date time.Time, metric Metric, security *Security) string
 }
 
 // NewPVDB Create a new PVDB data provider
-func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metric, symbol string) string) *Pvdb {
+func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metric, security *Security) string) *Pvdb {
 	return &Pvdb{
 		cache:     cache,
 		hashFunc:  hashFunc,
@@ -197,30 +197,30 @@ func (p *Pvdb) DataType() string {
 	return "security"
 }
 
-// uniqueStrings filters a list of string to only unique values
-func uniqueStrings(strs []string) []string {
-	unique := make(map[string]bool, len(strs))
-	for _, v := range strs {
-		unique[v] = true
+// uniqueSecurities filters a list of Securities to only unique values
+func uniqueSecurities(securities []*Security) []*Security {
+	unique := make(map[string]*Security, len(securities))
+	for _, v := range securities {
+		unique[v.CompositeFigi] = v
 	}
-	uniqStrs := make([]string, len(unique))
+	uniqList := make([]*Security, len(unique))
 	j := 0
-	for k := range unique {
-		uniqStrs[j] = k
+	for _, v := range unique {
+		uniqList[j] = v
 		j++
 	}
-	return uniqStrs
+	return uniqList
 }
 
-func buildDataFrame(vals map[int]map[string]float64, symbols []string, tradingDays []time.Time, lastDate time.Time) *dataframe.DataFrame {
-	symbolCnt := len(symbols)
-	series := make([]dataframe.Series, 0, symbolCnt+1)
+func buildDataFrame(vals map[int]map[string]float64, securities []*Security, tradingDays []time.Time, lastDate time.Time) *dataframe.DataFrame {
+	securityCnt := len(securities)
+	series := make([]dataframe.Series, 0, securityCnt+1)
 	series = append(series, dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: len(tradingDays)}, tradingDays))
 
 	// build series
-	vals2 := make(map[string][]float64, symbolCnt)
-	for _, symbol := range symbols {
-		vals2[symbol] = make([]float64, len(tradingDays))
+	vals2 := make(map[string][]float64, securityCnt)
+	for _, security := range securities {
+		vals2[security.CompositeFigi] = make([]float64, len(tradingDays))
 	}
 
 	for idx, k := range tradingDays {
@@ -229,39 +229,39 @@ func buildDataFrame(vals map[int]map[string]float64, symbols []string, tradingDa
 			dayData = vals[lastDate.Year()*1000+k.YearDay()]
 		}
 
-		for _, symbol := range symbols {
-			v, ok := dayData[symbol]
+		for _, security := range securities {
+			v, ok := dayData[security.CompositeFigi]
 			if !ok {
-				vals2[symbol][idx] = math.NaN()
+				vals2[security.CompositeFigi][idx] = math.NaN()
 			} else {
-				vals2[symbol][idx] = v
+				vals2[security.CompositeFigi][idx] = v
 			}
 		}
 	}
 
 	// break arrays out of map in order to build the dataframe
-	for _, symbol := range symbols {
-		arr := vals2[symbol]
-		series = append(series, dataframe.NewSeriesFloat64(symbol, &dataframe.SeriesInit{Capacity: len(arr)}, arr))
+	for _, security := range securities {
+		arr := vals2[security.CompositeFigi]
+		series = append(series, dataframe.NewSeriesFloat64(security.CompositeFigi, &dataframe.SeriesInit{Capacity: len(arr)}, arr))
 	}
 
 	df := dataframe.NewDataFrame(series...)
 	return df
 }
 
-func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
+func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 	tz := common.GetTimezone()
-	subLog := log.With().Strs("Symbols", symbols).Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
+	subLog := log.With().Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
 
 	tradingDays, err := p.TradingDays(ctx, begin, end, frequency)
 	if err != nil {
 		return nil, err
 	}
 
-	// ensure symbols is a unique set
-	symbols = uniqueStrings(symbols)
+	// ensure securities is a unique set
+	securities = uniqueSecurities(securities)
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
@@ -273,17 +273,17 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	}
 
 	// build SQL query
-	args := make([]interface{}, len(symbols)+2)
+	args := make([]interface{}, len(securities)+2)
 	args[0] = begin
 	args[1] = end
 
-	tickerSet := make([]string, len(symbols))
-	for idx, ticker := range symbols {
-		tickerSet[idx] = fmt.Sprintf("$%d", idx+3)
-		args[idx+2] = ticker
+	figiSet := make([]string, len(securities))
+	for idx, security := range securities {
+		figiSet[idx] = fmt.Sprintf("$%d", idx+3)
+		args[idx+2] = security.CompositeFigi
 	}
-	tickerArgs := strings.Join(tickerSet, ", ")
-	sql := fmt.Sprintf("SELECT event_date, ticker, close, adj_close::double precision FROM eod WHERE ticker IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, ticker", tickerArgs)
+	figiArgs := strings.Join(figiSet, ", ")
+	sql := fmt.Sprintf("SELECT event_date, composite_figi, close, adj_close::double precision FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, composite_figi", figiArgs)
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, args...)
@@ -300,22 +300,26 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	}
 
 	// parse database rows
-	vals := make(map[int]map[string]float64, len(symbols))
+	vals := make(map[int]map[string]float64, len(securities))
 
 	var date time.Time
 	var lastDate time.Time
-	var ticker string
+	var compositeFigi string
 	var close float64
 	var adjClose pgtype.Float8
 
-	symbolCnt := len(symbols)
+	securityCnt := len(securities)
 
 	for rows.Next() {
-		err = rows.Scan(&date, &ticker, &close, &adjClose)
+		err = rows.Scan(&date, &compositeFigi, &close, &adjClose)
 
-		p.cache[p.hashFunc(date, MetricClose, ticker)] = close
+		s := &Security{
+			CompositeFigi: compositeFigi,
+		}
+
+		p.cache[p.hashFunc(date, MetricClose, s)] = close
 		if adjClose.Status == pgtype.Present {
-			p.cache[p.hashFunc(date, MetricAdjustedClose, ticker)] = adjClose.Float
+			p.cache[p.hashFunc(date, MetricAdjustedClose, s)] = adjClose.Float
 		}
 
 		if err != nil {
@@ -330,15 +334,15 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 		dateHash := date.Year()*1000 + date.YearDay()
 		valMap, ok := vals[dateHash]
 		if !ok {
-			valMap = make(map[string]float64, symbolCnt)
+			valMap = make(map[string]float64, securityCnt)
 			vals[dateHash] = valMap
 		}
 
 		switch metric {
 		case MetricClose:
-			valMap[ticker] = close
+			valMap[compositeFigi] = close
 		case MetricAdjustedClose:
-			valMap[ticker] = adjClose.Float
+			valMap[compositeFigi] = adjClose.Float
 		default:
 			span.SetStatus(codes.Error, "un-supported metric")
 			if err := trx.Rollback(ctx); err != nil {
@@ -357,47 +361,47 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, symbols []string, metric Me
 	}
 
 	// preload splits & divs
-	p.preloadCorporateActions(ctx, symbols, begin)
+	p.preloadCorporateActions(ctx, securities, begin)
 
 	// build dataframe
-	df := buildDataFrame(vals, symbols, tradingDays, lastDate)
+	df := buildDataFrame(vals, securities, tradingDays, lastDate)
 	return df, nil
 }
 
-func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, start time.Time) {
+func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Security, start time.Time) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
 	defer span.End()
 
 	tz := common.GetTimezone()
 
-	corporateTickerSet := make([]string, 0, len(tickerSet))
-	for _, ticker := range tickerSet {
-		if _, ok := p.Dividends[ticker]; !ok {
-			corporateTickerSet = append(corporateTickerSet, ticker)
-			p.Dividends[ticker] = make([]*Measurement, 0)
-			p.Splits[ticker] = make([]*Measurement, 0)
+	corporateFigiSet := make([]string, 0, len(securities))
+	for _, security := range securities {
+		if _, ok := p.Dividends[security.CompositeFigi]; !ok {
+			corporateFigiSet = append(corporateFigiSet, security.CompositeFigi)
+			p.Dividends[security.CompositeFigi] = make([]*Measurement, 0)
+			p.Splits[security.CompositeFigi] = make([]*Measurement, 0)
 		}
 	}
 
-	if len(corporateTickerSet) == 0 {
-		log.Debug().Strs("Tickers", tickerSet).Msg("skipping preload of corporate actions because there are no additional tickers to preload")
+	if len(corporateFigiSet) == 0 {
+		log.Debug().Msg("skipping preload of corporate actions because there are no additional securities to preload")
 		return // nothing needs to be loaded
 	}
 
-	log.Debug().Time("Start", start).Strs("Tickers", corporateTickerSet).Msg("pre-load from corporate actions")
+	log.Debug().Time("Start", start).Strs("FIGI", corporateFigiSet).Msg("pre-load from corporate actions")
 
-	subLog := log.With().Strs("Symbols", corporateTickerSet).Time("StartTime", start).Logger()
+	subLog := log.With().Strs("Figis", corporateFigiSet).Time("StartTime", start).Logger()
 
-	args := make([]interface{}, len(corporateTickerSet)+1)
+	args := make([]interface{}, len(corporateFigiSet)+1)
 	args[0] = start
 
-	tickerPlaceholders := make([]string, len(corporateTickerSet))
-	for idx, ticker := range corporateTickerSet {
-		tickerPlaceholders[idx] = fmt.Sprintf("$%d", idx+2)
-		args[idx+1] = ticker
+	figiPlaceholders := make([]string, len(corporateFigiSet))
+	for idx, figi := range corporateFigiSet {
+		figiPlaceholders[idx] = fmt.Sprintf("$%d", idx+2)
+		args[idx+1] = figi
 	}
-	corporateTickerArgs := strings.Join(tickerPlaceholders, ", ")
-	sql := fmt.Sprintf("SELECT event_date, ticker, dividend, split_factor FROM eod WHERE ticker IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, ticker", corporateTickerArgs)
+	corporateFigiArgs := strings.Join(figiPlaceholders, ", ")
+	sql := fmt.Sprintf("SELECT event_date, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
@@ -422,12 +426,12 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 
 	var date time.Time
-	var ticker string
+	var compositeFigi string
 	var dividend float64
 	var splitFactor float64
 
 	for rows.Next() {
-		err = rows.Scan(&date, &ticker, &dividend, &splitFactor)
+		err = rows.Scan(&date, &compositeFigi, &dividend, &splitFactor)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
@@ -438,7 +442,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 		}
 
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
-		divs := p.Dividends[ticker]
+		divs := p.Dividends[compositeFigi]
 		if dividend != 0.0 {
 			divs = append(divs, &Measurement{
 				Date:  date,
@@ -446,7 +450,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 			})
 		}
 
-		splits := p.Splits[ticker]
+		splits := p.Splits[compositeFigi]
 		if splitFactor != 1.0 {
 			splits = append(splits, &Measurement{
 				Date:  date,
@@ -454,8 +458,8 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 			})
 		}
 
-		p.Dividends[ticker] = divs
-		p.Splits[ticker] = splits
+		p.Dividends[compositeFigi] = divs
+		p.Splits[compositeFigi] = splits
 	}
 
 	if err := trx.Commit(ctx); err != nil {
@@ -463,10 +467,10 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, tickerSet []string, 
 	}
 }
 
-func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error) {
+func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetLatestDataBefore")
 	defer span.End()
-	subLog := log.With().Str("Symbol", symbol).Str("Metric", string(metric)).Time("Before", before).Logger()
+	subLog := log.With().Str("Symbol", security.Ticker).Str("Metric", string(metric)).Time("Before", before).Logger()
 
 	tz := common.GetTimezone()
 
@@ -507,10 +511,10 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 		return math.NaN(), ErrUnsupportedMetric
 	}
 
-	sql := fmt.Sprintf("SELECT event_date, ticker, %s FROM eod WHERE ticker=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
+	sql := fmt.Sprintf("SELECT event_date, %s FROM eod WHERE composite_figi=$1 AND event_date <= $2 ORDER BY event_date DESC LIMIT 1", columns)
 
 	// execute the query
-	rows, err := trx.Query(ctx, sql, symbol, before)
+	rows, err := trx.Query(ctx, sql, security.CompositeFigi, before)
 	if err != nil {
 		span.RecordError(err)
 		msg := "db query failed"
@@ -524,11 +528,10 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, symbol string, metric Me
 	}
 
 	var date time.Time
-	var ticker string
 	var val float64
 
 	for rows.Next() {
-		err = rows.Scan(&date, &ticker, &val)
+		err = rows.Scan(&date, &val)
 		if err != nil {
 			span.RecordError(err)
 			msg := "db scan failed"

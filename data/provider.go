@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
@@ -37,11 +36,17 @@ const (
 	CashAsset = "$CASH"
 )
 
+var (
+	CashSecurity = Security{
+		Ticker: CashAsset,
+	}
+)
+
 // Provider interface for retrieving quotes
 type Provider interface {
 	DataType() string
-	GetDataForPeriod(ctx context.Context, symbols []string, metric Metric, frequency Frequency, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
-	GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error)
+	GetDataForPeriod(ctx context.Context, securities []*Security, metric Metric, frequency Frequency, begin time.Time, end time.Time) (*dataframe.DataFrame, error)
+	GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error)
 }
 
 type DateProvider interface {
@@ -97,7 +102,13 @@ var riskFreeRate *dataframe.DataFrame
 func InitializeDataManager() {
 	pvdb := NewPVDB(map[string]float64{}, buildHashKey)
 	var err error
-	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), []string{"DGS3MO"}, MetricClose, FrequencyDaily,
+	dgs3mo := []*Security{
+		{
+			CompositeFigi: "PVGG06TNP6J8",
+			Ticker:        "DGS3MO",
+		},
+	}
+	riskFreeRate, err = pvdb.GetDataForPeriod(context.Background(), dgs3mo, MetricClose, FrequencyDaily,
 		time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
 	if err != nil {
 		log.Panic().Err(err).Msg("cannot load risk free rate")
@@ -167,9 +178,9 @@ func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 			break
 		}
 
-		if vals["DGS3MO"] != nil && !math.IsNaN(vals["DGS3MO"].(float64)) {
+		if vals["PVGG06TNP6J8"] != nil && !math.IsNaN(vals["PVGG06TNP6J8"].(float64)) {
 			m.lastRiskFreeIdx = *row
-			ret = vals["DGS3MO"].(float64)
+			ret = vals["PVGG06TNP6J8"].(float64)
 		}
 
 		dt := vals[common.DateIdx].(time.Time)
@@ -182,19 +193,19 @@ func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 }
 
 // GetDataFrame get a dataframe for the requested symbol
-func (m *Manager) GetDataFrame(ctx context.Context, metric Metric, symbols ...string) (*dataframe.DataFrame, error) {
-	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, m.Frequency, m.Begin, m.End)
+func (m *Manager) GetDataFrame(ctx context.Context, metric Metric, securities ...*Security) (*dataframe.DataFrame, error) {
+	res, err := m.providers["security"].GetDataForPeriod(ctx, securities, metric, m.Frequency, m.Begin, m.End)
 	return res, err
 }
 
-func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric Metric, symbols ...string) error {
+func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric Metric, securities ...*Security) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "provider.Fetch")
 	defer span.End()
 
 	tz := common.GetTimezone()
 	begin = time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, tz)
 	end = time.Date(end.Year(), end.Month(), end.Day(), 0, 0, 0, 0, tz)
-	res, err := m.providers["security"].GetDataForPeriod(ctx, symbols, metric, FrequencyDaily, begin, end)
+	res, err := m.providers["security"].GetDataForPeriod(ctx, securities, metric, FrequencyDaily, begin, end)
 	if err != nil {
 		return err
 	}
@@ -207,10 +218,6 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 		attribute.KeyValue{
 			Key:   "End",
 			Value: attribute.StringValue(end.Format("2006-01-02")),
-		},
-		attribute.KeyValue{
-			Key:   "Symbols",
-			Value: attribute.StringSliceValue(symbols),
 		},
 		attribute.KeyValue{
 			Key:   "Metric",
@@ -230,13 +237,13 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 		}
 
 		d := vals[common.DateIdx].(time.Time)
-		for _, s := range symbols {
+		for _, s := range securities {
 			key := buildHashKey(d, metric, s)
-			if vals[s] != nil {
+			if vals[s.CompositeFigi] != nil {
 				m.cache[key] = vals[s].(float64)
 			} else {
 				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
-				log.Warn().Stack().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s).Str("Key", key).Msg("setting cache key to NaN")
+				log.Warn().Stack().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s.Ticker).Str("Key", key).Msg("setting cache key to NaN")
 				m.cache[key] = math.NaN()
 			}
 		}
@@ -245,40 +252,38 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	return nil
 }
 
-func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, symbol string) (float64, error) {
-	symbol = strings.ToUpper(symbol)
-	key := buildHashKey(date, metric, symbol)
+func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, security *Security) (float64, error) {
+	key := buildHashKey(date, metric, security)
 	val, ok := m.cache[key]
 	if !ok {
 		tz := common.GetTimezone()
 		end := time.Date(date.Year(), date.Month()+6, date.Day(), 0, 0, 0, 0, tz)
-		err := m.Fetch(ctx, date, end, metric, symbol)
+		err := m.Fetch(ctx, date, end, metric, security)
 		if err != nil {
 			return 0, err
 		}
 		val, ok = m.cache[key]
 		if !ok {
-			log.Error().Stack().Str("Metric", string(metric)).Str("Symbol", symbol).Time("Date", date).Msg("could not load metric")
+			log.Error().Stack().Str("Metric", string(metric)).Str("Symbol", security.Ticker).Time("Date", date).Msg("could not load metric")
 			return 0, ErrMetricDoesNotExist
 		}
 	}
 	return val, nil
 }
 
-func (m *Manager) GetLatestDataBefore(ctx context.Context, symbol string, metric Metric, before time.Time) (float64, error) {
+func (m *Manager) GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.GetLatestDataBefore")
 	defer span.End()
 
-	symbol = strings.ToUpper(symbol)
 	var err error
-	val, ok := m.lastCache[symbol]
+	val, ok := m.lastCache[security.CompositeFigi]
 	if !ok {
-		val, err = m.providers["security"].GetLatestDataBefore(ctx, symbol, metric, before)
+		val, err = m.providers["security"].GetLatestDataBefore(ctx, security, metric, before)
 		if err != nil {
 			log.Warn().Stack().Err(err).Msg("get latest data before failed")
 			return math.NaN(), err
 		}
-		m.lastCache[symbol] = val
+		m.lastCache[security.CompositeFigi] = val
 	}
 	return val, nil
 }
@@ -297,7 +302,7 @@ func (m *Manager) HashSize() int {
 	return (len(m.cache) * keySize) + (len(m.cache) * valSize)
 }
 
-func buildHashKey(date time.Time, metric Metric, symbol string) string {
+func buildHashKey(date time.Time, metric Metric, security *Security) string {
 	// Hash key like 2021340:split:VFINX
-	return fmt.Sprintf("%d%d:%s:%s", date.Year(), date.YearDay(), metric, symbol)
+	return fmt.Sprintf("%d%d:%s:%s", date.Year(), date.YearDay(), metric, security.CompositeFigi)
 }

@@ -83,7 +83,7 @@ type Model struct {
 	// private
 	dataProxy      *data.Manager
 	value          float64
-	holdings       map[string]float64
+	holdings       map[data.Security]float64
 	activities     []*Activity
 	justifications map[string][]*Justification
 }

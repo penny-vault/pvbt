@@ -22,7 +22,6 @@ import (
 	"encoding/hex"
 	"runtime"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -154,10 +153,14 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	ticker := c.Params("ticker")
+	compositeFigi := c.Params("compositeFigi")
+	security, err := data.SecurityFromFigi(compositeFigi)
+	if err != nil {
+		return fiber.ErrNotFound
+	}
 
 	if snapToStart {
-		securityStart, err := manager.GetDataFrame(context.Background(), data.MetricAdjustedClose, ticker)
+		securityStart, err := manager.GetDataFrame(context.Background(), data.MetricAdjustedClose, security)
 		if err != nil {
 			return fiber.ErrBadRequest
 		}
@@ -165,13 +168,11 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		startDate = row[common.DateIdx].(time.Time)
 	}
 
-	benchmarkTicker := strings.ToUpper(ticker)
-
 	dates := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
-	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, benchmarkTicker)
+	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, security.CompositeFigi)
 	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
 
-	p := portfolio.NewPortfolio(ticker, startDate, 10000, manager)
+	p := portfolio.NewPortfolio(security.Ticker, startDate, 10000, manager)
 	err = p.TargetPortfolio(context.Background(), targetPortfolio)
 	if err != nil {
 		return fiber.ErrBadRequest
