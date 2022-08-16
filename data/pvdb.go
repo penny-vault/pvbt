@@ -41,8 +41,8 @@ var (
 
 type Pvdb struct {
 	cache     map[string]float64
-	Dividends map[string][]*Measurement
-	Splits    map[string][]*Measurement
+	Dividends map[Security][]*Measurement
+	Splits    map[Security][]*Measurement
 	hashFunc  func(date time.Time, metric Metric, security *Security) string
 }
 
@@ -51,8 +51,8 @@ func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metr
 	return &Pvdb{
 		cache:     cache,
 		hashFunc:  hashFunc,
-		Dividends: make(map[string][]*Measurement),
-		Splits:    make(map[string][]*Measurement),
+		Dividends: make(map[Security][]*Measurement),
+		Splits:    make(map[Security][]*Measurement),
 	}
 }
 
@@ -313,8 +313,9 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 	for rows.Next() {
 		err = rows.Scan(&date, &compositeFigi, &close, &adjClose)
 
-		s := &Security{
-			CompositeFigi: compositeFigi,
+		s, err := SecurityFromFigi(compositeFigi)
+		if err != nil {
+			subLog.Error().Err(err).Msg("security does not exist")
 		}
 
 		p.cache[p.hashFunc(date, MetricClose, s)] = close
@@ -376,10 +377,10 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 
 	corporateFigiSet := make([]string, 0, len(securities))
 	for _, security := range securities {
-		if _, ok := p.Dividends[security.CompositeFigi]; !ok {
+		if _, ok := p.Dividends[*security]; !ok {
 			corporateFigiSet = append(corporateFigiSet, security.CompositeFigi)
-			p.Dividends[security.CompositeFigi] = make([]*Measurement, 0)
-			p.Splits[security.CompositeFigi] = make([]*Measurement, 0)
+			p.Dividends[*security] = make([]*Measurement, 0)
+			p.Splits[*security] = make([]*Measurement, 0)
 		}
 	}
 
@@ -401,7 +402,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 		args[idx+1] = figi
 	}
 	corporateFigiArgs := strings.Join(figiPlaceholders, ", ")
-	sql := fmt.Sprintf("SELECT event_date, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
+	sql := fmt.Sprintf("SELECT event_date, ticker, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
@@ -426,12 +427,13 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 	}
 
 	var date time.Time
+	var ticker string
 	var compositeFigi string
 	var dividend float64
 	var splitFactor float64
 
 	for rows.Next() {
-		err = rows.Scan(&date, &compositeFigi, &dividend, &splitFactor)
+		err = rows.Scan(&date, &ticker, &compositeFigi, &dividend, &splitFactor)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
@@ -441,8 +443,13 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 			return
 		}
 
+		security := Security{
+			CompositeFigi: compositeFigi,
+			Ticker:        ticker,
+		}
+
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
-		divs := p.Dividends[compositeFigi]
+		divs := p.Dividends[security]
 		if dividend != 0.0 {
 			divs = append(divs, &Measurement{
 				Date:  date,
@@ -450,7 +457,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 			})
 		}
 
-		splits := p.Splits[compositeFigi]
+		splits := p.Splits[security]
 		if splitFactor != 1.0 {
 			splits = append(splits, &Measurement{
 				Date:  date,
@@ -458,8 +465,8 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 			})
 		}
 
-		p.Dividends[compositeFigi] = divs
-		p.Splits[compositeFigi] = splits
+		p.Dividends[security] = divs
+		p.Splits[security] = splits
 	}
 
 	if err := trx.Commit(ctx); err != nil {

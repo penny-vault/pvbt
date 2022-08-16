@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
@@ -41,7 +42,7 @@ const (
 type Notification struct {
 	ForDate      time.Time
 	ForFrequency NotificationFrequency
-	Holdings     map[string]float64
+	Holdings     map[data.Security]float64
 	Portfolio    *Portfolio
 	PeriodReturn float64
 	YTDReturn    float64
@@ -203,10 +204,10 @@ func (n *Notification) SendEmail(userFullName string, emailAddress string) error
 	return nil
 }
 
-func holdingsString(h map[string]float64) string {
+func holdingsString(h map[data.Security]float64) string {
 	assets := make([]string, 0, len(h))
 	for k := range h {
-		assets = append(assets, k)
+		assets = append(assets, k.Ticker)
 	}
 
 	return strings.Join(assets, ", ")

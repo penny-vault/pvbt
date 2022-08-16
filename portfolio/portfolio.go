@@ -131,20 +131,21 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 		log.Warn().Stack().Err(err).Time("TransactionDate", startDate).Str("TransactionTicker", data.CashAsset).Str("TransactionType", DepositTransaction).Msg("couldn't compute SourceID for initial deposit")
 	}
 	p.Transactions = append(p.Transactions, &t)
-	model.holdings = map[string]float64{
-		data.CashAsset: initial,
+	model.holdings = map[data.Security]float64{
+		data.CashSecurity: initial,
 	}
 
 	return &model
 }
 
-func buildHoldingsArray(date time.Time, holdings map[string]float64) []*Holding {
+func buildHoldingsArray(date time.Time, holdings map[data.Security]float64) []*Holding {
 	holdingArray := make([]*Holding, 0, len(holdings))
 	for k, v := range holdings {
 		h := &Holding{
-			Date:   date,
-			Ticker: k,
-			Shares: v,
+			Date:          date,
+			CompositeFIGI: k.CompositeFigi,
+			Ticker:        k.Ticker,
+			Shares:        v,
 		}
 		holdingArray = append(holdingArray, h)
 	}
@@ -155,14 +156,14 @@ func (pm *Model) getPortfolioSecuritiesValue(ctx context.Context, date time.Time
 	var securityValue float64
 
 	for k, v := range pm.holdings {
-		if k != data.CashAsset {
-			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, k)
+		if k != data.CashSecurity {
+			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, &k)
 			if err != nil {
-				log.Warn().Stack().Str("Symbol", k).Time("Date", date).Float64("Price", price).Msg("security price data not available.")
+				log.Warn().Stack().Str("Symbol", k.Ticker).Time("Date", date).Float64("Price", price).Msg("security price data not available.")
 				return 0, ErrSecurityPriceNotAvailable
 			}
 
-			log.Debug().Time("Date", date).Str("Ticker", k).Float64("Price", price).Float64("Value", v*price).Msg("Retrieve price data")
+			log.Debug().Time("Date", date).Str("Ticker", k.Ticker).Float64("Price", price).Float64("Value", v*price).Msg("Retrieve price data")
 
 			if !math.IsNaN(price) {
 				securityValue += v * price
@@ -173,7 +174,7 @@ func (pm *Model) getPortfolioSecuritiesValue(ctx context.Context, date time.Time
 	return securityValue, nil
 }
 
-func createTransaction(date time.Time, asset string, kind string, price float64, shares float64, justification []*Justification) (*Transaction, error) {
+func createTransaction(date time.Time, security *data.Security, kind string, price float64, shares float64, justification []*Justification) (*Transaction, error) {
 	trxID, err := uuid.New().MarshalBinary()
 	if err != nil {
 		log.Warn().Stack().Err(err).Msg("could not marshal uuid to binary")
@@ -182,7 +183,8 @@ func createTransaction(date time.Time, asset string, kind string, price float64,
 	t := Transaction{
 		ID:            trxID,
 		Date:          date,
-		Ticker:        asset,
+		Ticker:        security.Ticker,
+		CompositeFIGI: security.CompositeFigi,
 		Kind:          kind,
 		PricePerShare: price,
 		Shares:        shares,
@@ -193,29 +195,29 @@ func createTransaction(date time.Time, asset string, kind string, price float64,
 
 	err = computeTransactionSourceID(&t)
 	if err != nil {
-		log.Warn().Stack().Err(err).Time("TransactionDate", date).Str("TransactionTicker", asset).Str("TransactionType", kind).Msg("couldn't compute SourceID for transaction")
+		log.Warn().Stack().Err(err).Time("TransactionDate", date).Str("TransactionTicker", security.Ticker).Str("TransactionType", kind).Msg("couldn't compute SourceID for transaction")
 	}
 
 	return &t, nil
 }
 
-func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, asset string) float64 {
-	price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, asset)
+func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, security *data.Security) float64 {
+	price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, security)
 	if err != nil {
-		log.Warn().Stack().Err(err).Str("Asset", asset).Msg("dataProxy.Get returned an error")
+		log.Warn().Stack().Err(err).Str("Ticker", security.Ticker).Msg("dataProxy.Get returned an error")
 		price = 0.0
 	}
 	if math.IsNaN(price) {
-		log.Warn().Stack().Str("Ticker", asset).Msg("price is NaN")
+		log.Warn().Stack().Str("Ticker", security.Ticker).Msg("price is NaN")
 		price = 0.0
 	}
 	return price
 }
 
-func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset string, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
+func (pm *Model) modifyPosition(ctx context.Context, date time.Time, security *data.Security, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
 	// is this security currently held? If so, do we need to buy more or sell some
-	price := pm.getPriceSafe(ctx, date, asset)
-	subLog := log.With().Float64("Price", price).Time("Date", date).Str("Asset", asset).Float64("TargetDollars", targetDollars).Logger()
+	price := pm.getPriceSafe(ctx, date, security)
+	subLog := log.With().Float64("Price", price).Time("Date", date).Str("Ticker", security.Ticker).Float64("TargetDollars", targetDollars).Logger()
 	if price < 1.0e-5 {
 		subLog.Error().Stack().Msg("cannot purchase an asset when price is 0; skip asset")
 		return nil, 0, ErrSecurityPriceNotAvailable
@@ -224,7 +226,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 	var t *Transaction
 	var err error
 
-	if currentNumShares, ok := pm.holdings[asset]; ok {
+	if currentNumShares, ok := pm.holdings[*security]; ok {
 		currentDollars := currentNumShares * price
 		diff := targetDollars - currentDollars
 
@@ -239,7 +241,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 			toSellShares := toSellDollars / price
 			if toSellDollars <= 1.0e-5 || toSellShares <= 1.0e-5 {
 				log.Error().Stack().
-					Str("Ticker", asset).
+					Str("Ticker", security.Ticker).
 					Str("Kind", "SellTransaction").
 					Float64("Shares", toSellShares).
 					Time("Date", date).
@@ -250,7 +252,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 				return nil, currentNumShares, nil
 			}
 
-			t, err = createTransaction(date, asset, SellTransaction, price, toSellShares, justification)
+			t, err = createTransaction(date, security, SellTransaction, price, toSellShares, justification)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -259,7 +261,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 			toBuyDollars := targetDollars - currentDollars
 			toBuyShares := toBuyDollars / price
 
-			subLog := log.With().Str("Ticker", asset).Str("Kind", "BuyTransaction").Float64("Shares", toBuyShares).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
+			subLog := log.With().Str("Ticker", security.Ticker).Str("Kind", "BuyTransaction").Float64("Shares", toBuyShares).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
 			if toBuyShares <= 1.0e-5 {
 				subLog.Warn().Stack().Msg("refusing to buy 0 shares")
 				return nil, currentNumShares, nil
@@ -270,7 +272,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 				return nil, 0, ErrSecurityPriceNotAvailable
 			}
 
-			t, err = createTransaction(date, asset, BuyTransaction, price, toBuyShares, justification)
+			t, err = createTransaction(date, security, BuyTransaction, price, toBuyShares, justification)
 			if err != nil {
 				return nil, 0, err
 			}
@@ -280,13 +282,13 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 	} else {
 		// this is a new position
 		shares := targetDollars / price
-		subLog := log.With().Str("Ticker", asset).Str("Kind", "BuyTransaction").Float64("Shares", shares).Float64("TotalValue", targetDollars).Time("Date", date).Logger()
+		subLog := log.With().Str("Ticker", security.Ticker).Str("Kind", "BuyTransaction").Float64("Shares", shares).Float64("TotalValue", targetDollars).Time("Date", date).Logger()
 		if shares <= 1.0e-5 {
 			subLog.Warn().Stack().Msg("refusing to buy 0 shares")
 			return nil, 0, ErrRebalancePercentWrong
 		}
 
-		t, err = createTransaction(date, asset, BuyTransaction, price, shares, justification)
+		t, err = createTransaction(date, security, BuyTransaction, price, shares, justification)
 		if err != nil {
 			return nil, 0, err
 		}
@@ -298,7 +300,7 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, asset strin
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[string]float64, justification []*Justification) error {
+func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[data.Security]float64, justification []*Justification) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "RebalanceTo")
 	defer span.End()
 
@@ -339,7 +341,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 
 	// cash position of the portfolio
 	var cash float64
-	if currCash, ok := pm.holdings[data.CashAsset]; ok {
+	if currCash, ok := pm.holdings[data.CashSecurity]; ok {
 		cash += currCash
 	}
 
@@ -360,19 +362,19 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 	buys := make([]*Transaction, 0, 10)
 
 	// sell any holdings that we no longer want
-	for asset, shares := range pm.holdings {
-		if asset == data.CashAsset {
+	for security, shares := range pm.holdings {
+		if security.Ticker == data.CashAsset {
 			continue
 		}
 
 		if shares <= 1.0e-5 {
-			log.Warn().Stack().Str("Ticker", asset).Float64("Shares", shares).Msg("holdings are out of sync")
+			log.Warn().Stack().Str("Ticker", security.Ticker).Float64("Shares", shares).Msg("holdings are out of sync")
 			return ErrHoldings
 		}
 
-		if _, ok := target[asset]; !ok {
-			price := pm.getPriceSafe(ctx, date, asset)
-			t, err := createTransaction(date, asset, SellTransaction, price, shares, justification)
+		if _, ok := target[security]; !ok {
+			price := pm.getPriceSafe(ctx, date, &security)
+			t, err := createTransaction(date, &security, SellTransaction, price, shares, justification)
 			if err != nil {
 				return err
 			}
@@ -382,13 +384,13 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 	}
 
 	// purchase holdings based on target
-	newHoldings := make(map[string]float64)
-	for asset, targetPercent := range target {
+	newHoldings := make(map[data.Security]float64)
+	for security, targetPercent := range target {
 		targetDollars := investable * targetPercent
-		t, numShares, err := pm.modifyPosition(ctx, date, asset, targetDollars, justification)
+		t, numShares, err := pm.modifyPosition(ctx, date, &security, targetDollars, justification)
 		if err != nil {
 			// don't fail if position could not be modified, just continue -- writing off asset as $0
-			log.Warn().Err(err).Time("Date", date).Str("Asset", asset).Msg("writing off asset")
+			log.Warn().Err(err).Time("Date", date).Str("Ticker", security.Ticker).Msg("writing off asset")
 			continue
 		}
 
@@ -403,13 +405,13 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 			}
 		}
 
-		newHoldings[asset] = numShares
+		newHoldings[security] = numShares
 	}
 
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
 	if cash > 1.0e-05 {
-		newHoldings[data.CashAsset] = cash
+		newHoldings[data.CashSecurity] = cash
 	}
 	pm.holdings = newHoldings
 
@@ -418,75 +420,10 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[str
 	return nil
 }
 
-// BuildAssetPlan scans the dataframe and builds a map on asset of the time frame the asset is held in the portfolio
-func BuildAssetPlan(ctx context.Context, target *dataframe.DataFrame) map[string]*Period {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "BuildAssetPlan")
-	defer span.End()
-
-	plan := map[string]*Period{}
-
-	tickerSeriesIdx, err := target.NameToColumn(common.TickerName)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invest target portfolio failed")
-		log.Warn().Stack().Err(err).Msg("invest target portfolio failed")
-		return plan
-	}
-
-	// check series type
-	isSingleAsset := false
-	series := target.Series[tickerSeriesIdx]
-	if series.Type() == "string" {
-		isSingleAsset = true
-	}
-
-	// Get price data
-	iterator := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-	for {
-		row, val, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-
-		date := val[common.DateIdx].(time.Time)
-
-		if isSingleAsset {
-			ticker := val[common.TickerName].(string)
-			period, ok := plan[ticker]
-			if !ok {
-				period = &Period{
-					Begin: date,
-				}
-				plan[ticker] = period
-			}
-			if period.End.Before(date) {
-				period.End = date
-			}
-		} else {
-			// it's multi-asset which means a map of tickers
-			assetMap := val[common.TickerName].(map[string]float64)
-			for ticker := range assetMap {
-				period, ok := plan[ticker]
-				if !ok {
-					period = &Period{
-						Begin: date,
-					}
-					plan[ticker] = period
-				}
-				if period.End.Before(date) {
-					period.End = date
-				}
-			}
-		}
-	}
-
-	return plan
-}
-
 // TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
 //
 //	`target` must have a column named `common.DateIdx` (DATE) and either a string column
-//	or MixedAsset column of map[string]float64 where the keys are the tickers and values are
+//	or MixedAsset column of map[data.Security]float64 where the keys are the tickers and values are
 //	the percentages of portfolio to hold
 func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
@@ -597,13 +534,18 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFram
 
 		pm.justifications[date.String()] = justification
 
-		var rebalance map[string]float64
+		var rebalance map[data.Security]float64
 		if isSingleAsset {
 			strSymbol := symbol.(string)
-			rebalance = map[string]float64{}
-			rebalance[strSymbol] = 1.0
+			security, err := data.SecurityFromFigi(strSymbol)
+			if err != nil {
+				log.Error().Err(err).Msg("security not found")
+				return err
+			}
+			rebalance = map[data.Security]float64{}
+			rebalance[*security] = 1.0
 		} else {
-			rebalance = symbol.(map[string]float64)
+			rebalance = symbol.(map[data.Security]float64)
 		}
 
 		err = pm.RebalanceTo(ctx, date, rebalance, justification)
@@ -647,7 +589,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	// Load split & dividend history
 	cnt := 0
 	for k := range pm.holdings {
-		if k != data.CashAsset {
+		if k.Ticker != data.CashAsset {
 			cnt++
 		}
 	}

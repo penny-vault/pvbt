@@ -140,13 +140,13 @@ func NewManager() *Manager {
 }
 
 // Get dividend map
-func (m *Manager) GetDividends() map[string][]*Measurement {
+func (m *Manager) GetDividends() map[Security][]*Measurement {
 	pvdb := m.providers["security"].(*Pvdb)
 	return pvdb.Dividends
 }
 
 // Get splits map
-func (m *Manager) GetSplits() map[string][]*Measurement {
+func (m *Manager) GetSplits() map[Security][]*Measurement {
 	pvdb := m.providers["security"].(*Pvdb)
 	return pvdb.Splits
 }
