@@ -118,8 +118,12 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("should error if trying to rebalance on a date when transactions have already occurred", func() {
-				target := make(map[string]float64)
-				target["VFINX"] = 1.0
+				target := make(map[data.Security]float64)
+				vfinx := data.Security{
+					CompositeFigi: "BBG000BHTMY2",
+					Ticker:        "VFINX",
+				}
+				target[vfinx] = 1.0
 				justification := make([]*portfolio.Justification, 0)
 				err = pm.RebalanceTo(context.Background(), time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
 				Expect(err).To(HaveOccurred())

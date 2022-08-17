@@ -30,7 +30,6 @@ package mdep
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -55,7 +54,7 @@ var (
 type MomentumDrivenEarningsPrediction struct {
 	NumHoldings   int
 	RiskIndicator string
-	OutTicker     string
+	OutTicker     *data.Security
 	Period        data.Frequency
 }
 
@@ -86,11 +85,10 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, ErrInvalidRisk
 	}
 
-	var outTicker string
+	var outTicker data.Security
 	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
 		return nil, err
 	}
-	outTicker = strings.ToUpper(outTicker)
 
 	periodStr := "Weekly"
 	if err := json.Unmarshal(args["period"], &periodStr); err != nil {
@@ -103,7 +101,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 	var mdep strategy.Strategy = &MomentumDrivenEarningsPrediction{
 		NumHoldings:   numHoldings,
-		OutTicker:     outTicker,
+		OutTicker:     &outTicker,
 		RiskIndicator: riskIndicator,
 		Period:        period,
 	}
@@ -204,7 +202,6 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 }
 
 func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
-	var err error
 	var indicator *dataframe.DataFrame
 
 	subLog := log.With().Str("Strategy", "mdep").Logger()
@@ -212,10 +209,15 @@ func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.
 	switch mdep.RiskIndicator {
 	case "Momentum":
 		subLog.Debug().Msg("get risk on/off indicator")
+		securities, err := data.SecurityFromTickerList([]string{"VFINX", "PRIDX"})
+		if err != nil {
+			log.Error().Err(err).Strs("Securities", []string{"VFINX", "PRIDX"}).Msg("securities not found")
+			return nil, err
+		}
 		momentum := &indicators.Momentum{
-			Assets:  []string{"VFINX", "PRIDX"},
-			Periods: []int{1, 3, 6},
-			Manager: manager,
+			Securities: securities,
+			Periods:    []int{1, 3, 6},
+			Manager:    manager,
 		}
 		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
 		if err != nil {
@@ -231,24 +233,28 @@ func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.
 	return indicator, nil
 }
 
-func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[string]float64, error) {
+func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[data.Security]float64, error) {
 	subLog := log.With().Str("Strategy", "seek").Logger()
-	targetMap := make(map[string]float64)
+	targetMap := make(map[data.Security]float64)
 	cnt := 0
-	rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, numAssets)
+	rows, err := db.Query(ctx, "SELECT composite_figi FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", day, numAssets)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not query database for mdep portfolio")
 		return nil, err
 	}
 	for rows.Next() {
 		cnt++
-		var ticker string
-		err := rows.Scan(&ticker)
+		var compositeFigi string
+		err := rows.Scan(&compositeFigi)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not scan result")
 			return nil, err
 		}
-		targetMap[ticker] = 0.0
+		security, err := data.SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("could not load security")
+		}
+		targetMap[*security] = 0.0
 	}
 
 	qty := 1.0 / float64(cnt)
@@ -276,7 +282,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	for _, day := range tradeDays {
 		var ok bool
 		var err error
-		var targetMap map[string]float64
+		var targetMap map[data.Security]float64
 		var riskDate time.Time
 
 		// check if risk indicator should be updated
@@ -302,12 +308,12 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 				return nil, err
 			}
 		} else {
-			targetMap = make(map[string]float64)
+			targetMap = make(map[data.Security]float64)
 		}
 
 		if len(targetMap) == 0 {
 			// nothing to invest in - use cash like asset
-			targetMap[mdep.OutTicker] = 1.0
+			targetMap[*mdep.OutTicker] = 1.0
 		}
 
 		targetDates = append(targetDates, day)
@@ -328,20 +334,25 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 	subLog := log.With().Str("Strategy", "MDEP").Logger()
 	subLog.Debug().Msg("calculating predicted portfolio")
 
-	var ticker string
-	predictedTarget := make(map[string]float64)
+	var compositeFigi string
+	predictedTarget := make(map[data.Security]float64)
 	lastDateIdx := len(tradeDays) - 1
-	rows, err := db.Query(ctx, "SELECT ticker FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
+	rows, err := db.Query(ctx, "SELECT composite_figi FROM zacks_financials WHERE zacks_rank=1 AND event_date=$1 ORDER BY market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], mdep.NumHoldings)
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not query database for MDEP predicted portfolio")
 		return nil, err
 	}
 	for rows.Next() {
-		if err := rows.Scan(&ticker); err != nil {
+		if err := rows.Scan(&compositeFigi); err != nil {
 			log.Error().Stack().Err(err).Msg("could not scan rows")
 			return nil, err
 		}
-		predictedTarget[ticker] = 1.0 / float64(mdep.NumHoldings)
+		security, err := data.SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security not found")
+			return nil, err
+		}
+		predictedTarget[*security] = 1.0 / float64(mdep.NumHoldings)
 	}
 
 	predictedPortfolio := &strategy.Prediction{
@@ -399,8 +410,8 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 	subLog.Debug().Msg("find covered periods in portfolio plan")
 
 	coveredPeriods := make([]*Period, 0, target.NRows())
-	activeAssets := make(map[string]*Period)
-	var pendingClose map[string]*Period
+	activeAssets := make(map[data.Security]*Period)
+	var pendingClose map[data.Security]*Period
 
 	tickerSeriesIdx := target.MustNameToColumn(common.TickerName)
 
@@ -422,11 +433,17 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 		date := val[common.DateIdx].(time.Time)
 
 		pendingClose = activeAssets
-		activeAssets = make(map[string]*Period)
+		activeAssets = make(map[data.Security]*Period)
 
 		if isSingleAsset {
-			ticker := val[common.TickerName].(string)
-			period, ok := pendingClose[ticker]
+			figi := val[common.TickerName].(string)
+			security, err := data.SecurityFromFigi(figi)
+			if err != nil {
+				log.Error().Err(err).Str("CompositeFigi", figi).Msg("could not find security")
+				return coveredPeriods
+			}
+
+			period, ok := pendingClose[*security]
 			if !ok {
 				period = &Period{
 					Asset: ticker,
@@ -441,7 +458,7 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 			activeAssets[ticker] = period
 		} else {
 			// it's multi-asset which means a map of tickers
-			assetMap := val[common.TickerName].(map[string]float64)
+			assetMap := val[common.TickerName].(map[data.Security]float64)
 			for ticker := range assetMap {
 				period, ok := pendingClose[ticker]
 				if !ok {

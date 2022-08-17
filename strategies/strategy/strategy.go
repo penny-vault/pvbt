@@ -75,7 +75,7 @@ type Info struct {
 
 type Prediction struct {
 	TradeDate     time.Time
-	Target        map[string]float64
+	Target        map[data.Security]float64
 	Justification map[string]float64
 }
 

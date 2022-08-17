@@ -56,9 +56,9 @@ var (
 type KellersDefensiveAssetAllocation struct {
 	// arguments
 	breadth            float64
-	cashUniverse       []string
-	protectiveUniverse []string
-	riskUniverse       []string
+	cashUniverse       []*data.Security
+	protectiveUniverse []*data.Security
+	riskUniverse       []*data.Security
 	topT               int64
 
 	// class variables
@@ -70,8 +70,8 @@ type KellersDefensiveAssetAllocation struct {
 }
 
 type momScore struct {
-	Ticker string
-	Score  float64
+	Security *data.Security
+	Score    float64
 }
 
 type byTicker []momScore
@@ -82,23 +82,20 @@ func (a byTicker) Less(i, j int) bool { return a[i].Score > a[j].Score }
 
 // New constructs a new Kellers DAA strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	cashUniverse := []string{}
+	cashUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["cashUniverse"], &cashUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(cashUniverse)
 
-	protectiveUniverse := []string{}
+	protectiveUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(protectiveUniverse)
 
-	riskUniverse := []string{}
+	riskUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["riskUniverse"], &riskUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(riskUniverse)
 
 	var breadth float64
 	if err := json.Unmarshal(args["breadth"], &breadth); err != nil {
@@ -131,7 +128,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
-	tickers := []string{}
+	tickers := []*data.Security{}
 	tickers = append(tickers, daa.cashUniverse...)
 	tickers = append(tickers, daa.protectiveUniverse...)
 	tickers = append(tickers, daa.riskUniverse...)
@@ -165,8 +162,8 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 
 		// compute the number of bad assets in canary (protective) universe
 		var b float64
-		for _, ticker := range daa.protectiveUniverse {
-			v := val[ticker].(float64)
+		for _, security := range daa.protectiveUniverse {
+			v := val[security.CompositeFigi].(float64)
 			if v < 0 {
 				b++
 			}
@@ -178,36 +175,36 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 		// compute the t parameter for daa
 		t := int(math.Round((1.0 - cf) * float64(daa.topT)))
 		riskyScores := make([]momScore, len(daa.riskUniverse))
-		for ii, ticker := range daa.riskUniverse {
+		for ii, security := range daa.riskUniverse {
 			riskyScores[ii] = momScore{
-				Ticker: ticker,
-				Score:  val[ticker].(float64),
+				Security: security,
+				Score:    val[security.CompositeFigi].(float64),
 			}
 		}
 		tArray[*row] = float64(t)
 		sort.Sort(byTicker(riskyScores))
 
 		// get t risk assets
-		riskAssets := make([]string, t)
+		riskAssets := make([]*data.Security, t)
 		for ii := 0; ii < t; ii++ {
-			riskAssets[ii] = riskyScores[ii].Ticker
+			riskAssets[ii] = riskyScores[ii].Security
 		}
 
 		// select highest scored cash instrument
 		cashScores := make([]momScore, len(daa.cashUniverse))
-		for ii, ticker := range daa.cashUniverse {
+		for ii, security := range daa.cashUniverse {
 			cashScores[ii] = momScore{
-				Ticker: ticker,
-				Score:  val[ticker].(float64),
+				Security: security,
+				Score:    val[security.CompositeFigi].(float64),
 			}
 		}
 		sort.Sort(byTicker(cashScores))
-		cashAsset := cashScores[0].Ticker
+		cashSecurity := cashScores[0].Security
 
 		// build investment map
-		targetMap := make(map[string]float64)
+		targetMap := make(map[data.Security]float64)
 		if cf > 1.0e-5 {
-			targetMap[cashAsset] = cf
+			targetMap[*cashSecurity] = cf
 		}
 		w := (1.0 - cf) / float64(t)
 		if t == 0 {
@@ -216,14 +213,14 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 			wArray[*row] = w
 		}
 
-		for _, asset := range riskAssets {
-			if alloc, ok := targetMap[asset]; ok {
+		for _, security := range riskAssets {
+			if alloc, ok := targetMap[*security]; ok {
 				shares := w + alloc
 				if shares > 1.0e-5 {
-					targetMap[asset] = shares
+					targetMap[*security] = shares
 				}
 			} else if w > 1.0e-5 {
-				targetMap[asset] = w
+				targetMap[*security] = w
 			}
 		}
 
@@ -245,22 +242,22 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 	series = append(series, tSeries)
 	series = append(series, wSeries)
 
-	assetMap := make(map[string]bool)
+	assetMap := make(map[data.Security]bool)
 
-	universe := make([]string, 0, len(daa.cashUniverse)+len(daa.riskUniverse)+len(daa.protectiveUniverse))
+	universe := make([]*data.Security, 0, len(daa.cashUniverse)+len(daa.riskUniverse)+len(daa.protectiveUniverse))
 	universe = append(universe, daa.cashUniverse...)
 	universe = append(universe, daa.protectiveUniverse...)
 	universe = append(universe, daa.riskUniverse...)
 
-	for _, asset := range universe {
-		if _, ok := assetMap[asset]; ok {
+	for _, security := range universe {
+		if _, ok := assetMap[*security]; ok {
 			continue
 		} else {
-			assetMap[asset] = true
+			assetMap[*security] = true
 		}
-		idx, err := daa.momentum.NameToColumn(asset)
+		idx, err := daa.momentum.NameToColumn(security.CompositeFigi)
 		if err != nil {
-			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
+			log.Warn().Str("Asset", security.CompositeFigi).Msg("could not transalate asset name to series")
 		}
 		series = append(series, daa.momentum.Series[idx].Copy())
 	}
@@ -292,7 +289,7 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 
 		daa.predictedPortfolio = &strategy.Prediction{
 			TradeDate:     nextTradeDate,
-			Target:        lastRow[common.TickerName].(map[string]float64),
+			Target:        lastRow[common.TickerName].(map[data.Security]float64),
 			Justification: predictedJustification,
 		}
 	}

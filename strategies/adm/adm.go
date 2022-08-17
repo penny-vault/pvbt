@@ -52,9 +52,9 @@ var (
 )
 
 type AcceleratingDualMomentum struct {
-	inTickers    []string
+	inTickers    []*data.Security
 	prices       *dataframe.DataFrame
-	outTicker    string
+	outTicker    *data.Security
 	riskFreeRate *dataframe.DataFrame
 	momentum     *dataframe.DataFrame
 	schedule     *tradecron.TradeCron
@@ -62,19 +62,16 @@ type AcceleratingDualMomentum struct {
 
 // New Construct a new Accelerating Dual Momentum strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	inTickers := []string{}
-	if err := json.Unmarshal(args["inTickers"], &inTickers); err != nil {
+	inSecurities := []*data.Security{}
+	if err := json.Unmarshal(args["inTickers"], &inSecurities); err != nil {
+		log.Error().Err(err).Msg("could not un-marshal inTickers argument")
 		return nil, err
 	}
 
-	common.ArrToUpper(inTickers)
-
-	var outTicker string
-	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
+	var outSecurity data.Security
+	if err := json.Unmarshal(args["outTicker"], &outSecurity); err != nil {
 		return nil, err
 	}
-
-	outTicker = strings.ToUpper(outTicker)
 
 	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
 	if err != nil {
@@ -82,8 +79,8 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 
 	var adm strategy.Strategy = &AcceleratingDualMomentum{
-		inTickers: inTickers,
-		outTicker: outTicker,
+		inTickers: inSecurities,
+		outTicker: &outSecurity,
 		schedule:  schedule,
 	}
 
@@ -94,9 +91,13 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
-	tickers := []string{}
+	tickers := []*data.Security{}
 	tickers = append(tickers, adm.inTickers...)
-	riskFreeSymbol := "DGS3MO"
+	riskFreeSymbol, err := data.SecurityFromTicker("DGS3MO")
+	if err != nil {
+		log.Error().Err(err).Msg("could not find the DGS3MO security")
+		return err
+	}
 	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
 	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
@@ -105,11 +106,11 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 	}
 
 	colNames := make([]string, len(adm.inTickers)+1)
-	colNames[0] = adm.outTicker
+	colNames[0] = adm.outTicker.CompositeFigi
 	for ii, t := range adm.inTickers {
-		colNames[ii+1] = t
+		colNames[ii+1] = t.CompositeFigi
 	}
-	prices, err := dfextras.DropNA(ctx, prices)
+	prices, err = dfextras.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -170,16 +171,16 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 		}
 		roll.Rename(fmt.Sprintf("RISKFREE%d", ii))
 		series = append(series, roll)
-		for _, ticker := range adm.inTickers {
-			jj, err := lag.NameToColumn(ticker)
+		for _, security := range adm.inTickers {
+			jj, err := lag.NameToColumn(security.CompositeFigi)
 			if err != nil {
 				return err
 			}
 			s := lag.Series[jj]
-			name := fmt.Sprintf("%sLAG%d", ticker, ii)
+			name := fmt.Sprintf("%sLAG%d", security.CompositeFigi, ii)
 			s.Rename(name)
 
-			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", ticker, ii), &dataframe.SeriesInit{Size: nrows})
+			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", security.CompositeFigi, ii), &dataframe.SeriesInit{Size: nrows})
 			series = append(series, s, mom)
 		}
 	}
@@ -187,19 +188,19 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 	adm.momentum = dataframe.NewDataFrame(series...)
 
 	for ii := range adm.inTickers {
-		ticker := adm.inTickers[ii]
+		security := adm.inTickers[ii]
 		for _, jj := range periods {
-			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", ticker, ticker, jj, jj))
-			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", ticker, jj)); err != nil {
+			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
+			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
 				log.Error().Stack().Err(err).Msg("could not calculate momentum")
 			}
 		}
 	}
 
 	for ii := range adm.inTickers {
-		ticker := adm.inTickers[ii]
-		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", ticker, ticker, ticker))
-		if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", ticker)); err != nil {
+		security := adm.inTickers[ii]
+		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
+		if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", security.CompositeFigi)); err != nil {
 			log.Error().Stack().Err(err).Msg("could not calculate score")
 		}
 	}
@@ -250,15 +251,15 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	for ii := 0; ii < dfSize; ii++ {
 		zeroes[ii] = 0.0
 	}
-	outOfMarketSeries := dataframe.NewSeriesFloat64(adm.outTicker, &dataframe.SeriesInit{
+	outOfMarketSeries := dataframe.NewSeriesFloat64(adm.outTicker.CompositeFigi, &dataframe.SeriesInit{
 		Capacity: dfSize,
 	}, zeroes...)
 
 	scores = append(scores, adm.momentum.Series[timeIdx], outOfMarketSeries)
-	for _, ticker := range adm.inTickers {
-		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", ticker))
+	for _, security := range adm.inTickers {
+		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", security.CompositeFigi))
 		series := adm.momentum.Series[ii].Copy()
-		series.Rename(ticker)
+		series.Rename(security.CompositeFigi)
 		scores = append(scores, series)
 	}
 	scoresDf := dataframe.NewDataFrame(scores...)
@@ -313,10 +314,16 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 			return nil, nil, err
 		}
 
+		compositeFigi := lastRow[common.TickerName].(string)
+		security, err := data.SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("could not find security")
+			return nil, nil, err
+		}
 		predictedPortfolio = &strategy.Prediction{
 			TradeDate: nextTradeDate,
-			Target: map[string]float64{
-				lastRow[common.TickerName].(string): 1.0,
+			Target: map[data.Security]float64{
+				*security: 1.0,
 			},
 			Justification: predictedJustification,
 		}

@@ -605,7 +605,7 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 
 	// for each holding check if there are splits
 	for k := range pm.holdings {
-		if k == data.CashAsset {
+		if k.Ticker == data.CashAsset {
 			continue
 		}
 
@@ -624,14 +624,15 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					t := Transaction{
 						ID:            trxID,
 						Date:          date,
-						Ticker:        k,
+						Ticker:        k.Ticker,
+						CompositeFIGI: k.CompositeFigi,
 						Kind:          DividendTransaction,
 						PricePerShare: 1.0,
 						TotalValue:    totalValue,
 						Justification: nil,
 					}
 					// update cash position in holdings
-					pm.holdings[data.CashAsset] += nShares * dividend
+					pm.holdings[data.CashSecurity] += nShares * dividend
 					if err := computeTransactionSourceID(&t); err != nil {
 						log.Error().Stack().Err(err).Msg("failed to compute transaction source ID")
 					}
@@ -656,7 +657,8 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 					t := Transaction{
 						ID:            trxID,
 						Date:          date,
-						Ticker:        k,
+						Ticker:        k.Ticker,
+						CompositeFIGI: k.CompositeFigi,
 						Kind:          SplitTransaction,
 						PricePerShare: 0.0,
 						Shares:        shares,
@@ -682,11 +684,12 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 }
 
 // BuildPredictedHoldings creates a PortfolioHoldingItem from a date, target map, and justification map
-func BuildPredictedHoldings(tradeDate time.Time, target map[string]float64, justificationMap map[string]float64) *PortfolioHoldingItem {
+func BuildPredictedHoldings(tradeDate time.Time, target map[data.Security]float64, justificationMap map[string]float64) *PortfolioHoldingItem {
 	holdings := make([]*ReportableHolding, 0, len(target))
 	for k, v := range target {
 		h := ReportableHolding{
-			Ticker:           k,
+			Ticker:           k.Ticker,
+			CompositeFIGI:    k.CompositeFigi,
 			Shares:           v * 100.0,
 			PercentPortfolio: float32(v),
 		}
