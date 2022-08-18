@@ -100,8 +100,12 @@ var riskFreeRate *dataframe.DataFrame
 
 // InitializeDataManager download risk free data
 func InitializeDataManager() {
+	err := LoadSecuritiesFromDB()
+	if err != nil {
+		log.Error().Err(err).Msg("could not load securities database")
+	}
+
 	pvdb := NewPVDB(map[string]float64{}, buildHashKey)
-	var err error
 	dgs3mo := []*Security{
 		{
 			CompositeFigi: "PVGG06TNP6J8",
