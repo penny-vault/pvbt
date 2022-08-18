@@ -59,9 +59,9 @@ type MomentumDrivenEarningsPrediction struct {
 }
 
 type Period struct {
-	Asset string
-	Begin time.Time
-	End   time.Time
+	Security *data.Security
+	Begin    time.Time
+	End      time.Time
 }
 
 // New Construct a new Momentum Driven Earnings Prediction (MDEP) strategy
@@ -371,12 +371,12 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 
 	subLog := log.With().Str("Strategy", "MDEP").Logger()
 	subLog.Debug().Msg("pre-populate data cache")
-	tickerSet := make(map[string]bool, len(covered))
+	tickerSet := make(map[data.Security]bool, len(covered))
 
 	begin := time.Now()
 	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, v := range covered {
-		tickerSet[v.Asset] = true
+		tickerSet[*v.Security] = true
 		if begin.After(v.Begin) {
 			begin = v.Begin
 		}
@@ -385,19 +385,22 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 		}
 	}
 
-	tickerList := make([]string, len(tickerSet))
+	tickerList := make([]*data.Security, len(tickerSet))
 	ii := 0
 	for k := range tickerSet {
-		tickerList[ii] = k
+		tickerList[ii] = &data.Security{
+			CompositeFigi: k.CompositeFigi,
+			Ticker:        k.Ticker,
+		}
 		ii++
 	}
 
 	manager.Begin = begin
 	manager.End = end
 
-	subLog.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Strs("Tickers", tickerList).Msg("querying database for eod")
+	subLog.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
-		log.Error().Stack().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+		log.Error().Stack().Err(err).Msg("could not get adjusted close dataframe")
 	}
 }
 
@@ -446,33 +449,33 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 			period, ok := pendingClose[*security]
 			if !ok {
 				period = &Period{
-					Asset: ticker,
-					Begin: date,
+					Security: security,
+					Begin:    date,
 				}
 			} else {
-				delete(pendingClose, ticker)
+				delete(pendingClose, *security)
 			}
 			if period.End.Before(date) {
 				period.End = date.AddDate(0, 0, 7)
 			}
-			activeAssets[ticker] = period
+			activeAssets[*security] = period
 		} else {
 			// it's multi-asset which means a map of tickers
 			assetMap := val[common.TickerName].(map[data.Security]float64)
-			for ticker := range assetMap {
-				period, ok := pendingClose[ticker]
+			for security := range assetMap {
+				period, ok := pendingClose[security]
 				if !ok {
 					period = &Period{
-						Asset: ticker,
-						Begin: date,
+						Security: &security,
+						Begin:    date,
 					}
 				} else {
-					delete(pendingClose, ticker)
+					delete(pendingClose, security)
 				}
 				if period.End.Before(date) {
 					period.End = date.AddDate(0, 0, 8)
 				}
-				activeAssets[ticker] = period
+				activeAssets[security] = period
 			}
 		}
 
