@@ -28,67 +28,44 @@ paths:
           description: ERROR
       tags:
         - utility
-  /benchmark/{ticker}:
+  /security:
     get:
-      summary: calculate benchmark performance over specified time-frame
+      summary: list securities matching
       security:
         - bearerAuth: []
       parameters:
-        - in: path
-          name: ticker
+        - in: query
+          name: q
+          description: >-
+            query string
           schema:
             type: string
-          required: true
-        - in: query
-          name: snapToStart
-          description: >-
-            indicates if data should "snap" to the start of the
-            period or use the exact start date provided
-          schema:
-            type: boolean
-            default: true
+            default: ""
           required: false
-        - in: query
-          name: startDate
-          schema:
-            type: string
-            default: "1990-01-01"
-            example: "2021-06-18"
-          required: false
-          description: >-
-            Date to start benchmark simulation on (yyyy-mm-dd)
-        - in: query
-          name: endDate
+        - in: header
+          name: range
           schema:
             type: string
             default: "now"
-          examples:
-            date:
-              value: "2021-06-18"
-              summary: date string as yyyy-mm-dd
-            keyword:
-              value: "now"
-              summary: keyword indicating time, e.g. now
           required: false
+          example: "items=0-9"
           description: >-
-            Date to end benchmark simulation on. Entered as a
-            'yyyy-mm-dd' or using the convenience shortcut 'now' to
-            specify the current date
+            range header specifying which items should be returned; limit of 100 items at a time
       responses:
         "200":
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PortfolioPerformance'
+                $ref: '#/components/schemas/Security'
         "400":
           description: Bad parameters
         "401":
           description: Not Authorized
-        "404":
-          description: Benchmark symbol not found
+        "416":
+          description: Unallowable range
       tags:
-        - portfolio
+        - security
   /portfolio/:
     get:
       summary: retrieve a list of portfolios for the logged-in user
@@ -727,6 +704,17 @@ components:
         - totalDeposited
         - totalWithdrawn
         - metrics
+    Security:
+      type: object
+      properties:
+        compositeFigi:
+          type: string
+        cusip:
+          type: string
+        name:
+          type: string
+        ticker:
+          type: string
     Status:
       type: object
       properties:
