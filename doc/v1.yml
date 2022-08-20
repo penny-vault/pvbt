@@ -30,7 +30,7 @@ paths:
         - utility
   /security:
     get:
-      summary: list securities matching
+      summary: list securities
       security:
         - bearerAuth: []
       parameters:
@@ -46,7 +46,7 @@ paths:
           name: range
           schema:
             type: string
-            default: "now"
+            default: "items=0-9"
           required: false
           example: "items=0-9"
           description: >-
