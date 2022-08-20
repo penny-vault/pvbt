@@ -169,7 +169,7 @@ func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 func MockAssets(db pgxmock.PgxConnIface) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT ticker, composite_figi FROM assets WHERE active='t'").WillReturnRows(
+	db.ExpectQuery("SELECT ticker, composite_figi, cusip, name FROM assets WHERE active='t'").WillReturnRows(
 		NewCSVRows([]string{"assets.csv"}, map[string]string{}).Rows())
 	db.ExpectCommit()
 }

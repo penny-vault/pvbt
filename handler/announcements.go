@@ -49,7 +49,7 @@ func GetAnnouncements(c *fiber.Ctx) error {
 
 	rows, err := trx.Query(context.Background(), query)
 	if err != nil {
-		subLog.Warn().Stack().Err(err).Str("Query", query).Msg("datdabase query failed")
+		subLog.Warn().Stack().Err(err).Str("Query", query).Msg("database query failed")
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}

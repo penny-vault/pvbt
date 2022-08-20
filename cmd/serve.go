@@ -145,6 +145,9 @@ var serveCmd = &cobra.Command{
 		// Setup logging middleware
 		app.Use(middleware.NewLogger())
 
+		// Add timing headers
+		app.Use(middleware.Timer())
+
 		// Configure authentication
 		jwksAutoRefresh, jwksURL := jwks.SetupJWKS()
 

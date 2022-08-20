@@ -27,6 +27,8 @@ import (
 type Security struct {
 	Ticker        string `json:"ticker"`
 	CompositeFigi string `json:"compositeFigi"`
+	Name          string `json:"name"`
+	Cusip         string `json:"cusip"`
 }
 
 var (
@@ -50,7 +52,7 @@ func LoadSecuritiesFromDB() error {
 		return err
 	}
 
-	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi FROM assets WHERE active='t'")
+	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi, cusip, name FROM assets WHERE active='t'")
 	if err != nil {
 		log.Error().Err(err).Msg("could not query assets from database")
 		return err
@@ -59,7 +61,9 @@ func LoadSecuritiesFromDB() error {
 	for rows.Next() {
 		var ticker string
 		var compositeFigi string
-		err := rows.Scan(&ticker, &compositeFigi)
+		var cusip string
+		var name string
+		err := rows.Scan(&ticker, &compositeFigi, &cusip, &name)
 		if err != nil {
 			log.Error().Err(err).Msg("could not scan database results")
 			if err := trx.Rollback(context.Background()); err != nil {
@@ -69,6 +73,8 @@ func LoadSecuritiesFromDB() error {
 		}
 		s := &Security{
 			CompositeFigi: compositeFigi,
+			Cusip:         cusip,
+			Name:          name,
 			Ticker:        ticker,
 		}
 
@@ -87,18 +93,16 @@ func LoadSecuritiesFromDB() error {
 func SecurityFromFigi(figi string) (*Security, error) {
 	if s, ok := securitiesByFigi[figi]; ok {
 		return s, nil
-	} else {
-		return nil, ErrNotFound
 	}
+	return nil, ErrNotFound
 }
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
 func SecurityFromTicker(ticker string) (*Security, error) {
 	if s, ok := securitiesByTicker[ticker]; ok {
 		return s, nil
-	} else {
-		return nil, ErrNotFound
 	}
+	return nil, ErrNotFound
 }
 
 // SecurityFromTickerList loads securities from database using the ticker as the lookup key

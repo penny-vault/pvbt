@@ -67,7 +67,7 @@ func GetActivity(c *fiber.Ctx, sqlQuery string, args ...any) error {
 
 	rows, err := trx.Query(context.Background(), sqlQuery, args...)
 	if err != nil {
-		subLog.Warn().Stack().Err(err).Str("Query", sqlQuery).Msg("datdabase query failed")
+		subLog.Warn().Stack().Err(err).Str("Query", sqlQuery).Msg("database query failed")
 		if err := trx.Rollback(context.Background()); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
