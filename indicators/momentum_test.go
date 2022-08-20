@@ -63,6 +63,7 @@ var _ = Describe("Momentum", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))

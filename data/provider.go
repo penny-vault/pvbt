@@ -244,7 +244,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 		for _, s := range securities {
 			key := buildHashKey(d, metric, s)
 			if vals[s.CompositeFigi] != nil {
-				m.cache[key] = vals[s].(float64)
+				m.cache[key] = vals[s.CompositeFigi].(float64)
 			} else {
 				span.SetStatus(codes.Error, fmt.Sprintf("no value for %s on %s", s, d.Format("2006-01-02")))
 				log.Warn().Stack().Time("Date", d).Str("Metric", string(metric)).Str("Symbol", s.Ticker).Str("Key", key).Msg("setting cache key to NaN")

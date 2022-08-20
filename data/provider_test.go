@@ -49,6 +49,7 @@ var _ = Describe("Provider", func() {
 		database.SetPool(dbPool)
 
 		// setup database expectations
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, tz), time.Date(2022, 6, 16, 0, 0, 0, 0, tz),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2022, 6, 16, 0, 0, 0, 0, time.UTC))

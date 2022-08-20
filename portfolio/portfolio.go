@@ -539,7 +539,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFram
 			strSymbol := symbol.(string)
 			security, err := data.SecurityFromFigi(strSymbol)
 			if err != nil {
-				log.Error().Err(err).Msg("security not found")
+				log.Error().Err(err).Str("CompositeFigi", strSymbol).Msg("security not found")
 				return err
 			}
 			rebalance = map[data.Security]float64{}

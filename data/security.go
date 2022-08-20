@@ -41,6 +41,9 @@ var (
 func LoadSecuritiesFromDB() error {
 	ctx := context.Background()
 
+	securitiesByFigi = make(map[string]*Security)
+	securitiesByTicker = make(map[string]*Security)
+
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not get transaction when creating securities list")
@@ -83,18 +86,18 @@ func LoadSecuritiesFromDB() error {
 // SecurityFromFigi loads a security from database using the Composite FIGI as the lookup key
 func SecurityFromFigi(figi string) (*Security, error) {
 	if s, ok := securitiesByFigi[figi]; ok {
-		return nil, ErrNotFound
-	} else {
 		return s, nil
+	} else {
+		return nil, ErrNotFound
 	}
 }
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
 func SecurityFromTicker(ticker string) (*Security, error) {
 	if s, ok := securitiesByTicker[ticker]; ok {
-		return nil, ErrNotFound
-	} else {
 		return s, nil
+	} else {
+		return nil, ErrNotFound
 	}
 }
 
@@ -103,9 +106,9 @@ func SecurityFromTickerList(tickers []string) ([]*Security, error) {
 	securities := make([]*Security, 0, len(tickers))
 	for _, ticker := range tickers {
 		if s, ok := securitiesByTicker[ticker]; ok {
-			return nil, ErrNotFound
-		} else {
 			securities = append(securities, s)
+		} else {
+			return nil, ErrNotFound
 		}
 	}
 	return securities, nil

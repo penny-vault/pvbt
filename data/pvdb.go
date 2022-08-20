@@ -315,7 +315,8 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 
 		s, err := SecurityFromFigi(compositeFigi)
 		if err != nil {
-			subLog.Error().Err(err).Msg("security does not exist")
+			subLog.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security does not exist")
+			return nil, err
 		}
 
 		p.cache[p.hashFunc(date, MetricClose, s)] = close
@@ -402,7 +403,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 		args[idx+1] = figi
 	}
 	corporateFigiArgs := strings.Join(figiPlaceholders, ", ")
-	sql := fmt.Sprintf("SELECT event_date, ticker, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
+	sql := fmt.Sprintf("SELECT event_date, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
 
 	trx, err := database.TrxForUser("pvuser")
 	if err != nil {
@@ -427,29 +428,27 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 	}
 
 	var date time.Time
-	var ticker string
 	var compositeFigi string
 	var dividend float64
 	var splitFactor float64
 
 	for rows.Next() {
-		err = rows.Scan(&date, &ticker, &compositeFigi, &dividend, &splitFactor)
+		err = rows.Scan(&date, &compositeFigi, &dividend, &splitFactor)
 		if err != nil {
-			subLog.Error().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
-
+			subLog.Panic().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
 			return
 		}
 
-		security := Security{
-			CompositeFigi: compositeFigi,
-			Ticker:        ticker,
+		security, err := SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Panic().Err(err).Str("CompositeFigi", compositeFigi).Msg("asset map out of sync")
 		}
 
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
-		divs := p.Dividends[security]
+		divs := p.Dividends[*security]
 		if dividend != 0.0 {
 			divs = append(divs, &Measurement{
 				Date:  date,
@@ -457,7 +456,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 			})
 		}
 
-		splits := p.Splits[security]
+		splits := p.Splits[*security]
 		if splitFactor != 1.0 {
 			splits = append(splits, &Measurement{
 				Date:  date,
@@ -465,8 +464,8 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 			})
 		}
 
-		p.Dividends[security] = divs
-		p.Splits[security] = splits
+		p.Dividends[*security] = divs
+		p.Splits[*security] = splits
 	}
 
 	if err := trx.Commit(ctx); err != nil {

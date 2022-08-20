@@ -37,6 +37,9 @@ var _ = Describe("Daa", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		err     error
+		vfinx   *data.Security
+		pridx   *data.Security
+		vustx   *data.Security
 		manager *data.Manager
 		strat   *daa.KellersDefensiveAssetAllocation
 		target  *dataframe.DataFrame
@@ -45,7 +48,7 @@ var _ = Describe("Daa", func() {
 
 	BeforeEach(func() {
 		tz = common.GetTimezone()
-		jsonParams := `{"riskUniverse": ["VFINX", "PRIDX"], "cashUniverse": ["VUSTX"], "protectiveUniverse": ["VUSTX"], "breadth": 1, "topT": 1}`
+		jsonParams := `{"riskUniverse": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "cashUniverse": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}], "protectiveUniverse": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}], "breadth": 1, "topT": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 			panic(err)
@@ -64,6 +67,7 @@ var _ = Describe("Daa", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
@@ -71,6 +75,13 @@ var _ = Describe("Daa", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
+
+		vfinx, err = data.SecurityFromTicker("VFINX")
+		Expect(err).To(BeNil())
+		pridx, err = data.SecurityFromTicker("PRIDX")
+		Expect(err).To(BeNil())
+		vustx, err = data.SecurityFromTicker("VUSTX")
+		Expect(err).To(BeNil())
 	})
 
 	Describe("Compute momentum scores", func() {
@@ -122,39 +133,39 @@ var _ = Describe("Daa", func() {
 
 			It("should be invested in PRIDX to start", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["PRIDX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*pridx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VUSTX in the second month after start", func() {
 				val := target.Row(1, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vustx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VUSTX to end", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vustx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VFINX on 1998-04-30", func() {
 				val := target.Row(100, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vfinx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VUSTX on 2006-03-31", func() {
 				val := target.Row(195, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["VUSTX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vustx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VFINX on 2014-12-31", func() {
 				val := target.Row(300, true, dataframe.SeriesName)
-				t := val[common.TickerName].(map[string]float64)
-				Expect(t["VFINX"]).Should(BeNumerically("~", 1))
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vfinx]).Should(BeNumerically("~", 1))
 			})
 		})
 	})

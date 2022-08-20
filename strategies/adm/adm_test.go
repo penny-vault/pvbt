@@ -46,7 +46,7 @@ var _ = Describe("Adm", func() {
 
 	BeforeEach(func() {
 		tz = common.GetTimezone()
-		jsonParams := `{"inTickers": ["VFINX", "PRIDX"], "outTicker": "VUSTX"}`
+		jsonParams := `{"inTickers": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "outTicker": {"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 			panic(err)
@@ -62,6 +62,7 @@ var _ = Describe("Adm", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
@@ -130,28 +131,28 @@ var _ = Describe("Adm", func() {
 
 			It("should be invested in VFINX to start", func() {
 				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("BBG000BHTMY2"))
 			})
 
 			It("should be invested in PRIDX to end", func() {
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
+				Expect(val[common.TickerName].(string)).To(Equal("BBG000BBVR08"))
 			})
 
 			It("should be invested in PRIDX on 1997-11-28", func() {
 				val := target.Row(100, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("BBG000BHTMY2"))
 			})
 
 			It("should be invested in PRIDX on 2006-03-31", func() {
 				val := target.Row(200, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
+				Expect(val[common.TickerName].(string)).To(Equal("BBG000BBVR08"))
 			})
 
 			It("should be invested in VFINX on 2014-07-31", func() {
 				val := target.Row(300, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+				Expect(val[common.TickerName].(string)).To(Equal("BBG000BHTMY2"))
 			})
 		})
 	})
