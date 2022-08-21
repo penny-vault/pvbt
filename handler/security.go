@@ -30,7 +30,7 @@ import (
 
 func parseRange(r string) (int, int, error) {
 	if r == "" {
-		return 10, 0, nil
+		return 100, 0, nil
 	}
 
 	re := regexp.MustCompile(`((\w+)=)?(\d+)-(\d+)`)
@@ -89,8 +89,8 @@ func LookupSecurity(c *fiber.Ctx) error {
 
 	if query != "" {
 		var err error
-		query = fmt.Sprintf("%s:*", query)
-		sql := fmt.Sprintf("SELECT composite_figi, cusip, ticker, name, ts_rank_cd(search, to_tsquery('simple', $1)) AS rank from assets where active='t' and to_tsquery('simple', $1) @@ search ORDER BY rank desc LIMIT %d OFFSET %d;", limit, offset)
+		query = fmt.Sprintf("%s%%", query)
+		sql := fmt.Sprintf("SELECT composite_figi, cusip, ticker, name, 1.0 AS rank from assets where active='t' and ticker ilike $1 ORDER BY ticker LIMIT %d OFFSET %d;", limit, offset)
 		rows, err = trx.Query(ctx, sql, query)
 		if err != nil {
 			subLog.Warn().Stack().Str("SQL", sql).Err(err).Str("Query", sql).Msg("database query failed")
@@ -136,6 +136,43 @@ func LookupSecurity(c *fiber.Ctx) error {
 			Ticker:        ticker,
 		}
 		securities = append(securities, s)
+	}
+
+	if len(securities) == 0 {
+		// use full text search
+		query = fmt.Sprintf("%s:*", query)
+		sql := fmt.Sprintf("SELECT composite_figi, cusip, ticker, name, ts_rank_cd(search, to_tsquery('simple', $1)) AS rank from assets where active='t' and to_tsquery('simple', $1) @@ search ORDER BY rank desc LIMIT %d OFFSET %d;", limit, offset)
+		rows, err = trx.Query(ctx, sql, query)
+		if err != nil {
+			subLog.Warn().Stack().Str("SQL", sql).Err(err).Str("Query", sql).Msg("database query failed")
+			if err := trx.Rollback(context.Background()); err != nil {
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+
+			return fiber.ErrInternalServerError
+		}
+		for rows.Next() {
+			var ticker string
+			var compositeFigi string
+			var cusip string
+			var name string
+			var rank float64
+			err := rows.Scan(&compositeFigi, &cusip, &ticker, &name, &rank)
+			if err != nil {
+				log.Error().Err(err).Msg("could not scan database results")
+				if err := trx.Rollback(context.Background()); err != nil {
+					log.Error().Stack().Err(err).Msg("could not rollback transaction")
+				}
+				return err
+			}
+			s := &data.Security{
+				CompositeFigi: compositeFigi,
+				Cusip:         cusip,
+				Name:          name,
+				Ticker:        ticker,
+			}
+			securities = append(securities, s)
+		}
 	}
 
 	if err := trx.Commit(ctx); err != nil {
