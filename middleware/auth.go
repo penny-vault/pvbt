@@ -103,7 +103,10 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 		}
 
 		// store user ID and token in c.Locals
-		jwtToken := c.Locals("user").(jwt.Token)
+		jwtToken, ok := c.Locals("user").(jwt.Token)
+		if !ok {
+			return fiber.ErrUnauthorized
+		}
 		c.Locals("userID", jwtToken.Subject())
 		return c.Next()
 	}
