@@ -23,10 +23,16 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v4"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )
+
+type SecurityDetail struct {
+	CompositeFigi string `json:compositeFigi`
+	Cusip         string `json:cusip`
+	Name          string `json:name`
+	Ticker        string `json:ticker`
+}
 
 func parseRange(r string) (int, int, error) {
 	if r == "" {
@@ -114,7 +120,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		}
 	}
 
-	securities := make([]*data.Security, 0)
+	securities := make([]*SecurityDetail, 0)
 	for rows.Next() {
 		var ticker string
 		var compositeFigi string
@@ -129,7 +135,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 			}
 			return err
 		}
-		s := &data.Security{
+		s := &SecurityDetail{
 			CompositeFigi: compositeFigi,
 			Cusip:         cusip,
 			Name:          name,
