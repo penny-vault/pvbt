@@ -28,10 +28,10 @@ import (
 )
 
 type SecurityDetail struct {
-	CompositeFigi string `json:compositeFigi`
-	Cusip         string `json:cusip`
-	Name          string `json:name`
-	Ticker        string `json:ticker`
+	CompositeFigi string `json:"compositeFigi"`
+	Cusip         string `json:"cusip"`
+	Name          string `json:"name"`
+	Ticker        string `json:"ticker"`
 }
 
 func parseRange(r string) (int, int, error) {
@@ -171,7 +171,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 				}
 				return err
 			}
-			s := &data.Security{
+			s := &SecurityDetail{
 				CompositeFigi: compositeFigi,
 				Cusip:         cusip,
 				Name:          name,

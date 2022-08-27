@@ -987,7 +987,18 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		}
 
 		tz := common.GetTimezone()
-		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &pm.holdings, &p.Notifications, &p.Benchmark)
+		tmpHoldings := make(map[string]float64)
+		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &tmpHoldings, &p.Notifications, &p.Benchmark)
+
+		for k, v := range tmpHoldings {
+			security, err := data.SecurityFromFigi(k)
+			if err != nil {
+				subLog.Warn().Str("CompositeFigi", k).Msg("portfolio holds inactive security")
+				continue
+			}
+			pm.holdings[*security] = v
+		}
+
 		p.StartDate = p.StartDate.In(tz)
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
@@ -995,7 +1006,6 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			if err := trx.Rollback(context.Background()); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
-
 			return nil, err
 		}
 
@@ -1183,7 +1193,11 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 		holdings=$8,
 		notifications=$9,
 		predicted_bytes=$12`
-	holdings, err := json.Marshal(pm.holdings)
+	marshableHoldings := make(map[string]float64, len(pm.holdings))
+	for k, v := range pm.holdings {
+		marshableHoldings[k.CompositeFigi] = v
+	}
+	holdings, err := json.Marshal(marshableHoldings)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to marshal holdings")
 		if err := trx.Rollback(context.Background()); err != nil {
