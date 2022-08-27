@@ -3,19 +3,19 @@ shortcode = "paa"
 description = "A strategy that seeks to create an appealing alternative to a 1-yr CD while boosting returns"
 source = "https://indexswingtrader.blogspot.com/2016/04/introducing-protective-asset-allocation.html"
 version = "1.0.0"
-benchmark = "SHV"
+benchmark = '{"compositeFigi": "BBG000QN04L8", "ticker": "SHV", "name": "iShares Short Treasury Bond ETF"}'
 
 [arguments.riskUniverse]
 name = "Risk Universe"
 description = "List of ETF, Mutual Fund, or Stock tickers in the 'risk' universe"
-typecode = "[]string"
-default = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
+typecode = "[]stock"
+default = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000BSWKH7", "ticker": "QQQ", "name": "Invesco QQQ Trust, Series 1"}, {"compositeFigi": "BBG000CGC9C4", "ticker": "IWM", "name": "iShares Russell 2000 ETF"}, {"compositeFigi": "BBG000HT8SM3", "ticker": "VGK", "name": "Vanguard FTSE Europe ETF"}, {"compositeFigi": "BBG000BK38F5", "ticker": "EWJ", "name": "iShares MSCI Japan ETF"}, {"compositeFigi": "BBG000M0P5L2", "ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF"}, {"compositeFigi": "BBG000BXW687", "ticker": "IYR", "name": "iShares U.S. Real Estate ETF"}, {"compositeFigi": "BBG000PVYFK0", "ticker": "GSG", "name": "iShares S&P  GSCI Commodity-Indexed Trust"}, {"compositeFigi": "BBG000CRF6Q8", "ticker": "GLD", "name": "SPDR Gold Trust, SPDR Gold Shares"}, {"compositeFigi": "BBG000R2T3H9", "ticker": "HYG", "name": "iShares iBoxx $ High Yield Corporate Bond ETF"}, {"compositeFigi": "BBG000BBV9N3", "ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF"}, {"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}]'
 
 [arguments.protectiveUniverse]
 name = "Protective Universe"
 description = "List of ETF, Mutual Fund, or Stock tickers in the 'protective' universe to use as canary assets, signaling when to invest in risk vs cash"
-typecode = "[]string"
-default = '["IEF", "SHY"]'
+typecode = "[]stock"
+default = '[{"compositeFigi": "BBG000BHR296", "ticker": "IEF", "name": "iShares 7-10 Year Treasury Bond ETF"}, {"compositeFigi": "BBG000NTFYM5", "ticker": "SHY", "name": "iShares 1-3 Year Treasury Bond ETF"}, {"compositeFigi": "BBG0019SRJP8", "ticker": "STIP", "name": "iShares 0-5 Year TIPS Bond ETF"}]'
 
 [arguments.protectionFactor]
 name = "Protection Factor"
@@ -39,29 +39,29 @@ advanced = true
 default = "6"
 
 [suggested.PAA-Conservative]
-riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["$CASH"]'
+riskUniverse = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000BSWKH7", "ticker": "QQQ", "name": "Invesco QQQ Trust, Series 1"}, {"compositeFigi": "BBG000CGC9C4", "ticker": "IWM", "name": "iShares Russell 2000 ETF"}, {"compositeFigi": "BBG000HT8SM3", "ticker": "VGK", "name": "Vanguard FTSE Europe ETF"}, {"compositeFigi": "BBG000BK38F5", "ticker": "EWJ", "name": "iShares MSCI Japan ETF"}, {"compositeFigi": "BBG000M0P5L2", "ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF"}, {"compositeFigi": "BBG000BXW687", "ticker": "IYR", "name": "iShares U.S. Real Estate ETF"}, {"compositeFigi": "BBG000PVYFK0", "ticker": "GSG", "name": "iShares S&P  GSCI Commodity-Indexed Trust"}, {"compositeFigi": "BBG000CRF6Q8", "ticker": "GLD", "name": "SPDR Gold Trust, SPDR Gold Shares"}, {"compositeFigi": "BBG000R2T3H9", "ticker": "HYG", "name": "iShares iBoxx $ High Yield Corporate Bond ETF"}, {"compositeFigi": "BBG000BBV9N3", "ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF"}, {"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}]'
+protectiveUniverse = '[{"compositeFigi": "BBG000QN04L8", "ticker": "SHV", "name": "iShares Short Treasury Bond ETF"}]'
 protectionFactor = "2"
 lookback = "12"
 topN = "6"
 
 [suggested.PAA0]
-riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF", "SHY"]'
+riskUniverse = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000BSWKH7", "ticker": "QQQ", "name": "Invesco QQQ Trust, Series 1"}, {"compositeFigi": "BBG000CGC9C4", "ticker": "IWM", "name": "iShares Russell 2000 ETF"}, {"compositeFigi": "BBG000HT8SM3", "ticker": "VGK", "name": "Vanguard FTSE Europe ETF"}, {"compositeFigi": "BBG000BK38F5", "ticker": "EWJ", "name": "iShares MSCI Japan ETF"}, {"compositeFigi": "BBG000M0P5L2", "ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF"}, {"compositeFigi": "BBG000BXW687", "ticker": "IYR", "name": "iShares U.S. Real Estate ETF"}, {"compositeFigi": "BBG000PVYFK0", "ticker": "GSG", "name": "iShares S&P  GSCI Commodity-Indexed Trust"}, {"compositeFigi": "BBG000CRF6Q8", "ticker": "GLD", "name": "SPDR Gold Trust, SPDR Gold Shares"}, {"compositeFigi": "BBG000R2T3H9", "ticker": "HYG", "name": "iShares iBoxx $ High Yield Corporate Bond ETF"}, {"compositeFigi": "BBG000BBV9N3", "ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF"}, {"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}]'
+protectiveUniverse = '[{"compositeFigi": "BBG000BHR296", "ticker": "IEF", "name": "iShares 7-10 Year Treasury Bond ETF"}, {"compositeFigi": "BBG000NTFYM5", "ticker": "SHY", "name": "iShares 1-3 Year Treasury Bond ETF"}]'
 protectionFactor = "0"
 lookback = "12"
 topN = "6"
 
 [suggested.PAA1]
-riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF", "SHY"]'
+riskUniverse = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000BSWKH7", "ticker": "QQQ", "name": "Invesco QQQ Trust, Series 1"}, {"compositeFigi": "BBG000CGC9C4", "ticker": "IWM", "name": "iShares Russell 2000 ETF"}, {"compositeFigi": "BBG000HT8SM3", "ticker": "VGK", "name": "Vanguard FTSE Europe ETF"}, {"compositeFigi": "BBG000BK38F5", "ticker": "EWJ", "name": "iShares MSCI Japan ETF"}, {"compositeFigi": "BBG000M0P5L2", "ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF"}, {"compositeFigi": "BBG000BXW687", "ticker": "IYR", "name": "iShares U.S. Real Estate ETF"}, {"compositeFigi": "BBG000PVYFK0", "ticker": "GSG", "name": "iShares S&P  GSCI Commodity-Indexed Trust"}, {"compositeFigi": "BBG000CRF6Q8", "ticker": "GLD", "name": "SPDR Gold Trust, SPDR Gold Shares"}, {"compositeFigi": "BBG000R2T3H9", "ticker": "HYG", "name": "iShares iBoxx $ High Yield Corporate Bond ETF"}, {"compositeFigi": "BBG000BBV9N3", "ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF"}, {"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}]'
+protectiveUniverse = '[{"compositeFigi": "BBG000BHR296", "ticker": "IEF", "name": "iShares 7-10 Year Treasury Bond ETF"}, {"compositeFigi": "BBG000NTFYM5", "ticker": "SHY", "name": "iShares 1-3 Year Treasury Bond ETF"}]'
 protectionFactor = "1"
 lookback = "12"
 topN = "6"
 
 [suggested.PAA2]
-riskUniverse = '["SPY", "QQQ", "IWM", "VGK", "EWJ", "EEM", "IYR", "GSG", "GLD", "HYG", "LQD", "TLT"]'
-protectiveUniverse = '["IEF", "SHY"]'
+riskUniverse = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000BSWKH7", "ticker": "QQQ", "name": "Invesco QQQ Trust, Series 1"}, {"compositeFigi": "BBG000CGC9C4", "ticker": "IWM", "name": "iShares Russell 2000 ETF"}, {"compositeFigi": "BBG000HT8SM3", "ticker": "VGK", "name": "Vanguard FTSE Europe ETF"}, {"compositeFigi": "BBG000BK38F5", "ticker": "EWJ", "name": "iShares MSCI Japan ETF"}, {"compositeFigi": "BBG000M0P5L2", "ticker": "EEM", "name": "iShares MSCI Emerging Markets ETF"}, {"compositeFigi": "BBG000BXW687", "ticker": "IYR", "name": "iShares U.S. Real Estate ETF"}, {"compositeFigi": "BBG000PVYFK0", "ticker": "GSG", "name": "iShares S&P  GSCI Commodity-Indexed Trust"}, {"compositeFigi": "BBG000CRF6Q8", "ticker": "GLD", "name": "SPDR Gold Trust, SPDR Gold Shares"}, {"compositeFigi": "BBG000R2T3H9", "ticker": "HYG", "name": "iShares iBoxx $ High Yield Corporate Bond ETF"}, {"compositeFigi": "BBG000BBV9N3", "ticker": "LQD", "name": "iShares iBoxx $ Investment Grade Corporate Bond ETF"}, {"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}]'
+protectiveUniverse = '[{"compositeFigi": "BBG000BHR296", "ticker": "IEF", "name": "iShares 7-10 Year Treasury Bond ETF"}, {"compositeFigi": "BBG000NTFYM5", "ticker": "SHY", "name": "iShares 1-3 Year Treasury Bond ETF"}]'
 protectionFactor = "2"
 lookback = "12"
 topN = "6"
