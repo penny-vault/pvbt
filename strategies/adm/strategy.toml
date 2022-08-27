@@ -9,23 +9,23 @@ schedule = "@monthend"
 [arguments.inTickers]
 name = "Tickers"
 description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
-typecode = "[]string"
-default = '["VFINX", "PRIDX"]'
+typecode = "[]stock"
+default = '[{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX", "name": "Vanguard 500 Index Fund Investor Shares"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX", "name": "T. Rowe Price International Discovery Fund"}]'
 
 [arguments.outTicker]
 name = "Out-of-Market Ticker"
 description = "Ticker to use when model scores are all below 0"
-typecode = "string"
-default = "VUSTX"
+typecode = "stock"
+default = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [suggested."Engineered Portfolio"]
-inTickers = '["VFINX", "VINEX"]'
-outTicker = "VUSTX"
+inTickers = '[{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX", "name": "Vanguard 500 Index Fund Investor Shares"}, {"compositeFigi": "BBG000GP5R56", "ticker": "VINEX", "name": "Vanguard International Explorer Fund Investor Shares"}]'
+outTicker = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [suggested.PRIDX]
-inTickers = '["VFINX", "PRIDX"]'
-outTicker = "VUSTX"
+inTickers = '[{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX", "name": "Vanguard 500 Index Fund Investor Shares"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX", "name": "T. Rowe Price International Discovery Fund"}]'
+outTicker = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [suggested."All ETF"]
-inTickers = '["SPY", "SCZ"]'
-outTicker = "TLT"
+inTickers = '[{"compositeFigi": "BBG000BDTBL9", "ticker": "SPY", "name": "SPDR S&P 500 ETF Trust"}, {"compositeFigi": "BBG000T1G7X6", "ticker": "SCZ", "name": "iShares MSCI EAFE Small-Cap ETF"}]'
+outTicker = '{"compositeFigi": "BBG000BJKYW3", "ticker": "TLT", "name": "iShares 20+ Year Treasury Bond ETF"}'
