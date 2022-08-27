@@ -87,8 +87,8 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return adm, nil
 }
 
+// donloadPriceData loads EOD quotes for in tickers
 func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, manager *data.Manager) error {
-	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
 	tickers := []*data.Security{}
