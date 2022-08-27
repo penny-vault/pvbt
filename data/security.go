@@ -18,6 +18,7 @@ package data
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
@@ -32,6 +33,7 @@ type Security struct {
 var (
 	securitiesByFigi   map[string]*Security
 	securitiesByTicker map[string]*Security
+	writeLocker        sync.RWMutex
 )
 
 var (
@@ -55,6 +57,9 @@ func LoadSecuritiesFromDB() error {
 		log.Error().Err(err).Msg("could not query assets from database")
 		return err
 	}
+
+	writeLocker.Lock()
+	defer writeLocker.Unlock()
 
 	for rows.Next() {
 		var ticker string
@@ -85,6 +90,9 @@ func LoadSecuritiesFromDB() error {
 
 // SecurityFromFigi loads a security from database using the Composite FIGI as the lookup key
 func SecurityFromFigi(figi string) (*Security, error) {
+	writeLocker.RLock()
+	defer writeLocker.RUnlock()
+
 	if s, ok := securitiesByFigi[figi]; ok {
 		return s, nil
 	}
@@ -93,6 +101,9 @@ func SecurityFromFigi(figi string) (*Security, error) {
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
 func SecurityFromTicker(ticker string) (*Security, error) {
+	writeLocker.RLock()
+	defer writeLocker.RUnlock()
+
 	if s, ok := securitiesByTicker[ticker]; ok {
 		return s, nil
 	}
@@ -101,6 +112,9 @@ func SecurityFromTicker(ticker string) (*Security, error) {
 
 // SecurityFromTickerList loads securities from database using the ticker as the lookup key
 func SecurityFromTickerList(tickers []string) ([]*Security, error) {
+	writeLocker.RLock()
+	defer writeLocker.RUnlock()
+
 	securities := make([]*Security, 0, len(tickers))
 	for _, ticker := range tickers {
 		if s, ok := securitiesByTicker[ticker]; ok {

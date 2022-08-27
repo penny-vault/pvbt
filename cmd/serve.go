@@ -163,6 +163,9 @@ var serveCmd = &cobra.Command{
 		if _, err := scheduler.Every(1).Hours().Do(strategies.LoadStrategyMetricsFromDb); err != nil {
 			log.Panic().Err(err).Msg("could not schedule load strategies metrics from DB")
 		}
+		if _, err := scheduler.Every(1).Days().Do(data.LoadSecuritiesFromDB); err != nil {
+			log.Panic().Err(err).Msg("could not schedule load securities from DB")
+		}
 		scheduler.StartAsync()
 
 		// Start server on http://${heroku-url}:${port}
