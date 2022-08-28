@@ -821,10 +821,10 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 // LOAD
 
-func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
+func LoadPerformanceFromDB(ctx context.Context, portfolioID uuid.UUID, userID string) (*Performance, error) {
 	subLog := log.With().Str("PortfolioID", portfolioID.String()).Str("UserID", userID).Logger()
 	portfolioSQL := `SELECT performance_bytes FROM portfolios WHERE id=$1 AND user_id=$2`
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return nil, err
@@ -843,18 +843,18 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 	p := NewPerformance(portfolio)
 
 	var data []byte
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&data)
+	err = trx.QueryRow(ctx, portfolioSQL, portfolioID, userID).Scan(&data)
 
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("query database for performance failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return nil, err
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		subLog.Warn().Stack().Err(err).Msg("commit transaction failed")
 		return nil, err
 	}
@@ -868,9 +868,9 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 }
 
 // LoadMeasurementFromDB reads a single measurement for the `portfolio` on the specified `date`
-func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time) (*PerformanceMeasurement, error) {
+func LoadMeasurementFromDB(ctx context.Context, portfolioID []byte, userID string, forDate time.Time) (*PerformanceMeasurement, error) {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(portfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return nil, err
@@ -937,7 +937,7 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 	WHERE portfolio_id=$1 AND user_id=$2 AND event_date=$3
 	ORDER BY event_date
 	LIMIT 1`
-	row := trx.QueryRow(context.Background(), measurementSQL, portfolioID, userID, forDate)
+	row := trx.QueryRow(ctx, measurementSQL, portfolioID, userID, forDate)
 	m := PerformanceMeasurement{}
 	if err := row.Scan(
 		&m.Time,
@@ -997,13 +997,13 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 		&m.TotalWithdrawn,
 		&m.Justification); err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, err
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to the database")
 	}
 
@@ -1011,9 +1011,9 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 }
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
-func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
+func (perf *Performance) LoadMeasurementsFromDB(ctx context.Context, userID string) error {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
@@ -1079,10 +1079,10 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	FROM portfolio_measurements
 	WHERE portfolio_id=$1 AND user_id=$2
 	ORDER BY event_date`
-	rows, err := trx.Query(context.Background(), measurementSQL, perf.PortfolioID, userID)
+	rows, err := trx.Query(ctx, measurementSQL, perf.PortfolioID, userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed executing measurement query")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1151,7 +1151,7 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 			&m.Justification)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -1161,7 +1161,7 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	}
 	perf.Measurements = measurements
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to the database")
 	}
 	return nil
@@ -1181,29 +1181,29 @@ func (perf *Performance) LogSummary() {
 
 // SAVE
 
-func (perf *Performance) Save(userID string) error {
+func (perf *Performance) Save(ctx context.Context, userID string) error {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
-	err = perf.SaveWithTransaction(trx, userID)
+	err = perf.SaveWithTransaction(ctx, trx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to save portfolio transactions")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	return err
 }
 
-func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
+func (perf *Performance) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID string) error {
 	sql := `UPDATE portfolios SET
 		performance_bytes=$2,
 		ytd_return=$3,
@@ -1224,7 +1224,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	perf.Measurements = make([]*PerformanceMeasurement, 0)
 	raw, err := perf.MarshalBinary()
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1237,7 +1237,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		maxDrawDown = perf.DrawDowns[0].LossPercent
 	}
 
-	_, err = trx.Exec(context.Background(), sql,
+	_, err = trx.Exec(ctx, sql,
 		perf.PortfolioID,
 		raw,
 		perf.PortfolioReturns.TWRRYTD,
@@ -1253,16 +1253,16 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		perf.PortfolioMetrics.SortinoRatioSinceInception,
 		perf.PortfolioMetrics.UlcerIndexP90)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	err = perf.saveMeasurements(trx, userID)
+	err = perf.saveMeasurements(ctx, trx, userID)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1272,7 +1272,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	return nil
 }
 
-func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
+func (perf *Performance) saveMeasurements(ctx context.Context, trx pgx.Tx, userID string) error {
 	sql := `INSERT INTO portfolio_measurements (
 		event_date,
 		portfolio_id,
@@ -1393,7 +1393,7 @@ func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	DO NOTHING`
 
 	for _, m := range perf.Measurements {
-		holdings, err := json.Marshal(m.Holdings)
+		holdings, err := json.MarshalContext(ctx, m.Holdings)
 		if err != nil {
 			for _, holding := range m.Holdings {
 				log.Error().Stack().Str("Ticker", holding.Ticker).Float64("Shares", holding.Shares).Float32("PercentPorfolio", holding.PercentPortfolio).Float64("Value", holding.Value).Msg("holding")
@@ -1401,13 +1401,13 @@ func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 			return ErrSerialize
 		}
 
-		justification, err := json.Marshal(m.Justification)
+		justification, err := json.MarshalContext(ctx, m.Justification)
 		if err != nil {
 			log.Warn().Stack().Err(err).Msg("failed to serialize justification")
 			return ErrSerialize
 		}
 
-		_, err = trx.Exec(context.Background(), sql,
+		_, err = trx.Exec(ctx, sql,
 			m.Time,                  // 1
 			perf.PortfolioID,        // 2
 			m.RiskFreeValue,         // 3

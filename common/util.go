@@ -177,6 +177,7 @@ func SetupLogging() {
 	}
 
 	// setup stack marshaler
+	//nolint:reassign
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 }
 

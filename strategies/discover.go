@@ -98,12 +98,13 @@ func Register(strategyPkg string, factory strategy.Factory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
+	ctx := context.Background()
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
 		log.Info().Str("StrategyName", strat.Name).Msg("Refresh metrics for strategy")
 
 		// load results from the database
-		trx, err := database.TrxForUser("pvuser")
+		trx, err := database.TrxForUser(ctx, "pvuser")
 		if err != nil {
 			log.Panic().Str("Endpoint", "UpdatePortfolio").Str("UserID", "pvuser").Msg("unable to get database transaction for user")
 		}

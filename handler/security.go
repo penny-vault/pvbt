@@ -74,6 +74,7 @@ func parseRange(r string) (int, int, error) {
 }
 
 func LookupSecurity(c *fiber.Ctx) error {
+	ctx := context.Background()
 	query := c.Query("q")
 	rangeHeader := c.Get("range")
 	limit, offset, err := parseRange(rangeHeader)
@@ -82,10 +83,9 @@ func LookupSecurity(c *fiber.Ctx) error {
 		return fiber.ErrRequestedRangeNotSatisfiable
 	}
 
-	ctx := context.Background()
 	subLog := log.With().Str("Query", query).Str("Endpoint", "LookupSecurity").Logger()
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not get transaction when querying trading days")
 		return fiber.ErrInternalServerError
@@ -100,7 +100,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		rows, err = trx.Query(ctx, sql, query)
 		if err != nil {
 			subLog.Warn().Stack().Str("SQL", sql).Err(err).Str("Query", sql).Msg("database query failed")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -112,7 +112,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		rows, err = trx.Query(ctx, sql)
 		if err != nil {
 			subLog.Warn().Stack().Str("SQL", sql).Err(err).Str("Query", sql).Msg("database query failed")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -130,7 +130,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		err := rows.Scan(&compositeFigi, &cusip, &ticker, &name, &rank)
 		if err != nil {
 			log.Error().Err(err).Msg("could not scan database results")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return err
@@ -151,7 +151,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		rows, err = trx.Query(ctx, sql, query)
 		if err != nil {
 			subLog.Warn().Stack().Str("SQL", sql).Err(err).Str("Query", sql).Msg("database query failed")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -166,7 +166,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 			err := rows.Scan(&compositeFigi, &cusip, &ticker, &name, &rank)
 			if err != nil {
 				log.Error().Err(err).Msg("could not scan database results")
-				if err := trx.Rollback(context.Background()); err != nil {
+				if err := trx.Rollback(ctx); err != nil {
 					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 				return err

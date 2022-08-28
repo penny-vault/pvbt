@@ -159,7 +159,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	database.LogOpenTransactions()
 
 	// Get database transaction
-	db, err := database.TrxForUser("pvuser")
+	db, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not start database transaction")
 		return nil, nil, err

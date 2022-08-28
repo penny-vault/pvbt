@@ -801,9 +801,9 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 
 // LOAD
 
-func (pm *Model) LoadTransactionsFromDB() error {
+func (pm *Model) LoadTransactionsFromDB(ctx context.Context) error {
 	p := pm.Portfolio
-	trx, err := database.TrxForUser(p.UserID)
+	trx, err := database.TrxForUser(ctx, p.UserID)
 	if err != nil {
 		log.Error().Stack().Err(err).
 			Str("PortfolioID", hex.EncodeToString(p.ID)).
@@ -833,14 +833,14 @@ func (pm *Model) LoadTransactionsFromDB() error {
 	FROM portfolio_transactions
 	WHERE portfolio_id=$1 AND user_id=$2
 	ORDER BY sequence_num`
-	rows, err := trx.Query(context.Background(), transactionSQL, p.ID, p.UserID)
+	rows, err := trx.Query(ctx, transactionSQL, p.ID, p.UserID)
 	if err != nil {
 		log.Error().Stack().Err(err).
 			Str("PortfolioID", hex.EncodeToString(p.ID)).
 			Str("UserID", p.UserID).
 			Str("Query", transactionSQL).
 			Msg("could not load portfolio transactions from database")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -869,7 +869,7 @@ func (pm *Model) LoadTransactionsFromDB() error {
 				Str("UserID", p.UserID).
 				Str("Query", transactionSQL).
 				Msg("failed scanning row into transaction fields")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -899,20 +899,20 @@ func (pm *Model) LoadTransactionsFromDB() error {
 	}
 	p.Transactions = transactions
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
 	}
 
 	return nil
 }
 
-func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*Model, error) {
+func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*Model, error) {
 	subLog := log.With().Str("UserID", userID).Strs("PortfolioIDs", portfolioIDs).Logger()
 	if userID == "" {
 		subLog.Error().Stack().Msg("userID cannot be an empty string")
 		return nil, ErrEmptyUserID
 	}
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Msg("failed to create database transaction for user")
 		return nil, err
@@ -937,7 +937,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			portfolios
 		WHERE
 			id = ANY ($1) AND user_id=$2`
-		rows, err = trx.Query(context.Background(), portfolioSQL, portfolioIDs, userID)
+		rows, err = trx.Query(ctx, portfolioSQL, portfolioIDs, userID)
 	} else {
 		portfolioSQL := `
 		SELECT
@@ -956,12 +956,12 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 			portfolios
 		WHERE
 			user_id=$1`
-		rows, err = trx.Query(context.Background(), portfolioSQL, userID)
+		rows, err = trx.Query(ctx, portfolioSQL, userID)
 	}
 
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not load portfolio from database")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1003,7 +1003,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		p.EndDate = p.EndDate.In(tz)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Msg("could not load portfolio from database")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return nil, err
@@ -1020,7 +1020,7 @@ func LoadFromDB(portfolioIDs []string, userID string, dataProxy *data.Manager) (
 		return nil, ErrPortfolioNotFound
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
 	}
 	return resultSet, nil
@@ -1038,7 +1038,7 @@ func (pm *Model) AddActivity(date time.Time, msg string, tags []string) {
 	})
 }
 
-func (pm *Model) SaveActivities() error {
+func (pm *Model) SaveActivities(ctx context.Context) error {
 	p := pm.Portfolio
 	userID := p.UserID
 
@@ -1049,7 +1049,7 @@ func (pm *Model) SaveActivities() error {
 	}
 
 	// Save to database
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
@@ -1058,19 +1058,19 @@ func (pm *Model) SaveActivities() error {
 	for _, activity := range pm.activities {
 
 		sql := `INSERT INTO activity ("user_id", "portfolio_id", "event_date", "activity", "tags") VALUES ($1, $2, $3, $4, $5)`
-		if _, err := trx.Exec(context.Background(), sql, userID, p.ID, activity.Date, activity.Msg, activity.Tags); err != nil {
+		if _, err := trx.Exec(ctx, sql, userID, p.ID, activity.Date, activity.Msg, activity.Tags); err != nil {
 			subLog.Error().Err(err).Msg("could not create activity")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return err
 		}
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return err
@@ -1079,28 +1079,28 @@ func (pm *Model) SaveActivities() error {
 	return nil
 }
 
-func (pm *Model) SetStatus(msg string) error {
+func (pm *Model) SetStatus(ctx context.Context, msg string) error {
 	p := pm.Portfolio
 	userID := p.UserID
 
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Str("Status", msg).Logger()
 
 	// Save to database
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
 	sql := `UPDATE portfolios SET status=$1 WHERE id=$2`
-	if _, err := trx.Exec(context.Background(), sql, msg, p.ID); err != nil {
+	if _, err := trx.Exec(ctx, sql, msg, p.ID); err != nil {
 		subLog.Error().Err(err).Msg("could not update portfolio status")
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1111,37 +1111,37 @@ func (pm *Model) SetStatus(msg string) error {
 }
 
 // Save portfolio to database along with all transaction data
-func (pm *Model) Save(userID string) error {
+func (pm *Model) Save(ctx context.Context, userID string) error {
 	p := pm.Portfolio
 	p.UserID = userID
 
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Str("UserID", userID).Logger()
 
-	if err := pm.SaveActivities(); err != nil {
+	if err := pm.SaveActivities(ctx); err != nil {
 		subLog.Error().Err(err).Msg("could not save activities")
 	}
 
 	// Save to database
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
-	err = pm.SaveWithTransaction(trx, userID, false)
+	err = pm.SaveWithTransaction(ctx, trx, userID, false)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to create portfolio transactions")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to commit portfolio transaction")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1151,7 +1151,7 @@ func (pm *Model) Save(userID string) error {
 	return nil
 }
 
-func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) error {
+func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID string, permanent bool) error {
 	temporary := !permanent
 	p := pm.Portfolio
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
@@ -1197,10 +1197,10 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 	for k, v := range pm.holdings {
 		marshableHoldings[k.CompositeFigi] = v
 	}
-	holdings, err := json.Marshal(marshableHoldings)
+	holdings, err := json.MarshalContext(ctx, marshableHoldings)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to marshal holdings")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1210,21 +1210,21 @@ func (pm *Model) SaveWithTransaction(trx pgx.Tx, userID string, permanent bool) 
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("Could not marshal predicted bytes")
 	}
-	_, err = trx.Exec(context.Background(), portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
+	_, err = trx.Exec(ctx, portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
 		p.StrategyArguments, p.Benchmark, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID, predictedBytes)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Str("Query", portfolioSQL).Msg("failed to save portfolio")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	return pm.saveTransactions(trx, userID)
+	return pm.saveTransactions(ctx, trx, userID)
 }
 
-func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
+func (pm *Model) saveTransactions(ctx context.Context, trx pgx.Tx, userID string) error {
 	p := pm.Portfolio
 
 	log.Info().
@@ -1310,12 +1310,12 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 		var jsonJustification []byte
 		if len(t.Justification) > 0 {
 			var err error
-			jsonJustification, err = json.Marshal(t.Justification)
+			jsonJustification, err = json.MarshalContext(ctx, t.Justification)
 			if err != nil {
 				log.Error().Err(err).Msg("could not marshal to JSON the justification array")
 			}
 		}
-		_, err := trx.Exec(context.Background(), transactionSQL,
+		_, err := trx.Exec(ctx, transactionSQL,
 			t.ID,              // 1
 			p.ID,              // 2
 			t.Kind,            // 3
@@ -1359,7 +1359,7 @@ func (pm *Model) saveTransactions(trx pgx.Tx, userID string) error {
 				Int("Idx", idx).
 				Str("UserID", userID).
 				Msg("failed to save transaction")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 

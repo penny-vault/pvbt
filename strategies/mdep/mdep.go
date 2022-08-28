@@ -128,7 +128,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	}
 
 	// Get database transaction
-	db, err := database.TrxForUser("pvuser")
+	db, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		log.Warn().Stack().Err(err).Msg("could not get database transaction")
 		return nil, nil, err

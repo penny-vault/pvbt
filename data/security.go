@@ -46,7 +46,7 @@ func LoadSecuritiesFromDB() error {
 	securitiesByFigi = make(map[string]*Security)
 	securitiesByTicker = make(map[string]*Security)
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not get transaction when creating securities list")
 		return err

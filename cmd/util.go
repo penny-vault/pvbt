@@ -30,7 +30,7 @@ import (
 //	dataManager - interface to the database
 //	portfolioID - specified as {userID}:{portfolioID} only pull requested portfolio
 //	userList    - list of users to include portfolios for
-func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
+func getPortfolios(ctx context.Context, portfolioID string, userList []string) []*portfolio.Model {
 	dataManager := data.NewManager()
 
 	// get a list of portfolio id's to update
@@ -46,21 +46,21 @@ func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 			pIDStr,
 		}
 		log.Info().Str("PortfolioID", updateCmdPortfolioID).Msg("load portfolio from DB")
-		p, err := portfolio.LoadFromDB(ids, u, dataManager)
+		p, err := portfolio.LoadFromDB(ctx, ids, u, dataManager)
 		if err != nil {
 			log.Fatal().Err(err).Msg("could not load portfolio from DB")
 		}
 		portfolios = append(portfolios, p[0])
 	} else {
 		for _, u := range userList {
-			trx, err := database.TrxForUser(u)
+			trx, err := database.TrxForUser(ctx, u)
 			if err != nil {
 				log.Panic().Err(err).Str("User", u).Msg("could not create transaction for user")
 			}
 
-			rows, err := trx.Query(context.Background(), "SELECT id FROM portfolios WHERE temporary='f'")
+			rows, err := trx.Query(ctx, "SELECT id FROM portfolios WHERE temporary='f'")
 			if err != nil {
-				if err := trx.Rollback(context.Background()); err != nil {
+				if err := trx.Rollback(ctx); err != nil {
 					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 				log.Panic().Err(err).Msg("could not get portfolio IDs")
@@ -70,7 +70,7 @@ func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 				var pIDStr string
 				err := rows.Scan(&pIDStr)
 				if err != nil {
-					if err := trx.Rollback(context.Background()); err != nil {
+					if err := trx.Rollback(ctx); err != nil {
 						log.Error().Stack().Err(err).Msg("could not rollback transaction")
 					}
 					log.Warn().Stack().Err(err).Str("User", u).Msg("get portfolio ids failed")
@@ -79,9 +79,9 @@ func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 
 				ids := []string{pIDStr}
 				log.Debug().Str("PortfolioID", pIDStr).Msg("load portfolio from DB")
-				p, err := portfolio.LoadFromDB(ids, u, dataManager)
+				p, err := portfolio.LoadFromDB(ctx, ids, u, dataManager)
 				if err != nil {
-					if err := trx.Rollback(context.Background()); err != nil {
+					if err := trx.Rollback(ctx); err != nil {
 						log.Error().Stack().Err(err).Msg("could not rollback transaction")
 					}
 					log.Panic().Err(err).Strs("IDs", ids).Msg("could not load portfolio from DB")
@@ -89,7 +89,7 @@ func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 				portfolios = append(portfolios, p[0])
 			}
 
-			if err := trx.Commit(context.Background()); err != nil {
+			if err := trx.Commit(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not commit transaction")
 			}
 		}
@@ -97,9 +97,9 @@ func getPortfolios(portfolioID string, userList []string) []*portfolio.Model {
 	return portfolios
 }
 
-func getUsers() []string {
+func getUsers(ctx context.Context) []string {
 	// load portfolio ids from database
-	users, err := database.GetUsers()
+	users, err := database.GetUsers(ctx)
 	if err != nil {
 		log.Panic().Err(err).Msg("could not load users from database")
 	}

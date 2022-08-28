@@ -65,7 +65,7 @@ type Info struct {
 	LongDescription string                       `json:"longDescription"`
 	Source          string                       `json:"source"`
 	Version         string                       `json:"version"`
-	Benchmark       string                       `json:"benchmark"`
+	Benchmark       data.Security                `json:"benchmark"`
 	Arguments       map[string]Argument          `json:"arguments"`
 	Suggested       map[string]map[string]string `json:"suggestedParams"`
 	Schedule        string                       `json:"Schedule"`

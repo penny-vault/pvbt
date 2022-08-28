@@ -32,6 +32,7 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
@@ -58,6 +59,8 @@ var serveCmd = &cobra.Command{
 	Short: "Run the pv-api server",
 	Long:  `Run HTTP server that implements the Penny Vault API`,
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
+
 		if Profile {
 			f, err := os.Create("profile.out")
 			if err != nil {
@@ -95,7 +98,7 @@ var serveCmd = &cobra.Command{
 		log.Info().Msg("initialized logging")
 
 		// setup open telemetry
-		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+		ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 		defer cancel()
 
 		shutdown, err := opentelemetry.Setup()
@@ -110,13 +113,14 @@ var serveCmd = &cobra.Command{
 		log.Info().Msg("initialized open telemetry")
 
 		// setup database
-		if err := database.Connect(); err != nil {
+		if err := database.Connect(ctx); err != nil {
 			log.Fatal().Err(err).Msg("database connection failed")
 		}
 		log.Info().Msg("connected to database")
 
 		// Initialize data framework
 		data.InitializeDataManager()
+		tradecron.Initialize()
 		log.Info().Msg("initialized data framework")
 
 		// Create new Fiber instance

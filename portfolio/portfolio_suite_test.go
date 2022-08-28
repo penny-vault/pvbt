@@ -27,6 +27,7 @@ import (
 
 func TestPortfolio(t *testing.T) {
 	// setup logging
+	//nolint:reassign
 	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
 	log.Logger = log.With().Caller().Logger()
 	log.Logger = log.Output(GinkgoWriter)

@@ -46,8 +46,9 @@ var purgeCmd = &cobra.Command{
 	Use:   "purge",
 	Short: "Delete temporary portfolios older than max_temp_portfolio_age_secs",
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
 		// setup database
-		err := database.Connect()
+		err := database.Connect(ctx)
 		if err != nil {
 			log.Panic().Err(err).Msg("could not connect to database")
 		}
@@ -59,7 +60,7 @@ var purgeCmd = &cobra.Command{
 			userList = append(userList, purgeUser)
 		} else {
 			// get a list of users from the database
-			users, _ := database.GetUsers()
+			users, _ := database.GetUsers(ctx)
 			userList = append(userList, users...)
 		}
 
@@ -68,16 +69,16 @@ var purgeCmd = &cobra.Command{
 
 		for _, u := range userList {
 			subLog := log.With().Str("User", u).Logger()
-			trx, err := database.TrxForUser(u)
+			trx, err := database.TrxForUser(ctx, u)
 			if err != nil {
 				subLog.Error().Stack().Err(err).Msg("could not get database transaction")
 			}
 
 			var cnt int64
-			err = trx.QueryRow(context.Background(), "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
+			err = trx.QueryRow(ctx, "SELECT count(*) FROM portfolios WHERE temporary=true AND created < $1", maxAge).Scan(&cnt)
 			if err != nil {
 				subLog.Error().Stack().Err(err).Msg("could not get expired portfolio count")
-				if err := trx.Rollback(context.Background()); err != nil {
+				if err := trx.Rollback(ctx); err != nil {
 					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 
@@ -86,17 +87,17 @@ var purgeCmd = &cobra.Command{
 
 			subLog.Info().Int64("NumExpiredPortfolios", cnt).Time("MaxAge", maxAge).Msg("number of expired portfolios")
 
-			_, err = trx.Exec(context.Background(), "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
+			_, err = trx.Exec(ctx, "DELETE FROM portfolios WHERE temporary=true AND created < $1", maxAge)
 			if err != nil {
 				subLog.Error().Stack().Err(err).Msg("could not delete portfolios")
-				if err := trx.Rollback(context.Background()); err != nil {
+				if err := trx.Rollback(ctx); err != nil {
 					log.Error().Stack().Err(err).Msg("could not rollback transaction")
 				}
 
 				continue
 			}
 
-			err = trx.Commit(context.Background())
+			err = trx.Commit(ctx)
 			if err != nil {
 				subLog.Error().Stack().Err(err).Msg("could not delete portfolios")
 			}

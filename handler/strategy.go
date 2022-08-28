@@ -59,9 +59,14 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	shortcode := c.Params("shortcode")
 	startDateStr := c.Query("startDate", "1980-01-01")
 	endDateStr := c.Query("endDate", "now")
-	benchmark := c.Query("benchmark", "VFINX")
+	benchmarkStr := c.Query("benchmark", "BBG000BHTMY2")
+	subLog := log.With().Str("Bechmark", benchmarkStr).Str("Shortcode", shortcode).Str("StartDateQueryStr", startDateStr).Str("EndDateQueryStr", endDateStr).Logger()
 
-	subLog := log.With().Str("Shortcode", shortcode).Str("StartDateQueryStr", startDateStr).Str("EndDateQueryStr", endDateStr).Logger()
+	benchmark, err := data.SecurityFromFigi(benchmarkStr)
+	if err != nil {
+		subLog.Error().Err(err).Msg("could not get benchmark Security")
+		return fiber.ErrBadRequest
+	}
 
 	span.SetAttributes(
 		attribute.KeyValue{
@@ -80,7 +85,6 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	var startDate time.Time
 	var endDate time.Time
-	var err error
 
 	tz := common.GetTimezone()
 
@@ -132,7 +136,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 	if c.Query("permanent", "false") == "true" {
 		permanent = true
 	}
-	go b.Save(c.Locals("userID").(string), permanent)
+	go b.Save(ctx, c.Locals("userID").(string), permanent)
 
 	portfolioIDStr := hex.EncodeToString(b.PortfolioModel.Portfolio.ID)
 	serializedPortfolio, err := b.PortfolioModel.Portfolio.MarshalBinary()

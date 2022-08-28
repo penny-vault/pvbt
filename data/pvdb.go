@@ -116,7 +116,7 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		return res, ErrInvalidTimeRange
 	}
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not get transaction when querying trading days")
 		return res, err
@@ -263,7 +263,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 	// ensure securities is a unique set
 	securities = uniqueSecurities(securities)
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		span.RecordError(err)
 		msg := "failed to load eod prices -- could not get a database transaction"
@@ -312,7 +312,6 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 
 	for rows.Next() {
 		err = rows.Scan(&date, &compositeFigi, &close, &adjClose)
-
 		s, err := SecurityFromFigi(compositeFigi)
 		if err != nil {
 			subLog.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security does not exist")
@@ -405,7 +404,7 @@ func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Securi
 	corporateFigiArgs := strings.Join(figiPlaceholders, ", ")
 	sql := fmt.Sprintf("SELECT event_date, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		span.RecordError(err)
 		msg := "failed to get transaction for preloading corporate actions"
@@ -480,7 +479,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 
 	tz := common.GetTimezone()
 
-	trx, err := database.TrxForUser("pvuser")
+	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		span.RecordError(err)
 		msg := "could not get a database transaction"
