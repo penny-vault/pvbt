@@ -138,6 +138,29 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 		return err
 	}
 
+	// include last day if it is a non-trade day
+	log.Debug().Msg("getting last day eod prices of requested range")
+	manager.Frequency = data.FrequencyDaily
+	begin := manager.Begin
+	manager.Begin = manager.End.AddDate(0, 0, -10)
+	final, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, securities...)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting final")
+		return err
+	}
+	manager.Begin = begin
+	manager.Frequency = data.FrequencyMonthly
+
+	nrows := final.NRows()
+	row := final.Row(nrows-1, false, dataframe.SeriesName)
+	dt := row[common.DateIdx].(time.Time)
+	lastRow := paa.prices.Row(paa.prices.NRows()-1, false, dataframe.SeriesName)
+	lastDt := lastRow[common.DateIdx].(time.Time)
+	if !dt.Equal(lastDt) {
+		paa.prices.Append(nil, row)
+	}
+
+
 	return nil
 }
 

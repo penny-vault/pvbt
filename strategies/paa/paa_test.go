@@ -41,7 +41,6 @@ var _ = Describe("Paa", func() {
 		vustx   *data.Security
 		manager *data.Manager
 		strat   *paa.KellersProtectiveAssetAllocation
-		target  *dataframe.DataFrame
 		tz      *time.Location
 	)
 
@@ -97,7 +96,6 @@ var _ = Describe("Paa", func() {
 						"vfinx.csv",
 						"pridx.csv",
 						"vustx.csv",
-						"riskfree.csv",
 					},
 					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC),
 					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
@@ -107,39 +105,50 @@ var _ = Describe("Paa", func() {
 						"vfinx_corporate.csv",
 						"pridx_corporate.csv",
 						"vustx_corporate.csv",
-						"riskfree_corporate.csv",
 					},
 					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
 
-				target, _, err = strat.Compute(context.Background(), manager)
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{
+					"vfinx.csv",
+					"pridx.csv",
+					"vustx.csv",
+				},
+					time.Date(2020, time.December, 22, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.December, 22, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 			})
 
 			It("should not error", func() {
+				_, _, err = strat.Compute(context.Background(), manager)
 				Expect(err).To(BeNil())
 			})
 
 			It("should have length", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				Expect(target.NRows()).To(Equal(373))
 			})
 
 			It("should begin on", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				val := target.Row(0, true, dataframe.SeriesName)
 				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.December, 29, 16, 0, 0, 0, tz)))
 			})
 
 			It("should end on", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
 				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2020, time.December, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should be invested in PRIDX to start", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				val := target.Row(0, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[data.Security]float64)
 				Expect(t[*pridx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in PRIDX to end", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[data.Security]float64)
@@ -147,18 +156,21 @@ var _ = Describe("Paa", func() {
 			})
 
 			It("should be invested in VFINX on 1998-04-30", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				val := target.Row(100, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[data.Security]float64)
 				Expect(t[*vfinx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in PRIDX on 2006-08-31", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				val := target.Row(200, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[data.Security]float64)
 				Expect(t[*pridx]).Should(BeNumerically("~", 1))
 			})
 
 			It("should be invested in VUSTX on 2014-12-31", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
 				val := target.Row(300, true, dataframe.SeriesName)
 				t := val[common.TickerName].(map[data.Security]float64)
 				Expect(t[*vustx]).Should(BeNumerically("~", 1))
