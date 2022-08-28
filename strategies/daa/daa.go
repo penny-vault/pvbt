@@ -107,7 +107,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthend 0 16 * *", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
@@ -144,6 +144,28 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 		return err
 	}
 	daa.prices = prices
+
+	// include last day if it is a non-trade day
+	log.Debug().Msg("getting last day eod prices of requested range")
+	manager.Frequency = data.FrequencyDaily
+	begin := manager.Begin
+	manager.Begin = manager.End.AddDate(0, 0, -10)
+	final, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting final")
+		return ErrCouldNotRetrieveData
+	}
+	manager.Begin = begin
+	manager.Frequency = data.FrequencyMonthly
+
+	nrows := final.NRows()
+	row := final.Row(nrows-1, false, dataframe.SeriesName)
+	dt := row[common.DateIdx].(time.Time)
+	lastRow := daa.prices.Row(daa.prices.NRows()-1, false, dataframe.SeriesName)
+	lastDt := lastRow[common.DateIdx].(time.Time)
+	if !dt.Equal(lastDt) {
+		daa.prices.Append(nil, row)
+	}
 
 	return nil
 }
@@ -278,15 +300,11 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		nextTradeDate, err := daa.schedule.Next(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get next trade date")
-			return
-		}
-		if !lastTradeDate.Equal(nextTradeDate) {
+		if !daa.schedule.IsTradeDay(lastTradeDate) {
 			daa.targetPortfolio.Remove(daa.targetPortfolio.NRows() - 1)
 		}
 
+		nextTradeDate := daa.schedule.Next(lastTradeDate)
 		daa.predictedPortfolio = &strategy.Prediction{
 			TradeDate:     nextTradeDate,
 			Target:        lastRow[common.TickerName].(map[data.Security]float64),

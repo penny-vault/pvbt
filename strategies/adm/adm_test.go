@@ -19,13 +19,13 @@ import (
 	"context"
 	"time"
 
-	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/strategies/adm"
+	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/goccy/go-json"
 	"github.com/jdfergason/dataframe-go"
@@ -70,6 +70,9 @@ var _ = Describe("Adm", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.LoadMarketHolidays()
 	})
 
 	Describe("Compute momentum scores", func() {
@@ -96,16 +99,6 @@ var _ = Describe("Adm", func() {
 						"riskfree_corporate.csv",
 					},
 					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-
-				dbPool.ExpectBegin()
-				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-				dbPool.ExpectQuery("SELECT").WillReturnRows(
-					pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
-						"event_date":  "date",
-						"early_close": "bool",
-						"close_time":  "int",
-					}).Rows())
-				dbPool.ExpectCommit()
 
 				target, _, err = strat.Compute(context.Background(), manager)
 			})

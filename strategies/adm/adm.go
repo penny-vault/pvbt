@@ -73,7 +73,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthend 0 16 * *", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
@@ -299,21 +299,12 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		isTradeDay, err := adm.schedule.IsTradeDay(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not evaluate trade schedule")
-			return nil, nil, err
-		}
+		isTradeDay := adm.schedule.IsTradeDay(lastTradeDate)
 		if !isTradeDay {
 			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
 		}
 
-		nextTradeDate, err := adm.schedule.Next(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get next trade date")
-			return nil, nil, err
-		}
-
+		nextTradeDate := adm.schedule.Next(lastTradeDate)
 		compositeFigi := lastRow[common.TickerName].(string)
 		security, err := data.SecurityFromFigi(compositeFigi)
 		if err != nil {

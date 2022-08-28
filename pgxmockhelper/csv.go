@@ -166,10 +166,22 @@ func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 	return r
 }
 
+func MockHolidays(db pgxmock.PgxConnIface) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT event_date, early_close").WillReturnRows(
+		NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
+			"event_date":  "date",
+			"early_close": "bool",
+			"close_time":  "int",
+		}).Rows())
+	db.ExpectCommit()
+}
+
 func MockAssets(db pgxmock.PgxConnIface) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT ticker, composite_figi, cusip, name FROM assets WHERE active='t'").WillReturnRows(
+	db.ExpectQuery("SELECT ticker, composite_figi FROM assets WHERE active='t'").WillReturnRows(
 		NewCSVRows([]string{"assets.csv"}, map[string]string{}).Rows())
 	db.ExpectCommit()
 }

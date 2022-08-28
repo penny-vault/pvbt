@@ -204,11 +204,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		subLog.Debug().Msg("checking trading days against schedule")
 		endIdx := len(tradeDays) - 1
 		lastDate := tradeDays[endIdx]
-		isTradeDay, err := seek.schedule.IsTradeDay(lastDate)
-		if err != nil {
-			subLog.Error().Err(err).Msg("could not evaluate schedule")
-			return nil, nil, err
-		}
+		isTradeDay := seek.schedule.IsTradeDay(lastDate)
 		if !isTradeDay {
 			tradeDays = tradeDays[:endIdx]
 		}

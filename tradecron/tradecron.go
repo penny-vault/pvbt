@@ -170,74 +170,45 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 // IsTradeDay evaluates the given date against the schedule and returns true if the date falls
 // on a trading day according to the schedule. The time portion of the schedule is ignored when
 // evaluating this function
-func (tc *TradeCron) IsTradeDay(forDate time.Time) (bool, error) {
+func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
 	t1 := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 	t2 := t1.AddDate(0, 0, -1)
 	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 23, 59, 59, 0, tc.marketStatus.tz)
-	next, err := tc.Next(t2)
-	if err != nil {
-		log.Error().Err(err).Msg("could not get next tradeable day")
-		return false, err
-	}
+	next := tc.Next(t2)
 	nextDate := time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
-	return nextDate.Equal(t1), nil
+	return nextDate.Equal(t1)
 }
 
 // Next returns the next tradeable date
-func (tc *TradeCron) Next(forDate time.Time) (time.Time, error) {
+func (tc *TradeCron) Next(forDate time.Time) time.Time {
 	var dt time.Time
-	var err error
 
 	nextDate := tc.Schedule.Next(forDate)
 
 	switch tc.DateFlag {
 	case AtWeekBegin:
-		dt, err = tc.marketStatus.NextFirstTradingDayOfWeek(forDate)
-		if err != nil {
-			return dt, err
-		}
+		dt = tc.marketStatus.NextFirstTradingDayOfWeek(forDate)
 		if nextDate.After(dt) {
 			// bump forward because next date is still after dt
-			dt, err = tc.marketStatus.NextFirstTradingDayOfWeek(nextDate)
-			if err != nil {
-				return dt, err
-			}
+			dt = tc.marketStatus.NextFirstTradingDayOfWeek(nextDate)
 		}
 	case AtWeekEnd:
-		dt, err = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
-		if err != nil {
-			return dt, err
-		}
+		dt = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
 		if nextDate.After(dt) {
 			// bump forward because next date is still after dt
-			dt, err = tc.marketStatus.NextLastTradingDayOfWeek(nextDate)
-			if err != nil {
-				return dt, err
-			}
+			dt = tc.marketStatus.NextLastTradingDayOfWeek(nextDate)
 		}
 	case AtMonthBegin:
-		dt, err = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
-		if err != nil {
-			return dt, err
-		}
+		dt = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
 		if nextDate.After(dt) {
 			// bump forward because next date is still after dt
-			dt, err = tc.marketStatus.NextFirstTradingDayOfMonth(nextDate)
-			if err != nil {
-				return dt, err
-			}
+			dt = tc.marketStatus.NextFirstTradingDayOfMonth(nextDate)
 		}
 	case AtMonthEnd:
-		dt, err = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
-		if err != nil {
-			return dt, err
-		}
+		dt = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
 		if nextDate.After(dt) {
 			// bump forward because next date is still after dt
-			dt, err = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
-			if err != nil {
-				return dt, err
-			}
+			dt = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
 		}
 	default:
 		dt = forDate
@@ -246,11 +217,8 @@ func (tc *TradeCron) Next(forDate time.Time) (time.Time, error) {
 	marketOpen := false
 	for !marketOpen {
 		dt = tc.Schedule.Next(dt)
-		marketOpen, err = tc.marketStatus.IsMarketOpen(dt)
-		if err != nil {
-			return dt, err
-		}
+		marketOpen = tc.marketStatus.IsMarketOpen(dt)
 	}
 
-	return dt, nil
+	return dt
 }
