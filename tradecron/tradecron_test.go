@@ -19,7 +19,6 @@ import (
 	"errors"
 	"time"
 
-	"github.com/jackc/pgconn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
@@ -104,15 +103,8 @@ var _ = Describe("Tradecron", func() {
 
 	DescribeTable("when evaluating next trade day",
 		func(spec string, hours tradecron.MarketHours, given time.Time, expected time.Time) {
-			dbPool.ExpectBegin()
-			dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-			dbPool.ExpectQuery("SELECT").WillReturnRows(
-				pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
-					"event_date":  "date",
-					"early_close": "bool",
-					"close_time":  "int",
-				}).Rows())
-			dbPool.ExpectCommit()
+			pgxmockhelper.MockHolidays(dbPool)
+			tradecron.LoadMarketHolidays()
 
 			cron, err := tradecron.New(spec, hours)
 			Expect(err).To(BeNil())

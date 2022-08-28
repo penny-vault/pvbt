@@ -30,6 +30,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
+	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Momentum", func() {
@@ -71,6 +72,9 @@ var _ = Describe("Momentum", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.Initialize()
 	})
 
 	Describe("Compute momentum indicator", func() {

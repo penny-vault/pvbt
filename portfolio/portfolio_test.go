@@ -31,6 +31,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Portfolio", func() {
@@ -60,6 +61,9 @@ var _ = Describe("Portfolio", func() {
 		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.Initialize()
 
 		dataProxy = data.NewManager()
 	})

@@ -29,9 +29,10 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/strategies/paa"
+	"github.com/penny-vault/pv-api/tradecron"
 )
 
-var _ = Describe("Daa", func() {
+var _ = Describe("Paa", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		err     error
@@ -73,6 +74,9 @@ var _ = Describe("Daa", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.Initialize()
 
 		vfinx, err = data.SecurityFromTicker("VFINX")
 		Expect(err).To(BeNil())
