@@ -28,6 +28,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
+	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -75,26 +76,36 @@ func adjustSearchDates(frequency Frequency, begin, end time.Time) (time.Time, ti
 
 func filterDays(frequency Frequency, res []time.Time) []time.Time {
 	days := make([]time.Time, 0, 252)
-	for idx, xx := range res[:len(res)-1] {
-		next := res[idx+1]
 
-		switch frequency {
-		case FrequencyDaily:
+	var schedule *tradecron.TradeCron
+	var err error
+
+	switch frequency {
+	case FrequencyDaily:
+		schedule, err = tradecron.New("@close * * *", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close * * *").Msg("could not build tradecron schedule")
+		}
+	case FrequencyWeekly:
+		schedule, err = tradecron.New("@close @weekend", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @weekend").Msg("could not build tradecron schedule")
+		}
+	case FrequencyMonthly:
+		schedule, err = tradecron.New("@close @monthend", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthend").Msg("could not build tradecron schedule")
+		}
+	case FrequencyAnnually:
+		schedule, err = tradecron.New("@close @monthend 12 *", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthend 12 *").Msg("could not build tradecron schedule")
+		}
+	}
+
+	for _, xx := range res {
+		if schedule.IsTradeDay(xx) {
 			days = append(days, xx)
-		case FrequencyWeekly:
-			_, week := xx.ISOWeek()
-			_, nextWeek := next.ISOWeek()
-			if week != nextWeek {
-				days = append(days, xx)
-			}
-		case FrequencyMonthly:
-			if xx.Month() != next.Month() {
-				days = append(days, xx)
-			}
-		case FrequencyAnnually:
-			if xx.Year() != next.Year() {
-				days = append(days, xx)
-			}
 		}
 	}
 	return days
@@ -179,8 +190,10 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 	}
 
 	// final filter to actual days
+	beginFull := time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, begin.Location())
+	endFull := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999_999_999, begin.Location())
 	for _, d := range days {
-		if d.Equal(begin) || d.Equal(end) || (d.Before(end) && d.After(begin)) {
+		if (d.Before(endFull) || d.Equal(endFull)) && (d.After(beginFull) || d.Equal(beginFull)) {
 			daysFiltered = append(daysFiltered, d)
 		}
 	}
