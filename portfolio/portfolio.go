@@ -99,7 +99,7 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 	p := Portfolio{
 		ID:           id,
 		Name:         name,
-		Benchmark:    "VFINX",
+		Benchmark:    "BBG000BHTMY2",
 		Transactions: []*Transaction{},
 		StartDate:    startDate,
 	}

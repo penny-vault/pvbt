@@ -695,9 +695,9 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		Withdrawn:      prevMeasurement.TotalWithdrawn,
 	}
 
-	benchmarkSecurity, err := data.SecurityFromTicker(pm.Portfolio.Benchmark)
+	benchmarkSecurity, err := data.SecurityFromFigi(pm.Portfolio.Benchmark)
 	if err != nil {
-		log.Error().Err(err).Msg("could not load benchmark security")
+		log.Error().Err(err).Str("Benchmark", pm.Portfolio.Benchmark).Msg("could not load benchmark security")
 		return err
 	}
 
