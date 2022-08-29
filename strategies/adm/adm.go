@@ -105,14 +105,42 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 		return ErrCouldNotRetrieveData
 	}
 
+	prices, err = dfextras.DropNA(ctx, prices)
+	if err != nil {
+		return err
+	}
+
+	// include last day if it is a non-trade day
+	log.Debug().Msg("getting last day eod prices of requested range")
+	manager.Frequency = data.FrequencyDaily
+	begin := manager.Begin
+	manager.Begin = manager.End.AddDate(0, 0, -10)
+	final, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting final")
+		return err
+	}
+	manager.Begin = begin
+	manager.Frequency = data.FrequencyMonthly
+
+	final, err = dfextras.DropNA(ctx, final)
+	if err != nil {
+		return err
+	}
+
+	nrows := final.NRows()
+	row := final.Row(nrows-1, false, dataframe.SeriesName)
+	dt := row[common.DateIdx].(time.Time)
+	lastRow := prices.Row(prices.NRows()-1, false, dataframe.SeriesName)
+	lastDt := lastRow[common.DateIdx].(time.Time)
+	if !dt.Equal(lastDt) {
+		prices.Append(nil, row)
+	}
+
 	colNames := make([]string, len(adm.inTickers)+1)
 	colNames[0] = adm.outTicker.CompositeFigi
 	for ii, t := range adm.inTickers {
 		colNames[ii+1] = t.CompositeFigi
-	}
-	prices, err = dfextras.DropNA(ctx, prices)
-	if err != nil {
-		return err
 	}
 
 	eod, riskFreeRate, err := dfextras.Split(ctx, prices, colNames...)

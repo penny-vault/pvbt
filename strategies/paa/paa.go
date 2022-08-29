@@ -151,6 +151,11 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 	manager.Begin = begin
 	manager.Frequency = data.FrequencyMonthly
 
+	final, err = dfextras.DropNA(ctx, final)
+	if err != nil {
+		return err
+	}
+
 	nrows := final.NRows()
 	row := final.Row(nrows-1, false, dataframe.SeriesName)
 	dt := row[common.DateIdx].(time.Time)

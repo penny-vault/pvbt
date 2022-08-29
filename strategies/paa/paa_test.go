@@ -234,7 +234,7 @@ var _ = Describe("Paa", func() {
 				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2020, time.April, 30, 16, 0, 0, 0, tz)))
 			})
 
-			It("should be invested in PRIDX to end", func() {
+			It("should be invested in VUSTX to end", func() {
 				target, _, _ := strat.Compute(context.Background(), manager)
 				n := target.NRows()
 				val := target.Row(n-1, true, dataframe.SeriesName)
