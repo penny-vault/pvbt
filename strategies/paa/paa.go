@@ -160,7 +160,6 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 		paa.prices.Append(nil, row)
 	}
 
-
 	return nil
 }
 
