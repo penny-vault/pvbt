@@ -3,13 +3,13 @@ shortcode = "mdep"
 description = "A strategy that invests directly in stocks based on earnings predictions"
 source = "None"
 version = "1.0.0"
-benchmark = "VFINX"
+benchmark = { compositeFigi = "BBG000BHTMY2", ticker = "VFINX", name = "Vanguard 500 Index Fund Investor Shares" }
 
 [arguments.outTicker]
 name = "Out-of-Market Ticker"
 description = "Ticker to use when sentiment model score is below 0"
-typecode = "string"
-default = "VUSTX"
+typecode = "stock"
+default = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [arguments.numHoldings]
 name = "Number of Holdings"

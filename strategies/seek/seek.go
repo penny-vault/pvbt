@@ -28,7 +28,6 @@ package seek
 import (
 	"context"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -53,16 +52,16 @@ var (
 
 type SeekingAlphaQuant struct {
 	NumHoldings   int
-	OutTicker     string
+	OutSecurity   *data.Security
 	RiskIndicator string
 	Period        data.Frequency
 	schedule      *tradecron.TradeCron
 }
 
 type Period struct {
-	Asset string
-	Begin time.Time
-	End   time.Time
+	Security *data.Security
+	Begin    time.Time
+	End      time.Time
 }
 
 type ByStartDur []*Period
@@ -81,7 +80,7 @@ func (a ByStartDur) Less(i, j int) bool {
 
 // New Construct a new Momentum Driven Earnings Prediction (seek) strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	numHoldings := 100
+	numHoldings := 50
 	if err := json.Unmarshal(args["numHoldings"], &numHoldings); err != nil {
 		return nil, err
 	}
@@ -89,11 +88,10 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, ErrHoldings
 	}
 
-	var outTicker string
-	if err := json.Unmarshal(args["outTicker"], &outTicker); err != nil {
+	var outSecurity *data.Security
+	if err := json.Unmarshal(args["outTicker"], &outSecurity); err != nil {
 		return nil, err
 	}
-	outTicker = strings.ToUpper(outTicker)
 
 	period := "Weekly"
 	if err := json.Unmarshal(args["period"], &period); err != nil {
@@ -129,7 +127,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 	var seek strategy.Strategy = &SeekingAlphaQuant{
 		NumHoldings:   numHoldings,
-		OutTicker:     outTicker,
+		OutSecurity:   outSecurity,
 		Period:        data.Frequency(period),
 		RiskIndicator: riskIndicator,
 		schedule:      cronspec,
@@ -161,7 +159,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	database.LogOpenTransactions()
 
 	// Get database transaction
-	db, err := database.TrxForUser("pvuser")
+	db, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not start database transaction")
 		return nil, nil, err
@@ -206,11 +204,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 		subLog.Debug().Msg("checking trading days against schedule")
 		endIdx := len(tradeDays) - 1
 		lastDate := tradeDays[endIdx]
-		isTradeDay, err := seek.schedule.IsTradeDay(lastDate)
-		if err != nil {
-			subLog.Error().Err(err).Msg("could not evaluate schedule")
-			return nil, nil, err
-		}
+		isTradeDay := seek.schedule.IsTradeDay(lastDate)
 		if !isTradeDay {
 			tradeDays = tradeDays[:endIdx]
 		}
@@ -255,7 +249,6 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 }
 
 func (seek *SeekingAlphaQuant) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
-	var err error
 	var indicator *dataframe.DataFrame
 
 	subLog := log.With().Str("Strategy", "seek").Logger()
@@ -263,10 +256,15 @@ func (seek *SeekingAlphaQuant) getRiskOnOffIndicator(ctx context.Context, manage
 	switch seek.RiskIndicator {
 	case "Momentum":
 		subLog.Debug().Msg("get risk on/off indicator")
+		securities, err := data.SecurityFromTickerList([]string{"VFINX", "PRIDX"})
+		if err != nil {
+			log.Error().Err(err).Strs("Securities", []string{"VFINX", "PRIDX"}).Msg("securities not found")
+			return nil, err
+		}
 		momentum := &indicators.Momentum{
-			Assets:  []string{"VFINX", "PRIDX"},
-			Periods: []int{1, 3, 6},
-			Manager: manager,
+			Securities: securities,
+			Periods:    []int{1, 3, 6},
+			Manager:    manager,
 		}
 		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
 		if err != nil {
@@ -289,20 +287,25 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	subLog := log.With().Str("Strategy", "seek").Logger()
 	subLog.Debug().Msg("calculating predicted portfolio")
 
-	var ticker string
-	predictedTarget := make(map[string]float64)
+	var compositeFigi string
+	predictedTarget := make(map[data.Security]float64)
 	lastDateIdx := len(tradeDays) - 1
-	rows, err := db.Query(ctx, "SELECT ticker FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
+	rows, err := db.Query(ctx, "SELECT composite_figi FROM seeking_alpha WHERE quant_rating=1 AND event_date=$1 AND market_cap_mil >= 500 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", tradeDays[lastDateIdx], seek.NumHoldings)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not query database for SEEK predicted portfolio")
 		return nil, err
 	}
 	for rows.Next() {
-		if err := rows.Scan(&ticker); err != nil {
+		if err := rows.Scan(&compositeFigi); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not scan rows")
 			return nil, err
 		}
-		predictedTarget[ticker] = 1.0 / float64(seek.NumHoldings)
+		security, err := data.SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security not found")
+			return nil, err
+		}
+		predictedTarget[*security] = 1.0 / float64(seek.NumHoldings)
 	}
 
 	predictedPortfolio := &strategy.Prediction{
@@ -314,24 +317,30 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	return predictedPortfolio, nil
 }
 
-func getSeekAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[string]float64, error) {
+func getSeekAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[data.Security]float64, error) {
 	subLog := log.With().Str("Strategy", "seek").Logger()
-	targetMap := make(map[string]float64)
+	targetMap := make(map[data.Security]float64)
 	cnt := 0
-	rows, err := db.Query(ctx, "SELECT ticker FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, numAssets)
+	rows, err := db.Query(ctx, "SELECT composite_figi FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, numAssets)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not query database for portfolio")
 		return nil, err
 	}
 	for rows.Next() {
 		cnt++
-		var ticker string
-		err := rows.Scan(&ticker)
+		var compositeFigi string
+		err := rows.Scan(&compositeFigi)
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not scan result")
 			return nil, err
 		}
-		targetMap[ticker] = 0.0
+		security, err := data.SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security not found")
+			return nil, err
+		}
+
+		targetMap[*security] = 0.0
 	}
 
 	qty := 1.0 / float64(cnt)
@@ -359,7 +368,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 
 	for _, day := range tradeDays {
 		var err error
-		var targetMap map[string]float64
+		var targetMap map[data.Security]float64
 		var riskDate time.Time
 		var ok bool
 
@@ -386,12 +395,12 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 				return nil, err
 			}
 		} else {
-			targetMap = make(map[string]float64)
+			targetMap = make(map[data.Security]float64)
 		}
 
 		if len(targetMap) == 0 {
 			// nothing to invest in - use cash like asset
-			targetMap[seek.OutTicker] = 1.0
+			targetMap[*seek.OutSecurity] = 1.0
 		}
 
 		targetDates = append(targetDates, day)
@@ -413,12 +422,12 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 	subLog := log.With().Str("Strategy", "seek").Logger()
 	subLog.Debug().Msg("pre-populate data cache")
 
-	tickerSet := make(map[string]bool, len(covered))
+	tickerSet := make(map[data.Security]bool, len(covered))
 
 	begin := time.Now()
 	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 	for _, v := range covered {
-		tickerSet[v.Asset] = true
+		tickerSet[*v.Security] = true
 		if begin.After(v.Begin) {
 			begin = v.Begin
 		}
@@ -427,10 +436,13 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 		}
 	}
 
-	tickerList := make([]string, len(tickerSet))
+	tickerList := make([]*data.Security, len(tickerSet))
 	ii := 0
 	for k := range tickerSet {
-		tickerList[ii] = k
+		tickerList[ii] = &data.Security{
+			CompositeFigi: k.CompositeFigi,
+			Ticker:        k.Ticker,
+		}
 		ii++
 	}
 
@@ -439,7 +451,7 @@ func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.
 
 	subLog.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
 	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
-		subLog.Error().Stack().Err(err).Strs("Assets", tickerList).Msg("could not get adjusted close dataframe")
+		subLog.Error().Stack().Err(err).Msg("could not get adjusted close dataframe")
 	}
 }
 
@@ -452,16 +464,15 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 	subLog.Info().Msg("find covered periods in portfolio plan")
 
 	coveredPeriods := make([]*Period, 0, target.NRows())
-	activeAssets := make(map[string]*Period)
-	var pendingClose map[string]*Period
+	activeAssets := make(map[data.Security]*Period)
+	var pendingClose map[data.Security]*Period
 
 	tickerSeriesIdx := target.MustNameToColumn(common.TickerName)
 
 	// check series type
-	isSingleAsset := false
 	series := target.Series[tickerSeriesIdx]
 	if series.Type() == "string" {
-		isSingleAsset = true
+		log.Error().Msg("target series is single asset; expected multi-asset")
 	}
 
 	// Create a map of asset time periods
@@ -475,41 +486,24 @@ func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Per
 		date := val[common.DateIdx].(time.Time)
 
 		pendingClose = activeAssets
-		activeAssets = make(map[string]*Period)
+		activeAssets = make(map[data.Security]*Period)
 
-		if isSingleAsset {
-			ticker := val[common.TickerName].(string)
-			period, ok := pendingClose[ticker]
+		// it's multi-asset which means a map of tickers
+		assetMap := val[common.TickerName].(map[data.Security]float64)
+		for security := range assetMap {
+			period, ok := pendingClose[security]
 			if !ok {
 				period = &Period{
-					Asset: ticker,
-					Begin: date,
+					Security: &security,
+					Begin:    date,
 				}
 			} else {
-				delete(pendingClose, ticker)
+				delete(pendingClose, security)
 			}
 			if period.End.Before(date) {
-				period.End = date.AddDate(0, 0, 7)
+				period.End = date.AddDate(0, 0, 8)
 			}
-			activeAssets[ticker] = period
-		} else {
-			// it's multi-asset which means a map of tickers
-			assetMap := val[common.TickerName].(map[string]float64)
-			for ticker := range assetMap {
-				period, ok := pendingClose[ticker]
-				if !ok {
-					period = &Period{
-						Asset: ticker,
-						Begin: date,
-					}
-				} else {
-					delete(pendingClose, ticker)
-				}
-				if period.End.Before(date) {
-					period.End = date.AddDate(0, 0, 8)
-				}
-				activeAssets[ticker] = period
-			}
+			activeAssets[security] = period
 		}
 
 		// any assets that remain in pending close should be added to covered periods

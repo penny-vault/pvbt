@@ -16,11 +16,13 @@
 package portfolio
 
 import (
+	"context"
 	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
@@ -41,7 +43,7 @@ const (
 type Notification struct {
 	ForDate      time.Time
 	ForFrequency NotificationFrequency
-	Holdings     map[string]float64
+	Holdings     map[data.Security]float64
 	Portfolio    *Portfolio
 	PeriodReturn float64
 	YTDReturn    float64
@@ -73,10 +75,7 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 		if err != nil {
 			log.Error().Err(err).Time("forDate", forDate).Msg("daily notifications is specified but could not create tradecron instance")
 		}
-		isTradeDay, err := tradeCron.IsTradeDay(forDate)
-		if err != nil {
-			log.Error().Err(err).Time("forDate", forDate).Msg("daily notifications is specified but could not evaluate if forDate is a trading day")
-		}
+		isTradeDay := tradeCron.IsTradeDay(forDate)
 		if isTradeDay {
 			frequencies = append(frequencies, NotifyDaily)
 			notificationNames = append(notificationNames, "Daily")
@@ -88,10 +87,7 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 		if err != nil {
 			log.Error().Err(err).Time("forDate", forDate).Msg("weekly notifications is specified but could not create tradecron instance")
 		}
-		isTradeDay, err := tradeCron.IsTradeDay(forDate)
-		if err != nil {
-			log.Error().Err(err).Time("forDate", forDate).Msg("weekly notifications is specified but could not evaluate if forDate is a trading day")
-		}
+		isTradeDay := tradeCron.IsTradeDay(forDate)
 		if isTradeDay {
 			frequencies = append(frequencies, NotifyWeekly)
 			notificationNames = append(notificationNames, "Weekly")
@@ -103,10 +99,7 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 		if err != nil {
 			log.Error().Err(err).Time("forDate", forDate).Msg("monthly notifications is specified but could not create tradecron instance")
 		}
-		isTradeDay, err := tradeCron.IsTradeDay(forDate)
-		if err != nil {
-			log.Error().Err(err).Time("forDate", forDate).Msg("monthly notifications is specified but could not evaluate if forDate is a trading day")
-		}
+		isTradeDay := tradeCron.IsTradeDay(forDate)
 		if isTradeDay {
 			frequencies = append(frequencies, NotifyMonthly)
 			notificationNames = append(notificationNames, "Monthly")
@@ -118,10 +111,7 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 		if err != nil {
 			log.Error().Err(err).Time("forDate", forDate).Msg("annually notifications is specified but could not create tradecron instance")
 		}
-		isTradeDay, err := tradeCron.IsTradeDay(forDate)
-		if err != nil {
-			log.Error().Err(err).Time("forDate", forDate).Msg("annually notifications is specified but could not evaluate if forDate is a trading day")
-		}
+		isTradeDay := tradeCron.IsTradeDay(forDate)
 		if isTradeDay {
 			frequencies = append(frequencies, NotifyAnnually)
 			notificationNames = append(notificationNames, "Annually")
@@ -129,18 +119,17 @@ func (pm *Model) RequestedNotificationsForDate(forDate time.Time) []Notification
 	}
 
 	log.Debug().Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Strs("Notifications", notificationNames).Msg("enabled notifications")
-
 	return frequencies
 }
 
-func (pm *Model) NotificationsForDate(forDate time.Time, perf *Performance) []*Notification {
+func (pm *Model) NotificationsForDate(ctx context.Context, forDate time.Time, perf *Performance) []*Notification {
 	// get notification frequencies for date
 	frequencies := pm.RequestedNotificationsForDate(forDate)
 	notifications := make([]*Notification, 0, len(frequencies))
 
 	// process for each frequency
 	for _, freq := range frequencies {
-		measurement, err := LoadMeasurementFromDB(pm.Portfolio.ID, pm.Portfolio.UserID, forDate)
+		measurement, err := LoadMeasurementFromDB(ctx, pm.Portfolio.ID, pm.Portfolio.UserID, forDate)
 		if err != nil {
 			log.Error().Err(err).Str("NotificationFrequency", freq.String()).Msg("could not retrieve measurement for portfolio")
 			continue
@@ -203,10 +192,10 @@ func (n *Notification) SendEmail(userFullName string, emailAddress string) error
 	return nil
 }
 
-func holdingsString(h map[string]float64) string {
+func holdingsString(h map[data.Security]float64) string {
 	assets := make([]string, 0, len(h))
 	for k := range h {
-		assets = append(assets, k)
+		assets = append(assets, k.Ticker)
 	}
 
 	return strings.Join(assets, ", ")

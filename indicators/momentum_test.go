@@ -30,6 +30,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
+	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Momentum", func() {
@@ -47,7 +48,13 @@ var _ = Describe("Momentum", func() {
 		manager = data.NewManager()
 
 		momentum = &indicators.Momentum{
-			Assets:  []string{"VFINX", "PRIDX"},
+			Securities: []*data.Security{{
+				Ticker:        "VFINX",
+				CompositeFigi: "BBG000BHTMY2",
+			}, {
+				Ticker:        "PRIDX",
+				CompositeFigi: "BBG000BBVR08",
+			}},
 			Periods: []int{1, 3, 6},
 			Manager: manager,
 		}
@@ -57,6 +64,7 @@ var _ = Describe("Momentum", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
@@ -64,6 +72,9 @@ var _ = Describe("Momentum", func() {
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.Initialize()
 	})
 
 	Describe("Compute momentum indicator", func() {

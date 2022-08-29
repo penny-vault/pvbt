@@ -26,6 +26,7 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
+	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
@@ -41,14 +42,16 @@ var backtestCmd = &cobra.Command{
 	Args:       cobra.MinimumNArgs(2),
 	ArgAliases: []string{"StrategyShortcode", "StrategyArguments"},
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
 		// setup database
-		err := database.Connect()
+		err := database.Connect(ctx)
 		if err != nil {
 			log.Panic().Err(err).Msg("could not connect to database")
 		}
 
 		// Initialize data framework
 		data.InitializeDataManager()
+		tradecron.Initialize()
 		log.Info().Msg("initialized data framework")
 
 		// initialize strategies
@@ -71,7 +74,7 @@ var backtestCmd = &cobra.Command{
 			return
 		}
 
-		target, predicted, err := strategy.Compute(context.Background(), dataManager)
+		target, predicted, err := strategy.Compute(ctx, dataManager)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Could not compute strategy positions")
 		}
@@ -91,13 +94,13 @@ var backtestCmd = &cobra.Command{
 
 		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000, dataManager)
 		fmt.Println("Building portfolio...")
-		if err := pm.TargetPortfolio(context.Background(), target); err != nil {
+		if err := pm.TargetPortfolio(ctx, target); err != nil {
 			log.Fatal().Stack().Err(err).Msg("could not invest portfolio")
 		}
 
 		fmt.Println("Computing performance metrics...")
 		perf := portfolio.NewPerformance(pm.Portfolio)
-		if err := perf.CalculateThrough(context.Background(), pm, time.Now()); err != nil {
+		if err := perf.CalculateThrough(ctx, pm, time.Now()); err != nil {
 			log.Fatal().Err(err).Msg("could not calculate portfolio performance")
 		}
 

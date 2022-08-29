@@ -42,7 +42,7 @@ type Backtest struct {
 	Performance    *portfolio.Performance
 }
 
-func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark string, startDate time.Time, endDate time.Time, manager *data.Manager) (*Backtest, error) {
+func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark *data.Security, startDate time.Time, endDate time.Time, manager *data.Manager) (*Backtest, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "backtest.New")
 	defer span.End()
 
@@ -65,13 +65,13 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	}
 
 	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
-	pm.Portfolio.Benchmark = benchmark
+	pm.Portfolio.Benchmark = benchmark.CompositeFigi
 
 	manager.Begin = startDate
 	manager.End = endDate
 
 	pm.Portfolio.StrategyShortcode = shortcode
-	paramsJSON, err := json.Marshal(params)
+	paramsJSON, err := json.MarshalContext(ctx, params)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not marshal strategy params")
@@ -109,27 +109,27 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 }
 
 // Save the backtest to the Database
-func (b *Backtest) Save(userID string, permanent bool) {
+func (b *Backtest) Save(ctx context.Context, userID string, permanent bool) {
 	start := time.Now()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("unable to get database transaction for user")
 		return
 	}
 
-	err = b.PortfolioModel.SaveWithTransaction(trx, userID, permanent)
+	err = b.PortfolioModel.SaveWithTransaction(ctx, trx, userID, permanent)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save portfolio")
 		return
 	}
 
-	err = b.Performance.SaveWithTransaction(trx, userID)
+	err = b.Performance.SaveWithTransaction(ctx, trx, userID)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not save performance measurement")
 		return
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(b.PortfolioModel.Portfolio.ID)).Msg("could not commit database transaction")
 		return

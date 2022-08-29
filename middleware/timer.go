@@ -13,25 +13,29 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package portfolio_test
+package middleware
 
 import (
-	"testing"
+	"fmt"
+	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
-	"github.com/rs/zerolog/pkgerrors"
+	"github.com/gofiber/fiber/v2"
 )
 
-func TestPortfolio(t *testing.T) {
-	// setup logging
-	//nolint:reassign
-	zerolog.ErrorStackMarshaler = pkgerrors.MarshalStack
-	log.Logger = log.With().Caller().Logger()
-	log.Logger = log.Output(GinkgoWriter)
-
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Portfolio Suite")
+// Timer will measure how long it takes before a response is returned
+func Timer() func(*fiber.Ctx) error {
+	return func(c *fiber.Ctx) error {
+		// start timer
+		start := time.Now()
+		// next routes
+		err := c.Next()
+		// stop timer
+		stop := time.Now()
+		// follows server-timing spec
+		// https://developer.mozilla.org/zh-CN/docs/Web/HTTP/Headers/Server-Timing
+		c.Append("Server-Timing",
+			fmt.Sprintf("app;dur=%v", stop.Sub(start).String()),
+		)
+		return err
+	}
 }

@@ -170,6 +170,7 @@ func (pr *PortfolioResponse) Sanitize() {
 }
 
 func CreatePortfolio(c *fiber.Ctx) error {
+	ctx := context.Background()
 	userID := c.Locals("userID").(string)
 	portfolioID := uuid.New()
 
@@ -190,15 +191,15 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	}
 
 	portfolioSQL := fmt.Sprintf(`INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"%s": 10000}')`, data.CashAsset)
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
-	_, err = trx.Exec(context.Background(), portfolioSQL, portfolioID, portfolioParams.Name, portfolioParams.Strategy, jsonArgs, portfolioParams.BenchmarkTicker, time.Unix(portfolioParams.StartDate, 0), userID)
+	_, err = trx.Exec(ctx, portfolioSQL, portfolioID, portfolioParams.Name, portfolioParams.Strategy, jsonArgs, portfolioParams.BenchmarkTicker, time.Unix(portfolioParams.StartDate, 0), userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not save new portfolio")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -206,17 +207,17 @@ func CreatePortfolio(c *fiber.Ctx) error {
 	}
 
 	depositTransactionSQL := `INSERT INTO portfolio_transactions ("portfolio_id", "event_date", "num_shares", "price_per_share", "source", "ticker", "total_value", "transaction_type", "user_id") VALUES ($1, $2, 10000, 1, 'PV', '$CASH', 10000, 'DEPOSIT', $3)`
-	_, err = trx.Exec(context.Background(), depositTransactionSQL, portfolioID, time.Unix(portfolioParams.StartDate, 0), userID)
+	_, err = trx.Exec(ctx, depositTransactionSQL, portfolioID, time.Unix(portfolioParams.StartDate, 0), userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not save new portfolio transaction")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return fiber.ErrNotFound
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
 
@@ -234,22 +235,23 @@ func CreatePortfolio(c *fiber.Ctx) error {
 // @Produce json
 // @Param id path string true "id of porfolio to retrieve"
 func GetPortfolio(c *fiber.Ctx) error {
+	ctx := context.Background()
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID).Str("UserID", userID).Logger()
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
-	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
+	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
 	p := NewPortfolioResponse()
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not scan row from db into Performance struct")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -258,7 +260,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 
 	p.Sanitize()
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
 
@@ -266,6 +268,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 }
 
 func GetPortfolioPerformance(c *fiber.Ctx) error {
+	ctx := context.Background()
 	portfolioIDStr := c.Params("id")
 	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("Endpoint", "GetPortfolioPerformance").Logger()
 	portfolioID, err := uuid.Parse(portfolioIDStr)
@@ -276,7 +279,7 @@ func GetPortfolioPerformance(c *fiber.Ctx) error {
 
 	userID := c.Locals("userID").(string)
 
-	p, err := portfolio.LoadPerformanceFromDB(portfolioID, userID)
+	p, err := portfolio.LoadPerformanceFromDB(ctx, portfolioID, userID)
 	if err != nil {
 		return err
 	}
@@ -388,6 +391,7 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 
 // ListPortfolios list all portfolios for logged in user
 func ListPortfolios(c *fiber.Ctx) error {
+	ctx := context.Background()
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("UserID", userID).Str("Endpoint", "ListPortfolios").Logger()
 
@@ -416,16 +420,16 @@ func ListPortfolios(c *fiber.Ctx) error {
 		extract(epoch from created)::int as created,
 		extract(epoch from lastchanged)::int as lastchanged
 	FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 
-	rows, err := trx.Query(context.Background(), portfolioSQL, userID)
+	rows, err := trx.Query(ctx, portfolioSQL, userID)
 	if err != nil {
-		subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("datdabase query failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("database query failed")
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -471,14 +475,14 @@ func ListPortfolios(c *fiber.Ctx) error {
 	err = rows.Err()
 	if err != nil {
 		subLog.Warn().Stack().Str("Query", portfolioSQL).Msg("ListPortfolio failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return fiber.ErrInternalServerError
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
 
@@ -488,6 +492,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 // UpdatePortfolio loads the portfolio from the database and updates it with the values passed
 // via the PATCH command
 func UpdatePortfolio(c *fiber.Ctx) error {
+	ctx := context.Background()
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "UpdatePortfolio").Logger()
@@ -498,19 +503,19 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 
 	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
-	row := trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID)
+	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
 	p := NewPortfolioResponse()
 	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("select portfolio info failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -528,10 +533,10 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	}
 
 	updateSQL := `UPDATE portfolios SET name=$1, notifications=$2 WHERE id=$3 AND user_id=$4`
-	_, err = trx.Exec(context.Background(), updateSQL, params.Name, params.Notifications, portfolioID, userID)
+	_, err = trx.Exec(ctx, updateSQL, params.Name, params.Notifications, portfolioID, userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", updateSQL).Msg("update portfolio settings failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -539,11 +544,11 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 	}
 
 	p = NewPortfolioResponse()
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).
+	err = trx.QueryRow(ctx, portfolioSQL, portfolioID, userID).
 		Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Bytes("Body", c.Body()).Msg("sacn portfolio statistics failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -552,7 +557,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	p.Sanitize()
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
 	return c.JSON(p)
@@ -560,11 +565,12 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 // DeletePortfolio delete portfolio
 func DeletePortfolio(c *fiber.Ctx) error {
+	ctx := context.Background()
 	portfolioID := c.Params("id")
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "DeletePortfolio").Logger()
 
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Msg("could not get database transaction")
 		return fiber.ErrServiceUnavailable

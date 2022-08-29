@@ -128,6 +128,7 @@ func BuildQuery(from string, fields []string, safeFields []string, where map[str
 }
 
 func (f *Database) GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error) {
+	ctx := context.Background()
 	where := make(map[string]string)
 	fields := []string{"event_date", field1, field2}
 
@@ -139,8 +140,8 @@ func (f *Database) GetMeasurements(field1 string, field2 string, since time.Time
 		return nil, err
 	}
 
-	trx, _ := database.TrxForUser(f.UserID)
-	rows, err := trx.Query(context.Background(), sql, args...)
+	trx, _ := database.TrxForUser(ctx, f.UserID)
+	rows, err := trx.Query(ctx, sql, args...)
 	if err != nil {
 		log.Warn().Stack().Err(err).Str("Query", sql).Msg("portfolio_measurements query failed")
 		return nil, err
@@ -167,6 +168,7 @@ func (f *Database) GetMeasurements(field1 string, field2 string, since time.Time
 }
 
 func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
+	ctx := context.Background()
 	where := make(map[string]string)
 
 	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
@@ -197,8 +199,8 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	}
 
-	trx, _ := database.TrxForUser(f.UserID)
-	rows, err := trx.Query(context.Background(), querySQL, args...)
+	trx, _ := database.TrxForUser(ctx, f.UserID)
+	rows, err := trx.Query(ctx, querySQL, args...)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("get measurements database query failed")
 		return nil, err
@@ -272,6 +274,7 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 }
 
 func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
+	ctx := context.Background()
 	subLog := log.With().Time("Since", since).Logger()
 	where := make(map[string]string)
 	tz := common.GetTimezone()
@@ -287,8 +290,8 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 		return nil, err
 	}
 
-	trx, _ := database.TrxForUser(f.UserID)
-	rows, err := trx.Query(context.Background(), sqlQuery, args...)
+	trx, _ := database.TrxForUser(ctx, f.UserID)
+	rows, err := trx.Query(ctx, sqlQuery, args...)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("portfolio_transactions query failed")
 		return nil, err
@@ -327,7 +330,7 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 
 		if err != nil {
 			subLog.Error().Stack().Err(err).Msg("error scanning transaction")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return nil, err
@@ -352,7 +355,7 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 
 	data, err := h.MarshalBinary()
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to database")
 	}
 

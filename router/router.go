@@ -34,7 +34,7 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksURL string) {
 	api.Get("/activity", middleware.PVAuth(jwks, jwksURL), handler.GetAllActivity)
 
 	// Benchmark
-	api.Get("/benchmark/:ticker", middleware.PVAuth(jwks, jwksURL), handler.Benchmark)
+	api.Get("/benchmark/:compositeFigi", middleware.PVAuth(jwks, jwksURL), handler.Benchmark)
 
 	// Portfolio
 	portfolio := api.Group("/portfolio")
@@ -48,6 +48,10 @@ func SetupRoutes(app *fiber.App, jwks *jwk.AutoRefresh, jwksURL string) {
 	portfolio.Get("/:id/measurements", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioMeasurements)
 	portfolio.Get("/:id/performance", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioPerformance)
 	portfolio.Get("/:id/transactions", middleware.PVAuth(jwks, jwksURL), handler.GetPortfolioTransactions)
+
+	// Security
+	security := api.Group("/security")
+	security.Get("/", middleware.PVAuth(jwks, jwksURL), handler.LookupSecurity)
 
 	// Strategy
 	strategy := api.Group("/strategy")

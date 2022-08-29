@@ -51,7 +51,7 @@ const (
 var pool PgxIface
 var openTransactions map[string]string
 
-func createUser(userID string) error {
+func createUser(ctx context.Context, userID string) error {
 	if userID == "" {
 		log.Error().Stack().Msg("userID cannot be an empty string")
 		return ErrEmptyUserID
@@ -60,17 +60,17 @@ func createUser(userID string) error {
 	subLog := log.With().Str("UserID", userID).Logger()
 	subLog.Info().Msg("creating new role")
 
-	trx, err := pool.Begin(context.Background())
+	trx, err := pool.Begin(ctx)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not create new transaction")
 		return err
 	}
 
 	// Make sure the current role is pvapi
-	_, err = trx.Exec(context.Background(), "SET ROLE pvapi")
+	_, err = trx.Exec(ctx, "SET ROLE pvapi")
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not switch to pvapi role")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return err
@@ -81,9 +81,9 @@ func createUser(userID string) error {
 	// select, insert, update, and delete queries
 	ident := pgx.Identifier{userID}
 	sql := fmt.Sprintf("CREATE ROLE %s WITH nologin IN ROLE pvuser;", ident.Sanitize())
-	_, err = trx.Exec(context.Background(), sql)
+	_, err = trx.Exec(ctx, sql)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
 		subLog.Error().Stack().Err(err).Str("Query", sql).Msg("failed to create role")
@@ -94,18 +94,18 @@ func createUser(userID string) error {
 	// NOTE: We have to do our own sanitization because postgresql can only do sanitization on
 	// select, insert, update, and delete queries
 	sql = fmt.Sprintf("GRANT %s TO pvapi;", ident.Sanitize())
-	_, err = trx.Exec(context.Background(), sql)
+	_, err = trx.Exec(ctx, sql)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
 		subLog.Error().Stack().Err(err).Str("Query", sql).Msg("failed to grant privileges to role")
 		return err
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Str("Query", sql).Msg("could not rollback transaction")
 		}
 		subLog.Error().Stack().Err(err).Msg("failed to commit changes")
@@ -122,14 +122,14 @@ func SetPool(myPool PgxIface) {
 	pool = myPool
 }
 
-func Connect() error {
+func Connect(ctx context.Context) error {
 	var err error
-	myPool, err := pgxpool.Connect(context.Background(), viper.GetString("database.url"))
+	myPool, err := pgxpool.Connect(ctx, viper.GetString("database.url"))
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not connect to pool")
 		return err
 	}
-	if err = myPool.Ping(context.Background()); err != nil {
+	if err = myPool.Ping(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not ping database server")
 		return err
 	}
@@ -147,8 +147,8 @@ func LogOpenTransactions() {
 // TrxForUser creates a transaction with the appropriate user set
 // NOTE: the default use is pvapi which only has enough privileges to create new roles and switch to them.
 // Any kind of real work must be done with a user role which limits access to only that user
-func TrxForUser(userID string) (pgx.Tx, error) {
-	trx, err := pool.Begin(context.Background())
+func TrxForUser(ctx context.Context, userID string) (pgx.Tx, error) {
+	trx, err := pool.Begin(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -170,28 +170,28 @@ func TrxForUser(userID string) (pgx.Tx, error) {
 	// set user
 	ident := pgx.Identifier{userID}
 	sql := fmt.Sprintf("SET ROLE %s", ident.Sanitize())
-	_, err = wrappedTrx.Exec(context.Background(), sql)
+	_, err = wrappedTrx.Exec(ctx, sql)
 	if err != nil {
 		// user doesn't exist -- create it
 		subLog.Warn().Stack().Err(err).Msg("role does not exist")
-		if err := wrappedTrx.Rollback(context.Background()); err != nil {
+		if err := wrappedTrx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			return nil, err
 		}
-		err = createUser(userID)
+		err = createUser(ctx, userID)
 		if err != nil {
 			log.Error().Stack().Err(err).Msg("could not create user")
 			return nil, err
 		}
-		return TrxForUser(userID)
+		return TrxForUser(ctx, userID)
 	}
 
 	return wrappedTrx, nil
 }
 
 // Get a list of users in the pvapi role
-func GetUsers() ([]string, error) {
-	trx, err := pool.Begin(context.Background())
+func GetUsers(ctx context.Context) ([]string, error) {
+	trx, err := pool.Begin(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("could not begin transaction")
 		return nil, err
@@ -204,10 +204,10 @@ func GetUsers() ([]string, error) {
 			FROM cte JOIN pg_auth_members m ON m.member = cte.oid
 	)
 	SELECT oid::regrole::text AS rolename FROM cte;`
-	rows, err := trx.Query(context.Background(), sql, "pvapi")
+	rows, err := trx.Query(ctx, sql, "pvapi")
 	if err != nil {
 		log.Warn().Stack().Err(err).Str("Query", sql).Msg("get list of database roles failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
@@ -232,13 +232,13 @@ func GetUsers() ([]string, error) {
 	err = rows.Err()
 	if err != nil {
 		log.Warn().Stack().Err(err).Str("Query", sql).Msg("GetUser query read failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback tranasaction")
 		}
 		return nil, err
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Err(err).Msg("could not commit transaction")
 	}
 

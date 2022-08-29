@@ -166,6 +166,26 @@ func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 	return r
 }
 
+func MockHolidays(db pgxmock.PgxConnIface) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT event_date, early_close").WillReturnRows(
+		NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
+			"event_date":  "date",
+			"early_close": "bool",
+			"close_time":  "int",
+		}).Rows())
+	db.ExpectCommit()
+}
+
+func MockAssets(db pgxmock.PgxConnIface) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT ticker, composite_figi FROM assets WHERE active='t'").WillReturnRows(
+		NewCSVRows([]string{"assets.csv"}, map[string]string{}).Rows())
+	db.ExpectCommit()
+}
+
 func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
@@ -176,7 +196,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Ti
 	db.ExpectCommit()
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT event_date, ticker, close, adj_close::double precision FROM eod").WillReturnRows(
+	db.ExpectQuery("SELECT event_date, composite_figi, close, adj_close::double precision FROM eod").WillReturnRows(
 		NewCSVRows(fn, map[string]string{
 			"event_date": "date",
 			"close":      "float64",
@@ -188,7 +208,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Ti
 func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn []string, d1, d2 time.Time) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT event_date, ticker, dividend, split_factor FROM eod").WillReturnRows(
+	db.ExpectQuery("SELECT event_date, composite_figi, dividend, split_factor FROM eod").WillReturnRows(
 		NewCSVRows(fn, map[string]string{
 			"event_date":   "date",
 			"dividend":     "float64",

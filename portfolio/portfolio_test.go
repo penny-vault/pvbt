@@ -24,12 +24,14 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
+	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Portfolio", func() {
@@ -52,12 +54,16 @@ var _ = Describe("Portfolio", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
+		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
 			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
 			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
 		data.InitializeDataManager()
+
+		pgxmockhelper.MockHolidays(dbPool)
+		tradecron.Initialize()
 
 		dataProxy = data.NewManager()
 	})
@@ -72,9 +78,9 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
-					"VFINX",
-					"PRIDX",
-					"VFINX",
+					"BBG000BHTMY2",
+					"BBG000BBVR08",
+					"BBG000BHTMY2",
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
@@ -114,12 +120,19 @@ var _ = Describe("Portfolio", func() {
 			})
 
 			It("should not error", func() {
+				if err != nil {
+					log.Error().Err(err).Msg("target portfolio errored")
+				}
 				Expect(err).NotTo(HaveOccurred())
 			})
 
 			It("should error if trying to rebalance on a date when transactions have already occurred", func() {
-				target := make(map[string]float64)
-				target["VFINX"] = 1.0
+				target := make(map[data.Security]float64)
+				vfinx := data.Security{
+					CompositeFigi: "BBG000BHTMY2",
+					Ticker:        "VFINX",
+				}
+				target[vfinx] = 1.0
 				justification := make([]*portfolio.Justification, 0)
 				err = pm.RebalanceTo(context.Background(), time.Date(2019, 5, 1, 0, 0, 0, 0, tz), target, justification)
 				Expect(err).To(HaveOccurred())
@@ -152,6 +165,7 @@ var _ = Describe("Portfolio", func() {
 			It("second transaction should be a buy of VFINX", func() {
 				Expect(p.Transactions[1].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[1].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[1].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[1].Shares).Should(BeNumerically("~", 38.32592, 1e-5))
 				Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 10000.00, 1e-2))
@@ -160,6 +174,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2018-03-23 for the VFINX dividend", func() {
 				Expect(p.Transactions[2].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[2].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[2].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[2].Date).To(Equal(time.Date(2018, 3, 23, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[2].Shares).To(Equal(0.0))
 				Expect(p.Transactions[2].TotalValue).Should(BeNumerically("~", 39.38755, 1e-5))
@@ -168,6 +183,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2018-06-27 for the VFINX dividend", func() {
 				Expect(p.Transactions[3].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[3].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[3].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[3].Date).To(Equal(time.Date(2018, 6, 27, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[3].Shares).To(Equal(0.0))
 				Expect(p.Transactions[3].TotalValue).Should(BeNumerically("~", 42.09336, 1e-5))
@@ -176,6 +192,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2018-09-25 for the VFINX dividend", func() {
 				Expect(p.Transactions[4].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[4].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[4].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[4].Date).To(Equal(time.Date(2018, 9, 25, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[4].Shares).To(Equal(0.0))
 				Expect(p.Transactions[4].TotalValue).Should(BeNumerically("~", 44.08248, 1e-5))
@@ -184,6 +201,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2018-12-14 for the VFINX dividend", func() {
 				Expect(p.Transactions[5].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[5].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[5].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[5].Date).To(Equal(time.Date(2018, 12, 14, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[5].Shares).To(Equal(0.0))
 				Expect(p.Transactions[5].TotalValue).Should(BeNumerically("~", 46.90327, 1e-5))
@@ -192,6 +210,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2019-01-31 SELL of VFINX", func() {
 				Expect(p.Transactions[6].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[6].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[6].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[6].Date).To(Equal(time.Date(2019, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[6].Shares).Should(BeNumerically("~", 38.32592, 1e-5))
 				Expect(p.Transactions[6].PricePerShare).Should(BeNumerically("~", 249.96, 1e-5))
@@ -201,6 +220,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2019-01-31 BUY of PRIDX", func() {
 				Expect(p.Transactions[7].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[7].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[7].CompositeFIGI).To(Equal("BBG000BBVR08"))
 				Expect(p.Transactions[7].Date).To(Equal(time.Date(2019, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[7].Shares).Should(BeNumerically("~", 163.19301, 1e-5))
 				Expect(p.Transactions[7].PricePerShare).Should(BeNumerically("~", 59.76, 1e-5))
@@ -210,6 +230,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2019-12-17 for the PRIDX dividend", func() {
 				Expect(p.Transactions[8].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[8].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[8].CompositeFIGI).To(Equal("BBG000BBVR08"))
 				Expect(p.Transactions[8].Date).To(Equal(time.Date(2019, 12, 17, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[8].Shares).To(Equal(0.0))
 				Expect(p.Transactions[8].TotalValue).Should(BeNumerically("~", 164.82494, 1e-5))
@@ -218,6 +239,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2020-01-31 SELL of PRIDX", func() {
 				Expect(p.Transactions[9].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[9].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[9].CompositeFIGI).To(Equal("BBG000BBVR08"))
 				Expect(p.Transactions[9].Date).To(Equal(time.Date(2020, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[9].Shares).Should(BeNumerically("~", 163.19301, 1e-5))
 				Expect(p.Transactions[9].PricePerShare).Should(BeNumerically("~", 67.16, 1e-5))
@@ -227,6 +249,7 @@ var _ = Describe("Portfolio", func() {
 			It("should have a transaction on 2020-01-31 BUY of VFINX", func() {
 				Expect(p.Transactions[10].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[10].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[10].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[10].Date).To(Equal(time.Date(2020, 1, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[10].Shares).Should(BeNumerically("~", 37.33052, 1e-5))
 				Expect(p.Transactions[10].PricePerShare).Should(BeNumerically("~", 298.01, 1e-5))
@@ -242,7 +265,7 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				tickerSeries2 := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, []string{
-					"TSLA",
+					"BBG000N9MNX3",
 				})
 
 				df = dataframe.NewDataFrame(timeSeries2, tickerSeries2)
@@ -272,6 +295,7 @@ var _ = Describe("Portfolio", func() {
 			It("third transaction should be a SPLIT on 2020-08-31", func() {
 				Expect(p.Transactions[2].Kind).To(Equal(portfolio.SplitTransaction))
 				Expect(p.Transactions[2].Ticker).To(Equal("TSLA"))
+				Expect(p.Transactions[2].CompositeFIGI).To(Equal("BBG000N9MNX3"))
 				Expect(p.Transactions[2].Date).To(Equal(time.Date(2020, 8, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[2].Shares).Should(BeNumerically("~", 76.85568, 1e-5))
 			})
@@ -325,9 +349,9 @@ var _ = Describe("Portfolio", func() {
 				})
 
 				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
-					"VFINX",
-					"PRIDX",
-					"VFINX",
+					"BBG000BHTMY2",
+					"BBG000BBVR08",
+					"BBG000BHTMY2",
 				})
 
 				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
@@ -400,6 +424,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
+				Expect(perf.Measurements[0].Holdings[0].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 			})
 
 			It("value should not be calculated on non-trading days", func() {
@@ -429,18 +454,30 @@ var _ = Describe("Portfolio", func() {
 					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 				})
 
+				var vfinx *data.Security
+				var pridx *data.Security
+				var vustx *data.Security
+				var err error
+
+				vfinx, err = data.SecurityFromTicker("VFINX")
+				Expect(err).To(BeNil())
+				pridx, err = data.SecurityFromTicker("PRIDX")
+				Expect(err).To(BeNil())
+				vustx, err = data.SecurityFromTicker("VUSTX")
+				Expect(err).To(BeNil())
+
 				tickerSeriesMulti := dataframe.NewSeriesMixed(common.TickerName,
 					&dataframe.SeriesInit{Size: 3},
-					map[string]float64{
-						"VFINX": 1.0,
+					map[data.Security]float64{
+						*vfinx: 1.0,
 					},
-					map[string]float64{
-						"VFINX": 0.25,
-						"PRIDX": 0.5,
-						"VUSTX": 0.25,
+					map[data.Security]float64{
+						*vfinx: 0.25,
+						*pridx: 0.5,
+						*vustx: 0.25,
 					},
-					map[string]float64{
-						"PRIDX": 1.0,
+					map[data.Security]float64{
+						*pridx: 1.0,
 					},
 				)
 
@@ -458,7 +495,7 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err := dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VFINX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, vfinx)
 				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
@@ -467,7 +504,7 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "PRIDX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, pridx)
 				Expect(err).To(BeNil())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
@@ -476,7 +513,7 @@ var _ = Describe("Portfolio", func() {
 				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vustx_corporate.csv"},
 					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
 
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, "VUSTX")
+				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, vustx)
 				Expect(err).To(BeNil())
 
 				err = pm.TargetPortfolio(context.Background(), df)
@@ -507,6 +544,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[1].Date).To(Equal(time.Date(2018, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[1].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[1].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[1].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[1].PricePerShare).Should(BeNumerically("~", 260.92, 1e-2))
 				Expect(p.Transactions[1].Shares).Should(BeNumerically("~", 38.32592, 1e-5))
 				Expect(p.Transactions[1].TotalValue).Should(BeNumerically("~", 10_000.00, 1e-2))
@@ -516,6 +554,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[6].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[6].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[6].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[6].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[6].PricePerShare).Should(BeNumerically("~", 249.96, 1e-2))
 				Expect(p.Transactions[6].Shares).Should(BeNumerically("~", 28.57195, 1e-5))
 				Expect(p.Transactions[6].TotalValue).Should(BeNumerically("~", 7141.84424, 1e-5))
@@ -531,6 +570,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[pridxIdx].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[pridxIdx].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[pridxIdx].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[pridxIdx].CompositeFIGI).To(Equal("BBG000BBVR08"))
 				Expect(p.Transactions[pridxIdx].Shares).Should(BeNumerically("~", 81.59651, 1e-5))
 				Expect(p.Transactions[pridxIdx].TotalValue).Should(BeNumerically("~", 4876.20727, 1e-5))
 			})
@@ -546,6 +586,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2019, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vustxIdx].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[vustxIdx].Ticker).To(Equal("VUSTX"))
+				Expect(p.Transactions[vustxIdx].CompositeFIGI).To(Equal("BBG000BCKYB1"))
 				Expect(p.Transactions[vustxIdx].Shares).Should(BeNumerically("~", 205.57366, 1e-5))
 				Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2438.10363, 1e-5))
 			})
@@ -554,6 +595,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[9].Date).To(Equal(time.Date(2019, 02, 28, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[9].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[9].Ticker).To(Equal("VUSTX"))
+				Expect(p.Transactions[9].CompositeFIGI).To(Equal("BBG000BCKYB1"))
 				Expect(p.Transactions[9].Shares).Should(BeNumerically("~", 0, 1e-5))
 				Expect(p.Transactions[9].TotalValue).Should(BeNumerically("~", 5.1804, 1e-2))
 			})
@@ -562,6 +604,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[10].Date).To(Equal(time.Date(2019, 03, 20, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[10].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[10].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[10].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[10].Shares).Should(BeNumerically("~", 0, 1e-5))
 				Expect(p.Transactions[10].TotalValue).Should(BeNumerically("~", 13.55998, 1e-5))
 			})
@@ -570,6 +613,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[11].Date).To(Equal(time.Date(2019, 03, 29, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[11].Kind).To(Equal(portfolio.DividendTransaction))
 				Expect(p.Transactions[11].Ticker).To(Equal("VUSTX"))
+				Expect(p.Transactions[11].CompositeFIGI).To(Equal("BBG000BCKYB1"))
 				Expect(p.Transactions[11].Shares).Should(BeNumerically("~", 0, 1e-5))
 				Expect(p.Transactions[11].TotalValue).Should(BeNumerically("~", 5.96163, 1e-5))
 			})
@@ -585,6 +629,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[vustxIdx].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vustxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vustxIdx].Ticker).To(Equal("VUSTX"))
+				Expect(p.Transactions[vustxIdx].CompositeFIGI).To(Equal("BBG000BCKYB1"))
 				Expect(p.Transactions[vustxIdx].Shares).Should(BeNumerically("~", 205.57366, 1e-2))
 				Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2888.30995, 1e-2))
 			})
@@ -599,6 +644,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[vfinxIdx].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vfinxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vfinxIdx].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[vfinxIdx].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 				Expect(p.Transactions[vfinxIdx].Shares).Should(BeNumerically("~", 9.75398, 1e-2))
 				Expect(p.Transactions[vfinxIdx].TotalValue).Should(BeNumerically("~", 2906.78214, 1e-2))
 			})
@@ -608,6 +654,7 @@ var _ = Describe("Portfolio", func() {
 				Expect(p.Transactions[29].Date).To(Equal(time.Date(2020, 01, 31, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[29].Kind).To(Equal(portfolio.BuyTransaction))
 				Expect(p.Transactions[29].Ticker).To(Equal("PRIDX"))
+				Expect(p.Transactions[29].CompositeFIGI).To(Equal("BBG000BBVR08"))
 				Expect(p.Transactions[29].Shares).Should(BeNumerically("~", 89.40857, 1e-2))
 				Expect(p.Transactions[29].TotalValue).Should(BeNumerically("~", 6004.66897, 1e-5))
 			})

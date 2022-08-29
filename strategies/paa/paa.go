@@ -56,9 +56,9 @@ func min(x int, y int) int {
 
 // KellersProtectiveAssetAllocation strategy type
 type KellersProtectiveAssetAllocation struct {
-	protectiveUniverse []string
-	riskUniverse       []string
-	allTickers         []string
+	protectiveUniverse []*data.Security
+	riskUniverse       []*data.Security
+	allTickers         []*data.Security
 	protectionFactor   int
 	topN               int
 	lookback           int
@@ -69,17 +69,15 @@ type KellersProtectiveAssetAllocation struct {
 
 // NewKellersProtectiveAssetAllocation Construct a new Kellers PAA strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	protectiveUniverse := []string{}
+	protectiveUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(protectiveUniverse)
 
-	riskUniverse := []string{}
+	riskUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["riskUniverse"], &riskUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(riskUniverse)
 
 	var protectionFactor int
 	if err := json.Unmarshal(args["protectionFactor"], &protectionFactor); err != nil {
@@ -96,11 +94,11 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	allTickers := make([]string, 0, len(riskUniverse)+len(protectiveUniverse))
+	allTickers := make([]*data.Security, 0, len(riskUniverse)+len(protectiveUniverse))
 	allTickers = append(allTickers, riskUniverse...)
 	allTickers = append(allTickers, protectiveUniverse...)
 
-	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthend 0 16 * *", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
@@ -122,11 +120,11 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
-	tickers := []string{}
-	tickers = append(tickers, paa.protectiveUniverse...)
-	tickers = append(tickers, paa.riskUniverse...)
+	securities := []*data.Security{}
+	securities = append(securities, paa.protectiveUniverse...)
+	securities = append(securities, paa.riskUniverse...)
 
-	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
+	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, securities...)
 	if errs != nil {
 		return ErrDataRetrievalFailed
 	}
@@ -138,6 +136,33 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 	paa.prices = prices
 	if err != nil {
 		return err
+	}
+
+	// include last day if it is a non-trade day
+	log.Debug().Msg("getting last day eod prices of requested range")
+	manager.Frequency = data.FrequencyDaily
+	begin := manager.Begin
+	manager.Begin = manager.End.AddDate(0, 0, -10)
+	final, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, securities...)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting final")
+		return err
+	}
+	manager.Begin = begin
+	manager.Frequency = data.FrequencyMonthly
+
+	final, err = dfextras.DropNA(ctx, final)
+	if err != nil {
+		return err
+	}
+
+	nrows := final.NRows()
+	row := final.Row(nrows-1, false, dataframe.SeriesName)
+	dt := row[common.DateIdx].(time.Time)
+	lastRow := paa.prices.Row(paa.prices.NRows()-1, false, dataframe.SeriesName)
+	lastDt := lastRow[common.DateIdx].(time.Time)
+	if !dt.Equal(lastDt) {
+		paa.prices.Append(nil, row)
 	}
 
 	return nil
@@ -169,15 +194,15 @@ func (paa *KellersProtectiveAssetAllocation) mom(ctx context.Context) error {
 	}
 
 	// calculate momentum 13, mom13 = (p0 / SMA13) - 1
-	for _, ticker := range paa.allTickers {
-		name := fmt.Sprintf("%s_MOM", ticker)
+	for _, security := range paa.allTickers {
+		name := fmt.Sprintf("%s_MOM", security.CompositeFigi)
 		if err := sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
 			Size: sma.NRows(dontLock),
 		}), nil); err != nil {
 			log.Error().Stack().Err(err).Msg("could not add series")
 			return err
 		}
-		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", ticker, ticker)
+		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", security.CompositeFigi, security.CompositeFigi)
 		fn := funcs.RegFunc(expr)
 		err := funcs.Evaluate(ctx, sma, fn, name)
 		if err != nil {
@@ -188,11 +213,11 @@ func (paa *KellersProtectiveAssetAllocation) mom(ctx context.Context) error {
 	series := make([]dataframe.Series, 0, len(paa.allTickers)+1)
 	dateIdx := sma.MustNameToColumn(common.DateIdx)
 	series = append(series, sma.Series[dateIdx].Copy())
-	for _, ticker := range paa.allTickers {
-		name := fmt.Sprintf("%s_MOM", ticker)
+	for _, security := range paa.allTickers {
+		name := fmt.Sprintf("%s_MOM", security.CompositeFigi)
 		idx := sma.MustNameToColumn(name)
 		s := sma.Series[idx].Copy()
-		s.Rename(ticker)
+		s.Rename(security.CompositeFigi)
 		series = append(series, s)
 	}
 	paa.momentum = dataframe.NewDataFrame(series...)
@@ -221,11 +246,11 @@ func (paa *KellersProtectiveAssetAllocation) rank() ([]common.PairList, []string
 
 		// rank each risky asset if it's momentum is greater than 0
 		sortable := make(common.PairList, 0, len(paa.riskUniverse))
-		for _, ticker := range paa.riskUniverse {
-			floatVal := vals[ticker].(float64)
+		for _, security := range paa.riskUniverse {
+			floatVal := vals[security.CompositeFigi].(float64)
 			if floatVal > 0 {
 				sortable = append(sortable, common.Pair{
-					Key:   ticker,
+					Key:   security.CompositeFigi,
 					Value: floatVal,
 				})
 			}
@@ -238,10 +263,10 @@ func (paa *KellersProtectiveAssetAllocation) rank() ([]common.PairList, []string
 
 		// rank each protective asset and select max
 		sortable = make(common.PairList, 0, len(paa.protectiveUniverse))
-		for _, ticker := range paa.protectiveUniverse {
+		for _, security := range paa.protectiveUniverse {
 			sortable = append(sortable, common.Pair{
-				Key:   ticker,
-				Value: vals[ticker].(float64),
+				Key:   security.CompositeFigi,
+				Value: vals[security.CompositeFigi].(float64),
 			})
 		}
 
@@ -270,8 +295,12 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 	}), nil); err != nil {
 		log.Error().Stack().Err(err).Msg("could not add series to momentum dataframe")
 	}
+
 	riskUniverseMomNames := make([]string, len(paa.riskUniverse))
-	copy(riskUniverseMomNames, paa.riskUniverse)
+	for idx, security := range paa.riskUniverse {
+		riskUniverseMomNames[idx] = security.CompositeFigi
+	}
+
 	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
 	err := funcs.Evaluate(ctx, mom, fn, name,
 		funcs.EvaluateOptions{
@@ -333,17 +362,27 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 		numRiskAssetsToHold := min(paa.topN, len(riskAssets))
 		riskAssetsEqualWeightPercentage := sf / float64(numRiskAssetsToHold)
 
-		targetMap := make(map[string]float64)
+		targetMap := make(map[data.Security]float64)
 
 		if riskAssetsEqualWeightPercentage > 1.0e-5 {
 			for _, asset := range riskAssets {
-				targetMap[asset.Key] = riskAssetsEqualWeightPercentage
+				security, err := data.SecurityFromFigi(asset.Key)
+				if err != nil {
+					log.Error().Err(err).Str("CompositeFigi", asset.Key).Msg("security not found")
+					return nil, err
+				}
+				targetMap[*security] = riskAssetsEqualWeightPercentage
 			}
 		}
 
 		// allocate 100% of bond fraction to protective asset with highest momentum score
 		if bf > 0 {
-			targetMap[protectiveAsset] = bf
+			security, err := data.SecurityFromFigi(protectiveAsset)
+			if err != nil {
+				log.Error().Err(err).Str("CompositeFigi", protectiveAsset).Msg("security not found")
+				return nil, err
+			}
+			targetMap[*security] = bf
 		}
 
 		targetAssets[*row] = targetMap
@@ -361,8 +400,8 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 	series = append(series, timeSeries)
 	series = append(series, targetSeries)
 
-	for _, ticker := range paa.allTickers {
-		colIdx := mom.MustNameToColumn(ticker)
+	for _, security := range paa.allTickers {
+		colIdx := mom.MustNameToColumn(security.CompositeFigi)
 		col := mom.Series[colIdx]
 		col.Lock()
 		newCol := col.Copy()
@@ -411,24 +450,15 @@ func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(targetP
 		}
 
 		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		isTradeDay, err := paa.schedule.IsTradeDay(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not evaluate trade schedule")
-			return nil
-		}
+		isTradeDay := paa.schedule.IsTradeDay(lastTradeDate)
 		if !isTradeDay {
 			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
 		}
 
-		nextTradeDate, err := paa.schedule.Next(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get next trade date")
-			return nil
-		}
-
+		nextTradeDate := paa.schedule.Next(lastTradeDate)
 		predictedPortfolio = &strategy.Prediction{
 			TradeDate:     nextTradeDate,
-			Target:        lastRow[common.TickerName].(map[string]float64),
+			Target:        lastRow[common.TickerName].(map[data.Security]float64),
 			Justification: predictedJustification,
 		}
 	}

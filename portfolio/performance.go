@@ -184,22 +184,22 @@ func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
 	return 0.0
 }
 
-func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings map[string]float64, date time.Time) (float64, error) {
+func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time) (float64, error) {
 	totalVal := 0.0
-	for symbol, qty := range holdings {
-		if symbol == data.CashAsset {
+	for security, qty := range holdings {
+		if security.Ticker == data.CashAsset {
 			if math.IsNaN(qty) {
 				log.Warn().Stack().Msg("Cash position is NaN")
 			} else {
 				totalVal += qty
 			}
 		} else {
-			price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
+			price, err := dataManager.Get(ctx, date, data.MetricClose, &security)
 			if err != nil {
 				return totalVal, ErrSecurityPriceNotAvailable
 			}
 			if math.IsNaN(price) {
-				price, err = dataManager.GetLatestDataBefore(ctx, symbol, data.MetricClose, date)
+				price, err = dataManager.GetLatestDataBefore(ctx, &security, data.MetricClose, date)
 				if err != nil {
 					return totalVal, ErrSecurityPriceNotAvailable
 				}
@@ -232,15 +232,19 @@ func updateDateBundle(bundle *dateBundle, date time.Time, last time.Time) {
 	}
 }
 
-func holdingsMapFromMeasurement(measurement *PerformanceMeasurement) map[string]float64 {
-	holdings := make(map[string]float64)
+func holdingsMapFromMeasurement(measurement *PerformanceMeasurement) map[data.Security]float64 {
+	holdings := make(map[data.Security]float64)
 	for _, holding := range measurement.Holdings {
-		holdings[holding.Ticker] = holding.Shares
+		security := data.Security{
+			CompositeFigi: holding.CompositeFIGI,
+			Ticker:        holding.Ticker,
+		}
+		holdings[security] = holding.Shares
 	}
 	return holdings
 }
 
-func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, date time.Time, sums *cumulativeSums) (map[string]float64, int, error) {
+func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxIdx int, date time.Time, sums *cumulativeSums) (map[data.Security]float64, int, error) {
 	numTrxs := len(p.Transactions)
 
 	for ; trxIdx < numTrxs; trxIdx++ {
@@ -252,8 +256,13 @@ func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, 
 			break
 		}
 
+		security := data.Security{
+			CompositeFigi: trx.CompositeFIGI,
+			Ticker:        trx.Ticker,
+		}
+
 		shares := 0.0
-		if val, ok := holdings[trx.Ticker]; ok {
+		if val, ok := holdings[security]; ok {
 			shares = val
 		}
 
@@ -262,31 +271,31 @@ func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, 
 			sums.Deposited += trx.TotalValue
 			sums.RiskFreeValue += trx.TotalValue
 			sums.BenchmarkValue += trx.TotalValue
-			if val, ok := holdings[data.CashAsset]; ok {
-				holdings[data.CashAsset] = val + trx.TotalValue
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val + trx.TotalValue
 			} else {
-				holdings[data.CashAsset] = trx.TotalValue
+				holdings[data.CashSecurity] = trx.TotalValue
 			}
 			continue
 		case WithdrawTransaction:
 			sums.Withdrawn += trx.TotalValue
 			sums.RiskFreeValue -= trx.TotalValue
 			sums.BenchmarkValue -= trx.TotalValue
-			if val, ok := holdings[data.CashAsset]; ok {
-				holdings[data.CashAsset] = val - trx.TotalValue
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val - trx.TotalValue
 			}
 			continue
 		case BuyTransaction:
 			shares += trx.Shares
-			if val, ok := holdings[data.CashAsset]; ok {
-				holdings[data.CashAsset] = val - trx.TotalValue
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val - trx.TotalValue
 			}
 			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
 		case DividendTransaction:
-			if val, ok := holdings[data.CashAsset]; ok {
-				holdings[data.CashAsset] = val + trx.TotalValue
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val + trx.TotalValue
 			} else {
-				holdings[data.CashAsset] = trx.TotalValue
+				holdings[data.CashSecurity] = trx.TotalValue
 			}
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
 			continue
@@ -295,10 +304,10 @@ func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, 
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
 		case SellTransaction:
 			shares -= trx.Shares
-			if val, ok := holdings[data.CashAsset]; ok {
-				holdings[data.CashAsset] = val + trx.TotalValue
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val + trx.TotalValue
 			} else {
-				holdings[data.CashAsset] = trx.TotalValue
+				holdings[data.CashSecurity] = trx.TotalValue
 			}
 			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
 		default:
@@ -306,9 +315,9 @@ func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, 
 			return holdings, trxIdx, ErrInvalidTransactionType
 		}
 
-		if val, ok := holdings[data.CashAsset]; ok {
+		if val, ok := holdings[data.CashSecurity]; ok {
 			if val <= 1.0e-5 {
-				delete(holdings, data.CashAsset)
+				delete(holdings, data.CashSecurity)
 			}
 		}
 
@@ -318,44 +327,44 @@ func processTransactions(p *Portfolio, holdings map[string]float64, trxIdx int, 
 		}
 
 		if shares == 0 {
-			delete(holdings, trx.Ticker)
+			delete(holdings, security)
 		} else {
-			holdings[trx.Ticker] = shares
+			holdings[security] = shares
 		}
 	}
 
 	return holdings, trxIdx, nil
 }
 
-func calculateShares(ctx context.Context, dataManager *data.Manager, asset string, date time.Time, dollars float64) (float64, error) {
-	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, asset)
+func calculateShares(ctx context.Context, dataManager *data.Manager, security *data.Security, date time.Time, dollars float64) (float64, error) {
+	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
 	if err != nil {
-		log.Error().Stack().Time("Date", date).Str("Ticker", asset).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
+		log.Error().Stack().Time("Date", date).Str("Ticker", security.Ticker).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
 		return 0, ErrSecurityPriceNotAvailable
 	}
 	if math.IsNaN(price) {
-		log.Warn().Stack().Time("Date", date).Str("Ticker", asset).Err(err).Str("Metric", "AdjustedClose").Msg("benchmark value is NaN")
+		log.Warn().Stack().Time("Date", date).Str("Ticker", security.Ticker).Err(err).Str("Metric", "AdjustedClose").Msg("benchmark value is NaN")
 		return 0, ErrSecurityPriceNotAvailable
 	}
 	return dollars / price, nil
 }
 
-func calculateValue(ctx context.Context, dataManager *data.Manager, asset string, shares float64, date time.Time) float64 {
-	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, asset)
+func calculateValue(ctx context.Context, dataManager *data.Manager, security *data.Security, shares float64, date time.Time) float64 {
+	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
 	if err != nil {
-		log.Error().Stack().Err(err).Str("Asset", asset).Time("Date", date).Msg("could not get security prices from pvdb")
+		log.Error().Stack().Err(err).Str("Asset", security.Ticker).Time("Date", date).Msg("could not get security prices from pvdb")
 	}
 	return shares * price
 }
 
-func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings map[string]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
 	currentAssets := make([]*ReportableHolding, 0, len(holdings))
-	for symbol, qty := range holdings {
+	for security, qty := range holdings {
 		var value float64
-		if symbol == data.CashAsset {
+		if security.Ticker == data.CashAsset {
 			value = qty
 		} else if qty > 1.0e-5 {
-			price, err := dataManager.Get(ctx, date, data.MetricClose, symbol)
+			price, err := dataManager.Get(ctx, date, data.MetricClose, &security)
 			if err != nil {
 				return nil, ErrSecurityPriceNotAvailable
 			}
@@ -366,7 +375,8 @@ func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings 
 		}
 		if qty > 1.0e-5 {
 			currentAssets = append(currentAssets, &ReportableHolding{
-				Ticker:           symbol,
+				CompositeFIGI:    security.CompositeFigi,
+				Ticker:           security.Ticker,
 				Shares:           qty,
 				PercentPortfolio: float32(value / totalValue),
 				Value:            value,
@@ -685,10 +695,16 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		Withdrawn:      prevMeasurement.TotalWithdrawn,
 	}
 
+	benchmarkSecurity, err := data.SecurityFromFigi(pm.Portfolio.Benchmark)
+	if err != nil {
+		log.Error().Err(err).Str("Benchmark", pm.Portfolio.Benchmark).Msg("could not load benchmark security")
+		return err
+	}
+
 	// compute # of shares held for benchmark
 	var benchmarkShares float64
 	if len(perf.Measurements) > 0 {
-		benchmarkShares, err = calculateShares(ctx, dataManager, pm.Portfolio.Benchmark, prevMeasurement.Time, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(ctx, dataManager, benchmarkSecurity, prevMeasurement.Time, sums.BenchmarkValue)
 		if err != nil {
 			span.RecordError(err)
 			msg := "could not get benchmark eod prices"
@@ -714,7 +730,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999_999_999, nyc)
 		updateDateBundle(dates, date, prevDate)
 
-		sums.BenchmarkValue = calculateValue(ctx, dataManager, pm.Portfolio.Benchmark, benchmarkShares, date)
+		sums.BenchmarkValue = calculateValue(ctx, dataManager, benchmarkSecurity, benchmarkShares, date)
 
 		// update holdings
 		holdings, trxIdx, err = processTransactions(p, holdings, trxIdx, date, sums)
@@ -726,7 +742,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		justificationArray := pm.justifications[tradingDate.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals (BenchmarkValue is updated in processTransactions)
-		benchmarkShares, err = calculateShares(ctx, dataManager, pm.Portfolio.Benchmark, date, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(ctx, dataManager, benchmarkSecurity, date, sums.BenchmarkValue)
 		if err != nil {
 			return err
 		}
@@ -805,10 +821,10 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 // LOAD
 
-func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, error) {
+func LoadPerformanceFromDB(ctx context.Context, portfolioID uuid.UUID, userID string) (*Performance, error) {
 	subLog := log.With().Str("PortfolioID", portfolioID.String()).Str("UserID", userID).Logger()
 	portfolioSQL := `SELECT performance_bytes FROM portfolios WHERE id=$1 AND user_id=$2`
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return nil, err
@@ -827,18 +843,18 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 	p := NewPerformance(portfolio)
 
 	var data []byte
-	err = trx.QueryRow(context.Background(), portfolioSQL, portfolioID, userID).Scan(&data)
+	err = trx.QueryRow(ctx, portfolioSQL, portfolioID, userID).Scan(&data)
 
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("query database for performance failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return nil, err
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		subLog.Warn().Stack().Err(err).Msg("commit transaction failed")
 		return nil, err
 	}
@@ -852,9 +868,9 @@ func LoadPerformanceFromDB(portfolioID uuid.UUID, userID string) (*Performance, 
 }
 
 // LoadMeasurementFromDB reads a single measurement for the `portfolio` on the specified `date`
-func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time) (*PerformanceMeasurement, error) {
+func LoadMeasurementFromDB(ctx context.Context, portfolioID []byte, userID string, forDate time.Time) (*PerformanceMeasurement, error) {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(portfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return nil, err
@@ -921,7 +937,7 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 	WHERE portfolio_id=$1 AND user_id=$2 AND event_date=$3
 	ORDER BY event_date
 	LIMIT 1`
-	row := trx.QueryRow(context.Background(), measurementSQL, portfolioID, userID, forDate)
+	row := trx.QueryRow(ctx, measurementSQL, portfolioID, userID, forDate)
 	m := PerformanceMeasurement{}
 	if err := row.Scan(
 		&m.Time,
@@ -981,13 +997,13 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 		&m.TotalWithdrawn,
 		&m.Justification); err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, err
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to the database")
 	}
 
@@ -995,9 +1011,9 @@ func LoadMeasurementFromDB(portfolioID []byte, userID string, forDate time.Time)
 }
 
 // loadMeasurementsFromDB populates the measurements array with values from the database
-func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
+func (perf *Performance) LoadMeasurementsFromDB(ctx context.Context, userID string) error {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
@@ -1063,10 +1079,10 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	FROM portfolio_measurements
 	WHERE portfolio_id=$1 AND user_id=$2
 	ORDER BY event_date`
-	rows, err := trx.Query(context.Background(), measurementSQL, perf.PortfolioID, userID)
+	rows, err := trx.Query(ctx, measurementSQL, perf.PortfolioID, userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed executing measurement query")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1135,7 +1151,7 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 			&m.Justification)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Str("Query", measurementSQL).Msg("failed to scan PerformanceMeasurement row in DB query")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 
@@ -1145,7 +1161,7 @@ func (perf *Performance) LoadMeasurementsFromDB(userID string) error {
 	}
 	perf.Measurements = measurements
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction to the database")
 	}
 	return nil
@@ -1165,29 +1181,29 @@ func (perf *Performance) LogSummary() {
 
 // SAVE
 
-func (perf *Performance) Save(userID string) error {
+func (perf *Performance) Save(ctx context.Context, userID string) error {
 	subLog := log.With().Str("UserID", userID).Str("PortfolioID", hex.EncodeToString(perf.PortfolioID)).Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return err
 	}
 
-	err = perf.SaveWithTransaction(trx, userID)
+	err = perf.SaveWithTransaction(ctx, trx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to save portfolio transactions")
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	err = trx.Commit(context.Background())
+	err = trx.Commit(ctx)
 	return err
 }
 
-func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
+func (perf *Performance) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID string) error {
 	sql := `UPDATE portfolios SET
 		performance_bytes=$2,
 		ytd_return=$3,
@@ -1208,7 +1224,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	perf.Measurements = make([]*PerformanceMeasurement, 0)
 	raw, err := perf.MarshalBinary()
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1221,7 +1237,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		maxDrawDown = perf.DrawDowns[0].LossPercent
 	}
 
-	_, err = trx.Exec(context.Background(), sql,
+	_, err = trx.Exec(ctx, sql,
 		perf.PortfolioID,
 		raw,
 		perf.PortfolioReturns.TWRRYTD,
@@ -1237,16 +1253,16 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 		perf.PortfolioMetrics.SortinoRatioSinceInception,
 		perf.PortfolioMetrics.UlcerIndexP90)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
 		return err
 	}
 
-	err = perf.saveMeasurements(trx, userID)
+	err = perf.saveMeasurements(ctx, trx, userID)
 	if err != nil {
-		if err := trx.Rollback(context.Background()); err != nil {
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -1256,7 +1272,7 @@ func (perf *Performance) SaveWithTransaction(trx pgx.Tx, userID string) error {
 	return nil
 }
 
-func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
+func (perf *Performance) saveMeasurements(ctx context.Context, trx pgx.Tx, userID string) error {
 	sql := `INSERT INTO portfolio_measurements (
 		event_date,
 		portfolio_id,
@@ -1377,7 +1393,7 @@ func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 	DO NOTHING`
 
 	for _, m := range perf.Measurements {
-		holdings, err := json.Marshal(m.Holdings)
+		holdings, err := json.MarshalContext(ctx, m.Holdings)
 		if err != nil {
 			for _, holding := range m.Holdings {
 				log.Error().Stack().Str("Ticker", holding.Ticker).Float64("Shares", holding.Shares).Float32("PercentPorfolio", holding.PercentPortfolio).Float64("Value", holding.Value).Msg("holding")
@@ -1385,13 +1401,13 @@ func (perf *Performance) saveMeasurements(trx pgx.Tx, userID string) error {
 			return ErrSerialize
 		}
 
-		justification, err := json.Marshal(m.Justification)
+		justification, err := json.MarshalContext(ctx, m.Justification)
 		if err != nil {
 			log.Warn().Stack().Err(err).Msg("failed to serialize justification")
 			return ErrSerialize
 		}
 
-		_, err = trx.Exec(context.Background(), sql,
+		_, err = trx.Exec(ctx, sql,
 			m.Time,                  // 1
 			perf.PortfolioID,        // 2
 			m.RiskFreeValue,         // 3
