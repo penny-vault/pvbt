@@ -175,6 +175,84 @@ var _ = Describe("Paa", func() {
 				t := val[common.TickerName].(map[data.Security]float64)
 				Expect(t[*vustx]).Should(BeNumerically("~", 1))
 			})
+
+			It("predicted should be PRIDX", func() {
+				_, predicted, _ := strat.Compute(context.Background(), manager)
+				for k := range predicted.Target {
+					Expect(k.Ticker).To(Equal("PRIDX"))
+				}
+			})
+
+			It("predicted date should be 2021/01/29", func() {
+				_, predicted, _ := strat.Compute(context.Background(), manager)
+				Expect(predicted.TradeDate).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+			})
+		})
+	})
+
+	Describe("Check predicted portfolio", func() {
+		Context("with full stock history", func() {
+			BeforeEach(func() {
+				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
+				manager.End = time.Date(2020, time.May, 20, 0, 0, 0, 0, tz)
+
+				pgxmockhelper.MockDBEodQuery(dbPool,
+					[]string{
+						"vfinx.csv",
+						"pridx.csv",
+						"vustx.csv",
+					},
+					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, time.June, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, time.May, 20, 0, 0, 0, 0, time.UTC))
+
+				pgxmockhelper.MockDBCorporateQuery(dbPool,
+					[]string{
+						"vfinx_corporate.csv",
+						"pridx_corporate.csv",
+						"vustx_corporate.csv",
+					},
+					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{
+					"vfinx.csv",
+					"pridx.csv",
+					"vustx.csv",
+				},
+					time.Date(2020, time.May, 10, 0, 0, 0, 0, time.UTC), time.Date(2020, time.May, 20, 0, 0, 0, 0, time.UTC),
+					time.Date(2020, time.May, 10, 0, 0, 0, 0, time.UTC), time.Date(2020, time.May, 20, 0, 0, 0, 0, time.UTC))
+			})
+
+			It("should have length", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
+				Expect(target.NRows()).To(Equal(365))
+			})
+
+			It("should end on", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2020, time.April, 30, 16, 0, 0, 0, tz)))
+			})
+
+			It("should be invested in PRIDX to end", func() {
+				target, _, _ := strat.Compute(context.Background(), manager)
+				n := target.NRows()
+				val := target.Row(n-1, true, dataframe.SeriesName)
+				t := val[common.TickerName].(map[data.Security]float64)
+				Expect(t[*vustx]).Should(BeNumerically("~", 1))
+			})
+
+			It("PRIDX should be predicted asset", func() {
+				_, predicted, _ := strat.Compute(context.Background(), manager)
+				for k := range predicted.Target {
+					Expect(k.Ticker).To(Equal("PRIDX"))
+				}
+			})
+
+			It("predicted asset should be 5/29", func() {
+				_, predicted, _ := strat.Compute(context.Background(), manager)
+				Expect(predicted.TradeDate).To(Equal(time.Date(2020, time.May, 29, 16, 0, 0, 0, tz)))
+			})
 		})
 	})
 })

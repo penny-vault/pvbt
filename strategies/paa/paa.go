@@ -98,7 +98,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	allTickers = append(allTickers, riskUniverse...)
 	allTickers = append(allTickers, protectiveUniverse...)
 
-	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthend 0 16 * *", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
