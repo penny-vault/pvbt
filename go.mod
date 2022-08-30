@@ -11,7 +11,7 @@ require (
 	github.com/go-co-op/gocron v1.17.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/goccy/go-json v0.9.11
-	github.com/gofiber/fiber/v2 v2.36.0
+	github.com/gofiber/fiber/v2 v2.37.0
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/guptarohit/asciigraph v0.5.5 // indirect
@@ -30,7 +30,7 @@ require (
 	github.com/spf13/cast v1.5.0 // indirect
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/viper v1.12.0
-	github.com/valyala/fasthttp v1.38.0 // indirect
+	github.com/valyala/fasthttp v1.39.0 // indirect
 	github.com/xitongsys/parquet-go v1.6.2 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
