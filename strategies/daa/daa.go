@@ -286,7 +286,9 @@ func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
 		if err != nil {
 			log.Warn().Str("Asset", security.CompositeFigi).Msg("could not transalate asset name to series")
 		}
-		series = append(series, daa.momentum.Series[idx].Copy())
+		justification := daa.momentum.Series[idx].Copy()
+		justification.Rename(security.Ticker)
+		series = append(series, justification)
 	}
 
 	daa.targetPortfolio = dataframe.NewDataFrame(series...)

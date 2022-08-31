@@ -73,6 +73,7 @@ func Register(strategyPkg string, factory strategy.Factory) {
 
 	// load config file
 	fn = fmt.Sprintf("%s/strategy.toml", strategyPkg)
+	subLog = log.With().Str("FileName", fn).Logger()
 	file, err = resources.Open(fn)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to open file")

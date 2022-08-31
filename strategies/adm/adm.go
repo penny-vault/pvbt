@@ -309,7 +309,13 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	targetPortfolioSeries = append(targetPortfolioSeries, argmax)
 	for ii, xx := range scoresDf.Series {
 		if ii >= 2 {
-			xx.Rename(fmt.Sprintf("%s Score", xx.Name()))
+			security, err := data.SecurityFromFigi(xx.Name())
+			if err != nil {
+				log.Warn().Str("Name", xx.Name()).Err(err).Msg("could not find security from figi")
+				xx.Rename(fmt.Sprintf("%s Score", xx.Name()))
+			} else {
+				xx.Rename(fmt.Sprintf("%s Score", security.Ticker))
+			}
 			targetPortfolioSeries = append(targetPortfolioSeries, xx)
 		}
 	}

@@ -52,7 +52,7 @@ func LoadSecuritiesFromDB() error {
 		return err
 	}
 
-	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi FROM assets WHERE active='t'")
+	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi, active FROM assets ORDER BY active")
 	if err != nil {
 		log.Error().Err(err).Msg("could not query assets from database")
 		return err
@@ -64,7 +64,8 @@ func LoadSecuritiesFromDB() error {
 	for rows.Next() {
 		var ticker string
 		var compositeFigi string
-		err := rows.Scan(&ticker, &compositeFigi)
+		var active bool
+		err := rows.Scan(&ticker, &compositeFigi, &active)
 		if err != nil {
 			log.Error().Err(err).Msg("could not scan database results")
 			if err := trx.Rollback(context.Background()); err != nil {
@@ -78,7 +79,9 @@ func LoadSecuritiesFromDB() error {
 		}
 
 		securitiesByFigi[compositeFigi] = s
-		securitiesByTicker[ticker] = s
+		if active {
+			securitiesByTicker[ticker] = s
+		}
 	}
 
 	if err := trx.Commit(ctx); err != nil {

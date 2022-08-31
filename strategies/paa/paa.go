@@ -406,6 +406,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 		col.Lock()
 		newCol := col.Copy()
 		col.Unlock()
+		newCol.Rename(security.Ticker)
 		series = append(series, newCol)
 	}
 
