@@ -81,7 +81,7 @@ type Model struct {
 	Portfolio *Portfolio
 
 	// private
-	dataProxy      *data.Manager
+	dataProxy      *data.ManagerV0
 	value          float64
 	holdings       map[data.Security]float64
 	activities     []*Activity
@@ -94,7 +94,7 @@ type Period struct {
 }
 
 // NewPortfolio create a portfolio
-func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.Manager) *Model {
+func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.ManagerV0) *Model {
 	id, _ := uuid.New().MarshalBinary()
 	p := Portfolio{
 		ID:           id,
@@ -906,7 +906,7 @@ func (pm *Model) LoadTransactionsFromDB(ctx context.Context) error {
 	return nil
 }
 
-func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string, dataProxy *data.Manager) ([]*Model, error) {
+func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string, dataProxy *data.ManagerV0) ([]*Model, error) {
 	subLog := log.With().Str("UserID", userID).Strs("PortfolioIDs", portfolioIDs).Logger()
 	if userID == "" {
 		subLog.Error().Stack().Msg("userID cannot be an empty string")

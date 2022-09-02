@@ -124,7 +124,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return daa, nil
 }
 
-func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.Manager) error {
+func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.ManagerV0) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -321,7 +321,7 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "daa.Compute")
 	defer span.End()
 

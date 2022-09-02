@@ -116,7 +116,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return paa, nil
 }
 
-func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.Manager) error {
+func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.ManagerV0) error {
 	// Load EOD quotes for in tickers
 	manager.Frequency = data.FrequencyMonthly
 
@@ -169,7 +169,7 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 }
 
 // validateTimeRange
-func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Manager) {
+func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.ManagerV0) {
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
 	if manager.End.Equal(nullTime) {
@@ -468,7 +468,7 @@ func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(targetP
 }
 
 // Compute signal
-func (paa *KellersProtectiveAssetAllocation) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (paa *KellersProtectiveAssetAllocation) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "paa.Compute")
 	defer span.End()
 

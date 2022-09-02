@@ -15,17 +15,9 @@
 
 package data
 
-import (
-	"sync"
-)
+import "time"
 
-type CacheItem struct {
-	Values []float64
-	Period *Interval
-}
-
-type securityMetricCache struct {
-	Size   int64
-	Values map[string]*CacheItem
-	Locker sync.RWMutex
+type Manager struct {
+	cache         *securityMetricCache
+	timeReference []time.Time
 }

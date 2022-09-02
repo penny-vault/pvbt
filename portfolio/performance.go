@@ -184,7 +184,7 @@ func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
 	return 0.0
 }
 
-func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time) (float64, error) {
+func getHoldingsValue(ctx context.Context, dataManager *data.ManagerV0, holdings map[data.Security]float64, date time.Time) (float64, error) {
 	totalVal := 0.0
 	for security, qty := range holdings {
 		if security.Ticker == data.CashAsset {
@@ -336,7 +336,7 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 	return holdings, trxIdx, nil
 }
 
-func calculateShares(ctx context.Context, dataManager *data.Manager, security *data.Security, date time.Time, dollars float64) (float64, error) {
+func calculateShares(ctx context.Context, dataManager *data.ManagerV0, security *data.Security, date time.Time, dollars float64) (float64, error) {
 	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
 	if err != nil {
 		log.Error().Stack().Time("Date", date).Str("Ticker", security.Ticker).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
@@ -349,7 +349,7 @@ func calculateShares(ctx context.Context, dataManager *data.Manager, security *d
 	return dollars / price, nil
 }
 
-func calculateValue(ctx context.Context, dataManager *data.Manager, security *data.Security, shares float64, date time.Time) float64 {
+func calculateValue(ctx context.Context, dataManager *data.ManagerV0, security *data.Security, shares float64, date time.Time) float64 {
 	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("Asset", security.Ticker).Time("Date", date).Msg("could not get security prices from pvdb")
@@ -357,7 +357,7 @@ func calculateValue(ctx context.Context, dataManager *data.Manager, security *da
 	return shares * price
 }
 
-func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+func buildHoldingsList(ctx context.Context, dataManager *data.ManagerV0, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
 	currentAssets := make([]*ReportableHolding, 0, len(holdings))
 	for security, qty := range holdings {
 		var value float64
@@ -476,7 +476,7 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 	}
 }
 
-func getRiskFreeRate(ctx context.Context, dataManager *data.Manager, date time.Time) float64 {
+func getRiskFreeRate(ctx context.Context, dataManager *data.ManagerV0, date time.Time) float64 {
 	rawRate := dataManager.RiskFreeRate(ctx, date)
 	riskFreeRate := rawRate / 100.0 / 252.0
 	return (1 + riskFreeRate)

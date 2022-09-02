@@ -80,8 +80,8 @@ type Measurement struct {
 	Value float64
 }
 
-// Manager data manager type
-type Manager struct {
+// ManagerV0 data manager type
+type ManagerV0 struct {
 	Begin           time.Time
 	End             time.Time
 	Frequency       Frequency
@@ -128,8 +128,8 @@ func InitializeDataManager() {
 }
 
 // NewManager create a new data manager
-func NewManager() *Manager {
-	var m = Manager{
+func NewManager() *ManagerV0 {
+	var m = ManagerV0{
 		Frequency: FrequencyMonthly,
 		cache:     make(map[string]float64, 1_000_000),
 		lastCache: make(map[string]float64, 10_000),
@@ -144,25 +144,25 @@ func NewManager() *Manager {
 }
 
 // Get dividend map
-func (m *Manager) GetDividends() map[Security][]*Measurement {
+func (m *ManagerV0) GetDividends() map[Security][]*Measurement {
 	pvdb := m.providers["security"].(*Pvdb)
 	return pvdb.Dividends
 }
 
 // Get splits map
-func (m *Manager) GetSplits() map[Security][]*Measurement {
+func (m *ManagerV0) GetSplits() map[Security][]*Measurement {
 	pvdb := m.providers["security"].(*Pvdb)
 	return pvdb.Splits
 }
 
 // RegisterDataProvider add a data provider to the system
-func (m *Manager) RegisterDataProvider(p Provider) {
+func (m *ManagerV0) RegisterDataProvider(p Provider) {
 	m.providers[p.DataType()] = p
 }
 
 // RiskFreeRate Get the risk free rate for given date, if the specific date requested
 // is not available then the closest available value is returned
-func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
+func (m *ManagerV0) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 	start := m.lastRiskFreeIdx
 	row := riskFreeRate.Row(m.lastRiskFreeIdx, true, dataframe.SeriesName)
 	currDate := row[common.DateIdx].(time.Time)
@@ -197,12 +197,12 @@ func (m *Manager) RiskFreeRate(ctx context.Context, t time.Time) float64 {
 }
 
 // GetDataFrame get a dataframe for the requested symbol
-func (m *Manager) GetDataFrame(ctx context.Context, metric Metric, securities ...*Security) (*dataframe.DataFrame, error) {
+func (m *ManagerV0) GetDataFrame(ctx context.Context, metric Metric, securities ...*Security) (*dataframe.DataFrame, error) {
 	res, err := m.providers["security"].GetDataForPeriod(ctx, securities, metric, m.Frequency, m.Begin, m.End)
 	return res, err
 }
 
-func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, metric Metric, securities ...*Security) error {
+func (m *ManagerV0) Fetch(ctx context.Context, begin time.Time, end time.Time, metric Metric, securities ...*Security) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "provider.Fetch")
 	defer span.End()
 
@@ -256,7 +256,7 @@ func (m *Manager) Fetch(ctx context.Context, begin time.Time, end time.Time, met
 	return nil
 }
 
-func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, security *Security) (float64, error) {
+func (m *ManagerV0) Get(ctx context.Context, date time.Time, metric Metric, security *Security) (float64, error) {
 	key := buildHashKey(date, metric, security)
 	val, ok := m.cache[key]
 	if !ok {
@@ -275,7 +275,7 @@ func (m *Manager) Get(ctx context.Context, date time.Time, metric Metric, securi
 	return val, nil
 }
 
-func (m *Manager) GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error) {
+func (m *ManagerV0) GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "fred.GetLatestDataBefore")
 	defer span.End()
 
@@ -292,15 +292,15 @@ func (m *Manager) GetLatestDataBefore(ctx context.Context, security *Security, m
 	return val, nil
 }
 
-func (m *Manager) TradingDays(ctx context.Context, since time.Time, through time.Time, frequency Frequency) ([]time.Time, error) {
+func (m *ManagerV0) TradingDays(ctx context.Context, since time.Time, through time.Time, frequency Frequency) ([]time.Time, error) {
 	return m.dateProvider.TradingDays(ctx, since, through, frequency)
 }
 
-func (m *Manager) HashLen() int {
+func (m *ManagerV0) HashLen() int {
 	return len(m.cache)
 }
 
-func (m *Manager) HashSize() int {
+func (m *ManagerV0) HashSize() int {
 	keySize := 19
 	valSize := 8
 	return (len(m.cache) * keySize) + (len(m.cache) * valSize)

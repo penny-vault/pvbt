@@ -154,7 +154,7 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate time.Time, manager *data.Manager) error {
+func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate time.Time, manager *data.ManagerV0) error {
 	tz := common.GetTimezone()
 	subLog := log.With().Str("Shortcode", strat.Shortcode).Time("EndDate", endDate).Str("StrategyName", strat.Name).Logger()
 	subLog.Info().Msg("create portfolio")

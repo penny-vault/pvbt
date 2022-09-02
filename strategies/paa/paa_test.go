@@ -39,7 +39,7 @@ var _ = Describe("Paa", func() {
 		vfinx   *data.Security
 		pridx   *data.Security
 		vustx   *data.Security
-		manager *data.Manager
+		manager *data.ManagerV0
 		strat   *paa.KellersProtectiveAssetAllocation
 		tz      *time.Location
 	)

@@ -110,7 +110,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.Compute")
 	defer span.End()
 
@@ -201,7 +201,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
+func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, error) {
 	var indicator *dataframe.DataFrame
 
 	subLog := log.With().Str("Strategy", "mdep").Logger()
@@ -365,7 +365,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 }
 
 // prepopulateDataCache loads asset eod prices into the in-memory cache
-func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.Manager) {
+func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.ManagerV0) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
 	defer span.End()
 

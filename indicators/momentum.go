@@ -34,7 +34,7 @@ import (
 type Momentum struct {
 	Securities []*data.Security
 	Periods    []int
-	Manager    *data.Manager
+	Manager    *data.ManagerV0
 }
 
 func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices *dataframe.DataFrame, rfr dataframe.Series) (*dataframe.DataFrame, error) {

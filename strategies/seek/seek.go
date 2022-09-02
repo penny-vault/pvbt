@@ -137,7 +137,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "seek.Compute")
 	defer span.End()
 
@@ -248,7 +248,7 @@ func (seek *SeekingAlphaQuant) Compute(ctx context.Context, manager *data.Manage
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (seek *SeekingAlphaQuant) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
+func (seek *SeekingAlphaQuant) getRiskOnOffIndicator(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, error) {
 	var indicator *dataframe.DataFrame
 
 	subLog := log.With().Str("Strategy", "seek").Logger()
@@ -415,7 +415,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 }
 
 // prepopulateDataCache loads asset eod prices into the in-memory cache
-func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.Manager) {
+func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.ManagerV0) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
 	defer span.End()
 

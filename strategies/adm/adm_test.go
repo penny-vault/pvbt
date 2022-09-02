@@ -38,7 +38,7 @@ var _ = Describe("Adm", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		strat   *adm.AcceleratingDualMomentum
-		manager *data.Manager
+		manager *data.ManagerV0
 		tz      *time.Location
 		vustx   *data.Security
 	)

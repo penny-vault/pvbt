@@ -88,7 +88,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // donloadPriceData loads EOD quotes for in tickers
-func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, manager *data.Manager) error {
+func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, manager *data.ManagerV0) error {
 	manager.Frequency = data.FrequencyMonthly
 
 	tickers := []*data.Security{}
@@ -243,7 +243,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
-func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
 	defer span.End()
 

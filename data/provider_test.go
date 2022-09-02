@@ -32,7 +32,7 @@ import (
 var _ = Describe("Provider", func() {
 	var (
 		ctx       context.Context
-		dataProxy *data.Manager
+		dataProxy *data.ManagerV0
 		dbPool    pgxmock.PgxConnIface
 		tz        *time.Location
 	)

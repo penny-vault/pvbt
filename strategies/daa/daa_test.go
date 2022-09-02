@@ -40,7 +40,7 @@ var _ = Describe("Daa", func() {
 		vfinx   *data.Security
 		pridx   *data.Security
 		vustx   *data.Security
-		manager *data.Manager
+		manager *data.ManagerV0
 		strat   *daa.KellersDefensiveAssetAllocation
 		tz      *time.Location
 	)

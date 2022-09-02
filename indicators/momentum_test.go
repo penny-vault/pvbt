@@ -37,7 +37,7 @@ var _ = Describe("Momentum", func() {
 	var (
 		dbPool    pgxmock.PgxConnIface
 		momentum  indicators.Indicator
-		manager   *data.Manager
+		manager   *data.ManagerV0
 		indicator *dataframe.DataFrame
 		tz        *time.Location
 		err       error

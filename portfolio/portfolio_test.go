@@ -36,7 +36,7 @@ import (
 
 var _ = Describe("Portfolio", func() {
 	var (
-		dataProxy *data.Manager
+		dataProxy *data.ManagerV0
 		dbPool    pgxmock.PgxConnIface
 		df        *dataframe.DataFrame
 		err       error
