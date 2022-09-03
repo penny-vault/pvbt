@@ -181,8 +181,10 @@ func MockHolidays(db pgxmock.PgxConnIface) {
 func MockAssets(db pgxmock.PgxConnIface) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT ticker, composite_figi FROM assets WHERE active='t'").WillReturnRows(
-		NewCSVRows([]string{"assets.csv"}, map[string]string{}).Rows())
+	db.ExpectQuery("SELECT ticker, composite_figi, active FROM assets ORDER BY active").WillReturnRows(
+		NewCSVRows([]string{"assets.csv"}, map[string]string{
+			"active": "bool",
+		}).Rows())
 	db.ExpectCommit()
 }
 
