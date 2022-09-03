@@ -990,6 +990,7 @@ func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string, dataP
 		tmpHoldings := make(map[string]float64)
 		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &tmpHoldings, &p.Notifications, &p.Benchmark)
 
+		pm.holdings = make(map[data.Security]float64, len(tmpHoldings))
 		for k, v := range tmpHoldings {
 			security, err := data.SecurityFromFigi(k)
 			if err != nil {
