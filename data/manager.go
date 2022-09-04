@@ -18,6 +18,6 @@ package data
 import "time"
 
 type Manager struct {
-	cache         *securityMetricCache
+	cache         *SecurityMetricCache
 	timeReference []time.Time
 }

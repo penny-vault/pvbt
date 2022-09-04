@@ -17,7 +17,6 @@ package data
 
 import (
 	"context"
-	"errors"
 	"sync"
 
 	"github.com/penny-vault/pv-api/data/database"
@@ -34,10 +33,6 @@ var (
 	securitiesByFigi   map[string]*Security
 	securitiesByTicker map[string]*Security
 	writeLocker        sync.RWMutex
-)
-
-var (
-	ErrNotFound = errors.New("security not found")
 )
 
 func LoadSecuritiesFromDB() error {

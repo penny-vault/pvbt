@@ -17,7 +17,6 @@ package data
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
@@ -32,12 +31,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
-)
-
-var (
-	ErrUnsupportedMetric = errors.New("unsupported metric")
-	ErrInvalidTimeRange  = errors.New("start must be before end")
-	ErrNoTradingDays     = errors.New("no trading days available")
 )
 
 type Pvdb struct {
