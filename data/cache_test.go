@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gmeasure"
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
@@ -57,6 +58,34 @@ var _ = Describe("Cache", func() {
 				}
 			})
 
+			It("benchmarks performance", func() {
+				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
+				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
+				vals := []float64{0, 1, 2, 3, 4}
+
+				experiment := gmeasure.NewExperiment("cache set")
+				AddReportEntry(experiment.Name, experiment)
+
+				experiment.SampleDuration("simple set", func(_ int) {
+					cache = data.NewSecurityMetricCache(1024, dates)
+					err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+					Expect(err).To(BeNil())
+				}, gmeasure.SamplingConfig{N: 1000})
+
+				cache = data.NewSecurityMetricCache(1024, dates)
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				Expect(err).To(BeNil())
+
+				beginSubset := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
+				endSubset := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
+
+				experiment.SampleDuration("simple get", func(_ int) {
+					val, err := cache.Get(security, data.MetricAdjustedClose, beginSubset, endSubset)
+					Expect(err).To(BeNil())
+					Expect(val).To(Equal([]float64{1, 2, 3}))
+				}, gmeasure.SamplingConfig{N: 1000})
+			})
+
 			It("should have default count of 0", func() {
 				Expect(cache.Count()).To(Equal(0))
 			})
@@ -73,7 +102,7 @@ var _ = Describe("Cache", func() {
 				Expect(cache.Size()).To(BeNumerically("==", 40), "cache size after set")
 			})
 
-			DescribeTable("check various time ranges", Pending,
+			DescribeTable("check various time ranges",
 				func(a, b int, expectedPresent bool, expectedInterval []*data.Interval) {
 					begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
@@ -119,7 +148,7 @@ var _ = Describe("Cache", func() {
 				}}),
 			)
 
-			DescribeTable("get various time ranges", Pending,
+			DescribeTable("get various time ranges",
 				func(a, b int, expected []float64, expectedError error) {
 					begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
@@ -132,7 +161,7 @@ var _ = Describe("Cache", func() {
 					rangeB := time.Date(2022, 8, b, 0, 0, 0, 0, tz())
 					res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
 					if expectedError == nil {
-						Expect(err).ToNot(BeNil())
+						Expect(err).To(BeNil())
 					} else {
 						Expect(errors.Is(err, expectedError)).To(BeTrue())
 					}
@@ -148,9 +177,20 @@ var _ = Describe("Cache", func() {
 				Entry("When range is completely outside of covered interval (after end)", 10, 12, nil, data.ErrRangeDoesNotExist),
 				Entry("When range is invalid (start after end)", 5, 3, nil, data.ErrInvalidTimeRange),
 				Entry("When range is covered but days only on weekend", 6, 7, []float64{}, nil),
+				Entry("When range is a subset of covered period", 4, 5, []float64{1, 2}, nil),
+				Entry("Range touches left extremity", 3, 5, []float64{0, 1, 2}, nil),
+				Entry("Range touches right extremity", 5, 8, []float64{2, 3}, nil),
+				Entry("Range covers full period", 3, 8, []float64{0, 1, 2, 3}, nil),
+				Entry("Range covers a single day 0", 3, 3, []float64{0}, nil),
+				Entry("Range covers a single day 1", 4, 4, []float64{1}, nil),
+				Entry("Range covers a single day 2", 5, 5, []float64{2}, nil),
+				Entry("Range covers a single day 3", 8, 8, []float64{3}, nil),
+				Entry("Range begins on weekend", 6, 8, []float64{3}, nil),
+				Entry("Range ends on saturday", 3, 6, []float64{0, 1, 2}, nil),
+				Entry("Range ends on sunday", 3, 6, []float64{0, 1, 2}, nil),
 			)
 
-			It("should successfully get values", Pending, func() {
+			It("should successfully get values", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1, 2, 3, 4}
@@ -162,34 +202,25 @@ var _ = Describe("Cache", func() {
 				Expect(result).To(Equal(vals))
 			})
 
-			It("should error for metric that doesn't exist", Pending, func() {
+			It("should error for metric that doesn't exist", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				vals := []float64{0, 1, 2, 3, 4}
-
-				cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
-
 				_, err := cache.Get(security, data.MetricClose, begin, end)
-				Expect(errors.Is(err, data.ErrMetricDoesNotExist)).To(BeTrue(), "error should be metric does not exist")
+				Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue(), "error should be metric does not exist")
 			})
 
-			It("should error for security that doesn't exist", Pending, func() {
+			It("should error for security that doesn't exist", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				vals := []float64{0, 1, 2, 3, 4}
-
-				cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
-
 				security2 := &data.Security{
 					CompositeFigi: "second",
 					Ticker:        "second",
 				}
-
 				_, err := cache.Get(security2, data.MetricClose, begin, end)
-				Expect(errors.Is(err, data.ErrSecurityDoesNotExist)).To(BeTrue(), "error should be security does not exist")
+				Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue(), "error should be security does not exist")
 			})
 
-			It("should error when Set size is greater than total size of cache", Pending, func() {
+			It("should error when Set size is greater than total size of cache", func() {
 				cache = data.NewSecurityMetricCache(2, dates)
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
@@ -199,8 +230,8 @@ var _ = Describe("Cache", func() {
 				Expect(errors.Is(err, data.ErrDataLargerThanCache)).To(BeTrue(), "error should be data larger than cache")
 			})
 
-			It("should evict old data when cumulative sets exceed the configured memory", Pending, func() {
-				cache = data.NewSecurityMetricCache(2, dates)
+			It("should evict old data when cumulative sets exceed the configured memory", func() {
+				cache = data.NewSecurityMetricCache(16, dates)
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1}
@@ -219,7 +250,6 @@ var _ = Describe("Cache", func() {
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin2, end2)
 				Expect(err).To(BeNil())
-				Expect(result).ToNot(Equal(vals))
 				Expect(result).To(Equal(vals2))
 			})
 

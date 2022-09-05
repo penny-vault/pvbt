@@ -15,7 +15,11 @@
 
 package data
 
-import "time"
+import (
+	"time"
+
+	"github.com/rs/zerolog"
+)
 
 // Intervals store a beginning and ending time period
 type Interval struct {
@@ -34,11 +38,7 @@ func (interval *Interval) Adjacent(other *Interval) bool {
 func (interval *Interval) AdjacentLeft(other *Interval) bool {
 	// if other is prior to interval - check if they touch
 	otherEnd := other.End.AddDate(0, 0, 1)
-	if otherEnd.Equal(interval.Begin) {
-		return true
-	}
-
-	return false
+	return otherEnd.Equal(interval.Begin)
 }
 
 // Adjacent checks if offset touches the ending of interval (daily resolution)
@@ -46,15 +46,12 @@ func (interval *Interval) AdjacentLeft(other *Interval) bool {
 func (interval *Interval) AdjacentRight(other *Interval) bool {
 	// if other is after interval - check if they touch
 	otherBegin := other.Begin.AddDate(0, 0, -1)
-	if otherBegin.Equal(interval.End) {
-		return true
-	}
-	return false
+	return otherBegin.Equal(interval.End)
 }
 
 // Contains returns true if interval completely contains other
 func (interval *Interval) Contains(other *Interval) bool {
-	if (other.Begin.Before(interval.End) || other.Begin.Equal(interval.End)) && (other.End.After(interval.Begin) || other.End.Equal(interval.Begin)) {
+	if (other.Begin.After(interval.Begin) || other.Begin.Equal(interval.Begin)) && (other.End.Before(interval.End) || other.End.Equal(interval.End)) {
 		return true
 	}
 	return false
@@ -81,7 +78,7 @@ func (interval *Interval) Contiguous(other *Interval) bool {
 
 // Overlaps returns true if interval and other overlap
 func (interval *Interval) Overlaps(other *Interval) bool {
-	if other.Begin.Before(interval.End) && other.End.After(interval.Begin) {
+	if (other.Begin.Before(interval.End) || other.Begin.Equal(interval.End)) && (other.End.After(interval.Begin) || other.End.Equal(interval.Begin)) {
 		return true
 	}
 	return false
@@ -94,4 +91,9 @@ func (interval *Interval) Valid() error {
 	}
 
 	return nil
+}
+
+// MarshalZerologObject implement the log marshaller interface for zerolog
+func (interval *Interval) MarshalZerologObject(e *zerolog.Event) {
+	e.Time("Begin", interval.Begin).Time("End", interval.End)
 }

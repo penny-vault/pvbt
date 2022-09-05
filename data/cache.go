@@ -16,7 +16,6 @@
 package data
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"sync"
@@ -27,8 +26,9 @@ import (
 )
 
 type CacheItem struct {
-	Values []float64
-	Period *Interval
+	Values   []float64
+	Period   *Interval
+	startIdx int
 }
 
 type SecurityMetricCache struct {
@@ -69,12 +69,103 @@ func NewSecurityMetricCache(sz int64, periods []time.Time) *SecurityMetricCache 
 // Check returns if the requested range is in the cache. If the range is not completely covered by the cache
 // returns false and a list of intervals covered by the cache that partially match the requested range.
 func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin, end time.Time) (bool, []*Interval) {
-	return false, nil
+	cache.locker.RLock()
+	defer cache.locker.RUnlock()
+
+	k := key(security, metric)
+
+	requestedInterval := &Interval{
+		Begin: begin,
+		End:   end,
+	}
+
+	if err := requestedInterval.Valid(); err != nil {
+		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		return false, []*Interval{}
+	}
+
+	touchingIntervals := []*Interval{}
+	if items, ok := cache.values[k]; ok {
+		for _, item := range items {
+			if item.Period.Contains(requestedInterval) {
+				return true, []*Interval{item.Period}
+			}
+			if item.Period.Overlaps(requestedInterval) {
+				touchingIntervals = append(touchingIntervals, item.Period)
+			}
+		}
+	}
+
+	return false, touchingIntervals
 }
 
-// Get returns the requested data over the range. If the data does not return ErrDoesNotExist
+// Get returns the requested data over the range. If no data matches the hash key return ErrRangeDoesNotExist
 func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) ([]float64, error) {
-	return nil, errors.New("not implemented")
+	cache.locker.RLock()
+	defer cache.locker.RUnlock()
+
+	k := key(security, metric)
+
+	requestedInterval := &Interval{
+		Begin: begin,
+		End:   end,
+	}
+
+	if err := requestedInterval.Valid(); err != nil {
+		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		return nil, ErrInvalidTimeRange
+	}
+
+	if items, ok := cache.values[k]; ok {
+		for _, item := range items {
+			if item.Period.Contains(requestedInterval) {
+				periodSubset := cache.periods[item.startIdx:]
+				var beginIdx int
+				var endIdx int
+				beginExactMatch := false
+				endExactMatch := false
+
+				if item.Period.Begin.Equal(begin) {
+					beginIdx = 0
+					beginExactMatch = true
+				} else {
+					beginIdx = sort.Search(len(periodSubset), func(i int) bool {
+						idxVal := periodSubset[i]
+						return (idxVal.After(begin) || idxVal.Equal(begin))
+					})
+					if periodSubset[beginIdx].Equal(begin) {
+						beginExactMatch = true
+					}
+				}
+
+				if item.Period.End.Equal(end) {
+					endIdx = len(item.Values) - 1
+					endExactMatch = true
+				} else {
+					endIdx = sort.Search(len(periodSubset), func(i int) bool {
+						idxVal := periodSubset[i]
+						return (idxVal.After(end) || idxVal.Equal(end))
+					})
+					if periodSubset[endIdx].Equal(end) {
+						endExactMatch = true
+					}
+				}
+
+				// special case: no dates match range because its a holiday or weekend
+				if !beginExactMatch && !endExactMatch && beginIdx == endIdx {
+					return []float64{}, nil
+				}
+
+				if !endExactMatch {
+					endIdx--
+				}
+
+				return item.Values[beginIdx : endIdx+1], nil
+			}
+		}
+	}
+
+	return nil, ErrRangeDoesNotExist
 }
 
 // Set adds the data for the specified security and metric to the cache
@@ -114,9 +205,15 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 		items = []*CacheItem{}
 	}
 
+	startIdx := sort.Search(len(cache.periods), func(i int) bool {
+		idxVal := cache.periods[i]
+		return (idxVal.After(interval.Begin) || idxVal.Equal(interval.Begin))
+	})
+
 	items, sizeAdded := cache.merge(&CacheItem{
-		Values: val,
-		Period: interval,
+		Values:   val,
+		Period:   interval,
+		startIdx: startIdx,
 	}, items)
 
 	cache.values[k] = items
@@ -191,6 +288,8 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 				End:   maxTime(new.Period.End, item.Period.Begin),
 			}
 
+			mergedStartIdx := item.startIdx
+
 			added := 0
 			// new values before current values
 			mergedValues := make([]float64, 0, len(item.Values))
@@ -209,6 +308,7 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 				numDates := endIdx - startIdx
 				added += numDates
 				mergedValues = new.Values[:numDates]
+				mergedStartIdx = startIdx
 			}
 
 			mergedValues = append(mergedValues, item.Values...)
@@ -233,6 +333,7 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 
 			item.Period = mergedInterval
 			item.Values = mergedValues
+			item.startIdx = mergedStartIdx
 
 			return items, added
 		}
