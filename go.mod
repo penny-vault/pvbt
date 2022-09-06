@@ -17,7 +17,7 @@ require (
 	github.com/guptarohit/asciigraph v0.5.5 // indirect
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
-	github.com/jackc/pgx/v4 v4.17.1
+	github.com/jackc/pgx/v4 v4.17.2
 	github.com/jdfergason/jwt/v2 v2.2.6
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.25
