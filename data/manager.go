@@ -15,9 +15,72 @@
 
 package data
 
-import "time"
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/viper"
+)
 
 type Manager struct {
-	cache         *SecurityMetricCache
-	timeReference []time.Time
+	cache       *SecurityMetricCache
+	pvdb        *PvDb
+	locker      sync.RWMutex
+	tradingDays []time.Time
+}
+
+var (
+	managerOnce     sync.Once
+	managerInstance *Manager
+)
+
+func getManagerInstance() *Manager {
+	managerOnce.Do(func() {
+		err := LoadSecuritiesFromDB()
+		if err != nil {
+			log.Error().Err(err).Msg("could not load securities database")
+		}
+
+		pvdb := NewPvDb()
+
+		managerInstance = &Manager{
+			cache:  NewSecurityMetricCache(viper.GetInt64("data.cacheBytes"), []time.Time{}),
+			pvdb:   pvdb,
+			locker: sync.RWMutex{},
+		}
+
+		managerInstance.getTradingDays()
+	})
+	return managerInstance
+}
+
+func (manager *Manager) getTradingDays() {
+	ctx := context.Background()
+	begin := time.Date(1980, 1, 1, 0, 0, 0, 0, common.GetTimezone())
+	now := time.Now()
+	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, common.GetTimezone())
+
+	tradingDays, err := manager.pvdb.TradingDays(ctx, begin, end, FrequencyDaily)
+	if err != nil {
+		log.Panic().Err(err).Msg("could not load trading days")
+	}
+
+	manager.locker.Lock()
+	manager.tradingDays = tradingDays
+	manager.cache.periods = tradingDays
+	manager.locker.Unlock()
+
+	refreshTimer := time.NewTimer(24 * time.Hour)
+	go func() {
+		<-refreshTimer.C
+		log.Info().Msg("refreshing trading days")
+		manager.getTradingDays()
+	}()
+}
+
+func (manager *Manager) getData(securities []*Security, metrics []Metric, begin, end time.Time) (map[string]float64, error) {
+	return nil, nil
 }
