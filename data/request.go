@@ -71,55 +71,12 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 }
 
 func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
-	// if metric is open, high, low, close, or adjusted close also pre-fetch splits
-	// and dividends
-	_, hasOpen := req.metrics[MetricOpen]
-	_, hasHigh := req.metrics[MetricHigh]
-	_, hasLow := req.metrics[MetricLow]
-	_, hasClose := req.metrics[MetricClose]
-	_, hasAdjustedClose := req.metrics[MetricAdjustedClose]
-
-	if hasOpen || hasHigh || hasLow || hasClose || hasAdjustedClose {
-		req.metrics[MetricSplitFactor] = 3
-		req.metrics[MetricDividendCash] = 3
-	}
-
-	metrics := make([]Metric, 0, len(req.metrics))
-	metricsStr := make([]string, 0, len(req.metrics))
-	for k := range req.metrics {
-		metrics = append(metrics, k)
-		metricsStr = append(metricsStr, string(k))
-	}
-
-	subLog := log.With().Time("Begin", a).Time("End", b).Strs("Metrics", metricsStr).Str("Frequency", string(req.frequency)).Logger()
-
 	manager := getManagerInstance()
-
-	// check if the data is in the cache
-	type securityMetric struct {
-		security *Security
-		metric   Metric
+	result, err := manager.GetData(req.securities, req.metricsArray(), req.frequency, a, b)
+	if err != nil {
+		log.Error().Err(err).Msg("could not get data")
 	}
-
-	toPull := make([]securityMetric, 0)
-	for _, security := range req.securities {
-		for metric := range req.metrics {
-			data, err := manager.cache.Get(security, metric, a, b)
-			if err != nil {
-				toPull[security] = metric
-			}
-		}
-	}
-
-	if res, err := manager.pvdb.Get(ctx, req.securities, metrics, req.frequency, a, b); err == nil {
-		df := dataFrameFromMap(res, a, b)
-		return df, nil
-	} else {
-		subLog.Error().Err(err).Msg("could not fetch data")
-		return nil, err
-	}
-
-	return nil, ErrNotFound
+	return securityMetricMapToDataFrame(result, a, b), nil
 }
 
 func (req *DataRequest) On(a time.Time) (map[Security]float64, error) {
@@ -128,4 +85,14 @@ func (req *DataRequest) On(a time.Time) (map[Security]float64, error) {
 
 // private methods
 
-func dataFrameFromMap(vals map[Security][]float64, begin, end time.Time) *dataframe.DataFrame
+func (req *DataRequest) metricsArray() []Metric {
+	metrics := make([]Metric, 0, len(req.metrics))
+	for k := range req.metrics {
+		metrics = append(metrics, k)
+	}
+	return metrics
+}
+
+func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, begin, end time.Time) *dataframe.DataFrame {
+	return nil
+}

@@ -31,6 +31,11 @@ type CacheItem struct {
 	startIdx int
 }
 
+type SecurityMetric struct {
+	security Security
+	metric   Metric
+}
+
 type SecurityMetricCache struct {
 	sizeBytes    int64
 	maxSizeBytes int64
@@ -72,7 +77,10 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	cache.locker.RLock()
 	defer cache.locker.RUnlock()
 
-	k := key(security, metric)
+	k := SecurityMetric{
+		security: *security,
+		metric:   metric,
+	}
 
 	requestedInterval := &Interval{
 		Begin: begin,
@@ -85,7 +93,7 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	}
 
 	touchingIntervals := []*Interval{}
-	if items, ok := cache.values[k]; ok {
+	if items, ok := cache.values[key(k)]; ok {
 		for _, item := range items {
 			if item.Period.Contains(requestedInterval) {
 				return true, []*Interval{item.Period}
@@ -104,7 +112,10 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 	cache.locker.RLock()
 	defer cache.locker.RUnlock()
 
-	k := key(security, metric)
+	k := SecurityMetric{
+		security: *security,
+		metric:   metric,
+	}
 
 	requestedInterval := &Interval{
 		Begin: begin,
@@ -116,7 +127,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 		return nil, ErrInvalidTimeRange
 	}
 
-	if items, ok := cache.values[k]; ok {
+	if items, ok := cache.values[key(k)]; ok {
 		for _, item := range items {
 			if item.Period.Contains(requestedInterval) {
 				periodSubset := cache.periods[item.startIdx:]
@@ -184,7 +195,10 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 		cache.deleteLRU(toAddBytes)
 	}
 
-	k := key(security, metric)
+	k := key(SecurityMetric{
+		security: *security,
+		metric:   metric,
+	})
 
 	// create an interval and check that it's valid
 	interval := &Interval{
@@ -234,8 +248,8 @@ func (cache *SecurityMetricCache) Size() int64 {
 
 // Private Implementation
 
-func key(security *Security, metric Metric) string {
-	return fmt.Sprintf("%s:%s", security.CompositeFigi, metric)
+func key(s SecurityMetric) string {
+	return fmt.Sprintf("%s:%s", s.security.CompositeFigi, s.metric)
 }
 
 func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {

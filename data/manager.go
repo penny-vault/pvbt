@@ -81,6 +81,84 @@ func (manager *Manager) getTradingDays() {
 	}()
 }
 
-func (manager *Manager) getData(securities []*Security, metrics []Metric, begin, end time.Time) (map[string]float64, error) {
-	return nil, nil
+func (manager *Manager) GetData(securities []*Security, metrics []Metric, frequency Frequency, begin, end time.Time) (map[SecurityMetric][]float64, error) {
+	ctx := context.Background()
+	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
+
+	normalizedMetrics := normalizeMetrics(metrics)
+
+	// check what needs to be pulled
+	toPullSecuritiesMap := make(map[*Security]bool, len(securities))
+	for _, security := range securities {
+		for _, metric := range normalizedMetrics {
+			contains, _ := manager.cache.Check(security, metric, begin, end)
+			if !contains {
+				toPullSecuritiesMap[security] = true
+			}
+		}
+	}
+
+	toPullSecuritiesArray := make([]*Security, 0, len(toPullSecuritiesMap))
+	for k := range toPullSecuritiesMap {
+		toPullSecuritiesArray = append(toPullSecuritiesArray, k)
+	}
+
+	// adjust request date range
+	duration := end.Sub(begin)
+	modifiedEnd := end
+	if duration < viper.GetDuration("database.min_request_duration") {
+		modifiedEnd = begin.Add(viper.GetDuration("database.min_request_duration"))
+	}
+
+	// pull required data not currently in cache
+	if result, err := manager.pvdb.Get(ctx, toPullSecuritiesArray, normalizedMetrics, frequency, begin, modifiedEnd); err == nil {
+		for k, v := range result {
+			manager.cache.Set(&k.security, k.metric, begin, modifiedEnd, v)
+		}
+	} else {
+		subLog.Error().Err(err).Msg("could not fetch data")
+		return nil, err
+	}
+
+	// get specific time period
+	data := make(map[SecurityMetric][]float64)
+	for _, security := range securities {
+		for _, metric := range normalizedMetrics {
+			if vals, err := manager.cache.Get(security, metric, begin, end); err == nil {
+				data[SecurityMetric{
+					security: *security,
+					metric:   metric,
+				}] = vals
+			} else {
+				subLog.Error().Err(err).Msg("could not fetch data")
+				return nil, err
+			}
+		}
+	}
+
+	return data, nil
+}
+
+func normalizeMetrics(metrics []Metric) []Metric {
+	metricMap := make(map[Metric]int, len(metrics))
+
+	// if metric is open, high, low, close, or adjusted close also pre-fetch splits
+	// and dividends
+	_, hasOpen := metricMap[MetricOpen]
+	_, hasHigh := metricMap[MetricHigh]
+	_, hasLow := metricMap[MetricLow]
+	_, hasClose := metricMap[MetricClose]
+	_, hasAdjustedClose := metricMap[MetricAdjustedClose]
+
+	if hasOpen || hasHigh || hasLow || hasClose || hasAdjustedClose {
+		metricMap[MetricSplitFactor] = 3
+		metricMap[MetricDividendCash] = 3
+	}
+
+	normalizedMetrics := make([]Metric, 0, len(metricMap))
+	for k := range metricMap {
+		normalizedMetrics = append(normalizedMetrics, k)
+	}
+
+	return normalizedMetrics
 }

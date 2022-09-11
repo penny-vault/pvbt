@@ -226,7 +226,7 @@ func buildDataFrame(vals map[int]map[string]float64, securities []*Security, tra
 }
 
 // TODO
-func (p *PvDb) Get(ctx context.Context, securities []*Security, metrics []Metric, frequency Frequency, begin, end time.Time) (map[Security][]float64, error) {
+func (p *PvDb) Get(ctx context.Context, securities []*Security, metrics []Metric, frequency Frequency, begin, end time.Time) (map[SecurityMetric][]float64, error) {
 	return nil, nil
 }
 
