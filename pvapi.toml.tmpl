@@ -6,27 +6,31 @@ secret = "TODO"
 client_id = "TODO"
 domain = "TODO"
 
-[database]
-url = "TODO"
-max_temp_portfolio_age_secs = 86400
-
-[log]
-level = "warning"
-report_caller = true
-output = "stdout"
-loki_url = ""
-
-[sendgrid]
-apikey = ""
-
 [cache]
 redis = false
 redis_url = "" # redis://<user>:<pass>@localhost:6379/<db>
 local_size = 10 # number of items to cache in local memory
 ttl = 86400 # number of seconds to store in redis cache
 
-[server]
-port = 3000
+[database]
+url = "TODO"
+# e.g. url = "postgres://pvapi@localhost/pennyvault"
+max_temp_portfolio_age_secs = 86400
+min_request_duration = "126d" # minimum duration for data requests from database
+
+[debug]
+dump_csv = false
+
+[email]
+name = "Penny Vault"
+address = "no-reply@pennyvault.com"
+date_format = "02 Jan 2006"
+
+[log]
+level = "warning"
+report_caller = true
+output = "stdout"
+pretty = true
 
 [nats]
 server = "tls://connect.ngs.global"
@@ -34,3 +38,17 @@ credentials = "<path to pvapi.creds>"
 requests_subject = "portfolios.request"
 requests_consumer = "pvapi_requests_consumer"
 status_subject = "portfolios.status"
+
+# Configure open telemetry end-points. Headers required by the OLTP server
+# (i.e. authentication) can be configured as a sub-table called otlp.headers
+[otlp]
+endpoint = "server.otlp.com"
+[otlp.headers]
+"x-auth" = "example-auth"
+
+[sendgrid]
+apikey = "TODO"
+template = "<email template id>"
+
+[server]
+port = 3000
