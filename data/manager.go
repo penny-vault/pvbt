@@ -126,8 +126,8 @@ func (manager *Manager) GetData(securities []*Security, metrics []Metric, freque
 		for _, metric := range normalizedMetrics {
 			if vals, err := manager.cache.Get(security, metric, begin, end); err == nil {
 				data[SecurityMetric{
-					security: *security,
-					metric:   metric,
+					SecurityObject: *security,
+					MetricObject:   metric,
 				}] = vals
 			} else {
 				subLog.Error().Err(err).Msg("could not fetch data")

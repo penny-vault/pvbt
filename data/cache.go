@@ -32,8 +32,8 @@ type CacheItem struct {
 }
 
 type SecurityMetric struct {
-	security Security
-	metric   Metric
+	SecurityObject Security
+	MetricObject   Metric
 }
 
 type SecurityMetricCache struct {
@@ -78,8 +78,8 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	defer cache.locker.RUnlock()
 
 	k := SecurityMetric{
-		security: *security,
-		metric:   metric,
+		SecurityObject: *security,
+		MetricObject:   metric,
 	}
 
 	requestedInterval := &Interval{
@@ -113,8 +113,8 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 	defer cache.locker.RUnlock()
 
 	k := SecurityMetric{
-		security: *security,
-		metric:   metric,
+		SecurityObject: *security,
+		MetricObject:   metric,
 	}
 
 	requestedInterval := &Interval{
@@ -196,8 +196,8 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 	}
 
 	k := key(SecurityMetric{
-		security: *security,
-		metric:   metric,
+		SecurityObject: *security,
+		MetricObject:   metric,
 	})
 
 	// create an interval and check that it's valid
@@ -249,7 +249,7 @@ func (cache *SecurityMetricCache) Size() int64 {
 // Private Implementation
 
 func key(s SecurityMetric) string {
-	return fmt.Sprintf("%s:%s", s.security.CompositeFigi, s.metric)
+	return fmt.Sprintf("%s:%s", s.SecurityObject.CompositeFigi, s.MetricObject)
 }
 
 func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {

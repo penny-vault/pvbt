@@ -22,7 +22,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/georgysavva/scany/pgxscan"
 	dataframe "github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
@@ -272,24 +271,19 @@ func (p *PvDb) GetMeasurements(ctx context.Context, securities []*Security, metr
 	}
 
 	// parse database rows
-	vals := make(map[int]map[string]float64, len(securities))
-
-	type Measurement struct {
-		EventDate     time.Time
-		CompositeFigi string
-		Open          float64
-		High          float64
-		Low           float64
-		Close         float64
-		AdjClose      float64
-	}
-
-	securityCnt := len(securities)
+	vals := make(map[SecurityMetric][]float64, len(securities))
 
 	for rows.Next() {
-		meas := Measurement{}
+		var eventDate time.Time
+		var compositeFigi string
 
-		if err := pgxscan.ScanRow(&meas, rows); err != nil {
+		args := []interface{}{&eventDate, &compositeFigi}
+		metricVals := make([]*float64, len(metricColumns))
+		for _, metricVal := range metricVals {
+			args = append(args, metricVal)
+		}
+
+		if err := rows.Scan(args...); err != nil {
 			log.Error().Stack().Err(err).Msg("failed to load eod prices -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
@@ -297,12 +291,23 @@ func (p *PvDb) GetMeasurements(ctx context.Context, securities []*Security, metr
 			return nil, err
 		}
 
-		meas.EventDate = time.Date(meas.EventDate.Year(), meas.EventDate.Month(), meas.EventDate.Day(), 16, 0, 0, 0, tz)
-		dateHash := date.Year()*1000 + date.YearDay()
-		valMap, ok := vals[dateHash]
-		if !ok {
-			valMap = make(map[string]float64, securityCnt)
-			vals[dateHash] = valMap
+		eventDate = time.Date(eventDate.Year(), eventDate.Month(), eventDate.Day(), 16, 0, 0, 0, tz)
+		security, err := SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Msg("cannot lookup security in local security cache")
+		}
+
+		for idx, metric := range metrics {
+			securityMetric := SecurityMetric{
+				SecurityObject: *security,
+				MetricObject:   metric,
+			}
+			if metricArray, ok := vals[securityMetric]; ok {
+				metricArray = append(metricArray, *metricVals[idx])
+				vals[securityMetric] = metricArray
+			} else {
+				vals[securityMetric] = []float64{*metricVals[idx]}
+			}
 		}
 
 		switch metric {
