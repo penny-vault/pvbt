@@ -24,7 +24,7 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
-	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/dataframe"
 )
 
 // Factory method implementing the Factory pattern to create a new Strategy object

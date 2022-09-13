@@ -13,19 +13,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package indicators
+package data
 
-import (
-	"context"
-	"time"
+import "time"
 
-	"github.com/penny-vault/pv-api/dataframe"
-)
-
-var (
-	SeriesName = "indicator"
-)
-
-type Indicator interface {
-	IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error)
+type DataFrame struct {
+	dates []time.Time
+	vals  [][]float64
 }

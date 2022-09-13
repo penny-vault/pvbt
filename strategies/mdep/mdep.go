@@ -34,10 +34,10 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v4"
-	"github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"

@@ -21,11 +21,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jdfergason/dataframe-go"
-	"github.com/jdfergason/dataframe-go/math/funcs"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
 
@@ -42,7 +40,7 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 	series := []dataframe.Series{}
 	series = append(series, prices.Series[dateSeriesIdx].Copy())
 
-	aggFn := dfextras.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
+	aggFn := dataframe.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
 		var sum float64
 		for _, val := range vals {
 			if v, ok := val.(float64); ok {
@@ -63,8 +61,8 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 
 	for _, ii := range m.Periods {
 		// compute a lag for each series
-		lag := dfextras.Lag(ii, prices)
-		roll, err := dfextras.Rolling(ctx, ii, rfr.Copy(), aggFn)
+		lag := dataframe.Lag(ii, prices)
+		roll, err := dataframe.Rolling(ctx, ii, rfr.Copy(), aggFn)
 		if err != nil {
 			log.Error().Err(err).Msg("error computing rolling sum of risk free rate")
 			return nil, err
@@ -148,33 +146,35 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	}
 
 	// run calculations
-	for _, security := range m.Securities {
-		for _, jj := range m.Periods {
-			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
-			if err := funcs.Evaluate(ctx, momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
-				log.Error().Stack().Err(err).Msg("could not calculate momentum")
+	/*
+		for _, security := range m.Securities {
+			for _, jj := range m.Periods {
+				fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
+				if err := funcs.Evaluate(ctx, momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
+					log.Error().Stack().Err(err).Msg("could not calculate momentum")
+					return nil, err
+				}
+			}
+		}
+
+		cols := make([]string, 0, len(m.Securities))
+		for _, security := range m.Securities {
+			scoreName := fmt.Sprintf("%sSCORE", security.CompositeFigi)
+			cols = append(cols, scoreName)
+			fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
+			if err := funcs.Evaluate(ctx, momentum, fn, scoreName); err != nil {
+				log.Error().Stack().Err(err).Msg("could not calculate score")
 				return nil, err
 			}
 		}
-	}
 
-	cols := make([]string, 0, len(m.Securities))
-	for _, security := range m.Securities {
-		scoreName := fmt.Sprintf("%sSCORE", security.CompositeFigi)
-		cols = append(cols, scoreName)
-		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
-		if err := funcs.Evaluate(ctx, momentum, fn, scoreName); err != nil {
-			log.Error().Stack().Err(err).Msg("could not calculate score")
+		// compute indicator
+		fn := funcs.RegFunc(fmt.Sprintf("max(%s)", strings.Join(cols, ",")))
+		if err := funcs.Evaluate(ctx, momentum, fn, SeriesName); err != nil {
+			log.Error().Stack().Err(err).Msg("could not calculate indicator column")
 			return nil, err
 		}
-	}
-
-	// compute indicator
-	fn := funcs.RegFunc(fmt.Sprintf("max(%s)", strings.Join(cols, ",")))
-	if err := funcs.Evaluate(ctx, momentum, fn, SeriesName); err != nil {
-		log.Error().Stack().Err(err).Msg("could not calculate indicator column")
-		return nil, err
-	}
+	*/
 
 	var seriesIdx int
 	if seriesIdx, err = momentum.NameToColumn(SeriesName); err != nil {
@@ -186,7 +186,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	dateSeries := prices.Series[dateSeriesIdx]
 	indicatorDF := dataframe.NewDataFrame(dateSeries, indicatorSeries)
 
-	if indicatorDF, err = dfextras.DropNA(ctx, indicatorDF); err != nil {
+	if indicatorDF, err = dataframe.DropNA(ctx, indicatorDF); err != nil {
 		log.Error().Err(err).Msg("could not drop indicator NA rows")
 		return nil, err
 	}

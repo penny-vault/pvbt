@@ -36,7 +36,6 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/dfextras"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -44,7 +43,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
 
@@ -139,7 +138,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 		return ErrCouldNotRetrieveData
 	}
 
-	prices, err := dfextras.DropNA(ctx, prices)
+	prices, err := dataframe.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -158,7 +157,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 	manager.Begin = begin
 	manager.Frequency = data.FrequencyMonthly
 
-	final, err = dfextras.DropNA(ctx, final)
+	final, err = dataframe.DropNA(ctx, final)
 	if err != nil {
 		return err
 	}
@@ -344,7 +343,7 @@ func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager
 	}
 
 	// Compute momentum scores
-	momentum, err := dfextras.Momentum13612(ctx, daa.prices)
+	momentum, err := dataframe.Momentum13612(ctx, daa.prices)
 	if err != nil {
 		return nil, nil, err
 	}

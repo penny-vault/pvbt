@@ -33,12 +33,9 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/jdfergason/dataframe-go"
-	"github.com/jdfergason/dataframe-go/exports"
-	"github.com/jdfergason/dataframe-go/math/funcs"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -105,7 +102,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 		return ErrCouldNotRetrieveData
 	}
 
-	prices, err = dfextras.DropNA(ctx, prices)
+	prices, err = dataframe.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -123,7 +120,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 	manager.Begin = begin
 	manager.Frequency = data.FrequencyMonthly
 
-	final, err = dfextras.DropNA(ctx, final)
+	final, err = dataframe.DropNA(ctx, final)
 	if err != nil {
 		return err
 	}
@@ -143,7 +140,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 		colNames[ii+1] = t.CompositeFigi
 	}
 
-	eod, riskFreeRate, err := dfextras.Split(ctx, prices, colNames...)
+	eod, riskFreeRate, err := dataframe.Split(ctx, prices, colNames...)
 	if err != nil {
 		return err
 	}
@@ -164,7 +161,7 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 	rfr := adm.riskFreeRate.Series[1]
 
-	aggFn := dfextras.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
+	aggFn := dataframe.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
 		var sum float64
 		for _, val := range vals {
 			if v, ok := val.(float64); ok {
@@ -191,8 +188,8 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 	}
 
 	for _, ii := range periods {
-		lag := dfextras.Lag(ii, adm.prices)
-		roll, err := dfextras.Rolling(ctx, ii, rfr.Copy(), aggFn)
+		lag := dataframe.Lag(ii, adm.prices)
+		roll, err := dataframe.Rolling(ctx, ii, rfr.Copy(), aggFn)
 
 		if err != nil {
 			return err
@@ -215,23 +212,25 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 	adm.momentum = dataframe.NewDataFrame(series...)
 
-	for ii := range adm.inTickers {
-		security := adm.inTickers[ii]
-		for _, jj := range periods {
-			fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
-			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
-				log.Error().Stack().Err(err).Msg("could not calculate momentum")
+	/*
+		for ii := range adm.inTickers {
+			security := adm.inTickers[ii]
+			for _, jj := range periods {
+				fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
+				if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
+					log.Error().Stack().Err(err).Msg("could not calculate momentum")
+				}
 			}
 		}
-	}
 
-	for ii := range adm.inTickers {
-		security := adm.inTickers[ii]
-		fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
-		if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", security.CompositeFigi)); err != nil {
-			log.Error().Stack().Err(err).Msg("could not calculate score")
+		for ii := range adm.inTickers {
+			security := adm.inTickers[ii]
+			fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
+			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", security.CompositeFigi)); err != nil {
+				log.Error().Stack().Err(err).Msg("could not calculate score")
+			}
 		}
-	}
+	*/
 
 	// write to csv
 	if viper.GetBool("debug.dump_csv") {
@@ -291,9 +290,9 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 		scores = append(scores, series)
 	}
 	scoresDf := dataframe.NewDataFrame(scores...)
-	scoresDf, _ = dfextras.DropNA(ctx, scoresDf)
+	scoresDf, _ = dataframe.DropNA(ctx, scoresDf)
 
-	argmax, err := dfextras.ArgMax(ctx, scoresDf)
+	argmax, err := dataframe.ArgMax(ctx, scoresDf)
 	argmax.Rename(common.TickerName)
 	if err != nil {
 		return nil, nil, err
@@ -364,10 +363,12 @@ func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
 		log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error opening file")
 		return
 	}
-	if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
-		return
-	}
+	/*
+		if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
+			log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
+			return
+		}
+	*/
 
 	// prices
 	fh, err = os.OpenFile("adm_prices.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
@@ -375,10 +376,12 @@ func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
 		log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error opening file")
 		return
 	}
-	if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
-		return
-	}
+	/*
+		if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
+			log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
+			return
+		}
+	*/
 
 	// riskfree
 	fh, err = os.OpenFile("adm_riskfreerate.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
@@ -386,8 +389,10 @@ func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
 		log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error opening file")
 		return
 	}
-	if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
-		return
-	}
+	/*
+		if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
+			log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
+			return
+		}
+	*/
 }

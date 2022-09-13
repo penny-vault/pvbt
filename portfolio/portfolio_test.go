@@ -20,10 +20,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgconn"
-	"github.com/jdfergason/dataframe-go"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pv-api/common"

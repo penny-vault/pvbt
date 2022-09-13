@@ -23,11 +23,11 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/jackc/pgconn"
-	"github.com/jdfergason/dataframe-go"
 	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/tradecron"

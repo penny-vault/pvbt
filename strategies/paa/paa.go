@@ -26,15 +26,12 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	json "github.com/goccy/go-json"
-	dataframe "github.com/jdfergason/dataframe-go"
-	"github.com/jdfergason/dataframe-go/math/funcs"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/dfextras"
+	dataframe "github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -129,7 +126,7 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 		return ErrDataRetrievalFailed
 	}
 
-	prices, err := dfextras.DropNA(ctx, prices)
+	prices, err := dataframe.DropNA(ctx, prices)
 	if err != nil {
 		return err
 	}
@@ -151,7 +148,7 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 	manager.Begin = begin
 	manager.Frequency = data.FrequencyMonthly
 
-	final, err = dfextras.DropNA(ctx, final)
+	final, err = dataframe.DropNA(ctx, final)
 	if err != nil {
 		return err
 	}
@@ -188,27 +185,29 @@ func (paa *KellersProtectiveAssetAllocation) validateTimeRange(manager *data.Man
 func (paa *KellersProtectiveAssetAllocation) mom(ctx context.Context) error {
 	dontLock := dataframe.Options{DontLock: true}
 
-	sma, err := dfextras.SMA(paa.lookback+1, paa.prices)
+	sma, err := dataframe.SMA(paa.lookback+1, paa.prices)
 	if err != nil {
 		return err
 	}
 
-	// calculate momentum 13, mom13 = (p0 / SMA13) - 1
-	for _, security := range paa.allTickers {
-		name := fmt.Sprintf("%s_MOM", security.CompositeFigi)
-		if err := sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
-			Size: sma.NRows(dontLock),
-		}), nil); err != nil {
-			log.Error().Stack().Err(err).Msg("could not add series")
-			return err
+	/*
+		// calculate momentum 13, mom13 = (p0 / SMA13) - 1
+		for _, security := range paa.allTickers {
+			name := fmt.Sprintf("%s_MOM", security.CompositeFigi)
+			if err := sma.AddSeries(dataframe.NewSeriesFloat64(name, &dataframe.SeriesInit{
+				Size: sma.NRows(dontLock),
+			}), nil); err != nil {
+				log.Error().Stack().Err(err).Msg("could not add series")
+				return err
+			}
+			expr := fmt.Sprintf("(%s/%s_SMA-1)*100", security.CompositeFigi, security.CompositeFigi)
+			fn := funcs.RegFunc(expr)
+			err := funcs.Evaluate(ctx, sma, fn, name)
+			if err != nil {
+				return err
+			}
 		}
-		expr := fmt.Sprintf("(%s/%s_SMA-1)*100", security.CompositeFigi, security.CompositeFigi)
-		fn := funcs.RegFunc(expr)
-		err := funcs.Evaluate(ctx, sma, fn, name)
-		if err != nil {
-			return err
-		}
-	}
+	*/
 
 	series := make([]dataframe.Series, 0, len(paa.allTickers)+1)
 	dateIdx := sma.MustNameToColumn(common.DateIdx)
@@ -301,25 +300,27 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 		riskUniverseMomNames[idx] = security.CompositeFigi
 	}
 
-	fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
-	err := funcs.Evaluate(ctx, mom, fn, name,
-		funcs.EvaluateOptions{
-			CustomFns: map[string]func(args ...float64) float64{
-				"countPositive": func(args ...float64) float64 {
-					var result float64
-					for _, x := range args {
-						if x > 0 {
-							result += 1.0
+	/*
+		fn := funcs.RegFunc(fmt.Sprintf("countPositive(%s)", strings.Join(riskUniverseMomNames, ",")))
+		err := funcs.Evaluate(ctx, mom, fn, name,
+			funcs.EvaluateOptions{
+				CustomFns: map[string]func(args ...float64) float64{
+					"countPositive": func(args ...float64) float64 {
+						var result float64
+						for _, x := range args {
+							if x > 0 {
+								result += 1.0
+							}
 						}
-					}
-					return result
+						return result
+					},
 				},
 			},
-		},
-	)
-	if err != nil {
-		return nil, err
-	}
+		)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	// bf is the bond fraction that should be used in portfolio construction
 	// bf = (N-n) / (N-n1)
@@ -329,11 +330,13 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(ctx context.Context,
 	}), nil); err != nil {
 		log.Error().Stack().Err(err).Msg("could not add series to dataframe")
 	}
-	fn = funcs.RegFunc(fmt.Sprintf("min(1.0, (%f - paa_n) / %f)", N, N-n1))
-	err = funcs.Evaluate(ctx, mom, fn, bfCol)
-	if err != nil {
-		return nil, err
-	}
+	/*
+		fn = funcs.RegFunc(fmt.Sprintf("min(1.0, (%f - paa_n) / %f)", N, N-n1))
+		err = funcs.Evaluate(ctx, mom, fn, bfCol)
+		if err != nil {
+			return nil, err
+		}
+	*/
 
 	// initialize the target portfolio
 	targetAssets := make([]interface{}, mom.NRows())

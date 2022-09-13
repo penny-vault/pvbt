@@ -19,7 +19,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/jdfergason/dataframe-go"
 	"github.com/rs/zerolog/log"
 )
 
@@ -70,16 +69,22 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 	return req
 }
 
-func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
+func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*DataFrame, error) {
 	manager := getManagerInstance()
-	result, err := manager.GetData(req.securities, req.metricsArray(), req.frequency, a, b)
+	metricVals, dates, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
 		log.Error().Err(err).Msg("could not get data")
 	}
-	return securityMetricMapToDataFrame(result, a, b), nil
+	// filter down to requested frequency
+	metricVals, dates :=
+	return securityMetricMapToDataFrame(metricVals, dates), nil
 }
 
-func (req *DataRequest) On(a time.Time) (map[Security]float64, error) {
+func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
+	return nil, nil
+}
+
+func (req *DataRequest) OnOrBefore(a time.Time) (map[SecurityMetric]float64, error) {
 	return nil, nil
 }
 
@@ -91,8 +96,4 @@ func (req *DataRequest) metricsArray() []Metric {
 		metrics = append(metrics, k)
 	}
 	return metrics
-}
-
-func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, begin, end time.Time) *dataframe.DataFrame {
-	return nil
 }

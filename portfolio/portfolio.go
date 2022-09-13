@@ -28,11 +28,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
-	"github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
-	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/rs/zerolog/log"
@@ -765,7 +764,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	}
 
 	// thin the targetPortfolio to only include info on or after the startDate
-	_, err = dfextras.TimeTrim(ctx, targetPortfolio, startDate, through, true)
+	_, err = dataframe.TimeTrim(ctx, targetPortfolio, startDate, through, true)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not trim target portfolio to date range")

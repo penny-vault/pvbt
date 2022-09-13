@@ -13,18 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dfextras_test
+package data
 
 import (
-	"testing"
+	"time"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/rs/zerolog/log"
+	"github.com/penny-vault/pv-api/dataframe"
 )
 
-func TestDfextras(t *testing.T) {
-	log.Logger = log.Output(GinkgoWriter)
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dfextras Suite")
+func dataFrameFromSecurityMetricMap(vals map[SecurityMetric][]float64, dates []time.Time) *dataframe.DataFrame {
+	return nil
 }

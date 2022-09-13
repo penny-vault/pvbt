@@ -28,7 +28,7 @@ import (
 	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/goccy/go-json"
-	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/dataframe"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
