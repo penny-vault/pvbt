@@ -52,7 +52,7 @@ require (
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.28.0
 	github.com/sendgrid/sendgrid-go v3.11.1+incompatible
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.9.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.10.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.9.0
 )
 
@@ -79,8 +79,8 @@ require (
 	github.com/shabbyrobe/xmlwriter v0.0.0-20220218224045-defe0ad214f6 // indirect
 	github.com/tealeg/xlsx/v3 v3.2.4 // indirect
 	github.com/xitongsys/parquet-go-source v0.0.0-20220624101223-5cb561a812f4 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.9.0 // indirect
-	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.10.0 // indirect
+	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	google.golang.org/genproto v0.0.0-20220720214146-176da50484ac // indirect
 )
 
