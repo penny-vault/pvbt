@@ -29,15 +29,6 @@ var (
 	}
 )
 
-type Frequency string
-
-const (
-	FrequencyDaily    Frequency = "Daily"
-	FrequencyWeekly   Frequency = "Weekly"
-	FrequencyMonthly  Frequency = "Monthly"
-	FrequencyAnnually Frequency = "Annually"
-)
-
 type Metric string
 
 const (

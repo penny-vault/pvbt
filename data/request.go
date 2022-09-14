@@ -69,15 +69,15 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 	return req
 }
 
-func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*DataFrame, error) {
+func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
 	manager := getManagerInstance()
 	metricVals, dates, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
 		log.Error().Err(err).Msg("could not get data")
 	}
 	// filter down to requested frequency
-	metricVals, dates :=
-	return securityMetricMapToDataFrame(metricVals, dates), nil
+	df := securityMetricMapToDataFrame(metricVals, dates)
+	df = df.Frequency(dataframe.Monthly)
 }
 
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {

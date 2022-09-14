@@ -13,11 +13,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package data
+package dataframe
 
-import "time"
+import (
+	"log"
+	"time"
 
-type DataFrame struct {
-	dates []time.Time
-	vals  [][]float64
+	"github.com/penny-vault/pv-api/tradecron"
+)
+
+// Frequency returns a data frame filtered to the requested frequency
+func (df *DataFrame) Frequency(freq Frequency) *DataFrame {
+	days := make([]time.Time, 0, 252)
+
+	var schedule *tradecron.TradeCron
+	var err error
+
+	switch frequency {
+	case FrequencyDaily:
+		schedule, err = tradecron.New("@close * * *", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close * * *").Msg("could not build tradecron schedule")
+		}
+	case FrequencyWeekly:
+		schedule, err = tradecron.New("@close @weekend", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @weekend").Msg("could not build tradecron schedule")
+		}
+	case FrequencyMonthly:
+		schedule, err = tradecron.New("@close @monthend", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthend").Msg("could not build tradecron schedule")
+		}
+	case FrequencyAnnually:
+		schedule, err = tradecron.New("@close @monthend 12 *", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthend 12 *").Msg("could not build tradecron schedule")
+		}
+	}
+
+	for _, xx := range res {
+		if schedule.IsTradeDay(xx) {
+			days = append(days, xx)
+		}
+	}
+	return days
+
 }

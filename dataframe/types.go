@@ -13,14 +13,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package data
+package dataframe
 
-import (
-	"time"
+import "time"
 
-	"github.com/penny-vault/pv-api/dataframe"
-)
-
-func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, dates []time.Time) *dataframe.DataFrame {
-	return nil
+type DataFrame struct {
+	dates []time.Time
+	vals  [][]float64
 }
+
+// Defines
+type Frequency string
+
+const (
+	Daily      Frequency = "Daily"
+	WeekBegin  Frequency = "WeekBegin"
+	WeekEnd    Frequency = "WeekEnd"
+	MonthBegin Frequency = "MonthBegin"
+	MonthEnd   Frequency = "MonthEnd"
+	YearBegin  Frequency = "YearBegin"
+	YearEnd    Frequency = "YearEnd"
+)

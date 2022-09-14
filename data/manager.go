@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
@@ -38,7 +39,7 @@ var (
 	managerInstance *Manager
 )
 
-func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (map[SecurityMetric][]float64, []time.Time, error) {
+func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
 	ctx := context.Background()
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
@@ -76,7 +77,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		}
 	} else {
 		subLog.Error().Err(err).Msg("could not fetch data")
-		return nil, nil, err
+		return nil, err
 	}
 
 	// get specific time period
@@ -90,12 +91,13 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 				}] = vals
 			} else {
 				subLog.Error().Err(err).Msg("could not fetch data")
-				return nil, nil, err
+				return nil, err
 			}
 		}
 	}
 
-	return data, dates, nil
+	df := securityMetricMapToDataFrame(data, dates)
+	return df, nil
 }
 
 func getManagerInstance() *Manager {
