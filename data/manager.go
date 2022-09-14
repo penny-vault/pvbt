@@ -68,7 +68,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		modifiedEnd = begin.Add(viper.GetDuration("database.min_request_duration"))
 	}
 
-	dates := manager.tradingDaysAtFrequency(FrequencyDaily, begin, modifiedEnd)
+	dates := manager.tradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
 	// pull required data not currently in cache
 	if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0], dates[len(dates)-1]); err == nil {
@@ -98,6 +98,25 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 
 	df := securityMetricMapToDataFrame(data, dates)
 	return df, nil
+}
+
+// GetMetricsOnOrBefore finds a single metric value on the requested date or the closest date available prior to the requested date
+func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
+	ctx := context.Background()
+	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
+
+	// check if the date is currently in the cache
+	if vals, err := manager.cache.Get(security, metric, date, date); err != nil {
+		return vals[0], date, nil
+	}
+
+	// not currently in the cache ... load from DB
+	val, forDate, err := manager.pvdb.GetEODOnOrBefore(ctx, security, metric, date)
+	if err != nil {
+		subLog.Error().Err(err).Msg("could not fetch data")
+		return 0.0, time.Time{}, err
+	}
+	return val, forDate, err
 }
 
 func getManagerInstance() *Manager {
@@ -144,7 +163,7 @@ func (manager *Manager) getTradingDays() {
 	}()
 }
 
-func (manager *Manager) tradingDaysAtFrequency(frequency Frequency, begin, end time.Time) []time.Time {
+func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, begin, end time.Time) []time.Time {
 	beginIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
 		idxVal := manager.tradingDays[i]
 		return (idxVal.After(begin) || idxVal.Equal(begin))

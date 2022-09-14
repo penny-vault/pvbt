@@ -17,21 +17,25 @@ package data
 
 import (
 	"context"
+	"strings"
 	"time"
 
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
 
 type DataRequest struct {
 	securities []*Security
-	frequency  Frequency
+	frequency  dataframe.Frequency
 	metrics    map[Metric]int
 }
 
+// NewDataRequest creates a new data request object for the requested securities. The frequency
+// is defaulted to Monthly and the metric defaults to Adjusted Close
 func NewDataRequest(securities ...*Security) *DataRequest {
 	req := &DataRequest{
 		securities: securities,
-		frequency:  FrequencyMonthly,
+		frequency:  dataframe.Monthly,
 		metrics:    make(map[Metric]int, 1),
 	}
 
@@ -45,7 +49,7 @@ func (req *DataRequest) Securities(securities ...*Security) *DataRequest {
 	return req
 }
 
-func (req *DataRequest) Frequency(frequency Frequency) *DataRequest {
+func (req *DataRequest) Frequency(frequency dataframe.Frequency) *DataRequest {
 	req.frequency = frequency
 	return req
 }
@@ -71,21 +75,68 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 
 func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
 	manager := getManagerInstance()
-	metricVals, dates, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
+	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
-		log.Error().Err(err).Msg("could not get data")
+		return nil, err
 	}
-	// filter down to requested frequency
-	df := securityMetricMapToDataFrame(metricVals, dates)
 	df = df.Frequency(dataframe.Monthly)
+	return df, nil
 }
 
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
-	return nil, nil
+	manager := getManagerInstance()
+	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)
+	if err != nil {
+		return nil, err
+	}
+
+	if df.Len() == 0 {
+		return nil, ErrNotFound
+	}
+
+	res := make(map[SecurityMetric]float64, df.Len())
+	colMap := make([]SecurityMetric, df.Cols())
+	for idx, colName := range df.ColNames {
+		parts := strings.Split(colName, ":")
+		security, err := SecurityFromFigi(parts[0])
+		if err != nil {
+			log.Panic().Err(err).Msg("unknown figi name - there is a programming error in colnames of dataframe")
+		}
+		colMap[idx] = SecurityMetric{
+			SecurityObject: *security,
+			MetricObject:   Metric(parts[1]),
+		}
+	}
+
+	for idx, valArray := range df.Vals {
+		res[colMap[idx]] = valArray[0]
+	}
+
+	return res, nil
 }
 
-func (req *DataRequest) OnOrBefore(a time.Time) (map[SecurityMetric]float64, error) {
-	return nil, nil
+func (req *DataRequest) OnOrBefore(a time.Time) (float64, time.Time, error) {
+	var requestedMetric Metric
+	var metricCnt int
+	for k, v := range req.metrics {
+		if v == 1 {
+			requestedMetric = k
+			metricCnt++
+		}
+	}
+
+	if len(req.securities) > 1 || metricCnt > 1 {
+		log.Error().Msg("OnOrBefore called with multiple securities")
+		return 0.0, time.Time{}, ErrMultipleNotSupported
+	}
+
+	manager := getManagerInstance()
+	val, eventDate, err := manager.GetMetricOnOrBefore(req.securities[0], requestedMetric, a)
+	if err != nil {
+		return 0.0, time.Time{}, err
+	}
+
+	return val, eventDate, nil
 }
 
 // private methods

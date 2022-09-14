@@ -18,12 +18,13 @@ package data
 import "errors"
 
 var (
-	ErrNotFound            = errors.New("security not found")
-	ErrInvalidTimeRange    = errors.New("start must be before end")
-	ErrNoTradingDays       = errors.New("no trading days available")
-	ErrRangeDoesNotExist   = errors.New("range does not exist in cache")
-	ErrUnsupportedMetric   = errors.New("unsupported metric")
-	ErrDataLargerThanCache = errors.New("data larger than cache size")
-	ErrOutsideCoveredTime  = errors.New("date range outside of covered time interval")
-	ErrBeginAfterEnd       = errors.New("invalid interval; begin after end date")
+	ErrBeginAfterEnd        = errors.New("invalid interval; begin after end date")
+	ErrDataLargerThanCache  = errors.New("data larger than cache size")
+	ErrInvalidTimeRange     = errors.New("start must be before end")
+	ErrMultipleNotSupported = errors.New("on-or-before can only return a single metric for a single security")
+	ErrNotFound             = errors.New("security not found")
+	ErrNoTradingDays        = errors.New("no trading days available")
+	ErrOutsideCoveredTime   = errors.New("date range outside of covered time interval")
+	ErrRangeDoesNotExist    = errors.New("range does not exist in cache")
+	ErrUnsupportedMetric    = errors.New("unsupported metric")
 )

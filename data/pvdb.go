@@ -18,6 +18,7 @@ package data
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -111,7 +112,7 @@ func (p *PvDb) TradingDays(ctx context.Context, begin time.Time, end time.Time) 
 
 // GetEOD fetches EOD metrics from the database
 func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (map[SecurityMetric][]float64, error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEOD")
 	defer span.End()
 	tz := common.GetTimezone()
 
@@ -201,6 +202,91 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	}
 
 	return vals, nil
+}
+
+func (p *PvDb) GetEODOnOrBefore(ctx context.Context, security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEODOnOrBefore")
+	defer span.End()
+	subLog := log.With().Str("Security.Ticker", security.Ticker).Str("Security.Figi", security.CompositeFigi).Str("Metric", string(metric)).Time("Date", date).Logger()
+
+	tz := common.GetTimezone()
+
+	trx, err := database.TrxForUser(ctx, "pvuser")
+	if err != nil {
+		span.RecordError(err)
+		msg := "could not get a database transaction"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Stack().Err(err).Msg(msg)
+		return math.NaN(), time.Time{}, err
+	}
+
+	// build SQL query
+	var columns string
+	switch metric {
+	case MetricOpen:
+		columns = "open AS val"
+	case MetricHigh:
+		columns = "high AS val"
+	case MetricLow:
+		columns = "low AS val"
+	case MetricClose:
+		columns = "close AS val"
+	case MetricVolume:
+		columns = "(volume::double precision) AS val"
+	case MetricAdjustedClose:
+		columns = "(adj_close::double precision) AS val"
+	case MetricDividendCash:
+		columns = "dividend AS val"
+	case MetricSplitFactor:
+		columns = "split_factor AS val"
+	default:
+		span.SetStatus(codes.Error, "un-supported metric")
+		subLog.Error().Stack().Msg("un-supported metric requested")
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+		return math.NaN(), time.Time{}, ErrUnsupportedMetric
+	}
+
+	sql := fmt.Sprintf("SELECT event_date, %s FROM eod WHERE composite_figi=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
+
+	// execute the query
+	rows, err := trx.Query(ctx, sql, security.CompositeFigi, date)
+	if err != nil {
+		span.RecordError(err)
+		msg := "db query failed"
+		span.SetStatus(codes.Error, msg)
+		subLog.Warn().Stack().Err(err).Msg(msg)
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+
+		return math.NaN(), time.Time{}, err
+	}
+
+	var eventDate time.Time
+	var val float64
+
+	for rows.Next() {
+		err = rows.Scan(&eventDate, &val)
+		if err != nil {
+			span.RecordError(err)
+			msg := "db scan failed"
+			span.SetStatus(codes.Error, msg)
+			subLog.Warn().Stack().Err(err).Msg(msg)
+			if err := trx.Rollback(ctx); err != nil {
+				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+			}
+			return math.NaN(), time.Time{}, err
+		}
+
+		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
+	}
+
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Stack().Err(err).Msg("could not commit transaction")
+	}
+	return val, eventDate, err
 }
 
 func metricsToColumns(metrics []Metric) string {

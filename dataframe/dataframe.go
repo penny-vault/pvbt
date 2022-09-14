@@ -16,47 +16,82 @@
 package dataframe
 
 import (
-	"log"
 	"time"
 
 	"github.com/penny-vault/pv-api/tradecron"
+	"github.com/rs/zerolog/log"
 )
 
-// Frequency returns a data frame filtered to the requested frequency
-func (df *DataFrame) Frequency(freq Frequency) *DataFrame {
-	days := make([]time.Time, 0, 252)
+// Len returns the number of rows in the dataframe
+func (df *DataFrame) Len() int {
+	return len(df.Dates)
+}
 
+// Cols returns the number of columns in the dataframe
+func (df *DataFrame) Cols() int {
+	return len(df.ColNames)
+}
+
+// Frequency returns a data frame filtered to the requested frequency; note this is not
+// an in-place function but creates a copy of the data
+func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 	var schedule *tradecron.TradeCron
 	var err error
 
 	switch frequency {
-	case FrequencyDaily:
+	case Daily:
 		schedule, err = tradecron.New("@close * * *", tradecron.RegularHours)
 		if err != nil {
 			log.Panic().Err(err).Str("Schedule", "@close * * *").Msg("could not build tradecron schedule")
 		}
-	case FrequencyWeekly:
+	case WeekBegin:
+		schedule, err = tradecron.New("@close @weekbegin", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @weekbegin").Msg("could not build tradecron schedule")
+		}
+	case WeekEnd:
 		schedule, err = tradecron.New("@close @weekend", tradecron.RegularHours)
 		if err != nil {
 			log.Panic().Err(err).Str("Schedule", "@close @weekend").Msg("could not build tradecron schedule")
 		}
-	case FrequencyMonthly:
+	case MonthBegin:
+		schedule, err = tradecron.New("@close @monthbegin", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthbegin").Msg("could not build tradecron schedule")
+		}
+	case MonthEnd:
 		schedule, err = tradecron.New("@close @monthend", tradecron.RegularHours)
 		if err != nil {
 			log.Panic().Err(err).Str("Schedule", "@close @monthend").Msg("could not build tradecron schedule")
 		}
-	case FrequencyAnnually:
+	case YearBegin:
 		schedule, err = tradecron.New("@close @monthend 12 *", tradecron.RegularHours)
 		if err != nil {
 			log.Panic().Err(err).Str("Schedule", "@close @monthend 12 *").Msg("could not build tradecron schedule")
 		}
-	}
-
-	for _, xx := range res {
-		if schedule.IsTradeDay(xx) {
-			days = append(days, xx)
+	case YearEnd:
+		schedule, err = tradecron.New("@close @monthbegin 1 *", tradecron.RegularHours)
+		if err != nil {
+			log.Panic().Err(err).Str("Schedule", "@close @monthbegin 1 *").Msg("could not build tradecron schedule")
 		}
 	}
-	return days
 
+	newDates := make([]time.Time, 0, len(df.Dates))
+	newVals := make([][]float64, len(df.ColNames))
+	for rowIdx, xx := range df.Dates {
+		if schedule.IsTradeDay(xx) {
+			newDates = append(newDates, xx)
+			for colIdx := range newVals {
+				newVals[colIdx] = append(newVals[colIdx], df.Vals[colIdx][rowIdx])
+			}
+		}
+	}
+
+	newDf := &DataFrame{
+		Dates:    newDates,
+		ColNames: df.ColNames,
+		Vals:     newVals,
+	}
+
+	return newDf
 }

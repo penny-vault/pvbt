@@ -146,6 +146,10 @@ var _ = Describe("Cache", func() {
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
+				Entry("When range is a single date", 4, 4, true, []*data.Interval{{
+					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+				}}),
 			)
 
 			DescribeTable("get various time ranges",
@@ -188,6 +192,7 @@ var _ = Describe("Cache", func() {
 				Entry("Range begins on weekend", 6, 8, []float64{3}, nil),
 				Entry("Range ends on saturday", 3, 6, []float64{0, 1, 2}, nil),
 				Entry("Range ends on sunday", 3, 6, []float64{0, 1, 2}, nil),
+				Entry("When range is a single date", 4, 4, []float64{1}, nil),
 			)
 
 			It("should successfully get values", func() {

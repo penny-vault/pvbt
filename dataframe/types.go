@@ -17,20 +17,33 @@ package dataframe
 
 import "time"
 
+// DataFrame stores a table of values organized by date
+// the vals array is row major - e.g.,
+// VFINX  PRIDX
+// 1      4
+// 2      5
+// 3      6
+//
+// Vals[0][0] = 1
+// Vals[0][1] = 2
 type DataFrame struct {
-	dates []time.Time
-	vals  [][]float64
+	Dates    []time.Time
+	ColNames []string
+	Vals     [][]float64
 }
 
-// Defines
+// Defines a time period - typically used to filter a dataframe
 type Frequency string
 
 const (
 	Daily      Frequency = "Daily"
 	WeekBegin  Frequency = "WeekBegin"
 	WeekEnd    Frequency = "WeekEnd"
+	Weekly     Frequency = "WeekEnd"
 	MonthBegin Frequency = "MonthBegin"
 	MonthEnd   Frequency = "MonthEnd"
+	Monthly    Frequency = "MonthlEnd"
 	YearBegin  Frequency = "YearBegin"
 	YearEnd    Frequency = "YearEnd"
+	Annually   Frequency = "YearEnd"
 )
