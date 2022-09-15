@@ -16,11 +16,23 @@
 package data
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/penny-vault/pv-api/dataframe"
 )
 
 func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, dates []time.Time) *dataframe.DataFrame {
-	return nil
+	df := &dataframe.DataFrame{
+		Dates:    dates,
+		ColNames: make([]string, len(vals)),
+		Vals:     make([][]float64, len(vals)),
+	}
+	idx := 0
+	for k, v := range vals {
+		df.ColNames[idx] = fmt.Sprintf("%s:%s", k.SecurityObject.CompositeFigi, k.MetricObject)
+		df.Vals[idx] = v
+		idx++
+	}
+	return df
 }

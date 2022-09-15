@@ -24,7 +24,7 @@ import (
 )
 
 // FilterDays takes an array of dates and filters it based on the requested frequency
-func FilterDays(frequency dataframe.Frequency, res []time.Time) []time.Time {
+func FilterDays(frequency dataframe.Frequency, dates []time.Time) []time.Time {
 	days := make([]time.Time, 0, 252)
 
 	var schedule *tradecron.TradeCron
@@ -68,7 +68,7 @@ func FilterDays(frequency dataframe.Frequency, res []time.Time) []time.Time {
 		}
 	}
 
-	for _, xx := range res {
+	for _, xx := range dates {
 		if schedule.IsTradeDay(xx) {
 			days = append(days, xx)
 		}
