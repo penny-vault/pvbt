@@ -57,14 +57,14 @@ func FilterDays(frequency dataframe.Frequency, dates []time.Time) []time.Time {
 			log.Panic().Err(err).Str("Schedule", "@close @monthend").Msg("could not build tradecron schedule")
 		}
 	case dataframe.YearBegin:
-		schedule, err = tradecron.New("@close @monthend 12 *", tradecron.RegularHours)
+		schedule, err = tradecron.New("@close @monthbegin 0 * * 1", tradecron.RegularHours)
 		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close @monthend 12 *").Msg("could not build tradecron schedule")
+			log.Panic().Err(err).Str("Schedule", "@close @monthbegin 0 * * 1").Msg("could not build tradecron schedule")
 		}
 	case dataframe.YearEnd:
-		schedule, err = tradecron.New("@close @monthbegin 1 *", tradecron.RegularHours)
+		schedule, err = tradecron.New("@close @monthend 0 * * 12", tradecron.RegularHours)
 		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close @monthbegin 1 *").Msg("could not build tradecron schedule")
+			log.Panic().Err(err).Str("Schedule", "@close @monthend 0 * * 12").Msg("could not build tradecron schedule")
 		}
 	}
 

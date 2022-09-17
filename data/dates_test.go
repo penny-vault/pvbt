@@ -16,7 +16,6 @@
 package data_test
 
 import (
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -57,14 +56,14 @@ var _ = Describe("FilterDates test", func() {
 
 			})
 
-			It("successfully filters by day", Pending, func() {
+			It("successfully filters by day", func() {
 				days := data.FilterDays(dataframe.Daily, dates)
 				Expect(len(days)).To(Equal(252))
 				Expect(days[0]).To(Equal(time.Date(2021, 1, 4, 0, 0, 0, 0, tz())))
 				Expect(days[251]).To(Equal(time.Date(2021, 12, 31, 0, 0, 0, 0, tz())))
 			})
 
-			It("successfully filters by week begin", Pending, func() {
+			It("successfully filters by week begin", func() {
 				days := data.FilterDays(dataframe.WeekBegin, dates)
 				Expect(len(days)).To(Equal(52))
 				Expect(days[0]).To(Equal(time.Date(2021, 1, 4, 0, 0, 0, 0, tz())))
@@ -121,7 +120,7 @@ var _ = Describe("FilterDates test", func() {
 				Expect(days[51]).To(Equal(time.Date(2021, 12, 27, 0, 0, 0, 0, tz())))
 			})
 
-			It("successfully filters by week end", Pending, func() {
+			It("successfully filters by week end", func() {
 				days := data.FilterDays(dataframe.WeekEnd, dates)
 				Expect(len(days)).To(Equal(52))
 				Expect(days[0]).To(Equal(time.Date(2021, 1, 8, 0, 0, 0, 0, tz())))
@@ -180,7 +179,6 @@ var _ = Describe("FilterDates test", func() {
 
 			It("successfully filters by month begin", func() {
 				days := data.FilterDays(dataframe.MonthBegin, dates)
-				fmt.Println(days)
 				Expect(len(days)).To(Equal(12))
 				Expect(days[0]).To(Equal(time.Date(2021, 1, 4, 0, 0, 0, 0, tz())))
 				Expect(days[1]).To(Equal(time.Date(2021, 2, 1, 0, 0, 0, 0, tz())))
@@ -196,6 +194,78 @@ var _ = Describe("FilterDates test", func() {
 				Expect(days[11]).To(Equal(time.Date(2021, 12, 1, 0, 0, 0, 0, tz())))
 			})
 
+			It("successfully filters by month end", func() {
+				days := data.FilterDays(dataframe.MonthEnd, dates)
+				Expect(len(days)).To(Equal(12))
+				Expect(days[0]).To(Equal(time.Date(2021, 1, 29, 0, 0, 0, 0, tz())))
+				Expect(days[1]).To(Equal(time.Date(2021, 2, 26, 0, 0, 0, 0, tz())))
+				Expect(days[2]).To(Equal(time.Date(2021, 3, 31, 0, 0, 0, 0, tz())))
+				Expect(days[3]).To(Equal(time.Date(2021, 4, 30, 0, 0, 0, 0, tz())))
+				Expect(days[4]).To(Equal(time.Date(2021, 5, 28, 0, 0, 0, 0, tz())))
+				Expect(days[5]).To(Equal(time.Date(2021, 6, 30, 0, 0, 0, 0, tz())))
+				Expect(days[6]).To(Equal(time.Date(2021, 7, 30, 0, 0, 0, 0, tz())))
+				Expect(days[7]).To(Equal(time.Date(2021, 8, 31, 0, 0, 0, 0, tz())))
+				Expect(days[8]).To(Equal(time.Date(2021, 9, 30, 0, 0, 0, 0, tz())))
+				Expect(days[9]).To(Equal(time.Date(2021, 10, 29, 0, 0, 0, 0, tz())))
+				Expect(days[10]).To(Equal(time.Date(2021, 11, 30, 0, 0, 0, 0, tz())))
+				Expect(days[11]).To(Equal(time.Date(2021, 12, 31, 0, 0, 0, 0, tz())))
+			})
+		})
+
+		Context("with 10 years of dates", func() {
+			var (
+				dates  []time.Time
+				dbPool pgxmock.PgxConnIface
+			)
+
+			BeforeEach(func() {
+				currDate := time.Date(2010, 1, 1, 0, 0, 0, 0, tz())
+				dates = make([]time.Time, 3650)
+				dates[0] = currDate
+
+				for ii := 1; ii < 3650; ii++ {
+					currDate = currDate.AddDate(0, 0, 1)
+					dates[ii] = currDate
+				}
+
+				var err error
+				dbPool, err = pgxmock.NewConn()
+				Expect(err).To(BeNil())
+				database.SetPool(dbPool)
+
+				pgxmockhelper.MockHolidays(dbPool)
+				tradecron.LoadMarketHolidays()
+
+			})
+
+			It("successfully filters by year begin", func() {
+				days := data.FilterDays(dataframe.YearBegin, dates)
+				Expect(len(days)).To(Equal(10))
+				Expect(days[0]).To(Equal(time.Date(2010, 1, 4, 0, 0, 0, 0, tz())))
+				Expect(days[1]).To(Equal(time.Date(2011, 1, 3, 0, 0, 0, 0, tz())))
+				Expect(days[2]).To(Equal(time.Date(2012, 1, 3, 0, 0, 0, 0, tz())))
+				Expect(days[3]).To(Equal(time.Date(2013, 1, 2, 0, 0, 0, 0, tz())))
+				Expect(days[4]).To(Equal(time.Date(2014, 1, 2, 0, 0, 0, 0, tz())))
+				Expect(days[5]).To(Equal(time.Date(2015, 1, 2, 0, 0, 0, 0, tz())))
+				Expect(days[6]).To(Equal(time.Date(2016, 1, 4, 0, 0, 0, 0, tz())))
+				Expect(days[7]).To(Equal(time.Date(2017, 1, 3, 0, 0, 0, 0, tz())))
+				Expect(days[8]).To(Equal(time.Date(2018, 1, 2, 0, 0, 0, 0, tz())))
+				Expect(days[9]).To(Equal(time.Date(2019, 1, 2, 0, 0, 0, 0, tz())))
+			})
+
+			It("successfully filters by year end", func() {
+				days := data.FilterDays(dataframe.YearEnd, dates)
+				Expect(len(days)).To(Equal(9))
+				Expect(days[0]).To(Equal(time.Date(2010, 12, 31, 0, 0, 0, 0, tz())))
+				Expect(days[1]).To(Equal(time.Date(2011, 12, 30, 0, 0, 0, 0, tz())))
+				Expect(days[2]).To(Equal(time.Date(2012, 12, 31, 0, 0, 0, 0, tz())))
+				Expect(days[3]).To(Equal(time.Date(2013, 12, 31, 0, 0, 0, 0, tz())))
+				Expect(days[4]).To(Equal(time.Date(2014, 12, 31, 0, 0, 0, 0, tz())))
+				Expect(days[5]).To(Equal(time.Date(2015, 12, 31, 0, 0, 0, 0, tz())))
+				Expect(days[6]).To(Equal(time.Date(2016, 12, 30, 0, 0, 0, 0, tz())))
+				Expect(days[7]).To(Equal(time.Date(2017, 12, 29, 0, 0, 0, 0, tz())))
+				Expect(days[8]).To(Equal(time.Date(2018, 12, 31, 0, 0, 0, 0, tz())))
+			})
 		})
 	})
 })
