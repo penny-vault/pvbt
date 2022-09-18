@@ -35,7 +35,7 @@ var (
 	writeLocker        sync.RWMutex
 )
 
-func LoadSecuritiesFromDB() error {
+func loadSecuritiesFromDB() error {
 	ctx := context.Background()
 
 	securitiesByFigi = make(map[string]*Security)

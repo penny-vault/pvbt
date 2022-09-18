@@ -53,7 +53,6 @@ var _ = Describe("FilterDates test", func() {
 
 				pgxmockhelper.MockHolidays(dbPool)
 				tradecron.LoadMarketHolidays()
-
 			})
 
 			It("successfully filters by day", func() {

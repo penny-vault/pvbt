@@ -23,6 +23,7 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
+	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
 )
@@ -39,6 +40,7 @@ var (
 	managerInstance *Manager
 )
 
+// GetMetrics returns metrics for the requested securities over the specified time range
 func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
 	ctx := context.Background()
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
@@ -119,9 +121,10 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	return val, forDate, err
 }
 
-func getManagerInstance() *Manager {
+func GetManagerInstance() *Manager {
 	managerOnce.Do(func() {
-		err := LoadSecuritiesFromDB()
+		tradecron.LoadMarketHolidays()
+		err := loadSecuritiesFromDB()
 		if err != nil {
 			log.Error().Err(err).Msg("could not load securities database")
 		}

@@ -74,7 +74,7 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 }
 
 func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
-	manager := getManagerInstance()
+	manager := GetManagerInstance()
 	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe
 }
 
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
-	manager := getManagerInstance()
+	manager := GetManagerInstance()
 	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (req *DataRequest) OnOrBefore(a time.Time) (float64, time.Time, error) {
 		return 0.0, time.Time{}, ErrMultipleNotSupported
 	}
 
-	manager := getManagerInstance()
+	manager := GetManagerInstance()
 	val, eventDate, err := manager.GetMetricOnOrBefore(req.securities[0], requestedMetric, a)
 	if err != nil {
 		return 0.0, time.Time{}, err

@@ -26,6 +26,7 @@ import (
 
 	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/rs/zerolog/log"
 )
 
@@ -175,6 +176,12 @@ func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 	return r
 }
 
+func MockManager(db pgxmock.PgxConnIface) {
+	MockHolidays(db)
+	MockAssets(db)
+	MockTradingDays(db)
+}
+
 func MockHolidays(db pgxmock.PgxConnIface) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
@@ -184,6 +191,16 @@ func MockHolidays(db pgxmock.PgxConnIface) {
 			"early_close": "bool",
 			"close_time":  "int",
 		}).Rows())
+	db.ExpectCommit()
+}
+
+func MockTradingDays(db pgxmock.PgxConnIface) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
+		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
+			"trade_day": "date",
+		}).Between(time.Date(1980, 1, 1, 0, 0, 0, 0, common.GetTimezone()), time.Date(2022, 6, 17, 0, 0, 0, 0, common.GetTimezone())).Rows())
 	db.ExpectCommit()
 }
 
