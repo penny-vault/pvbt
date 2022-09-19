@@ -46,10 +46,15 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
 	normalizedMetrics := normalizeMetrics(metrics)
+	normalizedSecurities, err := normalizeSecurities(securities)
+	if err != nil {
+		log.Error().Err(err).Msg("normalizing securities failed")
+		return nil, err
+	}
 
 	// check what needs to be pulled
-	toPullSecuritiesMap := make(map[*Security]bool, len(securities))
-	for _, security := range securities {
+	toPullSecuritiesMap := make(map[*Security]bool, len(normalizedSecurities))
+	for _, security := range normalizedSecurities {
 		for _, metric := range normalizedMetrics {
 			contains, _ := manager.cache.Check(security, metric, begin, end)
 			if !contains {
@@ -84,7 +89,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 
 	// get specific time period
 	data := make(map[SecurityMetric][]float64)
-	for _, security := range securities {
+	for _, security := range normalizedSecurities {
 		for _, metric := range normalizedMetrics {
 			if vals, err := manager.cache.Get(security, metric, begin, end); err == nil {
 				data[SecurityMetric{
@@ -174,11 +179,26 @@ func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, be
 
 	endIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
 		idxVal := manager.tradingDays[i]
-		return (idxVal.After(begin) || idxVal.Equal(begin))
+		return (idxVal.After(end) || idxVal.Equal(end))
 	})
 
-	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx])
+	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx+1])
 	return days
+}
+
+func normalizeSecurities(securities []*Security) ([]*Security, error) {
+	for idx, security := range securities {
+		res, err := SecurityFromFigi(security.CompositeFigi)
+		if err != nil {
+			res, err = SecurityFromTicker(security.Ticker)
+			if err != nil {
+				return nil, err
+			}
+		}
+		securities[idx] = res
+	}
+
+	return securities, nil
 }
 
 func normalizeMetrics(metrics []Metric) []Metric {

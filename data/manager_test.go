@@ -16,6 +16,7 @@
 package data_test
 
 import (
+	"errors"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -57,6 +58,7 @@ var _ = Describe("Manager tests", func() {
 			}
 			_, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).ToNot(BeNil())
+			Expect(errors.Is(err, data.ErrSecurityNotFound)).To(BeTrue())
 		})
 	})
 })

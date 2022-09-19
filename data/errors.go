@@ -22,7 +22,7 @@ var (
 	ErrDataLargerThanCache  = errors.New("data larger than cache size")
 	ErrInvalidTimeRange     = errors.New("start must be before end")
 	ErrMultipleNotSupported = errors.New("on-or-before can only return a single metric for a single security")
-	ErrNotFound             = errors.New("security not found")
+	ErrSecurityNotFound     = errors.New("security not found")
 	ErrNoTradingDays        = errors.New("no trading days available")
 	ErrOutsideCoveredTime   = errors.New("date range outside of covered time interval")
 	ErrRangeDoesNotExist    = errors.New("range does not exist in cache")

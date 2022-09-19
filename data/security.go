@@ -94,7 +94,7 @@ func SecurityFromFigi(figi string) (*Security, error) {
 	if s, ok := securitiesByFigi[figi]; ok {
 		return s, nil
 	}
-	return nil, ErrNotFound
+	return nil, ErrSecurityNotFound
 }
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
@@ -105,7 +105,7 @@ func SecurityFromTicker(ticker string) (*Security, error) {
 	if s, ok := securitiesByTicker[ticker]; ok {
 		return s, nil
 	}
-	return nil, ErrNotFound
+	return nil, ErrSecurityNotFound
 }
 
 // SecurityFromTickerList loads securities from database using the ticker as the lookup key
@@ -118,7 +118,7 @@ func SecurityFromTickerList(tickers []string) ([]*Security, error) {
 		if s, ok := securitiesByTicker[ticker]; ok {
 			securities = append(securities, s)
 		} else {
-			return nil, ErrNotFound
+			return nil, ErrSecurityNotFound
 		}
 	}
 	return securities, nil

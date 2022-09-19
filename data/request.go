@@ -91,7 +91,7 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	}
 
 	if df.Len() == 0 {
-		return nil, ErrNotFound
+		return nil, ErrSecurityNotFound
 	}
 
 	res := make(map[SecurityMetric]float64, df.Len())
