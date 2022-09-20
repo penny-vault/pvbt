@@ -48,7 +48,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/jdfergason/dataframe-go v0.2.0
 	github.com/nats-io/nats.go v1.17.0
-	github.com/onsi/ginkgo/v2 v2.1.6
+	github.com/onsi/ginkgo/v2 v2.2.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.28.0
 	github.com/sendgrid/sendgrid-go v3.11.1+incompatible
