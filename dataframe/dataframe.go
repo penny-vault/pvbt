@@ -27,8 +27,8 @@ func (df *DataFrame) Len() int {
 	return len(df.Dates)
 }
 
-// Cols returns the number of columns in the dataframe
-func (df *DataFrame) Cols() int {
+// ColCount returns the number of columns in the dataframe
+func (df *DataFrame) ColCount() int {
 	return len(df.ColNames)
 }
 

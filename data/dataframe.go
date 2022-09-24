@@ -16,7 +16,7 @@
 package data
 
 import (
-	"fmt"
+	"sort"
 	"time"
 
 	"github.com/penny-vault/pv-api/dataframe"
@@ -28,10 +28,20 @@ func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, dates []tim
 		ColNames: make([]string, len(vals)),
 		Vals:     make([][]float64, len(vals)),
 	}
+
 	idx := 0
-	for k, v := range vals {
-		df.ColNames[idx] = fmt.Sprintf("%s:%s", k.SecurityObject.CompositeFigi, k.MetricObject)
-		df.Vals[idx] = v
+	tmpCols := make([]SecurityMetric, len(vals))
+	for k := range vals {
+		tmpCols[idx] = k
+		idx++
+	}
+
+	sort.Sort(BySecurityMetric(tmpCols))
+
+	idx = 0
+	for idx, col := range tmpCols {
+		df.ColNames[idx] = col.String()
+		df.Vals[idx] = vals[col]
 		idx++
 	}
 	return df

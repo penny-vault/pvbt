@@ -40,8 +40,8 @@ var _ = Describe("Manager tests", func() {
 		Expect(err).To(BeNil())
 		database.SetPool(dbPool)
 
-		pgxmockhelper.MockManager(dbPool)
 		manager = data.GetManagerInstance()
+		manager.Reset()
 	})
 
 	Context("when fetching metrics", func() {
@@ -60,5 +60,28 @@ var _ = Describe("Manager tests", func() {
 			Expect(err).ToNot(BeNil())
 			Expect(errors.Is(err, data.ErrSecurityNotFound)).To(BeTrue())
 		})
+
+		It("it fetches VFINX when only ticker is present", func() {
+			securities := []*data.Security{
+				{
+					Ticker:        "VFINX",
+					CompositeFigi: "UNKNOWN",
+				},
+			}
+
+			metrics := []data.Metric{
+				data.MetricClose,
+			}
+
+			pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
+			df, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
+			Expect(err).To(BeNil())
+			Expect(df.Len()).To(Equal(2))
+			Expect(df.ColNames).To(Equal([]string{"BBG000BHTMY2:Close", "BBG000BHTMY2:DividendCash", "BBG000BHTMY2:SplitFactor"}))
+			Expect(df.Vals).To(Equal([][]float64{{
+				334.8879, 337.3002,
+			}, {1, 1}, {0, 0}}))
+		})
+
 	})
 })

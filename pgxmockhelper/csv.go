@@ -68,7 +68,6 @@ func discoverTestDataPath(fn string) string {
 }
 
 func NewCSVRows(inputs []string, typeMap map[string]string) *CSVRows {
-
 	rows := &CSVRows{
 		dateCol: -1,
 		rows:    make([][]any, 0),
@@ -168,6 +167,38 @@ func (csvRows *CSVRows) Between(a time.Time, b time.Time) *CSVRows {
 	return csvRows
 }
 
+// Cols filters columns to only those specified in the cols array
+func (csvRows *CSVRows) Cols(cols []string) *CSVRows {
+	newRows := [][]any{}
+	newHeader := make([]string, 0, len(csvRows.header))
+
+	colsMap := make(map[string]bool, len(cols))
+	for _, colName := range cols {
+		colsMap[colName] = true
+	}
+
+	keep := make([]int, 0, len(csvRows.header))
+	for idx, colName := range csvRows.header {
+		if _, ok := colsMap[colName]; ok {
+			newHeader = append(newHeader, colName)
+			keep = append(keep, idx)
+		}
+	}
+
+	for _, row := range csvRows.rows {
+		newRow := []any{}
+		for _, k := range keep {
+			newRow = append(newRow, row[k])
+		}
+		newRows = append(newRows, newRow)
+	}
+
+	csvRows.header = newHeader
+	csvRows.rows = newRows
+
+	return csvRows
+}
+
 func (csvRows *CSVRows) Rows() *pgxmock.Rows {
 	r := pgxmock.NewRows(csvRows.header)
 	for _, row := range csvRows.rows {
@@ -214,51 +245,20 @@ func MockAssets(db pgxmock.PgxConnIface) {
 	db.ExpectCommit()
 }
 
-func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
+func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, a, b time.Time, cols ...string) {
+	cols = append(cols, "event_date", "composite_figi")
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
-			"trade_day": "date",
-		}).Between(d1, d2).Rows())
-	db.ExpectCommit()
-	db.ExpectBegin()
-	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT event_date, composite_figi, close, adj_close::double precision FROM eod").WillReturnRows(
-		NewCSVRows(fn, map[string]string{
-			"event_date": "date",
-			"close":      "float64",
-			"adj_close":  "float64",
-		}).Between(d3, d4).Rows())
-	db.ExpectCommit()
-}
-
-func MockDBCorporateQuery(db pgxmock.PgxConnIface, fn []string, d1, d2 time.Time) {
-	db.ExpectBegin()
-	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT event_date, composite_figi, dividend, split_factor FROM eod").WillReturnRows(
+	db.ExpectQuery("SELECT event_date, composite_figi, (.+) FROM eod").WillReturnRows(
 		NewCSVRows(fn, map[string]string{
 			"event_date":   "date",
-			"dividend":     "float64",
+			"open":         "float64",
+			"high":         "float64",
+			"low":          "flaot64",
+			"close":        "float64",
+			"adj_close":    "float64",
 			"split_factor": "float64",
-		}).Between(d1, d2).Rows())
+			"dividend":     "float64",
+		}).Between(a, b).Cols(cols).Rows())
 	db.ExpectCommit()
-}
-
-// Utility functions to help figure out what db expectations should be used
-
-func CheckDBQuery1(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
-	db.ExpectBegin()
-	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-}
-
-func CheckDBQuery2(db pgxmock.PgxConnIface, fn []string, d1, d2, d3, d4 time.Time) {
-	db.ExpectBegin()
-	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-	db.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-		NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
-			"trade_day": "date",
-		}).Between(d1, d2).Rows())
-	db.ExpectBegin()
-	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
 }

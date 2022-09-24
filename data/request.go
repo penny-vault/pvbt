@@ -95,7 +95,7 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	}
 
 	res := make(map[SecurityMetric]float64, df.Len())
-	colMap := make([]SecurityMetric, df.Cols())
+	colMap := make([]SecurityMetric, df.ColCount())
 	for idx, colName := range df.ColNames {
 		parts := strings.Split(colName, ":")
 		security, err := SecurityFromFigi(parts[0])

@@ -50,13 +50,26 @@ type pair struct {
 	last time.Time
 }
 
-// ByAge implements sort.Interface for []Person based on
-// the Age field.
+// ByDate implements sort.Interface for []pair based on
+// `last` the time field.
 type ByDate []pair
 
 func (a ByDate) Len() int           { return len(a) }
 func (a ByDate) Swap(i, j int)      { a[i], a[j] = a[j], a[i] }
 func (a ByDate) Less(i, j int) bool { return a[i].last.Before(a[j].last) }
+
+// BySecurityMetric implements sort.Interface for []SecurityMetric
+type BySecurityMetric []SecurityMetric
+
+func (a BySecurityMetric) Len() int      { return len(a) }
+func (a BySecurityMetric) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
+func (a BySecurityMetric) Less(i, j int) bool {
+	return a[i].String() < a[j].String()
+}
+
+func (sm SecurityMetric) String() string {
+	return fmt.Sprintf("%s:%s", sm.SecurityObject.CompositeFigi, sm.MetricObject)
+}
 
 // Functions
 
@@ -187,6 +200,7 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 	toAddBytes := int64(len(val) * 8)
 
 	if cache.maxSizeBytes < toAddBytes {
+		log.Error().Int64("maxSizeBytes", cache.maxSizeBytes).Int64("toAddBytes", toAddBytes).Msg("insufficient space to cache data")
 		return ErrDataLargerThanCache
 	}
 

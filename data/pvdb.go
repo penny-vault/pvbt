@@ -134,13 +134,17 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	args[1] = end
 
 	figiSet := make([]string, len(securities))
+	debugArgs := make([]string, len(securities))
 	for idx, security := range securities {
 		figiSet[idx] = fmt.Sprintf("$%d", idx+3)
+		debugArgs[idx] = security.CompositeFigi
 		args[idx+2] = security.CompositeFigi
 	}
 	figiArgs := strings.Join(figiSet, ", ")
 	metricColumns := metricsToColumns(metrics)
 	sql := fmt.Sprintf("SELECT event_date, composite_figi, %s FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, composite_figi", metricColumns, figiArgs)
+
+	log.Debug().Strs("FigiArgs", debugArgs).Time("Begin", begin).Time("End", end).Str("Sql", sql).Msg("sql query to run")
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, args...)
@@ -164,9 +168,11 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 		var compositeFigi string
 
 		args := []interface{}{&eventDate, &compositeFigi}
-		metricVals := make([]*float64, len(metricColumns))
-		for _, metricVal := range metricVals {
-			args = append(args, metricVal)
+		metricVals := make([]*float64, len(metrics))
+		for idx := range metricVals {
+			var metricVal float64
+			metricVals[idx] = &metricVal
+			args = append(args, &metricVal)
 		}
 
 		if err := rows.Scan(args...); err != nil {
@@ -309,6 +315,8 @@ func metricsToColumns(metrics []Metric) string {
 			metricCols[idx] = "dividend"
 		case MetricVolume:
 			metricCols[idx] = "volume"
+		default:
+			log.Warn().Str("Metric", string(metric)).Msg("unknown metric requested")
 		}
 	}
 	return strings.Join(metricCols, ", ")

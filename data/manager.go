@@ -80,7 +80,11 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	// pull required data not currently in cache
 	if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0], dates[len(dates)-1]); err == nil {
 		for k, v := range result {
-			manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
+			err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
+			if err != nil {
+				log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
+				return nil, err
+			}
 		}
 	} else {
 		subLog.Error().Err(err).Msg("could not fetch data")
@@ -136,8 +140,13 @@ func GetManagerInstance() *Manager {
 
 		pvdb := NewPvDb()
 
+		cacheMaxSize := viper.GetInt64("cache.local_bytes")
+		if cacheMaxSize == 0 {
+			cacheMaxSize = 10485760 // 10 MB
+		}
+
 		managerInstance = &Manager{
-			cache:  NewSecurityMetricCache(viper.GetInt64("data.cacheBytes"), []time.Time{}),
+			cache:  NewSecurityMetricCache(cacheMaxSize, []time.Time{}),
 			pvdb:   pvdb,
 			locker: sync.RWMutex{},
 		}
@@ -145,6 +154,16 @@ func GetManagerInstance() *Manager {
 		managerInstance.getTradingDays()
 	})
 	return managerInstance
+}
+
+// Reset restores the manager connection to its initial state - this is mostly used in testing
+func (manager *Manager) Reset() {
+	cacheMaxSize := viper.GetInt64("cache.local_bytes")
+	if cacheMaxSize == 0 {
+		cacheMaxSize = 10485760 // 10 MB
+	}
+
+	manager.cache = NewSecurityMetricCache(cacheMaxSize, []time.Time{})
 }
 
 func (manager *Manager) getTradingDays() {
@@ -192,6 +211,7 @@ func normalizeSecurities(securities []*Security) ([]*Security, error) {
 		if err != nil {
 			res, err = SecurityFromTicker(security.Ticker)
 			if err != nil {
+				log.Error().Str("Ticker", security.Ticker).Str("CompositeFigi", security.CompositeFigi).Msg("security could not be found by ticker or composite figi")
 				return nil, err
 			}
 		}
@@ -202,7 +222,11 @@ func normalizeSecurities(securities []*Security) ([]*Security, error) {
 }
 
 func normalizeMetrics(metrics []Metric) []Metric {
-	metricMap := make(map[Metric]int, len(metrics))
+	metricMap := make(map[Metric]bool, len(metrics))
+	normalizedMetrics := make([]Metric, 0, len(metrics))
+	for _, metric := range metrics {
+		metricMap[metric] = true
+	}
 
 	// if metric is open, high, low, close, or adjusted close also pre-fetch splits
 	// and dividends
@@ -213,13 +237,12 @@ func normalizeMetrics(metrics []Metric) []Metric {
 	_, hasAdjustedClose := metricMap[MetricAdjustedClose]
 
 	if hasOpen || hasHigh || hasLow || hasClose || hasAdjustedClose {
-		metricMap[MetricSplitFactor] = 3
-		metricMap[MetricDividendCash] = 3
+		metricMap[MetricSplitFactor] = true
+		metricMap[MetricDividendCash] = true
 	}
 
-	normalizedMetrics := make([]Metric, 0, len(metricMap))
-	for k := range metricMap {
-		normalizedMetrics = append(normalizedMetrics, k)
+	for metric := range metricMap {
+		normalizedMetrics = append(normalizedMetrics, metric)
 	}
 
 	return normalizedMetrics
