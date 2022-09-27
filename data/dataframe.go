@@ -42,7 +42,6 @@ func securityMetricMapToDataFrame(vals map[SecurityMetric][]float64, dates []tim
 	for idx, col := range tmpCols {
 		df.ColNames[idx] = col.String()
 		df.Vals[idx] = vals[col]
-		idx++
 	}
 	return df
 }

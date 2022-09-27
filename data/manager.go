@@ -94,7 +94,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	// get specific time period
 	data := make(map[SecurityMetric][]float64)
 	for _, security := range normalizedSecurities {
-		for _, metric := range normalizedMetrics {
+		for _, metric := range metrics {
 			if vals, err := manager.cache.Get(security, metric, begin, end); err == nil {
 				data[SecurityMetric{
 					SecurityObject: *security,

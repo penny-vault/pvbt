@@ -114,7 +114,8 @@ func NewCSVRows(inputs []string, typeMap map[string]string) *CSVRows {
 							subLog.Panic().Err(err).Str("Val", val).Msg("could not convert val to datetime of format 2006-01-02")
 						}
 						// put in proper timezone
-						cols[idx] = parsed
+						res := time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 0, 0, 0, 0, common.GetTimezone())
+						cols[idx] = res
 						rows.dateCol = idx
 					case "float64":
 						parsed, err := strconv.ParseFloat(val, 64)
@@ -254,7 +255,7 @@ func MockDBEodQuery(db pgxmock.PgxConnIface, fn []string, a, b time.Time, cols .
 			"event_date":   "date",
 			"open":         "float64",
 			"high":         "float64",
-			"low":          "flaot64",
+			"low":          "float64",
 			"close":        "float64",
 			"adj_close":    "float64",
 			"split_factor": "float64",
