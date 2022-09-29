@@ -46,7 +46,6 @@ func (p *PvDb) TradingDays(ctx context.Context, begin time.Time, end time.Time) 
 	tz := common.GetTimezone()
 
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
-	subLog.Debug().Msg("getting trading days")
 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {

@@ -223,7 +223,6 @@ func normalizeSecurities(securities []*Security) ([]*Security, error) {
 
 func normalizeMetrics(metrics []Metric) []Metric {
 	metricMap := make(map[Metric]bool, len(metrics))
-	normalizedMetrics := make([]Metric, 0, len(metrics))
 	for _, metric := range metrics {
 		metricMap[metric] = true
 	}
@@ -237,13 +236,9 @@ func normalizeMetrics(metrics []Metric) []Metric {
 	_, hasAdjustedClose := metricMap[MetricAdjustedClose]
 
 	if hasOpen || hasHigh || hasLow || hasClose || hasAdjustedClose {
-		metricMap[MetricSplitFactor] = true
-		metricMap[MetricDividendCash] = true
+		metrics = append(metrics, MetricSplitFactor)
+		metrics = append(metrics, MetricDividendCash)
 	}
 
-	for metric := range metricMap {
-		normalizedMetrics = append(normalizedMetrics, metric)
-	}
-
-	return normalizedMetrics
+	return metrics
 }

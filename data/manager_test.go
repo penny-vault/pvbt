@@ -88,6 +88,27 @@ var _ = Describe("Manager tests", func() {
 			}}))
 		})
 
+		It("it succeeds when no data is available", func() {
+			securities := []*data.Security{
+				{
+					Ticker:        "TSLA",
+					CompositeFigi: "UNKNOWN",
+				},
+			}
+
+			metrics := []data.Metric{
+				data.MetricClose,
+			}
+
+			// event_date  composite_figi  open      high      low       close     adj_close  split_factor  dividend
+			// 2021-01-04  BBG000N9MNX3    719.4600  744.4899  717.1895  729.7700  729.7700   1.000000      0.0000
+			// 2021-01-05  BBG000N9MNX3    723.6600  740.8400  719.2000  735.1100  735.1100   1.000000      0.0000
+
+			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
+			_, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()))
+			Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue())
+		})
+
 		DescribeTable("check all metrics",
 			func(a, b int, metric data.Metric, expectedVals [][]float64) {
 				metricColumn := "close"
