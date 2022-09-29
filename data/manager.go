@@ -78,17 +78,19 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dates := manager.tradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
 	// pull required data not currently in cache
-	if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0], dates[len(dates)-1]); err == nil {
-		for k, v := range result {
-			err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
-			if err != nil {
-				log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
-				return nil, err
+	if len(toPullSecuritiesArray) > 0 {
+		if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0], dates[len(dates)-1]); err == nil {
+			for k, v := range result {
+				err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
+				if err != nil {
+					log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
+					return nil, err
+				}
 			}
+		} else {
+			subLog.Error().Err(err).Msg("could not fetch data")
+			return nil, err
 		}
-	} else {
-		subLog.Error().Err(err).Msg("could not fetch data")
-		return nil, err
 	}
 
 	// get specific time period
