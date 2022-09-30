@@ -55,11 +55,7 @@ func (req *DataRequest) Frequency(frequency dataframe.Frequency) *DataRequest {
 }
 
 func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
-	for metric, status := range req.metrics {
-		if status != 2 {
-			delete(req.metrics, metric)
-		}
-	}
+	req.metrics = make(map[Metric]int, len(metrics))
 
 	if len(metrics) == 0 {
 		log.Warn().Msg("cannot set request metrics to an empty list; using adjusted close")
