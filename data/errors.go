@@ -18,6 +18,7 @@ package data
 import "errors"
 
 var (
+	ErrSingle               = errors.New("cannot call *Single functions with multiple securities or metrics")
 	ErrBeginAfterEnd        = errors.New("invalid interval; begin after end date")
 	ErrDataLargerThanCache  = errors.New("data larger than cache size")
 	ErrInvalidTimeRange     = errors.New("start must be before end")

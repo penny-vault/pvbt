@@ -80,7 +80,6 @@ type Model struct {
 	Portfolio *Portfolio
 
 	// private
-	dataProxy      *data.ManagerV0
 	value          float64
 	holdings       map[data.Security]float64
 	activities     []*Activity
@@ -93,7 +92,7 @@ type Period struct {
 }
 
 // NewPortfolio create a portfolio
-func NewPortfolio(name string, startDate time.Time, initial float64, manager *data.ManagerV0) *Model {
+func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 	id, _ := uuid.New().MarshalBinary()
 	p := Portfolio{
 		ID:           id,
@@ -105,12 +104,8 @@ func NewPortfolio(name string, startDate time.Time, initial float64, manager *da
 
 	model := Model{
 		Portfolio:      &p,
-		dataProxy:      manager,
 		justifications: make(map[string][]*Justification),
 	}
-
-	model.dataProxy.Begin = startDate
-	model.dataProxy.End = time.Now()
 
 	// Create initial deposit
 	trxID, _ := uuid.New().MarshalBinary()
@@ -156,7 +151,7 @@ func (pm *Model) getPortfolioSecuritiesValue(ctx context.Context, date time.Time
 
 	for k, v := range pm.holdings {
 		if k != data.CashSecurity {
-			price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, &k)
+			price, err := data.NewDataRequest(&k).Metrics(data.MetricClose).OnSingle(date)
 			if err != nil {
 				log.Warn().Stack().Str("Symbol", k.Ticker).Time("Date", date).Float64("Price", price).Msg("security price data not available.")
 				return 0, ErrSecurityPriceNotAvailable
@@ -201,9 +196,9 @@ func createTransaction(date time.Time, security *data.Security, kind string, pri
 }
 
 func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, security *data.Security) float64 {
-	price, err := pm.dataProxy.Get(ctx, date, data.MetricClose, security)
+	price, err := data.NewDataRequest(security).Metrics(data.MetricClose).OnSingle(date)
 	if err != nil {
-		log.Warn().Stack().Err(err).Str("Ticker", security.Ticker).Msg("dataProxy.Get returned an error")
+		log.Warn().Stack().Err(err).Str("Ticker", security.Ticker).Msg("DataRequest.OnSingle returned an error")
 		price = 0.0
 	}
 	if math.IsNaN(price) {
@@ -419,36 +414,21 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 	return nil
 }
 
-// TargetPortfolio invests the portfolio in the ratios specified by the dataframe `target`.
-//
-//	`target` must have a column named `common.DateIdx` (DATE) and either a string column
-//	or MixedAsset column of map[data.Security]float64 where the keys are the tickers and values are
-//	the percentages of portfolio to hold
-func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFrame) error {
+// TargetPortfolio invests the portfolio in the ratios specified by the PieHistory `target`.
+func (pm *Model) TargetPortfolio(ctx context.Context, target *PieHistory) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
 
 	p := pm.Portfolio
 
 	log.Info().Msg("building target portfolio")
-	log.Info().Int("CacheSizeMB", pm.dataProxy.HashSize()/(1024.0*1024.0)).Msg("EOD price cache size")
-	if target.NRows() == 0 {
+	if len(target.Dates) == 0 {
 		log.Warn().Stack().Msg("target rows = 0; nothing to do!")
 		return nil
 	}
 
-	timeIdx, err := target.NameToColumn(common.DateIdx)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invest target portfolio failed")
-		log.Warn().Stack().Msg("could not find date index in data frame")
-		return err
-	}
-
-	timeSeries := target.Series[timeIdx]
-
 	// Set time range of portfolio
-	p.EndDate = timeSeries.Value(timeSeries.NRows() - 1).(time.Time)
+	p.EndDate = target.EndDate()
 	now := time.Now()
 	if now.Before(p.EndDate) {
 		p.EndDate = now
@@ -468,55 +448,25 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFram
 	// Adjust first transaction to the target portfolio's first date if
 	// there are no other transactions in the portfolio
 	if len(p.Transactions) == 1 {
-		p.StartDate = timeSeries.Value(0).(time.Time)
+		p.StartDate = target.StartDate()
 		p.Transactions[0].Date = p.StartDate
 	}
 
-	tickerSeriesIdx, err := target.NameToColumn(common.TickerName)
-	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "invest target portfolio failed")
-		log.Warn().Stack().Err(err).Str("FieldName", common.TickerName).Msg("target portfolio does not have required field")
-		return ErrNoTickerColumn
-	}
-
-	// check series type
-	isSingleAsset := false
-	series := target.Series[tickerSeriesIdx]
-	if series.Type() == "string" {
-		isSingleAsset = true
-	}
-
 	// Create transactions
-	// t3 := time.Now()
-	targetIter := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-	for {
-		row, val, _ := targetIter(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-
+	iter := target.Iterator()
+	for iter.Next() {
 		// Get next transaction symbol
-		var date time.Time
-		var symbol interface{}
-		justification := make([]*Justification, 0, len(val))
+		date := iter.Date()
+		val := iter.Val()
 
-		for k, v := range val {
-			idx := k.(string)
-			switch idx {
-			case common.DateIdx:
-				date = v.(time.Time)
-			case common.TickerName:
-				symbol = v
-			default:
-				if value, ok := v.(float64); ok {
-					j := &Justification{
-						Key:   idx,
-						Value: value,
-					}
-					justification = append(justification, j)
-				}
+		justification := make([]*Justification, 0, len(val.Justifications))
+
+		for k, v := range val.Justifications {
+			j := &Justification{
+				Key:   k,
+				Value: v,
 			}
+			justification = append(justification, j)
 		}
 
 		// HACK - if the date is Midnight adjust to market close (i.e. 4pm EST)
@@ -532,22 +482,9 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *dataframe.DataFram
 		}
 
 		pm.justifications[date.String()] = justification
+		rebalance := val.Members
 
-		var rebalance map[data.Security]float64
-		if isSingleAsset {
-			strSymbol := symbol.(string)
-			security, err := data.SecurityFromFigi(strSymbol)
-			if err != nil {
-				log.Error().Err(err).Str("CompositeFigi", strSymbol).Msg("security not found")
-				return err
-			}
-			rebalance = map[data.Security]float64{}
-			rebalance[*security] = 1.0
-		} else {
-			rebalance = symbol.(map[data.Security]float64)
-		}
-
-		err = pm.RebalanceTo(ctx, date, rebalance, justification)
+		err := pm.RebalanceTo(ctx, date, rebalance, justification)
 		if err != nil {
 			return err
 		}
@@ -599,7 +536,12 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 
 	addTransactions := make([]*Transaction, 0, 10)
 
-	myDividends := pm.dataProxy.GetDividends()
+	holdings := make([]*data.Security, 0, len(pm.holdings))
+	for holding := range pm.holdings {
+		holdings = append(holdings, &holding)
+	}
+
+	myDividends := data.NewDataRequest(holdings...).Frequency(dataframe.Daily).Metrics()
 	mySplits := pm.dataProxy.GetSplits()
 
 	// for each holding check if there are splits

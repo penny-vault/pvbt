@@ -79,6 +79,25 @@ func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe
 	return df, nil
 }
 
+// OnSingle is a convenience function that returns the price for a single security and metric
+func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
+	metrics := req.metricsArray()
+	if len(req.securities) > 1 || len(metrics) > 1 {
+		return 0, ErrSingle
+	}
+
+	securityMetric := SecurityMetric{
+		SecurityObject: *req.securities[0],
+		MetricObject:   metrics[0],
+	}
+	price, err := req.On(a)
+	if err != nil {
+		return 0, err
+	}
+	return price[securityMetric], err
+}
+
+// On returns the price for the requested date
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	manager := GetManagerInstance()
 	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)

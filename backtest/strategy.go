@@ -42,7 +42,7 @@ type Backtest struct {
 	Performance    *portfolio.Performance
 }
 
-func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark *data.Security, startDate time.Time, endDate time.Time, manager *data.ManagerV0) (*Backtest, error) {
+func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark *data.Security, startDate time.Time, endDate time.Time) (*Backtest, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "backtest.New")
 	defer span.End()
 
