@@ -24,7 +24,7 @@ require (
 	github.com/magefile/mage v1.14.0
 	github.com/mattn/go-runewidth v0.0.13 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onsi/gomega v1.20.2
+	github.com/onsi/gomega v1.21.1
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pierrec/lz4/v4 v4.1.17
 	github.com/spf13/cast v1.5.0 // indirect
