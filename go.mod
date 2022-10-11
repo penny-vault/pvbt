@@ -28,7 +28,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.5
 	github.com/pierrec/lz4/v4 v4.1.17
 	github.com/spf13/cast v1.5.0 // indirect
-	github.com/spf13/cobra v1.5.0
+	github.com/spf13/cobra v1.6.0
 	github.com/spf13/viper v1.13.0
 	github.com/valyala/fasthttp v1.40.0 // indirect
 	github.com/xitongsys/parquet-go v1.6.2 // indirect
@@ -93,7 +93,7 @@ require (
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
-	github.com/inconshreveable/mousetrap v1.0.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.1 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
 	github.com/jackc/pgconn v1.13.0
 	github.com/jackc/pgio v1.0.0 // indirect
