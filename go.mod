@@ -47,7 +47,7 @@ require github.com/robfig/cron/v3 v3.0.1
 require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/jdfergason/dataframe-go v0.2.0
-	github.com/nats-io/nats.go v1.17.0
+	github.com/nats-io/nats.go v1.18.0
 	github.com/onsi/ginkgo/v2 v2.3.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.28.0
@@ -120,10 +120,10 @@ require (
 	github.com/subosito/gotenv v1.4.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/tcplisten v1.0.0 // indirect
-	go.opentelemetry.io/otel v1.10.0
+	go.opentelemetry.io/otel v1.11.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.10.0
 	go.opentelemetry.io/otel/sdk v1.10.0
-	go.opentelemetry.io/otel/trace v1.10.0
+	go.opentelemetry.io/otel/trace v1.11.0
 	golang.org/x/sync v0.0.0-20220601150217-0de741cfad7f // indirect
 	golang.org/x/xerrors v0.0.0-20220609144429-65e65417b02f // indirect
 	google.golang.org/grpc v1.48.0 // indirect
