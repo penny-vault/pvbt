@@ -75,6 +75,7 @@ func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Times("Idx", df.Dates).Strs("ColNames", df.ColNames).Floats64("Values", df.Vals[0]).Msg("df")
 	df = df.Frequency(dataframe.Monthly)
 	return df, nil
 }
