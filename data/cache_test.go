@@ -40,7 +40,7 @@ type segment struct {
 
 var _ = Describe("Cache", func() {
 	Describe("when the cache is initialized ", func() {
-		Context("with values for a single security and metric", func() {
+		Context("with values for a single security and metric using the cache date index", func() {
 			var (
 				cache    *data.SecurityMetricCache
 				dates    []time.Time
@@ -212,10 +212,9 @@ var _ = Describe("Cache", func() {
 
 			DescribeTable("test merging of values",
 				func(segments []segment, expectedItemCount, a, b int, expectedVals []float64) {
-
 					// set each segment on the cache, this should cause merging
 					for _, seg := range segments {
-						log.Info().Int("Start", seg.start).Int("End", seg.end).Floats64("Floats", seg.vals).Msg("adding segment")
+						log.Debug().Int("Start", seg.start).Int("End", seg.end).Floats64("Floats", seg.vals).Msg("adding segment")
 						begin := time.Date(2022, 8, seg.start, 0, 0, 0, 0, tz())
 						end := time.Date(2022, 8, seg.end, 0, 0, 0, 0, tz())
 						err := cache.Set(security, data.MetricAdjustedClose, begin, end, seg.vals)
@@ -261,6 +260,68 @@ var _ = Describe("Cache", func() {
 				Entry("when segments are right contiguous with overlap", []segment{{1, 2, []float64{1, 2}}, {2, 3, []float64{2, 3}}}, 1, 1, 3, []float64{1, 2, 3}),
 				Entry("when segments are left contiguous with overlap", []segment{{2, 3, []float64{2, 3}}, {1, 2, []float64{1, 2}}}, 1, 1, 3, []float64{1, 2, 3}),
 			)
+
+			It("should collapse multiple overlapping cache items", func() {
+				// add two single item entries into the cache that are separated by a day
+				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
+				Expect(err).To(BeNil(), "error during first cache set")
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
+				Expect(err).To(BeNil(), "error during second cache set")
+
+				// make sure there are 2 entries in the []*CacheItem list
+				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
+
+				// now add a *CacheItem that connects the previous two entries
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), []float64{2})
+				Expect(err).To(BeNil(), "error during second cache set")
+
+				// check the number of items for the security / metric pair
+				itemCount := cache.ItemCount(security, data.MetricAdjustedClose)
+				Expect(itemCount).To(Equal(1), "item count after 3 sets")
+
+				// validate that multiple items are properly sorted
+				rangeA := time.Date(2022, 8, 1, 0, 0, 0, 0, tz())
+				rangeB := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
+				item := cache.Items(security, data.MetricAdjustedClose)[0]
+				Expect(item.Period.Begin).To(Equal(rangeA))
+				Expect(item.Period.End).To(Equal(rangeB))
+
+				// try to retrieve the data
+				res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
+				Expect(err).To(BeNil())
+				Expect(res.Vals[0]).To(Equal([]float64{1, 2, 3}), "value for security/metric in cache")
+			})
+
+			It("should not collapse if items don't overlap", func() {
+				// add two single item entries into the cache that are separated by a day
+				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
+				Expect(err).To(BeNil(), "error during first cache set")
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
+				Expect(err).To(BeNil(), "error during second cache set")
+
+				// make sure there are 2 entries in the []*CacheItem list
+				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
+
+				// now add a *CacheItem that connects the previous two entries
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), []float64{4})
+				Expect(err).To(BeNil(), "error during second cache set")
+
+				// check the number of items for the security / metric pair
+				itemCount := cache.ItemCount(security, data.MetricAdjustedClose)
+				Expect(itemCount).To(Equal(2), "item count after 3 sets")
+
+				// validate that multiple items are properly sorted
+				rangeA := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
+				rangeB := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
+				item := cache.Items(security, data.MetricAdjustedClose)[1]
+				Expect(item.Period.Begin).To(Equal(rangeA))
+				Expect(item.Period.End).To(Equal(rangeB))
+
+				// try to retrieve the data
+				res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
+				Expect(err).To(BeNil())
+				Expect(res.Vals[0]).To(Equal([]float64{3, 4}), "value for security/metric in cache")
+			})
 
 			It("should successfully get values", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())

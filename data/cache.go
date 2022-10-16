@@ -393,6 +393,7 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 	skip := false
 	for idx, item := range items[:cnt-1] {
 		if skip {
+			skip = false
 			continue
 		}
 
@@ -405,8 +406,17 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 
 		if item.Period.Contiguous(next.Period) {
 			// need to merge
+			mergedItem, _ := cache.merge(item, next)
+			newItems = append(newItems, mergedItem)
+			skip = true
+			continue
 		}
+
 		newItems = append(newItems, item)
+	}
+
+	if !skip {
+		newItems = append(newItems, items[cnt-1])
 	}
 
 	return newItems
@@ -417,142 +427,147 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
 func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
+	log.Debug().Time("Period.Begin", new.Period.Begin).Time("Period.End", new.Period.End).Floats64("Values", new.Values).Msg("inserting item into []*CacheItem list")
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
 
-	insertIdx := -1
+	insertIdx := len(items)
 	for idx, item := range items {
 		if item.Period.Contains(new.Period) {
 			// nothing to be done data already in cache
+			log.Debug().Msg("skipping because item is already in []*CacheItem list")
 			return items, 0
 		}
 
 		if new.Period.Contains(item.Period) {
+			log.Debug().Msg("new is a superset of item --- replacing")
 			added := len(new.Values) - len(item.Values)
-			item.Period = new.Period
-			item.Values = new.Values
-			item.isLocalDate = new.isLocalDate
-			item.localDates = new.localDates
-			item.startIdx = new.startIdx
+			item.copyFrom(new)
 			return items, added
 		}
 
 		if item.Period.Contiguous(new.Period) || cache.contiguousByDateIndex(new, item) {
-			// need to merge
-			// combined interval interval
-			mergedInterval := &Interval{
-				Begin: minTime(new.Period.Begin, item.Period.Begin),
-				End:   maxTime(new.Period.End, item.Period.End),
-			}
-
-			// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
-			mergedStartIdx := item.startIdx
-
-			added := 0
-			// new values occur before current values
-			mergedValues := make([]float64, 0, len(item.Values))
-			if new.Period.Begin.Before(item.Period.Begin) {
-				startIdx := sort.Search(len(cache.periods), func(i int) bool {
-					idxVal := cache.periods[i]
-					return (idxVal.After(new.Period.Begin) || idxVal.Equal(new.Period.Begin))
-				})
-
-				if new.isLocalDate {
-					// cannot rely upon index in cache.periods. must search through local dates
-					// the end date of new should be the start of the current item (hence using item.Period.Begin and not .End)
-					searchVal := item.Period.Begin.AddDate(0, 0, -1)
-					endIdx := sort.Search(len(new.localDates), func(i int) bool {
-						idxVal := new.localDates[i]
-						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-					})
-					added += endIdx
-					mergedValues = new.Values[:endIdx]
-				} else {
-					// the end date of new should be the start of the current item (hence using item.Period.Begin and not .End)
-					searchVal := item.Period.Begin.AddDate(0, 0, -1)
-					endIdx := sort.Search(len(cache.periods), func(i int) bool {
-						idxVal := cache.periods[i]
-						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-					})
-
-					numDates := endIdx - startIdx + 1
-					if len(new.Values) < numDates {
-						numDates = len(new.Values)
-					}
-					added += numDates
-					mergedValues = new.Values[:numDates]
-				}
-				mergedStartIdx = startIdx
-			}
-
-			mergedValues = append(mergedValues, item.Values...)
-
-			// new values after item.Values
-			if new.Period.End.After(item.Period.End) {
-				periodStartIdx := sort.Search(len(cache.periods), func(i int) bool {
-					idxVal := cache.periods[i]
-					return (idxVal.After(new.Period.Begin) || idxVal.Equal(new.Period.Begin))
-				})
-
-				if new.isLocalDate {
-					searchVal := item.Period.End.AddDate(0, 0, 1)
-					startIdx := sort.Search(len(new.localDates), func(i int) bool {
-						idxVal := new.localDates[i]
-						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-					})
-
-					added += len(new.Values[startIdx:])
-					mergedValues = append(mergedValues, new.Values[startIdx:]...)
-				} else {
-					searchVal := item.Period.End.AddDate(0, 0, 1)
-					sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
-						idxVal := cache.periods[i]
-						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-					})
-
-					startIdx := sliceStartIdx - periodStartIdx
-					added += len(new.Values[startIdx:])
-					mergedValues = append(mergedValues, new.Values[startIdx:]...)
-				}
-			}
-
-			item.Period = mergedInterval
-			item.Values = mergedValues
-			item.startIdx = mergedStartIdx
-
+			log.Debug().Msg("item and new are contiguous")
+			merged, added := cache.merge(new, item)
+			item.copyFrom(merged)
 			return items, added
 		}
 
 		if item.Period.Begin.After(new.Period.Begin) {
-			log.Debug().Int("startIdx", item.startIdx).Time("IntervalA", item.Period.Begin).Time("IntervalB", item.Period.End).Msg("item is after new")
 			// insert at the index
 			insertIdx = idx
 		}
 	}
 
-	if insertIdx != -1 {
-		items = insert(items, insertIdx, new)
-	} else {
+	// insert into array
+	log.Debug().Msg("insert new into []*CacheItem array")
+	if insertIdx >= len(items) {
 		items = append(items, new)
+	} else {
+		items = append(items[:insertIdx+1], items[insertIdx:]...)
+		items[insertIdx] = new
 	}
 
 	return items, len(new.Values)
 }
 
-func insert(orig []*CacheItem, index int, value *CacheItem) []*CacheItem {
-	if index < 0 {
-		return orig
+// merge takes to cache items and merges them into one
+func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
+	// combined interval interval
+	mergedInterval := &Interval{
+		Begin: minTime(a.Period.Begin, b.Period.Begin),
+		End:   maxTime(a.Period.End, b.Period.End),
 	}
 
-	if index >= len(orig) {
-		return append(orig, value)
+	// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
+	mergedStartIdx := b.startIdx
+
+	added := 0
+	// new values occur before current values
+	mergedValues := make([]float64, 0, len(b.Values))
+	if a.Period.Begin.Before(b.Period.Begin) {
+		startIdx := sort.Search(len(cache.periods), func(i int) bool {
+			idxVal := cache.periods[i]
+			return (idxVal.After(a.Period.Begin) || idxVal.Equal(a.Period.Begin))
+		})
+
+		if a.isLocalDate {
+			// cannot rely upon index in cache.periods. must search through local dates
+			// the end date of new should be the start of the current item (hence using b.Period.Begin and not .End)
+			searchVal := b.Period.Begin.AddDate(0, 0, -1)
+			endIdx := sort.Search(len(a.localDates), func(i int) bool {
+				idxVal := a.localDates[i]
+				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+			})
+			added += endIdx
+			mergedValues = a.Values[:endIdx]
+		} else {
+			// the end date of new should be the start of the current item (hence using b.Period.Begin and not .End)
+			searchVal := b.Period.Begin.AddDate(0, 0, -1)
+			endIdx := sort.Search(len(cache.periods), func(i int) bool {
+				idxVal := cache.periods[i]
+				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+			})
+
+			numDates := endIdx - startIdx + 1
+			if len(a.Values) < numDates {
+				numDates = len(a.Values)
+			}
+			added += numDates
+			mergedValues = a.Values[:numDates]
+		}
+		mergedStartIdx = startIdx
 	}
 
-	orig = append(orig[:index+1], orig[index:]...)
-	orig[index] = value
+	mergedValues = append(mergedValues, b.Values...)
 
-	return orig
+	// new values after b.Values
+	if a.Period.End.After(b.Period.End) {
+		periodStartIdx := sort.Search(len(cache.periods), func(i int) bool {
+			idxVal := cache.periods[i]
+			return (idxVal.After(a.Period.Begin) || idxVal.Equal(a.Period.Begin))
+		})
+
+		if a.isLocalDate {
+			searchVal := b.Period.End.AddDate(0, 0, 1)
+			startIdx := sort.Search(len(a.localDates), func(i int) bool {
+				idxVal := a.localDates[i]
+				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+			})
+
+			added += len(a.Values[startIdx:])
+			mergedValues = append(mergedValues, a.Values[startIdx:]...)
+		} else {
+			searchVal := b.Period.End.AddDate(0, 0, 1)
+			sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
+				idxVal := cache.periods[i]
+				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+			})
+
+			startIdx := sliceStartIdx - periodStartIdx
+			added += len(a.Values[startIdx:])
+			mergedValues = append(mergedValues, a.Values[startIdx:]...)
+		}
+	}
+
+	mergedCacheItem := &CacheItem{
+		Period:   mergedInterval,
+		Values:   mergedValues,
+		startIdx: mergedStartIdx,
+	}
+
+	// TODO: need to merge localDateIdx and isLocalDate
+
+	return mergedCacheItem, added
+}
+
+func (item *CacheItem) copyFrom(new *CacheItem) {
+	item.Period = new.Period
+	item.Values = new.Values
+	item.isLocalDate = new.isLocalDate
+	item.localDates = new.localDates
+	item.startIdx = new.startIdx
 }
 
 func minTime(a, b time.Time) time.Time {
