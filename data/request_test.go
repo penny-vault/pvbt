@@ -90,7 +90,7 @@ var _ = Describe("Request tests", func() {
 			}}))
 		})
 
-		PIt("it errors when no data is available", func() {
+		It("it errors when no data is available", func() {
 			securities := []*data.Security{
 				{
 					Ticker:        "TSLA",
@@ -105,7 +105,7 @@ var _ = Describe("Request tests", func() {
 			Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue())
 		})
 
-		PDescribeTable("check all metrics",
+		DescribeTable("check all metrics",
 			func(a, b int, metric data.Metric, expectedVals [][]float64) {
 				metricColumn := "close"
 				switch metric {
@@ -135,7 +135,7 @@ var _ = Describe("Request tests", func() {
 
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
-				req := data.NewDataRequest(securities...).Metrics(data.MetricClose).Frequency(dataframe.Daily)
+				req := data.NewDataRequest(securities...).Metrics(metric).Frequency(dataframe.Daily)
 				df, err := req.Between(ctx, begin, end)
 
 				Expect(err).To(BeNil())

@@ -42,7 +42,7 @@ const (
 	Weekly     Frequency = "WeekEnd"
 	MonthBegin Frequency = "MonthBegin"
 	MonthEnd   Frequency = "MonthEnd"
-	Monthly    Frequency = "MonthlEnd"
+	Monthly    Frequency = "MonthEnd"
 	YearBegin  Frequency = "YearBegin"
 	YearEnd    Frequency = "YearEnd"
 	Annually   Frequency = "YearEnd"

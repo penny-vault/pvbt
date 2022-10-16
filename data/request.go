@@ -35,7 +35,7 @@ type DataRequest struct {
 func NewDataRequest(securities ...*Security) *DataRequest {
 	req := &DataRequest{
 		securities: securities,
-		frequency:  dataframe.Monthly,
+		frequency:  dataframe.Daily,
 		metrics:    make(map[Metric]int, 1),
 	}
 
@@ -75,8 +75,7 @@ func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe
 	if err != nil {
 		return nil, err
 	}
-	log.Debug().Times("Idx", df.Dates).Strs("ColNames", df.ColNames).Floats64("Values", df.Vals[0]).Msg("df")
-	df = df.Frequency(dataframe.Monthly)
+	df = df.Frequency(req.frequency)
 	return df, nil
 }
 
