@@ -427,7 +427,6 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
 func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
-	log.Debug().Time("Period.Begin", new.Period.Begin).Time("Period.End", new.Period.End).Floats64("Values", new.Values).Msg("inserting item into []*CacheItem list")
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
