@@ -16,6 +16,7 @@
 package dataframe
 
 import (
+	"math"
 	"time"
 
 	"github.com/penny-vault/pv-api/tradecron"
@@ -94,4 +95,37 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 	}
 
 	return newDf
+}
+
+// Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
+func (df *DataFrame) Breakout() DataFrameMap {
+	dfMap := DataFrameMap{}
+	for idx, col := range df.ColNames {
+		dfMap[col] = &DataFrame{
+			Dates:    df.Dates,
+			ColNames: []string{col},
+			Vals:     [][]float64{df.Vals[idx]},
+		}
+	}
+	return dfMap
+}
+
+// Drop removes rows that contain the value `val` from the dataframe
+func (df *DataFrame) Drop(val float64) *DataFrame {
+	isNA := math.IsNaN(val)
+	newVals := make([][]float64, 0, len(df.Vals))
+	newDates := make([]time.Time, 0, len(df.Vals))
+	for rowIdx, row := range df.Vals {
+		keep := true
+		for _, colVal := range row {
+			keep = keep && !(colVal == val || (isNA && math.IsNaN(colVal)))
+		}
+		if keep {
+			newVals = append(newVals, row)
+			newDates = append(newDates, df.Dates[rowIdx])
+		}
+	}
+	df.Vals = newVals
+	df.Dates = newDates
+	return df
 }
