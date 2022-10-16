@@ -101,7 +101,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 				data[SecurityMetric{
 					SecurityObject: *security,
 					MetricObject:   metric,
-				}] = vals
+				}] = vals.Vals[0]
 			} else {
 				subLog.Error().Err(err).Msg("could not fetch data")
 				return nil, err
@@ -120,7 +120,7 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 
 	// check if the date is currently in the cache
 	if vals, err := manager.cache.Get(security, metric, date, date); err != nil {
-		return vals[0], date, nil
+		return vals.Vals[0][0], date, nil
 	}
 
 	// not currently in the cache ... load from DB
@@ -165,7 +165,8 @@ func (manager *Manager) Reset() {
 		cacheMaxSize = 10485760 // 10 MB
 	}
 
-	manager.cache = NewSecurityMetricCache(cacheMaxSize, []time.Time{})
+	periods := manager.cache.periods
+	manager.cache = NewSecurityMetricCache(cacheMaxSize, periods)
 }
 
 func (manager *Manager) getTradingDays() {
