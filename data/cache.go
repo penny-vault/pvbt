@@ -22,13 +22,16 @@ import (
 	"time"
 
 	"github.com/alphadose/haxmap"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
 
 type CacheItem struct {
-	Values   []float64
-	Period   *Interval
-	startIdx int
+	Values      []float64
+	Period      *Interval
+	isLocalDate bool
+	localDates  []time.Time
+	startIdx    int
 }
 
 type SecurityMetric struct {
@@ -121,7 +124,7 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 }
 
 // Get returns the requested data over the range. If no data matches the hash key return ErrRangeDoesNotExist
-func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) ([]float64, error) {
+func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
 	cache.locker.RLock()
 	defer cache.locker.RUnlock()
 
@@ -140,10 +143,18 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 		return nil, ErrInvalidTimeRange
 	}
 
-	if items, ok := cache.values[key(k)]; ok {
+	myKey := key(k)
+
+	if items, ok := cache.values[myKey]; ok {
 		for _, item := range items {
 			if item.Period.Contains(requestedInterval) {
-				periodSubset := cache.periods[item.startIdx:]
+				var periodSubset []time.Time
+				if item.isLocalDate {
+					periodSubset = item.localDates
+				} else {
+					periodSubset = cache.periods[item.startIdx:]
+				}
+
 				var beginIdx int
 				var endIdx int
 				beginExactMatch := false
@@ -177,14 +188,26 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 
 				// special case: no dates match range because its a holiday or weekend
 				if !beginExactMatch && !endExactMatch && beginIdx == endIdx {
-					return []float64{}, nil
+					return &dataframe.DataFrame{
+						ColNames: []string{myKey},
+					}, nil
 				}
 
 				if !endExactMatch {
 					endIdx--
 				}
 
-				return item.Values[beginIdx : endIdx+1], nil
+				vals := make([][]float64, 1)
+				vals[0] = item.Values[beginIdx : endIdx+1]
+				dates := periodSubset[beginIdx : endIdx+1]
+
+				df := &dataframe.DataFrame{
+					Dates:    dates,
+					Vals:     vals,
+					ColNames: []string{myKey},
+				}
+
+				return df, nil
 			}
 		}
 	}
@@ -194,6 +217,11 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 
 // Set adds the data for the specified security and metric to the cache
 func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, val []float64) error {
+	return cache.SetWithLocalDates(security, metric, begin, end, []time.Time{}, val)
+}
+
+// Set adds the data for the specified security and metric to the cache
+func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric Metric, begin, end time.Time, dates []time.Time, val []float64) error {
 	cache.locker.Lock()
 	defer cache.locker.Unlock()
 
@@ -238,17 +266,61 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 		return (idxVal.After(interval.Begin) || idxVal.Equal(interval.Begin))
 	})
 
-	items, sizeAdded := cache.merge(&CacheItem{
-		Values:   val,
-		Period:   interval,
-		startIdx: startIdx,
-	}, items)
+	var cacheItem *CacheItem
+	if len(dates) != 0 {
+		cacheItem = &CacheItem{
+			Values:      val,
+			Period:      interval,
+			isLocalDate: true,
+			localDates:  dates,
+			startIdx:    startIdx,
+		}
+	} else {
+		cacheItem = &CacheItem{
+			Values:   val,
+			Period:   interval,
+			startIdx: startIdx,
+		}
+	}
+
+	items, sizeAdded := cache.insertItem(cacheItem, items)
+	if len(items) > 1 {
+		items = cache.defrag(items)
+	}
 
 	cache.values[k] = items
 	cache.lastSeen.Set(k, time.Now())
 	cache.sizeBytes += int64(sizeAdded * 8)
 
 	return nil
+}
+
+// Items returns the items in the cache for a given SecurityMetric. This method is only intended for testing.
+func (cache *SecurityMetricCache) Items(security *Security, metric Metric) []*CacheItem {
+	k := key(SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   metric,
+	})
+
+	if v, ok := cache.values[k]; ok {
+		return v
+	}
+
+	return []*CacheItem{}
+}
+
+// ItemCount returns the number of non-contiguous items in the cache for the given SecurityMetric
+func (cache *SecurityMetricCache) ItemCount(security *Security, metric Metric) int {
+	k := key(SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   metric,
+	})
+
+	if v, ok := cache.values[k]; ok {
+		return len(v)
+	}
+
+	return 0
 }
 
 // Count returns the number of securities + metrics in the cache
@@ -293,10 +365,58 @@ func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {
 	}
 }
 
-// merge takes a list of intervals and adds a new interval to the list. If the new interval
+// contiguousByDateIndex checks if two items are contiguous according to the date index
+func (cache *SecurityMetricCache) contiguousByDateIndex(a, b *CacheItem) bool {
+	// if a is after b swap a and b
+	if a.startIdx > b.startIdx {
+		c := a
+		a = b
+		b = c
+	}
+
+	startIdx := a.startIdx
+	dateIdx := cache.periods[startIdx:]
+
+	searchVal := a.Period.End
+	endIdx := sort.Search(len(dateIdx), func(i int) bool {
+		idxVal := dateIdx[i]
+		return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+	}) + startIdx
+
+	return endIdx >= (b.startIdx - 1)
+}
+
+// defrag merges contiguous cache items in an array of cache items
+func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
+	cnt := len(items)
+	newItems := make([]*CacheItem, 0, cnt)
+	skip := false
+	for idx, item := range items[:cnt-1] {
+		if skip {
+			continue
+		}
+
+		next := items[idx+1]
+		if item.Period.Contains(next.Period) {
+			newItems = append(newItems, item)
+			skip = true
+			continue
+		}
+
+		if item.Period.Contiguous(next.Period) {
+			// need to merge
+		}
+		newItems = append(newItems, item)
+	}
+
+	return newItems
+}
+
+// insertItem takes a list of intervals and adds a new interval to the list. If the new interval
 // overlaps with an existing interval they are merged, otherwise it is inserted in the
-// interval.Begin time sorted location in the list
-func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
+// interval.Begin time sorted location in the list, returns the updated list of cache items and number
+// of values that were added
+func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
@@ -308,18 +428,29 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 			return items, 0
 		}
 
-		if item.Period.Contiguous(new.Period) {
+		if new.Period.Contains(item.Period) {
+			added := len(new.Values) - len(item.Values)
+			item.Period = new.Period
+			item.Values = new.Values
+			item.isLocalDate = new.isLocalDate
+			item.localDates = new.localDates
+			item.startIdx = new.startIdx
+			return items, added
+		}
+
+		if item.Period.Contiguous(new.Period) || cache.contiguousByDateIndex(new, item) {
 			// need to merge
-			// new interval
+			// combined interval interval
 			mergedInterval := &Interval{
 				Begin: minTime(new.Period.Begin, item.Period.Begin),
-				End:   maxTime(new.Period.End, item.Period.Begin),
+				End:   maxTime(new.Period.End, item.Period.End),
 			}
 
+			// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
 			mergedStartIdx := item.startIdx
 
 			added := 0
-			// new values before current values
+			// new values occur before current values
 			mergedValues := make([]float64, 0, len(item.Values))
 			if new.Period.Begin.Before(item.Period.Begin) {
 				startIdx := sort.Search(len(cache.periods), func(i int) bool {
@@ -327,15 +458,31 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 					return (idxVal.After(new.Period.Begin) || idxVal.Equal(new.Period.Begin))
 				})
 
-				searchVal := item.Period.Begin.AddDate(0, 0, -1)
-				endIdx := sort.Search(len(cache.periods), func(i int) bool {
-					idxVal := cache.periods[i]
-					return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-				})
+				if new.isLocalDate {
+					// cannot rely upon index in cache.periods. must search through local dates
+					// the end date of new should be the start of the current item (hence using item.Period.Begin and not .End)
+					searchVal := item.Period.Begin.AddDate(0, 0, -1)
+					endIdx := sort.Search(len(new.localDates), func(i int) bool {
+						idxVal := new.localDates[i]
+						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+					})
+					added += endIdx
+					mergedValues = new.Values[:endIdx]
+				} else {
+					// the end date of new should be the start of the current item (hence using item.Period.Begin and not .End)
+					searchVal := item.Period.Begin.AddDate(0, 0, -1)
+					endIdx := sort.Search(len(cache.periods), func(i int) bool {
+						idxVal := cache.periods[i]
+						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+					})
 
-				numDates := endIdx - startIdx
-				added += numDates
-				mergedValues = new.Values[:numDates]
+					numDates := endIdx - startIdx + 1
+					if len(new.Values) < numDates {
+						numDates = len(new.Values)
+					}
+					added += numDates
+					mergedValues = new.Values[:numDates]
+				}
 				mergedStartIdx = startIdx
 			}
 
@@ -348,15 +495,26 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 					return (idxVal.After(new.Period.Begin) || idxVal.Equal(new.Period.Begin))
 				})
 
-				searchVal := item.Period.End.AddDate(0, 0, 1)
-				sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
-					idxVal := cache.periods[i]
-					return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-				})
+				if new.isLocalDate {
+					searchVal := item.Period.End.AddDate(0, 0, 1)
+					startIdx := sort.Search(len(new.localDates), func(i int) bool {
+						idxVal := new.localDates[i]
+						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+					})
 
-				startIdx := sliceStartIdx - periodStartIdx
-				added += len(new.Values[startIdx:])
-				mergedValues = append(mergedValues, new.Values[startIdx:]...)
+					added += len(new.Values[startIdx:])
+					mergedValues = append(mergedValues, new.Values[startIdx:]...)
+				} else {
+					searchVal := item.Period.End.AddDate(0, 0, 1)
+					sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
+						idxVal := cache.periods[i]
+						return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+					})
+
+					startIdx := sliceStartIdx - periodStartIdx
+					added += len(new.Values[startIdx:])
+					mergedValues = append(mergedValues, new.Values[startIdx:]...)
+				}
 			}
 
 			item.Period = mergedInterval
@@ -367,6 +525,7 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 		}
 
 		if item.Period.Begin.After(new.Period.Begin) {
+			log.Debug().Int("startIdx", item.startIdx).Time("IntervalA", item.Period.Begin).Time("IntervalB", item.Period.End).Msg("item is after new")
 			// insert at the index
 			insertIdx = idx
 		}
@@ -374,6 +533,8 @@ func (cache *SecurityMetricCache) merge(new *CacheItem, items []*CacheItem) ([]*
 
 	if insertIdx != -1 {
 		items = insert(items, insertIdx, new)
+	} else {
+		items = append(items, new)
 	}
 
 	return items, len(new.Values)

@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gmeasure"
+	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
@@ -31,9 +32,15 @@ func tz() *time.Location {
 	return common.GetTimezone()
 }
 
+type segment struct {
+	start int
+	end   int
+	vals  []float64
+}
+
 var _ = Describe("Cache", func() {
-	Describe("When the cache is initialized ", func() {
-		Context("with contiguous values for a single security and metric", func() {
+	Describe("when the cache is initialized ", func() {
+		Context("with values for a single security and metric", func() {
 			var (
 				cache    *data.SecurityMetricCache
 				dates    []time.Time
@@ -82,7 +89,7 @@ var _ = Describe("Cache", func() {
 				experiment.SampleDuration("simple get", func(_ int) {
 					val, err := cache.Get(security, data.MetricAdjustedClose, beginSubset, endSubset)
 					Expect(err).To(BeNil())
-					Expect(val).To(Equal([]float64{1, 2, 3}))
+					Expect(val.Vals[0]).To(Equal([]float64{1, 2, 3}))
 				}, gmeasure.SamplingConfig{N: 1000})
 			})
 
@@ -118,35 +125,35 @@ var _ = Describe("Cache", func() {
 					Expect(present).To(Equal(expectedPresent))
 					Expect(intervals).To(Equal(expectedInterval))
 				},
-				Entry("When range is completely outside of data interval (before start)", 1, 1, false, []*data.Interval{}),
-				Entry("When range is before start and ends within interval", 2, 3, false, []*data.Interval{{
+				Entry("when range is completely outside of data interval (before start)", 1, 1, false, []*data.Interval{}),
+				Entry("when range is before start and ends within interval", 2, 3, false, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range is before start and ends at interval end", 2, 8, false, []*data.Interval{{
+				Entry("when range is before start and ends at interval end", 2, 8, false, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range is before start and ends after end", 2, 9, false, []*data.Interval{{
+				Entry("when range is before start and ends after end", 2, 9, false, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range is after start and ends after end", 4, 9, false, []*data.Interval{{
+				Entry("when range is after start and ends after end", 4, 9, false, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range is completely outside of data interval (after end)", 9, 9, false, []*data.Interval{}),
-				Entry("When range is completely outside of covered interval (after end)", 10, 12, false, []*data.Interval{}),
-				Entry("When range is invalid (start after end)", 5, 3, false, []*data.Interval{}),
-				Entry("When range is covered but days only on weekend", 6, 7, true, []*data.Interval{{
+				Entry("when range is completely outside of data interval (after end)", 9, 9, false, []*data.Interval{}),
+				Entry("when range is completely outside of covered interval (after end)", 10, 12, false, []*data.Interval{}),
+				Entry("when range is invalid (start after end)", 5, 3, false, []*data.Interval{}),
+				Entry("when range is covered but days only on weekend", 6, 7, true, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range completely covers available data", 3, 8, true, []*data.Interval{{
+				Entry("when range completely covers available data", 3, 8, true, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
-				Entry("When range is a single date", 4, 4, true, []*data.Interval{{
+				Entry("when range is a single date", 4, 4, true, []*data.Interval{{
 					Begin: time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					End:   time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}}),
@@ -164,35 +171,95 @@ var _ = Describe("Cache", func() {
 					rangeA := time.Date(2022, 8, a, 0, 0, 0, 0, tz())
 					rangeB := time.Date(2022, 8, b, 0, 0, 0, 0, tz())
 					res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
+
 					if expectedError == nil {
 						Expect(err).To(BeNil())
+
+						if len(expected) > 0 {
+							Expect(len(res.Vals)).To(Equal(1), "number of columns in df should be one")
+							if len(res.Vals) > 0 {
+								Expect(res.Vals[0]).To(Equal(expected))
+							}
+						} else {
+							Expect(len(res.Vals)).To(Equal(0), "number of columns in df should be zero")
+						}
 					} else {
 						Expect(errors.Is(err, expectedError)).To(BeTrue())
 					}
-
-					Expect(res).To(Equal(expected))
 				},
-				Entry("When range is completely outside of data interval (before start)", 1, 1, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is before start and ends within interval", 2, 3, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is before start and ends at interval end", 2, 8, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is before start and ends after end", 2, 9, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is after start and ends after end", 4, 9, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is completely outside of data interval (after end)", 9, 9, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is completely outside of covered interval (after end)", 10, 12, nil, data.ErrRangeDoesNotExist),
-				Entry("When range is invalid (start after end)", 5, 3, nil, data.ErrInvalidTimeRange),
-				Entry("When range is covered but days only on weekend", 6, 7, []float64{}, nil),
-				Entry("When range is a subset of covered period", 4, 5, []float64{1, 2}, nil),
-				Entry("Range touches left extremity", 3, 5, []float64{0, 1, 2}, nil),
-				Entry("Range touches right extremity", 5, 8, []float64{2, 3}, nil),
-				Entry("Range covers full period", 3, 8, []float64{0, 1, 2, 3}, nil),
-				Entry("Range covers a single day 0", 3, 3, []float64{0}, nil),
-				Entry("Range covers a single day 1", 4, 4, []float64{1}, nil),
-				Entry("Range covers a single day 2", 5, 5, []float64{2}, nil),
-				Entry("Range covers a single day 3", 8, 8, []float64{3}, nil),
-				Entry("Range begins on weekend", 6, 8, []float64{3}, nil),
-				Entry("Range ends on saturday", 3, 6, []float64{0, 1, 2}, nil),
-				Entry("Range ends on sunday", 3, 6, []float64{0, 1, 2}, nil),
-				Entry("When range is a single date", 4, 4, []float64{1}, nil),
+				Entry("when range is completely outside of data interval (before start)", 1, 1, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is before start and ends within interval", 2, 3, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is before start and ends at interval end", 2, 8, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is before start and ends after end", 2, 9, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is after start and ends after end", 4, 9, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is completely outside of data interval (after end)", 9, 9, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is completely outside of covered interval (after end)", 10, 12, nil, data.ErrRangeDoesNotExist),
+				Entry("when range is invalid (start after end)", 5, 3, nil, data.ErrInvalidTimeRange),
+				Entry("when range is covered but days only on weekend", 6, 7, []float64{}, nil),
+				Entry("when range is a subset of covered period", 4, 5, []float64{1, 2}, nil),
+				Entry("range touches left extremity", 3, 5, []float64{0, 1, 2}, nil),
+				Entry("range touches right extremity", 5, 8, []float64{2, 3}, nil),
+				Entry("range covers full period", 3, 8, []float64{0, 1, 2, 3}, nil),
+				Entry("range covers a single day 0", 3, 3, []float64{0}, nil),
+				Entry("range covers a single day 1", 4, 4, []float64{1}, nil),
+				Entry("range covers a single day 2", 5, 5, []float64{2}, nil),
+				Entry("range covers a single day 3", 8, 8, []float64{3}, nil),
+				Entry("range begins on weekend", 6, 8, []float64{3}, nil),
+				Entry("range ends on saturday", 3, 6, []float64{0, 1, 2}, nil),
+				Entry("range ends on sunday", 3, 6, []float64{0, 1, 2}, nil),
+				Entry("when range is a single date", 4, 4, []float64{1}, nil),
+			)
+
+			DescribeTable("test merging of values",
+				func(segments []segment, expectedItemCount, a, b int, expectedVals []float64) {
+
+					// set each segment on the cache, this should cause merging
+					for _, seg := range segments {
+						log.Info().Int("Start", seg.start).Int("End", seg.end).Floats64("Floats", seg.vals).Msg("adding segment")
+						begin := time.Date(2022, 8, seg.start, 0, 0, 0, 0, tz())
+						end := time.Date(2022, 8, seg.end, 0, 0, 0, 0, tz())
+						err := cache.Set(security, data.MetricAdjustedClose, begin, end, seg.vals)
+						Expect(err).To(BeNil())
+					}
+
+					// check the number of items for the security / metric pair
+					itemCount := cache.ItemCount(security, data.MetricAdjustedClose)
+					Expect(itemCount).To(Equal(expectedItemCount), "item count")
+
+					// validate that multiple items are properly sorted
+					items := cache.Items(security, data.MetricAdjustedClose)
+					if len(items) > 1 {
+						lastItem := items[0]
+						log.Debug().Time("PeriodBegin", lastItem.Period.Begin).Time("PeriodEnd", lastItem.Period.End).Floats64("Vals", lastItem.Values).Msg("cache item")
+						for _, item := range items[1:] {
+							log.Debug().Time("PeriodBegin", item.Period.Begin).Time("PeriodEnd", item.Period.End).Floats64("Vals", item.Values).Msg("cache item")
+							Expect(item.Period.Begin.Before(lastItem.Period.End)).To(BeFalse(), "item period begin should be after the previous end")
+							lastItem = item
+						}
+					} else if len(items) == 1 {
+						item := items[0]
+						log.Debug().Time("PeriodBegin", item.Period.Begin).Time("PeriodEnd", item.Period.End).Floats64("Vals", item.Values).Msg("cache item")
+					}
+
+					// try to retrieve the data
+					rangeA := time.Date(2022, 8, a, 0, 0, 0, 0, tz())
+					rangeB := time.Date(2022, 8, b, 0, 0, 0, 0, tz())
+					res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
+					Expect(err).To(BeNil())
+					Expect(res.Vals[0]).To(Equal(expectedVals))
+				},
+				Entry("when segments are non contiguous", []segment{{1, 2, []float64{1, 2}}, {4, 5, []float64{4, 5}}}, 2, 4, 5, []float64{4, 5}),
+				Entry("when segments are left contiguous", []segment{{3, 4, []float64{3, 4}}, {1, 2, []float64{1, 2}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
+				Entry("when segments are right contiguous", []segment{{1, 2, []float64{1, 2}}, {3, 4, []float64{3, 4}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
+				Entry("when segments are left contiguous (single)", []segment{{2, 2, []float64{2}}, {1, 1, []float64{1}}}, 1, 1, 2, []float64{1, 2}),
+				Entry("when segments are right contiguous (single)", []segment{{1, 1, []float64{1}}, {2, 2, []float64{2}}}, 1, 1, 2, []float64{1, 2}),
+				Entry("when segments are equal", []segment{{4, 5, []float64{4, 5}}, {4, 5, []float64{4, 5}}}, 1, 4, 5, []float64{4, 5}),
+				Entry("when segment A is a subset of segment B", []segment{{3, 4, []float64{3, 4}}, {1, 5, []float64{1, 2, 3, 4, 5}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
+				Entry("when segment B is a subset of segment A", []segment{{1, 5, []float64{1, 2, 3, 4, 5}}, {3, 4, []float64{3, 4}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
+				Entry("when segments are left contiguous (weekend)", []segment{{8, 9, []float64{8, 9}}, {4, 5, []float64{4, 5}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
+				Entry("when segments are right contiguous (weekend)", []segment{{4, 5, []float64{4, 5}}, {8, 9, []float64{8, 9}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
+				Entry("when segments are right contiguous with overlap", []segment{{1, 2, []float64{1, 2}}, {2, 3, []float64{2, 3}}}, 1, 1, 3, []float64{1, 2, 3}),
+				Entry("when segments are left contiguous with overlap", []segment{{2, 3, []float64{2, 3}}, {1, 2, []float64{1, 2}}}, 1, 1, 3, []float64{1, 2, 3}),
 			)
 
 			It("should successfully get values", func() {
@@ -204,7 +271,7 @@ var _ = Describe("Cache", func() {
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 				Expect(err).To(BeNil())
-				Expect(result).To(Equal(vals))
+				Expect(result.Vals[0]).To(Equal(vals))
 			})
 
 			It("should error for metric that doesn't exist", func() {
@@ -255,7 +322,7 @@ var _ = Describe("Cache", func() {
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin2, end2)
 				Expect(err).To(BeNil())
-				Expect(result).To(Equal(vals2))
+				Expect(result.Vals[0]).To(Equal(vals2))
 			})
 
 		})
