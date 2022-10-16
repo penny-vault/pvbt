@@ -75,6 +75,8 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 		if err != nil {
 			log.Panic().Err(err).Str("Schedule", "@close @monthbegin 1 *").Msg("could not build tradecron schedule")
 		}
+	default:
+		log.Panic().Str("Frequency", string(frequency)).Msg("Unknown frequncy provided to dataframe frequency function")
 	}
 
 	newDates := make([]time.Time, 0, len(df.Dates))
