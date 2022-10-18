@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/alphadose/haxmap"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
@@ -159,6 +160,9 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				var endIdx int
 				beginExactMatch := false
 				endExactMatch := false
+				noValuesFound := false
+
+				log.Info().Time("Begin", begin).Time("End", end).Msg("ordinary girl")
 
 				if item.Period.Begin.Equal(begin) {
 					beginIdx = 0
@@ -168,7 +172,10 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 						idxVal := periodSubset[i]
 						return (idxVal.After(begin) || idxVal.Equal(begin))
 					})
-					if periodSubset[beginIdx].Equal(begin) {
+					if beginIdx == len(periodSubset) && item.isLocalDate {
+						noValuesFound = true
+					}
+					if !noValuesFound && periodSubset[beginIdx].Equal(begin) {
 						beginExactMatch = true
 					}
 				}
@@ -181,6 +188,9 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 						idxVal := periodSubset[i]
 						return (idxVal.After(end) || idxVal.Equal(end))
 					})
+					if endIdx == len(periodSubset) {
+						endIdx -= 1
+					}
 					if periodSubset[endIdx].Equal(end) {
 						endExactMatch = true
 					}
@@ -193,13 +203,24 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					}, nil
 				}
 
-				if !endExactMatch {
+				if !endExactMatch && endIdx != 0 {
 					endIdx--
 				}
 
+				endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
+				if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
+					noValuesFound = true
+				}
+
 				vals := make([][]float64, 1)
-				vals[0] = item.Values[beginIdx : endIdx+1]
-				dates := periodSubset[beginIdx : endIdx+1]
+				var dates []time.Time
+				if noValuesFound {
+					vals[0] = []float64{}
+					dates = []time.Time{}
+				} else {
+					vals[0] = item.Values[beginIdx : endIdx+1]
+					dates = periodSubset[beginIdx : endIdx+1]
+				}
 
 				df := &dataframe.DataFrame{
 					Dates:    dates,
@@ -268,6 +289,11 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 
 	var cacheItem *CacheItem
 	if len(dates) != 0 {
+
+		if len(dates) != len(val) {
+			return ErrDateLengthDoesNotMatch
+		}
+
 		cacheItem = &CacheItem{
 			Values:      val,
 			Period:      interval,
@@ -330,6 +356,10 @@ func (cache *SecurityMetricCache) Count() int {
 
 func (cache *SecurityMetricCache) Size() int64 {
 	return cache.sizeBytes
+}
+
+func (item *CacheItem) IsLocalDateIndex() bool {
+	return item.isLocalDate
 }
 
 // Private Implementation
