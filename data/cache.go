@@ -162,8 +162,6 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				endExactMatch := false
 				noValuesFound := false
 
-				log.Info().Time("Begin", begin).Time("End", end).Msg("ordinary girl")
-
 				if item.Period.Begin.Equal(begin) {
 					beginIdx = 0
 					beginExactMatch = true
@@ -354,12 +352,19 @@ func (cache *SecurityMetricCache) Count() int {
 	return len(cache.values)
 }
 
+// Size returns the number of bytes currently stored in the SecurityMetricCache
 func (cache *SecurityMetricCache) Size() int64 {
 	return cache.sizeBytes
 }
 
+// IsLocalDateIndex returns true if a the CacheItem uses a local date index
 func (item *CacheItem) IsLocalDateIndex() bool {
 	return item.isLocalDate
+}
+
+// LocalDateIndex returns the local date index
+func (item *CacheItem) LocalDateIndex() []time.Time {
+	return item.localDates
 }
 
 // Private Implementation
@@ -515,6 +520,9 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	added := 0
 	// new values occur before current values
 	mergedValues := make([]float64, 0, len(b.Values))
+	isLocalDate := b.isLocalDate
+	mergedLocalDates := make([]time.Time, 0, len(b.localDates))
+
 	if a.Period.Begin.Before(b.Period.Begin) {
 		startIdx := sort.Search(len(cache.periods), func(i int) bool {
 			idxVal := cache.periods[i]
@@ -529,8 +537,15 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 				idxVal := a.localDates[i]
 				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
 			})
+			endIdx += 1
 			added += endIdx
-			mergedValues = a.Values[:endIdx]
+			if endIdx > len(a.Values) {
+				mergedValues = a.Values[:endIdx-1]
+				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx-1]...)
+			} else {
+				mergedValues = a.Values[:endIdx]
+				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx]...)
+			}
 		} else {
 			// the end date of new should be the start of the current item (hence using b.Period.Begin and not .End)
 			searchVal := b.Period.Begin.AddDate(0, 0, -1)
@@ -550,6 +565,9 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	}
 
 	mergedValues = append(mergedValues, b.Values...)
+	if b.isLocalDate {
+		mergedLocalDates = append(mergedLocalDates, b.localDates...)
+	}
 
 	// new values after b.Values
 	if a.Period.End.After(b.Period.End) {
@@ -567,6 +585,7 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 
 			added += len(a.Values[startIdx:])
 			mergedValues = append(mergedValues, a.Values[startIdx:]...)
+			mergedLocalDates = append(mergedLocalDates, a.localDates[startIdx:]...)
 		} else {
 			searchVal := b.Period.End.AddDate(0, 0, 1)
 			sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
@@ -581,12 +600,12 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	}
 
 	mergedCacheItem := &CacheItem{
-		Period:   mergedInterval,
-		Values:   mergedValues,
-		startIdx: mergedStartIdx,
+		Period:      mergedInterval,
+		Values:      mergedValues,
+		startIdx:    mergedStartIdx,
+		isLocalDate: isLocalDate,
+		localDates:  mergedLocalDates,
 	}
-
-	// TODO: need to merge localDateIdx and isLocalDate
 
 	return mergedCacheItem, added
 }

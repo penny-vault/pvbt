@@ -38,6 +38,13 @@ type segment struct {
 	vals  []float64
 }
 
+type segment2 struct {
+	start int
+	end   int
+	dates []int
+	vals  []float64
+}
+
 var _ = Describe("Cache", func() {
 	Describe("when the cache is initialized ", func() {
 		Context("with values for a single security and metric using the cache date index", func() {
@@ -214,7 +221,6 @@ var _ = Describe("Cache", func() {
 				func(segments []segment, expectedItemCount, a, b int, expectedVals []float64) {
 					// set each segment on the cache, this should cause merging
 					for _, seg := range segments {
-						log.Debug().Int("Start", seg.start).Int("End", seg.end).Floats64("Floats", seg.vals).Msg("adding segment")
 						begin := time.Date(2022, 8, seg.start, 0, 0, 0, 0, tz())
 						end := time.Date(2022, 8, seg.end, 0, 0, 0, 0, tz())
 						err := cache.Set(security, data.MetricAdjustedClose, begin, end, seg.vals)
@@ -538,14 +544,17 @@ var _ = Describe("Cache", func() {
 				Entry("when range is a single date", 4, 4, []float64{2}, nil),
 			)
 
-			PDescribeTable("test merging of values",
-				func(segments []segment, expectedItemCount, a, b int, expectedVals []float64) {
+			DescribeTable("test merging of values",
+				func(segments []segment2, expectedItemCount, a, b int, expectedVals []float64) {
 					// set each segment on the cache, this should cause merging
 					for _, seg := range segments {
-						log.Debug().Int("Start", seg.start).Int("End", seg.end).Floats64("Floats", seg.vals).Msg("adding segment")
 						begin := time.Date(2022, 8, seg.start, 0, 0, 0, 0, tz())
 						end := time.Date(2022, 8, seg.end, 0, 0, 0, 0, tz())
-						err := cache.Set(security, data.MetricAdjustedClose, begin, end, seg.vals)
+						localDates := make([]time.Time, len(seg.dates))
+						for idx := range localDates {
+							localDates[idx] = time.Date(2022, 8, seg.dates[idx], 0, 0, 0, 0, tz())
+						}
+						err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, localDates, seg.vals)
 						Expect(err).To(BeNil())
 					}
 
@@ -575,32 +584,32 @@ var _ = Describe("Cache", func() {
 					Expect(err).To(BeNil())
 					Expect(res.Vals[0]).To(Equal(expectedVals))
 				},
-				Entry("when segments are non contiguous", []segment{{1, 2, []float64{1, 2}}, {4, 5, []float64{4, 5}}}, 2, 4, 5, []float64{4, 5}),
-				Entry("when segments are left contiguous", []segment{{3, 4, []float64{3, 4}}, {1, 2, []float64{1, 2}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
-				Entry("when segments are right contiguous", []segment{{1, 2, []float64{1, 2}}, {3, 4, []float64{3, 4}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
-				Entry("when segments are left contiguous (single)", []segment{{2, 2, []float64{2}}, {1, 1, []float64{1}}}, 1, 1, 2, []float64{1, 2}),
-				Entry("when segments are right contiguous (single)", []segment{{1, 1, []float64{1}}, {2, 2, []float64{2}}}, 1, 1, 2, []float64{1, 2}),
-				Entry("when segments are equal", []segment{{4, 5, []float64{4, 5}}, {4, 5, []float64{4, 5}}}, 1, 4, 5, []float64{4, 5}),
-				Entry("when segment A is a subset of segment B", []segment{{3, 4, []float64{3, 4}}, {1, 5, []float64{1, 2, 3, 4, 5}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
-				Entry("when segment B is a subset of segment A", []segment{{1, 5, []float64{1, 2, 3, 4, 5}}, {3, 4, []float64{3, 4}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
-				Entry("when segments are left contiguous (weekend)", []segment{{8, 9, []float64{8, 9}}, {4, 5, []float64{4, 5}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
-				Entry("when segments are right contiguous (weekend)", []segment{{4, 5, []float64{4, 5}}, {8, 9, []float64{8, 9}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
-				Entry("when segments are right contiguous with overlap", []segment{{1, 2, []float64{1, 2}}, {2, 3, []float64{2, 3}}}, 1, 1, 3, []float64{1, 2, 3}),
-				Entry("when segments are left contiguous with overlap", []segment{{2, 3, []float64{2, 3}}, {1, 2, []float64{1, 2}}}, 1, 1, 3, []float64{1, 2, 3}),
+				Entry("when segments are non contiguous", []segment2{{1, 2, []int{1, 2}, []float64{1, 2}}, {4, 5, []int{4, 5}, []float64{4, 5}}}, 2, 4, 5, []float64{4, 5}),
+				Entry("when segments are left contiguous", []segment2{{3, 4, []int{3, 4}, []float64{3, 4}}, {1, 2, []int{1, 2}, []float64{1, 2}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
+				Entry("when segments are right contiguous", []segment2{{1, 2, []int{1, 2}, []float64{1, 2}}, {3, 4, []int{3, 4}, []float64{3, 4}}}, 1, 1, 4, []float64{1, 2, 3, 4}),
+				Entry("when segments are left contiguous (single)", []segment2{{2, 2, []int{2}, []float64{2}}, {1, 1, []int{1}, []float64{1}}}, 1, 1, 2, []float64{1, 2}),
+				Entry("when segments are right contiguous (single)", []segment2{{1, 1, []int{1}, []float64{1}}, {2, 2, []int{2}, []float64{2}}}, 1, 1, 2, []float64{1, 2}),
+				Entry("when segments are equal", []segment2{{4, 5, []int{4, 5}, []float64{4, 5}}, {4, 5, []int{4, 5}, []float64{4, 5}}}, 1, 4, 5, []float64{4, 5}),
+				Entry("when segment A is a subset of segment B", []segment2{{3, 4, []int{3, 4}, []float64{3, 4}}, {1, 5, []int{1, 2, 3, 4, 5}, []float64{1, 2, 3, 4, 5}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
+				Entry("when segment B is a subset of segment A", []segment2{{1, 5, []int{1, 2, 3, 4, 5}, []float64{1, 2, 3, 4, 5}}, {3, 4, []int{3, 4}, []float64{3, 4}}}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
+				Entry("when segments are left contiguous (weekend)", []segment2{{8, 9, []int{8, 9}, []float64{8, 9}}, {4, 5, []int{4, 5}, []float64{4, 5}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
+				Entry("when segments are right contiguous (weekend)", []segment2{{4, 5, []int{4, 5}, []float64{4, 5}}, {8, 9, []int{8, 9}, []float64{8, 9}}}, 1, 4, 9, []float64{4, 5, 8, 9}),
+				Entry("when segments are right contiguous with overlap", []segment2{{1, 2, []int{1, 2}, []float64{1, 2}}, {2, 3, []int{2, 3}, []float64{2, 3}}}, 1, 1, 3, []float64{1, 2, 3}),
+				Entry("when segments are left contiguous with overlap", []segment2{{2, 3, []int{2, 3}, []float64{2, 3}}, {1, 2, []int{1, 2}, []float64{1, 2}}}, 1, 1, 3, []float64{1, 2, 3}),
 			)
 
-			PIt("should collapse multiple overlapping cache items", func() {
+			It("should collapse multiple overlapping cache items", func() {
 				// add two single item entries into the cache that are separated by a day
-				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())}, []float64{1})
 				Expect(err).To(BeNil(), "error during first cache set")
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
+				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())}, []float64{3})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// make sure there are 2 entries in the []*CacheItem list
 				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
 
 				// now add a *CacheItem that connects the previous two entries
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), []float64{2})
+				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())}, []float64{2})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// check the number of items for the security / metric pair
@@ -618,102 +627,32 @@ var _ = Describe("Cache", func() {
 				res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
 				Expect(err).To(BeNil())
 				Expect(res.Vals[0]).To(Equal([]float64{1, 2, 3}), "value for security/metric in cache")
+
+				// confirm that the local date index is properly merged
+				Expect(item.LocalDateIndex()).To(Equal([]time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz())}))
 			})
 
-			PIt("should not collapse if items don't overlap", func() {
-				// add two single item entries into the cache that are separated by a day
-				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
-				Expect(err).To(BeNil(), "error during first cache set")
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
-				Expect(err).To(BeNil(), "error during second cache set")
-
-				// make sure there are 2 entries in the []*CacheItem list
-				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
-
-				// now add a *CacheItem that connects the previous two entries
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), []float64{4})
-				Expect(err).To(BeNil(), "error during second cache set")
-
-				// check the number of items for the security / metric pair
-				itemCount := cache.ItemCount(security, data.MetricAdjustedClose)
-				Expect(itemCount).To(Equal(2), "item count after 3 sets")
-
-				// validate that multiple items are properly sorted
-				rangeA := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
-				rangeB := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
-				item := cache.Items(security, data.MetricAdjustedClose)[1]
-				Expect(item.Period.Begin).To(Equal(rangeA))
-				Expect(item.Period.End).To(Equal(rangeB))
-
-				// try to retrieve the data
-				res, err := cache.Get(security, data.MetricAdjustedClose, rangeA, rangeB)
-				Expect(err).To(BeNil())
-				Expect(res.Vals[0]).To(Equal([]float64{3, 4}), "value for security/metric in cache")
-			})
-
-			PIt("should successfully get values", func() {
+			It("should successfully get values", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				vals := []float64{0, 1, 2, 3, 4}
+				vals := []float64{4, 5}
 
-				cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())}, vals)
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 				Expect(err).To(BeNil())
 				Expect(result.Vals[0]).To(Equal(vals))
 			})
 
-			PIt("should error for metric that doesn't exist", func() {
-				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
-				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				_, err := cache.Get(security, data.MetricClose, begin, end)
-				Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue(), "error should be metric does not exist")
-			})
-
-			PIt("should error for security that doesn't exist", func() {
-				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
-				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				security2 := &data.Security{
-					CompositeFigi: "second",
-					Ticker:        "second",
-				}
-				_, err := cache.Get(security2, data.MetricClose, begin, end)
-				Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue(), "error should be security does not exist")
-			})
-
-			PIt("should error when Set size is greater than total size of cache", func() {
+			It("should error when Set size is greater than total size of cache", func() {
 				cache = data.NewSecurityMetricCache(2, dates)
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
-				vals := []float64{0, 1, 2, 3, 4}
+				vals := []float64{0, 1, 2}
 
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}, vals)
 				Expect(errors.Is(err, data.ErrDataLargerThanCache)).To(BeTrue(), "error should be data larger than cache")
 			})
-
-			PIt("should evict old data when cumulative sets exceed the configured memory", func() {
-				cache = data.NewSecurityMetricCache(16, dates)
-				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
-				end := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
-				vals := []float64{0, 1}
-
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
-				Expect(err).To(BeNil())
-
-				begin2 := time.Date(2022, 8, 5, 0, 0, 0, 0, tz())
-				end2 := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
-				vals2 := []float64{2, 3}
-				err = cache.Set(security, data.MetricAdjustedClose, begin2, end2, vals2)
-				Expect(err).To(BeNil())
-
-				_, err = cache.Get(security, data.MetricAdjustedClose, begin, end)
-				Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue(), "error should be range does not exist")
-
-				result, err := cache.Get(security, data.MetricAdjustedClose, begin2, end2)
-				Expect(err).To(BeNil())
-				Expect(result.Vals[0]).To(Equal(vals2))
-			})
-
 		})
 
 	})
