@@ -15,7 +15,10 @@
 
 package dataframe
 
-import "time"
+import (
+	"errors"
+	"time"
+)
 
 // DataFrame stores a table of values organized by date
 // the vals array is row major - e.g.,
@@ -46,4 +49,8 @@ const (
 	YearBegin  Frequency = "YearBegin"
 	YearEnd    Frequency = "YearEnd"
 	Annually   Frequency = "YearEnd"
+)
+
+var (
+	ErrDateIndexNotAligned = errors.New("date index does not align")
 )

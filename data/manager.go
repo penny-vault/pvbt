@@ -41,7 +41,7 @@ var (
 )
 
 // GetMetrics returns metrics for the requested securities over the specified time range
-func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
+func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
 	ctx := context.Background()
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
@@ -81,10 +81,26 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	if len(toPullSecuritiesArray) > 0 {
 		if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0], dates[len(dates)-1]); err == nil {
 			for k, v := range result {
-				err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
-				if err != nil {
-					log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
-					return nil, err
+				if isSparseMetric(k.MetricObject) {
+					df := securityMetricMapToDataFrame(map[SecurityMetric][]float64{
+						k: v,
+					}, dates)
+					log.Debug().Int("len(Dates)", len(df.Dates)).Int("len(Vals)", len(df.Vals)).Msg("Before")
+					df = df.Drop(0)
+					log.Debug().Int("len(Dates)", len(df.Dates)).Int("len(Vals)", len(df.Vals)).Msg("After")
+					if len(df.Dates) > 0 {
+						err = manager.cache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, df.Dates, df.Vals[0])
+					}
+					if err != nil {
+						log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
+						return nil, err
+					}
+				} else {
+					err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
+					if err != nil {
+						log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
+						return nil, err
+					}
 				}
 			}
 		} else {
@@ -94,14 +110,15 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	}
 
 	// get specific time period
-	data := make(map[SecurityMetric][]float64)
+	dfMap := make(dataframe.DataFrameMap)
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
-			if vals, err := manager.cache.Get(security, metric, begin, end); err == nil {
-				data[SecurityMetric{
+			if df, err := manager.cache.Get(security, metric, begin, end); err == nil {
+				k := SecurityMetric{
 					SecurityObject: *security,
 					MetricObject:   metric,
-				}] = vals.Vals[0]
+				}
+				dfMap[k.String()] = df
 			} else {
 				subLog.Error().Err(err).Msg("could not fetch data")
 				return nil, err
@@ -109,8 +126,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		}
 	}
 
-	df := securityMetricMapToDataFrame(data, dates)
-	return df, nil
+	return dfMap, nil
 }
 
 // GetMetricsOnOrBefore finds a single metric value on the requested date or the closest date available prior to the requested date
@@ -244,4 +260,15 @@ func normalizeMetrics(metrics []Metric) []Metric {
 	}
 
 	return metrics
+}
+
+func isSparseMetric(metric Metric) bool {
+	switch metric {
+	case MetricSplitFactor:
+		return true
+	case MetricDividendCash:
+		return true
+	default:
+		return false
+	}
 }

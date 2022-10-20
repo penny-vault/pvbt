@@ -79,8 +79,11 @@ var _ = Describe("Manager tests", func() {
 			// 2021-01-05  BBG000N9MNX3    723.6600  740.8400  719.2000  735.1100  735.1100   1.000000      0.0000
 
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
-			df, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
-			Expect(err).To(BeNil())
+			dfMap, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
+			Expect(err).To(BeNil(), "error when fetching data")
+			df, err := dfMap.DataFrame()
+			Expect(err).To(BeNil(), "error when collapsing to dataframe")
+
 			Expect(df.Len()).To(Equal(2))
 			Expect(df.ColNames).To(Equal([]string{"BBG000N9MNX3:Close"}))
 			Expect(df.Vals).To(Equal([][]float64{{
@@ -129,8 +132,11 @@ var _ = Describe("Manager tests", func() {
 			_, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 11, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil())
 
-			df, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 11, 0, 0, 0, 0, common.GetTimezone()))
-			Expect(err).To(BeNil())
+			dfMap, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 11, 0, 0, 0, 0, common.GetTimezone()))
+			Expect(err).To(BeNil(), "error when fetching data")
+			df, err := dfMap.DataFrame()
+			Expect(err).To(BeNil(), "error when collapsing to dataframe")
+
 			Expect(df.Len()).To(Equal(6))
 			Expect(df.ColCount()).To(Equal(1))
 			Expect(df.ColNames).To(Equal([]string{"BBG000N9MNX3:Close"}))
@@ -169,8 +175,11 @@ var _ = Describe("Manager tests", func() {
 
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
-				df, err := manager.GetMetrics(securities, []data.Metric{metric}, begin, end)
-				Expect(err).To(BeNil())
+				dfMap, err := manager.GetMetrics(securities, []data.Metric{metric}, begin, end)
+				Expect(err).To(BeNil(), "error when fetching data")
+				df, err := dfMap.DataFrame()
+				Expect(err).To(BeNil(), "error when collapsing to dataframe")
+
 				Expect(df.Len()).To(Equal(1))
 				Expect(df.ColNames).To(Equal(colNames))
 				Expect(df.Vals).To(Equal(expectedVals))

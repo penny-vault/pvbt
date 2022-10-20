@@ -26,7 +26,6 @@ import (
 
 type DataRequest struct {
 	securities []*Security
-	frequency  dataframe.Frequency
 	metrics    map[Metric]int
 }
 
@@ -35,7 +34,6 @@ type DataRequest struct {
 func NewDataRequest(securities ...*Security) *DataRequest {
 	req := &DataRequest{
 		securities: securities,
-		frequency:  dataframe.Daily,
 		metrics:    make(map[Metric]int, 1),
 	}
 
@@ -46,11 +44,6 @@ func NewDataRequest(securities ...*Security) *DataRequest {
 
 func (req *DataRequest) Securities(securities ...*Security) *DataRequest {
 	req.securities = securities
-	return req
-}
-
-func (req *DataRequest) Frequency(frequency dataframe.Frequency) *DataRequest {
-	req.frequency = frequency
 	return req
 }
 
@@ -69,14 +62,15 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 	return req
 }
 
-func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (*dataframe.DataFrame, error) {
+// Between queries the metric data store and returns a dataframe with metrics betwen the specified dates
+// columns are named `CompositeFigi:MetricName`
+func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (dataframe.DataFrameMap, error) {
 	manager := GetManagerInstance()
-	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
+	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
 		return nil, err
 	}
-	df = df.Frequency(req.frequency)
-	return df, nil
+	return dfMap, nil
 }
 
 // OnSingle is a convenience function that returns the price for a single security and metric
@@ -100,31 +94,29 @@ func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
 // On returns the price for the requested date
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	manager := GetManagerInstance()
-	df, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)
+	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)
 	if err != nil {
 		return nil, err
 	}
 
-	if df.Len() == 0 {
+	if len(dfMap) == 0 {
 		return nil, ErrSecurityNotFound
 	}
 
-	res := make(map[SecurityMetric]float64, df.Len())
-	colMap := make([]SecurityMetric, df.ColCount())
-	for idx, colName := range df.ColNames {
-		parts := strings.Split(colName, ":")
-		security, err := SecurityFromFigi(parts[0])
-		if err != nil {
-			log.Panic().Err(err).Msg("unknown figi name - there is a programming error in colnames of dataframe")
+	res := make(map[SecurityMetric]float64, len(dfMap))
+	for _, df := range dfMap {
+		for idx, colName := range df.ColNames {
+			parts := strings.Split(colName, ":")
+			security, err := SecurityFromFigi(parts[0])
+			if err != nil {
+				log.Panic().Err(err).Msg("unknown figi name - there is a programming error in colnames of dataframe")
+			}
+			securityMetric := SecurityMetric{
+				SecurityObject: *security,
+				MetricObject:   Metric(parts[1]),
+			}
+			res[securityMetric] = df.Vals[idx][0]
 		}
-		colMap[idx] = SecurityMetric{
-			SecurityObject: *security,
-			MetricObject:   Metric(parts[1]),
-		}
-	}
-
-	for idx, valArray := range df.Vals {
-		res[colMap[idx]] = valArray[0]
 	}
 
 	return res, nil

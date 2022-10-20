@@ -27,7 +27,6 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
-	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 )
 
@@ -59,7 +58,7 @@ var _ = Describe("Request tests", func() {
 				},
 			}
 
-			req := data.NewDataRequest(securities...).Metrics(data.MetricClose).Frequency(dataframe.Daily)
+			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
 
 			_, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).ToNot(BeNil())
@@ -80,9 +79,11 @@ var _ = Describe("Request tests", func() {
 
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 
-			req := data.NewDataRequest(securities...).Metrics(data.MetricClose).Frequency(dataframe.Daily)
-			df, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
-			Expect(err).To(BeNil())
+			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
+			dfMap, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
+			Expect(err).To(BeNil(), "error when fetching data")
+			df, err := dfMap.DataFrame()
+			Expect(err).To(BeNil(), "error when collapsing to dataframe")
 			Expect(df.Len()).To(Equal(2))
 			Expect(df.ColNames).To(Equal([]string{"BBG000N9MNX3:Close"}))
 			Expect(df.Vals).To(Equal([][]float64{{
@@ -100,7 +101,7 @@ var _ = Describe("Request tests", func() {
 
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 
-			req := data.NewDataRequest(securities...).Metrics(data.MetricClose).Frequency(dataframe.Daily)
+			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
 			_, err := req.Between(ctx, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue())
 		})
@@ -135,10 +136,13 @@ var _ = Describe("Request tests", func() {
 
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
-				req := data.NewDataRequest(securities...).Metrics(metric).Frequency(dataframe.Daily)
-				df, err := req.Between(ctx, begin, end)
-
+				req := data.NewDataRequest(securities...).Metrics(metric)
+				dfMap, err := req.Between(ctx, begin, end)
 				Expect(err).To(BeNil())
+				Expect(err).To(BeNil(), "error when fetching data")
+				df, err := dfMap.DataFrame()
+				Expect(err).To(BeNil(), "error when collapsing to dataframe")
+
 				Expect(df.Len()).To(Equal(1))
 				Expect(df.ColNames).To(Equal(colNames))
 				Expect(df.Vals).To(Equal(expectedVals))

@@ -17,9 +17,41 @@ package dataframe
 
 type DataFrameMap map[string]*DataFrame
 
+// Drop calls dataframe.Drop on each dataframe in the map
 func (dfMap DataFrameMap) Drop(val float64) DataFrameMap {
 	for _, v := range dfMap {
 		v.Drop(val)
 	}
 	return dfMap
+}
+
+func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
+	newDfMap := make(DataFrameMap, len(dfMap))
+	for k, v := range dfMap {
+		newDfMap[k] = v.Frequency(frequency)
+	}
+	return newDfMap
+
+}
+
+// DataFrame converts each item in the map to a column in the dataframe
+func (dfMap DataFrameMap) DataFrame() (*DataFrame, error) {
+	df := &DataFrame{}
+	first := true
+	for _, v := range dfMap {
+		if first {
+			df.Dates = v.Dates
+			df.ColNames = v.ColNames
+			df.Vals = v.Vals
+			first = false
+		} else {
+			if len(df.Dates) != len(v.Dates) {
+				return nil, ErrDateIndexNotAligned
+			}
+			df.ColNames = append(df.ColNames, v.ColNames...)
+			df.Vals = append(df.Vals, v.Vals...)
+		}
+	}
+
+	return df, nil
 }
