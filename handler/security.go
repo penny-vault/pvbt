@@ -22,7 +22,7 @@ import (
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )

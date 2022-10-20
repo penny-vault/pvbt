@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v5"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
