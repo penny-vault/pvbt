@@ -62,7 +62,7 @@ var _ = Describe("Manager tests", func() {
 			Expect(errors.Is(err, data.ErrSecurityNotFound)).To(BeTrue())
 		})
 
-		It("it fetches TSLA when only ticker is present", func() {
+		It("fetches TSLA when only ticker is present", func() {
 			securities := []*data.Security{
 				{
 					Ticker:        "TSLA",

@@ -85,11 +85,16 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 					df := securityMetricMapToDataFrame(map[SecurityMetric][]float64{
 						k: v,
 					}, dates)
-					log.Debug().Int("len(Dates)", len(df.Dates)).Int("len(Vals)", len(df.Vals)).Msg("Before")
-					df = df.Drop(0)
-					log.Debug().Int("len(Dates)", len(df.Dates)).Int("len(Vals)", len(df.Vals)).Msg("After")
+					if k.MetricObject == MetricSplitFactor {
+						df = df.Drop(1)
+					} else {
+						df = df.Drop(0)
+					}
 					if len(df.Dates) > 0 {
 						err = manager.cache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, df.Dates, df.Vals[0])
+					} else {
+						// still need to set with blank so that we don't try and query the database again
+						err = manager.cache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, []time.Time{}, []float64{})
 					}
 					if err != nil {
 						log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
