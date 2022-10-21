@@ -495,7 +495,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *PieHistory) error 
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
 func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) error {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
 	defer span.End()
 
 	p := pm.Portfolio
@@ -541,8 +541,11 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		holdings = append(holdings, &holding)
 	}
 
-	myDividends := data.NewDataRequest(holdings...).Frequency(dataframe.Daily).Metrics()
-	mySplits := pm.dataProxy.GetSplits()
+	divSplits, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash, data.MetricSplitFactor).Between(ctx, from, through)
+	if err != nil {
+		log.Error().Err(err).Msg("could not load dividends/splits")
+		return err
+	}
 
 	// for each holding check if there are splits
 	for k := range pm.holdings {
