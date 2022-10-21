@@ -44,7 +44,7 @@ type SecurityMetricCache struct {
 	sizeBytes    int64
 	maxSizeBytes int64
 	values       map[string][]*CacheItem
-	lastSeen     *haxmap.HashMap[string, time.Time]
+	lastSeen     *haxmap.Map[string, time.Time]
 	periods      []time.Time
 	locker       sync.RWMutex
 }
@@ -375,11 +375,12 @@ func key(s SecurityMetric) string {
 
 func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {
 	lastAccess := make([]pair, 0, cache.lastSeen.Len())
-	cache.lastSeen.ForEach(func(s string, t time.Time) {
+	cache.lastSeen.ForEach(func(s string, t time.Time) bool {
 		lastAccess = append(lastAccess, pair{
 			key:  s,
 			last: t,
 		})
+		return true
 	})
 
 	sort.Sort(ByDate(lastAccess))

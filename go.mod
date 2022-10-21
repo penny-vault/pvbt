@@ -10,7 +10,7 @@ require (
 	github.com/gofiber/fiber/v2 v2.38.1
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
-	github.com/jackc/pgx/v4 v4.17.2 // indirect
+	github.com/jackc/pgx/v4 v4.17.2
 	github.com/jdfergason/jwt/v2 v2.2.6
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.25
@@ -37,7 +37,6 @@ require github.com/robfig/cron/v3 v3.0.1
 require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/alphadose/haxmap v1.0.2
-	github.com/jackc/pgx/v5 v5.0.3
 	github.com/nats-io/nats.go v1.18.0
 	github.com/onsi/ginkgo/v2 v2.3.1
 	github.com/pashagolub/pgxmock v1.8.0
@@ -51,7 +50,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
-	github.com/jackc/puddle/v2 v2.0.0 // indirect
+	github.com/jackc/pgx/v5 v5.0.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.3 // indirect
