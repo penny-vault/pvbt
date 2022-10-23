@@ -17,17 +17,13 @@ package data
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )
-
-// Security represents a tradeable asset
-type Security struct {
-	Ticker        string `json:"ticker"`
-	CompositeFigi string `json:"compositeFigi"`
-}
 
 var (
 	securitiesByFigi   map[string]*Security
@@ -122,4 +118,29 @@ func SecurityFromTickerList(tickers []string) ([]*Security, error) {
 		}
 	}
 	return securities, nil
+}
+
+// SecurityMetric functions
+
+// String returns a string representation of the security metric
+func (sm SecurityMetric) String() string {
+	return fmt.Sprintf("%s:%s", sm.SecurityObject.CompositeFigi, sm.MetricObject)
+}
+
+func NewSecurityMetricFromString(s string) SecurityMetric {
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return SecurityMetric{}
+	}
+
+	security, err := SecurityFromFigi(parts[0])
+	if err != nil {
+		return SecurityMetric{}
+	}
+
+	m := Metric(parts[1])
+	return SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   m,
+	}
 }

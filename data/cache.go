@@ -16,7 +16,6 @@
 package data
 
 import (
-	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -33,11 +32,6 @@ type CacheItem struct {
 	isLocalDate bool
 	localDates  []time.Time
 	startIdx    int
-}
-
-type SecurityMetric struct {
-	SecurityObject Security
-	MetricObject   Metric
 }
 
 type SecurityMetricCache struct {
@@ -69,10 +63,6 @@ func (a BySecurityMetric) Len() int      { return len(a) }
 func (a BySecurityMetric) Swap(i, j int) { a[i], a[j] = a[j], a[i] }
 func (a BySecurityMetric) Less(i, j int) bool {
 	return a[i].String() < a[j].String()
-}
-
-func (sm SecurityMetric) String() string {
-	return fmt.Sprintf("%s:%s", sm.SecurityObject.CompositeFigi, sm.MetricObject)
 }
 
 // Functions
@@ -110,7 +100,7 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	}
 
 	touchingIntervals := []*Interval{}
-	if items, ok := cache.values[key(k)]; ok {
+	if items, ok := cache.values[k.String()]; ok {
 		for _, item := range items {
 			if item.Period.Contains(requestedInterval) {
 				return true, []*Interval{item.Period}
@@ -144,7 +134,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 		return nil, ErrInvalidTimeRange
 	}
 
-	myKey := key(k)
+	myKey := k.String()
 
 	if items, ok := cache.values[myKey]; ok {
 		for _, item := range items {
@@ -256,10 +246,10 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 		cache.deleteLRU(toAddBytes)
 	}
 
-	k := key(SecurityMetric{
+	k := SecurityMetric{
 		SecurityObject: *security,
 		MetricObject:   metric,
-	})
+	}.String()
 
 	// create an interval and check that it's valid
 	interval := &Interval{
@@ -321,10 +311,10 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 
 // Items returns the items in the cache for a given SecurityMetric. This method is only intended for testing.
 func (cache *SecurityMetricCache) Items(security *Security, metric Metric) []*CacheItem {
-	k := key(SecurityMetric{
+	k := SecurityMetric{
 		SecurityObject: *security,
 		MetricObject:   metric,
-	})
+	}.String()
 
 	if v, ok := cache.values[k]; ok {
 		return v
@@ -335,10 +325,10 @@ func (cache *SecurityMetricCache) Items(security *Security, metric Metric) []*Ca
 
 // ItemCount returns the number of non-contiguous items in the cache for the given SecurityMetric
 func (cache *SecurityMetricCache) ItemCount(security *Security, metric Metric) int {
-	k := key(SecurityMetric{
+	k := SecurityMetric{
 		SecurityObject: *security,
 		MetricObject:   metric,
-	})
+	}.String()
 
 	if v, ok := cache.values[k]; ok {
 		return len(v)
@@ -368,10 +358,6 @@ func (item *CacheItem) LocalDateIndex() []time.Time {
 }
 
 // Private Implementation
-
-func key(s SecurityMetric) string {
-	return fmt.Sprintf("%s:%s", s.SecurityObject.CompositeFigi, s.MetricObject)
-}
 
 func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {
 	lastAccess := make([]pair, 0, cache.lastSeen.Len())

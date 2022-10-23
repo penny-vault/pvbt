@@ -19,6 +19,17 @@ const (
 	CashAsset = "$CASH"
 )
 
+// Security represents a tradeable asset
+type Security struct {
+	Ticker        string `json:"ticker"`
+	CompositeFigi string `json:"compositeFigi"`
+}
+
+type SecurityMetric struct {
+	SecurityObject Security
+	MetricObject   Metric
+}
+
 var (
 	CashSecurity = Security{
 		Ticker: CashAsset,
