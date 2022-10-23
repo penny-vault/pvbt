@@ -64,11 +64,8 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 
-	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
+	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000)
 	pm.Portfolio.Benchmark = benchmark.CompositeFigi
-
-	manager.Begin = startDate
-	manager.End = endDate
 
 	pm.Portfolio.StrategyShortcode = shortcode
 	paramsJSON, err := json.MarshalContext(ctx, params)
@@ -78,7 +75,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 	pm.Portfolio.StrategyArguments = string(paramsJSON)
-	target, predictedAssets, err := stratObject.Compute(ctx, manager)
+	target, predictedAssets, err := stratObject.Compute(ctx, startDate, endDate)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not compute strategy portfolio")
