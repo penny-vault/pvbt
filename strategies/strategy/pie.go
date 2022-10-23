@@ -16,9 +16,12 @@
 package strategy
 
 import (
+	"fmt"
+	"os"
 	"sort"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/penny-vault/pv-api/data"
 )
 
@@ -122,4 +125,27 @@ func (ph *PieHistory) EndDate() time.Time {
 		return ph.Dates[len(ph.Dates)-1]
 	}
 	return time.Time{}
+}
+
+func (ph *PieHistory) Table() {
+	tableData := make([][]string, 0, len(ph.Dates))
+	for idx, date := range ph.Dates {
+		for security, qty := range ph.Pies[idx].Members {
+			tableData = append(tableData, []string{date.Format("2006-01-02"), security.Ticker, fmt.Sprintf("%.2f", qty)})
+		}
+	}
+
+	data := [][]string{
+		[]string{"1/1/2014", "Domain name", "2233", "$10.98"},
+		[]string{"1/1/2014", "January Hosting", "2233", "$54.95"},
+		[]string{"1/4/2014", "February Hosting", "2233", "$51.00"},
+		[]string{"1/4/2014", "February Extra Bandwidth", "2233", "$30.00"},
+	}
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Date", "Description", "CV2", "Amount"})
+	table.SetFooter([]string{"", "", "Total", "$146.93"}) // Add Footer
+	table.SetBorder(false)                                // Set Border to false
+	table.AppendBulk(data)                                // Add Bulk Data
+	table.Render()
 }
