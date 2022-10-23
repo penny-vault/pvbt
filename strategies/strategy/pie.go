@@ -13,9 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package portfolio
+package strategy
 
 import (
+	"sort"
 	"time"
 
 	"github.com/penny-vault/pv-api/data"
@@ -60,6 +61,53 @@ func (iter *PieHistoryIterator) Val() *Pie {
 		return nil
 	}
 	return iter.History.Pies[iter.CurrentIndex]
+}
+
+func (ph *PieHistory) Trim(begin, end time.Time) *PieHistory {
+	// special case 0: requested range is invalid
+	if end.Before(begin) {
+		ph.Dates = []time.Time{}
+		ph.Pies = []*Pie{}
+		return ph
+	}
+
+	// special case 1: pie history is empty
+	if len(ph.Dates) == 0 {
+		return ph
+	}
+
+	// special case 2: end time is before pie history start
+	if end.Before(ph.Dates[0]) {
+		ph.Dates = []time.Time{}
+		ph.Pies = []*Pie{}
+		return ph
+	}
+
+	// special case 3: start time is after pie history end
+	if begin.After(ph.Dates[len(ph.Dates)-1]) {
+		ph.Dates = []time.Time{}
+		ph.Pies = []*Pie{}
+		return ph
+	}
+
+	// Use binary search to find the index corresponding to the start and end times
+	beginIdx := sort.Search(len(ph.Dates), func(i int) bool {
+		idxVal := ph.Dates[i]
+		return (idxVal.After(begin) || idxVal.Equal(begin))
+	})
+
+	endIdx := sort.Search(len(ph.Dates), func(i int) bool {
+		idxVal := ph.Dates[i]
+		return (idxVal.After(end) || idxVal.Equal(end))
+	})
+
+	if endIdx != len(ph.Dates) {
+		endIdx += 1
+	}
+	ph.Dates = ph.Dates[beginIdx:endIdx]
+	ph.Pies = ph.Pies[beginIdx:endIdx]
+
+	return ph
 }
 
 func (ph *PieHistory) StartDate() time.Time {

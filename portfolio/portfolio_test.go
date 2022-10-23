@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
-	"github.com/penny-vault/pv-api/dataframe"
+	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pv-api/common"
@@ -31,19 +31,19 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/penny-vault/pv-api/portfolio"
-	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Portfolio", func() {
 	var (
-		dataProxy *data.ManagerV0
-		dbPool    pgxmock.PgxConnIface
-		df        *dataframe.DataFrame
-		err       error
-		p         *portfolio.Portfolio
-		perf      *portfolio.Performance
-		pm        *portfolio.Model
-		tz        *time.Location
+		dbPool  pgxmock.PgxConnIface
+		manager *data.Manager
+		pie     *strategy.PieHistory
+
+		err  error
+		p    *portfolio.Portfolio
+		perf *portfolio.Performance
+		pm   *portfolio.Model
+		tz   *time.Location
 	)
 
 	BeforeEach(func() {
@@ -53,70 +53,69 @@ var _ = Describe("Portfolio", func() {
 		Expect(err).To(BeNil())
 		database.SetPool(dbPool)
 
-		// Expect trading days transaction and query
-		pgxmockhelper.MockAssets(dbPool)
-		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
-			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-		data.InitializeDataManager()
-
-		pgxmockhelper.MockHolidays(dbPool)
-		tradecron.Initialize()
-
-		dataProxy = data.NewManager()
+		manager = data.GetManagerInstance()
+		manager.Reset()
 	})
 
 	Describe("with a single holding at a time", func() {
 		Context("is successfully invested in target portfolio", func() {
 			BeforeEach(func() {
-				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
-					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
-				})
+				var vfinx *data.Security
+				var pridx *data.Security
 
-				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
-					"BBG000BHTMY2",
-					"BBG000BBVR08",
-					"BBG000BHTMY2",
-				})
+				vfinx, err = data.SecurityFromFigi("BBG000BHTMY2")
+				Expect(err).To(BeNil(), "vfinx security lookup")
+				pridx, err = data.SecurityFromFigi("BBG000BBVR08")
+				Expect(err).To(BeNil(), "pridx security lookup")
 
-				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
+				pie = &strategy.PieHistory{
+					Dates: []time.Time{
+						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+					},
+					Pies: []*strategy.Pie{
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*pridx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+					},
+				}
+
+				pm = portfolio.NewPortfolio("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
-				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.End = time.Date(2020, time.January, 31, 0, 0, 0, 0, tz)
-				dataProxy.Frequency = data.FrequencyDaily
 
 				// Expect dataframe transaction and query for VFINX
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2018, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
-					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2019, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
-				err = pm.TargetPortfolio(context.Background(), df)
-
+				err = pm.TargetPortfolio(context.Background(), pie)
 			})
 
 			It("should not error", func() {
@@ -260,28 +259,30 @@ var _ = Describe("Portfolio", func() {
 		Context("has stocks with splits", func() {
 			BeforeEach(func() {
 				ctx := context.Background()
-				timeSeries2 := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, []time.Time{
-					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
-				})
+				tsla, err := data.SecurityFromFigi("BBG000N9MNX3")
+				Expect(err).To(BeNil())
 
-				tickerSeries2 := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, []string{
-					"BBG000N9MNX3",
-				})
+				pie = &strategy.PieHistory{
+					Dates: []time.Time{
+						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+					},
+					Pies: []*strategy.Pie{
+						{
+							Members: map[data.Security]float64{
+								*tsla: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+					},
+				}
 
-				df = dataframe.NewDataFrame(timeSeries2, tickerSeries2)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
+				pm = portfolio.NewPortfolio("Test", time.Date(2020, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
-				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.Frequency = data.FrequencyDaily
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"tsla_corporate.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
-				err = pm.TargetPortfolio(ctx, df)
+				err = pm.TargetPortfolio(ctx, pie)
 				Expect(err).To(BeNil())
 				err = pm.FillCorporateActions(ctx, time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
 				Expect(err).To(BeNil())
@@ -303,25 +304,14 @@ var _ = Describe("Portfolio", func() {
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
 				dbPool.ExpectBegin()
 				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-				dbPool.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-					pgxmockhelper.NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
-						"trade_day": "date",
-					}).Between(time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 12, 7, 0, 0, 0, 0, time.UTC)).Rows())
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
-
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC))
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"},
-					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 0, 0, 0, 0, tz))
 				Expect(err).NotTo(HaveOccurred())
@@ -342,73 +332,73 @@ var _ = Describe("Portfolio", func() {
 
 		Context("calculates performance through 2020-11-30", func() {
 			BeforeEach(func() {
-				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
-					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
-				})
+				vfinx, err := data.SecurityFromFigi("BBG000BHTMY2")
+				Expect(err).To(BeNil(), "vfinx security lookup")
+				pridx, err := data.SecurityFromFigi("BBG000BBVR08")
+				Expect(err).To(BeNil(), "pridx security lookup")
 
-				tickerSeries := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 3}, []string{
-					"BBG000BHTMY2",
-					"BBG000BBVR08",
-					"BBG000BHTMY2",
-				})
+				pie = &strategy.PieHistory{
+					Dates: []time.Time{
+						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+					},
+					Pies: []*strategy.Pie{
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*pridx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+					},
+				}
 
-				df = dataframe.NewDataFrame(timeSeries, tickerSeries)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
-				dataProxy.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.Frequency = data.FrequencyDaily
+				pm = portfolio.NewPortfolio("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
 
 				// Expect database transactions
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2018, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
-					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2019, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2019, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 8, 7, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				dbPool.ExpectBegin()
 				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-				dbPool.ExpectQuery("SELECT trading_day FROM trading_days").WillReturnRows(
-					pgxmockhelper.NewCSVRows([]string{"tradingdays.csv"}, map[string]string{
-						"trade_day": "date",
-					}).Between(time.Date(2018, 1, 24, 0, 0, 0, 0, time.UTC), time.Date(2020, 12, 7, 0, 0, 0, 0, time.UTC)).Rows())
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2018, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2019, 7, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 7, 27, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 10, 0, 0, 0, 0, time.UTC),
-					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC))
+					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
-				err = pm.TargetPortfolio(context.Background(), df)
+				err = pm.TargetPortfolio(context.Background(), pie)
 				Expect(err).To(BeNil())
 				perf = portfolio.NewPerformance(pm.Portfolio)
 				err = perf.CalculateThrough(context.Background(), pm, time.Date(2020, time.November, 30, 16, 0, 0, 0, tz))
@@ -448,75 +438,57 @@ var _ = Describe("Portfolio", func() {
 	Describe("with multiple holdings at a time", func() {
 		Context("is successfully invested", func() {
 			BeforeEach(func() {
-				timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 3}, []time.Time{
-					time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-					time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
-				})
+				vfinx, err := data.SecurityFromFigi("BBG000BHTMY2")
+				Expect(err).To(BeNil(), "vfinx security lookup")
+				pridx, err := data.SecurityFromFigi("BBG000BBVR08")
+				Expect(err).To(BeNil(), "pridx security lookup")
+				vustx, err := data.SecurityFromFigi("BBG000BCKYB1")
+				Expect(err).To(BeNil(), "vustx security lookup")
 
-				var vfinx *data.Security
-				var pridx *data.Security
-				var vustx *data.Security
-				var err error
-
-				vfinx, err = data.SecurityFromTicker("VFINX")
-				Expect(err).To(BeNil())
-				pridx, err = data.SecurityFromTicker("PRIDX")
-				Expect(err).To(BeNil())
-				vustx, err = data.SecurityFromTicker("VUSTX")
-				Expect(err).To(BeNil())
-
-				tickerSeriesMulti := dataframe.NewSeriesMixed(common.TickerName,
-					&dataframe.SeriesInit{Size: 3},
-					map[data.Security]float64{
-						*vfinx: 1.0,
+				pie = &strategy.PieHistory{
+					Dates: []time.Time{
+						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 					},
-					map[data.Security]float64{
-						*vfinx: 0.25,
-						*pridx: 0.5,
-						*vustx: 0.25,
+					Pies: []*strategy.Pie{
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*vfinx: 0.25,
+								*pridx: 0.5,
+								*vustx: 0.25,
+							},
+							Justifications: map[string]float64{},
+						},
+						{
+							Members: map[data.Security]float64{
+								*pridx: 1.0,
+							},
+							Justifications: map[string]float64{},
+						},
 					},
-					map[data.Security]float64{
-						*pridx: 1.0,
-					},
-				)
+				}
 
-				df = dataframe.NewDataFrame(timeSeries, tickerSeriesMulti)
-				pm = portfolio.NewPortfolio("Test", dataProxy.Begin, 10000, dataProxy)
+				pm = portfolio.NewPortfolio("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
-				dataProxy.Begin = time.Date(2018, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-				dataProxy.Frequency = data.FrequencyDaily
 
 				// Setup database
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vfinx_corporate.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
-
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, vfinx)
-				Expect(err).To(BeNil())
+					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"pridx_corporate.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
-
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, pridx)
-				Expect(err).To(BeNil())
+					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
-					time.Date(2017, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 8, 0, 0, 0, 0, time.UTC),
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-				pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"vustx_corporate.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, time.January, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
-				_, err = dataProxy.GetDataFrame(context.Background(), data.MetricClose, vustx)
-				Expect(err).To(BeNil())
-
-				err = pm.TargetPortfolio(context.Background(), df)
+				err = pm.TargetPortfolio(context.Background(), pie)
 				Expect(err).To(BeNil())
 			})
 
