@@ -40,6 +40,16 @@ var (
 	managerInstance *Manager
 )
 
+// TradingDays returns a dataframe over the specified date period, all values in the dataframe are 0
+func (manager *Manager) TradingDays(begin, end time.Time) *dataframe.DataFrame {
+	df := &dataframe.DataFrame{
+		Dates:    manager.tradingDays,
+		Vals:     [][]float64{make([]float64, len(manager.tradingDays))},
+		ColNames: []string{"zeros"},
+	}
+	return df.Trim(begin, end)
+}
+
 // GetMetrics returns metrics for the requested securities over the specified time range
 func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
 	ctx := context.Background()
