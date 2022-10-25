@@ -81,8 +81,7 @@ var _ = Describe("Manager tests", func() {
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 			dfMap, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil(), "error when fetching data")
-			df, err := dfMap.DataFrame()
-			Expect(err).To(BeNil(), "error when collapsing to dataframe")
+			df := dfMap.DataFrame()
 
 			Expect(df.Len()).To(Equal(2))
 			Expect(df.ColNames).To(Equal([]string{"BBG000N9MNX3:Close"}))
@@ -134,8 +133,7 @@ var _ = Describe("Manager tests", func() {
 
 			dfMap, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 11, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil(), "error when fetching data")
-			df, err := dfMap.DataFrame()
-			Expect(err).To(BeNil(), "error when collapsing to dataframe")
+			df := dfMap.DataFrame()
 
 			Expect(df.Len()).To(Equal(6))
 			Expect(df.ColCount()).To(Equal(1))
@@ -177,8 +175,7 @@ var _ = Describe("Manager tests", func() {
 
 				dfMap, err := manager.GetMetrics(securities, []data.Metric{metric}, begin, end)
 				Expect(err).To(BeNil(), "error when fetching data")
-				df, err := dfMap.DataFrame()
-				Expect(err).To(BeNil(), "error when collapsing to dataframe")
+				df := dfMap.DataFrame()
 
 				Expect(df.Len()).To(Equal(1))
 				Expect(df.ColNames).To(Equal(colNames))

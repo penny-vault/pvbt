@@ -9,8 +9,9 @@ domain = "TODO"
 [cache]
 redis = false
 redis_url = "" # redis://<user>:<pass>@localhost:6379/<db>
-local_bytes = 536870912 # number of bytes to cache in local memory
-ttl = 86400 # number of seconds to store in redis cache
+metric_bytes = 536870912 # number of bytes to cache in local memory
+lru_bytes = 52428800 # number of bytes to cache in general lru
+ttl = 86400 # number of seconds to store in lru cache
 
 [database]
 url = "TODO"

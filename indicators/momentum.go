@@ -32,7 +32,6 @@ import (
 type Momentum struct {
 	Securities []*data.Security
 	Periods    []int
-	Manager    *data.ManagerV0
 }
 
 func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices *dataframe.DataFrame, rfr dataframe.Series) (*dataframe.DataFrame, error) {
@@ -40,6 +39,7 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 	series := []dataframe.Series{}
 	series = append(series, prices.Series[dateSeriesIdx].Copy())
 
+	// aggFn computes the sum of a series
 	aggFn := dataframe.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
 		var sum float64
 		for _, val := range vals {
@@ -51,6 +51,7 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 		return sum, nil
 	})
 
+	// for each column in the prices dataframe create a new column with the postfix of SCORE
 	for ii := range prices.Series {
 		name := prices.Series[ii].Name(dataframe.Options{})
 		if strings.Compare(name, common.DateIdx) != 0 {
@@ -59,6 +60,15 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 		}
 	}
 
+	// for each period
+	//   1) create a new dataframe that is lagged by the period (lagging prepends N nil values and removes the last N values)
+	//   2) compute the rolling sum of the risk free rate (where the period length is used as the number of values in the sum)
+	//   3) rename the roll series to RISKFREE<period length>
+	//
+	//   for each securirty in the matrix
+	//     4) rename the lagged series to <security composite figi>LAG<period length>
+	//     5) create a new series named <security composite figi>MOM<period length>
+	// 6) add a new series named indicator to the dataframe (initialized with zero-values)
 	for _, ii := range m.Periods {
 		// compute a lag for each series
 		lag := dataframe.Lag(ii, prices)
@@ -90,19 +100,7 @@ func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices
 }
 
 func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
-	origStart := m.Manager.Begin
-	origEnd := m.Manager.End
-	origFrequency := m.Manager.Frequency
-
-	defer func() {
-		m.Manager.Begin = origStart
-		m.Manager.End = origEnd
-		m.Manager.Frequency = origFrequency
-	}()
-
-	m.Manager.Begin = start.AddDate(0, -6, 0)
-	m.Manager.End = end
-	m.Manager.Frequency = data.FrequencyMonthly
+	begin := start.AddDate(0, -6, 0)
 
 	// Add the risk free asset
 	securities := make([]*data.Security, 0, len(m.Securities)+1)
@@ -113,30 +111,25 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	securities = append(securities, m.Securities...)
 
 	// fetch prices
-	prices, err := m.Manager.GetDataFrame(ctx, data.MetricAdjustedClose, securities...)
+	priceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load data for momentum indicator")
 		return nil, err
 	}
 
+	prices := priceMap.DataFrame().Frequency(dataframe.Monthly)
+
 	// create a new series with date column
-	dateSeriesIdx, err := prices.NameToColumn(common.DateIdx)
+	dgs3mo, err := data.SecurityFromFigi("PVGG06TNP6J8")
 	if err != nil {
-		log.Error().Err(err).Msg("could not get date index")
-		return nil, err
-	}
-	dgsIdx, err := prices.NameToColumn("PVGG06TNP6J8")
-	if err != nil {
-		log.Error().Err(err).Msg("could not get DGS3MO index")
+		log.Error().Err(err).Msg("could not get DGS3MO security")
 		return nil, err
 	}
 
-	rfr := prices.Series[dgsIdx]
-
-	if err := prices.RemoveSeries("PVGG06TNP6J8"); err != nil {
-		log.Error().Err(err).Msg("could not remove DGS3MO series")
-		return nil, err
-	}
+	riskFreeRate, prices = prices.Split(data.SecurityMetric{
+		SecurityObject: *dgs3mo,
+		MetricObject:   data.MetricAdjustedClose,
+	}.String())
 
 	// build copy of dataframe
 	momentum, err := m.buildDataFrame(ctx, dateSeriesIdx, prices, rfr)

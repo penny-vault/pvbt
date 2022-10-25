@@ -132,6 +132,39 @@ func (df *DataFrame) Len() int {
 	return len(df.Dates)
 }
 
+// Split the dataframe into 2, with columns being in the first dataframe and
+// all remaining columns in the second
+func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
+	one := &DataFrame{
+		Dates:    df.Dates,
+		ColNames: []string{},
+		Vals:     [][]float64{},
+	}
+	two := &DataFrame{
+		Dates:    df.Dates,
+		ColNames: []string{},
+		Vals:     [][]float64{},
+	}
+
+	// convert requested columns to a map for easy lookup
+	colMap := make(map[string]bool, len(columns))
+	for _, col := range columns {
+		colMap[col] = true
+	}
+
+	for idx, col := range df.ColNames {
+		if _, ok := colMap[col]; ok {
+			one.ColNames = append(one.ColNames, col)
+			one.Vals = append(one.Vals, df.Vals[idx])
+		} else {
+			two.ColNames = append(two.ColNames, col)
+			two.Vals = append(two.Vals, df.Vals[idx])
+		}
+	}
+
+	return one, two
+}
+
 // Trim the dataframe to the specified date range (inclusive)
 func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
 	// special case 0: requested range is invalid

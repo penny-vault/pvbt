@@ -22,11 +22,9 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
@@ -65,8 +63,6 @@ var notifyCmd = &cobra.Command{
 			log.Panic().Err(err).Msg("could not connect to database")
 		}
 
-		data.InitializeDataManager()
-		tradecron.Initialize()
 		strategies.InitializeStrategyMap()
 
 		// calculate notification date

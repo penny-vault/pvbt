@@ -35,7 +35,7 @@ func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
 }
 
 // DataFrame converts each item in the map to a column in the dataframe
-func (dfMap DataFrameMap) DataFrame() (*DataFrame, error) {
+func (dfMap DataFrameMap) DataFrame() *DataFrame {
 	df := &DataFrame{}
 	first := true
 	for _, v := range dfMap {
@@ -45,13 +45,15 @@ func (dfMap DataFrameMap) DataFrame() (*DataFrame, error) {
 			df.Vals = v.Vals
 			first = false
 		} else {
-			if len(df.Dates) != len(v.Dates) {
-				return nil, ErrDateIndexNotAligned
-			}
+			/*
+				if len(df.Dates) != len(v.Dates) {
+					// TODO: align date indexes
+				}
+			*/
 			df.ColNames = append(df.ColNames, v.ColNames...)
 			df.Vals = append(df.Vals, v.Vals...)
 		}
 	}
 
-	return df, nil
+	return df
 }

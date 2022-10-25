@@ -29,8 +29,8 @@ import (
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
 	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
@@ -167,7 +167,7 @@ func (f *Database) GetMeasurements(field1 string, field2 string, since time.Time
 	return data, err
 }
 
-func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
+func (f *Database) GetHoldings(frequency dataframe.Frequency, since time.Time) ([]byte, error) {
 	ctx := context.Background()
 	where := make(map[string]string)
 
@@ -187,13 +187,13 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 
 	var querySQL string
 	switch frequency {
-	case data.FrequencyAnnually:
+	case dataframe.Annually:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('year' from next_date) != extract('year' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
-	case data.FrequencyMonthly:
+	case dataframe.Monthly:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
-	case data.FrequencyWeekly:
+	case dataframe.Weekly:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('week' from next_date) != extract('week' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
-	case data.FrequencyDaily:
+	case dataframe.Daily:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('doy' from next_date) != extract('doy' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
 	default:
 		querySQL = fmt.Sprintf("SELECT event_date, %s, LAG(holdings, 1) OVER (ORDER BY event_date) holdings, justification, strategy_value FROM (%s) AS subq WHERE extract('month' from next_date) != extract('month' from event_date) or next_date is null ORDER BY event_date ASC", periodReturnField, sqlTmp)
@@ -259,9 +259,9 @@ func (f *Database) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 
 	nyc := common.GetTimezone()
 	switch frequency {
-	case data.FrequencyAnnually:
+	case dataframe.Annually:
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
-	case data.FrequencyMonthly:
+	case dataframe.Monthly:
 		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
 	default:
 		// no adjustment necessary for other frequencies

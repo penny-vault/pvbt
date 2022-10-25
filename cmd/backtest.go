@@ -92,13 +92,13 @@ var backtestCmd = &cobra.Command{
 
 		startDate := target.Dates[0]
 
-		fmt.Println(target.Table())
+		target.Table()
 		fmt.Printf("Start Date: %s\n", startDate.Format("2006-01-02"))
 		fmt.Printf("Next Trade Date: %+v\n", predicted.TradeDate)
 		fmt.Printf("Predicted Target: %+v\n", predicted.Target)
 		fmt.Printf("Predicted Justification: %+v\n", predicted.Justification)
 
-		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000, dataManager)
+		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000)
 		fmt.Println("Building portfolio...")
 		if err := pm.TargetPortfolio(ctx, target); err != nil {
 			log.Fatal().Stack().Err(err).Msg("could not invest portfolio")

@@ -37,7 +37,6 @@ var _ = Describe("Momentum", func() {
 	var (
 		dbPool    pgxmock.PgxConnIface
 		momentum  indicators.Indicator
-		manager   *data.ManagerV0
 		indicator *dataframe.DataFrame
 		tz        *time.Location
 		err       error
@@ -45,7 +44,6 @@ var _ = Describe("Momentum", func() {
 
 	BeforeEach(func() {
 		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
-		manager = data.NewManager()
 
 		momentum = &indicators.Momentum{
 			Securities: []*data.Security{{

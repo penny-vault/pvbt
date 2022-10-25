@@ -82,8 +82,8 @@ var _ = Describe("Request tests", func() {
 			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
 			dfMap, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil(), "error when fetching data")
-			df, err := dfMap.DataFrame()
-			Expect(err).To(BeNil(), "error when collapsing to dataframe")
+			df := dfMap.DataFrame()
+
 			Expect(df.Len()).To(Equal(2))
 			Expect(df.ColNames).To(Equal([]string{"BBG000N9MNX3:Close"}))
 			Expect(df.Vals).To(Equal([][]float64{{
@@ -140,8 +140,7 @@ var _ = Describe("Request tests", func() {
 				dfMap, err := req.Between(ctx, begin, end)
 				Expect(err).To(BeNil())
 				Expect(err).To(BeNil(), "error when fetching data")
-				df, err := dfMap.DataFrame()
-				Expect(err).To(BeNil(), "error when collapsing to dataframe")
+				df := dfMap.DataFrame()
 
 				Expect(df.Len()).To(Equal(1))
 				Expect(df.ColNames).To(Equal(colNames))

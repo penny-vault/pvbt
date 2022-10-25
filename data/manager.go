@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/coocood/freecache"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -29,7 +30,8 @@ import (
 )
 
 type Manager struct {
-	cache       *SecurityMetricCache
+	metricCache *SecurityMetricCache
+	lruCache    *freecache.Cache
 	pvdb        *PvDb
 	locker      sync.RWMutex
 	tradingDays []time.Time
@@ -40,14 +42,31 @@ var (
 	managerInstance *Manager
 )
 
-// TradingDays returns a dataframe over the specified date period, all values in the dataframe are 0
-func (manager *Manager) TradingDays(begin, end time.Time) *dataframe.DataFrame {
-	df := &dataframe.DataFrame{
-		Dates:    manager.tradingDays,
-		Vals:     [][]float64{make([]float64, len(manager.tradingDays))},
-		ColNames: []string{"zeros"},
-	}
-	return df.Trim(begin, end)
+func GetManagerInstance() *Manager {
+	managerOnce.Do(func() {
+		tradecron.LoadMarketHolidays()
+		err := LoadSecuritiesFromDB()
+		if err != nil {
+			log.Error().Err(err).Msg("could not load securities database")
+		}
+
+		pvdb := NewPvDb()
+
+		cacheMaxSize := viper.GetInt64("cache.metric_bytes")
+		if cacheMaxSize == 0 {
+			cacheMaxSize = 10485760 // 10 MB
+		}
+
+		managerInstance = &Manager{
+			metricCache: NewSecurityMetricCache(cacheMaxSize, []time.Time{}),
+			lruCache:    freecache.NewCache(viper.GetInt("cache.lru_bytes")),
+			pvdb:        pvdb,
+			locker:      sync.RWMutex{},
+		}
+
+		managerInstance.getTradingDays()
+	})
+	return managerInstance
 }
 
 // GetMetrics returns metrics for the requested securities over the specified time range
@@ -66,7 +85,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	toPullSecuritiesMap := make(map[*Security]bool, len(normalizedSecurities))
 	for _, security := range normalizedSecurities {
 		for _, metric := range normalizedMetrics {
-			contains, _ := manager.cache.Check(security, metric, begin, end)
+			contains, _ := manager.metricCache.Check(security, metric, begin, end)
 			if !contains {
 				toPullSecuritiesMap[security] = true
 			}
@@ -101,17 +120,17 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 						df = df.Drop(0)
 					}
 					if len(df.Dates) > 0 {
-						err = manager.cache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, df.Dates, df.Vals[0])
+						err = manager.metricCache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, df.Dates, df.Vals[0])
 					} else {
 						// still need to set with blank so that we don't try and query the database again
-						err = manager.cache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, []time.Time{}, []float64{})
+						err = manager.metricCache.SetWithLocalDates(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, []time.Time{}, []float64{})
 					}
 					if err != nil {
 						log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
 						return nil, err
 					}
 				} else {
-					err = manager.cache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
+					err = manager.metricCache.Set(&k.SecurityObject, k.MetricObject, begin, modifiedEnd, v)
 					if err != nil {
 						log.Error().Err(err).Str("Security", k.SecurityObject.Ticker).Str("Metric", string(k.MetricObject)).Msg("couldn't set cache")
 						return nil, err
@@ -128,7 +147,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dfMap := make(dataframe.DataFrameMap)
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
-			if df, err := manager.cache.Get(security, metric, begin, end); err == nil {
+			if df, err := manager.metricCache.Get(security, metric, begin, end); err == nil {
 				k := SecurityMetric{
 					SecurityObject: *security,
 					MetricObject:   metric,
@@ -150,7 +169,7 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
 
 	// check if the date is currently in the cache
-	if vals, err := manager.cache.Get(security, metric, date, date); err != nil {
+	if vals, err := manager.metricCache.Get(security, metric, date, date); err != nil {
 		return vals.Vals[0][0], date, nil
 	}
 
@@ -163,30 +182,13 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	return val, forDate, err
 }
 
-func GetManagerInstance() *Manager {
-	managerOnce.Do(func() {
-		tradecron.LoadMarketHolidays()
-		err := loadSecuritiesFromDB()
-		if err != nil {
-			log.Error().Err(err).Msg("could not load securities database")
-		}
-
-		pvdb := NewPvDb()
-
-		cacheMaxSize := viper.GetInt64("cache.local_bytes")
-		if cacheMaxSize == 0 {
-			cacheMaxSize = 10485760 // 10 MB
-		}
-
-		managerInstance = &Manager{
-			cache:  NewSecurityMetricCache(cacheMaxSize, []time.Time{}),
-			pvdb:   pvdb,
-			locker: sync.RWMutex{},
-		}
-
-		managerInstance.getTradingDays()
-	})
-	return managerInstance
+// GetPortfolio returns a cached portfolio
+func (manager *Manager) GetLRU(key string) []byte {
+	val, err := manager.lruCache.Get([]byte(key))
+	if err != nil {
+		return []byte{}
+	}
+	return val
 }
 
 // Reset restores the manager connection to its initial state - this is mostly used in testing
@@ -196,9 +198,29 @@ func (manager *Manager) Reset() {
 		cacheMaxSize = 10485760 // 10 MB
 	}
 
-	periods := manager.cache.periods
-	manager.cache = NewSecurityMetricCache(cacheMaxSize, periods)
+	periods := manager.metricCache.periods
+	manager.metricCache = NewSecurityMetricCache(cacheMaxSize, periods)
 }
+
+// SetLRU saves the portfolio in the online cache
+func (manager *Manager) SetLRU(key string, val []byte) {
+	err := manager.lruCache.Set([]byte(key), val, viper.GetInt("cache.ttl"))
+	if err != nil {
+		log.Error().Err(err).Str("key", key).Msg("could not set cache value")
+	}
+}
+
+// TradingDays returns a dataframe over the specified date period, all values in the dataframe are 0
+func (manager *Manager) TradingDays(begin, end time.Time) *dataframe.DataFrame {
+	df := &dataframe.DataFrame{
+		Dates:    manager.tradingDays,
+		Vals:     [][]float64{make([]float64, len(manager.tradingDays))},
+		ColNames: []string{"zeros"},
+	}
+	return df.Trim(begin, end)
+}
+
+// Private methods
 
 func (manager *Manager) getTradingDays() {
 	ctx := context.Background()
@@ -213,7 +235,7 @@ func (manager *Manager) getTradingDays() {
 
 	manager.locker.Lock()
 	manager.tradingDays = tradingDays
-	manager.cache.periods = tradingDays
+	manager.metricCache.periods = tradingDays
 	manager.locker.Unlock()
 
 	refreshTimer := time.NewTimer(24 * time.Hour)
@@ -224,35 +246,15 @@ func (manager *Manager) getTradingDays() {
 	}()
 }
 
-func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, begin, end time.Time) []time.Time {
-	beginIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
-		idxVal := manager.tradingDays[i]
-		return (idxVal.After(begin) || idxVal.Equal(begin))
-	})
-
-	endIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
-		idxVal := manager.tradingDays[i]
-		return (idxVal.After(end) || idxVal.Equal(end))
-	})
-
-	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx+1])
-	return days
-}
-
-func normalizeSecurities(securities []*Security) ([]*Security, error) {
-	for idx, security := range securities {
-		res, err := SecurityFromFigi(security.CompositeFigi)
-		if err != nil {
-			res, err = SecurityFromTicker(security.Ticker)
-			if err != nil {
-				log.Error().Str("Ticker", security.Ticker).Str("CompositeFigi", security.CompositeFigi).Msg("security could not be found by ticker or composite figi")
-				return nil, err
-			}
-		}
-		securities[idx] = res
+func isSparseMetric(metric Metric) bool {
+	switch metric {
+	case MetricSplitFactor:
+		return true
+	case MetricDividendCash:
+		return true
+	default:
+		return false
 	}
-
-	return securities, nil
 }
 
 func normalizeMetrics(metrics []Metric) []Metric {
@@ -277,13 +279,33 @@ func normalizeMetrics(metrics []Metric) []Metric {
 	return metrics
 }
 
-func isSparseMetric(metric Metric) bool {
-	switch metric {
-	case MetricSplitFactor:
-		return true
-	case MetricDividendCash:
-		return true
-	default:
-		return false
+func normalizeSecurities(securities []*Security) ([]*Security, error) {
+	for idx, security := range securities {
+		res, err := SecurityFromFigi(security.CompositeFigi)
+		if err != nil {
+			res, err = SecurityFromTicker(security.Ticker)
+			if err != nil {
+				log.Error().Str("Ticker", security.Ticker).Str("CompositeFigi", security.CompositeFigi).Msg("security could not be found by ticker or composite figi")
+				return nil, err
+			}
+		}
+		securities[idx] = res
 	}
+
+	return securities, nil
+}
+
+func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, begin, end time.Time) []time.Time {
+	beginIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
+		idxVal := manager.tradingDays[i]
+		return (idxVal.After(begin) || idxVal.Equal(begin))
+	})
+
+	endIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
+		idxVal := manager.tradingDays[i]
+		return (idxVal.After(end) || idxVal.Equal(end))
+	})
+
+	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx+1])
+	return days
 }
