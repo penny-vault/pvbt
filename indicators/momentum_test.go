@@ -60,7 +60,8 @@ var _ = Describe("Momentum", func() {
 		// Expect trading days transaction and query
 		pgxmockhelper.MockHolidays(dbPool)
 		pgxmockhelper.MockAssets(dbPool)
-		data.GetManagerInstance()
+		manager := data.GetManagerInstance()
+		manager.Reset()
 	})
 
 	Describe("Compute momentum indicator", func() {
