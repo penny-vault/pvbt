@@ -17,11 +17,8 @@ package indicators
 
 import (
 	"context"
-	"fmt"
-	"strings"
 	"time"
 
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
@@ -34,69 +31,22 @@ type Momentum struct {
 	Periods    []int
 }
 
-func (m *Momentum) buildDataFrame(ctx context.Context, dateSeriesIdx int, prices *dataframe.DataFrame, rfr dataframe.Series) (*dataframe.DataFrame, error) {
-	nrows := prices.NRows(dataframe.Options{})
-	series := []dataframe.Series{}
-	series = append(series, prices.Series[dateSeriesIdx].Copy())
+// momentum calculates momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
+// where riskFreeRate is the monthly yield of a risk free investment
+func momentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+	riskFreeRate = riskFreeRate.RollingSumScaled(period, -1.0/12.0)
+	return df.Div(df.Lag(period)).MulScalar(100).AddVec(riskFreeRate.Vals[0])
+}
 
-	// aggFn computes the sum of a series
-	aggFn := dataframe.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
-		var sum float64
-		for _, val := range vals {
-			if v, ok := val.(float64); ok {
-				sum += v
-			}
-		}
+// momentum computes the 6-3-1 momentum of each column in df
+// momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
+func momentum631(df *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+	momentum6 := momentum(6, df, riskFreeRate)
+	momentum3 := momentum(3, df, riskFreeRate)
+	momentum1 := momentum(1, df, riskFreeRate)
 
-		return sum, nil
-	})
-
-	// for each column in the prices dataframe create a new column with the postfix of SCORE
-	for ii := range prices.Series {
-		name := prices.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, common.DateIdx) != 0 {
-			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, prices.Series[ii].Copy(), score)
-		}
-	}
-
-	// for each period
-	//   1) create a new dataframe that is lagged by the period (lagging prepends N nil values and removes the last N values)
-	//   2) compute the rolling sum of the risk free rate (where the period length is used as the number of values in the sum)
-	//   3) rename the roll series to RISKFREE<period length>
-	//
-	//   for each securirty in the matrix
-	//     4) rename the lagged series to <security composite figi>LAG<period length>
-	//     5) create a new series named <security composite figi>MOM<period length>
-	// 6) add a new series named indicator to the dataframe (initialized with zero-values)
-	for _, ii := range m.Periods {
-		// compute a lag for each series
-		lag := dataframe.Lag(ii, prices)
-		roll, err := dataframe.Rolling(ctx, ii, rfr.Copy(), aggFn)
-		if err != nil {
-			log.Error().Err(err).Msg("error computing rolling sum of risk free rate")
-			return nil, err
-		}
-
-		roll.Rename(fmt.Sprintf("RISKFREE%d", ii))
-		series = append(series, roll)
-		for _, security := range m.Securities {
-			jj, err := lag.NameToColumn(security.CompositeFigi)
-			if err != nil {
-				return nil, err
-			}
-			s := lag.Series[jj]
-			name := fmt.Sprintf("%sLAG%d", security.CompositeFigi, ii)
-			s.Rename(name)
-
-			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", security.CompositeFigi, ii), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, s, mom)
-		}
-	}
-
-	series = append(series, dataframe.NewSeriesFloat64(SeriesName, &dataframe.SeriesInit{Size: nrows}))
-	momentum := dataframe.NewDataFrame(series...)
-	return momentum, nil
+	avgMomentum := dataframe.Mean(momentum6, momentum3, momentum1) // take the average of the same security column across all dataframes
+	return avgMomentum.Max()
 }
 
 func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
@@ -126,63 +76,18 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 		return nil, err
 	}
 
-	riskFreeRate, prices = prices.Split(data.SecurityMetric{
+	riskFreeRate, prices := prices.Split(data.SecurityMetric{
 		SecurityObject: *dgs3mo,
 		MetricObject:   data.MetricAdjustedClose,
 	}.String())
 
-	// build copy of dataframe
-	momentum, err := m.buildDataFrame(ctx, dateSeriesIdx, prices, rfr)
-	if err != nil {
-		// already logged
-		return nil, err
-	}
-
 	// run calculations
-	/*
-		for _, security := range m.Securities {
-			for _, jj := range m.Periods {
-				fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
-				if err := funcs.Evaluate(ctx, momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
-					log.Error().Stack().Err(err).Msg("could not calculate momentum")
-					return nil, err
-				}
-			}
-		}
-
-		cols := make([]string, 0, len(m.Securities))
-		for _, security := range m.Securities {
-			scoreName := fmt.Sprintf("%sSCORE", security.CompositeFigi)
-			cols = append(cols, scoreName)
-			fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
-			if err := funcs.Evaluate(ctx, momentum, fn, scoreName); err != nil {
-				log.Error().Stack().Err(err).Msg("could not calculate score")
-				return nil, err
-			}
-		}
-
-		// compute indicator
-		fn := funcs.RegFunc(fmt.Sprintf("max(%s)", strings.Join(cols, ",")))
-		if err := funcs.Evaluate(ctx, momentum, fn, SeriesName); err != nil {
-			log.Error().Stack().Err(err).Msg("could not calculate indicator column")
-			return nil, err
-		}
-	*/
-
-	var seriesIdx int
-	if seriesIdx, err = momentum.NameToColumn(SeriesName); err != nil {
-		log.Error().Stack().Err(err).Msg("indicator column does not exist")
-		return nil, err
-
-	}
-	indicatorSeries := momentum.Series[seriesIdx]
-	dateSeries := prices.Series[dateSeriesIdx]
-	indicatorDF := dataframe.NewDataFrame(dateSeries, indicatorSeries)
-
-	if indicatorDF, err = dataframe.DropNA(ctx, indicatorDF); err != nil {
-		log.Error().Err(err).Msg("could not drop indicator NA rows")
-		return nil, err
-	}
+	// for each security and period compute
+	// mom(security, period) = ((security / lag(security, period) - 1) * 100) - (sum(risk free rate, period) / 12)
+	// score(security) = average(mom(security, 1), mom(security, 3), mom(security, 6))
+	// indicator = max(score)
+	indicatorDF := momentum631(prices, riskFreeRate)
+	indicatorDF.ColNames[0] = SeriesName
 
 	return indicatorDF, nil
 }

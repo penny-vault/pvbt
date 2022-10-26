@@ -189,4 +189,160 @@ var _ = Describe("DataFrame", func() {
 			Expect(df.Len()).To(Equal(0))
 		})
 	})
+
+	Context("with 5 values for checking math functions", func() {
+		var (
+			df *dataframe.DataFrame
+		)
+
+		BeforeEach(func() {
+			dates := make([]time.Time, 5)
+			vals := make([]float64, 5)
+			dt := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			for idx := range dates {
+				dates[idx] = dt
+				dt = dt.AddDate(0, 0, 1)
+				vals[idx] = float64(idx)
+			}
+			df = &dataframe.DataFrame{
+				ColNames: []string{"Col1"},
+				Dates:    dates,
+				Vals:     [][]float64{vals},
+			}
+		})
+
+		It("lag shouldn't change the original dataframe", func() {
+			df.Lag(2)
+			Expect(math.IsNaN(df.Vals[0][0])).To(BeFalse())
+		})
+
+		It("lag 0 shouldn't shift the data frame", func() {
+			df2 := df.Lag(0)
+			Expect(df2.Vals[0][0]).To(BeNumerically("~", 0.0))
+		})
+
+		It("lag 2 shifts data frame by 2 values", func() {
+			df2 := df.Lag(2)
+			Expect(len(df.Vals[0])).To(Equal(5))
+			Expect(math.IsNaN(df2.Vals[0][0])).To(BeTrue())
+			Expect(math.IsNaN(df2.Vals[0][1])).To(BeTrue())
+			Expect(df2.Vals[0][2]).To(Equal(0.0))
+			Expect(df2.Vals[0][3]).To(Equal(1.0))
+			Expect(df2.Vals[0][4]).To(Equal(2.0))
+		})
+
+		It("lag 6 results in all NaNs", func() {
+			df2 := df.Lag(6)
+			Expect(len(df.Vals[0])).To(Equal(5))
+			Expect(math.IsNaN(df2.Vals[0][0])).To(BeTrue())
+			Expect(math.IsNaN(df2.Vals[0][1])).To(BeTrue())
+			Expect(math.IsNaN(df2.Vals[0][2])).To(BeTrue())
+			Expect(math.IsNaN(df2.Vals[0][3])).To(BeTrue())
+			Expect(math.IsNaN(df2.Vals[0][4])).To(BeTrue())
+		})
+
+		It("can divide same named columns", func() {
+			df2 := df.Copy()
+			df3 := df.Div(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(math.IsNaN(df3.Vals[0][0])).To(BeTrue())
+			Expect(df3.Vals[0][1]).To(Equal(1.0))
+			Expect(df3.Vals[0][2]).To(Equal(1.0))
+			Expect(df3.Vals[0][3]).To(Equal(1.0))
+			Expect(df3.Vals[0][4]).To(Equal(1.0))
+		})
+
+		It("different named columns do not divide", func() {
+			df2 := df.Copy()
+			df2.ColNames[0] = "Different"
+			df3 := df.Div(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(0.0))
+			Expect(df3.Vals[0][1]).To(Equal(1.0))
+			Expect(df3.Vals[0][2]).To(Equal(2.0))
+			Expect(df3.Vals[0][3]).To(Equal(3.0))
+			Expect(df3.Vals[0][4]).To(Equal(4.0))
+		})
+
+		It("non-column aligned dfs still divide", func() {
+			df2 := df.Copy()
+			df2.ColNames[0] = "Different"
+			df2.ColNames = append(df2.ColNames, "Col1")
+			df2.Vals = append(df2.Vals, []float64{2, 2, 2, 2, 2})
+			df3 := df.Div(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(0.0))
+			Expect(df3.Vals[0][1]).To(Equal(0.5))
+			Expect(df3.Vals[0][2]).To(Equal(1.0))
+			Expect(df3.Vals[0][3]).To(Equal(1.5))
+			Expect(df3.Vals[0][4]).To(Equal(2.0))
+		})
+
+		It("can multiply same named columns", func() {
+			df2 := df.Copy()
+			df3 := df.Mul(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(0.0))
+			Expect(df3.Vals[0][1]).To(Equal(1.0))
+			Expect(df3.Vals[0][2]).To(Equal(4.0))
+			Expect(df3.Vals[0][3]).To(Equal(9.0))
+			Expect(df3.Vals[0][4]).To(Equal(16.0))
+		})
+
+		It("different named columns do not multiply", func() {
+			df2 := df.Copy()
+			df2.ColNames[0] = "Different"
+			df3 := df.Div(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(0.0))
+			Expect(df3.Vals[0][1]).To(Equal(1.0))
+			Expect(df3.Vals[0][2]).To(Equal(2.0))
+			Expect(df3.Vals[0][3]).To(Equal(3.0))
+			Expect(df3.Vals[0][4]).To(Equal(4.0))
+		})
+
+		It("non-column aligned dfs still multiply", func() {
+			df2 := df.Copy()
+			df2.ColNames[0] = "Different"
+			df2.ColNames = append(df2.ColNames, "Col1")
+			df2.Vals = append(df2.Vals, []float64{2, 2, 2, 2, 2})
+			df3 := df.Mul(df2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(0.0))
+			Expect(df3.Vals[0][1]).To(Equal(2.0))
+			Expect(df3.Vals[0][2]).To(Equal(4.0))
+			Expect(df3.Vals[0][3]).To(Equal(6.0))
+			Expect(df3.Vals[0][4]).To(Equal(8.0))
+		})
+
+		It("can add a vector to the dataframe", func() {
+			df3 := df.AddVec([]float64{1, 2, 3, 4, 5})
+			Expect(df3.Len()).To(Equal(5))
+			Expect(df3.Vals[0][0]).To(Equal(1.0))
+			Expect(df3.Vals[0][1]).To(Equal(3.0))
+			Expect(df3.Vals[0][2]).To(Equal(5.0))
+			Expect(df3.Vals[0][3]).To(Equal(7.0))
+			Expect(df3.Vals[0][4]).To(Equal(9.0))
+		})
+
+		It("computes rolling sum scaled with period 2", func() {
+			df3 := df.RollingSumScaled(2, 2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(math.IsNaN(df3.Vals[0][0])).To(BeTrue())
+			Expect(df3.Vals[0][1]).To(Equal(2.0))  // (0 + 1) * 2 = 2
+			Expect(df3.Vals[0][2]).To(Equal(6.0))  // (1 + 2) * 2 = 6
+			Expect(df3.Vals[0][3]).To(Equal(10.0)) // (2 + 3) * 2 = 10
+			Expect(df3.Vals[0][4]).To(Equal(14.0)) // (3 + 4) * 2 = 14
+		})
+
+		It("computes rolling sum scaled with period 3", func() {
+			df3 := df.RollingSumScaled(3, 2)
+			Expect(df3.Len()).To(Equal(5))
+			Expect(math.IsNaN(df3.Vals[0][0])).To(BeTrue())
+			Expect(math.IsNaN(df3.Vals[0][1])).To(BeTrue())
+			Expect(df3.Vals[0][2]).To(Equal(6.0))  // (0 + 1 + 2) * 2 = 6
+			Expect(df3.Vals[0][3]).To(Equal(12.0)) // (1 + 2 + 3) * 2 = 12
+			Expect(df3.Vals[0][4]).To(Equal(18.0)) // (2 + 3 + 4) * 2 = 18
+		})
+	})
 })

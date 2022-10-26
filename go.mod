@@ -24,7 +24,7 @@ require (
 	github.com/valyala/fasthttp v1.40.0 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.1.0 // indirect
-	golang.org/x/exp v0.0.0-20221019170559-20944726eadf // indirect
+	golang.org/x/exp v0.0.0-20221026004748-78e5e7837ae6 // indirect
 	golang.org/x/net v0.1.0 // indirect
 	golang.org/x/sys v0.1.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
@@ -37,6 +37,7 @@ require github.com/robfig/cron/v3 v3.0.1
 require (
 	github.com/Masterminds/semver/v3 v3.1.1
 	github.com/alphadose/haxmap v1.0.2
+	github.com/coocood/freecache v1.2.2
 	github.com/nats-io/nats.go v1.18.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.3.1
@@ -50,7 +51,6 @@ require (
 require (
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
-	github.com/coocood/freecache v1.2.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
 	github.com/jackc/pgx/v5 v5.0.3 // indirect

@@ -22,7 +22,18 @@ import (
 
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
+	"gonum.org/v1/gonum/floats"
 )
+
+// AddVec adds the vector to all columns in dataframe and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) AddVec(vec []float64) *DataFrame {
+	df = df.Copy()
+	for idx := range df.ColNames {
+		floats.Add(df.Vals[idx], vec)
+	}
+	return df
+}
 
 // Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
 func (df *DataFrame) Breakout() DataFrameMap {
@@ -40,6 +51,43 @@ func (df *DataFrame) Breakout() DataFrameMap {
 // ColCount returns the number of columns in the dataframe
 func (df *DataFrame) ColCount() int {
 	return len(df.ColNames)
+}
+
+// Copy creates a copy of the dataframe
+func (df *DataFrame) Copy() *DataFrame {
+	df2 := &DataFrame{
+		ColNames: make([]string, len(df.ColNames)),
+		Dates:    make([]time.Time, len(df.Dates)),
+		Vals:     make([][]float64, len(df.Vals)),
+	}
+
+	copy(df2.ColNames, df.ColNames)
+	copy(df2.Dates, df.Dates)
+
+	for idx := range df2.Vals {
+		df2.Vals[idx] = make([]float64, len(df.Vals[idx]))
+		copy(df2.Vals[idx], df.Vals[idx])
+	}
+
+	return df2
+}
+
+// Div divides all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) Div(other *DataFrame) *DataFrame {
+	df = df.Copy()
+
+	otherMap := make(map[string]int, len(other.ColNames))
+	for idx, val := range other.ColNames {
+		otherMap[val] = idx
+	}
+
+	for idx, colName := range df.ColNames {
+		if otherIdx, ok := otherMap[colName]; ok {
+			floats.Div(df.Vals[idx], other.Vals[otherIdx])
+		}
+	}
+	return df
 }
 
 // Drop removes rows that contain the value `val` from the dataframe
@@ -127,9 +175,128 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 	return newDf
 }
 
+// Lag shifts the dataframe by the specified number of rows, replacing shifted values by math.NaN() and returns a new dataframe
+func (df *DataFrame) Lag(n int) *DataFrame {
+	df = df.Copy()
+	prepend := make([]float64, n)
+	for idx := range prepend {
+		prepend[idx] = math.NaN()
+	}
+
+	for idx := range df.Vals {
+		l := len(df.Vals[idx])
+		df.Vals[idx] = append(prepend, df.Vals[idx]...)[:l]
+	}
+	return df
+}
+
 // Len returns the number of rows in the dataframe
 func (df *DataFrame) Len() int {
 	return len(df.Dates)
+}
+
+// Max selects the max value for each row and returns a new dataframe
+func (df *DataFrame) Max() *DataFrame {
+	maxDf := &DataFrame{
+		ColNames: []string{"max"},
+		Dates:    df.Dates,
+		Vals:     [][]float64{make([]float64, len(df.Dates))},
+	}
+
+	for rowIdx := range df.Dates {
+		row := make([]float64, 0, len(df.ColNames))
+		for colIdx := range df.ColNames {
+			row = append(row, df.Vals[colIdx][rowIdx])
+		}
+		maxDf.Vals[0][rowIdx] = floats.Max(row)
+	}
+
+	return maxDf
+}
+
+// Mean calculates the mean of all like columns in the dataframes and returns a new dataframe
+// panics if rows are not equal.
+func Mean(dfs ...*DataFrame) *DataFrame {
+	resDf := dfs[0].Copy()
+
+	otherMaps := make([]map[string]int, len(dfs))
+	for dfIdx, resDf := range dfs {
+		for idx, val := range resDf.ColNames {
+			otherMaps[dfIdx][val] = idx
+		}
+	}
+
+	for resColIdx, colName := range resDf.ColNames {
+		for rowIdx := range resDf.Vals[0] {
+			row := 0.0
+			cnt := 0.0
+			for dfIdx := range dfs {
+				df := dfs[dfIdx]
+				colIdx := otherMaps[dfIdx][colName]
+				row += df.Vals[colIdx][rowIdx]
+				cnt += 1
+			}
+			resDf.Vals[resColIdx][rowIdx] = row / cnt
+		}
+	}
+
+	return resDf
+}
+
+// Mul multiplies all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
+	df = df.Copy()
+
+	otherMap := make(map[string]int, len(other.ColNames))
+	for idx, val := range other.ColNames {
+		otherMap[val] = idx
+	}
+
+	for idx, colName := range df.ColNames {
+		if otherIdx, ok := otherMap[colName]; ok {
+			floats.Mul(df.Vals[idx], other.Vals[otherIdx])
+		}
+	}
+	return df
+}
+
+// Mul multiplies all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
+	df = df.Copy()
+
+	for colIdx := range df.ColNames {
+		for rowIdx := range df.Vals[colIdx] {
+			df.Vals[colIdx][rowIdx] *= scalar
+		}
+	}
+	return df
+}
+
+// RollingSumScaled computes ∑ df[ii] * scalar and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) RollingSumScaled(ii int, scalar float64) *DataFrame {
+	df2 := df.Copy()
+	for colIdx := range df.ColNames {
+		roll := 0.0
+		dropIdx := 0
+		for rowIdx := range df.Vals[colIdx] {
+			if rowIdx >= ii {
+				roll += df.Vals[colIdx][rowIdx]
+				roll -= df.Vals[colIdx][dropIdx]
+				df2.Vals[colIdx][rowIdx] = roll * scalar
+				dropIdx += 1
+			} else if rowIdx == (ii - 1) {
+				roll += df.Vals[colIdx][rowIdx]
+				df2.Vals[colIdx][rowIdx] = roll * scalar
+			} else {
+				df2.Vals[colIdx][rowIdx] = math.NaN()
+				roll += df.Vals[colIdx][rowIdx]
+			}
+		}
+	}
+	return df2
 }
 
 // Split the dataframe into 2, with columns being in the first dataframe and

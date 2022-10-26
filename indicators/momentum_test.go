@@ -22,15 +22,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
-	"github.com/penny-vault/pv-api/tradecron"
 )
 
 var _ = Describe("Momentum", func() {
@@ -54,7 +51,6 @@ var _ = Describe("Momentum", func() {
 				CompositeFigi: "BBG000BBVR08",
 			}},
 			Periods: []int{1, 3, 6},
-			Manager: manager,
 		}
 
 		dbPool, err = pgxmock.NewConn()
@@ -62,53 +58,25 @@ var _ = Describe("Momentum", func() {
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
-		pgxmockhelper.MockAssets(dbPool)
-		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
-			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-
-		data.InitializeDataManager()
-
 		pgxmockhelper.MockHolidays(dbPool)
-		tradecron.Initialize()
+		pgxmockhelper.MockAssets(dbPool)
+		data.GetManagerInstance()
 	})
 
 	Describe("Compute momentum indicator", func() {
 		Context("with full stock history", func() {
 			BeforeEach(func() {
-				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
-
 				pgxmockhelper.MockDBEodQuery(dbPool,
 					[]string{
 						"vfinx.csv",
 						"pridx.csv",
-						"riskfree.csv",
+						"dgs3mo.csv",
 					},
-					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
+					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
-				pgxmockhelper.MockDBCorporateQuery(dbPool,
-					[]string{
-						"vfinx_corporate.csv",
-						"pridx_corporate.csv",
-						"riskfree_corporate.csv",
-					},
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-
-				dbPool.ExpectBegin()
-				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-				dbPool.ExpectQuery("SELECT").WillReturnRows(
-					pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
-						"event_date":  "date",
-						"early_close": "bool",
-						"close_time":  "int",
-					}).Rows())
-				dbPool.ExpectCommit()
-
-				indicator, err = momentum.IndicatorForPeriod(context.Background(), manager.Begin, manager.End)
+				indicator, err = momentum.IndicatorForPeriod(context.Background(),
+					time.Date(1980, time.January, 1, 0, 0, 0, 0, tz), time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
 			})
 
 			It("should not error", func() {
@@ -120,44 +88,30 @@ var _ = Describe("Momentum", func() {
 			})
 
 			It("should have an indicator for each trading day over the period", func() {
-				Expect(indicator.NRows()).To(Equal(379))
+				Expect(indicator.Len()).To(Equal(379))
 			})
 
 			It("should have a series named 'Indicator'", func() {
-				_, err := indicator.NameToColumn(indicators.SeriesName)
-				Expect(err).To(BeNil())
-			})
-
-			It("should have a date series", func() {
-				_, err := indicator.NameToColumn(common.DateIdx)
-				Expect(err).To(BeNil())
+				Expect(indicator.ColNames[0]).To(Equal(indicators.SeriesName))
 			})
 
 			It("should have correct starting value", func() {
-				row := indicator.Row(0, true)
-				val, ok := row[indicators.SeriesName].(float64)
-				Expect(ok).To(BeTrue())
+				val := indicator.Vals[0][0]
 				Expect(val).To(BeNumerically("~", 5.7988, .001))
 			})
 
 			It("should have correct starting date", func() {
-				row := indicator.Row(0, true)
-				val, ok := row[common.DateIdx].(time.Time)
-				Expect(ok).To(BeTrue())
+				val := indicator.Dates[0]
 				Expect(val).To(Equal(time.Date(1989, 6, 30, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have correct ending value", func() {
-				row := indicator.Row(378, true)
-				val, ok := row[indicators.SeriesName].(float64)
-				Expect(ok).To(BeTrue())
+				val := indicator.Vals[0][378]
 				Expect(val).To(BeNumerically("~", 19.4716, .001))
 			})
 
 			It("should have correct ending date", func() {
-				row := indicator.Row(378, true)
-				val, ok := row[common.DateIdx].(time.Time)
-				Expect(ok).To(BeTrue())
+				val := indicator.Dates[378]
 				Expect(val).To(Equal(time.Date(2020, 12, 31, 16, 0, 0, 0, tz)))
 			})
 		})
