@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog/log"
 
 	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/data"
@@ -30,7 +31,7 @@ import (
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 )
 
-var _ = Describe("Momentum", func() {
+var _ = Describe("Momentum", Ordered, func() {
 	var (
 		dbPool    pgxmock.PgxConnIface
 		momentum  indicators.Indicator
@@ -38,6 +39,18 @@ var _ = Describe("Momentum", func() {
 		tz        *time.Location
 		err       error
 	)
+
+	BeforeAll(func() {
+		dbPool, err = pgxmock.NewConn()
+		Expect(err).To(BeNil())
+		database.SetPool(dbPool)
+
+		// Expect trading days transaction and query
+		pgxmockhelper.MockHolidays(dbPool)
+		pgxmockhelper.MockAssets(dbPool)
+		pgxmockhelper.MockTradingDays(dbPool)
+		data.GetManagerInstance()
+	})
 
 	BeforeEach(func() {
 		tz, _ = time.LoadLocation("America/New_York") // New York is the reference time
@@ -53,13 +66,6 @@ var _ = Describe("Momentum", func() {
 			Periods: []int{1, 3, 6},
 		}
 
-		dbPool, err = pgxmock.NewConn()
-		Expect(err).To(BeNil())
-		database.SetPool(dbPool)
-
-		// Expect trading days transaction and query
-		pgxmockhelper.MockHolidays(dbPool)
-		pgxmockhelper.MockAssets(dbPool)
 		manager := data.GetManagerInstance()
 		manager.Reset()
 	})
@@ -73,11 +79,11 @@ var _ = Describe("Momentum", func() {
 						"pridx.csv",
 						"dgs3mo.csv",
 					},
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2019, 1, 1, 0, 0, 0, 0, time.UTC),
 					time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
 				indicator, err = momentum.IndicatorForPeriod(context.Background(),
-					time.Date(1980, time.January, 1, 0, 0, 0, 0, tz), time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
+					time.Date(2019, time.July, 1, 0, 0, 0, 0, tz), time.Date(2021, time.January, 1, 0, 0, 0, 0, tz))
 			})
 
 			It("should not error", func() {
@@ -89,7 +95,7 @@ var _ = Describe("Momentum", func() {
 			})
 
 			It("should have an indicator for each trading day over the period", func() {
-				Expect(indicator.Len()).To(Equal(379))
+				Expect(indicator.Len()).To(Equal(18))
 			})
 
 			It("should have a series named 'Indicator'", func() {
@@ -98,21 +104,22 @@ var _ = Describe("Momentum", func() {
 
 			It("should have correct starting value", func() {
 				val := indicator.Vals[0][0]
-				Expect(val).To(BeNumerically("~", 5.7988, .001))
+				log.Info().Floats64("indicator", indicator.Vals[0]).Msg("that's how you do it son")
+				Expect(val).To(BeNumerically("~", 4.1533, .001))
 			})
 
 			It("should have correct starting date", func() {
 				val := indicator.Dates[0]
-				Expect(val).To(Equal(time.Date(1989, 6, 30, 16, 0, 0, 0, tz)))
+				Expect(val).To(Equal(time.Date(2019, 7, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should have correct ending value", func() {
-				val := indicator.Vals[0][378]
+				val := indicator.Vals[0][17]
 				Expect(val).To(BeNumerically("~", 19.4716, .001))
 			})
 
 			It("should have correct ending date", func() {
-				val := indicator.Dates[378]
+				val := indicator.Dates[17]
 				Expect(val).To(Equal(time.Date(2020, 12, 31, 16, 0, 0, 0, tz)))
 			})
 		})
