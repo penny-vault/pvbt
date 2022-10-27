@@ -17,6 +17,7 @@ package indicators
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"github.com/penny-vault/pv-api/data"
@@ -35,7 +36,7 @@ type Momentum struct {
 // where riskFreeRate is the monthly yield of a risk free investment
 func momentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
 	riskFreeRate = riskFreeRate.RollingSumScaled(period, -1.0/12.0)
-	return df.Div(df.Lag(period)).MulScalar(100).AddVec(riskFreeRate.Vals[0])
+	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100).AddVec(riskFreeRate.Vals[0])
 }
 
 // momentum computes the 6-3-1 momentum of each column in df
@@ -88,6 +89,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	// indicator = max(score)
 	indicatorDF := momentum631(prices, riskFreeRate)
 	indicatorDF.ColNames[0] = SeriesName
+	indicatorDF = indicatorDF.Drop(math.NaN())
 
 	return indicatorDF, nil
 }
