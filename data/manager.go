@@ -306,6 +306,10 @@ func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, be
 		return (idxVal.After(end) || idxVal.Equal(end))
 	})
 
+	if len(manager.tradingDays) == 0 {
+		log.Fatal().Msg("manager trading days not initialized")
+	}
+
 	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx+1])
 	return days
 }
