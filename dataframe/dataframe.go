@@ -16,14 +16,30 @@
 package dataframe
 
 import (
+	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
+	"github.com/olekukonko/tablewriter"
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"gonum.org/v1/gonum/floats"
 )
+
+// AddScalar adds the scalar value to all columns in dataframe df and returns a new dataframe
+// panics if rows are not equal.
+func (df *DataFrame) AddScalar(scalar float64) *DataFrame {
+	df = df.Copy()
+
+	for colIdx := range df.ColNames {
+		for rowIdx := range df.Vals[colIdx] {
+			df.Vals[colIdx][rowIdx] += scalar
+		}
+	}
+	return df
+}
 
 // AddVec adds the vector to all columns in dataframe and returns a new dataframe
 // panics if rows are not equal.
@@ -221,6 +237,7 @@ func Mean(dfs ...*DataFrame) *DataFrame {
 
 	otherMaps := make([]map[string]int, len(dfs))
 	for dfIdx, resDf := range dfs {
+		otherMaps[dfIdx] = make(map[string]int, len(resDf.ColNames))
 		for idx, val := range resDf.ColNames {
 			otherMaps[dfIdx][val] = idx
 		}
@@ -261,7 +278,7 @@ func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
 	return df
 }
 
-// Mul multiplies all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
+// MulScalar multiplies all columns in dataframe df by the scalar and returns a new dataframe
 // panics if rows are not equal.
 func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
 	df = df.Copy()
@@ -330,6 +347,33 @@ func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
 	}
 
 	return one, two
+}
+
+// Table prints an ASCII formated table to stdout
+func (df *DataFrame) Table() string {
+	if len(df.Dates) == 0 {
+		return "" // nothing to do as there is no data available in the dataframe
+	}
+
+	// construct table header
+	tableCols := append([]string{"Date"}, df.ColNames...)
+
+	// initialize table
+	s := &strings.Builder{}
+	table := tablewriter.NewWriter(s)
+	table.SetHeader(tableCols)
+	table.SetBorder(false) // Set Border to false
+
+	for rowIdx, date := range df.Dates {
+		row := []string{date.Format("2006-01-02")}
+		for _, col := range df.Vals {
+			row = append(row, fmt.Sprintf("%.4f", col[rowIdx]))
+		}
+		table.Append(row)
+	}
+
+	table.Render()
+	return s.String()
 }
 
 // Trim the dataframe to the specified date range (inclusive)
