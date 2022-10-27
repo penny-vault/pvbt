@@ -191,6 +191,33 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 	return newDf
 }
 
+// IdxMax finds the column with the largest value for each row and stores it in a new dataframe with the column name 'idxmax'
+func (df *DataFrame) IdxMax() *DataFrame {
+	maxVals := make([]float64, len(df.Dates))
+
+	for rowIdx := range df.Dates {
+		max := math.NaN()
+		var ind int
+		for colIdx := range df.ColNames {
+			v := df.Vals[colIdx][rowIdx]
+			if math.IsNaN(v) {
+				continue
+			}
+			if v > max || math.IsNaN(max) {
+				max = v
+				ind = colIdx
+			}
+		}
+		maxVals = append(maxVals, float64(ind))
+	}
+
+	return &DataFrame{
+		Dates:    df.Dates,
+		Vals:     [][]float64{maxVals},
+		ColNames: []string{"idxmax"},
+	}
+}
+
 // Lag shifts the dataframe by the specified number of rows, replacing shifted values by math.NaN() and returns a new dataframe
 func (df *DataFrame) Lag(n int) *DataFrame {
 	df = df.Copy()

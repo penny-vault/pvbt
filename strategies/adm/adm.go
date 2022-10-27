@@ -28,7 +28,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
+	"math"
 	"strings"
 	"time"
 
@@ -85,9 +85,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // donloadPriceData loads EOD quotes for in tickers
-func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, manager *data.ManagerV0) error {
-	manager.Frequency = data.FrequencyMonthly
-
+func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begin, end time.Time) error {
 	tickers := []*data.Security{}
 	tickers = append(tickers, adm.inTickers...)
 	riskFreeSymbol, err := data.SecurityFromTicker("DGS3MO")
@@ -96,43 +94,27 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 		return err
 	}
 	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
-	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
 
-	if errs != nil {
+	priceMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
+	if err != nil {
 		return ErrCouldNotRetrieveData
 	}
 
-	prices, err = dataframe.DropNA(ctx, prices)
-	if err != nil {
-		return err
-	}
+	priceMap = priceMap.Frequency(dataframe.Monthly)
+	prices := priceMap.DataFrame()
+	prices = prices.Drop(math.NaN())
 
 	// include last day if it is a non-trade day
 	log.Debug().Msg("getting last day eod prices of requested range")
-	manager.Frequency = data.FrequencyDaily
-	begin := manager.Begin
-	manager.Begin = manager.End.AddDate(0, 0, -10)
-	final, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
-	if err != nil {
-		log.Error().Err(err).Msg("error getting final")
-		return err
-	}
-	manager.Begin = begin
-	manager.Frequency = data.FrequencyMonthly
 
-	final, err = dataframe.DropNA(ctx, final)
+	finalPricesMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, end.AddDate(0, 0, -10), end)
 	if err != nil {
+		log.Error().Err(err).Msg("error getting final prices in adm")
 		return err
 	}
 
-	nrows := final.NRows()
-	row := final.Row(nrows-1, false, dataframe.SeriesName)
-	dt := row[common.DateIdx].(time.Time)
-	lastRow := prices.Row(prices.NRows()-1, false, dataframe.SeriesName)
-	lastDt := lastRow[common.DateIdx].(time.Time)
-	if !dt.Equal(lastDt) {
-		prices.Append(nil, row)
-	}
+	finalPrices := finalPricesMap.DataFrame()
+	prices.Append(finalPrices.Last())
 
 	colNames := make([]string, len(adm.inTickers)+1)
 	colNames[0] = adm.outTicker.CompositeFigi
@@ -140,7 +122,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, mana
 		colNames[ii+1] = t.CompositeFigi
 	}
 
-	eod, riskFreeRate, err := dataframe.Split(ctx, prices, colNames...)
+	eod, riskFreeRate := prices.Split(colNames...)
 	if err != nil {
 		return err
 	}
@@ -242,24 +224,24 @@ func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
 
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
-func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.ManagerV0) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (*strategy.PieHistory, *strategy.Prediction, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
 	defer span.End()
 
 	// Ensure time range is valid (need at least 6 months)
 	nullTime := time.Time{}
-	if manager.End.Equal(nullTime) {
-		manager.End = time.Now()
+	if end.Equal(nullTime) {
+		end = time.Now()
 	}
-	if manager.Begin.Equal(nullTime) {
+	if begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
-		manager.Begin = manager.End.AddDate(-50, 0, 0)
+		begin = end.AddDate(-50, 0, 0)
 	} else {
 		// Set Begin 6 months in the past so we actually get the requested time range
-		manager.Begin = manager.Begin.AddDate(0, -6, 0)
+		begin = begin.AddDate(0, -6, 0)
 	}
 
-	err := adm.downloadPriceData(ctx, manager)
+	err := adm.downloadPriceData(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -268,9 +250,6 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	if err := adm.computeScores(ctx); err != nil {
 		return nil, nil, err
 	}
-
-	scores := []dataframe.Series{}
-	timeIdx, _ := adm.momentum.NameToColumn(common.DateIdx)
 
 	// create out-of-market series
 	dfSize := adm.momentum.Series[timeIdx].NRows()
@@ -354,45 +333,4 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, manager *data.
 	}
 
 	return targetPortfolio, predictedPortfolio, nil
-}
-
-func (adm *AcceleratingDualMomentum) writeDataFramesToCSV(ctx context.Context) {
-	// momentum
-	fh, err := os.OpenFile("adm_momentum.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-	if err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error opening file")
-		return
-	}
-	/*
-		if err := exports.ExportToCSV(ctx, fh, adm.momentum); err != nil {
-			log.Error().Stack().Err(err).Str("FileName", "adm_momentum.csv").Msg("error writing file")
-			return
-		}
-	*/
-
-	// prices
-	fh, err = os.OpenFile("adm_prices.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-	if err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error opening file")
-		return
-	}
-	/*
-		if err := exports.ExportToCSV(ctx, fh, adm.prices); err != nil {
-			log.Error().Stack().Err(err).Str("FileName", "adm_prices.csv").Msg("error writing file")
-			return
-		}
-	*/
-
-	// riskfree
-	fh, err = os.OpenFile("adm_riskfreerate.csv", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0600)
-	if err != nil {
-		log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error opening file")
-		return
-	}
-	/*
-		if err := exports.ExportToCSV(ctx, fh, adm.riskFreeRate); err != nil {
-			log.Error().Stack().Err(err).Str("FileName", "adm_riskfreerate.csv").Msg("error writing file")
-			return
-		}
-	*/
 }

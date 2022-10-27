@@ -15,6 +15,8 @@
 
 package dataframe
 
+import "github.com/rs/zerolog/log"
+
 type DataFrameMap map[string]*DataFrame
 
 // Drop calls dataframe.Drop on each dataframe in the map
@@ -34,7 +36,7 @@ func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
 
 }
 
-// DataFrame converts each item in the map to a column in the dataframe
+// DataFrame converts each item in the map to a column in the dataframe. If dataframes do not align then gaps are filled with math.NaN()
 func (dfMap DataFrameMap) DataFrame() *DataFrame {
 	df := &DataFrame{}
 	first := true
@@ -45,11 +47,12 @@ func (dfMap DataFrameMap) DataFrame() *DataFrame {
 			df.Vals = v.Vals
 			first = false
 		} else {
-			/*
-				if len(df.Dates) != len(v.Dates) {
-					// TODO: align date indexes
-				}
-			*/
+			if len(df.Dates) != len(v.Dates) ||
+				!df.Dates[0].Equal(v.Dates[0]) ||
+				!df.Dates[len(df.Dates)-1].Equal(v.Dates[len(v.Dates)-1]) {
+				// TODO: align date indexes
+				log.Panic().Msg("date indexes do not align!")
+			}
 			df.ColNames = append(df.ColNames, v.ColNames...)
 			df.Vals = append(df.Vals, v.Vals...)
 		}
