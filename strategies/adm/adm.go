@@ -27,20 +27,18 @@ package adm
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math"
 	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/dataframe"
+	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
-	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel"
 )
 
@@ -123,9 +121,6 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 	}
 
 	eod, riskFreeRate := prices.Split(colNames...)
-	if err != nil {
-		return err
-	}
 
 	adm.prices = eod
 	adm.riskFreeRate = riskFreeRate
@@ -134,97 +129,17 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 }
 
 func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.computeScores")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.computeScores")
 	defer span.End()
 
-	nrows := adm.prices.NRows(dataframe.Options{})
-	periods := []int{1, 3, 6}
-	series := []dataframe.Series{}
-
-	rfr := adm.riskFreeRate.Series[1]
-
-	aggFn := dataframe.AggregateSeriesFn(func(vals []interface{}, firstRow int, finalRow int) (float64, error) {
-		var sum float64
-		for _, val := range vals {
-			if v, ok := val.(float64); ok {
-				sum += v
-			}
-		}
-
-		return sum, nil
-	})
-
-	dateSeriesIdx, err := adm.prices.NameToColumn(common.DateIdx)
-	if err != nil {
-		return err
-	}
-
-	series = append(series, adm.prices.Series[dateSeriesIdx].Copy())
-
-	for ii := range adm.prices.Series {
-		name := adm.prices.Series[ii].Name(dataframe.Options{})
-		if strings.Compare(name, common.DateIdx) != 0 {
-			score := dataframe.NewSeriesFloat64(fmt.Sprintf("%sSCORE", name), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, adm.prices.Series[ii].Copy(), score)
-		}
-	}
-
-	for _, ii := range periods {
-		lag := dataframe.Lag(ii, adm.prices)
-		roll, err := dataframe.Rolling(ctx, ii, rfr.Copy(), aggFn)
-
-		if err != nil {
-			return err
-		}
-		roll.Rename(fmt.Sprintf("RISKFREE%d", ii))
-		series = append(series, roll)
-		for _, security := range adm.inTickers {
-			jj, err := lag.NameToColumn(security.CompositeFigi)
-			if err != nil {
-				return err
-			}
-			s := lag.Series[jj]
-			name := fmt.Sprintf("%sLAG%d", security.CompositeFigi, ii)
-			s.Rename(name)
-
-			mom := dataframe.NewSeriesFloat64(fmt.Sprintf("%sMOM%d", security.CompositeFigi, ii), &dataframe.SeriesInit{Size: nrows})
-			series = append(series, s, mom)
-		}
-	}
-
-	adm.momentum = dataframe.NewDataFrame(series...)
-
-	/*
-		for ii := range adm.inTickers {
-			security := adm.inTickers[ii]
-			for _, jj := range periods {
-				fn := funcs.RegFunc(fmt.Sprintf("(((%s/%sLAG%d)-1)*100)-(RISKFREE%d/12)", security.CompositeFigi, security.CompositeFigi, jj, jj))
-				if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sMOM%d", security.CompositeFigi, jj)); err != nil {
-					log.Error().Stack().Err(err).Msg("could not calculate momentum")
-				}
-			}
-		}
-
-		for ii := range adm.inTickers {
-			security := adm.inTickers[ii]
-			fn := funcs.RegFunc(fmt.Sprintf("(%sMOM1+%sMOM3+%sMOM6)/3", security.CompositeFigi, security.CompositeFigi, security.CompositeFigi))
-			if err := funcs.Evaluate(ctx, adm.momentum, fn, fmt.Sprintf("%sSCORE", security.CompositeFigi)); err != nil {
-				log.Error().Stack().Err(err).Msg("could not calculate score")
-			}
-		}
-	*/
-
-	// write to csv
-	if viper.GetBool("debug.dump_csv") {
-		adm.writeDataFramesToCSV(ctx)
-	}
+	adm.momentum = indicators.Momentum631(adm.prices, adm.riskFreeRate)
 
 	return nil
 }
 
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
-func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (*strategy.PieHistory, *strategy.Prediction, error) {
+func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (strategy.PieList, *strategy.Pie, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
 	defer span.End()
 
@@ -241,7 +156,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 		begin = begin.AddDate(0, -6, 0)
 	}
 
-	err := adm.downloadPriceData(ctx)
+	err := adm.downloadPriceData(ctx, begin, end)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -251,84 +166,55 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 		return nil, nil, err
 	}
 
-	// create out-of-market series
-	dfSize := adm.momentum.Series[timeIdx].NRows()
-	zeroes := make([]interface{}, dfSize)
-	for ii := 0; ii < dfSize; ii++ {
-		zeroes[ii] = 0.0
-	}
-	outOfMarketSeries := dataframe.NewSeriesFloat64(adm.outTicker.CompositeFigi, &dataframe.SeriesInit{
-		Capacity: dfSize,
-	}, zeroes...)
+	adm.momentum.Insert(adm.outTicker.CompositeFigi, make([]float64, len(adm.momentum.Dates)))
+	indexDf := adm.momentum.IdxMax()
 
-	scores = append(scores, adm.momentum.Series[timeIdx], outOfMarketSeries)
-	for _, security := range adm.inTickers {
-		ii, _ := adm.momentum.NameToColumn(fmt.Sprintf("%sSCORE", security.CompositeFigi))
-		series := adm.momentum.Series[ii].Copy()
-		series.Rename(security.CompositeFigi)
-		scores = append(scores, series)
-	}
-	scoresDf := dataframe.NewDataFrame(scores...)
-	scoresDf, _ = dataframe.DropNA(ctx, scoresDf)
-
-	argmax, err := dataframe.ArgMax(ctx, scoresDf)
-	argmax.Rename(common.TickerName)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	dateIdx, err := scoresDf.NameToColumn(common.DateIdx)
-	if err != nil {
-		return nil, nil, err
-	}
-	timeSeries := scoresDf.Series[dateIdx].Copy()
-	targetPortfolioSeries := make([]dataframe.Series, 0, len(scores))
-	targetPortfolioSeries = append(targetPortfolioSeries, timeSeries)
-	targetPortfolioSeries = append(targetPortfolioSeries, argmax)
-	for ii, xx := range scoresDf.Series {
-		if ii >= 2 {
-			security, err := data.SecurityFromFigi(xx.Name())
-			if err != nil {
-				log.Warn().Str("Name", xx.Name()).Err(err).Msg("could not find security from figi")
-				xx.Rename(fmt.Sprintf("%s Score", xx.Name()))
-			} else {
-				xx.Rename(fmt.Sprintf("%s Score", security.Ticker))
-			}
-			targetPortfolioSeries = append(targetPortfolioSeries, xx)
+	// create security map
+	securityMap := make([]data.Security, len(adm.momentum.ColNames))
+	for idx, colName := range adm.momentum.ColNames {
+		security, err := data.SecurityFromFigi(strings.Split(colName, ":")[0])
+		if err != nil {
+			log.Error().Err(err).Str("ColName", colName).Msg("could not lookup security")
+			return nil, nil, err
 		}
+		securityMap[idx] = *security
 	}
-	targetPortfolio := dataframe.NewDataFrame(targetPortfolioSeries...)
+
+	// create investment plan
+	targetPortfolio := strategy.PieList{}
+	for rowIdx, date := range indexDf.Dates {
+		idx := int(indexDf.Vals[0][rowIdx])
+		security := securityMap[idx]
+		justifications := make(map[string]float64, len(adm.inTickers))
+		for scoreIdx := range adm.momentum.ColNames {
+			justifications[securityMap[scoreIdx].Ticker] = adm.momentum.Vals[scoreIdx][rowIdx]
+		}
+		pie := &strategy.Pie{
+			Date: date,
+			Members: map[data.Security]float64{
+				security: 1.0,
+			},
+			Justifications: justifications,
+		}
+		targetPortfolio = append(targetPortfolio, pie)
+	}
 
 	// compute the predicted asset
-	var predictedPortfolio *strategy.Prediction
-	if targetPortfolio.NRows() >= 1 {
-		lastRow := targetPortfolio.Row(targetPortfolio.NRows()-1, true, dataframe.SeriesName)
-		predictedJustification := make(map[string]float64, len(lastRow)-1)
-		for k, v := range lastRow {
-			if k != common.TickerName && k != common.DateIdx {
-				predictedJustification[k.(string)] = v.(float64)
-			}
-		}
+	var predictedPortfolio *strategy.Pie
+	if len(targetPortfolio) >= 1 {
+		lastPie := targetPortfolio.Last()
+		lastTradeDate := lastPie.Date
 
-		lastTradeDate := lastRow[common.DateIdx].(time.Time)
 		isTradeDay := adm.schedule.IsTradeDay(lastTradeDate)
 		if !isTradeDay {
-			targetPortfolio.Remove(targetPortfolio.NRows() - 1)
+			targetPortfolio = targetPortfolio[:len(targetPortfolio)-1]
 		}
 
 		nextTradeDate := adm.schedule.Next(lastTradeDate)
-		compositeFigi := lastRow[common.TickerName].(string)
-		security, err := data.SecurityFromFigi(compositeFigi)
-		if err != nil {
-			log.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("could not find security")
-			return nil, nil, err
-		}
-		predictedPortfolio = &strategy.Prediction{
-			TradeDate: nextTradeDate,
-			Target: map[data.Security]float64{
-				*security: 1.0,
-			},
-			Justification: predictedJustification,
+		predictedPortfolio = &strategy.Pie{
+			Date:           nextTradeDate,
+			Members:        lastPie.Members,
+			Justifications: lastPie.Justifications,
 		}
 	}
 
