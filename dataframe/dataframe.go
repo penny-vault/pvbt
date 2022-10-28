@@ -51,6 +51,42 @@ func (df *DataFrame) AddVec(vec []float64) *DataFrame {
 	return df
 }
 
+// Append takes the date and values from other and appends them to df. If cols do not align, cols in df that are not in other are filled
+// with NaN. If the start date of other is not greater than df then do nothing
+func (df *DataFrame) Append(other *DataFrame) *DataFrame {
+	// if there is no data in other then do nothing
+	if len(other.Dates) == 0 {
+		return df
+	}
+
+	// if the first date in other is not after the last date of df then do nothing
+	otherFirstDate := other.Dates[0]
+	if len(df.Dates) != 0 && (otherFirstDate.Before(df.Dates[len(df.Dates)-1]) || otherFirstDate.Equal(df.Dates[len(df.Dates)-1])) {
+		return df
+	}
+
+	df.Dates = append(df.Dates, other.Dates...)
+	colMap := make(map[string]int, len(other.ColNames))
+
+	for colIdx, colName := range other.ColNames {
+		colMap[colName] = colIdx
+	}
+
+	for colIdx, colName := range df.ColNames {
+		if otherColIdx, ok := colMap[colName]; ok {
+			// fill with vals from other
+			df.Vals[colIdx] = append(df.Vals[colIdx], other.Vals[otherColIdx]...)
+		} else {
+			// fill with NaN
+			for ii := 0; ii < len(other.Dates); ii++ {
+				df.Vals[colIdx] = append(df.Vals[colIdx], math.NaN())
+			}
+		}
+	}
+
+	return df
+}
+
 // Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
 func (df *DataFrame) Breakout() DataFrameMap {
 	dfMap := DataFrameMap{}
@@ -218,6 +254,13 @@ func (df *DataFrame) IdxMax() *DataFrame {
 	}
 }
 
+// Insert a new column to the end of the dataframe
+func (df *DataFrame) Insert(name string, col []float64) *DataFrame {
+	df.ColNames = append(df.ColNames, name)
+	df.Vals = append(df.Vals, col)
+	return df
+}
+
 // Lag shifts the dataframe by the specified number of rows, replacing shifted values by math.NaN() and returns a new dataframe
 func (df *DataFrame) Lag(n int) *DataFrame {
 	df = df.Copy()
@@ -231,6 +274,27 @@ func (df *DataFrame) Lag(n int) *DataFrame {
 		df.Vals[idx] = append(prepend, df.Vals[idx]...)[:l]
 	}
 	return df
+}
+
+// Last returns a new dataframe with only the last item of the current dataframe
+func (df *DataFrame) Last() *DataFrame {
+	if df.Len() == 0 {
+		return df
+	}
+
+	lastVals := make([][]float64, len(df.ColNames))
+	lastRow := len(df.Dates) - 1
+	for _, col := range df.Vals {
+		lastVals = append(lastVals, []float64{col[lastRow]})
+	}
+
+	newDf := &DataFrame{
+		ColNames: df.ColNames,
+		Dates:    []time.Time{df.Dates[len(df.Dates)-1]},
+		Vals:     lastVals,
+	}
+
+	return newDf
 }
 
 // Len returns the number of rows in the dataframe

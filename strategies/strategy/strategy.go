@@ -72,15 +72,9 @@ type Info struct {
 	Factory         Factory                      `json:"-"`
 }
 
-type Prediction struct {
-	TradeDate     time.Time
-	Target        map[data.Security]float64
-	Justification map[string]float64
-}
-
 // Strategy an investing strategy
 type Strategy interface {
 	// Compute calculates the list of historical trades and returns a dataframe. Additionally, it
 	// returns a dataframe that indicates what assets to hold at the next trading time.
-	Compute(ctx context.Context, begin, end time.Time) (*PieHistory, *Prediction, error)
+	Compute(ctx context.Context, begin, end time.Time) (PieList, *Pie, error)
 }

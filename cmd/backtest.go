@@ -86,17 +86,17 @@ var backtestCmd = &cobra.Command{
 			log.Fatal().Err(err).Msg("Could not compute strategy positions")
 		}
 
-		if len(target.Dates) == 0 {
-			log.Fatal().Msg("no tramsactions available over period")
+		if len(target) == 0 {
+			log.Fatal().Msg("no transactions available over period")
 		}
 
-		startDate := target.Dates[0]
+		startDate := target[0].Date
 
 		target.Table()
 		fmt.Printf("Start Date: %s\n", startDate.Format("2006-01-02"))
-		fmt.Printf("Next Trade Date: %+v\n", predicted.TradeDate)
-		fmt.Printf("Predicted Target: %+v\n", predicted.Target)
-		fmt.Printf("Predicted Justification: %+v\n", predicted.Justification)
+		fmt.Printf("Next Trade Date: %+v\n", predicted.Date)
+		fmt.Printf("Predicted Target: %+v\n", predicted.Members)
+		fmt.Printf("Predicted Justification: %+v\n", predicted.Justifications)
 
 		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000)
 		fmt.Println("Building portfolio...")

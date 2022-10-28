@@ -167,13 +167,11 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		startDate = df.Dates[0]
 	}
 
-	target := &strategy.PieHistory{
-		Dates: []time.Time{startDate},
-		Pies: []*strategy.Pie{
-			{
-				Members: map[data.Security]float64{
-					*security: 1.0,
-				},
+	target := strategy.PieList{
+		{
+			Date: startDate,
+			Members: map[data.Security]float64{
+				*security: 1.0,
 			},
 		},
 	}

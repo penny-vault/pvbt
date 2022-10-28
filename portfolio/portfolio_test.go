@@ -37,7 +37,7 @@ var _ = Describe("Portfolio", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		manager *data.Manager
-		pie     *strategy.PieHistory
+		pie     strategy.PieList
 
 		err  error
 		p    *portfolio.Portfolio
@@ -68,31 +68,27 @@ var _ = Describe("Portfolio", func() {
 				pridx, err = data.SecurityFromFigi("BBG000BBVR08")
 				Expect(err).To(BeNil(), "pridx security lookup")
 
-				pie = &strategy.PieHistory{
-					Dates: []time.Time{
-						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+				pie = strategy.PieList{
+					{
+						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 1.0,
+						},
+						Justifications: map[string]float64{},
 					},
-					Pies: []*strategy.Pie{
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 1.0,
-							},
-							Justifications: map[string]float64{},
+					{
+						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*pridx: 1.0,
 						},
-						{
-							Members: map[data.Security]float64{
-								*pridx: 1.0,
-							},
-							Justifications: map[string]float64{},
+						Justifications: map[string]float64{},
+					},
+					{
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 1.0,
 						},
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 1.0,
-							},
-							Justifications: map[string]float64{},
-						},
+						Justifications: map[string]float64{},
 					},
 				}
 
@@ -262,17 +258,13 @@ var _ = Describe("Portfolio", func() {
 				tsla, err := data.SecurityFromFigi("BBG000N9MNX3")
 				Expect(err).To(BeNil())
 
-				pie = &strategy.PieHistory{
-					Dates: []time.Time{
-						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
-					},
-					Pies: []*strategy.Pie{
-						{
-							Members: map[data.Security]float64{
-								*tsla: 1.0,
-							},
-							Justifications: map[string]float64{},
+				pie = strategy.PieList{
+					{
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*tsla: 1.0,
 						},
+						Justifications: map[string]float64{},
 					},
 				}
 
@@ -337,31 +329,27 @@ var _ = Describe("Portfolio", func() {
 				pridx, err := data.SecurityFromFigi("BBG000BBVR08")
 				Expect(err).To(BeNil(), "pridx security lookup")
 
-				pie = &strategy.PieHistory{
-					Dates: []time.Time{
-						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+				pie = strategy.PieList{
+					{
+						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 1.0,
+						},
+						Justifications: map[string]float64{},
 					},
-					Pies: []*strategy.Pie{
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 1.0,
-							},
-							Justifications: map[string]float64{},
+					{
+						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*pridx: 1.0,
 						},
-						{
-							Members: map[data.Security]float64{
-								*pridx: 1.0,
-							},
-							Justifications: map[string]float64{},
+						Justifications: map[string]float64{},
+					},
+					{
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 1.0,
 						},
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 1.0,
-							},
-							Justifications: map[string]float64{},
-						},
+						Justifications: map[string]float64{},
 					},
 				}
 
@@ -445,33 +433,29 @@ var _ = Describe("Portfolio", func() {
 				vustx, err := data.SecurityFromFigi("BBG000BCKYB1")
 				Expect(err).To(BeNil(), "vustx security lookup")
 
-				pie = &strategy.PieHistory{
-					Dates: []time.Time{
-						time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
-						time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+				pie = strategy.PieList{
+					{
+						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 1.0,
+						},
+						Justifications: map[string]float64{},
 					},
-					Pies: []*strategy.Pie{
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 1.0,
-							},
-							Justifications: map[string]float64{},
+					{
+						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*vfinx: 0.25,
+							*pridx: 0.5,
+							*vustx: 0.25,
 						},
-						{
-							Members: map[data.Security]float64{
-								*vfinx: 0.25,
-								*pridx: 0.5,
-								*vustx: 0.25,
-							},
-							Justifications: map[string]float64{},
+						Justifications: map[string]float64{},
+					},
+					{
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Members: map[data.Security]float64{
+							*pridx: 1.0,
 						},
-						{
-							Members: map[data.Security]float64{
-								*pridx: 1.0,
-							},
-							Justifications: map[string]float64{},
-						},
+						Justifications: map[string]float64{},
 					},
 				}
 

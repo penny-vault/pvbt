@@ -82,7 +82,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 
-	pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+	pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.Date, predictedAssets.Members, predictedAssets.Justifications)
 	if err := pm.TargetPortfolio(ctx, target); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")

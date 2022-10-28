@@ -26,124 +26,91 @@ import (
 )
 
 type Pie struct {
+	Date           time.Time
 	Members        map[data.Security]float64
 	Justifications map[string]float64
 }
 
-type PieHistory struct {
-	Dates []time.Time
-	Pies  []*Pie
-}
+type PieList []*Pie
 
-type PieHistoryIterator struct {
-	CurrentIndex int
-	History      *PieHistory
-}
-
-// Iterator returns a new iterator over the PieHistory
-func (ph *PieHistory) Iterator() *PieHistoryIterator {
-	return &PieHistoryIterator{
-		CurrentIndex: -1,
-		History:      ph,
+// Last returns the last item in the PieHistory
+func (pl PieList) Last() *Pie {
+	lastIdx := len(pl) - 1
+	if lastIdx >= 0 {
+		return pl[lastIdx]
 	}
-}
 
-// Next progresses the iterator by 1
-func (iter *PieHistoryIterator) Next() bool {
-	iter.CurrentIndex++
-	return iter.CurrentIndex >= len(iter.History.Dates)
-}
-
-// Date returns the date at the current point in the iterator
-func (iter *PieHistoryIterator) Date() time.Time {
-	if iter.CurrentIndex < 0 || iter.CurrentIndex >= len(iter.History.Dates) {
-		return time.Time{}
-	}
-	return iter.History.Dates[iter.CurrentIndex]
-}
-
-// Val returns the Pie at the current point in the iterator
-func (iter *PieHistoryIterator) Val() *Pie {
-	if iter.CurrentIndex < 0 || iter.CurrentIndex >= len(iter.History.Dates) {
-		return nil
-	}
-	return iter.History.Pies[iter.CurrentIndex]
+	return nil
 }
 
 // Trim the PieHistory to only cover the time period between begin and end (inclusive)
-func (ph *PieHistory) Trim(begin, end time.Time) *PieHistory {
+func (pl PieList) Trim(begin, end time.Time) PieList {
 	// special case 0: requested range is invalid
 	if end.Before(begin) {
-		ph.Dates = []time.Time{}
-		ph.Pies = []*Pie{}
-		return ph
+		return PieList{}
 	}
 
 	// special case 1: pie history is empty
-	if len(ph.Dates) == 0 {
-		return ph
+	if len(pl) == 0 {
+		return pl
 	}
 
 	// special case 2: end time is before pie history start
-	if end.Before(ph.Dates[0]) {
-		ph.Dates = []time.Time{}
-		ph.Pies = []*Pie{}
-		return ph
+	if end.Before(pl[0].Date) {
+		return PieList{}
 	}
 
 	// special case 3: start time is after pie history end
-	if begin.After(ph.Dates[len(ph.Dates)-1]) {
-		ph.Dates = []time.Time{}
-		ph.Pies = []*Pie{}
-		return ph
+	if begin.After(pl.Last().Date) {
+		return PieList{}
 	}
 
 	// Use binary search to find the index corresponding to the start and end times
-	beginIdx := sort.Search(len(ph.Dates), func(i int) bool {
-		idxVal := ph.Dates[i]
+	beginIdx := sort.Search(len(pl), func(i int) bool {
+		idxVal := pl[i].Date
 		return (idxVal.After(begin) || idxVal.Equal(begin))
 	})
 
-	endIdx := sort.Search(len(ph.Dates), func(i int) bool {
-		idxVal := ph.Dates[i]
+	endIdx := sort.Search(len(pl), func(i int) bool {
+		idxVal := pl[i].Date
 		return (idxVal.After(end) || idxVal.Equal(end))
 	})
 
-	if endIdx != len(ph.Dates) {
+	if endIdx != len(pl) {
 		endIdx += 1
 	}
-	ph.Dates = ph.Dates[beginIdx:endIdx]
-	ph.Pies = ph.Pies[beginIdx:endIdx]
 
-	return ph
+	return pl[beginIdx:endIdx]
 }
 
 // StartDate returns the starting date of the pie history
-func (ph *PieHistory) StartDate() time.Time {
-	if len(ph.Dates) > 0 {
-		return ph.Dates[0]
+func (pl PieList) StartDate() time.Time {
+	if len(pl) == 0 {
+		return time.Time{}
 	}
-	return time.Time{}
+
+	return pl[0].Date
 }
 
 // EndDate returns the ending date of the pie history
-func (ph *PieHistory) EndDate() time.Time {
-	if len(ph.Dates) > 0 {
-		return ph.Dates[len(ph.Dates)-1]
+func (pl PieList) EndDate() time.Time {
+	last := pl.Last()
+	if last != nil {
+		return last.Date
 	}
 	return time.Time{}
 }
 
 // Table prints an ASCII formated table to stdout
-func (ph *PieHistory) Table() {
-	if len(ph.Dates) == 0 {
+func (pl PieList) Table() {
+	if len(pl) == 0 {
 		return // nothing to do as there is no data available in the pie history
 	}
 
 	// construct table header
 	tableCols := []string{"Date", "ticker", "Qty"}
 	justCols := []string{}
-	for title := range ph.Pies[0].Justifications {
+	for title := range pl[0].Justifications {
 		tableCols = append(tableCols, title)
 		justCols = append(justCols, title)
 	}
@@ -153,11 +120,11 @@ func (ph *PieHistory) Table() {
 	table.SetHeader(tableCols)
 	table.SetBorder(false) // Set Border to false
 
-	for idx, date := range ph.Dates {
-		for security, qty := range ph.Pies[idx].Members {
-			row := []string{date.Format("2006-01-02"), security.Ticker, fmt.Sprintf("%.2f", qty)}
+	for _, pie := range pl {
+		for security, qty := range pie.Members {
+			row := []string{pie.Date.Format("2006-01-02"), security.Ticker, fmt.Sprintf("%.2f", qty)}
 			for _, col := range justCols {
-				row = append(row, fmt.Sprintf("%.2f", ph.Pies[idx].Justifications[col]))
+				row = append(row, fmt.Sprintf("%.2f", pie.Justifications[col]))
 			}
 			table.Append(row)
 		}

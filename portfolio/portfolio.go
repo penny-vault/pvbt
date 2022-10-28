@@ -417,14 +417,14 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the PieHistory `target`.
-func (pm *Model) TargetPortfolio(ctx context.Context, target *strategy.PieHistory) error {
+func (pm *Model) TargetPortfolio(ctx context.Context, target strategy.PieList) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
 
 	p := pm.Portfolio
 
 	log.Info().Msg("building target portfolio")
-	if len(target.Dates) == 0 {
+	if len(target) == 0 {
 		log.Warn().Stack().Msg("target rows = 0; nothing to do!")
 		return nil
 	}
@@ -455,15 +455,13 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *strategy.PieHistor
 	}
 
 	// Create transactions
-	iter := target.Iterator()
-	for iter.Next() {
+	for _, pie := range target {
+		date := pie.Date
+
 		// Get next transaction symbol
-		date := iter.Date()
-		val := iter.Val()
+		justification := make([]*Justification, 0, len(pie.Justifications))
 
-		justification := make([]*Justification, 0, len(val.Justifications))
-
-		for k, v := range val.Justifications {
+		for k, v := range pie.Justifications {
 			j := &Justification{
 				Key:   k,
 				Value: v,
@@ -484,7 +482,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target *strategy.PieHistor
 		}
 
 		pm.justifications[date.String()] = justification
-		rebalance := val.Members
+		rebalance := pie.Members
 
 		err := pm.RebalanceTo(ctx, date, rebalance, justification)
 		if err != nil {
@@ -717,7 +715,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 		return err
 	}
 
-	pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+	pm.Portfolio.PredictedAssets = BuildPredictedHoldings(predictedAssets.Date, predictedAssets.Members, predictedAssets.Justifications)
 	p.EndDate = through
 
 	return nil

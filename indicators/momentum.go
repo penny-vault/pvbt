@@ -39,15 +39,15 @@ func momentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.Data
 	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100).AddVec(riskFreeRate.Vals[0])
 }
 
-// momentum computes the 6-3-1 momentum of each column in df
+// Momentum631 computes the 6-3-1 momentum of each column in df
 // momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
-func momentum631(df *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
-	momentum6 := momentum(6, df, riskFreeRate)
-	momentum3 := momentum(3, df, riskFreeRate)
-	momentum1 := momentum(1, df, riskFreeRate)
+func Momentum631(prices *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+	momentum6 := momentum(6, prices, riskFreeRate)
+	momentum3 := momentum(3, prices, riskFreeRate)
+	momentum1 := momentum(1, prices, riskFreeRate)
 
 	avgMomentum := dataframe.Mean(momentum6, momentum3, momentum1) // take the average of the same security column across all dataframes
-	return avgMomentum.Max()
+	return avgMomentum
 }
 
 func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
@@ -87,7 +87,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	// mom(security, period) = ((security / lag(security, period) - 1) * 100) - (sum(risk free rate, period) / 12)
 	// score(security) = average(mom(security, 1), mom(security, 3), mom(security, 6))
 	// indicator = max(score)
-	indicatorDF := momentum631(prices, riskFreeRate)
+	indicatorDF := Momentum631(prices, riskFreeRate).Max()
 	indicatorDF.ColNames[0] = SeriesName
 	indicatorDF = indicatorDF.Drop(math.NaN())
 
