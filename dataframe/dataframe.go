@@ -261,6 +261,27 @@ func (df *DataFrame) Insert(name string, col []float64) *DataFrame {
 	return df
 }
 
+// InsertRow adds a new row to the dataframe. Date must be after the last date in the dataframe and vals must equal the number
+// of columns. If either of these conditions are not met then panic
+func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
+	// Check that the last date in the dataframe is prior to the new date
+	if len(df.Dates) != 0 && !df.Dates[len(df.Dates)-1].Before(date) {
+		log.Panic().Time("lastDate", df.Dates[len(df.Dates)-1]).Time("newDate", date).Msg("newDate must be after lastDate")
+	}
+
+	// Check that hte number of columns equals the number of vals passed
+	if len(vals) != len(df.ColNames) {
+		log.Panic().Int("NumValsPassed", len(vals)).Int("NumColumns", len(df.ColNames)).Msg("number of vals passed must equal number of columns")
+	}
+
+	df.Dates = append(df.Dates, date)
+	for colIdx := range df.ColNames {
+		df.Vals[colIdx] = append(df.Vals[colIdx], vals[colIdx])
+	}
+
+	return df
+}
+
 // Lag shifts the dataframe by the specified number of rows, replacing shifted values by math.NaN() and returns a new dataframe
 func (df *DataFrame) Lag(n int) *DataFrame {
 	df = df.Copy()

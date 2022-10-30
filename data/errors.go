@@ -24,6 +24,7 @@ var (
 	ErrDateLengthDoesNotMatch = errors.New("length of date and values arrays must match when using local date index")
 	ErrInvalidTimeRange       = errors.New("start must be before end")
 	ErrMultipleNotSupported   = errors.New("on-or-before can only return a single metric for a single security")
+	ErrNoData                 = errors.New("no data available")
 	ErrSecurityNotFound       = errors.New("security not found")
 	ErrNoTradingDays          = errors.New("no trading days available")
 	ErrOutsideCoveredTime     = errors.New("date range outside of covered time interval")

@@ -27,11 +27,12 @@ import (
 )
 
 type CacheItem struct {
-	Values      []float64
-	Period      *Interval
-	isLocalDate bool
-	localDates  []time.Time
-	startIdx    int
+	Values        []float64
+	Period        *Interval
+	CoveredPeriod *Interval
+	isLocalDate   bool
+	localDates    []time.Time
+	startIdx      int
 }
 
 type SecurityMetricCache struct {
@@ -225,16 +226,91 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 }
 
 // Set adds the data for the specified security and metric to the cache
-func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, val []float64) error {
-	return cache.SetWithLocalDates(security, metric, begin, end, []time.Time{}, val)
-}
-
-// Set adds the data for the specified security and metric to the cache
-func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric Metric, begin, end time.Time, dates []time.Time, val []float64) error {
+func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
 	cache.locker.Lock()
 	defer cache.locker.Unlock()
 
-	toAddBytes := int64(len(val) * 8)
+	if len(df.Vals) == 0 {
+		return ErrNoData
+	}
+
+	toAddBytes := int64(len(df.Vals[0]) * 8)
+
+	if cache.maxSizeBytes < toAddBytes {
+		log.Error().Int64("maxSizeBytes", cache.maxSizeBytes).Int64("toAddBytes", toAddBytes).Msg("insufficient space to cache data")
+		return ErrDataLargerThanCache
+	}
+
+	newTotalSize := toAddBytes + cache.sizeBytes
+	if newTotalSize > cache.maxSizeBytes {
+		cache.deleteLRU(toAddBytes)
+	}
+
+	k := SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   metric,
+	}.String()
+
+	// create an interval and check that it's valid
+	interval := &Interval{
+		Begin: begin,
+		End:   end,
+	}
+
+	// check if the covered period differs from the interval, if it does set it
+	coveredInterval := &Interval{
+		Begin: df.Dates[0],
+		End:   df.Dates[len(df.Dates)-1],
+	}
+
+	if err := interval.Valid(); err != nil {
+		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		return ErrInvalidTimeRange
+	}
+
+	// check if this key already exists
+	var items []*CacheItem
+	var ok bool
+
+	if items, ok = cache.values[k]; !ok {
+		items = []*CacheItem{}
+	}
+
+	startIdx := sort.Search(len(cache.periods), func(i int) bool {
+		idxVal := cache.periods[i]
+		return (idxVal.After(interval.Begin) || idxVal.Equal(interval.Begin))
+	})
+
+	var cacheItem *CacheItem
+	cacheItem = &CacheItem{
+		Values:        df.Vals[0],
+		Period:        interval,
+		CoveredPeriod: coveredInterval,
+		startIdx:      startIdx,
+	}
+
+	items, sizeAdded := cache.insertItem(cacheItem, items)
+	if len(items) > 1 {
+		items = cache.defrag(items)
+	}
+
+	cache.values[k] = items
+	cache.lastSeen.Set(k, time.Now())
+	cache.sizeBytes += int64(sizeAdded * 8)
+
+	return nil
+}
+
+// Set adds the data for the specified security and metric to the cache
+func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
+	cache.locker.Lock()
+	defer cache.locker.Unlock()
+
+	if len(df.Vals) == 0 {
+		return ErrNoData
+	}
+
+	toAddBytes := int64(len(df.Vals[0]) * 8)
 
 	if cache.maxSizeBytes < toAddBytes {
 		log.Error().Int64("maxSizeBytes", cache.maxSizeBytes).Int64("toAddBytes", toAddBytes).Msg("insufficient space to cache data")
@@ -276,25 +352,13 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 	})
 
 	var cacheItem *CacheItem
-	if len(dates) != 0 {
 
-		if len(dates) != len(val) {
-			return ErrDateLengthDoesNotMatch
-		}
-
-		cacheItem = &CacheItem{
-			Values:      val,
-			Period:      interval,
-			isLocalDate: true,
-			localDates:  dates,
-			startIdx:    startIdx,
-		}
-	} else {
-		cacheItem = &CacheItem{
-			Values:   val,
-			Period:   interval,
-			startIdx: startIdx,
-		}
+	cacheItem = &CacheItem{
+		Values:      df.Vals[0],
+		Period:      interval,
+		isLocalDate: true,
+		localDates:  df.Dates,
+		startIdx:    startIdx,
 	}
 
 	items, sizeAdded := cache.insertItem(cacheItem, items)
@@ -495,7 +559,7 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 
 // merge takes to cache items and merges them into one
 func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
-	// combined interval interval
+	// combined intervals
 	mergedInterval := &Interval{
 		Begin: minTime(a.Period.Begin, b.Period.Begin),
 		End:   maxTime(a.Period.End, b.Period.End),

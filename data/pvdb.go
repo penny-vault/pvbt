@@ -24,6 +24,7 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
@@ -110,7 +111,7 @@ func (p *PvDb) TradingDays(ctx context.Context, begin time.Time, end time.Time) 
 }
 
 // GetEOD fetches EOD metrics from the database
-func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (map[SecurityMetric][]float64, error) {
+func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEOD")
 	defer span.End()
 	tz := common.GetTimezone()
@@ -160,7 +161,7 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	}
 
 	// parse database rows
-	vals := make(map[SecurityMetric][]float64, len(securities))
+	vals := make(dataframe.DataFrameMap, len(securities))
 
 	for rows.Next() {
 		var eventDate time.Time
@@ -193,11 +194,14 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 				SecurityObject: *security,
 				MetricObject:   metric,
 			}
-			if metricArray, ok := vals[securityMetric]; ok {
-				metricArray = append(metricArray, *metricVals[idx])
-				vals[securityMetric] = metricArray
+			if val, ok := vals[securityMetric.String()]; ok {
+				val.InsertRow(eventDate, *metricVals[idx])
 			} else {
-				vals[securityMetric] = []float64{*metricVals[idx]}
+				vals[securityMetric.String()] = &dataframe.DataFrame{
+					Dates:    []time.Time{eventDate},
+					ColNames: []string{securityMetric.String()},
+					Vals:     [][]float64{[]float64{*metricVals[idx]}},
+				}
 			}
 		}
 	}
