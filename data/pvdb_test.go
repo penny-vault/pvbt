@@ -73,7 +73,7 @@ var _ = Describe("PVDB tests", func() {
 			df, err := pvdb.GetEOD(ctx, securities, metrics, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil())
 			Expect(len(df)).To(Equal(1))
-			Expect(df[securityMetric]).To(Equal([]float64{
+			Expect(df[securityMetric.String()]).To(Equal([]float64{
 				729.7700, 735.1100,
 			}))
 		})
@@ -101,7 +101,7 @@ var _ = Describe("PVDB tests", func() {
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 			res, err := pvdb.GetEOD(ctx, securities, metrics, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).To(BeNil())
-			Expect(res[securityMetric]).To(BeNil())
+			Expect(res[securityMetric.String()]).To(BeNil())
 		})
 
 		DescribeTable("check all metrics",
@@ -143,7 +143,7 @@ var _ = Describe("PVDB tests", func() {
 				df, err := pvdb.GetEOD(ctx, securities, []data.Metric{metric}, begin, end)
 				Expect(err).To(BeNil())
 				Expect(len(df)).To(Equal(1))
-				Expect(df[securityMetric]).To(Equal(expectedVals))
+				Expect(df[securityMetric.String()]).To(Equal(expectedVals))
 			},
 			Entry("When requesting close price", 4, 4, data.MetricClose, []float64{729.77}),
 			Entry("When requesting adjusted close price", 4, 4, data.MetricAdjustedClose, []float64{729.77}),

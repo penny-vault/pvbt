@@ -112,35 +112,27 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 			dates[len(dates)-1]); err == nil {
 			for k, df := range result {
 				securityMetric := NewSecurityMetricFromString(k)
-				if isSparseMetric(securityMetric.MetricObject) {
-					if securityMetric.MetricObject == MetricSplitFactor {
+				security := securityMetric.SecurityObject
+				metric := securityMetric.MetricObject
+				subLog := log.With().Str("Security", security.Ticker).Str("Metric", string(metric)).Logger()
+				if isSparseMetric(metric) {
+					if metric == MetricSplitFactor {
 						df = df.Drop(1)
 					} else {
 						df = df.Drop(0)
 					}
-					if len(df.Dates) > 0 {
-						err = manager.metricCache.SetWithLocalDates(&securityMetric.SecurityObject,
-							securityMetric.MetricObject, begin, modifiedEnd, df.Dates, df.Vals[0])
-					} else {
-						// still need to set with blank so that we don't try and query the database again
-						err = manager.metricCache.SetWithLocalDates(&securityMetric.SecurityObject,
-							securityMetric.MetricObject, begin, modifiedEnd, []time.Time{}, []float64{})
-					}
+					err = manager.metricCache.SetWithLocalDates(&security, metric, begin, modifiedEnd, df)
 					if err != nil {
-						log.Error().Err(err).Str("Security", securityMetric.SecurityObject.Ticker).
-							Str("Metric", string(securityMetric.MetricObject)).Msg("couldn't set cache")
+						subLog.Error().Err(err).Msg("couldn't set local dates in cache")
 						return nil, err
 					}
 				} else {
-					if df.Len() > 0 {
-						actualBegin := df.Dates[0]
-						actualEnd := df.Last().Dates[0]
-						err = manager.metricCache.Set(&securityMetric.SecurityObject, securityMetric.MetricObject,
-							actualBegin, actualEnd, df.Vals[0])
-						if err != nil {
-							log.Error().Err(err).Str("Security", securityMetric.SecurityObject.Ticker).Str("Metric", string(securityMetric.MetricObject)).Msg("couldn't set cache")
-							return nil, err
-						}
+					actualBegin := df.Dates[0]
+					actualEnd := df.Last().Dates[0]
+					err = manager.metricCache.Set(&security, metric, actualBegin, actualEnd, df)
+					if err != nil {
+						subLog.Error().Err(err).Msg("couldn't set cache")
+						return nil, err
 					}
 				}
 			}
@@ -154,7 +146,11 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dfMap := make(dataframe.DataFrameMap)
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
-			df := manager.metricCache.GetAvailable(security, metric, begin, end)
+			df, err := manager.metricCache.Get(security, metric, begin, end)
+			if err != nil {
+				log.Error().Err(err).Time("Begin", begin).Time("End", end).Str("Figi", security.CompositeFigi).
+					Str("Ticker", security.Ticker).Str("Metric", string(metric)).Msg("fetching from cache failed")
+			}
 			k := SecurityMetric{
 				SecurityObject: *security,
 				MetricObject:   metric,

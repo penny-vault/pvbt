@@ -17,6 +17,7 @@ package data_test
 
 import (
 	"errors"
+	"sort"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -26,6 +27,7 @@ import (
 
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/dataframe"
 )
 
 func tz() *time.Location {
@@ -75,6 +77,13 @@ var _ = Describe("Cache", func() {
 			It("benchmarks performance", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				}
 				vals := []float64{0, 1, 2, 3, 4}
 
 				experiment := gmeasure.NewExperiment("cache set")
@@ -82,12 +91,20 @@ var _ = Describe("Cache", func() {
 
 				experiment.SampleDuration("simple set", func(_ int) {
 					cache = data.NewSecurityMetricCache(1024, dates)
-					err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+					err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame{
+						Dates:    dateIdx,
+						Vals:     [][]float64{vals},
+						ColNames: []string{"vals"},
+					})
 					Expect(err).To(BeNil())
 				}, gmeasure.SamplingConfig{N: 1000})
 
 				cache = data.NewSecurityMetricCache(1024, dates)
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				})
 				Expect(err).To(BeNil())
 
 				beginSubset := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
@@ -108,8 +125,21 @@ var _ = Describe("Cache", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1, 2, 3, 4}
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				}
 
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				df := &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 				Expect(err).To(BeNil())
 
 				Expect(cache.Count()).To(Equal(1), "number of metrics stored")
@@ -121,7 +151,20 @@ var _ = Describe("Cache", func() {
 					begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
 					vals := []float64{0, 1, 2, 3}
-					err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+					dateIdx := []time.Time{
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					}
+
+					df := &dataframe.DataFrame{
+						Dates:    dateIdx,
+						Vals:     [][]float64{vals},
+						ColNames: []string{"vals"},
+					}
+
+					err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 					Expect(err).To(BeNil())
 
 					// try to retrieve the data
@@ -171,7 +214,20 @@ var _ = Describe("Cache", func() {
 					begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
 					vals := []float64{0, 1, 2, 3}
-					err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+					dateIdx := []time.Time{
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					}
+
+					df := &dataframe.DataFrame{
+						Dates:    dateIdx,
+						Vals:     [][]float64{vals},
+						ColNames: []string{"vals"},
+					}
+
+					err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 					Expect(err).To(BeNil())
 
 					// try to retrieve the data
@@ -223,7 +279,24 @@ var _ = Describe("Cache", func() {
 					for _, seg := range segments {
 						begin := time.Date(2022, 8, seg.start, 0, 0, 0, 0, tz())
 						end := time.Date(2022, 8, seg.end, 0, 0, 0, 0, tz())
-						err := cache.Set(security, data.MetricAdjustedClose, begin, end, seg.vals)
+
+						startIdx := sort.Search(len(dates), func(i int) bool {
+							idxVal := dates[i]
+							return (idxVal.After(begin) || idxVal.Equal(end))
+						})
+
+						endIdx := sort.Search(len(dates), func(i int) bool {
+							idxVal := dates[i]
+							return (idxVal.After(end) || idxVal.Equal(end))
+						})
+
+						df := &dataframe.DataFrame{
+							Dates:    dates[startIdx : endIdx+1],
+							ColNames: []string{"vals"},
+							Vals:     [][]float64{seg.vals},
+						}
+
+						err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 						Expect(err).To(BeNil())
 					}
 
@@ -269,16 +342,31 @@ var _ = Describe("Cache", func() {
 
 			It("should collapse multiple overlapping cache items", func() {
 				// add two single item entries into the cache that are separated by a day
-				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
+				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{1}},
+					})
 				Expect(err).To(BeNil(), "error during first cache set")
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{3}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// make sure there are 2 entries in the []*CacheItem list
 				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
 
 				// now add a *CacheItem that connects the previous two entries
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), []float64{2})
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{2}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// check the number of items for the security / metric pair
@@ -300,16 +388,32 @@ var _ = Describe("Cache", func() {
 
 			It("should not collapse if items don't overlap", func() {
 				// add two single item entries into the cache that are separated by a day
-				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []float64{1})
+				err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{1}},
+					})
 				Expect(err).To(BeNil(), "error during first cache set")
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []float64{3})
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{3}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// make sure there are 2 entries in the []*CacheItem list
 				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
 
 				// now add a *CacheItem that connects the previous two entries
-				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), []float64{4})
+				err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{4}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// check the number of items for the security / metric pair
@@ -333,8 +437,21 @@ var _ = Describe("Cache", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1, 2, 3, 4}
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				}
 
-				cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				df := &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 				Expect(err).To(BeNil())
@@ -365,7 +482,21 @@ var _ = Describe("Cache", func() {
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1, 2, 3, 4}
 
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				}
+
+				df := &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 				Expect(errors.Is(err, data.ErrDataLargerThanCache)).To(BeTrue(), "error should be data larger than cache")
 			})
 
@@ -375,13 +506,36 @@ var _ = Describe("Cache", func() {
 				end := time.Date(2022, 8, 4, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1}
 
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, vals)
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+				}
+
+				df := &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
 				Expect(err).To(BeNil())
 
 				begin2 := time.Date(2022, 8, 5, 0, 0, 0, 0, tz())
 				end2 := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
 				vals2 := []float64{2, 3}
-				err = cache.Set(security, data.MetricAdjustedClose, begin2, end2, vals2)
+
+				dateIdx2 := []time.Time{
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+				}
+
+				df2 := &dataframe.DataFrame{
+					Dates:    dateIdx2,
+					Vals:     [][]float64{vals2},
+					ColNames: []string{"vals"},
+				}
+
+				err = cache.Set(security, data.MetricAdjustedClose, begin2, end2, df2)
 				Expect(err).To(BeNil())
 
 				_, err = cache.Get(security, data.MetricAdjustedClose, begin, end)
@@ -425,7 +579,13 @@ var _ = Describe("Cache", func() {
 				localDates := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}
 				vals := []float64{4, 5}
 
-				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, localDates, vals)
+				df := &dataframe.DataFrame{
+					Dates:    localDates,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, df)
 				Expect(err).To(BeNil())
 
 				Expect(cache.Count()).To(Equal(1), "number of metrics stored")
@@ -435,13 +595,19 @@ var _ = Describe("Cache", func() {
 				Expect(items[0].IsLocalDateIndex()).To(BeTrue(), "check if using a local date index")
 			})
 
-			It("should refuse to set values with unequal length and date and val arrays", func() {
+			It("should refuse to set values with unequal length date and val arrays", func() {
 				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				localDates := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}
 				vals := []float64{4}
 
-				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, localDates, vals)
+				df := &dataframe.DataFrame{
+					Dates:    localDates,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, df)
 				Expect(errors.Is(err, data.ErrDateLengthDoesNotMatch)).To(BeTrue(), "check if set caused an error")
 			})
 
@@ -451,7 +617,14 @@ var _ = Describe("Cache", func() {
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
 					dt := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())}
 					vals := []float64{5.2}
-					err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, dt, vals)
+
+					df := &dataframe.DataFrame{
+						Dates:    dt,
+						Vals:     [][]float64{vals},
+						ColNames: []string{"vals"},
+					}
+
+					err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, df)
 					Expect(err).To(BeNil())
 
 					// try to retrieve the data
@@ -502,7 +675,14 @@ var _ = Describe("Cache", func() {
 					end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
 					dt := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())}
 					vals := []float64{2}
-					err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, dt, vals)
+
+					df := &dataframe.DataFrame{
+						Dates:    dt,
+						Vals:     [][]float64{vals},
+						ColNames: []string{"vals"},
+					}
+
+					err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, df)
 					Expect(err).To(BeNil())
 
 					// try to retrieve the data
@@ -554,7 +734,14 @@ var _ = Describe("Cache", func() {
 						for idx := range localDates {
 							localDates[idx] = time.Date(2022, 8, seg.dates[idx], 0, 0, 0, 0, tz())
 						}
-						err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, localDates, seg.vals)
+
+						df := &dataframe.DataFrame{
+							Dates:    localDates,
+							Vals:     [][]float64{seg.vals},
+							ColNames: []string{"vals"},
+						}
+
+						err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, df)
 						Expect(err).To(BeNil())
 					}
 
@@ -600,16 +787,34 @@ var _ = Describe("Cache", func() {
 
 			It("should collapse multiple overlapping cache items", func() {
 				// add two single item entries into the cache that are separated by a day
-				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())}, []float64{1})
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose,
+					time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{1}},
+					})
 				Expect(err).To(BeNil(), "error during first cache set")
-				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())}, []float64{3})
+				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose,
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{3}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// make sure there are 2 entries in the []*CacheItem list
 				Expect(cache.ItemCount(security, data.MetricAdjustedClose)).To(Equal(2), "item count after 2 sets")
 
 				// now add a *CacheItem that connects the previous two entries
-				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())}, []float64{2})
+				err = cache.SetWithLocalDates(security, data.MetricAdjustedClose,
+					time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{[]float64{2}},
+					})
 				Expect(err).To(BeNil(), "error during second cache set")
 
 				// check the number of items for the security / metric pair
@@ -637,7 +842,12 @@ var _ = Describe("Cache", func() {
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{4, 5}
 
-				cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())}, vals)
+				cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{vals},
+					})
 
 				result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 				Expect(err).To(BeNil())
@@ -650,7 +860,12 @@ var _ = Describe("Cache", func() {
 				end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 				vals := []float64{0, 1, 2}
 
-				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end, []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}, vals)
+				err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
+					&dataframe.DataFrame{
+						ColNames: []string{"vals"},
+						Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())},
+						Vals:     [][]float64{vals},
+					})
 				Expect(errors.Is(err, data.ErrDataLargerThanCache)).To(BeTrue(), "error should be data larger than cache")
 			})
 		})

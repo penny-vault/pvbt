@@ -310,6 +310,10 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 		return ErrNoData
 	}
 
+	if len(df.Vals) > 0 && len(df.Vals[0]) != len(df.Dates) {
+		return ErrDateLengthDoesNotMatch
+	}
+
 	toAddBytes := int64(len(df.Vals[0]) * 8)
 
 	if cache.maxSizeBytes < toAddBytes {
@@ -351,9 +355,7 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 		return (idxVal.After(interval.Begin) || idxVal.Equal(interval.Begin))
 	})
 
-	var cacheItem *CacheItem
-
-	cacheItem = &CacheItem{
+	cacheItem := &CacheItem{
 		Values:      df.Vals[0],
 		Period:      interval,
 		isLocalDate: true,
