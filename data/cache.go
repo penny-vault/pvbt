@@ -23,6 +23,7 @@ import (
 	"github.com/alphadose/haxmap"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -96,7 +97,7 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	}
 
 	if err := requestedInterval.Valid(); err != nil {
-		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
 		return false, []*Interval{}
 	}
 
@@ -131,7 +132,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 	}
 
 	if err := requestedInterval.Valid(); err != nil {
-		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
 		return nil, ErrInvalidTimeRange
 	}
 
@@ -161,6 +162,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 						idxVal := periodSubset[i]
 						return (idxVal.After(begin) || idxVal.Equal(begin))
 					})
+					log.Debug().Int("len", len(periodSubset)).Int("beginIdx", beginIdx).Msg("begin good news")
 					if beginIdx == len(periodSubset) && item.isLocalDate {
 						noValuesFound = true
 					}
@@ -172,11 +174,13 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				if item.Period.End.Equal(end) {
 					endIdx = len(item.Values) - 1
 					endExactMatch = true
+					log.Debug().Int("endIdx", endIdx).Msg("end is exact match")
 				} else {
 					endIdx = sort.Search(len(periodSubset), func(i int) bool {
 						idxVal := periodSubset[i]
 						return (idxVal.After(end) || idxVal.Equal(end))
 					})
+					log.Debug().Int("endIdx", endIdx).Msg("testing 1 2 3")
 					if endIdx == len(periodSubset) {
 						endIdx -= 1
 					}
@@ -200,6 +204,8 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
 					noValuesFound = true
 				}
+
+				log.Debug().Time("begin", begin).Str("Metric", string(metric)).Time("end", end).Int("beginIdx", beginIdx).Int("endIdx", endIdx).Msg("cache")
 
 				vals := make([][]float64, 1)
 				var dates []time.Time
@@ -227,10 +233,62 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 
 // Set adds the data for the specified security and metric to the cache
 func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
+	if len(df.Vals) == 0 || len(df.Vals[0]) == 0 {
+		return ErrNoData
+	}
+
+	// check if the dataframe's dates match those of the date index
+	startDate := df.Dates[0]
+	startIdx := sort.Search(len(cache.periods), func(i int) bool {
+		idxVal := cache.periods[i]
+		return (idxVal.After(startDate) || idxVal.Equal(startDate))
+	})
+
+	prevIdx := 0
+	offset := 0
+	for idx, date := range df.Dates {
+		myIdx := idx + startIdx - offset
+		if !cache.periods[myIdx].Equal(date) {
+			df2 := &dataframe.DataFrame{
+				Dates:    df.Dates[prevIdx:idx],
+				Vals:     [][]float64{df.Vals[0][prevIdx:idx]},
+				ColNames: df.ColNames,
+			}
+			myEnd := df2.Dates[len(df2.Dates)-1]
+			err := cache.SetMatched(security, metric, begin, myEnd, df2)
+			if err != nil {
+				return err
+			}
+			begin = cache.periods[myIdx]
+			prevIdx = idx
+
+			startIdx = sort.Search(len(cache.periods), func(i int) bool {
+				idxVal := cache.periods[i]
+				return (idxVal.After(date) || idxVal.Equal(date))
+			})
+			offset = idx
+		}
+	}
+
+	if prevIdx == 0 {
+		return cache.SetMatched(security, metric, begin, end, df)
+	}
+
+	df2 := &dataframe.DataFrame{
+		Dates:    df.Dates[prevIdx:],
+		Vals:     [][]float64{df.Vals[0][prevIdx:]},
+		ColNames: df.ColNames,
+	}
+
+	return cache.SetMatched(security, metric, begin, end, df2)
+}
+
+// SetMatched adds the data for the specified security and metric to the cache assuming df's date frame matches cache.periods exactly
+func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
 	cache.locker.Lock()
 	defer cache.locker.Unlock()
 
-	if len(df.Vals) == 0 {
+	if len(df.Vals) == 0 || len(df.Vals[0]) == 0 {
 		return ErrNoData
 	}
 
@@ -264,7 +322,7 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 	}
 
 	if err := interval.Valid(); err != nil {
-		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
 		return ErrInvalidTimeRange
 	}
 
@@ -281,8 +339,7 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 		return (idxVal.After(interval.Begin) || idxVal.Equal(interval.Begin))
 	})
 
-	var cacheItem *CacheItem
-	cacheItem = &CacheItem{
+	cacheItem := &CacheItem{
 		Values:        df.Vals[0],
 		Period:        interval,
 		CoveredPeriod: coveredInterval,
@@ -337,8 +394,13 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 		End:   end,
 	}
 
+	coveredInterval := &Interval{
+		Begin: df.Dates[0],
+		End:   df.Dates[len(df.Dates)-1],
+	}
+
 	if err := interval.Valid(); err != nil {
-		log.Error().Err(err).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
 		return ErrInvalidTimeRange
 	}
 
@@ -356,11 +418,12 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 	})
 
 	cacheItem := &CacheItem{
-		Values:      df.Vals[0],
-		Period:      interval,
-		isLocalDate: true,
-		localDates:  df.Dates,
-		startIdx:    startIdx,
+		Values:        df.Vals[0],
+		Period:        interval,
+		CoveredPeriod: coveredInterval,
+		isLocalDate:   true,
+		localDates:    df.Dates,
+		startIdx:      startIdx,
 	}
 
 	items, sizeAdded := cache.insertItem(cacheItem, items)
@@ -462,16 +525,21 @@ func (cache *SecurityMetricCache) contiguousByDateIndex(a, b *CacheItem) bool {
 		b = c
 	}
 
-	startIdx := a.startIdx
-	dateIdx := cache.periods[startIdx:]
-
-	searchVal := a.Period.End
+	dateIdx := cache.periods[a.startIdx:]
+	searchVal := a.CoveredPeriod.End
 	endIdx := sort.Search(len(dateIdx), func(i int) bool {
 		idxVal := dateIdx[i]
 		return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
-	}) + startIdx
+	}) + a.startIdx
 
-	return endIdx >= (b.startIdx - 1)
+	dateIdx = cache.periods[b.startIdx:]
+	searchVal = b.CoveredPeriod.Begin
+	bStartIdx := sort.Search(len(dateIdx), func(i int) bool {
+		idxVal := dateIdx[i]
+		return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
+	}) + b.startIdx
+
+	return endIdx >= (bStartIdx - 1)
 }
 
 // defrag merges contiguous cache items in an array of cache items
@@ -492,7 +560,7 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 			continue
 		}
 
-		if item.Period.Contiguous(next.Period) {
+		if item.Period.Contiguous(next.Period) && item.CoveredPeriod.Contiguous(next.CoveredPeriod) {
 			// need to merge
 			mergedItem, _ := cache.merge(item, next)
 			newItems = append(newItems, mergedItem)
@@ -515,6 +583,7 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
 func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
+	log.Debug().Time("A", new.CoveredPeriod.Begin).Time("B", new.CoveredPeriod.End).Msg("covered period for insertItem")
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
@@ -534,8 +603,8 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 			return items, added
 		}
 
-		if item.Period.Contiguous(new.Period) || cache.contiguousByDateIndex(new, item) {
-			log.Debug().Msg("item and new are contiguous")
+		if (item.Period.Contiguous(new.Period) && item.CoveredPeriod.Contiguous(new.CoveredPeriod)) || cache.contiguousByDateIndex(new, item) {
+			log.Debug().Bool("contiguousByDateIndex", cache.contiguousByDateIndex(new, item)).Bool("CoveredContiguous", item.CoveredPeriod.Contiguous(new.CoveredPeriod)).Bool("Combo", (item.Period.Contiguous(new.Period) && item.CoveredPeriod.Contiguous(new.CoveredPeriod))).Object("item.CoveredPeriod", item.CoveredPeriod).Object("new.CoveredPeriod", new.CoveredPeriod).Msg("item and new are contiguous")
 			merged, added := cache.merge(new, item)
 			item.copyFrom(merged)
 			return items, added
@@ -560,6 +629,25 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 }
 
 // merge takes to cache items and merges them into one
+// ```mermaid
+// graph TD
+//
+//	A[Merge: a < b] -->|A| B{do Periods overlap?}
+//	A -->|B| B
+//	B --> E[merge period: min begin, max end]
+//	E --> C{isLocalDate?}
+//	B -->|No| D[don't merge]
+//	C -->|Yes| F{do localDateIdx's overlap?}
+//	F -->|No| G[append localDateIdx]
+//	G --> H[append values]
+//	F -->|Yes| I[find intersection of localDateIdx]
+//	I --> J[slice localDateIdx and append]
+//	J --> K[slice values and append]
+//	C -->|No| M[find intersection of covered period]
+//	M --> N[slice covered period and append]
+//	N --> O[slice values and append]
+//
+// ```
 func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	// combined intervals
 	mergedInterval := &Interval{
@@ -567,20 +655,29 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 		End:   maxTime(a.Period.End, b.Period.End),
 	}
 
+	mergedCoveredInterval := &Interval{
+		Begin: minTime(a.CoveredPeriod.Begin, b.CoveredPeriod.Begin),
+		End:   maxTime(a.CoveredPeriod.End, b.CoveredPeriod.End),
+	}
+
+	log.Debug().Time("A", mergedCoveredInterval.Begin).Time("B", mergedCoveredInterval.End).Msg("mergedCoveredInterval")
+
 	// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
 	mergedStartIdx := b.startIdx
 
 	added := 0
 	// new values occur before current values
-	mergedValues := make([]float64, 0, len(b.Values))
+	mergedValues := make([]float64, 0, len(a.Values)+len(b.Values))
 	isLocalDate := b.isLocalDate
-	mergedLocalDates := make([]time.Time, 0, len(b.localDates))
+	mergedLocalDates := make([]time.Time, 0, len(a.localDates)+len(b.localDates))
 
 	if a.Period.Begin.Before(b.Period.Begin) {
-		startIdx := sort.Search(len(cache.periods), func(i int) bool {
+		// find the start index based on the period begin
+		periodStartIdx := sort.Search(len(cache.periods), func(i int) bool {
 			idxVal := cache.periods[i]
 			return (idxVal.After(a.Period.Begin) || idxVal.Equal(a.Period.Begin))
 		})
+		mergedStartIdx = periodStartIdx
 
 		if a.isLocalDate {
 			// cannot rely upon index in cache.periods. must search through local dates
@@ -600,21 +697,35 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx]...)
 			}
 		} else {
+			coveredStartIdx := sort.Search(len(cache.periods), func(i int) bool {
+				idxVal := cache.periods[i]
+				return (idxVal.After(a.CoveredPeriod.Begin) || idxVal.Equal(a.CoveredPeriod.Begin))
+			})
+
+			// A*    *   AB*  *      B --- DON'T MERGE!
+			// A   *  *  AB*  *      B --- DON'T MERGE!
+			// A   *    *AB*  *      B
+			// A*    *   AB   *  *   B --- DON'T MERGE!
+			// A   *  *  AB   *  *   B --- DON'T MERGE!
+			// A   *    *AB   *  *   B --- DON'T MERGE!
+			// A*    *   AB      *  *B --- DON'T MERGE!
+			// A   *  *  AB      *  *B --- DON'T MERGE!
+			// A   *    *AB      *  *B --- DON'T MERGE!
+
 			// the end date of new should be the start of the current item (hence using b.Period.Begin and not .End)
-			searchVal := b.Period.Begin.AddDate(0, 0, -1)
-			endIdx := sort.Search(len(cache.periods), func(i int) bool {
+			searchVal := b.CoveredPeriod.Begin.AddDate(0, 0, -1)
+			coveredEndIdx := sort.Search(len(cache.periods), func(i int) bool {
 				idxVal := cache.periods[i]
 				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
 			})
 
-			numDates := endIdx - startIdx + 1
+			numDates := coveredEndIdx - coveredStartIdx + 1
 			if len(a.Values) < numDates {
 				numDates = len(a.Values)
 			}
 			added += numDates
 			mergedValues = a.Values[:numDates]
 		}
-		mergedStartIdx = startIdx
 	}
 
 	mergedValues = append(mergedValues, b.Values...)
@@ -640,7 +751,7 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 			mergedValues = append(mergedValues, a.Values[startIdx:]...)
 			mergedLocalDates = append(mergedLocalDates, a.localDates[startIdx:]...)
 		} else {
-			searchVal := b.Period.End.AddDate(0, 0, 1)
+			searchVal := b.CoveredPeriod.End.AddDate(0, 0, 1)
 			sliceStartIdx := sort.Search(len(cache.periods), func(i int) bool {
 				idxVal := cache.periods[i]
 				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
@@ -653,11 +764,12 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	}
 
 	mergedCacheItem := &CacheItem{
-		Period:      mergedInterval,
-		Values:      mergedValues,
-		startIdx:    mergedStartIdx,
-		isLocalDate: isLocalDate,
-		localDates:  mergedLocalDates,
+		Period:        mergedInterval,
+		CoveredPeriod: mergedCoveredInterval,
+		Values:        mergedValues,
+		startIdx:      mergedStartIdx,
+		isLocalDate:   isLocalDate,
+		localDates:    mergedLocalDates,
 	}
 
 	return mergedCacheItem, added
@@ -666,9 +778,17 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 func (item *CacheItem) copyFrom(new *CacheItem) {
 	item.Period = new.Period
 	item.Values = new.Values
+	item.CoveredPeriod = new.CoveredPeriod
 	item.isLocalDate = new.isLocalDate
 	item.localDates = new.localDates
 	item.startIdx = new.startIdx
+}
+
+func (item *CacheItem) MarshalZerologObject(e *zerolog.Event) {
+	e.Object("Period", item.Period)
+	e.Object("CoveredPeriod", item.CoveredPeriod)
+	e.Int("Length", len(item.Values))
+	e.Floats64("Values", item.Values)
 }
 
 func minTime(a, b time.Time) time.Time {
