@@ -45,6 +45,9 @@ var _ = Describe("Manager tests", func() {
 		manager.Reset()
 	})
 
+	// TODO: add tests that ensure if data is queried on date A but data has not yet been downloaded the cache properly
+	// reflects that the data for today is not yet available.
+
 	Context("when fetching metrics", func() {
 		It("it errors for unknown securities", func() {
 			securities := []*data.Security{
@@ -168,8 +171,8 @@ var _ = Describe("Manager tests", func() {
 					},
 				}
 
-				begin := time.Date(2021, 1, a, 0, 0, 0, 0, tz())
-				end := time.Date(2021, 1, b, 0, 0, 0, 0, tz())
+				begin := time.Date(2021, 1, a, 16, 0, 0, 0, tz())
+				end := time.Date(2021, 1, b, 16, 0, 0, 0, tz())
 
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
@@ -181,11 +184,11 @@ var _ = Describe("Manager tests", func() {
 				Expect(df.ColNames).To(Equal(colNames))
 				Expect(df.Vals).To(Equal(expectedVals))
 			},
-			Entry("When requesting close price", 4, 4, data.MetricClose, [][]float64{{729.77}}),
-			Entry("When requesting adjusted close price", 4, 4, data.MetricAdjustedClose, [][]float64{{729.77}}),
-			Entry("When requesting open price", 4, 4, data.MetricOpen, [][]float64{{719.46}}),
-			Entry("When requesting high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
-			Entry("When requesting low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
+			Entry("can fetch close price", 4, 4, data.MetricClose, [][]float64{{729.77}}),
+			Entry("can fetch adjusted close price", 4, 4, data.MetricAdjustedClose, [][]float64{{729.77}}),
+			Entry("can fetch open price", 4, 4, data.MetricOpen, [][]float64{{719.46}}),
+			Entry("can fetch high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
+			Entry("can fetch low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
 		)
 	})
 })

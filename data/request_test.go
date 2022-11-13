@@ -65,7 +65,7 @@ var _ = Describe("Request tests", func() {
 			Expect(errors.Is(err, data.ErrSecurityNotFound)).To(BeTrue())
 		})
 
-		It("it fetches TSLA when only ticker is present", func() {
+		It("fetches TSLA when only ticker is present", func() {
 			securities := []*data.Security{
 				{
 					Ticker:        "TSLA",
@@ -77,10 +77,10 @@ var _ = Describe("Request tests", func() {
 			// 2021-01-04  BBG000N9MNX3    719.4600  744.4899  717.1895  729.7700  729.7700   1.000000      0.0000
 			// 2021-01-05  BBG000N9MNX3    723.6600  740.8400  719.2000  735.1100  735.1100   1.000000      0.0000
 
-			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
+			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 23, 59, 59, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 
 			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
-			dfMap, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
+			dfMap, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 23, 59, 59, 0, common.GetTimezone()))
 			Expect(err).To(BeNil(), "error when fetching data")
 			df := dfMap.DataFrame()
 
@@ -131,8 +131,8 @@ var _ = Describe("Request tests", func() {
 					},
 				}
 
-				begin := time.Date(2021, 1, a, 0, 0, 0, 0, tz())
-				end := time.Date(2021, 1, b, 0, 0, 0, 0, tz())
+				begin := time.Date(2021, 1, a, 16, 0, 0, 0, tz())
+				end := time.Date(2021, 1, b, 16, 0, 0, 0, tz())
 
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
@@ -146,11 +146,11 @@ var _ = Describe("Request tests", func() {
 				Expect(df.ColNames).To(Equal(colNames))
 				Expect(df.Vals).To(Equal(expectedVals))
 			},
-			Entry("When requesting close price", 4, 4, data.MetricClose, [][]float64{{729.77}}),
-			Entry("When requesting adjusted close price", 4, 4, data.MetricAdjustedClose, [][]float64{{729.77}}),
-			Entry("When requesting open price", 4, 4, data.MetricOpen, [][]float64{{719.46}}),
-			Entry("When requesting high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
-			Entry("When requesting low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
+			Entry("can request close price", 4, 4, data.MetricClose, [][]float64{{729.77}}),
+			Entry("can request adjusted close price", 4, 4, data.MetricAdjustedClose, [][]float64{{729.77}}),
+			Entry("can request open price", 4, 4, data.MetricOpen, [][]float64{{719.46}}),
+			Entry("can request high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
+			Entry("can request low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
 		)
 	})
 })

@@ -150,6 +150,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 			if err != nil {
 				log.Error().Err(err).Time("Begin", begin).Time("End", end).Str("Figi", security.CompositeFigi).
 					Str("Ticker", security.Ticker).Str("Metric", string(metric)).Msg("fetching from cache failed")
+				return nil, err
 			}
 			k := SecurityMetric{
 				SecurityObject: *security,
