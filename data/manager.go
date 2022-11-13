@@ -97,7 +97,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		toPullSecuritiesArray = append(toPullSecuritiesArray, k)
 	}
 
-	// adjust request date range
+	// adjust request date range to cover the minimum request duration
 	duration := end.Sub(begin)
 	modifiedEnd := end
 	if duration < viper.GetDuration("database.min_request_duration") {
@@ -127,9 +127,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 						return nil, err
 					}
 				} else {
-					actualBegin := df.Dates[0]
-					actualEnd := df.Last().Dates[0]
-					err = manager.metricCache.Set(&security, metric, actualBegin, actualEnd, df)
+					err = manager.metricCache.Set(&security, metric, begin, modifiedEnd, df)
 					if err != nil {
 						subLog.Error().Err(err).Msg("couldn't set cache")
 						return nil, err
@@ -148,8 +146,14 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		for _, metric := range metrics {
 			df, err := manager.metricCache.Get(security, metric, begin, end)
 			if err != nil {
+				// this should never happen because we pulled the data in the previous step; if it does print out additional
+				// debug information
 				log.Error().Err(err).Time("Begin", begin).Time("End", end).Str("Figi", security.CompositeFigi).
 					Str("Ticker", security.Ticker).Str("Metric", string(metric)).Msg("fetching from cache failed")
+				items := manager.metricCache.Items(security, metric)
+				for _, item := range items {
+					log.Debug().Object("item", item).Msg("cache item at time of manager.Get cache miss")
+				}
 				return nil, err
 			}
 			k := SecurityMetric{

@@ -61,6 +61,15 @@ func discoverTestDataPath(fn string) string {
 		if !errors.Is(err, fs.ErrNotExist) {
 			return filepath.Join(dataDir, fn)
 		}
+
+		// try two directories up
+		twoUpPwdDir := filepath.Dir(oneUpPwdDir)
+		dataDir = filepath.Join(twoUpPwdDir, "testdata")
+		// check if data dir exists, if it does use it
+		_, err = os.Stat(dataDir)
+		if !errors.Is(err, fs.ErrNotExist) {
+			return filepath.Join(dataDir, fn)
+		}
 	}
 
 	log.Panic().Msg("could not resolve test data dir")

@@ -220,6 +220,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					vals[0] = []float64{}
 					dates = []time.Time{}
 				} else {
+					log.Debug().Int("LenVals", len(item.Values)).Int("Begin", beginIdx).Int("endIdx", endIdx).Msg("vals length")
 					vals[0] = item.Values[beginIdx : endIdx+1]
 					dates = periodSubset[beginIdx : endIdx+1]
 				}
@@ -600,7 +601,7 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
 func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
-	log.Debug().Time("A", new.CoveredPeriod.Begin).Time("B", new.CoveredPeriod.End).Msg("covered period for insertItem")
+	//log.Debug().Time("A", new.CoveredPeriod.Begin).Time("B", new.CoveredPeriod.End).Msg("covered period for insertItem")
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
@@ -609,7 +610,7 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 	for idx, item := range items {
 		if item.Period.Contains(new.Period) {
 			// nothing to be done data already in cache
-			log.Debug().Msg("skipping because item is already in []*CacheItem list")
+			log.Debug().Msg("skipping item insert because item is already in []*CacheItem list")
 			return items, 0
 		}
 
@@ -805,7 +806,7 @@ func (item *CacheItem) MarshalZerologObject(e *zerolog.Event) {
 	e.Object("Period", item.Period)
 	e.Object("CoveredPeriod", item.CoveredPeriod)
 	e.Int("Length", len(item.Values))
-	e.Floats64("Values", item.Values)
+	//e.Floats64("Values", item.Values)
 }
 
 func minTime(a, b time.Time) time.Time {
