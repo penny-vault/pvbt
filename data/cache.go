@@ -153,15 +153,27 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					periodSubset = item.localDates
 				} else {
 					periodSubset = cache.periods[item.startIdx:]
+					if !item.Period.Begin.Equal(item.CoveredPeriod.Begin) {
+						coveredPeriodStart := sort.Search(len(periodSubset), func(i int) bool {
+							idxVal := periodSubset[i]
+							return (idxVal.After(item.CoveredPeriod.Begin) || idxVal.Equal(item.CoveredPeriod.Begin))
+						})
+						periodSubset = periodSubset[coveredPeriodStart:]
+					}
 				}
 
 				var beginIdx int
 				var endIdx int
+
 				beginExactMatch := false
 				endExactMatch := false
 				noValuesFound := false
 
-				if item.Period.Begin.Equal(begin) {
+				if end.After(item.CoveredPeriod.End) {
+					end = item.CoveredPeriod.End
+				}
+
+				if item.CoveredPeriod.Begin.Equal(begin) {
 					beginIdx = 0
 					beginExactMatch = true
 				} else {
@@ -169,7 +181,9 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 						idxVal := periodSubset[i]
 						return (idxVal.After(begin) || idxVal.Equal(begin))
 					})
-					log.Debug().Int("len", len(periodSubset)).Int("beginIdx", beginIdx).Msg("begin good news")
+					if begin.After(item.CoveredPeriod.End) {
+						noValuesFound = true
+					}
 					if beginIdx == len(periodSubset) && item.isLocalDate {
 						noValuesFound = true
 					}
@@ -178,16 +192,17 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					}
 				}
 
-				if item.Period.End.Equal(end) {
+				if item.CoveredPeriod.End.Equal(end) {
 					endIdx = len(item.Values) - 1
 					endExactMatch = true
-					log.Debug().Int("endIdx", endIdx).Msg("end is exact match")
 				} else {
 					endIdx = sort.Search(len(periodSubset), func(i int) bool {
 						idxVal := periodSubset[i]
 						return (idxVal.After(end) || idxVal.Equal(end))
 					})
-					log.Debug().Int("endIdx", endIdx).Msg("testing 1 2 3")
+					if end.Before(item.CoveredPeriod.Begin) {
+						noValuesFound = true
+					}
 					if endIdx == len(periodSubset) {
 						endIdx -= 1
 					}
@@ -200,6 +215,8 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				if !beginExactMatch && !endExactMatch && beginIdx == endIdx {
 					return &dataframe.DataFrame{
 						ColNames: []string{myKey},
+						Dates:    []time.Time{},
+						Vals:     [][]float64{{}},
 					}, nil
 				}
 
@@ -212,15 +229,12 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					noValuesFound = true
 				}
 
-				log.Debug().Time("begin", begin).Str("Metric", string(metric)).Time("end", end).Int("beginIdx", beginIdx).Int("endIdx", endIdx).Msg("cache")
-
 				vals := make([][]float64, 1)
 				var dates []time.Time
 				if noValuesFound {
 					vals[0] = []float64{}
 					dates = []time.Time{}
 				} else {
-					log.Debug().Int("LenVals", len(item.Values)).Int("Begin", beginIdx).Int("endIdx", endIdx).Msg("vals length")
 					vals[0] = item.Values[beginIdx : endIdx+1]
 					dates = periodSubset[beginIdx : endIdx+1]
 				}

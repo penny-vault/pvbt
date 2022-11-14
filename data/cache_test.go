@@ -41,6 +41,117 @@ type segment struct {
 }
 
 var _ = Describe("Cache", func() {
+
+	Context("with long date period with non-equal period and covered period", func() {
+		var (
+			cache    *data.SecurityMetricCache
+			dates    []time.Time
+			security *data.Security
+		)
+
+		BeforeEach(func() {
+			dates = make([]time.Time, 365)
+			dt := time.Date(2021, time.October, 31, 0, 0, 0, 0, tz())
+			for idx := range dates {
+				dates[idx] = dt
+				dt = dt.AddDate(0, 0, 1)
+			}
+
+			cache = data.NewSecurityMetricCache(1024, dates)
+			security = &data.Security{
+				CompositeFigi: "test",
+				Ticker:        "test",
+			}
+		})
+
+		It("can get all values available", func() {
+			df := &dataframe.DataFrame{
+				Dates: []time.Time{
+					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				},
+				Vals: [][]float64{{7, 8, 9}},
+			}
+
+			err := cache.Set(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1], df)
+			Expect(err).To(BeNil(), "set does not return error")
+			df2, err := cache.Get(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1])
+			Expect(err).To(BeNil(), "set does not return error")
+			Expect(df2.Len()).To(BeNumerically("==", 3))
+			Expect(df2.Dates).To(Equal([]time.Time{
+				time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+			}))
+			Expect(df2.Vals).To(Equal([][]float64{{7, 8, 9}}))
+		})
+
+		It("can get subset of values available (left)", func() {
+			df := &dataframe.DataFrame{
+				Dates: []time.Time{
+					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				},
+				Vals: [][]float64{{7, 8, 9}},
+			}
+
+			err := cache.Set(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1], df)
+			Expect(err).To(BeNil(), "set does not return error")
+			df2, err := cache.Get(security, data.MetricAdjustedClose, dates[125], time.Date(2022, 8, 8, 0, 0, 0, 0, tz()))
+			Expect(err).To(BeNil(), "set does not return error")
+			Expect(df2.Len()).To(BeNumerically("==", 2))
+			Expect(df2.Dates).To(Equal([]time.Time{
+				time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+			}))
+			Expect(df2.Vals).To(Equal([][]float64{{7, 8}}))
+		})
+
+		It("can get a subset of values available (right)", func() {
+			df := &dataframe.DataFrame{
+				Dates: []time.Time{
+					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				},
+				Vals: [][]float64{{7, 8, 9}},
+			}
+
+			err := cache.Set(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1], df)
+			Expect(err).To(BeNil(), "set does not return error")
+			df2, err := cache.Get(security, data.MetricAdjustedClose, time.Date(2022, 8, 9, 0, 0, 0, 0, tz()), dates[len(dates)-1])
+			Expect(err).To(BeNil(), "set does not return error")
+			Expect(df2.Len()).To(BeNumerically("==", 1))
+			Expect(df2.Dates).To(Equal([]time.Time{
+				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+			}))
+			Expect(df2.Vals).To(Equal([][]float64{{9}}))
+		})
+
+		It("can get a subset of values", func() {
+			df := &dataframe.DataFrame{
+				Dates: []time.Time{
+					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
+				},
+				Vals: [][]float64{{7, 8, 9}},
+			}
+
+			err := cache.Set(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1], df)
+			Expect(err).To(BeNil(), "set does not return error")
+			df2, err := cache.Get(security, data.MetricAdjustedClose, time.Date(2022, 8, 8, 0, 0, 0, 0, tz()), time.Date(2022, 8, 8, 0, 0, 0, 0, tz()))
+			Expect(err).To(BeNil(), "set does not return error")
+			Expect(df2.Len()).To(BeNumerically("==", 1))
+			Expect(df2.Dates).To(Equal([]time.Time{
+				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+			}))
+			Expect(df2.Vals).To(Equal([][]float64{{8}}))
+		})
+	})
+
 	Context("with ranges where covered period does not equal the whole period", func() {
 		var (
 			cache    *data.SecurityMetricCache
@@ -587,7 +698,8 @@ var _ = Describe("Cache", func() {
 							Expect(res.Vals[0]).To(Equal(expected))
 						}
 					} else {
-						Expect(len(res.Vals)).To(Equal(0), "number of columns in df should be zero")
+						Expect(len(res.Vals)).To(Equal(1), "number of columns in df should be one")
+						Expect(len(res.Vals[0])).To(Equal(0), "number of values should be zero")
 					}
 				} else {
 					Expect(errors.Is(err, expectedError)).To(BeTrue())
