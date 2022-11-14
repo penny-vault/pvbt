@@ -195,7 +195,7 @@ func (manager *Manager) GetLRU(key string) []byte {
 	return val
 }
 
-// Reset restores the manager connection to its initial state - this is mostly used in testing
+// Reset restores the data manager to its initial state; clearing all cache - this is mostly used in testing
 func (manager *Manager) Reset() {
 	cacheMaxSize := viper.GetInt64("cache.local_bytes")
 	if cacheMaxSize == 0 {
