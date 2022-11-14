@@ -49,7 +49,7 @@ var (
 type AcceleratingDualMomentum struct {
 	inTickers    []*data.Security
 	prices       *dataframe.DataFrame
-	outTicker    *data.Security
+	outTickers   []*data.Security
 	riskFreeRate *dataframe.DataFrame
 	momentum     *dataframe.DataFrame
 	schedule     *tradecron.TradeCron
@@ -63,8 +63,8 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	var outSecurity data.Security
-	if err := json.Unmarshal(args["outTicker"], &outSecurity); err != nil {
+	outSecurities := []*data.Security{}
+	if err := json.Unmarshal(args["outTickers"], &outSecurities); err != nil {
 		return nil, err
 	}
 
@@ -74,9 +74,9 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 
 	var adm strategy.Strategy = &AcceleratingDualMomentum{
-		inTickers: inSecurities,
-		outTicker: &outSecurity,
-		schedule:  schedule,
+		inTickers:  inSecurities,
+		outTickers: outSecurities,
+		schedule:   schedule,
 	}
 
 	return adm, nil
@@ -91,7 +91,8 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 		log.Error().Err(err).Msg("could not find the DGS3MO security")
 		return err
 	}
-	tickers = append(tickers, adm.outTicker, riskFreeSymbol)
+	tickers = append(tickers, adm.outTickers...)
+	tickers = append(tickers, riskFreeSymbol)
 
 	priceMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
 	if err != nil {
@@ -114,25 +115,14 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 	finalPrices := finalPricesMap.DataFrame()
 	prices.Append(finalPrices.Last())
 
-	colNames := make([]string, len(adm.inTickers)+1)
-	colNames[0] = adm.outTicker.CompositeFigi
-	for ii, t := range adm.inTickers {
-		colNames[ii+1] = t.CompositeFigi
+	for ii := range prices.ColNames {
+		prices.ColNames[ii] = strings.Split(prices.ColNames[ii], ":")[0]
 	}
 
-	eod, riskFreeRate := prices.Split(colNames...)
+	riskFreeRate, eod := prices.Split(riskFreeSymbol.CompositeFigi)
 
 	adm.prices = eod
 	adm.riskFreeRate = riskFreeRate
-
-	return nil
-}
-
-func (adm *AcceleratingDualMomentum) computeScores(ctx context.Context) error {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.computeScores")
-	defer span.End()
-
-	adm.momentum = indicators.Momentum631(adm.prices, adm.riskFreeRate)
 
 	return nil
 }
@@ -162,33 +152,69 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 	}
 
 	// Compute momentum scores
-	if err := adm.computeScores(ctx); err != nil {
-		return nil, nil, err
-	}
+	adm.momentum = indicators.Momentum631(adm.prices, adm.riskFreeRate)
+	adm.momentum = adm.momentum.Drop(math.NaN())
 
-	adm.momentum.Insert(adm.outTicker.CompositeFigi, make([]float64, len(adm.momentum.Dates)))
-	indexDf := adm.momentum.IdxMax()
+	// split momentum into inMarket and outOfMarket
+	cols := make([]string, len(adm.inTickers))
+	for ii := range adm.inTickers {
+		cols[ii] = adm.inTickers[ii].CompositeFigi
+	}
+	inMarket, outOfMarket := adm.momentum.Split(cols...)
+
+	inMarketIdxMax := inMarket.IdxMax()
+	outOfMarketIdxMax := outOfMarket.IdxMax()
 
 	// create security map
-	securityMap := make([]data.Security, len(adm.momentum.ColNames))
-	for idx, colName := range adm.momentum.ColNames {
-		security, err := data.SecurityFromFigi(strings.Split(colName, ":")[0])
+	inMarketSecurityMap := make([]data.Security, len(inMarket.ColNames))
+	for idx, colName := range inMarket.ColNames {
+		security, err := data.SecurityFromFigi(colName)
 		if err != nil {
 			log.Error().Err(err).Str("ColName", colName).Msg("could not lookup security")
 			return nil, nil, err
 		}
-		securityMap[idx] = *security
+		inMarketSecurityMap[idx] = *security
+	}
+
+	outOfMarketSecurityMap := make([]data.Security, len(outOfMarket.ColNames))
+	for idx, colName := range outOfMarket.ColNames {
+		security, err := data.SecurityFromFigi(colName)
+		if err != nil {
+			log.Error().Err(err).Str("ColName", colName).Msg("could not lookup security")
+			return nil, nil, err
+		}
+		outOfMarketSecurityMap[idx] = *security
+	}
+
+	securityMap := make([]*data.Security, adm.momentum.ColCount())
+	for idx, colName := range adm.momentum.ColNames {
+		security, err := data.SecurityFromFigi(colName)
+		if err != nil {
+			log.Error().Err(err).Str("ColName", colName).Msg("could not lookup security")
+			return nil, nil, err
+		}
+		securityMap[idx] = security
 	}
 
 	// create investment plan
 	targetPortfolio := strategy.PieList{}
-	for rowIdx, date := range indexDf.Dates {
-		idx := int(indexDf.Vals[0][rowIdx])
-		security := securityMap[idx]
-		justifications := make(map[string]float64, len(adm.inTickers))
+	for rowIdx, date := range inMarketIdxMax.Dates {
+		inMarketIdx := int(inMarketIdxMax.Vals[0][rowIdx])
+		var security data.Security
+		if inMarket.Vals[inMarketIdx][rowIdx] < 0.0 {
+			// use out-of-market security
+			outOfMarketIdx := int(outOfMarketIdxMax.Vals[0][rowIdx])
+			security = outOfMarketSecurityMap[outOfMarketIdx]
+		} else {
+			// use in-market security
+			security = inMarketSecurityMap[inMarketIdx]
+		}
+
+		justifications := make(map[string]float64, adm.momentum.ColCount())
 		for scoreIdx := range adm.momentum.ColNames {
 			justifications[securityMap[scoreIdx].Ticker] = adm.momentum.Vals[scoreIdx][rowIdx]
 		}
+
 		pie := &strategy.Pie{
 			Date: date,
 			Members: map[data.Security]float64{

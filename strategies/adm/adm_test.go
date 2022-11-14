@@ -17,6 +17,7 @@ package adm_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/pashagolub/pgxmock"
@@ -34,15 +35,16 @@ import (
 
 var _ = Describe("Adm", Ordered, func() {
 	var (
-		begin  time.Time
-		end    time.Time
-		dbPool pgxmock.PgxConnIface
-		err    error
-		strat  *adm.AcceleratingDualMomentum
-		tz     *time.Location
-		vustx  *data.Security
-		vfinx  *data.Security
-		pridx  *data.Security
+		begin   time.Time
+		end     time.Time
+		dbPool  pgxmock.PgxConnIface
+		err     error
+		strat   *adm.AcceleratingDualMomentum
+		tz      *time.Location
+		vustx   *data.Security
+		vfinx   *data.Security
+		pridx   *data.Security
+		manager *data.Manager
 	)
 
 	BeforeAll(func() {
@@ -54,7 +56,7 @@ var _ = Describe("Adm", Ordered, func() {
 		pgxmockhelper.MockHolidays(dbPool)
 		pgxmockhelper.MockAssets(dbPool)
 		pgxmockhelper.MockTradingDays(dbPool)
-		data.GetManagerInstance()
+		manager = data.GetManagerInstance()
 
 		vustx, err = data.SecurityFromTicker("VUSTX")
 		Expect(err).To(BeNil())
@@ -66,21 +68,23 @@ var _ = Describe("Adm", Ordered, func() {
 
 	BeforeEach(func() {
 		tz = common.GetTimezone()
-		jsonParams := `{"inTickers": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "outTicker": {"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}}`
+		jsonParams := `{"inTickers": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "outTickers": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}]}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
 			panic(err)
 		}
 
-		tmp, _ := adm.New(params)
+		tmp, err := adm.New(params)
+		Expect(err).To(BeNil())
 		strat = tmp.(*adm.AcceleratingDualMomentum)
+		manager.Reset()
 	})
 
 	Describe("Compute momentum scores", func() {
 		Context("with full stock history", func() {
 			BeforeEach(func() {
-				begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				end = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
+				begin = time.Date(2019, time.July, 1, 0, 0, 0, 0, tz)
+				end = time.Date(2022, time.January, 1, 0, 0, 0, 0, tz)
 
 				pgxmockhelper.MockDBEodQuery(dbPool,
 					[]string{
@@ -89,7 +93,7 @@ var _ = Describe("Adm", Ordered, func() {
 						"vustx.csv",
 						"dgs3mo.csv",
 					},
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2019, time.January, 2, 0, 0, 0, 0, time.UTC), time.Date(2022, time.January, 3, 0, 0, 0, 0, time.UTC),
 					"adj_close", "split_factor", "dividend")
 			})
 
@@ -100,17 +104,17 @@ var _ = Describe("Adm", Ordered, func() {
 
 			It("should have length", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				Expect(len(target)).To(Equal(379))
+				Expect(len(target)).To(Equal(30))
 			})
 
 			It("should begin on", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				Expect(target[0].Date).To(Equal(time.Date(1989, time.June, 30, 16, 0, 0, 0, tz)))
+				Expect(target[0].Date).To(Equal(time.Date(2019, time.July, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should end on", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				Expect(target.Last().Date).To(Equal(time.Date(2020, time.December, 31, 16, 0, 0, 0, tz)))
+				Expect(target.Last().Date).To(Equal(time.Date(2021, time.December, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should be invested in VFINX to start", func() {
@@ -120,44 +124,105 @@ var _ = Describe("Adm", Ordered, func() {
 				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("should be invested in PRIDX to end", func() {
+			It("should be invested in VFINX to end", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				v, ok := target.Last().Members[*pridx]
+				v, ok := target.Last().Members[*vfinx]
 				Expect(ok).To(BeTrue())
 				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("should be invested in PRIDX on 1997-11-28", func() {
+			It("be fully invested in correct assets over investment period", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				v, ok := target[100].Members[*pridx]
-				Expect(ok).To(BeTrue())
-				Expect(v).To(BeNumerically("~", 1.0))
+
+				expectedDates := []time.Time{
+					time.Date(2019, 7, 31, 16, 0, 0, 0, tz),
+					time.Date(2019, 8, 30, 16, 0, 0, 0, tz),
+					time.Date(2019, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2019, 10, 31, 16, 0, 0, 0, tz),
+					time.Date(2019, 11, 29, 16, 0, 0, 0, tz),
+					time.Date(2019, 12, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 1, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 2, 28, 16, 0, 0, 0, tz),
+					time.Date(2020, 3, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 4, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 5, 29, 16, 0, 0, 0, tz),
+					time.Date(2020, 6, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 7, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 8, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 10, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 11, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 12, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 1, 29, 16, 0, 0, 0, tz),
+					time.Date(2021, 2, 26, 16, 0, 0, 0, tz),
+					time.Date(2021, 3, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 4, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 5, 28, 16, 0, 0, 0, tz),
+					time.Date(2021, 6, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 7, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 8, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 10, 29, 16, 0, 0, 0, tz),
+					time.Date(2021, 11, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 12, 31, 16, 0, 0, 0, tz),
+				}
+
+				expectedSecurities := []data.Security{
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*pridx,
+					*vfinx,
+					*vustx,
+					*vustx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+				}
+
+				for idx := range expectedDates {
+					v, ok := target[idx].Members[expectedSecurities[idx]]
+					var actual data.Security
+					for k := range target[idx].Members {
+						actual = k
+						break
+					}
+					Expect(ok).To(BeTrue(), fmt.Sprintf("[%d] securities match (%s != %s)", idx, expectedSecurities[idx].Ticker, actual.Ticker))
+					Expect(v).To(BeNumerically("~", 1.0), fmt.Sprintf("[%d] percent matches", idx))
+					Expect(target[idx].Date).To(Equal(expectedDates[idx]), fmt.Sprintf("[%d] date", idx))
+				}
 			})
 
-			It("should be invested in PRIDX on 2006-03-31", func() {
-				target, _, _ := strat.Compute(context.Background(), begin, end)
-				v, ok := target[200].Members[*pridx]
-				Expect(ok).To(BeTrue())
-				Expect(v).To(BeNumerically("~", 1.0))
-			})
-
-			It("should be invested in VFINX on 2014-07-31", func() {
-				target, _, _ := strat.Compute(context.Background(), begin, end)
-				v, ok := target[300].Members[*vfinx]
-				Expect(ok).To(BeTrue())
-				Expect(v).To(BeNumerically("~", 1.0))
-			})
-
-			It("predicted should be PRIDX", func() {
+			It("predicted should be VFINX", func() {
 				_, predicted, _ := strat.Compute(context.Background(), begin, end)
-				v, ok := predicted.Members[*pridx]
+				v, ok := predicted.Members[*vfinx]
 				Expect(ok).To(BeTrue())
 				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("predicted date should be 2021/01/29", func() {
+			It("predicted date should be 2022/01/31", func() {
 				_, predicted, _ := strat.Compute(context.Background(), begin, end)
-				Expect(predicted.Date).To(Equal(time.Date(2021, time.January, 29, 16, 0, 0, 0, tz)))
+				Expect(predicted.Date).To(Equal(time.Date(2022, time.January, 31, 16, 0, 0, 0, tz)))
 			})
 		})
 	})
@@ -165,7 +230,7 @@ var _ = Describe("Adm", Ordered, func() {
 	Describe("Check predicted portfolio", func() {
 		Context("with full stock history", func() {
 			BeforeEach(func() {
-				begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
+				begin = time.Date(2019, time.July, 1, 0, 0, 0, 0, tz)
 				end = time.Date(2020, time.April, 29, 0, 0, 0, 0, tz)
 
 				pgxmockhelper.MockDBEodQuery(dbPool,
@@ -175,13 +240,13 @@ var _ = Describe("Adm", Ordered, func() {
 						"vustx.csv",
 						"dgs3mo.csv",
 					},
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, time.April, 29, 0, 0, 0, 0, time.UTC),
+					time.Date(2019, time.January, 2, 0, 0, 0, 0, time.UTC), time.Date(2020, time.April, 30, 0, 0, 0, 0, time.UTC),
 					"adj_close", "split_factor", "dividend")
 			})
 
 			It("should have length", func() {
 				target, _, _ := strat.Compute(context.Background(), begin, end)
-				Expect(len(target)).To(Equal(370))
+				Expect(len(target)).To(Equal(9))
 			})
 
 			It("should end on", func() {
@@ -199,7 +264,11 @@ var _ = Describe("Adm", Ordered, func() {
 			It("PRIDX should be predicted asset", func() {
 				_, predicted, _ := strat.Compute(context.Background(), begin, end)
 				v, ok := predicted.Members[*pridx]
-				Expect(ok).To(BeTrue())
+				var actual string
+				for k := range predicted.Members {
+					actual = k.Ticker
+				}
+				Expect(ok).To(BeTrue(), fmt.Sprintf("check security: PRIDX != %s", actual))
 				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
