@@ -170,7 +170,11 @@ var _ = Describe("DataFrame", func() {
 			for idx := range dates {
 				dates[idx] = dt
 				dt = dt.AddDate(0, 0, 1)
-				vals[idx] = math.NaN()
+				if idx < 5 {
+					vals[idx] = float64(idx)
+				} else {
+					vals[idx] = math.NaN()
+				}
 			}
 			df = &dataframe.DataFrame{
 				ColNames: []string{"Col1"},
@@ -186,7 +190,138 @@ var _ = Describe("DataFrame", func() {
 		It("drops NaNs", func() {
 			Expect(df.Len()).To(Equal(10))
 			df = df.Drop(math.NaN())
-			Expect(df.Len()).To(Equal(0))
+			Expect(df.Len()).To(Equal(5), "length")
+			Expect(df.Vals[0]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals")
+			Expect(df.Dates).To(Equal([]time.Time{
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 4, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 5, 0, 0, 0, 0, time.UTC),
+			}), "dates")
+		})
+	})
+
+	Context("multi-column with NaN values in dataframe", func() {
+		var (
+			df *dataframe.DataFrame
+		)
+
+		BeforeEach(func() {
+			dates := make([]time.Time, 10)
+			dt := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			for idx := range dates {
+				dates[idx] = dt
+				dt = dt.AddDate(0, 0, 1)
+			}
+
+			vals1 := make([]float64, 10)
+			vals2 := make([]float64, 10)
+
+			for idx := range dates {
+				if idx < 5 {
+					vals1[idx] = float64(idx)
+				} else {
+					vals1[idx] = math.NaN()
+				}
+
+				if idx < 6 {
+					vals2[idx] = float64(idx)
+				} else {
+					vals2[idx] = math.NaN()
+				}
+			}
+
+			df = &dataframe.DataFrame{
+				ColNames: []string{"Col1", "Col2"},
+				Dates:    dates,
+				Vals:     [][]float64{vals1, vals2},
+			}
+		})
+
+		It("has length", func() {
+			Expect(df.Len()).To(Equal(10))
+		})
+
+		It("drops NaNs", func() {
+			Expect(df.Len()).To(Equal(10))
+			df = df.Drop(math.NaN())
+			Expect(df.Len()).To(Equal(5), "length")
+			Expect(df.ColCount()).To(Equal(2), "col count")
+			Expect(df.Vals[0]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals1")
+			Expect(df.Vals[1]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals2")
+			Expect(df.Dates).To(Equal([]time.Time{
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 4, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 5, 0, 0, 0, 0, time.UTC),
+			}), "dates")
+		})
+	})
+
+	Context("multi-column", func() {
+		var (
+			df *dataframe.DataFrame
+		)
+
+		BeforeEach(func() {
+			dates := make([]time.Time, 10)
+			dt := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			for idx := range dates {
+				dates[idx] = dt
+				dt = dt.AddDate(0, 0, 1)
+			}
+
+			vals1 := []float64{1, 2, 3, 4, 5, 6, 7, math.NaN(), 9, math.NaN()}
+			vals2 := []float64{1, 3, 2, 4, 6, 5, 6, math.NaN(), 10, 1}
+
+			df = &dataframe.DataFrame{
+				ColNames: []string{"Col1", "Col2"},
+				Dates:    dates,
+				Vals:     [][]float64{vals1, vals2},
+			}
+		})
+
+		It("can fetch last row", func() {
+			last := df.Last()
+			Expect(len(last.Vals)).To(Equal(len(df.Vals)), "length of value array")
+			Expect(last.ColCount()).To(Equal(df.ColCount()), "column count")
+			Expect(last.ColNames).To(Equal(df.ColNames), "column names")
+			Expect(last.Len()).To(Equal(1), "row length")
+			Expect(math.IsNaN(last.Vals[0][0])).To(BeTrue(), "col 0 value")
+			Expect(last.Vals[1][0]).To(Equal(1.0), "col 1 value")
+		})
+
+		It("can take idxmax", func() {
+			Expect(df.Len()).To(Equal(10))
+			idxmax := df.IdxMax()
+			Expect(idxmax.Len()).To(Equal(10), "length")
+			Expect(idxmax.ColCount()).To(Equal(1), "col count")
+
+			Expect(idxmax.Vals[0][0]).To(Equal(0.0), "vals[0]")
+			Expect(idxmax.Vals[0][1]).To(Equal(1.0), "vals[1]")
+			Expect(idxmax.Vals[0][2]).To(Equal(0.0), "vals[2]")
+			Expect(idxmax.Vals[0][3]).To(Equal(0.0), "vals[3]")
+			Expect(idxmax.Vals[0][4]).To(Equal(1.0), "vals[4]")
+			Expect(idxmax.Vals[0][5]).To(Equal(0.0), "vals[5]")
+			Expect(idxmax.Vals[0][6]).To(Equal(0.0), "vals[6]")
+			Expect(math.IsNaN(idxmax.Vals[0][7])).To(BeTrue(), "vals[7]")
+			Expect(idxmax.Vals[0][8]).To(Equal(1.0), "vals[8]")
+			Expect(math.IsNaN(idxmax.Vals[0][9])).To(BeTrue(), "vals[9]")
+
+			Expect(idxmax.Dates).To(Equal([]time.Time{
+				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 4, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 5, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 6, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 7, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 8, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 9, 0, 0, 0, 0, time.UTC),
+				time.Date(2020, 1, 10, 0, 0, 0, 0, time.UTC),
+			}), "dates")
 		})
 	})
 

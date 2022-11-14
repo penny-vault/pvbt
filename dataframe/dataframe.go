@@ -147,14 +147,26 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 	isNA := math.IsNaN(val)
 	newVals := make([][]float64, len(df.Vals))
 	newDates := make([]time.Time, 0, len(df.Vals))
-	for colIdx, col := range df.Vals {
-		for rowIdx, rowVal := range col {
-			if !(rowVal == val || (isNA && math.IsNaN(rowVal))) {
+
+	for rowIdx, rowDate := range df.Dates {
+		keep := true
+		for _, col := range df.Vals {
+			rowVal := col[rowIdx]
+			keep = keep && !(rowVal == val || (isNA && math.IsNaN(rowVal)))
+			if !keep {
+				break
+			}
+		}
+
+		if keep {
+			newDates = append(newDates, rowDate)
+			for colIdx, col := range df.Vals {
+				rowVal := col[rowIdx]
 				newVals[colIdx] = append(newVals[colIdx], rowVal)
-				newDates = append(newDates, df.Dates[rowIdx])
 			}
 		}
 	}
+
 	df.Vals = newVals
 	df.Dates = newDates
 	return df
@@ -229,7 +241,7 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 
 // IdxMax finds the column with the largest value for each row and stores it in a new dataframe with the column name 'idxmax'
 func (df *DataFrame) IdxMax() *DataFrame {
-	maxVals := make([]float64, len(df.Dates))
+	maxVals := make([]float64, 0, len(df.Dates))
 
 	for rowIdx := range df.Dates {
 		max := math.NaN()
@@ -237,14 +249,20 @@ func (df *DataFrame) IdxMax() *DataFrame {
 		for colIdx := range df.ColNames {
 			v := df.Vals[colIdx][rowIdx]
 			if math.IsNaN(v) {
-				continue
+				max = math.NaN()
+				break
 			}
 			if v > max || math.IsNaN(max) {
 				max = v
 				ind = colIdx
 			}
 		}
-		maxVals = append(maxVals, float64(ind))
+
+		if !math.IsNaN(max) {
+			maxVals = append(maxVals, float64(ind))
+		} else {
+			maxVals = append(maxVals, math.NaN())
+		}
 	}
 
 	return &DataFrame{
@@ -305,8 +323,8 @@ func (df *DataFrame) Last() *DataFrame {
 
 	lastVals := make([][]float64, len(df.ColNames))
 	lastRow := len(df.Dates) - 1
-	for _, col := range df.Vals {
-		lastVals = append(lastVals, []float64{col[lastRow]})
+	for idx, col := range df.Vals {
+		lastVals[idx] = []float64{col[lastRow]}
 	}
 
 	newDf := &DataFrame{
@@ -464,7 +482,7 @@ func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
 // Table prints an ASCII formated table to stdout
 func (df *DataFrame) Table() string {
 	if len(df.Dates) == 0 {
-		return "" // nothing to do as there is no data available in the dataframe
+		return "<NO DATA>" // nothing to do as there is no data available in the dataframe
 	}
 
 	// construct table header
