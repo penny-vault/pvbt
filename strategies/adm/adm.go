@@ -105,7 +105,6 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 
 	// include last day if it is a non-trade day
 	log.Debug().Msg("getting last day eod prices of requested range")
-
 	finalPricesMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, end.AddDate(0, 0, -10), end)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting final prices in adm")
