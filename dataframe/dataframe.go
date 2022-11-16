@@ -172,6 +172,43 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 	return df
 }
 
+// ForEach takes a lambda function of prototype func(rowIdx int, rowDate time.Time, colNames []string, vals []float64) []float64
+// and updates the row with the returned value
+func (df *DataFrame) ForEach(update bool, lambda func(int, time.Time, []string, []float64) []float64) {
+	res := make([]float64, len(df.ColNames))
+	for rowIdx, dt := range df.Dates {
+		for colIdx := range df.ColNames {
+			res[colIdx] = df.Vals[colIdx][rowIdx]
+		}
+		ret := lambda(rowIdx, dt, df.ColNames, res)
+		if update {
+			for colIdx, val := range ret {
+				df.Vals[colIdx][rowIdx] = val
+			}
+		}
+	}
+}
+
+// ForEachMap takes a lambda function of prototype func(rowIdx int, rowDate time.Time, vals map[string]float64) map[string]float64
+// and updates the row with the returned value; this is a convenience function and is slower than the `ForEach` sister function
+func (df *DataFrame) ForEachMap(update bool, lambda func(int, time.Time, map[string]float64) map[string]float64) {
+	res := make(map[string]float64, len(df.ColNames))
+	colMap := make(map[string]int, len(df.ColNames))
+	for rowIdx, dt := range df.Dates {
+		for colIdx, colName := range df.ColNames {
+			res[colName] = df.Vals[colIdx][rowIdx]
+		}
+		ret := lambda(rowIdx, dt, res)
+		if update {
+			for colName, val := range ret {
+				if colIdx, ok := colMap[colName]; ok {
+					df.Vals[colIdx][rowIdx] = val
+				}
+			}
+		}
+	}
+}
+
 // Frequency returns a data frame filtered to the requested frequency; note this is not
 // an in-place function but creates a copy of the data
 func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
@@ -295,6 +332,26 @@ func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
 	df.Dates = append(df.Dates, date)
 	for colIdx := range df.ColNames {
 		df.Vals[colIdx] = append(df.Vals[colIdx], vals[colIdx])
+	}
+
+	return df
+}
+
+// InsertMap adds a new row to the dataframe. Date must be after the last date in the dataframe otherwise panic.
+// all columns must already exist in the dataframe, any additional columns in vals is ignored
+func (df *DataFrame) InsertMap(date time.Time, vals map[string]float64) *DataFrame {
+	// Check that the last date in the dataframe is prior to the new date
+	if len(df.Dates) != 0 && !df.Dates[len(df.Dates)-1].Before(date) {
+		log.Panic().Time("lastDate", df.Dates[len(df.Dates)-1]).Time("newDate", date).Msg("newDate must be after lastDate")
+	}
+
+	df.Dates = append(df.Dates, date)
+	for colIdx, colName := range df.ColNames {
+		if val, ok := vals[colName]; ok {
+			df.Vals[colIdx] = append(df.Vals[colIdx], val)
+		} else {
+			df.Vals[colIdx] = append(df.Vals[colIdx], math.NaN())
+		}
 	}
 
 	return df
@@ -492,6 +549,10 @@ func (df *DataFrame) Table() string {
 	s := &strings.Builder{}
 	table := tablewriter.NewWriter(s)
 	table.SetHeader(tableCols)
+	footer := make([]string, len(tableCols))
+	footer[0] = "Num Rows"
+	footer[1] = fmt.Sprintf("%d", df.Len())
+	table.SetFooter(footer)
 	table.SetBorder(false) // Set Border to false
 
 	for rowIdx, date := range df.Dates {

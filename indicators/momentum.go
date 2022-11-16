@@ -32,21 +32,38 @@ type Momentum struct {
 	Periods    []int
 }
 
-// momentum calculates momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
+// riskAdjustedMomentum calculates riskAdjustedMomentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
 // where riskFreeRate is the monthly yield of a risk free investment
-func momentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+func riskAdjustedMomentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
 	riskFreeRate = riskFreeRate.RollingSumScaled(period, -1.0/12.0)
 	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100).AddVec(riskFreeRate.Vals[0])
+}
+
+// momentum calculates momentum(period) = (df / lag(df, period) - 1) * 100
+// where riskFreeRate is the monthly yield of a risk free investment
+func momentum(period int, df *dataframe.DataFrame) *dataframe.DataFrame {
+	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100)
 }
 
 // Momentum631 computes the 6-3-1 momentum of each column in df
 // momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
 func Momentum631(prices *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
-	momentum6 := momentum(6, prices, riskFreeRate)
-	momentum3 := momentum(3, prices, riskFreeRate)
-	momentum1 := momentum(1, prices, riskFreeRate)
+	momentum6 := riskAdjustedMomentum(6, prices, riskFreeRate)
+	momentum3 := riskAdjustedMomentum(3, prices, riskFreeRate)
+	momentum1 := riskAdjustedMomentum(1, prices, riskFreeRate)
 
 	avgMomentum := dataframe.Mean(momentum6, momentum3, momentum1) // take the average of the same security column across all dataframes
+	return avgMomentum
+}
+
+// Momentum12631 computes the equal weighted average momentum score over 1-, 3-, 6-, and 12-month periods
+func Momentum12631(prices *dataframe.DataFrame) *dataframe.DataFrame {
+	momentum12 := momentum(12, prices).MulScalar(1.0 / 100.0)
+	momentum6 := momentum(6, prices).MulScalar(2.0 / 100.0)
+	momentum3 := momentum(3, prices).MulScalar(4.0 / 100.0)
+	momentum1 := momentum(1, prices).MulScalar(12.0 / 100.0)
+
+	avgMomentum := dataframe.Mean(momentum12, momentum6, momentum3, momentum1) // take the average of the same security column across all dataframes
 	return avgMomentum
 }
 
