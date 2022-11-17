@@ -109,7 +109,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, begin, end time.Time) (strategy.PieList, *strategy.Pie, error) {
+func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.Compute")
 	defer span.End()
 
@@ -255,7 +255,7 @@ func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx)
 	return targetMap, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (strategy.PieList, error) {
+func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (data.PortfolioPlan, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
 	defer span.End()
 
@@ -266,13 +266,13 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	riskIdx := 0
 	NRisk := riskOn.Len()
 
-	targetPortfolio := make(strategy.PieList, len(tradeDays))
+	targetPortfolio := make(data.PortfolioPlan, 0, len(tradeDays))
 
 	for _, day := range tradeDays {
 		var err error
 		var riskDate time.Time
 
-		pie := &strategy.Pie{
+		pie := &data.SecurityAllocation{
 			Date:           day,
 			Justifications: make(map[string]float64),
 		}
@@ -307,7 +307,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 	return targetPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Pie, error) {
+func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
 	defer span.End()
 
@@ -335,7 +335,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 		predictedTarget[*security] = 1.0 / float64(mdep.NumHoldings)
 	}
 
-	predictedPortfolio := &strategy.Pie{
+	predictedPortfolio := &data.SecurityAllocation{
 		Date:           tradeDays[lastDateIdx],
 		Members:        predictedTarget,
 		Justifications: make(map[string]float64),

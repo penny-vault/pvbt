@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package strategy
+package data
 
 import (
 	"fmt"
@@ -22,19 +22,18 @@ import (
 	"time"
 
 	"github.com/olekukonko/tablewriter"
-	"github.com/penny-vault/pv-api/data"
 )
 
-type Pie struct {
+type SecurityAllocation struct {
 	Date           time.Time
-	Members        map[data.Security]float64
+	Members        map[Security]float64
 	Justifications map[string]float64
 }
 
-type PieList []*Pie
+type PortfolioPlan []*SecurityAllocation
 
 // Last returns the last item in the PieHistory
-func (pl PieList) Last() *Pie {
+func (pl PortfolioPlan) Last() *SecurityAllocation {
 	lastIdx := len(pl) - 1
 	if lastIdx >= 0 {
 		return pl[lastIdx]
@@ -44,10 +43,10 @@ func (pl PieList) Last() *Pie {
 }
 
 // Trim the PieHistory to only cover the time period between begin and end (inclusive)
-func (pl PieList) Trim(begin, end time.Time) PieList {
+func (pl PortfolioPlan) Trim(begin, end time.Time) PortfolioPlan {
 	// special case 0: requested range is invalid
 	if end.Before(begin) {
-		return PieList{}
+		return PortfolioPlan{}
 	}
 
 	// special case 1: pie history is empty
@@ -57,12 +56,12 @@ func (pl PieList) Trim(begin, end time.Time) PieList {
 
 	// special case 2: end time is before pie history start
 	if end.Before(pl[0].Date) {
-		return PieList{}
+		return PortfolioPlan{}
 	}
 
 	// special case 3: start time is after pie history end
 	if begin.After(pl.Last().Date) {
-		return PieList{}
+		return PortfolioPlan{}
 	}
 
 	// Use binary search to find the index corresponding to the start and end times
@@ -84,7 +83,7 @@ func (pl PieList) Trim(begin, end time.Time) PieList {
 }
 
 // StartDate returns the starting date of the pie history
-func (pl PieList) StartDate() time.Time {
+func (pl PortfolioPlan) StartDate() time.Time {
 	if len(pl) == 0 {
 		return time.Time{}
 	}
@@ -93,7 +92,7 @@ func (pl PieList) StartDate() time.Time {
 }
 
 // EndDate returns the ending date of the pie history
-func (pl PieList) EndDate() time.Time {
+func (pl PortfolioPlan) EndDate() time.Time {
 	last := pl.Last()
 	if last != nil {
 		return last.Date
@@ -102,7 +101,7 @@ func (pl PieList) EndDate() time.Time {
 }
 
 // Table prints an ASCII formated table to stdout
-func (pl PieList) Table() {
+func (pl PortfolioPlan) Table() {
 	if len(pl) == 0 {
 		return // nothing to do as there is no data available in the pie history
 	}

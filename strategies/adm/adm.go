@@ -128,7 +128,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
-func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (strategy.PieList, *strategy.Pie, error) {
+func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
 	defer span.End()
 
@@ -196,7 +196,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 	}
 
 	// create investment plan
-	targetPortfolio := strategy.PieList{}
+	targetPortfolio := data.PortfolioPlan{}
 	for rowIdx, date := range inMarketIdxMax.Dates {
 		inMarketIdx := int(inMarketIdxMax.Vals[0][rowIdx])
 		var security data.Security
@@ -214,7 +214,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 			justifications[securityMap[scoreIdx].Ticker] = adm.momentum.Vals[scoreIdx][rowIdx]
 		}
 
-		pie := &strategy.Pie{
+		pie := &data.SecurityAllocation{
 			Date: date,
 			Members: map[data.Security]float64{
 				security: 1.0,
@@ -225,7 +225,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 	}
 
 	// compute the predicted asset
-	var predictedPortfolio *strategy.Pie
+	var predictedPortfolio *data.SecurityAllocation
 	if len(targetPortfolio) >= 1 {
 		lastPie := targetPortfolio.Last()
 		lastTradeDate := lastPie.Date
@@ -236,7 +236,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 		}
 
 		nextTradeDate := adm.schedule.Next(lastTradeDate)
-		predictedPortfolio = &strategy.Pie{
+		predictedPortfolio = &data.SecurityAllocation{
 			Date:           nextTradeDate,
 			Members:        lastPie.Members,
 			Justifications: lastPie.Justifications,

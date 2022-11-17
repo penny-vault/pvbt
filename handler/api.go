@@ -29,7 +29,6 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
-	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/rs/zerolog/log"
 )
 
@@ -167,7 +166,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		startDate = df.Dates[0]
 	}
 
-	target := strategy.PieList{
+	target := data.PortfolioPlan{
 		{
 			Date: startDate,
 			Members: map[data.Security]float64{

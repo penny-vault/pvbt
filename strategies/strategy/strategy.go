@@ -76,5 +76,5 @@ type Info struct {
 type Strategy interface {
 	// Compute calculates the list of historical trades and returns a dataframe. Additionally, it
 	// returns a dataframe that indicates what assets to hold at the next trading time.
-	Compute(ctx context.Context, begin, end time.Time) (PieList, *Pie, error)
+	Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error)
 }

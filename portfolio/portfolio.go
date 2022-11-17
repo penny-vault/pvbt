@@ -33,7 +33,6 @@ import (
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/rs/zerolog/log"
 	"github.com/zeebo/blake3"
 	"go.opentelemetry.io/otel"
@@ -417,7 +416,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the PieHistory `target`.
-func (pm *Model) TargetPortfolio(ctx context.Context, target strategy.PieList) error {
+func (pm *Model) TargetPortfolio(ctx context.Context, target data.PortfolioPlan) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "TargetPortfolio")
 	defer span.End()
 

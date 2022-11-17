@@ -63,10 +63,10 @@ type KellersDefensiveAssetAllocation struct {
 
 	// class variables
 	momentum           *dataframe.DataFrame
-	predictedPortfolio *strategy.Pie
+	predictedPortfolio *data.SecurityAllocation
 	prices             *dataframe.DataFrame
 	schedule           *tradecron.TradeCron
-	targetPortfolio    strategy.PieList
+	targetPortfolio    data.PortfolioPlan
 }
 
 type momScore struct {
@@ -160,10 +160,10 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 }
 
 func (daa *KellersDefensiveAssetAllocation) calculatePortfolio() {
-	pies := make(strategy.PieList, daa.momentum.Len())
+	pies := make(data.PortfolioPlan, daa.momentum.Len())
 	securityMap := make(map[string]*data.Security) // create a local lookup table for securities for performance reasons
 	daa.momentum.ForEachMap(false, func(rowIdx int, rowDt time.Time, vals map[string]float64) map[string]float64 {
-		pie := &strategy.Pie{
+		pie := &data.SecurityAllocation{
 			Date:           rowDt,
 			Members:        make(map[data.Security]float64),
 			Justifications: make(map[string]float64),
@@ -264,7 +264,7 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 		}
 
 		nextTradeDate := daa.schedule.Next(lastPie.Date)
-		daa.predictedPortfolio = &strategy.Pie{
+		daa.predictedPortfolio = &data.SecurityAllocation{
 			Date:           nextTradeDate,
 			Members:        lastPie.Members,
 			Justifications: lastPie.Justifications,
@@ -273,7 +273,7 @@ func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, begin, end time.Time) (strategy.PieList, *strategy.Pie, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "daa.Compute")
 	defer span.End()
 

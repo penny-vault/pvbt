@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
-	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pv-api/common"
@@ -37,7 +36,7 @@ var _ = Describe("Portfolio", func() {
 	var (
 		dbPool  pgxmock.PgxConnIface
 		manager *data.Manager
-		pie     strategy.PieList
+		pie     data.PortfolioPlan
 
 		err  error
 		p    *portfolio.Portfolio
@@ -68,7 +67,7 @@ var _ = Describe("Portfolio", func() {
 				pridx, err = data.SecurityFromFigi("BBG000BBVR08")
 				Expect(err).To(BeNil(), "pridx security lookup")
 
-				pie = strategy.PieList{
+				pie = data.PortfolioPlan{
 					{
 						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
@@ -258,7 +257,7 @@ var _ = Describe("Portfolio", func() {
 				tsla, err := data.SecurityFromFigi("BBG000N9MNX3")
 				Expect(err).To(BeNil())
 
-				pie = strategy.PieList{
+				pie = data.PortfolioPlan{
 					{
 						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
@@ -329,7 +328,7 @@ var _ = Describe("Portfolio", func() {
 				pridx, err := data.SecurityFromFigi("BBG000BBVR08")
 				Expect(err).To(BeNil(), "pridx security lookup")
 
-				pie = strategy.PieList{
+				pie = data.PortfolioPlan{
 					{
 						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
@@ -433,7 +432,7 @@ var _ = Describe("Portfolio", func() {
 				vustx, err := data.SecurityFromFigi("BBG000BCKYB1")
 				Expect(err).To(BeNil(), "vustx security lookup")
 
-				pie = strategy.PieList{
+				pie = data.PortfolioPlan{
 					{
 						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
