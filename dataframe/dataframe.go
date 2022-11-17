@@ -28,29 +28,6 @@ import (
 	"gonum.org/v1/gonum/floats"
 )
 
-// AddScalar adds the scalar value to all columns in dataframe df and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) AddScalar(scalar float64) *DataFrame {
-	df = df.Copy()
-
-	for colIdx := range df.ColNames {
-		for rowIdx := range df.Vals[colIdx] {
-			df.Vals[colIdx][rowIdx] += scalar
-		}
-	}
-	return df
-}
-
-// AddVec adds the vector to all columns in dataframe and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) AddVec(vec []float64) *DataFrame {
-	df = df.Copy()
-	for idx := range df.ColNames {
-		floats.Add(df.Vals[idx], vec)
-	}
-	return df
-}
-
 // Append takes the date and values from other and appends them to df. If cols do not align, cols in df that are not in other are filled
 // with NaN. If the start date of other is not greater than df then do nothing
 func (df *DataFrame) Append(other *DataFrame) *DataFrame {
@@ -122,24 +99,6 @@ func (df *DataFrame) Copy() *DataFrame {
 	}
 
 	return df2
-}
-
-// Div divides all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) Div(other *DataFrame) *DataFrame {
-	df = df.Copy()
-
-	otherMap := make(map[string]int, len(other.ColNames))
-	for idx, val := range other.ColNames {
-		otherMap[val] = idx
-	}
-
-	for idx, colName := range df.ColNames {
-		if otherIdx, ok := otherMap[colName]; ok {
-			floats.Div(df.Vals[idx], other.Vals[otherIdx])
-		}
-	}
-	return df
 }
 
 // Drop removes rows that contain the value `val` from the dataframe
@@ -417,92 +376,6 @@ func (df *DataFrame) Max() *DataFrame {
 	return maxDf
 }
 
-// Mean calculates the mean of all like columns in the dataframes and returns a new dataframe
-// panics if rows are not equal.
-func Mean(dfs ...*DataFrame) *DataFrame {
-	resDf := dfs[0].Copy()
-
-	otherMaps := make([]map[string]int, len(dfs))
-	for dfIdx, resDf := range dfs {
-		otherMaps[dfIdx] = make(map[string]int, len(resDf.ColNames))
-		for idx, val := range resDf.ColNames {
-			otherMaps[dfIdx][val] = idx
-		}
-	}
-
-	for resColIdx, colName := range resDf.ColNames {
-		for rowIdx := range resDf.Vals[0] {
-			row := 0.0
-			cnt := 0.0
-			for dfIdx := range dfs {
-				df := dfs[dfIdx]
-				colIdx := otherMaps[dfIdx][colName]
-				row += df.Vals[colIdx][rowIdx]
-				cnt += 1
-			}
-			resDf.Vals[resColIdx][rowIdx] = row / cnt
-		}
-	}
-
-	return resDf
-}
-
-// Mul multiplies all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
-	df = df.Copy()
-
-	otherMap := make(map[string]int, len(other.ColNames))
-	for idx, val := range other.ColNames {
-		otherMap[val] = idx
-	}
-
-	for idx, colName := range df.ColNames {
-		if otherIdx, ok := otherMap[colName]; ok {
-			floats.Mul(df.Vals[idx], other.Vals[otherIdx])
-		}
-	}
-	return df
-}
-
-// MulScalar multiplies all columns in dataframe df by the scalar and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
-	df = df.Copy()
-
-	for colIdx := range df.ColNames {
-		for rowIdx := range df.Vals[colIdx] {
-			df.Vals[colIdx][rowIdx] *= scalar
-		}
-	}
-	return df
-}
-
-// RollingSumScaled computes ∑ df[ii] * scalar and returns a new dataframe
-// panics if rows are not equal.
-func (df *DataFrame) RollingSumScaled(ii int, scalar float64) *DataFrame {
-	df2 := df.Copy()
-	for colIdx := range df.ColNames {
-		roll := 0.0
-		dropIdx := 0
-		for rowIdx := range df.Vals[colIdx] {
-			if rowIdx >= ii {
-				roll += df.Vals[colIdx][rowIdx]
-				roll -= df.Vals[colIdx][dropIdx]
-				df2.Vals[colIdx][rowIdx] = roll * scalar
-				dropIdx += 1
-			} else if rowIdx == (ii - 1) {
-				roll += df.Vals[colIdx][rowIdx]
-				df2.Vals[colIdx][rowIdx] = roll * scalar
-			} else {
-				df2.Vals[colIdx][rowIdx] = math.NaN()
-				roll += df.Vals[colIdx][rowIdx]
-			}
-		}
-	}
-	return df2
-}
-
 // Split the dataframe into 2, with columns being in the first dataframe and
 // all remaining columns in the second
 func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
@@ -536,7 +409,7 @@ func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
 	return one, two
 }
 
-// Table prints an ASCII formated table to stdout
+// Table prints an ASCII formatted table to stdout
 func (df *DataFrame) Table() string {
 	if len(df.Dates) == 0 {
 		return "<NO DATA>" // nothing to do as there is no data available in the dataframe
