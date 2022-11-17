@@ -200,7 +200,7 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 				vals[securityMetric.String()] = &dataframe.DataFrame{
 					Dates:    []time.Time{eventDate},
 					ColNames: []string{securityMetric.String()},
-					Vals:     [][]float64{[]float64{*metricVals[idx]}},
+					Vals:     [][]float64{{*metricVals[idx]}},
 				}
 			}
 		}

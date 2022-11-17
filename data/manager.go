@@ -24,9 +24,11 @@ import (
 	"github.com/coocood/freecache"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
+	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/viper"
+	"go.opentelemetry.io/otel"
 )
 
 type Manager struct {
@@ -193,6 +195,39 @@ func (manager *Manager) GetLRU(key string) []byte {
 		return []byte{}
 	}
 	return val
+}
+
+// PreloadMetrics pre-emptively loads metrics into the data cache
+func (manager *Manager) PreloadMetrics(ctx context.Context, plan PortfolioPlan) {
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "preloadMetrics")
+	defer span.End()
+
+	log.Debug().Msg("pre-populate data cache")
+
+	begin := plan.StartDate()
+	end := plan.EndDate()
+
+	tickerSet := make(map[Security]bool)
+	for _, alloc := range plan {
+		for security := range alloc.Members {
+			tickerSet[security] = true
+		}
+	}
+
+	tickerList := make([]*Security, len(tickerSet))
+	ii := 0
+	for k := range tickerSet {
+		tickerList[ii] = &Security{
+			CompositeFigi: k.CompositeFigi,
+			Ticker:        k.Ticker,
+		}
+		ii++
+	}
+
+	log.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod metrics")
+	if _, err := manager.GetMetrics(tickerList, []Metric{MetricAdjustedClose, MetricClose, MetricDividendCash, MetricSplitFactor}, begin, end); err != nil {
+		log.Error().Stack().Err(err).Msg("preload metrics errored")
+	}
 }
 
 // Reset restores the data manager to its initial state; clearing all cache - this is mostly used in testing
