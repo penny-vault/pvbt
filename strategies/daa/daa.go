@@ -152,6 +152,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 	finalPrices = finalPrices.Drop(math.NaN())
 	daa.prices.Append(finalPrices.Last())
 
+	// Rename columns to composite figi only -- this is to promote readability when debugging
 	for ii := range daa.prices.ColNames {
 		daa.prices.ColNames[ii] = strings.Split(daa.prices.ColNames[ii], ":")[0]
 	}
@@ -162,7 +163,7 @@ func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Contex
 func (daa *KellersDefensiveAssetAllocation) calculatePortfolio() {
 	pies := make(data.PortfolioPlan, daa.momentum.Len())
 	securityMap := make(map[string]*data.Security) // create a local lookup table for securities for performance reasons
-	daa.momentum.ForEachMap(false, func(rowIdx int, rowDt time.Time, vals map[string]float64) map[string]float64 {
+	daa.momentum.ForEach(func(rowIdx int, rowDt time.Time, vals map[string]float64) map[string]float64 {
 		pie := &data.SecurityAllocation{
 			Date:           rowDt,
 			Members:        make(map[data.Security]float64),

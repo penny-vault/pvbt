@@ -69,7 +69,6 @@ var _ = Describe("Daa", Ordered, func() {
 	})
 
 	BeforeEach(func() {
-		tz = common.GetTimezone()
 		jsonParams := `{"riskUniverse": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "cashUniverse": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}], "protectiveUniverse": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}], "breadth": 1, "topT": 1}`
 		params := map[string]json.RawMessage{}
 		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {

@@ -46,8 +46,30 @@ func (df *DataFrame) AddVec(vec []float64) *DataFrame {
 	return df
 }
 
-// Div divides all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
-// panics if rows are not equal.
+// Count creates a new dataframe with the number of columns where the expression lambda func(float64) bool evaluates to true is placed
+// in the `count` column
+func (df *DataFrame) Count(lambda func(x float64) bool) *DataFrame {
+	res := &DataFrame{
+		Dates:    df.Dates,
+		Vals:     [][]float64{make([]float64, df.Len())},
+		ColNames: []string{"count"},
+	}
+
+	for rowIdx := range df.Dates {
+		count := 0
+		for _, col := range df.Vals {
+			if lambda(col[rowIdx]) {
+				count += 1
+			}
+		}
+		res.Vals[0][rowIdx] = float64(count)
+	}
+
+	return res
+}
+
+// Div divides all columns in `df` by the corresponding column in `other` and returns a new dataframe.
+// Panics if rows are not equal.
 func (df *DataFrame) Div(other *DataFrame) *DataFrame {
 	df = df.Copy()
 
