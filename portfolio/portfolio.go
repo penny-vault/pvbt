@@ -22,12 +22,14 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
 	"github.com/jackc/pgx/v4"
+	"github.com/olekukonko/tablewriter"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
@@ -295,19 +297,19 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, security *d
 
 // RebalanceTo rebalance the portfolio to the target percentages
 // Assumptions: can only rebalance current holdings
-func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[data.Security]float64, justification []*Justification) error {
+func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAllocation, justifications []*Justification) error {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "RebalanceTo")
 	defer span.End()
 
 	span.SetAttributes(
 		attribute.KeyValue{
 			Key:   "date",
-			Value: attribute.StringValue(date.Format("2006-01-02")),
+			Value: attribute.StringValue(allocation.Date.Format("2006-01-02")),
 		},
 	)
 
 	p := pm.Portfolio
-	err := pm.FillCorporateActions(ctx, date)
+	err := pm.FillCorporateActions(ctx, allocation.Date)
 	if err != nil {
 		return err
 	}
@@ -315,22 +317,24 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 	nTrx := len(p.Transactions)
 	if nTrx > 0 {
 		lastDate := p.Transactions[nTrx-1].Date
-		if lastDate.After(date) {
-			log.Error().Stack().Time("Date", date).Time("LastTransactionDate", lastDate).Msg("cannot rebalance portfolio when date is before last transaction date")
+		if lastDate.After(allocation.Date) {
+			log.Error().Stack().Time("Date", allocation.Date).Time("LastTransactionDate", lastDate).
+				Msg("cannot rebalance portfolio when date is before last transaction date")
 			return ErrTransactionsOutOfOrder
 		}
 	}
 
 	// check that target sums to 1.0
 	var total float64
-	for _, v := range target {
+	for _, v := range allocation.Members {
 		total += v
 	}
 
 	// Allow for floating point error
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
-		log.Error().Stack().Float64("TotalPercentAllocated", total).Time("Date", date).Msg("TotalPercentAllocated must equal 1.0")
+		log.Error().Stack().Float64("TotalPercentAllocated", total).Time("Date", allocation.Date).
+			Msg("TotalPercentAllocated must equal 1.0")
 		return ErrRebalancePercentWrong
 	}
 
@@ -341,7 +345,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 	}
 
 	// get the current value of non-cash holdings
-	securityValue, err := pm.getPortfolioSecuritiesValue(ctx, date)
+	securityValue, err := pm.getPortfolioSecuritiesValue(ctx, allocation.Date)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "security price data not available")
@@ -367,9 +371,9 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 			return ErrHoldings
 		}
 
-		if _, ok := target[security]; !ok {
-			price := pm.getPriceSafe(ctx, date, &security)
-			t, err := createTransaction(date, &security, SellTransaction, price, shares, justification)
+		if _, ok := allocation.Members[security]; !ok {
+			price := pm.getPriceSafe(ctx, allocation.Date, &security)
+			t, err := createTransaction(allocation.Date, &security, SellTransaction, price, shares, justifications)
 			if err != nil {
 				return err
 			}
@@ -380,12 +384,12 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 
 	// purchase holdings based on target
 	newHoldings := make(map[data.Security]float64)
-	for security, targetPercent := range target {
+	for security, targetPercent := range allocation.Members {
 		targetDollars := investable * targetPercent
-		t, numShares, err := pm.modifyPosition(ctx, date, &security, targetDollars, justification)
+		t, numShares, err := pm.modifyPosition(ctx, allocation.Date, &security, targetDollars, justifications)
 		if err != nil {
 			// don't fail if position could not be modified, just continue -- writing off asset as $0
-			log.Warn().Err(err).Time("Date", date).Str("Ticker", security.Ticker).Msg("writing off asset")
+			log.Warn().Err(err).Time("Date", allocation.Date).Str("Ticker", security.Ticker).Msg("writing off asset")
 			continue
 		}
 
@@ -410,9 +414,61 @@ func (pm *Model) RebalanceTo(ctx context.Context, date time.Time, target map[dat
 	}
 	pm.holdings = newHoldings
 
-	p.CurrentHoldings = buildHoldingsArray(date, newHoldings)
+	p.CurrentHoldings = buildHoldingsArray(allocation.Date, newHoldings)
 
 	return nil
+}
+
+// Table formats the portfolio into a human-readable string representation
+func (pm *Model) Table() string {
+	s := &strings.Builder{}
+
+	s.WriteString(
+		fmt.Sprintf("Name: %s (%s)\n",
+			pm.Portfolio.Name,
+			hex.EncodeToString(pm.Portfolio.ID),
+		),
+	)
+
+	years := int(pm.Portfolio.EndDate.Sub(pm.Portfolio.StartDate)/(time.Hour*24)) / 365
+	s.WriteString(
+		fmt.Sprintf("Time Period: %s to %s (%dy)\n\n",
+			pm.Portfolio.StartDate.Format("2006-01-02"),
+			pm.Portfolio.EndDate.Format("2006-01-02"),
+			years,
+		),
+	)
+
+	if len(pm.Portfolio.Transactions) == 0 {
+		return "<NO DATA>" // nothing to do as there is no data available in the dataframe
+	}
+
+	// construct table header
+	tableCols := append([]string{"Date"}, "Action", "Security", "Shares", "Price per Share", "Total")
+
+	// initialize table
+	table := tablewriter.NewWriter(s)
+	table.SetHeader(tableCols)
+	footer := make([]string, len(tableCols))
+	footer[0] = "Num Rows"
+	footer[1] = fmt.Sprintf("%d", len(pm.Portfolio.Transactions))
+	table.SetFooter(footer)
+	table.SetBorder(false) // Set Border to false
+
+	for _, trx := range pm.Portfolio.Transactions {
+		row := []string{
+			trx.Date.Format("2006-01-02"),
+			trx.Kind,
+			trx.Ticker,
+			fmt.Sprintf("%.2f", trx.Shares),
+			fmt.Sprintf("$%.2f", trx.PricePerShare),
+			fmt.Sprintf("$%.2f", trx.TotalValue),
+		}
+		table.Append(row)
+	}
+
+	table.Render()
+	return s.String()
 }
 
 // TargetPortfolio invests the portfolio in the ratios specified by the PieHistory `target`.
@@ -454,20 +510,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target data.PortfolioPlan)
 	}
 
 	// Create transactions
-	for _, pie := range target {
-		date := pie.Date
-
-		// Get next transaction symbol
-		justification := make([]*Justification, 0, len(pie.Justifications))
-
-		for k, v := range pie.Justifications {
-			j := &Justification{
-				Key:   k,
-				Value: v,
-			}
-			justification = append(justification, j)
-		}
-
+	for _, allocation := range target {
 		// HACK - if the date is Midnight adjust to market close (i.e. 4pm EST)
 		// This should really be set correctly for the day. The problem is if the
 		// transaction is on a day where the market closes early (either because of
@@ -476,14 +519,22 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target data.PortfolioPlan)
 		//
 		// Generally speaking getting the time slightly off here is immaterial so this
 		// is an OK hack
-		if date.Hour() == 0 && date.Minute() == 0 && date.Second() == 0 {
-			date = date.Add(time.Hour * 16)
+		if allocation.Date.Hour() == 0 && allocation.Date.Minute() == 0 && allocation.Date.Second() == 0 {
+			allocation.Date = allocation.Date.Add(time.Hour * 16)
 		}
 
-		pm.justifications[date.String()] = justification
-		rebalance := pie.Members
+		justifications := make([]*Justification, len(allocation.Justifications))
+		for k, v := range allocation.Justifications {
+			j := &Justification{
+				Key:   k,
+				Value: v,
+			}
+			justifications = append(justifications, j)
+		}
 
-		err := pm.RebalanceTo(ctx, date, rebalance, justification)
+		pm.justifications[allocation.Date.String()] = justifications
+
+		err := pm.RebalanceTo(ctx, allocation, justifications)
 		if err != nil {
 			return err
 		}

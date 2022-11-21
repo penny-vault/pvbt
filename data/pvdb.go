@@ -176,7 +176,7 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 		}
 
 		if err := rows.Scan(args...); err != nil {
-			log.Error().Stack().Err(err).Msg("failed to load eod prices -- db query scan failed")
+			log.Error().Stack().Err(err).Int("ArgCount", len(args)).Str("SQL", sql).Msg("failed to load eod prices -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}

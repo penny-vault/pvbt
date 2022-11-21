@@ -46,6 +46,7 @@ var (
 
 func GetManagerInstance() *Manager {
 	managerOnce.Do(func() {
+		log.Debug().Msg("initializing manager instance for the first time")
 		tradecron.LoadMarketHolidays()
 		err := LoadSecuritiesFromDB()
 		if err != nil {
@@ -102,8 +103,13 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	// adjust request date range to cover the minimum request duration
 	duration := end.Sub(begin)
 	modifiedEnd := end
-	if duration < viper.GetDuration("database.min_request_duration") {
-		modifiedEnd = begin.Add(viper.GetDuration("database.min_request_duration"))
+	minDur := viper.GetDuration("database.min_request_duration")
+	if minDur == 0 {
+		log.Warn().Msg("database.min_request_duration is not set use 1y")
+		minDur = time.Hour * 24 * 365
+	}
+	if duration < minDur {
+		modifiedEnd = begin.Add(minDur)
 	}
 
 	dates := manager.tradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
