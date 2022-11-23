@@ -11,7 +11,7 @@ require (
 	github.com/go-co-op/gocron v1.18.0
 	github.com/go-redis/redis/v8 v8.11.5
 	github.com/goccy/go-json v0.9.11
-	github.com/gofiber/fiber/v2 v2.40.0
+	github.com/gofiber/fiber/v2 v2.40.1
 	github.com/golang/snappy v0.0.4 // indirect
 	github.com/google/uuid v1.3.0
 	github.com/guptarohit/asciigraph v0.5.5 // indirect
