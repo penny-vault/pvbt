@@ -95,9 +95,9 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		}
 	}
 
-	toPullSecuritiesArray := make([]*Security, 0, len(toPullSecuritiesMap))
+	toPullSecurities := make([]*Security, 0, len(toPullSecuritiesMap))
 	for k := range toPullSecuritiesMap {
-		toPullSecuritiesArray = append(toPullSecuritiesArray, k)
+		toPullSecurities = append(toPullSecurities, k)
 	}
 
 	// adjust request date range to cover the minimum request duration
@@ -106,7 +106,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	minDur := viper.GetDuration("database.min_request_duration")
 	if minDur == 0 {
 		log.Warn().Msg("database.min_request_duration is not set use 1y")
-		minDur = time.Hour * 24 * 365
+		minDur = time.Hour * 24 * 366
 	}
 	if duration < minDur {
 		modifiedEnd = begin.Add(minDur)
@@ -114,20 +114,25 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 
 	dates := manager.tradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
+	myBegin := dates[0]
+	myEnd := dates[len(dates)-1]
+
 	// pull required data not currently in cache
-	if len(toPullSecuritiesArray) > 0 {
-		if result, err := manager.pvdb.GetEOD(ctx, toPullSecuritiesArray, normalizedMetrics, dates[0],
-			dates[len(dates)-1]); err == nil {
+	if len(toPullSecurities) > 0 {
+		if result, err := manager.pvdb.GetEOD(ctx, toPullSecurities, normalizedMetrics, myBegin, myEnd); err == nil {
 			for k, df := range result {
 				securityMetric := NewSecurityMetricFromString(k)
 				security := securityMetric.SecurityObject
 				metric := securityMetric.MetricObject
 				subLog := log.With().Str("Security", security.Ticker).Str("Metric", string(metric)).Logger()
 				if isSparseMetric(metric) {
-					if metric == MetricSplitFactor {
+					switch metric {
+					case MetricSplitFactor:
 						df = df.Drop(1)
-					} else {
+					case MetricDividendCash:
 						df = df.Drop(0)
+					default:
+						subLog.Error().Str("metric", string(metric)).Msg("metric is listed as sparse but there is no decimator configured")
 					}
 					err = manager.metricCache.SetWithLocalDates(&security, metric, begin, modifiedEnd, df)
 					if err != nil {

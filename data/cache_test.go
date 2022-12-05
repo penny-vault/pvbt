@@ -714,6 +714,7 @@ var _ = Describe("Cache", func() {
 			Entry("when range is completely outside of covered interval (after end)", 10, 12, nil, data.ErrRangeDoesNotExist),
 			Entry("when range is invalid (start after end)", 5, 3, nil, data.ErrInvalidTimeRange),
 			Entry("when range is covered but days only on weekend", 6, 7, []float64{}, nil),
+			Entry("when range is covered but single only on weekend", 6, 6, []float64{}, nil),
 			Entry("when range is a subset of covered period", 4, 5, []float64{1, 2}, nil),
 			Entry("range touches left extremity", 3, 5, []float64{0, 1, 2}, nil),
 			Entry("range touches right extremity", 5, 8, []float64{2, 3}, nil),

@@ -17,9 +17,11 @@ package data
 
 import (
 	"context"
+	"math"
 	"strings"
 	"time"
 
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
@@ -94,7 +96,11 @@ func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
 // On returns the price for the requested date
 func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	manager := GetManagerInstance()
-	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, a)
+
+	start := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, common.GetTimezone())
+	end := start.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
+
+	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), start, end)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +121,16 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 				SecurityObject: *security,
 				MetricObject:   Metric(parts[1]),
 			}
-			res[securityMetric] = df.Vals[idx][0]
+
+			if len(df.Vals) >= idx {
+				if len(df.Vals[idx]) > 0 {
+					res[securityMetric] = df.Vals[idx][0]
+				} else {
+					res[securityMetric] = math.NaN()
+				}
+			} else {
+				res[securityMetric] = math.NaN()
+			}
 		}
 	}
 

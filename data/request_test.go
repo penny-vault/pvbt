@@ -152,5 +152,62 @@ var _ = Describe("Request tests", func() {
 			Entry("can request high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
 			Entry("can request low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
 		)
+
+		DescribeTable("request On",
+			func(a, b, c int, metric data.Metric, expectedVal float64) {
+				metricColumn := "close"
+				switch metric {
+				case data.MetricAdjustedClose:
+					metricColumn = "adj_close"
+				case data.MetricClose:
+					metricColumn = "close"
+				case data.MetricHigh:
+					metricColumn = "high"
+				case data.MetricOpen:
+					metricColumn = "open"
+				case data.MetricLow:
+					metricColumn = "low"
+				}
+
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, a, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, b, 0, 0, 0, 0, common.GetTimezone()), metricColumn, "split_factor", "dividend")
+
+				securities := []*data.Security{
+					{
+						Ticker:        "TSLA",
+						CompositeFigi: "BBG000N9MNX3",
+					},
+				}
+
+				_, err := manager.GetMetrics(securities, []data.Metric{metric}, time.Date(2021, 1, a, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, b, 0, 0, 0, 0, common.GetTimezone()))
+				Expect(err).To(BeNil(), "error when fetching data for cache")
+
+				dt := time.Date(2021, 1, c, 16, 0, 0, 0, tz())
+				req := data.NewDataRequest(securities...).Metrics(metric)
+				resMap, err := req.On(dt)
+				Expect(err).To(BeNil(), "error when fetching from cache")
+
+				for secMec, val := range resMap {
+					Expect(secMec.SecurityObject.Ticker).To(Equal("TSLA"))
+					Expect(secMec.MetricObject).To(Equal(metric))
+					Expect(val).To(BeNumerically("~", expectedVal))
+				}
+			},
+			Entry("can request close price at begin", 4, 11, 4, data.MetricClose, 729.77),
+			Entry("can request adjusted close price at begin", 4, 11, 4, data.MetricAdjustedClose, 729.77),
+			Entry("can request open price at begin", 4, 11, 4, data.MetricOpen, 719.46),
+			Entry("can request high price at begin", 4, 11, 4, data.MetricHigh, 744.4899),
+			Entry("can request low price at begin", 4, 11, 4, data.MetricLow, 717.1895),
+
+			Entry("can request close price in middle", 4, 11, 5, data.MetricClose, 735.11),
+			Entry("can request adjusted close price in middle", 4, 11, 5, data.MetricAdjustedClose, 735.11),
+			Entry("can request open price in middle", 4, 11, 5, data.MetricOpen, 723.66),
+			Entry("can request high price in middle", 4, 11, 5, data.MetricHigh, 740.84),
+			Entry("can request low price in middle", 4, 11, 5, data.MetricLow, 719.20),
+			Entry("can request open price at end", 4, 11, 11, data.MetricOpen, 849.40),
+			Entry("can request high price at end", 4, 11, 11, data.MetricHigh, 854.43),
+			Entry("can request low price at end", 4, 11, 11, data.MetricLow, 803.6222),
+			Entry("can request close price at end", 4, 11, 11, data.MetricClose, 811.19),
+			Entry("can request adjusted close price at end", 4, 11, 11, data.MetricAdjustedClose, 811.19),
+		)
 	})
 })

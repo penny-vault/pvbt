@@ -17,7 +17,6 @@ package portfolio_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgconn"
@@ -97,14 +96,11 @@ var _ = Describe("Portfolio", Ordered, func() {
 
 				// Expect dataframe transaction and query for VFINX
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 4, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 2, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), "split_factor", "dividend")
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2022, 2, 2, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 			})
@@ -130,25 +126,23 @@ var _ = Describe("Portfolio", Ordered, func() {
 					Members: target,
 				}
 
-				fmt.Println(pm.Table())
-
 				err = pm.RebalanceTo(context.Background(), allocation, justification)
 				Expect(err).To(HaveOccurred())
 				Expect(err.Error()).To(Equal("start date occurs after through date"))
 			})
 
 			It("should have transactions", func() {
-				// 1 DEPOSIT    (2018-01-31)
-				// 2 BUY VFINX  (2018-01-31)
-				// 3 DIVIDEND   (2018-03-23)
-				// 4 DIVIDEND   (2018-06-27)
-				// 5 DIVIDEND   (2018-09-25)
-				// 6 DIVIDEND   (2018-12-14)
-				// 7 SELL VFINX (2019-01-31)
-				// 8 BUY PRIDX  (2019-01-31)
-				// 9 LTC        (2019-12-17)
-				// 10 SELL PRIDX (2020-01-31)
-				// 11 BUY VFINX  (2020-01-31)
+				// 1 DEPOSIT    (2019-01-31)
+				// 2 BUY VFINX  (2019-01-31)
+				// 3 DIVIDEND   (2019-03-20)
+				// 4 DIVIDEND   (2019-06-26)
+				// 5 DIVIDEND   (2019-09-25)
+				// 6 DIVIDEND   (2019-12-20)
+				// 7 SELL VFINX (2020-01-31)
+				// 8 BUY PRIDX  (2020-01-31)
+				// 9 LTC        (2020-12-17)
+				// 10 SELL PRIDX (2021-01-31)
+				// 11 BUY VFINX  (2021-01-31)
 				Expect(p.Transactions).To(HaveLen(11))
 			})
 

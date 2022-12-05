@@ -165,7 +165,6 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 				var beginIdx int
 				var endIdx int
 
-				beginExactMatch := false
 				endExactMatch := false
 				noValuesFound := false
 
@@ -175,7 +174,6 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 
 				if item.CoveredPeriod.Begin.Equal(begin) {
 					beginIdx = 0
-					beginExactMatch = true
 				} else {
 					beginIdx = sort.Search(len(periodSubset), func(i int) bool {
 						idxVal := periodSubset[i]
@@ -186,9 +184,6 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					}
 					if beginIdx == len(periodSubset) && item.isLocalDate {
 						noValuesFound = true
-					}
-					if !noValuesFound && periodSubset[beginIdx].Equal(begin) {
-						beginExactMatch = true
 					}
 				}
 
@@ -211,16 +206,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 					}
 				}
 
-				// special case: no dates match range because its a holiday or weekend
-				if !beginExactMatch && !endExactMatch && beginIdx == endIdx {
-					return &dataframe.DataFrame{
-						ColNames: []string{myKey},
-						Dates:    []time.Time{},
-						Vals:     [][]float64{{}},
-					}, nil
-				}
-
-				if !endExactMatch && endIdx != 0 {
+				if !endExactMatch && endIdx != 0 && beginIdx != endIdx {
 					endIdx--
 				}
 
