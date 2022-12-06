@@ -83,7 +83,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 						Justifications: map[string]float64{},
 					},
 					{
-						Date: time.Date(2021, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2021, time.January, 29, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*vfinx: 1.0,
 						},
@@ -96,11 +96,11 @@ var _ = Describe("Portfolio", Ordered, func() {
 
 				// Expect dataframe transaction and query for VFINX
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 4, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 2, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2022, 2, 2, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2021, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2022, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 			})

@@ -195,13 +195,16 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 						idxVal := periodSubset[i]
 						return (idxVal.After(end) || idxVal.Equal(end))
 					})
-					if end.Before(item.CoveredPeriod.Begin) {
+
+					if end.Before(item.CoveredPeriod.Begin) || len(periodSubset) == 0 {
 						noValuesFound = true
 					}
-					if endIdx == len(periodSubset) {
+
+					if endIdx == len(periodSubset) && endIdx != 0 {
 						endIdx -= 1
 					}
-					if periodSubset[endIdx].Equal(end) {
+
+					if endIdx < len(periodSubset) && periodSubset[endIdx].Equal(end) {
 						endExactMatch = true
 					}
 				}

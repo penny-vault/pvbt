@@ -26,6 +26,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/pgxmockhelper"
 )
 
@@ -190,5 +191,21 @@ var _ = Describe("Manager tests", func() {
 			Entry("can fetch high price", 4, 4, data.MetricHigh, [][]float64{{744.4899}}),
 			Entry("can fetch low price", 4, 4, data.MetricLow, [][]float64{{717.1895}}),
 		)
+
+		It("fetches trading days at requested frequency when range ends on weekday", func() {
+			begin := time.Date(2021, 8, 1, 0, 0, 0, 0, common.GetTimezone())
+			end := time.Date(2021, 8, 4, 0, 0, 0, 0, common.GetTimezone())
+
+			tradingDays := manager.TradingDaysAtFrequency(dataframe.Daily, begin, end)
+			Expect(tradingDays).To(HaveLen(3))
+		})
+
+		It("fetches trading days at requested frequency when range ends on weekend", func() {
+			begin := time.Date(2021, 8, 1, 0, 0, 0, 0, common.GetTimezone())
+			end := time.Date(2021, 8, 7, 0, 0, 0, 0, common.GetTimezone())
+
+			tradingDays := manager.TradingDaysAtFrequency(dataframe.Daily, begin, end)
+			Expect(tradingDays).To(HaveLen(5))
+		})
 	})
 })

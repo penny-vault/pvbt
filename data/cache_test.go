@@ -725,7 +725,7 @@ var _ = Describe("Cache", func() {
 			Entry("range covers a single day 3", 8, 8, []float64{3}, nil),
 			Entry("range begins on weekend", 6, 8, []float64{3}, nil),
 			Entry("range ends on saturday", 3, 6, []float64{0, 1, 2}, nil),
-			Entry("range ends on sunday", 3, 6, []float64{0, 1, 2}, nil),
+			Entry("range ends on sunday", 3, 7, []float64{0, 1, 2}, nil),
 			Entry("when range is a single date", 4, 4, []float64{1}, nil),
 		)
 

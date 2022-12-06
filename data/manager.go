@@ -112,7 +112,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 		modifiedEnd = begin.Add(minDur)
 	}
 
-	dates := manager.tradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
+	dates := manager.TradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
 	myBegin := dates[0]
 	myEnd := dates[len(dates)-1]
@@ -345,7 +345,10 @@ func normalizeSecurities(securities []*Security) ([]*Security, error) {
 	return securities, nil
 }
 
-func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, begin, end time.Time) []time.Time {
+func (manager *Manager) TradingDaysAtFrequency(frequency dataframe.Frequency, begin, end time.Time) []time.Time {
+	// set end to the end of the day
+	end = end.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
+
 	beginIdx := sort.Search(len(manager.tradingDays), func(i int) bool {
 		idxVal := manager.tradingDays[i]
 		return (idxVal.After(begin) || idxVal.Equal(begin))
@@ -360,6 +363,12 @@ func (manager *Manager) tradingDaysAtFrequency(frequency dataframe.Frequency, be
 		log.Fatal().Msg("manager trading days not initialized")
 	}
 
-	days := FilterDays(frequency, manager.tradingDays[beginIdx:endIdx+1])
+	myDays := manager.tradingDays[beginIdx : endIdx+1]
+	// check if we got 1 too many
+	if myDays[len(myDays)-1].After(end) {
+		myDays = myDays[:len(myDays)-1]
+	}
+
+	days := FilterDays(frequency, myDays)
 	return days
 }
