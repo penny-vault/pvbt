@@ -45,7 +45,7 @@ require (
 require github.com/robfig/cron/v3 v3.0.1
 
 require (
-	github.com/Masterminds/semver/v3 v3.1.1
+	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/jdfergason/dataframe-go v0.2.0
 	github.com/nats-io/nats.go v1.21.0
 	github.com/onsi/ginkgo/v2 v2.5.0
