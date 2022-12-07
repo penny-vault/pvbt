@@ -87,14 +87,6 @@ func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
 		MetricObject:   metrics[0],
 	}
 
-	/*
-		manager := GetManagerInstance()
-		items := manager.metricCache.Items(&securityMetric.SecurityObject, securityMetric.MetricObject)
-		for _, item := range items {
-			log.Debug().Floats64("Values", item.Values).Time("Covered1", item.CoveredPeriod.Begin).Time("Covered2", item.CoveredPeriod.End).Msg("item values")
-		}
-	*/
-
 	price, err := req.On(a)
 	if err != nil {
 		return 0, err

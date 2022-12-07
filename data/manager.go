@@ -105,7 +105,6 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	modifiedEnd := end
 	minDur := viper.GetDuration("database.min_request_duration")
 	if minDur == 0 {
-		log.Warn().Msg("database.min_request_duration is not set use 1y")
 		minDur = time.Hour * 24 * 366
 	}
 	if duration < minDur {
@@ -134,6 +133,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 					default:
 						subLog.Error().Str("metric", string(metric)).Msg("metric is listed as sparse but there is no decimator configured")
 					}
+
 					err = manager.metricCache.SetWithLocalDates(&security, metric, begin, modifiedEnd, df)
 					if err != nil {
 						subLog.Error().Err(err).Msg("couldn't set local dates in cache")
@@ -186,8 +186,12 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
 
 	// check if the date is currently in the cache
-	if vals, err := manager.metricCache.Get(security, metric, date, date); err != nil {
-		return vals.Vals[0][0], date, nil
+	if contains, _ := manager.metricCache.Check(security, metric, date, date); contains {
+		if vals, err := manager.metricCache.Get(security, metric, date, date); err == nil {
+			return vals.Vals[0][0], date, nil
+		} else {
+			log.Error().Err(err).Msg("error while fetching value from cache in GetMetricOnOrBefore")
+		}
 	}
 
 	// not currently in the cache ... load from DB

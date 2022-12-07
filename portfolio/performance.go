@@ -669,7 +669,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		Time("CalculationPeriod.End", through).
 		Str("PortfolioName", pm.Portfolio.Name).
 		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
-		Msg("calculate performance from")
+		Msg("calculate performance over requested period")
 
 	// Get the days performance should be calculated on
 	today := time.Now()

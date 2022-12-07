@@ -113,7 +113,8 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 	t := Transaction{
 		ID:            trxID,
 		Date:          startDate,
-		Ticker:        data.CashAsset,
+		Ticker:        data.CashSecurity.Ticker,
+		CompositeFIGI: data.CashSecurity.CompositeFigi,
 		Kind:          DepositTransaction,
 		PricePerShare: 1.0,
 		Shares:        initial,
@@ -177,6 +178,9 @@ func createTransaction(date time.Time, security *data.Security, kind string, pri
 		log.Warn().Stack().Err(err).Msg("could not marshal uuid to binary")
 		return nil, err
 	}
+
+	log.Debug().Str("Ticker", security.Ticker).Str("Kind", kind).Float64("Shares", shares).Float64("TotalValue", shares*price).Float64("Price", price).Time("TrxDate", date).Msg("creating transaction")
+
 	t := Transaction{
 		ID:            trxID,
 		Date:          date,
@@ -273,8 +277,6 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, security *d
 			if err != nil {
 				return nil, 0, err
 			}
-
-			subLog.Debug().Msg("Buy additional shares")
 		}
 	} else {
 		// this is a new position
@@ -289,7 +291,6 @@ func (pm *Model) modifyPosition(ctx context.Context, date time.Time, security *d
 		if err != nil {
 			return nil, 0, err
 		}
-		subLog.Debug().Msg("buy new holding")
 	}
 
 	return t, targetShares, nil
