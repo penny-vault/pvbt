@@ -638,7 +638,6 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 	}
 
 	// insert into array
-	log.Debug().Msg("insert new into []*CacheItem array")
 	if insertIdx >= len(items) {
 		items = append(items, new)
 	} else {
