@@ -17,9 +17,9 @@ package portfolio_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/jackc/pgconn"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/pashagolub/pgxmock"
@@ -325,21 +325,21 @@ var _ = Describe("Portfolio", Ordered, func() {
 			BeforeEach(func() {
 				plan = data.PortfolioPlan{
 					{
-						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*vfinx: 1.0,
 						},
 						Justifications: map[string]float64{},
 					},
 					{
-						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*pridx: 1.0,
 						},
 						Justifications: map[string]float64{},
 					},
 					{
-						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2021, time.January, 29, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*vfinx: 1.0,
 						},
@@ -347,38 +347,25 @@ var _ = Describe("Portfolio", Ordered, func() {
 					},
 				}
 
-				pm = portfolio.NewPortfolio("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
+				pm = portfolio.NewPortfolio("Test", time.Date(2019, time.January, 31, 0, 0, 0, 0, tz), 10000)
 
 				// Expect database transactions
+				// Expect dataframe transaction and query for VFINX
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2018, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2019, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
+					time.Date(2021, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 29, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 7, 31, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				dbPool.ExpectBegin()
-				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"dgs3mo.csv"},
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2019, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2019, 8, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 8, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 4, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"dgs3mo.csv"},
+					time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 4, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 				Expect(err).To(BeNil())
@@ -388,11 +375,11 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("should have performance measurements", func() {
-				Expect(perf.Measurements).To(HaveLen(714))
+				Expect(perf.Measurements).To(HaveLen(463))
 			})
 
 			It("should have a balance of $10,000 on Jan 31, 2018", func() {
-				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2018, 1, 31, 23, 59, 59, 999999999, tz)))
+				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2019, 1, 31, 23, 59, 59, 999999999, tz)))
 				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
 				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
@@ -400,19 +387,19 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("value should not be calculated on non-trading days", func() {
-				Expect(perf.Measurements[3].Time).To(Equal(time.Date(2018, 2, 5, 23, 59, 59, 999999999, tz)))
-				Expect(perf.Measurements[3].Value).Should(BeNumerically("~", 9382.18611, 1e-5))
-				Expect(perf.Measurements[3].BenchmarkValue).Should(BeNumerically("~", 9382.18, 1e-2))
+				Expect(perf.Measurements[2].Time).To(Equal(time.Date(2019, 2, 4, 23, 59, 59, 999999999, tz)))
+				Expect(perf.Measurements[2].Value).Should(BeNumerically("~", 10078.012482, 1e-5))
+				Expect(perf.Measurements[2].BenchmarkValue).Should(BeNumerically("~", 10078.012482, 1e-2))
 			})
 
-			It("value should include the dividend released on 2018-03-23", func() {
-				Expect(perf.Measurements[36].Time).To(Equal(time.Date(2018, 3, 23, 23, 59, 59, 999999999, tz)))
-				Expect(perf.Measurements[36].Value).Should(BeNumerically("~", 9195.83397, 1e-5))
-				Expect(perf.Measurements[36].BenchmarkValue).Should(BeNumerically("~", 9195.83, 1e-2))
+			It("value should include the dividend released on 2019-03-20", func() {
+				Expect(perf.Measurements[33].Time).To(Equal(time.Date(2019, 3, 20, 23, 59, 59, 999999999, tz)))
+				Expect(perf.Measurements[33].Value).Should(BeNumerically("~", 10478.08449, 1e-5))
+				Expect(perf.Measurements[33].BenchmarkValue).Should(BeNumerically("~", 10478.08449, 1e-2))
 			})
 
 			It("should have a final measurement on November 30, 2020", func() {
-				Expect(perf.Measurements[713].Time).To(Equal(time.Date(2020, 11, 30, 23, 59, 59, 999999999, tz)))
+				Expect(perf.Measurements[462].Time).To(Equal(time.Date(2020, 11, 30, 23, 59, 59, 999999999, tz)))
 			})
 		})
 	})
@@ -422,14 +409,14 @@ var _ = Describe("Portfolio", Ordered, func() {
 			BeforeEach(func() {
 				plan = data.PortfolioPlan{
 					{
-						Date: time.Date(2018, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*vfinx: 1.0,
 						},
 						Justifications: map[string]float64{},
 					},
 					{
-						Date: time.Date(2019, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*vfinx: 0.25,
 							*pridx: 0.5,
@@ -438,7 +425,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 						Justifications: map[string]float64{},
 					},
 					{
-						Date: time.Date(2020, time.January, 31, 0, 0, 0, 0, tz),
+						Date: time.Date(2021, time.January, 29, 0, 0, 0, 0, tz),
 						Members: map[data.Security]float64{
 							*pridx: 1.0,
 						},
@@ -451,19 +438,22 @@ var _ = Describe("Portfolio", Ordered, func() {
 
 				// Setup database
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
-					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
+					time.Date(2021, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 29, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 				Expect(err).To(BeNil())
 			})
 
 			It("should have transactions", func() {
+				for idx, trx := range p.Transactions {
+					fmt.Printf("%d) %s\t%s\t%s\n", idx, trx.Kind, trx.CompositeFIGI, trx.Date.Format("2006-01-02"))
+				}
 				Expect(p.Transactions).To(HaveLen(30))
 			})
 

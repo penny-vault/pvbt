@@ -74,6 +74,7 @@ func dateOnly(d time.Time) time.Time {
 }
 
 func NewSecurityMetricCache(sz int64, periods []time.Time) *SecurityMetricCache {
+	log.Debug().Int64("Size", sz).Msg("creating a new metric cache")
 	return &SecurityMetricCache{
 		sizeBytes:    0,
 		maxSizeBytes: sz,
@@ -613,19 +614,16 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 	for idx, item := range items {
 		if item.Period.Contains(new.Period) {
 			// nothing to be done data already in cache
-			log.Debug().Msg("skipping item insert because item is already in []*CacheItem list")
 			return items, 0
 		}
 
 		if new.Period.Contains(item.Period) {
-			log.Debug().Msg("new is a superset of item --- replacing")
 			added := len(new.Values) - len(item.Values)
 			item.copyFrom(new)
 			return items, added
 		}
 
 		if (item.Period.Contiguous(new.Period) && item.CoveredPeriod.Contiguous(new.CoveredPeriod)) || cache.contiguousByDateIndex(new, item) {
-			log.Debug().Bool("contiguousByDateIndex", cache.contiguousByDateIndex(new, item)).Bool("CoveredContiguous", item.CoveredPeriod.Contiguous(new.CoveredPeriod)).Bool("Combo", (item.Period.Contiguous(new.Period) && item.CoveredPeriod.Contiguous(new.CoveredPeriod))).Object("item.CoveredPeriod", item.CoveredPeriod).Object("new.CoveredPeriod", new.CoveredPeriod).Msg("item and new are contiguous")
 			merged, added := cache.merge(new, item)
 			item.copyFrom(merged)
 			return items, added
@@ -679,8 +677,6 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 		Begin: minTime(a.CoveredPeriod.Begin, b.CoveredPeriod.Begin),
 		End:   maxTime(a.CoveredPeriod.End, b.CoveredPeriod.End),
 	}
-
-	log.Debug().Time("A", mergedCoveredInterval.Begin).Time("B", mergedCoveredInterval.End).Msg("mergedCoveredInterval")
 
 	// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
 	mergedStartIdx := b.startIdx
