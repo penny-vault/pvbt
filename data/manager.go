@@ -335,6 +335,9 @@ func normalizeMetrics(metrics []Metric) []Metric {
 
 func normalizeSecurities(securities []*Security) ([]*Security, error) {
 	for idx, security := range securities {
+		if security.Ticker == "$CASH" {
+			continue
+		}
 		res, err := SecurityFromFigi(security.CompositeFigi)
 		if err != nil {
 			res, err = SecurityFromTicker(security.Ticker)
