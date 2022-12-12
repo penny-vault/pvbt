@@ -17,7 +17,6 @@ package portfolio_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -438,22 +437,22 @@ var _ = Describe("Portfolio", Ordered, func() {
 
 				// Setup database
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 2, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vustx.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
-				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2021, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 29, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
+
+				// pre-populate cache
+				manager.GetMetrics([]*data.Security{vfinx}, []data.Metric{data.MetricClose}, time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				manager.GetMetrics([]*data.Security{pridx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				manager.GetMetrics([]*data.Security{vustx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 				Expect(err).To(BeNil())
 			})
 
 			It("should have transactions", func() {
-				for idx, trx := range p.Transactions {
-					fmt.Printf("%d) %s\t%s\t%s\n", idx, trx.Kind, trx.CompositeFIGI, trx.Date.Format("2006-01-02"))
-				}
 				Expect(p.Transactions).To(HaveLen(30))
 			})
 

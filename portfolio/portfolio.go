@@ -589,7 +589,10 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 
 	holdings := make([]*data.Security, 0, len(pm.holdings))
 	for holding := range pm.holdings {
-		holdings = append(holdings, &holding)
+		holdings = append(holdings, &data.Security{
+			Ticker:        holding.Ticker,
+			CompositeFigi: holding.CompositeFigi,
+		})
 	}
 
 	divSplits, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash, data.MetricSplitFactor).Between(ctx, from, through)
