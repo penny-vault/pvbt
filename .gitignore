@@ -19,3 +19,4 @@ pvapi
 # configuration development files
 *.env
 pvapi.toml
+.vscode

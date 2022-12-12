@@ -17,27 +17,18 @@ package data
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )
 
-// Security represents a tradeable asset
-type Security struct {
-	Ticker        string `json:"ticker"`
-	CompositeFigi string `json:"compositeFigi"`
-}
-
 var (
 	securitiesByFigi   map[string]*Security
 	securitiesByTicker map[string]*Security
 	writeLocker        sync.RWMutex
-)
-
-var (
-	ErrNotFound = errors.New("security not found")
 )
 
 func LoadSecuritiesFromDB() error {
@@ -99,7 +90,7 @@ func SecurityFromFigi(figi string) (*Security, error) {
 	if s, ok := securitiesByFigi[figi]; ok {
 		return s, nil
 	}
-	return nil, ErrNotFound
+	return nil, ErrSecurityNotFound
 }
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
@@ -110,7 +101,7 @@ func SecurityFromTicker(ticker string) (*Security, error) {
 	if s, ok := securitiesByTicker[ticker]; ok {
 		return s, nil
 	}
-	return nil, ErrNotFound
+	return nil, ErrSecurityNotFound
 }
 
 // SecurityFromTickerList loads securities from database using the ticker as the lookup key
@@ -123,8 +114,33 @@ func SecurityFromTickerList(tickers []string) ([]*Security, error) {
 		if s, ok := securitiesByTicker[ticker]; ok {
 			securities = append(securities, s)
 		} else {
-			return nil, ErrNotFound
+			return nil, ErrSecurityNotFound
 		}
 	}
 	return securities, nil
+}
+
+// SecurityMetric functions
+
+// String returns a string representation of the security metric
+func (sm SecurityMetric) String() string {
+	return fmt.Sprintf("%s:%s", sm.SecurityObject.CompositeFigi, sm.MetricObject)
+}
+
+func NewSecurityMetricFromString(s string) SecurityMetric {
+	parts := strings.Split(s, ":")
+	if len(parts) != 2 {
+		return SecurityMetric{}
+	}
+
+	security, err := SecurityFromFigi(parts[0])
+	if err != nil {
+		return SecurityMetric{}
+	}
+
+	m := Metric(parts[1])
+	return SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   m,
+	}
 }

@@ -181,44 +181,64 @@ func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
 
 // Next returns the next tradeable date
 func (tc *TradeCron) Next(forDate time.Time) time.Time {
-	var dt time.Time
+	var checkDate time.Time
 
 	nextDate := tc.Schedule.Next(forDate)
 
+	// if there is a date flag in the schedule then fast-forward to the next possible date for checking
 	switch tc.DateFlag {
 	case AtWeekBegin:
-		dt = tc.marketStatus.NextFirstTradingDayOfWeek(forDate)
-		if nextDate.After(dt) {
+		checkDate = tc.marketStatus.NextFirstTradingDayOfWeek(forDate)
+		firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+		if nextDate.After(firstTradingDay) {
 			// bump forward because next date is still after dt
-			dt = tc.marketStatus.NextFirstTradingDayOfWeek(nextDate)
+			checkDate = tc.marketStatus.NextFirstTradingDayOfWeek(nextDate)
 		}
 	case AtWeekEnd:
-		dt = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
-		if nextDate.After(dt) {
+		checkDate = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
+		firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+		if nextDate.After(firstTradingDay) {
 			// bump forward because next date is still after dt
-			dt = tc.marketStatus.NextLastTradingDayOfWeek(nextDate)
+			checkDate = tc.marketStatus.NextLastTradingDayOfWeek(nextDate)
 		}
 	case AtMonthBegin:
-		dt = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
-		if nextDate.After(dt) {
-			// bump forward because next date is still after dt
-			dt = tc.marketStatus.NextFirstTradingDayOfMonth(nextDate)
+		// get the first trading day of the current month
+		lastMonth := time.Date(forDate.Year(), forDate.Month(), 1, 23, 59, 59, 0, tc.marketStatus.tz).AddDate(0, 0, -1)
+		firstTradingDayOfThisMonth := tc.marketStatus.NextFirstTradingDayOfMonth(lastMonth)
+		dateOnly := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
+		if firstTradingDayOfThisMonth.After(dateOnly) || firstTradingDayOfThisMonth.Equal(dateOnly) {
+			checkDate = firstTradingDayOfThisMonth
+		} else {
+			// it's after the first trading day of this month, get next month first trading day
+			checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
+			firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+			if nextDate.After(firstTradingDay) {
+				// bump forward because next date is still after dt
+				checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(nextDate)
+			}
 		}
 	case AtMonthEnd:
-		dt = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
-		if nextDate.After(dt) {
+		checkDate = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
+		firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+		if nextDate.After(firstTradingDay) {
 			// bump forward because next date is still after dt
-			dt = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
+			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
 		}
 	default:
-		dt = forDate
+		checkDate = forDate
 	}
 
 	marketOpen := false
+	maxIters := 5000
+	actualIters := 0
 	for !marketOpen {
-		dt = tc.Schedule.Next(dt)
-		marketOpen = tc.marketStatus.IsMarketOpen(dt)
+		checkDate = tc.Schedule.Next(checkDate)
+		marketOpen = tc.marketStatus.IsMarketOpen(checkDate)
+		if actualIters > maxIters {
+			log.Panic().Str("TimeSpec", tc.TimeSpec).Msg("something is wrong with tradecron schedule as it appears to be in an infinite loop")
+		}
+		actualIters++
 	}
 
-	return dt
+	return checkDate
 }

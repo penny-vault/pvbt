@@ -116,7 +116,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	manager := data.NewManager()
+	manager := data.GetManagerInstance()
 
 	params := map[string]json.RawMessage{}
 	if err := json.Unmarshal(c.Body(), &params); err != nil {
@@ -124,7 +124,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		return fiber.ErrBadRequest
 	}
 
-	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate, manager)
+	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate)
 	if err != nil {
 		if err.Error() == "strategy not found" {
 			return fiber.ErrNotFound
@@ -144,22 +144,14 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
 		return err
 	}
-	err = common.CacheSet(portfolioIDStr, serializedPortfolio)
-	if err != nil {
-		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
-		return err
-	}
+	manager.SetLRU(portfolioIDStr, serializedPortfolio)
 
 	serializedPerformance, err := b.Performance.MarshalBinary()
 	if err != nil {
 		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("serialization failed for portfolio")
 		return err
 	}
-	err = common.CacheSet(fmt.Sprintf("%s:performance", portfolioIDStr), serializedPerformance)
-	if err != nil {
-		subLog.Error().Stack().Err(err).Str("PortfolioID", portfolioIDStr).Msg("caching failed for portfolio")
-		return err
-	}
+	manager.SetLRU(fmt.Sprintf("%s:performance", portfolioIDStr), serializedPerformance)
 
 	measurements := b.Performance.Measurements
 	b.Performance.Measurements = nil // set measurements to nil for serialization

@@ -27,6 +27,7 @@ import (
 	"github.com/jackc/pgtype"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/filter"
 	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -336,7 +337,7 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 func GetPortfolioHoldings(c *fiber.Ctx) error {
 	portfolioIDStr := c.Params("id")
 	userID := c.Locals("userID").(string)
-	frequency := data.Frequency(c.Query("frequency", "Monthly"))
+	frequency := dataframe.Frequency(c.Query("frequency", "Monthly"))
 	sinceStr := c.Query("since", "0")
 	subLog := log.With().Str("PortfolioID", portfolioIDStr).Str("UserID", userID).Str("Frequency", string(frequency)).Str("Since", sinceStr).Logger()
 

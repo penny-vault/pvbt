@@ -19,7 +19,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
@@ -31,8 +30,6 @@ import (
 //	portfolioID - specified as {userID}:{portfolioID} only pull requested portfolio
 //	userList    - list of users to include portfolios for
 func getPortfolios(ctx context.Context, portfolioID string, userList []string) []*portfolio.Model {
-	dataManager := data.NewManager()
-
 	// get a list of portfolio id's to update
 	portfolios := make([]*portfolio.Model, 0, 100)
 	if portfolioID != "" {
@@ -46,7 +43,7 @@ func getPortfolios(ctx context.Context, portfolioID string, userList []string) [
 			pIDStr,
 		}
 		log.Info().Str("PortfolioID", updateCmdPortfolioID).Msg("load portfolio from DB")
-		p, err := portfolio.LoadFromDB(ctx, ids, u, dataManager)
+		p, err := portfolio.LoadFromDB(ctx, ids, u)
 		if err != nil {
 			log.Fatal().Err(err).Msg("could not load portfolio from DB")
 		}
@@ -79,7 +76,7 @@ func getPortfolios(ctx context.Context, portfolioID string, userList []string) [
 
 				ids := []string{pIDStr}
 				log.Debug().Str("PortfolioID", pIDStr).Msg("load portfolio from DB")
-				p, err := portfolio.LoadFromDB(ctx, ids, u, dataManager)
+				p, err := portfolio.LoadFromDB(ctx, ids, u)
 				if err != nil {
 					if err := trx.Rollback(ctx); err != nil {
 						log.Error().Stack().Err(err).Msg("could not rollback transaction")

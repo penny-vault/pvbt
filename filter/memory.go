@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
@@ -168,7 +168,7 @@ func (f *InMemory) GetMeasurements(field1 string, field2 string, since time.Time
 	return meas.MarshalBinary()
 }
 
-func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, periodReturnField string) portfolio.PortfolioHoldingItemList {
+func (f *InMemory) filterByTime(frequency dataframe.Frequency, since time.Time, periodReturnField string) portfolio.PortfolioHoldingItemList {
 	tz := common.GetTimezone()
 
 	holdings := portfolio.PortfolioHoldingItemList{
@@ -191,7 +191,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 		}
 
 		switch frequency {
-		case data.FrequencyAnnually:
+		case dataframe.Annually:
 			if last == nil {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          meas.Time,
@@ -213,7 +213,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 				justificationAtPeriodStart = last.Justification
 				added = true
 			}
-		case data.FrequencyMonthly:
+		case dataframe.Monthly:
 			if last != nil && meas.Time.Month() != last.Time.Month() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          last.Time,
@@ -228,7 +228,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 
 				added = true
 			}
-		case data.FrequencyWeekly:
+		case dataframe.Weekly:
 			if last != nil && meas.Time.Weekday() < last.Time.Weekday() && meas.Time.After(since) {
 				holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 					Time:          last.Time,
@@ -243,7 +243,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 
 				added = true
 			}
-		case data.FrequencyDaily:
+		case dataframe.Daily:
 			holdings.Items = append(holdings.Items, &portfolio.PortfolioHoldingItem{
 				Time:          meas.Time,
 				Holdings:      meas.Holdings,
@@ -286,7 +286,7 @@ func (f *InMemory) filterByTime(frequency data.Frequency, since time.Time, perio
 }
 
 // GetHoldings returns holdings at the requested `frequency` after `since`
-func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error) {
+func (f *InMemory) GetHoldings(frequency dataframe.Frequency, since time.Time) ([]byte, error) {
 	subLog := log.With().Str("Frequency", string(frequency)).Time("Since", since).Logger()
 	subLog.Info().Msg("GetHoldings from memory")
 
@@ -298,9 +298,9 @@ func (f *InMemory) GetHoldings(frequency data.Frequency, since time.Time) ([]byt
 	// add predicted holding item
 	predicted := f.Portfolio.PredictedAssets
 	switch frequency {
-	case data.FrequencyAnnually:
+	case dataframe.Annually:
 		predicted.Time = time.Date(predicted.Time.Year()+1, predicted.Time.Month(), 1, 16, 0, 0, 0, nyc)
-	case data.FrequencyMonthly:
+	case dataframe.Monthly:
 		predicted.Time = time.Date(predicted.Time.Year(), predicted.Time.Month()+1, 1, 16, 0, 0, 0, nyc)
 	default:
 		// nothing to be done in default case

@@ -32,7 +32,6 @@ import (
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/router"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/tradecron"
 
 	"github.com/go-co-op/gocron"
 	"github.com/gofiber/fiber/v2"
@@ -94,7 +93,6 @@ var serveCmd = &cobra.Command{
 		}
 
 		common.SetupLogging()
-		common.SetupCache()
 		log.Info().Msg("initialized logging")
 
 		// setup open telemetry
@@ -119,9 +117,7 @@ var serveCmd = &cobra.Command{
 		log.Info().Msg("connected to database")
 
 		// Initialize data framework
-		data.InitializeDataManager()
-		tradecron.Initialize()
-		log.Info().Msg("initialized data framework")
+		data.GetManagerInstance()
 
 		// Create new Fiber instance
 		app := fiber.New()

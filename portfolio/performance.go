@@ -184,7 +184,7 @@ func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
 	return 0.0
 }
 
-func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time) (float64, error) {
+func getHoldingsValue(ctx context.Context, holdings map[data.Security]float64, date time.Time) (float64, error) {
 	totalVal := 0.0
 	for security, qty := range holdings {
 		if security.Ticker == data.CashAsset {
@@ -194,17 +194,10 @@ func getHoldingsValue(ctx context.Context, dataManager *data.Manager, holdings m
 				totalVal += qty
 			}
 		} else {
-			price, err := dataManager.Get(ctx, date, data.MetricClose, &security)
+			price, _, err := data.NewDataRequest(&security).Metrics(data.MetricClose).OnOrBefore(date)
 			if err != nil {
 				return totalVal, ErrSecurityPriceNotAvailable
 			}
-			if math.IsNaN(price) {
-				price, err = dataManager.GetLatestDataBefore(ctx, &security, data.MetricClose, date)
-				if err != nil {
-					return totalVal, ErrSecurityPriceNotAvailable
-				}
-			}
-
 			totalVal += price * qty
 		}
 	}
@@ -290,18 +283,18 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 			if val, ok := holdings[data.CashSecurity]; ok {
 				holdings[data.CashSecurity] = val - trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
+			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process buy shares transaction")
 		case DividendTransaction:
 			if val, ok := holdings[data.CashSecurity]; ok {
 				holdings[data.CashSecurity] = val + trx.TotalValue
 			} else {
 				holdings[data.CashSecurity] = trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process dividend transaction")
 			continue
 		case SplitTransaction:
 			shares = trx.Shares
-			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("process split transaction")
 		case SellTransaction:
 			shares -= trx.Shares
 			if val, ok := holdings[data.CashSecurity]; ok {
@@ -309,7 +302,7 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 			} else {
 				holdings[data.CashSecurity] = trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
+			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process sell transaction")
 		default:
 			log.Warn().Stack().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
 			return holdings, trxIdx, ErrInvalidTransactionType
@@ -336,8 +329,8 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 	return holdings, trxIdx, nil
 }
 
-func calculateShares(ctx context.Context, dataManager *data.Manager, security *data.Security, date time.Time, dollars float64) (float64, error) {
-	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
+func calculateShares(ctx context.Context, security *data.Security, date time.Time, dollars float64) (float64, error) {
+	price, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).OnSingle(date)
 	if err != nil {
 		log.Error().Stack().Time("Date", date).Str("Ticker", security.Ticker).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
 		return 0, ErrSecurityPriceNotAvailable
@@ -349,22 +342,22 @@ func calculateShares(ctx context.Context, dataManager *data.Manager, security *d
 	return dollars / price, nil
 }
 
-func calculateValue(ctx context.Context, dataManager *data.Manager, security *data.Security, shares float64, date time.Time) float64 {
-	price, err := dataManager.Get(ctx, date, data.MetricAdjustedClose, security)
+func calculateValue(ctx context.Context, security *data.Security, shares float64, date time.Time) float64 {
+	price, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).OnSingle(date)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("Asset", security.Ticker).Time("Date", date).Msg("could not get security prices from pvdb")
 	}
 	return shares * price
 }
 
-func buildHoldingsList(ctx context.Context, dataManager *data.Manager, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+func buildHoldingsList(ctx context.Context, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
 	currentAssets := make([]*ReportableHolding, 0, len(holdings))
 	for security, qty := range holdings {
 		var value float64
 		if security.Ticker == data.CashAsset {
 			value = qty
 		} else if qty > 1.0e-5 {
-			price, err := dataManager.Get(ctx, date, data.MetricClose, &security)
+			price, err := data.NewDataRequest(&security).Metrics(data.MetricClose).OnSingle(date)
 			if err != nil {
 				return nil, ErrSecurityPriceNotAvailable
 			}
@@ -476,8 +469,15 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 	}
 }
 
-func getRiskFreeRate(ctx context.Context, dataManager *data.Manager, date time.Time) float64 {
-	rawRate := dataManager.RiskFreeRate(ctx, date)
+func getRiskFreeRate(ctx context.Context, date time.Time) float64 {
+	dgs3mo, err := data.SecurityFromTicker("DGS3MO")
+	if err != nil {
+		log.Error().Err(err).Msg("could not get DGS3MO security")
+	}
+	rawRate, err := data.NewDataRequest(dgs3mo).Metrics(data.MetricAdjustedClose).OnSingle(date)
+	if err != nil {
+		log.Error().Err(err).Time("forDate", date).Msg("could not get DGS3MO price")
+	}
 	riskFreeRate := rawRate / 100.0 / 252.0
 	return (1 + riskFreeRate)
 }
@@ -633,7 +633,6 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	defer span.End()
 
 	p := pm.Portfolio
-	dataManager := pm.dataProxy
 	var err error
 
 	// make sure we can check the data
@@ -670,15 +669,14 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		Time("CalculationPeriod.End", through).
 		Str("PortfolioName", pm.Portfolio.Name).
 		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
-		Msg("calculate performance from")
+		Msg("calculate performance over requested period")
 
 	// Get the days performance should be calculated on
 	today := time.Now()
 	prevDate := prevMeasurement.Time
-	tradingDays, err := dataManager.TradingDays(ctx, calculationStart, through, data.FrequencyDaily)
-	if err != nil {
-		return err
-	}
+	manager := data.GetManagerInstance()
+	tradingDaysDf := manager.TradingDays(calculationStart, through)
+	tradingDays := tradingDaysDf.Dates
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
@@ -704,7 +702,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	// compute # of shares held for benchmark
 	var benchmarkShares float64
 	if len(perf.Measurements) > 0 {
-		benchmarkShares, err = calculateShares(ctx, dataManager, benchmarkSecurity, prevMeasurement.Time, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(ctx, benchmarkSecurity, prevMeasurement.Time, sums.BenchmarkValue)
 		if err != nil {
 			span.RecordError(err)
 			msg := "could not get benchmark eod prices"
@@ -730,7 +728,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999_999_999, nyc)
 		updateDateBundle(dates, date, prevDate)
 
-		sums.BenchmarkValue = calculateValue(ctx, dataManager, benchmarkSecurity, benchmarkShares, date)
+		sums.BenchmarkValue = calculateValue(ctx, benchmarkSecurity, benchmarkShares, date)
 
 		// update holdings
 		holdings, trxIdx, err = processTransactions(p, holdings, trxIdx, date, sums)
@@ -742,25 +740,25 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		justificationArray := pm.justifications[tradingDate.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals (BenchmarkValue is updated in processTransactions)
-		benchmarkShares, err = calculateShares(ctx, dataManager, benchmarkSecurity, date, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(ctx, benchmarkSecurity, date, sums.BenchmarkValue)
 		if err != nil {
 			return err
 		}
 
 		// get value of portfolio
-		sums.TotalValue, err = getHoldingsValue(ctx, dataManager, holdings, date)
+		sums.TotalValue, err = getHoldingsValue(ctx, holdings, date)
 		if err != nil {
 			return err
 		}
 
 		// generate a new list of holdings for current measurement date
-		currentAssets, err := buildHoldingsList(ctx, dataManager, holdings, date, sums.TotalValue)
+		currentAssets, err := buildHoldingsList(ctx, holdings, date, sums.TotalValue)
 		if err != nil {
 			return err
 		}
 
 		// update riskFreeValue
-		sums.RiskFreeValue *= getRiskFreeRate(ctx, dataManager, date)
+		sums.RiskFreeValue *= getRiskFreeRate(ctx, date)
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,

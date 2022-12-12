@@ -42,7 +42,7 @@ type Backtest struct {
 	Performance    *portfolio.Performance
 }
 
-func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark *data.Security, startDate time.Time, endDate time.Time, manager *data.Manager) (*Backtest, error) {
+func New(ctx context.Context, shortcode string, params map[string]json.RawMessage, benchmark *data.Security, startDate time.Time, endDate time.Time) (*Backtest, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "backtest.New")
 	defer span.End()
 
@@ -64,11 +64,8 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 
-	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000, manager)
+	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000)
 	pm.Portfolio.Benchmark = benchmark.CompositeFigi
-
-	manager.Begin = startDate
-	manager.End = endDate
 
 	pm.Portfolio.StrategyShortcode = shortcode
 	paramsJSON, err := json.MarshalContext(ctx, params)
@@ -78,14 +75,14 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 	pm.Portfolio.StrategyArguments = string(paramsJSON)
-	target, predictedAssets, err := stratObject.Compute(ctx, manager)
+	target, predictedAssets, err := stratObject.Compute(ctx, startDate, endDate)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not compute strategy portfolio")
 		return nil, err
 	}
 
-	pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.TradeDate, predictedAssets.Target, predictedAssets.Justification)
+	pm.Portfolio.PredictedAssets = portfolio.BuildPredictedHoldings(predictedAssets.Date, predictedAssets.Members, predictedAssets.Justifications)
 	if err := pm.TargetPortfolio(ctx, target); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")

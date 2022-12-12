@@ -19,7 +19,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/dataframe"
 )
 
 var (

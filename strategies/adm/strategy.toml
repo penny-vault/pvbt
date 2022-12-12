@@ -2,7 +2,7 @@ name = "Accelerating Dual Momentum"
 shortcode = "adm"
 description = "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets."
 source = "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/"
-version = "1.0.0"
+version = "1.1.0"
 benchmark = { compositeFigi = "BBG000BHTMY2", ticker = "VFINX", name = "Vanguard 500 Index Fund Investor Shares" }
 schedule = "@monthend"
 
@@ -12,10 +12,10 @@ description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
 typecode = "[]stock"
 default = '[{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX", "name": "Vanguard 500 Index Fund Investor Shares"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX", "name": "T. Rowe Price International Discovery Fund"}]'
 
-[arguments.outTicker]
+[arguments.outTickers]
 name = "Out-of-Market Ticker"
 description = "Ticker to use when model scores are all below 0"
-typecode = "stock"
+typecode = "[]stock"
 default = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [suggested."Engineered Portfolio"]

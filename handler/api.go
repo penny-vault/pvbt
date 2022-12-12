@@ -26,7 +26,6 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/gofiber/fiber/v2"
-	"github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -143,10 +142,6 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		}
 	}()
 
-	manager := data.NewManager()
-	manager.Begin = startDate
-	manager.End = endDate
-
 	snapToStart, err := strconv.ParseBool(c.Query("snapToStart", "true"))
 	if err != nil {
 		subLog.Warn().Stack().Int("StatusCode", fiber.ErrBadRequest.Code).Err(err).Str("SnapToStart", c.Query("snapToStart")).Str("Uri", "/v1/benchmark").Msg("/v1/benchmark called with invalid snapToStart")
@@ -160,27 +155,35 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	}
 
 	if snapToStart {
-		securityStart, err := manager.GetDataFrame(context.Background(), data.MetricAdjustedClose, security)
+		securityStart, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).Between(context.Background(), startDate, endDate)
 		if err != nil {
 			return fiber.ErrBadRequest
 		}
-		row := securityStart.Row(0, true, dataframe.SeriesName)
-		startDate = row[common.DateIdx].(time.Time)
+		df := securityStart[data.SecurityMetric{
+			SecurityObject: *security,
+			MetricObject:   data.MetricAdjustedClose,
+		}.String()]
+		startDate = df.Dates[0]
 	}
 
-	dates := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: 1}, startDate)
-	tickers := dataframe.NewSeriesString(common.TickerName, &dataframe.SeriesInit{Size: 1}, security.CompositeFigi)
-	targetPortfolio := dataframe.NewDataFrame(dates, tickers)
+	target := data.PortfolioPlan{
+		{
+			Date: startDate,
+			Members: map[data.Security]float64{
+				*security: 1.0,
+			},
+		},
+	}
 
-	p := portfolio.NewPortfolio(security.Ticker, startDate, 10000, manager)
-	err = p.TargetPortfolio(context.Background(), targetPortfolio)
+	p := portfolio.NewPortfolio(security.Ticker, startDate, 10000)
+	err = p.TargetPortfolio(context.Background(), target)
 	if err != nil {
 		return fiber.ErrBadRequest
 	}
 
 	// calculate the portfolio's performance
 	performance := portfolio.NewPerformance(p.Portfolio)
-	err = performance.CalculateThrough(context.Background(), p, manager.End)
+	err = performance.CalculateThrough(context.Background(), p, endDate)
 	if err != nil {
 		return fiber.ErrBadRequest
 	}

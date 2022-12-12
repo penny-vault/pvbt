@@ -34,10 +34,9 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/jackc/pgx/v4"
-	"github.com/jdfergason/dataframe-go"
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
@@ -55,7 +54,7 @@ type MomentumDrivenEarningsPrediction struct {
 	NumHoldings   int
 	RiskIndicator string
 	OutTicker     *data.Security
-	Period        data.Frequency
+	Period        dataframe.Frequency
 }
 
 type Period struct {
@@ -94,8 +93,8 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	if err := json.Unmarshal(args["period"], &periodStr); err != nil {
 		return nil, err
 	}
-	period := data.Frequency(periodStr)
-	if (period != data.FrequencyWeekly) && (period != data.FrequencyMonthly) {
+	period := dataframe.Frequency(periodStr)
+	if (period != dataframe.Weekly) && (period != dataframe.Monthly) {
 		return nil, ErrInvalidPeriod
 	}
 
@@ -110,21 +109,21 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // Compute signal
-func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.Compute")
 	defer span.End()
 
 	subLog := log.With().Str("Strategy", "MDEP").Logger()
-	subLog.Info().Time("Start", manager.Begin).Time("End", manager.End).Msg("computing MDEP strategy")
+	subLog.Info().Time("Start", begin).Time("End", end).Msg("computing MDEP strategy")
 
 	// Ensure time range is valid
 	nullTime := time.Time{}
-	if manager.End.Equal(nullTime) {
-		manager.End = time.Now()
+	if end.Equal(nullTime) {
+		end = time.Now()
 	}
-	if manager.Begin.Equal(nullTime) {
+	if begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
-		manager.Begin = manager.End.AddDate(-50, 0, 0)
+		begin = end.AddDate(-50, 0, 0)
 	}
 
 	// Get database transaction
@@ -146,24 +145,19 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 		return nil, nil, err
 	}
 
-	if startDate.After(manager.Begin) {
-		manager.Begin = startDate
+	if startDate.After(begin) {
+		begin = startDate
 	}
 
-	manager.Frequency = data.FrequencyDaily
-
-	subLog.Debug().Time("Start", manager.Begin).Time("End", manager.End).Msg("updated time period")
+	subLog.Debug().Time("Start", begin).Time("End", end).Msg("updated time period")
 
 	// get a list of dates to invest in
-	tradeDays, err := manager.TradingDays(ctx, manager.Begin, manager.End, mdep.Period)
-	if err != nil {
-		if err := db.Rollback(ctx); err != nil {
-			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
-		}
-		return nil, nil, err
-	}
+	manager := data.GetManagerInstance()
+	tradeDaysDf := manager.TradingDays(begin, end)
+	tradeDaysDf = tradeDaysDf.Frequency(mdep.Period)
+	tradeDays := tradeDaysDf.Dates
 
-	indicator, err := mdep.getRiskOnOffIndicator(ctx, manager)
+	indicator, err := mdep.getRiskOnOffIndicator(ctx, begin, end)
 	if err != nil {
 		if err := db.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
@@ -189,9 +183,6 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 		return nil, nil, err
 	}
 
-	coveredPeriods := findCoveredPeriods(ctx, targetPortfolio)
-	prepopulateDataCache(ctx, coveredPeriods, manager)
-
 	subLog.Info().Msg("MDEP computed")
 
 	if err := db.Commit(ctx); err != nil {
@@ -201,7 +192,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, manag
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, error) {
+func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, begin, end time.Time) (*dataframe.DataFrame, error) {
 	var indicator *dataframe.DataFrame
 
 	subLog := log.With().Str("Strategy", "mdep").Logger()
@@ -217,18 +208,18 @@ func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.
 		momentum := &indicators.Momentum{
 			Securities: securities,
 			Periods:    []int{1, 3, 6},
-			Manager:    manager,
 		}
-		indicator, err = momentum.IndicatorForPeriod(ctx, manager.Begin, manager.End)
+		indicator, err = momentum.IndicatorForPeriod(ctx, begin, end)
 		if err != nil {
 			subLog.Error().Err(err).Msg("could not get risk on/off indicator")
 			return nil, err
 		}
 	default:
-		// just construct a series of ones
-		dateSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: 2}, time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC), time.Now())
-		indicatorSeries := dataframe.NewSeriesFloat64(indicators.SeriesName, &dataframe.SeriesInit{Capacity: 2}, 1.0, 1.0)
-		indicator = dataframe.NewDataFrame(dateSeries, indicatorSeries)
+		manager := data.GetManagerInstance()
+		indicator = manager.TradingDays(begin, end)
+		for idx := range indicator.Vals[0] {
+			indicator.Vals[0][idx] = 1.0
+		}
 	}
 	return indicator, nil
 }
@@ -264,38 +255,32 @@ func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx)
 	return targetMap, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (*dataframe.DataFrame, error) {
+func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (data.PortfolioPlan, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
 	defer span.End()
 
 	subLog := log.With().Str("Strategy", "MDEP").Logger()
 	subLog.Debug().Msg("build target portfolio")
 
-	// build target portfolio
-	targetAssets := make([]interface{}, 0, 600)
-	targetDates := make([]interface{}, 0, 600)
-
 	riskIndicator := false
 	riskIdx := 0
-	NRisk := riskOn.NRows()
+	NRisk := riskOn.Len()
+
+	targetPortfolio := make(data.PortfolioPlan, 0, len(tradeDays))
 
 	for _, day := range tradeDays {
-		var ok bool
 		var err error
-		var targetMap map[data.Security]float64
 		var riskDate time.Time
 
-		// check if risk indicator should be updated
-		row := riskOn.Row(riskIdx, true)
-		if riskDate, ok = row[common.DateIdx].(time.Time); !ok {
-			subLog.Error().Time("Day", day).Int("RiskIdx", riskIdx).Msg("could not get time for risk index")
+		pie := &data.SecurityAllocation{
+			Date:           day,
+			Justifications: make(map[string]float64),
 		}
+
+		// check if risk indicator should be updated
+		riskDate = riskOn.Dates[riskIdx]
 		if !day.Before(riskDate) {
-			if riskValue, ok := row[indicators.SeriesName].(float64); ok {
-				riskIndicator = riskValue > 0
-			} else {
-				subLog.Error().Time("Day", day).Int("RiskIdx", riskIdx).Msg("could not get risk value for idx")
-			}
+			riskIndicator = riskOn.Vals[0][riskIdx] > 0
 			riskIdx++
 			if riskIdx >= NRisk {
 				riskIdx--
@@ -303,31 +288,26 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 		}
 
 		if riskIndicator {
-			targetMap, err = getMDEPAssets(ctx, day, mdep.NumHoldings, db)
+			pie.Members, err = getMDEPAssets(ctx, day, mdep.NumHoldings, db)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			targetMap = make(map[data.Security]float64)
+			pie.Members = make(map[data.Security]float64)
 		}
 
-		if len(targetMap) == 0 {
+		if len(pie.Members) == 0 {
 			// nothing to invest in - use cash like asset
-			targetMap[*mdep.OutTicker] = 1.0
+			pie.Members[*mdep.OutTicker] = 1.0
 		}
 
-		targetDates = append(targetDates, day)
-		targetAssets = append(targetAssets, targetMap)
+		targetPortfolio = append(targetPortfolio, pie)
 	}
-
-	timeSeries := dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Size: len(targetDates)}, targetDates...)
-	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
-	targetPortfolio := dataframe.NewDataFrame(timeSeries, targetSeries)
 
 	return targetPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*strategy.Prediction, error) {
+func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx context.Context, tradeDays []time.Time, db pgx.Tx) (*data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildPredictedPortfolio")
 	defer span.End()
 
@@ -355,140 +335,11 @@ func (mdep *MomentumDrivenEarningsPrediction) buildPredictedPortfolio(ctx contex
 		predictedTarget[*security] = 1.0 / float64(mdep.NumHoldings)
 	}
 
-	predictedPortfolio := &strategy.Prediction{
-		TradeDate:     tradeDays[lastDateIdx],
-		Target:        predictedTarget,
-		Justification: make(map[string]float64),
+	predictedPortfolio := &data.SecurityAllocation{
+		Date:           tradeDays[lastDateIdx],
+		Members:        predictedTarget,
+		Justifications: make(map[string]float64),
 	}
 
 	return predictedPortfolio, nil
-}
-
-// prepopulateDataCache loads asset eod prices into the in-memory cache
-func prepopulateDataCache(ctx context.Context, covered []*Period, manager *data.Manager) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "prepopulateDataCache")
-	defer span.End()
-
-	subLog := log.With().Str("Strategy", "MDEP").Logger()
-	subLog.Debug().Msg("pre-populate data cache")
-	tickerSet := make(map[data.Security]bool, len(covered))
-
-	begin := time.Now()
-	end := time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
-	for _, v := range covered {
-		tickerSet[*v.Security] = true
-		if begin.After(v.Begin) {
-			begin = v.Begin
-		}
-		if end.Before(v.End) {
-			end = v.End
-		}
-	}
-
-	tickerList := make([]*data.Security, len(tickerSet))
-	ii := 0
-	for k := range tickerSet {
-		tickerList[ii] = &data.Security{
-			CompositeFigi: k.CompositeFigi,
-			Ticker:        k.Ticker,
-		}
-		ii++
-	}
-
-	manager.Begin = begin
-	manager.End = end
-
-	subLog.Debug().Time("Begin", begin).Time("End", end).Int("NumAssets", len(tickerList)).Msg("querying database for eod")
-	if _, err := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickerList...); err != nil {
-		log.Error().Stack().Err(err).Msg("could not get adjusted close dataframe")
-	}
-}
-
-// findCoveredPeriods creates periods that each assets stock prices should be downloaded
-func findCoveredPeriods(ctx context.Context, target *dataframe.DataFrame) []*Period {
-	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "buildQueryPlan")
-	defer span.End()
-
-	subLog := log.With().Str("Strategy", "MDEP").Logger()
-	subLog.Debug().Msg("find covered periods in portfolio plan")
-
-	coveredPeriods := make([]*Period, 0, target.NRows())
-	activeAssets := make(map[data.Security]*Period)
-	var pendingClose map[data.Security]*Period
-
-	tickerSeriesIdx := target.MustNameToColumn(common.TickerName)
-
-	// check series type
-	isSingleAsset := false
-	series := target.Series[tickerSeriesIdx]
-	if series.Type() == "string" {
-		isSingleAsset = true
-	}
-
-	// Create a map of asset time periods
-	iterator := target.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: false})
-	for {
-		row, val, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
-		}
-
-		date := val[common.DateIdx].(time.Time)
-
-		pendingClose = activeAssets
-		activeAssets = make(map[data.Security]*Period)
-
-		if isSingleAsset {
-			figi := val[common.TickerName].(string)
-			security, err := data.SecurityFromFigi(figi)
-			if err != nil {
-				log.Error().Err(err).Str("CompositeFigi", figi).Msg("could not find security")
-				return coveredPeriods
-			}
-
-			period, ok := pendingClose[*security]
-			if !ok {
-				period = &Period{
-					Security: security,
-					Begin:    date,
-				}
-			} else {
-				delete(pendingClose, *security)
-			}
-			if period.End.Before(date) {
-				period.End = date.AddDate(0, 0, 7)
-			}
-			activeAssets[*security] = period
-		} else {
-			// it's multi-asset which means a map of tickers
-			assetMap := val[common.TickerName].(map[data.Security]float64)
-			for security := range assetMap {
-				period, ok := pendingClose[security]
-				if !ok {
-					period = &Period{
-						Security: &security,
-						Begin:    date,
-					}
-				} else {
-					delete(pendingClose, security)
-				}
-				if period.End.Before(date) {
-					period.End = date.AddDate(0, 0, 8)
-				}
-				activeAssets[security] = period
-			}
-		}
-
-		// any assets that remain in pending close should be added to covered periods
-		for _, v := range pendingClose {
-			coveredPeriods = append(coveredPeriods, v)
-		}
-	}
-
-	// any remaining assets should be added to coveredPeriods
-	for _, v := range activeAssets {
-		coveredPeriods = append(coveredPeriods, v)
-	}
-
-	return coveredPeriods
 }

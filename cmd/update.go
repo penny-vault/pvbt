@@ -26,13 +26,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/penny-vault/pv-api/backtest"
 	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/penny-vault/pv-api/strategies/strategy"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +56,6 @@ var updateCmd = &cobra.Command{
 		ctx := context.Background()
 
 		common.SetupLogging()
-		common.SetupCache()
 		log.Info().Msg("initialized logging")
 		nyc := common.GetTimezone()
 
@@ -87,19 +84,13 @@ var updateCmd = &cobra.Command{
 			log.Info().Err(err).Msg("could not initialize message passing interface")
 		}
 
-		// Initialize data framework
-		data.InitializeDataManager()
-		tradecron.Initialize()
-		log.Info().Msg("initialized data framework")
-
 		// initialize strategies
 		strategies.InitializeStrategyMap()
 
-		dataManager := data.NewManager()
 		strategies.LoadStrategyMetricsFromDb()
 		for _, strat := range strategies.StrategyList {
 			if _, ok := strategies.StrategyMetricsMap[strat.Shortcode]; !ok && !testUpdateCMD {
-				if err := createStrategyPortfolio(ctx, strat, dt, dataManager); err != nil {
+				if err := createStrategyPortfolio(ctx, strat, dt); err != nil {
 					log.Panic().Err(err).Msg("could not create portfolio")
 				}
 			}
@@ -138,7 +129,7 @@ var updateCmd = &cobra.Command{
 			}
 
 			log.Info().Str("UserID", req.UserID).Str("PortfolioID", req.PortfolioID).Str("RequestTime", req.RequestTime).Msg("got portfolio update request")
-			if portfolios, err = portfolio.LoadFromDB(ctx, []string{req.PortfolioID}, req.UserID, dataManager); err != nil {
+			if portfolios, err = portfolio.LoadFromDB(ctx, []string{req.PortfolioID}, req.UserID); err != nil {
 				log.Fatal().Err(err).Msg("could not load request portfolio")
 			}
 
@@ -154,7 +145,7 @@ var updateCmd = &cobra.Command{
 	},
 }
 
-func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate time.Time, manager *data.Manager) error {
+func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate time.Time) error {
 	tz := common.GetTimezone()
 	subLog := log.With().Str("Shortcode", strat.Shortcode).Time("EndDate", endDate).Str("StrategyName", strat.Name).Logger()
 	subLog.Info().Msg("create portfolio")
@@ -184,7 +175,7 @@ func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate 
 		return err
 	}
 
-	b, err := backtest.New(ctx, strat.Shortcode, params, &strat.Benchmark, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), endDate, manager)
+	b, err := backtest.New(ctx, strat.Shortcode, params, &strat.Benchmark, time.Date(1980, 1, 1, 0, 0, 0, 0, tz), endDate)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("unable to build arguments for metrics calculation")
 		return err

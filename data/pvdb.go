@@ -17,109 +17,36 @@ package data
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"strings"
 	"time"
 
-	"github.com/jackc/pgtype"
-	dataframe "github.com/jdfergason/dataframe-go"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 )
 
-var (
-	ErrUnsupportedMetric = errors.New("unsupported metric")
-	ErrInvalidTimeRange  = errors.New("start must be before end")
-	ErrNoTradingDays     = errors.New("no trading days available")
-)
-
-type Pvdb struct {
-	cache     map[string]float64
-	Dividends map[Security][]*Measurement
-	Splits    map[Security][]*Measurement
-	hashFunc  func(date time.Time, metric Metric, security *Security) string
+type PvDb struct {
 }
 
 // NewPVDB Create a new PVDB data provider
-func NewPVDB(cache map[string]float64, hashFunc func(date time.Time, metric Metric, security *Security) string) *Pvdb {
-	return &Pvdb{
-		cache:     cache,
-		hashFunc:  hashFunc,
-		Dividends: make(map[Security][]*Measurement),
-		Splits:    make(map[Security][]*Measurement),
-	}
-}
-
-// Date provider functions
-
-func adjustSearchDates(frequency Frequency, begin, end time.Time) (time.Time, time.Time) {
-	switch frequency {
-	case FrequencyMonthly:
-		begin = begin.AddDate(0, -1, 0)
-		end = end.AddDate(0, 1, 0)
-	case FrequencyAnnually:
-		begin = begin.AddDate(-1, 0, 0)
-		end = end.AddDate(1, 0, 0)
-	default:
-		begin = begin.AddDate(0, 0, -7)
-		end = end.AddDate(0, 0, 7)
-	}
-	return begin, end
-}
-
-func filterDays(frequency Frequency, res []time.Time) []time.Time {
-	days := make([]time.Time, 0, 252)
-
-	var schedule *tradecron.TradeCron
-	var err error
-
-	switch frequency {
-	case FrequencyDaily:
-		schedule, err = tradecron.New("@close * * *", tradecron.RegularHours)
-		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close * * *").Msg("could not build tradecron schedule")
-		}
-	case FrequencyWeekly:
-		schedule, err = tradecron.New("@close @weekend", tradecron.RegularHours)
-		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close @weekend").Msg("could not build tradecron schedule")
-		}
-	case FrequencyMonthly:
-		schedule, err = tradecron.New("@close @monthend", tradecron.RegularHours)
-		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close @monthend").Msg("could not build tradecron schedule")
-		}
-	case FrequencyAnnually:
-		schedule, err = tradecron.New("@close @monthend 12 *", tradecron.RegularHours)
-		if err != nil {
-			log.Panic().Err(err).Str("Schedule", "@close @monthend 12 *").Msg("could not build tradecron schedule")
-		}
-	}
-
-	for _, xx := range res {
-		if schedule.IsTradeDay(xx) {
-			days = append(days, xx)
-		}
-	}
-	return days
+func NewPvDb() *PvDb {
+	return &PvDb{}
 }
 
 // TradingDays returns a list of trading days between begin and end at the desired frequency
-func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, frequency Frequency) ([]time.Time, error) {
+func (p *PvDb) TradingDays(ctx context.Context, begin time.Time, end time.Time) ([]time.Time, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.TradingDays")
 	defer span.End()
 
 	tz := common.GetTimezone()
 
-	subLog := log.With().Time("Begin", begin).Time("End", end).Str("Frequency", string(frequency)).Logger()
-	subLog.Debug().Msg("getting trading days")
+	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
 	res := make([]time.Time, 0, 252)
 	if end.Before(begin) {
@@ -135,8 +62,6 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 
 	searchBegin := begin
 	searchEnd := end
-	searchBegin, searchEnd = adjustSearchDates(frequency, searchBegin, searchEnd)
-
 	rows, err := trx.Query(ctx, "SELECT trading_day FROM trading_days WHERE market='us' AND trading_day BETWEEN $1 and $2 ORDER BY trading_day", searchBegin, searchEnd)
 	if err != nil {
 		span.RecordError(err)
@@ -162,8 +87,6 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		res = append(res, dt)
 	}
 
-	cnt := len(res) - 1
-
 	if len(res) == 0 {
 		span.SetStatus(codes.Error, "no trading days found")
 		subLog.Error().Stack().Msg("could not load trading days")
@@ -173,105 +96,25 @@ func (p *Pvdb) TradingDays(ctx context.Context, begin time.Time, end time.Time, 
 		return res, ErrNoTradingDays
 	}
 
-	days := filterDays(frequency, res)
-
-	daysFiltered := make([]time.Time, 0, 252)
-	lastDay := res[cnt]
-	if len(days) == 0 {
+	if len(res) == 0 {
 		subLog.Error().Stack().Msg("days array is empty")
 		if err := trx.Rollback(ctx); err != nil {
 			subLog.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
-		return daysFiltered, ErrNoTradingDays
-	}
-
-	if !lastDay.Equal(days[len(days)-1]) {
-		days = append(days, res[cnt])
-	}
-
-	// final filter to actual days
-	beginFull := time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, begin.Location())
-	endFull := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999_999_999, begin.Location())
-	for _, d := range days {
-		if (d.Before(endFull) || d.Equal(endFull)) && (d.After(beginFull) || d.Equal(beginFull)) {
-			daysFiltered = append(daysFiltered, d)
-		}
+		return res, ErrNoTradingDays
 	}
 
 	if err := trx.Commit(ctx); err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not commit transaction")
 	}
-	return daysFiltered, nil
+	return res, nil
 }
 
-// Provider functions
-
-func (p *Pvdb) DataType() string {
-	return "security"
-}
-
-// uniqueSecurities filters a list of Securities to only unique values
-func uniqueSecurities(securities []*Security) []*Security {
-	unique := make(map[string]*Security, len(securities))
-	for _, v := range securities {
-		unique[v.CompositeFigi] = v
-	}
-	uniqList := make([]*Security, len(unique))
-	j := 0
-	for _, v := range unique {
-		uniqList[j] = v
-		j++
-	}
-	return uniqList
-}
-
-func buildDataFrame(vals map[int]map[string]float64, securities []*Security, tradingDays []time.Time, lastDate time.Time) *dataframe.DataFrame {
-	securityCnt := len(securities)
-	series := make([]dataframe.Series, 0, securityCnt+1)
-	series = append(series, dataframe.NewSeriesTime(common.DateIdx, &dataframe.SeriesInit{Capacity: len(tradingDays)}, tradingDays))
-
-	// build series
-	vals2 := make(map[string][]float64, securityCnt)
-	for _, security := range securities {
-		vals2[security.CompositeFigi] = make([]float64, len(tradingDays))
-	}
-
-	for idx, k := range tradingDays {
-		dayData, ok := vals[k.Year()*1000+k.YearDay()]
-		if !ok {
-			dayData = vals[lastDate.Year()*1000+k.YearDay()]
-		}
-
-		for _, security := range securities {
-			v, ok := dayData[security.CompositeFigi]
-			if !ok {
-				vals2[security.CompositeFigi][idx] = math.NaN()
-			} else {
-				vals2[security.CompositeFigi][idx] = v
-			}
-		}
-	}
-
-	// break arrays out of map in order to build the dataframe
-	for _, security := range securities {
-		arr := vals2[security.CompositeFigi]
-		series = append(series, dataframe.NewSeriesFloat64(security.CompositeFigi, &dataframe.SeriesInit{Capacity: len(arr)}, arr))
-	}
-
-	df := dataframe.NewDataFrame(series...)
-	return df
-}
-
-func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, metric Metric, frequency Frequency, begin time.Time, end time.Time) (data *dataframe.DataFrame, err error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
+// GetEOD fetches EOD metrics from the database
+func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEOD")
 	defer span.End()
 	tz := common.GetTimezone()
-	subLog := log.With().Str("Metric", string(metric)).Str("Frequency", string(frequency)).Time("StartTime", begin).Time("EndTime", end).Logger()
-
-	tradingDays, err := p.TradingDays(ctx, begin, end, frequency)
-	if err != nil {
-		return nil, err
-	}
 
 	// ensure securities is a unique set
 	securities = uniqueSecurities(securities)
@@ -281,7 +124,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 		span.RecordError(err)
 		msg := "failed to load eod prices -- could not get a database transaction"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Stack().Err(err).Msg(msg)
+		log.Warn().Stack().Err(err).Msg(msg)
 		return nil, err
 	}
 
@@ -291,12 +134,17 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 	args[1] = end
 
 	figiSet := make([]string, len(securities))
+	debugArgs := make([]string, len(securities))
 	for idx, security := range securities {
 		figiSet[idx] = fmt.Sprintf("$%d", idx+3)
+		debugArgs[idx] = security.CompositeFigi
 		args[idx+2] = security.CompositeFigi
 	}
 	figiArgs := strings.Join(figiSet, ", ")
-	sql := fmt.Sprintf("SELECT event_date, composite_figi, close, adj_close::double precision FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, composite_figi", figiArgs)
+	metricColumns := metricsToColumns(metrics)
+	sql := fmt.Sprintf("SELECT event_date, composite_figi, %s FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, composite_figi", metricColumns, figiArgs)
+
+	log.Debug().Strs("FigiArgs", debugArgs).Time("Begin", begin).Time("End", end).Str("Sql", sql).Msg("sql query to run")
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, args...)
@@ -304,7 +152,7 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 		span.RecordError(err)
 		msg := "failed to load eod prices -- db query failed"
 		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
+		log.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
 		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
@@ -313,182 +161,62 @@ func (p *Pvdb) GetDataForPeriod(ctx context.Context, securities []*Security, met
 	}
 
 	// parse database rows
-	vals := make(map[int]map[string]float64, len(securities))
-
-	var date time.Time
-	var lastDate time.Time
-	var compositeFigi string
-	var close float64
-	var adjClose pgtype.Float8
-
-	securityCnt := len(securities)
+	vals := make(dataframe.DataFrameMap, len(securities))
 
 	for rows.Next() {
-		err = rows.Scan(&date, &compositeFigi, &close, &adjClose)
-		s, err := SecurityFromFigi(compositeFigi)
-		if err != nil {
-			subLog.Error().Err(err).Str("CompositeFigi", compositeFigi).Msg("security does not exist")
-			return nil, err
+		var eventDate time.Time
+		var compositeFigi string
+
+		args := []interface{}{&eventDate, &compositeFigi}
+		metricVals := make([]*float64, len(metrics))
+		for idx := range metricVals {
+			var metricVal float64
+			metricVals[idx] = &metricVal
+			args = append(args, &metricVal)
 		}
 
-		p.cache[p.hashFunc(date, MetricClose, s)] = close
-		if adjClose.Status == pgtype.Present {
-			p.cache[p.hashFunc(date, MetricAdjustedClose, s)] = adjClose.Float
-		}
-
-		if err != nil {
-			subLog.Error().Stack().Err(err).Msg("failed to load eod prices -- db query scan failed")
+		if err := rows.Scan(args...); err != nil {
+			log.Error().Stack().Err(err).Int("ArgCount", len(args)).Str("SQL", sql).Msg("failed to load eod prices -- db query scan failed")
 			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 			return nil, err
 		}
 
-		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
-		dateHash := date.Year()*1000 + date.YearDay()
-		valMap, ok := vals[dateHash]
-		if !ok {
-			valMap = make(map[string]float64, securityCnt)
-			vals[dateHash] = valMap
+		eventDate = time.Date(eventDate.Year(), eventDate.Month(), eventDate.Day(), 16, 0, 0, 0, tz)
+		security, err := SecurityFromFigi(compositeFigi)
+		if err != nil {
+			log.Error().Err(err).Msg("cannot lookup security in local security cache")
 		}
 
-		switch metric {
-		case MetricClose:
-			valMap[compositeFigi] = close
-		case MetricAdjustedClose:
-			valMap[compositeFigi] = adjClose.Float
-		default:
-			span.SetStatus(codes.Error, "un-supported metric")
-			if err := trx.Rollback(ctx); err != nil {
-				log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		for idx, metric := range metrics {
+			securityMetric := SecurityMetric{
+				SecurityObject: *security,
+				MetricObject:   metric,
 			}
-
-			log.Panic().Str("Metric", string(metric)).Msg("Unsupported metric type")
-			return nil, ErrUnsupportedMetric
+			if val, ok := vals[securityMetric.String()]; ok {
+				val.InsertRow(eventDate, *metricVals[idx])
+			} else {
+				vals[securityMetric.String()] = &dataframe.DataFrame{
+					Dates:    []time.Time{eventDate},
+					ColNames: []string{securityMetric.String()},
+					Vals:     [][]float64{{*metricVals[idx]}},
+				}
+			}
 		}
-
-		lastDate = date
 	}
 
 	if err := trx.Commit(ctx); err != nil {
 		log.Warn().Stack().Err(err).Msg("error committing transaction")
 	}
 
-	// preload splits & divs
-	p.preloadCorporateActions(ctx, securities, begin)
-
-	// build dataframe
-	df := buildDataFrame(vals, securities, tradingDays, lastDate)
-	return df, nil
+	return vals, nil
 }
 
-func (p *Pvdb) preloadCorporateActions(ctx context.Context, securities []*Security, start time.Time) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetDataForPeriod")
+func (p *PvDb) GetEODOnOrBefore(ctx context.Context, security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
+	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEODOnOrBefore")
 	defer span.End()
-
-	tz := common.GetTimezone()
-
-	corporateFigiSet := make([]string, 0, len(securities))
-	for _, security := range securities {
-		if _, ok := p.Dividends[*security]; !ok {
-			corporateFigiSet = append(corporateFigiSet, security.CompositeFigi)
-			p.Dividends[*security] = make([]*Measurement, 0)
-			p.Splits[*security] = make([]*Measurement, 0)
-		}
-	}
-
-	if len(corporateFigiSet) == 0 {
-		log.Debug().Msg("skipping preload of corporate actions because there are no additional securities to preload")
-		return // nothing needs to be loaded
-	}
-
-	log.Debug().Time("Start", start).Strs("FIGI", corporateFigiSet).Msg("pre-load from corporate actions")
-
-	subLog := log.With().Strs("Figis", corporateFigiSet).Time("StartTime", start).Logger()
-
-	args := make([]interface{}, len(corporateFigiSet)+1)
-	args[0] = start
-
-	figiPlaceholders := make([]string, len(corporateFigiSet))
-	for idx, figi := range corporateFigiSet {
-		figiPlaceholders[idx] = fmt.Sprintf("$%d", idx+2)
-		args[idx+1] = figi
-	}
-	corporateFigiArgs := strings.Join(figiPlaceholders, ", ")
-	sql := fmt.Sprintf("SELECT event_date, composite_figi, dividend, split_factor FROM eod WHERE composite_figi IN (%s) AND event_date >= $1 AND (dividend != 0 OR split_factor != 1.0) ORDER BY event_date DESC, composite_figi", corporateFigiArgs)
-
-	trx, err := database.TrxForUser(ctx, "pvuser")
-	if err != nil {
-		span.RecordError(err)
-		msg := "failed to get transaction for preloading corporate actions"
-		span.SetStatus(codes.Error, msg)
-		log.Warn().Stack().Err(err).Msg(msg)
-		return
-	}
-
-	// execute the query
-	rows, err := trx.Query(ctx, sql, args...)
-	if err != nil {
-		span.RecordError(err)
-		msg := "failed to load eod prices -- db query failed"
-		span.SetStatus(codes.Error, msg)
-		subLog.Warn().Stack().Err(err).Str("SQL", sql).Msg(msg)
-		if err := trx.Rollback(ctx); err != nil {
-			log.Error().Stack().Err(err).Msg("could not rollback transaction")
-		}
-		return
-	}
-
-	var date time.Time
-	var compositeFigi string
-	var dividend float64
-	var splitFactor float64
-
-	for rows.Next() {
-		err = rows.Scan(&date, &compositeFigi, &dividend, &splitFactor)
-		if err != nil {
-			if err := trx.Rollback(ctx); err != nil {
-				log.Error().Stack().Err(err).Msg("could not rollback transaction")
-			}
-			subLog.Panic().Stack().Err(err).Msg("failed to load corporate actions -- db query scan failed")
-			return
-		}
-
-		security, err := SecurityFromFigi(compositeFigi)
-		if err != nil {
-			log.Panic().Err(err).Str("CompositeFigi", compositeFigi).Msg("asset map out of sync")
-		}
-
-		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
-		divs := p.Dividends[*security]
-		if dividend != 0.0 {
-			divs = append(divs, &Measurement{
-				Date:  date,
-				Value: dividend,
-			})
-		}
-
-		splits := p.Splits[*security]
-		if splitFactor != 1.0 {
-			splits = append(splits, &Measurement{
-				Date:  date,
-				Value: splitFactor,
-			})
-		}
-
-		p.Dividends[*security] = divs
-		p.Splits[*security] = splits
-	}
-
-	if err := trx.Commit(ctx); err != nil {
-		log.Error().Stack().Err(err).Msg("error committing transaction")
-	}
-}
-
-func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metric Metric, before time.Time) (float64, error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetLatestDataBefore")
-	defer span.End()
-	subLog := log.With().Str("Symbol", security.Ticker).Str("Metric", string(metric)).Time("Before", before).Logger()
+	subLog := log.With().Str("Security.Ticker", security.Ticker).Str("Security.Figi", security.CompositeFigi).Str("Metric", string(metric)).Time("Date", date).Logger()
 
 	tz := common.GetTimezone()
 
@@ -498,7 +226,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 		msg := "could not get a database transaction"
 		span.SetStatus(codes.Error, msg)
 		subLog.Warn().Stack().Err(err).Msg(msg)
-		return math.NaN(), err
+		return math.NaN(), time.Time{}, err
 	}
 
 	// build SQL query
@@ -526,13 +254,13 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
-		return math.NaN(), ErrUnsupportedMetric
+		return math.NaN(), time.Time{}, ErrUnsupportedMetric
 	}
 
-	sql := fmt.Sprintf("SELECT event_date, %s FROM eod WHERE composite_figi=$1 AND event_date <= $2 ORDER BY event_date DESC LIMIT 1", columns)
+	sql := fmt.Sprintf("SELECT event_date, %s FROM eod WHERE composite_figi=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
 
 	// execute the query
-	rows, err := trx.Query(ctx, sql, security.CompositeFigi, before)
+	rows, err := trx.Query(ctx, sql, security.CompositeFigi, date)
 	if err != nil {
 		span.RecordError(err)
 		msg := "db query failed"
@@ -542,14 +270,14 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
-		return math.NaN(), err
+		return math.NaN(), time.Time{}, err
 	}
 
-	var date time.Time
+	var eventDate time.Time
 	var val float64
 
 	for rows.Next() {
-		err = rows.Scan(&date, &val)
+		err = rows.Scan(&eventDate, &val)
 		if err != nil {
 			span.RecordError(err)
 			msg := "db scan failed"
@@ -558,7 +286,7 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
-			return math.NaN(), err
+			return math.NaN(), time.Time{}, err
 		}
 
 		date = time.Date(date.Year(), date.Month(), date.Day(), 16, 0, 0, 0, tz)
@@ -567,5 +295,32 @@ func (p *Pvdb) GetLatestDataBefore(ctx context.Context, security *Security, metr
 	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit transaction")
 	}
-	return val, err
+	return val, eventDate, err
+}
+
+func metricsToColumns(metrics []Metric) string {
+	metricCols := make([]string, len(metrics))
+	for idx, metric := range metrics {
+		switch metric {
+		case MetricOpen:
+			metricCols[idx] = "open"
+		case MetricLow:
+			metricCols[idx] = "low"
+		case MetricHigh:
+			metricCols[idx] = "high"
+		case MetricClose:
+			metricCols[idx] = "close"
+		case MetricAdjustedClose:
+			metricCols[idx] = "adj_close"
+		case MetricSplitFactor:
+			metricCols[idx] = "split_factor"
+		case MetricDividendCash:
+			metricCols[idx] = "dividend"
+		case MetricVolume:
+			metricCols[idx] = "volume"
+		default:
+			log.Warn().Str("Metric", string(metric)).Msg("unknown metric requested")
+		}
+	}
+	return strings.Join(metricCols, ", ")
 }

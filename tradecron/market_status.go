@@ -123,8 +123,8 @@ func (ms *MarketStatus) NextFirstTradingDayOfMonth(t time.Time) time.Time {
 
 // NextFirstTradingDayOfWeek returns the first trading day of the week.
 func (ms *MarketStatus) NextFirstTradingDayOfWeek(t time.Time) time.Time {
-	days := (8 - t.Weekday()) % 7
-	t2 := t.AddDate(0, 0, int(days))
+	daysToWeekBegin := (8 - t.Weekday()) % 7
+	t2 := t.AddDate(0, 0, int(daysToWeekBegin))
 	marketOpen := false
 	for !marketOpen {
 		marketOpen = ms.IsMarketDay(t2)

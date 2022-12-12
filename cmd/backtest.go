@@ -21,18 +21,20 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
-	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
-	"github.com/penny-vault/pv-api/tradecron"
 	"github.com/rs/zerolog/log"
 
 	"github.com/spf13/cobra"
 )
 
+var backtestStartTime string
+var backtestEndTime string
+
 func init() {
+	backtestCmd.LocalFlags().StringVarP(&backtestStartTime, "start", "s", "1980-01-01", "start time for back test of form yyyy-mm-dd")
+	backtestCmd.LocalFlags().StringVarP(&backtestEndTime, "end", "e", "1980-01-01", "end time for back test of form yyyy-mm-dd")
 	rootCmd.AddCommand(backtestCmd)
 }
 
@@ -49,14 +51,19 @@ var backtestCmd = &cobra.Command{
 			log.Panic().Err(err).Msg("could not connect to database")
 		}
 
-		// Initialize data framework
-		data.InitializeDataManager()
-		tradecron.Initialize()
-		log.Info().Msg("initialized data framework")
+		// parse start and end time
+		startTime, err := time.Parse("2006-01-02", backtestStartTime)
+		if err != nil {
+			log.Fatal().Err(err).Str("input", backtestStartTime).Msg("invalid format for start time")
+		}
+
+		endTime, err := time.Parse("2006-01-02", backtestEndTime)
+		if err != nil {
+			log.Fatal().Err(err).Str("input", backtestEndTime).Msg("invalid format for end time")
+		}
 
 		// initialize strategies
 		strategies.InitializeStrategyMap()
-		dataManager := data.NewManager()
 
 		strategies.LoadStrategyMetricsFromDb()
 		strat := strategies.StrategyMap[args[0]]
@@ -74,25 +81,24 @@ var backtestCmd = &cobra.Command{
 			return
 		}
 
-		target, predicted, err := strategy.Compute(ctx, dataManager)
+		target, predicted, err := strategy.Compute(ctx, startTime, endTime)
 		if err != nil {
 			log.Fatal().Err(err).Msg("Could not compute strategy positions")
 		}
 
-		dateSeriesIdx, err := target.NameToColumn(common.DateIdx)
-		if err != nil {
-			log.Fatal().Err(err).Msg("could not get date index of target portfolio")
+		if len(target) == 0 {
+			log.Fatal().Msg("no transactions available over period")
 		}
-		dateIdx := target.Series[dateSeriesIdx]
-		startDate := dateIdx.Value(0).(time.Time)
 
-		fmt.Println(target.Table())
+		startDate := target[0].Date
+
+		target.Table()
 		fmt.Printf("Start Date: %s\n", startDate.Format("2006-01-02"))
-		fmt.Printf("Next Trade Date: %+v\n", predicted.TradeDate)
-		fmt.Printf("Predicted Target: %+v\n", predicted.Target)
-		fmt.Printf("Predicted Justification: %+v\n", predicted.Justification)
+		fmt.Printf("Next Trade Date: %+v\n", predicted.Date)
+		fmt.Printf("Predicted Target: %+v\n", predicted.Members)
+		fmt.Printf("Predicted Justification: %+v\n", predicted.Justifications)
 
-		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000, dataManager)
+		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000)
 		fmt.Println("Building portfolio...")
 		if err := pm.TargetPortfolio(ctx, target); err != nil {
 			log.Fatal().Stack().Err(err).Msg("could not invest portfolio")

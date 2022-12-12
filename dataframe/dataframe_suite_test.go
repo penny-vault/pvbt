@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dfextras_test
+package dataframe_test
 
 import (
 	"testing"
@@ -23,8 +23,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func TestDfextras(t *testing.T) {
+func TestDataFrame(t *testing.T) {
 	log.Logger = log.Output(GinkgoWriter)
 	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dfextras Suite")
+
+	RunSpecs(t, "Dataframe Suite")
 }
