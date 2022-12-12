@@ -283,18 +283,18 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 			if val, ok := holdings[data.CashSecurity]; ok {
 				holdings[data.CashSecurity] = val - trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("buy shares")
+			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process buy shares transaction")
 		case DividendTransaction:
 			if val, ok := holdings[data.CashSecurity]; ok {
 				holdings[data.CashSecurity] = val + trx.TotalValue
 			} else {
 				holdings[data.CashSecurity] = trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("dividend released")
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process dividend transaction")
 			continue
 		case SplitTransaction:
 			shares = trx.Shares
-			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("asset split")
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("process split transaction")
 		case SellTransaction:
 			shares -= trx.Shares
 			if val, ok := holdings[data.CashSecurity]; ok {
@@ -302,7 +302,7 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 			} else {
 				holdings[data.CashSecurity] = trx.TotalValue
 			}
-			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("sell shares")
+			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process sell transaction")
 		default:
 			log.Warn().Stack().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
 			return holdings, trxIdx, ErrInvalidTransactionType
