@@ -284,6 +284,14 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 				holdings[data.CashSecurity] = val - trx.TotalValue
 			}
 			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process buy shares transaction")
+		case InterestTransaction:
+			if val, ok := holdings[data.CashSecurity]; ok {
+				holdings[data.CashSecurity] = val + trx.TotalValue
+			} else {
+				holdings[data.CashSecurity] = trx.TotalValue
+			}
+			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process interest transaction")
+			continue
 		case DividendTransaction:
 			if val, ok := holdings[data.CashSecurity]; ok {
 				holdings[data.CashSecurity] = val + trx.TotalValue
