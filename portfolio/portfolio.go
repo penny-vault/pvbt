@@ -64,6 +64,7 @@ const (
 const (
 	SellTransaction     = "SELL"
 	BuyTransaction      = "BUY"
+	InterestTransaction = "INTEREST"
 	DividendTransaction = "DIVIDEND"
 	SplitTransaction    = "SPLIT"
 	DepositTransaction  = "DEPOSIT"
