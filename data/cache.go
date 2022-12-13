@@ -326,8 +326,8 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 
 	// create an interval and check that it's valid
 	interval := &Interval{
-		Begin: begin,
-		End:   end,
+		Begin: dateOnly(begin),
+		End:   dateOnly(end),
 	}
 
 	// check if the covered period differs from the interval, if it does set it
@@ -339,6 +339,15 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 	if err := interval.Valid(); err != nil {
 		log.Error().Err(err).Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
 		return ErrInvalidTimeRange
+	}
+
+	// for intervals that include the most recent couple of days truncate the period to the maximum of recent or the coveredInterval.End
+	// this addresses the case where prices have not been downloaded for the current day but a run tries to cache them
+	recent := time.Now()
+	recent = time.Date(recent.Year(), recent.Month(), recent.Day(), 0, 0, 0, 0, common.GetTimezone())
+	recent = recent.AddDate(0, 0, -7)
+	if interval.End.After(recent) {
+		interval.End = maxTime(coveredInterval.End, recent)
 	}
 
 	// check if this key already exists
@@ -424,6 +433,15 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 	if err := interval.Valid(); err != nil {
 		log.Error().Err(err).Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
 		return ErrInvalidTimeRange
+	}
+
+	// for intervals that include the most recent couple of days truncate the period to the maximum of recent or the coveredInterval.End
+	// this addresses the case where prices have not been downloaded for the current day but a run tries to cache them
+	recent := time.Now()
+	recent = time.Date(recent.Year(), recent.Month(), recent.Day(), 0, 0, 0, 0, common.GetTimezone())
+	recent = recent.AddDate(0, 0, -7)
+	if interval.End.After(recent) {
+		interval.End = maxTime(coveredInterval.End, recent)
 	}
 
 	// check if this key already exists
