@@ -35,9 +35,9 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
-	golang.org/x/net v0.2.0 // indirect
-	golang.org/x/sys v0.2.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/net v0.3.0 // indirect
+	golang.org/x/sys v0.3.0 // indirect
+	golang.org/x/text v0.5.0 // indirect
 	gonum.org/v1/gonum v0.12.0
 	google.golang.org/protobuf v1.28.1 // indirect
 )
@@ -48,7 +48,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/jdfergason/dataframe-go v0.2.0
 	github.com/nats-io/nats.go v1.21.0
-	github.com/onsi/ginkgo/v2 v2.6.0
+	github.com/onsi/ginkgo/v2 v2.6.1
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.28.0
 	github.com/sendgrid/sendgrid-go v3.12.0+incompatible
