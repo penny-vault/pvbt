@@ -24,7 +24,7 @@ require (
 	github.com/magefile/mage v1.14.0
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
-	github.com/onsi/gomega v1.24.1
+	github.com/onsi/gomega v1.24.2
 	github.com/pelletier/go-toml/v2 v2.0.6
 	github.com/pierrec/lz4/v4 v4.1.17
 	github.com/spf13/cast v1.5.0 // indirect
@@ -35,7 +35,7 @@ require (
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.0.0-20220722155217-630584e8d5aa // indirect
 	golang.org/x/exp v0.0.0-20220713135740-79cabaa25d75 // indirect
-	golang.org/x/net v0.3.0 // indirect
+	golang.org/x/net v0.4.0 // indirect
 	golang.org/x/sys v0.3.0 // indirect
 	golang.org/x/text v0.5.0 // indirect
 	gonum.org/v1/gonum v0.12.0
