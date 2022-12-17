@@ -15,9 +15,40 @@
 
 package dataframe
 
-import "github.com/rs/zerolog/log"
+import (
+	"time"
+
+	"github.com/penny-vault/pv-api/common"
+	"github.com/rs/zerolog/log"
+)
 
 type DataFrameMap map[string]*DataFrame
+
+// Align finds the maximum start and minimum end across all dataframes and trims them to match
+func (dfMap DataFrameMap) Align() DataFrameMap {
+	// find max start and min end
+	var start time.Time
+	var end time.Time
+
+	// initialize end time with a value from dfMap
+	for _, df := range dfMap {
+		end = df.End()
+		break
+	}
+
+	for _, df := range dfMap {
+		start = common.MaxTime(start, df.Start())
+		end = common.MinTime(end, df.End())
+	}
+
+	// trim df's to expected time range
+	dfMapTrimmed := make(DataFrameMap, len(dfMap))
+	for k, df := range dfMap {
+		dfMapTrimmed[k] = df.Trim(start, end)
+	}
+
+	return dfMapTrimmed
+}
 
 // Drop calls dataframe.Drop on each dataframe in the map
 func (dfMap DataFrameMap) Drop(val float64) DataFrameMap {
@@ -36,11 +67,13 @@ func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
 
 }
 
-// DataFrame converts each item in the map to a column in the dataframe. If dataframes do not align then gaps are filled with math.NaN()
+// DataFrame converts each item in the map to a column in the dataframe. If dataframes do not align they are trimmed to the max start and
+// min end
 func (dfMap DataFrameMap) DataFrame() *DataFrame {
 	df := &DataFrame{}
 	first := true
-	for _, v := range dfMap {
+	dfMap2 := dfMap.Align()
+	for _, v := range dfMap2 {
 		if first {
 			df.Dates = v.Dates
 			df.ColNames = v.ColNames
@@ -48,10 +81,9 @@ func (dfMap DataFrameMap) DataFrame() *DataFrame {
 			first = false
 		} else {
 			if len(df.Dates) != len(v.Dates) ||
-				!df.Dates[0].Equal(v.Dates[0]) ||
-				!df.Dates[len(df.Dates)-1].Equal(v.Dates[len(v.Dates)-1]) {
-				// TODO: align date indexes
-				log.Panic().Msg("date indexes do not align!")
+				!df.Start().Equal(v.Start()) ||
+				!df.End().Equal(v.End()) {
+				log.Panic().Time("df1.Start", df.Start()).Time("df1.End", df.End()).Time("df2.Start", v.Start()).Time("df2.End", v.End()).Msg("date indexes do not match - cannot merge into single dataframe")
 			}
 			df.ColNames = append(df.ColNames, v.ColNames...)
 			df.Vals = append(df.Vals, v.Vals...)

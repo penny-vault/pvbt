@@ -131,6 +131,14 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 	return df
 }
 
+// End returns the last time in the DataFrame
+func (df *DataFrame) End() time.Time {
+	if len(df.Dates) == 0 {
+		return time.Time{}
+	}
+	return df.Dates[len(df.Dates)-1]
+}
+
 // ForEachMap takes a lambda function of prototype func(rowIdx int, rowDate time.Time, vals map[string]float64) map[string]float64
 // and updates the row with the returned value; if nil is returned then don't update the row, otherwise update row with returned values
 func (df *DataFrame) ForEach(lambda func(int, time.Time, map[string]float64) map[string]float64) {
@@ -264,7 +272,7 @@ func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
 		log.Panic().Time("lastDate", df.Dates[len(df.Dates)-1]).Time("newDate", date).Msg("newDate must be after lastDate")
 	}
 
-	// Check that hte number of columns equals the number of vals passed
+	// Check that the number of columns equals the number of vals passed
 	if len(vals) != len(df.ColNames) {
 		log.Panic().Int("NumValsPassed", len(vals)).Int("NumColumns", len(df.ColNames)).Msg("number of vals passed must equal number of columns")
 	}
@@ -409,6 +417,14 @@ func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
 	return one, two
 }
 
+// Start returns the first date of the dataframe
+func (df *DataFrame) Start() time.Time {
+	if len(df.Dates) == 0 {
+		return time.Time{}
+	}
+	return df.Dates[0]
+}
+
 // Table prints an ASCII formatted table to stdout
 func (df *DataFrame) Table() string {
 	if len(df.Dates) == 0 {
@@ -442,30 +458,36 @@ func (df *DataFrame) Table() string {
 
 // Trim the dataframe to the specified date range (inclusive)
 func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
+	df2 := &DataFrame{
+		ColNames: df.ColNames,
+		Dates:    df.Dates,
+		Vals:     df.Vals,
+	}
+
 	// special case 0: requested range is invalid
 	if end.Before(begin) {
-		df.Dates = []time.Time{}
-		df.Vals = [][]float64{}
-		return df
+		df2.Dates = []time.Time{}
+		df2.Vals = [][]float64{}
+		return df2
 	}
 
 	// special case 1: data frame is empty
 	if df.Len() == 0 {
-		return df
+		return df2
 	}
 
 	// special case 2: end time is before data frame start
 	if end.Before(df.Dates[0]) {
-		df.Dates = []time.Time{}
-		df.Vals = [][]float64{}
-		return df
+		df2.Dates = []time.Time{}
+		df2.Vals = [][]float64{}
+		return df2
 	}
 
 	// special case 3: start time is after data frame end
 	if begin.After(df.Dates[len(df.Dates)-1]) {
-		df.Dates = []time.Time{}
-		df.Vals = [][]float64{}
-		return df
+		df2.Dates = []time.Time{}
+		df2.Vals = [][]float64{}
+		return df2
 	}
 
 	// Use binary search to find the index corresponding to the start and end times
@@ -482,10 +504,11 @@ func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
 	if endIdx != len(df.Dates) {
 		endIdx += 1
 	}
-	df.Dates = df.Dates[beginIdx:endIdx]
+
+	df2.Dates = df.Dates[beginIdx:endIdx]
 	for colIdx, col := range df.Vals {
-		df.Vals[colIdx] = col[beginIdx:endIdx]
+		df2.Vals[colIdx] = col[beginIdx:endIdx]
 	}
 
-	return df
+	return df2
 }

@@ -729,6 +729,66 @@ var _ = Describe("Cache", func() {
 			Entry("when range is a single date", 4, 4, []float64{1}, nil),
 		)
 
+		DescribeTable("get partial for various time ranges",
+			func(a, b int, expected []float64) {
+				begin := time.Date(2022, 8, 3, 0, 0, 0, 0, tz())
+				end := time.Date(2022, 8, 8, 0, 0, 0, 0, tz())
+				vals := []float64{3, 4, 5, 8}
+				dateIdx := []time.Time{
+					time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
+				}
+
+				df := &dataframe.DataFrame{
+					Dates:    dateIdx,
+					Vals:     [][]float64{vals},
+					ColNames: []string{"vals"},
+				}
+
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
+				Expect(err).To(BeNil())
+
+				// try to retrieve the data
+				rangeA := time.Date(2022, 8, a, 0, 0, 0, 0, tz())
+				rangeB := time.Date(2022, 8, b, 0, 0, 0, 0, tz())
+				res := cache.GetPartial(security, data.MetricAdjustedClose, rangeA, rangeB)
+
+				if len(expected) > 0 {
+					Expect(len(res.Vals)).To(Equal(1), "number of columns in df should be one")
+					if len(res.Vals) > 0 {
+						Expect(res.Vals[0]).To(Equal(expected))
+					}
+				} else {
+					Expect(len(res.Vals)).To(Equal(1), "number of columns in df should be zero")
+					Expect(len(res.Vals[0])).To(Equal(0), "number of values should be zero")
+				}
+			},
+			Entry("when range is completely outside of data interval (before start)", 1, 1, []float64{}),
+			Entry("when range is before start and ends within interval", 2, 3, []float64{3}),
+			Entry("when range is before start and ends at interval end", 2, 8, []float64{3, 4, 5, 8}),
+			Entry("when range is before start and ends after end", 2, 9, []float64{3, 4, 5, 8}),
+			Entry("when range is after start and ends after end", 4, 9, []float64{4, 5, 8}),
+			Entry("when range is completely outside of data interval (after end)", 9, 9, []float64{}),
+			Entry("when range is completely outside of covered interval (after end)", 10, 12, []float64{}),
+			Entry("when range is invalid (start after end)", 5, 3, []float64{}),
+			Entry("when range is covered but days only on weekend", 6, 7, []float64{}),
+			Entry("when range is covered but single only on weekend", 6, 6, []float64{}),
+			Entry("when range is a subset of covered period", 4, 5, []float64{4, 5}),
+			Entry("range touches left extremity", 3, 5, []float64{3, 4, 5}),
+			Entry("range touches right extremity", 5, 8, []float64{5, 8}),
+			Entry("range covers full period", 3, 8, []float64{3, 4, 5, 8}),
+			Entry("range covers a single day 0", 3, 3, []float64{3}),
+			Entry("range covers a single day 1", 4, 4, []float64{4}),
+			Entry("range covers a single day 2", 5, 5, []float64{5}),
+			Entry("range covers a single day 3", 8, 8, []float64{8}),
+			Entry("range begins on weekend", 6, 8, []float64{8}),
+			Entry("range ends on saturday", 3, 6, []float64{3, 4, 5}),
+			Entry("range ends on sunday", 3, 7, []float64{3, 4, 5}),
+			Entry("when range is a single date", 4, 4, []float64{4}),
+		)
+
 		DescribeTable("test merging of values",
 			func(segments []segment, expectedItemCount, a, b int, expectedVals []float64) {
 				// set each segment on the cache, this should cause merging

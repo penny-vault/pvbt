@@ -61,6 +61,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not create strategy")
+		log.Error().Err(err).Msg("could not create strategy")
 		return nil, err
 	}
 
@@ -72,6 +73,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not marshal strategy params")
+		log.Error().Err(err).Msg("could not marshal strategy params")
 		return nil, err
 	}
 	pm.Portfolio.StrategyArguments = string(paramsJSON)
@@ -79,6 +81,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "could not compute strategy portfolio")
+		log.Error().Err(err).Msg("could not compute strategy portfolio")
 		return nil, err
 	}
 
@@ -86,6 +89,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	if err := pm.TargetPortfolio(ctx, target); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "invest target portfolio failed")
+		log.Error().Err(err).Msg("invest target portfolio failed")
 		return nil, err
 	}
 
@@ -95,6 +99,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "calculate portfolio performance failed")
+		log.Error().Err(err).Msg("calculate portfolio performance failed")
 		return nil, err
 	}
 

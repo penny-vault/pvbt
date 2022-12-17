@@ -142,7 +142,7 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	}
 	figiArgs := strings.Join(figiSet, ", ")
 	metricColumns := metricsToColumns(metrics)
-	sql := fmt.Sprintf("SELECT event_date, composite_figi, %s FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date DESC, composite_figi", metricColumns, figiArgs)
+	sql := fmt.Sprintf("SELECT event_date, composite_figi, %s FROM eod WHERE composite_figi IN (%s) AND event_date BETWEEN $1 AND $2 ORDER BY event_date ASC, composite_figi", metricColumns, figiArgs)
 
 	log.Debug().Strs("FigiArgs", debugArgs).Time("Begin", begin).Time("End", end).Str("Sql", sql).Msg("sql query to run")
 

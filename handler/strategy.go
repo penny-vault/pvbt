@@ -126,6 +126,7 @@ func RunStrategy(c *fiber.Ctx) (resp error) {
 
 	b, err := backtest.New(ctx, shortcode, params, benchmark, startDate, endDate)
 	if err != nil {
+		log.Error().Err(err).Msg("error encountered when creating backtest")
 		if err.Error() == "strategy not found" {
 			return fiber.ErrNotFound
 		}

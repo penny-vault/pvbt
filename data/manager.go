@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/coocood/freecache"
+	lru "github.com/hashicorp/golang-lru/v2"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
@@ -33,7 +33,7 @@ import (
 
 type Manager struct {
 	metricCache *SecurityMetricCache
-	lruCache    *freecache.Cache
+	lruCache    *lru.Cache[string, []byte]
 	pvdb        *PvDb
 	locker      sync.RWMutex
 	tradingDays []time.Time
@@ -60,9 +60,14 @@ func GetManagerInstance() *Manager {
 			cacheMaxSize = 10485760 // 10 MB
 		}
 
+		lruCache, err := lru.New[string, []byte](viper.GetInt("cache.lru_size"))
+		if err != nil {
+			log.Error().Err(err).Msg("could not create lru cache")
+		}
+
 		managerInstance = &Manager{
 			metricCache: NewSecurityMetricCache(cacheMaxSize, []time.Time{}),
-			lruCache:    freecache.NewCache(viper.GetInt("cache.lru_bytes")),
+			lruCache:    lruCache,
 			pvdb:        pvdb,
 			locker:      sync.RWMutex{},
 		}
@@ -82,6 +87,12 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	if err != nil {
 		log.Error().Err(err).Msg("normalizing securities failed")
 		return nil, err
+	}
+
+	// if the end time is before begin then error
+	if end.Before(begin) {
+		subLog.Error().Err(ErrBeginAfterEnd).Msg("manager.GetMetrics called with an invalid time period (begin > end)")
+		return nil, ErrBeginAfterEnd
 	}
 
 	// check what needs to be pulled
@@ -112,6 +123,10 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	}
 
 	dates := manager.TradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
+
+	if len(dates) == 0 {
+		return dataframe.DataFrameMap{}, nil
+	}
 
 	myBegin := dates[0]
 	myEnd := dates[len(dates)-1]
@@ -157,18 +172,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dfMap := make(dataframe.DataFrameMap)
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
-			df, err := manager.metricCache.Get(security, metric, begin, end)
-			if err != nil {
-				// this should never happen because we pulled the data in the previous step; if it does print out additional
-				// debug information
-				log.Error().Err(err).Time("Begin", begin).Time("End", end).Str("Figi", security.CompositeFigi).
-					Str("Ticker", security.Ticker).Str("Metric", string(metric)).Msg("fetching from cache failed")
-				items := manager.metricCache.Items(security, metric)
-				for _, item := range items {
-					log.Debug().Object("item", item).Msg("cache item at time of manager.Get cache miss")
-				}
-				return nil, err
-			}
+			df := manager.metricCache.GetPartial(security, metric, begin, end)
 			k := SecurityMetric{
 				SecurityObject: *security,
 				MetricObject:   metric,
@@ -205,8 +209,8 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 
 // GetPortfolio returns a cached portfolio
 func (manager *Manager) GetLRU(key string) []byte {
-	val, err := manager.lruCache.Get([]byte(key))
-	if err != nil {
+	val, ok := manager.lruCache.Get(key)
+	if !ok {
 		return []byte{}
 	}
 	return val
@@ -254,14 +258,12 @@ func (manager *Manager) Reset() {
 
 	periods := manager.metricCache.periods
 	manager.metricCache = NewSecurityMetricCache(cacheMaxSize, periods)
+	manager.lruCache.Purge()
 }
 
 // SetLRU saves the portfolio in the online cache
 func (manager *Manager) SetLRU(key string, val []byte) {
-	err := manager.lruCache.Set([]byte(key), val, viper.GetInt("cache.ttl"))
-	if err != nil {
-		log.Error().Err(err).Str("key", key).Msg("could not set cache value")
-	}
+	manager.lruCache.Add(key, val)
 }
 
 // TradingDays returns a dataframe over the specified date period, all values in the dataframe are 0
@@ -370,12 +372,27 @@ func (manager *Manager) TradingDaysAtFrequency(frequency dataframe.Frequency, be
 		log.Fatal().Msg("manager trading days not initialized")
 	}
 
-	myDays := manager.tradingDays[beginIdx : endIdx+1]
+	if endIdx < len(manager.tradingDays) {
+		endIdx += 1
+	}
+
+	myDays := manager.tradingDays[beginIdx:endIdx]
+
+	// if no dates match return an empty set
+	if len(myDays) == 0 {
+		return myDays
+	}
+
 	// check if we got 1 too many
 	if myDays[len(myDays)-1].After(end) {
 		myDays = myDays[:len(myDays)-1]
 	}
 
-	days := FilterDays(frequency, myDays)
+	days := myDays
+
+	if frequency != dataframe.Daily {
+		days = FilterDays(frequency, myDays)
+	}
+
 	return days
 }

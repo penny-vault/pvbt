@@ -91,21 +91,6 @@ var _ = Describe("Request tests", func() {
 			}}))
 		})
 
-		It("it errors when no data is available", func() {
-			securities := []*data.Security{
-				{
-					Ticker:        "TSLA",
-					CompositeFigi: "UNKNOWN",
-				},
-			}
-
-			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
-
-			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
-			_, err := req.Between(ctx, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()))
-			Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue())
-		})
-
 		DescribeTable("check all metrics",
 			func(a, b int, metric data.Metric, expectedVals [][]float64) {
 				metricColumn := "close"

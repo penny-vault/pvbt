@@ -243,6 +243,136 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 	return nil, ErrRangeDoesNotExist
 }
 
+// GetPartial returns the requested data over the range. If the requested period only partially exists, return what is available.
+func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, begin, end time.Time) *dataframe.DataFrame {
+	cache.locker.RLock()
+	defer cache.locker.RUnlock()
+
+	begin = dateOnly(begin)
+	end = dateOnly(end)
+
+	k := SecurityMetric{
+		SecurityObject: *security,
+		MetricObject:   metric,
+	}
+
+	requestedInterval := &Interval{
+		Begin: begin,
+		End:   end,
+	}
+
+	if err := requestedInterval.Valid(); err != nil {
+		log.Error().Err(err).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
+		return &dataframe.DataFrame{
+			ColNames: []string{""},
+			Dates:    []time.Time{},
+			Vals:     [][]float64{{}},
+		}
+	}
+
+	myKey := k.String()
+
+	if items, ok := cache.values[myKey]; ok {
+		for _, item := range items {
+			if item.Period.Overlaps(requestedInterval) {
+				var periodSubset []time.Time
+				if item.isLocalDate {
+					periodSubset = item.localDates
+				} else {
+					periodSubset = cache.periods[item.startIdx:]
+					if !item.Period.Begin.Equal(item.CoveredPeriod.Begin) {
+						coveredPeriodStart := sort.Search(len(periodSubset), func(i int) bool {
+							idxVal := periodSubset[i]
+							return (idxVal.After(item.CoveredPeriod.Begin) || idxVal.Equal(item.CoveredPeriod.Begin))
+						})
+						periodSubset = periodSubset[coveredPeriodStart:]
+					}
+				}
+
+				var beginIdx int
+				var endIdx int
+
+				endExactMatch := false
+				noValuesFound := false
+
+				if end.After(item.CoveredPeriod.End) {
+					end = item.CoveredPeriod.End
+				}
+
+				if item.CoveredPeriod.Begin.Equal(begin) {
+					beginIdx = 0
+				} else {
+					beginIdx = sort.Search(len(periodSubset), func(i int) bool {
+						idxVal := periodSubset[i]
+						return (idxVal.After(begin) || idxVal.Equal(begin))
+					})
+					if begin.After(item.CoveredPeriod.End) {
+						noValuesFound = true
+					}
+					if beginIdx == len(periodSubset) && item.isLocalDate {
+						noValuesFound = true
+					}
+				}
+
+				if item.CoveredPeriod.End.Equal(end) {
+					endIdx = len(item.Values) - 1
+					endExactMatch = true
+				} else {
+					endIdx = sort.Search(len(periodSubset), func(i int) bool {
+						idxVal := periodSubset[i]
+						return (idxVal.After(end) || idxVal.Equal(end))
+					})
+
+					if end.Before(item.CoveredPeriod.Begin) || len(periodSubset) == 0 {
+						noValuesFound = true
+					}
+
+					if endIdx == len(periodSubset) && endIdx != 0 {
+						endIdx -= 1
+					}
+
+					if endIdx < len(periodSubset) && periodSubset[endIdx].Equal(end) {
+						endExactMatch = true
+					}
+				}
+
+				if !endExactMatch && endIdx != 0 && beginIdx != endIdx {
+					endIdx--
+				}
+
+				endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
+				if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
+					noValuesFound = true
+				}
+
+				vals := make([][]float64, 1)
+				var dates []time.Time
+				if noValuesFound {
+					vals[0] = []float64{}
+					dates = []time.Time{}
+				} else {
+					vals[0] = item.Values[beginIdx : endIdx+1]
+					dates = periodSubset[beginIdx : endIdx+1]
+				}
+
+				df := &dataframe.DataFrame{
+					Dates:    dates,
+					Vals:     vals,
+					ColNames: []string{myKey},
+				}
+
+				return df
+			}
+		}
+	}
+
+	return &dataframe.DataFrame{
+		ColNames: []string{""},
+		Dates:    []time.Time{},
+		Vals:     [][]float64{{}},
+	}
+}
+
 // Set adds the data for the specified security and metric to the cache
 func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
 	if len(df.Vals) == 0 || len(df.Vals[0]) == 0 {
@@ -347,7 +477,7 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 	recent = time.Date(recent.Year(), recent.Month(), recent.Day(), 0, 0, 0, 0, common.GetTimezone())
 	recent = recent.AddDate(0, 0, -7)
 	if interval.End.After(recent) {
-		interval.End = maxTime(coveredInterval.End, recent)
+		interval.End = common.MaxTime(coveredInterval.End, recent)
 	}
 
 	// check if this key already exists
@@ -441,7 +571,7 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 	recent = time.Date(recent.Year(), recent.Month(), recent.Day(), 0, 0, 0, 0, common.GetTimezone())
 	recent = recent.AddDate(0, 0, -7)
 	if interval.End.After(recent) {
-		interval.End = maxTime(coveredInterval.End, recent)
+		interval.End = common.MaxTime(coveredInterval.End, recent)
 	}
 
 	// check if this key already exists
@@ -687,13 +817,13 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 	// combined intervals
 	mergedInterval := &Interval{
-		Begin: minTime(a.Period.Begin, b.Period.Begin),
-		End:   maxTime(a.Period.End, b.Period.End),
+		Begin: common.MinTime(a.Period.Begin, b.Period.Begin),
+		End:   common.MaxTime(a.Period.End, b.Period.End),
 	}
 
 	mergedCoveredInterval := &Interval{
-		Begin: minTime(a.CoveredPeriod.Begin, b.CoveredPeriod.Begin),
-		End:   maxTime(a.CoveredPeriod.End, b.CoveredPeriod.End),
+		Begin: common.MinTime(a.CoveredPeriod.Begin, b.CoveredPeriod.Begin),
+		End:   common.MaxTime(a.CoveredPeriod.End, b.CoveredPeriod.End),
 	}
 
 	// mergedStartIdx is modified in the next step where we check whether item is before or after the CacheItem
@@ -823,19 +953,4 @@ func (item *CacheItem) MarshalZerologObject(e *zerolog.Event) {
 	e.Object("CoveredPeriod", item.CoveredPeriod)
 	e.Int("Length", len(item.Values))
 	//e.Floats64("Values", item.Values)
-}
-
-func minTime(a, b time.Time) time.Time {
-	if a.After(b) {
-		return b
-	}
-
-	return a
-}
-
-func maxTime(a, b time.Time) time.Time {
-	if a.Before(b) {
-		return b
-	}
-	return a
 }

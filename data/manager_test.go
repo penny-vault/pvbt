@@ -94,23 +94,6 @@ var _ = Describe("Manager tests", func() {
 			}}))
 		})
 
-		It("it errors when no data is available", func() {
-			securities := []*data.Security{
-				{
-					Ticker:        "TSLA",
-					CompositeFigi: "UNKNOWN",
-				},
-			}
-
-			metrics := []data.Metric{
-				data.MetricClose,
-			}
-
-			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), "close", "split_factor", "dividend")
-			_, err := manager.GetMetrics(securities, metrics, time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 3, 0, 0, 0, 0, common.GetTimezone()))
-			Expect(errors.Is(err, data.ErrRangeDoesNotExist)).To(BeTrue())
-		})
-
 		It("it uses the cache when it can", func() {
 			securities := []*data.Security{
 				{
