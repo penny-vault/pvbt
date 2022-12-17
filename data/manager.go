@@ -258,7 +258,12 @@ func (manager *Manager) Reset() {
 
 	periods := manager.metricCache.periods
 	manager.metricCache = NewSecurityMetricCache(cacheMaxSize, periods)
-	manager.lruCache.Purge()
+
+	lruCache, err := lru.New[string, []byte](viper.GetInt("cache.lru_size"))
+	if err != nil {
+		log.Error().Err(err).Msg("could not create lru cache")
+	}
+	manager.lruCache = lruCache
 }
 
 // SetLRU saves the portfolio in the online cache
