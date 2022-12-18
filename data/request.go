@@ -91,7 +91,13 @@ func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return price[securityMetric], err
+
+	priceVal, ok := price[securityMetric]
+	if ok {
+		return priceVal, err
+	} else {
+		return math.NaN(), err
+	}
 }
 
 // On returns the price for the requested date
@@ -116,7 +122,7 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 			parts := strings.Split(colName, ":")
 			security, err := SecurityFromFigi(parts[0])
 			if err != nil {
-				log.Panic().Err(err).Str("ColName", colName).Str("parts[0]", parts[0]).Strs("ColNames", df.ColNames).Msg("unknown figi name - there is a programming error in colnames of dataframe")
+				continue
 			}
 			securityMetric := SecurityMetric{
 				SecurityObject: *security,
