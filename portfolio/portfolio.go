@@ -562,10 +562,10 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	dt := p.Transactions[n-1].Date
 	tz := common.GetTimezone()
 
-	// remove time and move to midnight the next day... this
+	// remove time and move to 1 nano-second before midnight
 	// ensures that the search is inclusive of through
-	through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
-	through = through.AddDate(0, 0, 1)
+	//through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
+	//through = through.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
 	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
 	if from.After(through) {
 		subLog.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
@@ -618,23 +618,13 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 				totalValue := nShares * dividend
 				// there is a dividend, record it
 				pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
-				trxID, _ := uuid.New().MarshalBinary()
-				t := Transaction{
-					ID:            trxID,
-					Date:          date,
-					Ticker:        securityMetric.SecurityObject.Ticker,
-					CompositeFIGI: securityMetric.SecurityObject.CompositeFigi,
-					Kind:          DividendTransaction,
-					PricePerShare: 1.0,
-					TotalValue:    totalValue,
-					Justification: nil,
+				t, err := createTransaction(date, &securityMetric.SecurityObject, DividendTransaction, 1.0, totalValue, nil)
+				if err != nil {
+					log.Error().Stack().Err(err).Msg("failed to create transaction")
 				}
 				// update cash position in holdings
 				pm.holdings[data.CashSecurity] += nShares * dividend
-				if err := computeTransactionSourceID(&t); err != nil {
-					log.Error().Stack().Err(err).Msg("failed to compute transaction source ID")
-				}
-				addTransactions = append(addTransactions, &t)
+				addTransactions = append(addTransactions, t)
 			}
 		case data.MetricSplitFactor:
 			for idx, date := range v.Dates {
@@ -644,23 +634,11 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 				shares := splitFactor * nShares
 				// there is a split, record it
 				pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
-				trxID, _ := uuid.New().MarshalBinary()
-				t := Transaction{
-					ID:            trxID,
-					Date:          date,
-					Ticker:        securityMetric.SecurityObject.Ticker,
-					CompositeFIGI: securityMetric.SecurityObject.CompositeFigi,
-					Kind:          SplitTransaction,
-					PricePerShare: 0.0,
-					Shares:        shares,
-					TotalValue:    0,
-					Justification: nil,
+				t, err := createTransaction(date, &securityMetric.SecurityObject, SplitTransaction, 0.0, shares, nil)
+				if err != nil {
+					log.Error().Stack().Err(err).Msg("failed to create transaction")
 				}
-				if err := computeTransactionSourceID(&t); err != nil {
-					log.Error().Stack().Err(err).Msg("could not compute transaction source ID")
-				}
-				addTransactions = append(addTransactions, &t)
-
+				addTransactions = append(addTransactions, t)
 				// update holdings
 				pm.holdings[securityMetric.SecurityObject] = shares
 			}
@@ -970,12 +948,16 @@ func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string) ([]*M
 
 		pm.holdings = make(map[data.Security]float64, len(tmpHoldings))
 		for k, v := range tmpHoldings {
-			security, err := data.SecurityFromFigi(k)
-			if err != nil {
-				subLog.Warn().Str("CompositeFigi", k).Msg("portfolio holds inactive security")
-				continue
+			if k == data.CashAsset {
+				pm.holdings[data.CashSecurity] = v
+			} else {
+				security, err := data.SecurityFromFigi(k)
+				if err != nil {
+					subLog.Warn().Str("CompositeFigi", k).Msg("portfolio holds inactive security")
+					continue
+				}
+				pm.holdings[*security] = v
 			}
-			pm.holdings[*security] = v
 		}
 
 		p.StartDate = p.StartDate.In(tz)

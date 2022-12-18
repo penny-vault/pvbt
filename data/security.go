@@ -84,6 +84,10 @@ func LoadSecuritiesFromDB() error {
 
 // SecurityFromFigi loads a security from database using the Composite FIGI as the lookup key
 func SecurityFromFigi(figi string) (*Security, error) {
+	if managerInstance == nil {
+		GetManagerInstance()
+	}
+
 	writeLocker.RLock()
 	defer writeLocker.RUnlock()
 
@@ -95,6 +99,10 @@ func SecurityFromFigi(figi string) (*Security, error) {
 
 // SecurityFromTicker loads a security from database using the ticker as the lookup key
 func SecurityFromTicker(ticker string) (*Security, error) {
+	if managerInstance == nil {
+		GetManagerInstance()
+	}
+
 	writeLocker.RLock()
 	defer writeLocker.RUnlock()
 

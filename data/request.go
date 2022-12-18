@@ -116,7 +116,7 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 			parts := strings.Split(colName, ":")
 			security, err := SecurityFromFigi(parts[0])
 			if err != nil {
-				log.Panic().Err(err).Msg("unknown figi name - there is a programming error in colnames of dataframe")
+				log.Panic().Err(err).Str("ColName", colName).Str("parts[0]", parts[0]).Strs("ColNames", df.ColNames).Msg("unknown figi name - there is a programming error in colnames of dataframe")
 			}
 			securityMetric := SecurityMetric{
 				SecurityObject: *security,
