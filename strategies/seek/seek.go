@@ -93,9 +93,20 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	period := "Weekly"
-	if err := json.Unmarshal(args["period"], &period); err != nil {
+	periodStr := string(dataframe.Weekly)
+	if err := json.Unmarshal(args["period"], &periodStr); err != nil {
 		return nil, err
+	}
+	switch periodStr {
+	case "Weekly":
+		periodStr = string(dataframe.Weekly)
+	case "Monthly":
+		periodStr = string(dataframe.Monthly)
+	}
+	period := dataframe.Frequency(periodStr)
+	if (period != dataframe.Weekly) && (period != dataframe.Monthly) {
+		log.Error().Str("PeriodArg", string(period)).Msg("could not create SEEK strategy, period must be dataframe.Weekly (WeekEnd) or dataframe.Monthly (MonthEnd)")
+		return nil, ErrInvalidPeriod
 	}
 
 	var cronspec *tradecron.TradeCron

@@ -190,9 +190,22 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
 
 	// check if the date is currently in the cache
-	if contains, _ := manager.metricCache.Check(security, metric, date, date); contains {
+	if contains, intervals := manager.metricCache.Check(security, metric, date, date); contains {
 		if vals, err := manager.metricCache.Get(security, metric, date, date); err == nil {
-			return vals.Vals[0][0], date, nil
+			if vals.Len() > 0 {
+				// the date is part of the covered period
+				return vals.Vals[0][0], date, nil
+			} else {
+				// the date is not part of the covered period
+				// get the last interval
+				lastInterval := intervals[len(intervals)-1]
+				if vals2, err := manager.metricCache.Get(security, metric, lastInterval.Begin, date); err == nil {
+					last := vals2.Last()
+					return last.Vals[0][0], last.Dates[0], nil
+				} else {
+					log.Error().Err(err).Object("LastInterval", lastInterval).Msg("error while fetching value from cache in GetMetricOnOrBefore in second query")
+				}
+			}
 		} else {
 			log.Error().Err(err).Msg("error while fetching value from cache in GetMetricOnOrBefore")
 		}

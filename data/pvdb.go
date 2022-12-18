@@ -213,6 +213,8 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	return vals, nil
 }
 
+// GetEODOnOrBefore queries the database for the last value on or before the specified date. It returns the metric value and the date
+// of the measurement as well as any errors that occur.
 func (p *PvDb) GetEODOnOrBefore(ctx context.Context, security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEODOnOrBefore")
 	defer span.End()
