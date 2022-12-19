@@ -185,7 +185,7 @@ func createStrategyPortfolio(ctx context.Context, strat *strategy.Info, endDate 
 	return nil
 }
 
-func updatePortfolio(ctx context.Context, pm *portfolio.Model, dt time.Time) error {
+func updatePortfolio(ctx context.Context, pm *portfolio.Model, throughDate time.Time) error {
 	var err error
 	nyc := common.GetTimezone()
 
@@ -203,9 +203,13 @@ func updatePortfolio(ctx context.Context, pm *portfolio.Model, dt time.Time) err
 		return err
 	}
 
-	subLog.Debug().Time("Date", dt).Msg("update transactions")
-	err = pm.UpdateTransactions(ctx, dt)
+	subLog.Debug().Time("Date", throughDate).Msg("update transactions")
+	err = pm.UpdateTransactions(ctx, throughDate)
 	if err != nil {
+		if err2 := pm.SetStatus(ctx, fmt.Sprintf("update failed: %s", err.Error())); err2 != nil {
+			log.Error().Err(err2).Msg("could not set portfolio error status")
+		}
+
 		subLog.Error().Msg("skipping portfolio due to error")
 		return err
 	}
@@ -226,8 +230,8 @@ func updatePortfolio(ctx context.Context, pm *portfolio.Model, dt time.Time) err
 		}
 	}
 
-	subLog.Debug().Time("Date", dt).Msg("calculate performance through")
-	err = perf.CalculateThrough(ctx, pm, dt)
+	subLog.Debug().Time("Date", throughDate).Msg("calculate performance through")
+	err = perf.CalculateThrough(ctx, pm, throughDate)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("error while calculating portfolio performance -- refusing to save")
 		return err
