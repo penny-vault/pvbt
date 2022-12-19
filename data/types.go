@@ -32,7 +32,8 @@ type SecurityMetric struct {
 
 var (
 	CashSecurity = Security{
-		Ticker: CashAsset,
+		Ticker:        CashAsset,
+		CompositeFigi: CashAsset,
 	}
 	RiskFreeSecurity = Security{
 		CompositeFigi: "PVGG06TNP6J8",
