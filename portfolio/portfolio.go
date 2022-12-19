@@ -482,7 +482,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target data.PortfolioPlan)
 
 	log.Info().Msg("building target portfolio")
 	if len(target) == 0 {
-		log.Warn().Stack().Msg("target rows = 0; nothing to do!")
+		log.Debug().Stack().Msg("target rows = 0; nothing to do!")
 		return nil
 	}
 
@@ -558,18 +558,12 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	}
 
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
-
-	dt := p.Transactions[n-1].Date
-	tz := common.GetTimezone()
-
-	// remove time and move to 1 nano-second before midnight
-	// ensures that the search is inclusive of through
-	//through = time.Date(through.Year(), through.Month(), through.Day(), 0, 0, 0, 0, tz)
-	//through = through.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
-	from := time.Date(dt.Year(), dt.Month(), dt.Day(), 16, 0, 0, 0, tz)
+	// check what date range to consider
+	lastTrxDate := p.Transactions[n-1].Date
+	from := time.Date(lastTrxDate.Year(), lastTrxDate.Month(), lastTrxDate.Day()+1, 0, 0, 0, 0, common.GetTimezone())
 	if from.After(through) {
-		subLog.Warn().Stack().Time("Through", through).Time("Start", from).Msg("start date occurs after through date")
-		return ErrTimeInverted
+		// nothing to do
+		return nil
 	}
 
 	subLog.Debug().Time("From", from).Time("Through", through).Msg("evaluating corporate actions")
@@ -686,14 +680,14 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	defer span.End()
 
 	p := pm.Portfolio
-	begin := p.EndDate.AddDate(0, -6, 1)
-	startDate := p.EndDate.AddDate(0, 0, 1)
+	trxCalcStartDate := p.EndDate.AddDate(0, -6, 1)
+	addTrxOnDate := p.EndDate.AddDate(0, 0, 1)
 	subLog := log.With().Str("PortfolioID", hex.EncodeToString(p.ID)).Str("Strategy", p.StrategyShortcode).Logger()
 
-	if through.Before(begin) {
+	if through.Before(trxCalcStartDate) {
 		span.SetStatus(codes.Error, "cannot update portfolio due to dates being out of order")
 		subLog.Error().Stack().
-			Time("Begin", begin).
+			Time("Begin", trxCalcStartDate).
 			Time("End", through).
 			Msg("cannot update portfolio dates are out of order")
 		return ErrInvalidDateRange
@@ -720,8 +714,8 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 		return err
 	}
 
-	subLog.Info().Msg("computing portfolio strategy over date period")
-	targetPortfolio, predictedAssets, err := stratObject.Compute(ctx, begin, through)
+	subLog.Info().Time("TrxCalcStartDate", trxCalcStartDate).Time("AddTrxOnDate", addTrxOnDate).Msg("computing portfolio strategy over date period")
+	targetPortfolio, predictedAssets, err := stratObject.Compute(ctx, trxCalcStartDate, through)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to execute portfolio strategy")
@@ -730,7 +724,7 @@ func (pm *Model) UpdateTransactions(ctx context.Context, through time.Time) erro
 	}
 
 	// thin the targetPortfolio to only include info on or after the startDate
-	targetPortfolio = targetPortfolio.Trim(startDate, through)
+	targetPortfolio = targetPortfolio.Trim(addTrxOnDate, through)
 
 	err = pm.TargetPortfolio(ctx, targetPortfolio)
 	if err != nil {
@@ -851,6 +845,9 @@ func (pm *Model) LoadTransactionsFromDB(ctx context.Context) error {
 		if sourceID.Status == pgtype.Present {
 			t.SourceID = sourceID.String
 		}
+
+		// put event date in the correct time zone
+		t.Date = time.Date(t.Date.Year(), t.Date.Month(), t.Date.Day(), 16, 0, 0, 0, common.GetTimezone())
 
 		transactions = append(transactions, &t)
 	}
@@ -1330,9 +1327,7 @@ func (pm *Model) saveTransactions(ctx context.Context, trx pgx.Tx, userID string
 
 // Private API
 
-// computeTransactionSourceID calculates a 16-byte blake3 hash using the date, source,
-//
-//	composite figi, ticker, kind, price per share, shares, and total value
+// computeTransactionSourceID calculates a 16-byte blake3 hash using the date, source, composite figi, ticker, kind, price per share, shares, and total value
 func computeTransactionSourceID(t *Transaction) error {
 	h := blake3.New()
 
