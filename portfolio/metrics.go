@@ -150,6 +150,7 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 		if diff < 0 {
 			if drawDown == nil {
 				drawDown = &DrawDown{
+					Active:      true,
 					Begin:       prev,
 					End:         v.Time,
 					Recovery:    v.Time,
@@ -166,6 +167,7 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 			}
 		} else if drawDown != nil {
 			drawDown.Recovery = v.Time
+			drawDown.Active = false
 			allDrawDowns = append(allDrawDowns, drawDown)
 			drawDown = nil
 		}

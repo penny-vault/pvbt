@@ -68,6 +68,7 @@ type DrawDown struct {
 	End         timestamp
 	Recovery    timestamp
 	LossPercent float64
+	Active      bool
 }
 
 type AnnualReturn struct {

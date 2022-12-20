@@ -2375,6 +2375,8 @@ type DrawDown struct {
 	Recovery time.Time
 
 	LossPercent float64
+
+	Active bool
 }
 
 // MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
@@ -2433,6 +2435,11 @@ func (o *DrawDown) MarshalTo(buf []byte) int {
 		i += 9
 	}
 
+	if o.Active {
+		buf[i] = 4
+		i++
+	}
+
 	buf[i] = 0x7f
 	i++
 	return i
@@ -2469,6 +2476,10 @@ func (o *DrawDown) MarshalLen() (int, error) {
 
 	if o.LossPercent != 0 {
 		l += 9
+	}
+
+	if o.Active {
+		l++
 	}
 
 	if l > ColferSizeMax {
@@ -2565,6 +2576,15 @@ func (o *DrawDown) Unmarshal(data []byte) (int, error) {
 			goto eof
 		}
 		o.LossPercent = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 4 {
+		if i >= len(data) {
+			goto eof
+		}
+		o.Active = true
 		header = data[i]
 		i++
 	}
