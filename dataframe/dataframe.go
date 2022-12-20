@@ -65,8 +65,8 @@ func (df *DataFrame) Append(other *DataFrame) *DataFrame {
 }
 
 // Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
-func (df *DataFrame) Breakout() DataFrameMap {
-	dfMap := DataFrameMap{}
+func (df *DataFrame) Breakout() Map {
+	dfMap := Map{}
 	for idx, col := range df.ColNames {
 		dfMap[col] = &DataFrame{
 			Dates:    df.Dates,
@@ -315,7 +315,7 @@ func (df *DataFrame) Lag(n int) *DataFrame {
 
 	for idx := range df.Vals {
 		l := len(df.Vals[idx])
-		df.Vals[idx] = append(prepend, df.Vals[idx]...)[:l]
+		df.Vals[idx] = append(prepend, df.Vals[idx]...)[:l] //nolint:makezero
 	}
 	return df
 }
@@ -502,7 +502,7 @@ func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
 	})
 
 	if endIdx != len(df.Dates) {
-		endIdx += 1
+		endIdx++
 	}
 
 	df2.Dates = df.Dates[beginIdx:endIdx]

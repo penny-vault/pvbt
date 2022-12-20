@@ -18,6 +18,8 @@ linters:
   disable:
     - scopelint # Obsolete, using exportloopref instead
     - durationcheck
+    - exhaustive
+    - contextcheck
   presets:
     - bugs
     - unused
@@ -56,7 +58,6 @@ issues:
     - path: _test\.go
       linters:
         - gocyclo
-        - deadcode
         - errorlint
         - goerr113
     - path: backblaze/backblaze\.go

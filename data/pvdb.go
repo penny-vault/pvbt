@@ -111,7 +111,7 @@ func (p *PvDb) TradingDays(ctx context.Context, begin time.Time, end time.Time) 
 }
 
 // GetEOD fetches EOD metrics from the database
-func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
+func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.Map, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "pvdb.GetEOD")
 	defer span.End()
 	tz := common.GetTimezone()
@@ -161,7 +161,7 @@ func (p *PvDb) GetEOD(ctx context.Context, securities []*Security, metrics []Met
 	}
 
 	// parse database rows
-	vals := make(dataframe.DataFrameMap, len(securities))
+	vals := make(dataframe.Map, len(securities))
 
 	for rows.Next() {
 		var eventDate time.Time

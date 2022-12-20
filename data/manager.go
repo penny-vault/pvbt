@@ -78,7 +78,7 @@ func GetManagerInstance() *Manager {
 }
 
 // GetMetrics returns metrics for the requested securities over the specified time range
-func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.DataFrameMap, error) {
+func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.Map, error) {
 	ctx := context.Background()
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
@@ -125,7 +125,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dates := manager.TradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
 	if len(dates) == 0 {
-		return dataframe.DataFrameMap{}, nil
+		return dataframe.Map{}, nil
 	}
 
 	myBegin := dates[0]
@@ -169,7 +169,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	}
 
 	// get specific time period
-	dfMap := make(dataframe.DataFrameMap)
+	dfMap := make(dataframe.Map)
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
 			df := manager.metricCache.GetPartial(security, metric, begin, end)
@@ -195,17 +195,16 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 			if vals.Len() > 0 {
 				// the date is part of the covered period
 				return vals.Vals[0][0], date, nil
-			} else {
-				// the date is not part of the covered period
-				// get the last interval
-				lastInterval := intervals[len(intervals)-1]
-				if vals2, err := manager.metricCache.Get(security, metric, lastInterval.Begin, date); err == nil {
-					last := vals2.Last()
-					return last.Vals[0][0], last.Dates[0], nil
-				} else {
-					log.Error().Err(err).Object("LastInterval", lastInterval).Msg("error while fetching value from cache in GetMetricOnOrBefore in second query")
-				}
 			}
+
+			// the date is not part of the covered period
+			// get the last interval
+			lastInterval := intervals[len(intervals)-1]
+			if vals2, err := manager.metricCache.Get(security, metric, lastInterval.Begin, date); err == nil {
+				last := vals2.Last()
+				return last.Vals[0][0], last.Dates[0], nil
+			}
+			log.Error().Err(err).Object("LastInterval", lastInterval).Msg("error while fetching value from cache in GetMetricOnOrBefore in second query")
 		} else {
 			log.Error().Err(err).Msg("error while fetching value from cache in GetMetricOnOrBefore")
 		}
@@ -391,7 +390,7 @@ func (manager *Manager) TradingDaysAtFrequency(frequency dataframe.Frequency, be
 	}
 
 	if endIdx < len(manager.tradingDays) {
-		endIdx += 1
+		endIdx++
 	}
 
 	myDays := manager.tradingDays[beginIdx:endIdx]

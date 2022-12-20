@@ -149,7 +149,7 @@ func buildHoldingsArray(date time.Time, holdings map[data.Security]float64) []*H
 	return holdingArray
 }
 
-func (pm *Model) getPortfolioSecuritiesValue(ctx context.Context, date time.Time) (float64, error) {
+func (pm *Model) getPortfolioSecuritiesValue(date time.Time) (float64, error) {
 	var securityValue float64
 
 	for k, v := range pm.holdings {
@@ -203,7 +203,7 @@ func createTransaction(date time.Time, security *data.Security, kind string, pri
 	return &t, nil
 }
 
-func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, security *data.Security) float64 {
+func (pm *Model) getPriceSafe(date time.Time, security *data.Security) float64 {
 	price, err := data.NewDataRequest(security).Metrics(data.MetricClose).OnSingle(date)
 	if err != nil {
 		log.Warn().Stack().Err(err).Str("Ticker", security.Ticker).Msg("DataRequest.OnSingle returned an error")
@@ -216,9 +216,9 @@ func (pm *Model) getPriceSafe(ctx context.Context, date time.Time, security *dat
 	return price
 }
 
-func (pm *Model) modifyPosition(ctx context.Context, date time.Time, security *data.Security, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
+func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
 	// is this security currently held? If so, do we need to buy more or sell some
-	price := pm.getPriceSafe(ctx, date, security)
+	price := pm.getPriceSafe(date, security)
 	subLog := log.With().Float64("Price", price).Time("Date", date).Str("Ticker", security.Ticker).Float64("TargetDollars", targetDollars).Logger()
 	if price < 1.0e-5 {
 		subLog.Error().Stack().Msg("cannot purchase an asset when price is 0; skip asset")
@@ -347,7 +347,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	}
 
 	// get the current value of non-cash holdings
-	securityValue, err := pm.getPortfolioSecuritiesValue(ctx, allocation.Date)
+	securityValue, err := pm.getPortfolioSecuritiesValue(allocation.Date)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "security price data not available")
@@ -374,7 +374,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 		}
 
 		if _, ok := allocation.Members[security]; !ok {
-			price := pm.getPriceSafe(ctx, allocation.Date, &security)
+			price := pm.getPriceSafe(allocation.Date, &security)
 			t, err := createTransaction(allocation.Date, &security, SellTransaction, price, shares, justifications)
 			if err != nil {
 				return err
@@ -388,7 +388,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	newHoldings := make(map[data.Security]float64)
 	for security, targetPercent := range allocation.Members {
 		targetDollars := investable * targetPercent
-		t, numShares, err := pm.modifyPosition(ctx, allocation.Date, &security, targetDollars, justifications)
+		t, numShares, err := pm.modifyPosition(allocation.Date, &security, targetDollars, justifications)
 		if err != nil {
 			// don't fail if position could not be modified, just continue -- writing off asset as $0
 			log.Warn().Err(err).Time("Date", allocation.Date).Str("Ticker", security.Ticker).Msg("writing off asset")
@@ -525,7 +525,7 @@ func (pm *Model) TargetPortfolio(ctx context.Context, target data.PortfolioPlan)
 			allocation.Date = allocation.Date.Add(time.Hour * 16)
 		}
 
-		justifications := make([]*Justification, len(allocation.Justifications))
+		justifications := make([]*Justification, 0, len(allocation.Justifications))
 		for k, v := range allocation.Justifications {
 			j := &Justification{
 				Key:   k,

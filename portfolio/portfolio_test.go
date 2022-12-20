@@ -451,9 +451,12 @@ var _ = Describe("Portfolio", Ordered, func() {
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
 				// pre-populate cache
-				manager.GetMetrics([]*data.Security{vfinx}, []data.Metric{data.MetricClose}, time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
-				manager.GetMetrics([]*data.Security{pridx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
-				manager.GetMetrics([]*data.Security{vustx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				_, err = manager.GetMetrics([]*data.Security{vfinx}, []data.Metric{data.MetricClose}, time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				Expect(err).To(BeNil(), "get metrics vfinx")
+				_, err = manager.GetMetrics([]*data.Security{pridx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				Expect(err).To(BeNil(), "get metrics pridx")
+				_, err = manager.GetMetrics([]*data.Security{vustx}, []data.Metric{data.MetricClose}, time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC))
+				Expect(err).To(BeNil(), "get metrics vustx")
 
 				err = pm.TargetPortfolio(context.Background(), plan)
 				Expect(err).To(BeNil())

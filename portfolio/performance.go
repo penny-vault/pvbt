@@ -184,7 +184,7 @@ func (perf *Performance) ValueAtYearStart(dt time.Time) float64 {
 	return 0.0
 }
 
-func getHoldingsValue(ctx context.Context, holdings map[data.Security]float64, date time.Time) (float64, error) {
+func getHoldingsValue(holdings map[data.Security]float64, date time.Time) (float64, error) {
 	totalVal := 0.0
 	for security, qty := range holdings {
 		if security.Ticker == data.CashAsset {
@@ -325,9 +325,6 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 		// Protect against floating point noise
 		if shares <= 1.0e-5 {
 			shares = 0
-		}
-
-		if shares == 0 {
 			delete(holdings, security)
 		} else {
 			holdings[security] = shares
@@ -337,7 +334,7 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 	return holdings, trxIdx, nil
 }
 
-func calculateShares(ctx context.Context, security *data.Security, date time.Time, dollars float64) (float64, error) {
+func calculateShares(security *data.Security, date time.Time, dollars float64) (float64, error) {
 	price, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).OnSingle(date)
 	if err != nil {
 		log.Error().Stack().Time("Date", date).Str("Ticker", security.Ticker).Err(err).Str("Metric", "AdjustedClose").Msg("error when fetching benchmark adjusted close prices")
@@ -350,7 +347,7 @@ func calculateShares(ctx context.Context, security *data.Security, date time.Tim
 	return dollars / price, nil
 }
 
-func calculateValue(ctx context.Context, security *data.Security, shares float64, date time.Time) float64 {
+func calculateValue(security *data.Security, shares float64, date time.Time) float64 {
 	price, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).OnSingle(date)
 	if err != nil {
 		log.Error().Stack().Err(err).Str("Asset", security.Ticker).Time("Date", date).Msg("could not get security prices from pvdb")
@@ -358,7 +355,7 @@ func calculateValue(ctx context.Context, security *data.Security, shares float64
 	return shares * price
 }
 
-func buildHoldingsList(ctx context.Context, holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+func buildHoldingsList(holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
 	currentAssets := make([]*ReportableHolding, 0, len(holdings))
 	for security, qty := range holdings {
 		var value float64
@@ -477,7 +474,7 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 	}
 }
 
-func getRiskFreeRate(ctx context.Context, date time.Time) float64 {
+func getRiskFreeRate(date time.Time) float64 {
 	dgs3mo, err := data.SecurityFromTicker("DGS3MO")
 	if err != nil {
 		log.Error().Err(err).Msg("could not get DGS3MO security")
@@ -637,7 +634,7 @@ func (perf *Performance) initializeDates(calculationStart time.Time) *dateBundle
 
 // CalculateThrough computes performance metrics for the given portfolio until `through`
 func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, through time.Time) error {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "performance.CalculateThrough")
 	defer span.End()
 
 	p := pm.Portfolio
@@ -710,7 +707,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	// compute # of shares held for benchmark
 	var benchmarkShares float64
 	if len(perf.Measurements) > 0 {
-		benchmarkShares, err = calculateShares(ctx, benchmarkSecurity, prevMeasurement.Time, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(benchmarkSecurity, prevMeasurement.Time, sums.BenchmarkValue)
 		if err != nil {
 			span.RecordError(err)
 			msg := "could not get benchmark eod prices"
@@ -736,7 +733,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		date = time.Date(date.Year(), date.Month(), date.Day(), 23, 59, 59, 999_999_999, nyc)
 		updateDateBundle(dates, date, prevDate)
 
-		sums.BenchmarkValue = calculateValue(ctx, benchmarkSecurity, benchmarkShares, date)
+		sums.BenchmarkValue = calculateValue(benchmarkSecurity, benchmarkShares, date)
 
 		// update holdings
 		holdings, trxIdx, err = processTransactions(p, holdings, trxIdx, date, sums)
@@ -748,25 +745,25 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		justificationArray := pm.justifications[tradingDate.String()]
 
 		// update benchmarkShares to reflect any new deposits or withdrawals (BenchmarkValue is updated in processTransactions)
-		benchmarkShares, err = calculateShares(ctx, benchmarkSecurity, date, sums.BenchmarkValue)
+		benchmarkShares, err = calculateShares(benchmarkSecurity, date, sums.BenchmarkValue)
 		if err != nil {
 			return err
 		}
 
 		// get value of portfolio
-		sums.TotalValue, err = getHoldingsValue(ctx, holdings, date)
+		sums.TotalValue, err = getHoldingsValue(holdings, date)
 		if err != nil {
 			return err
 		}
 
 		// generate a new list of holdings for current measurement date
-		currentAssets, err := buildHoldingsList(ctx, holdings, date, sums.TotalValue)
+		currentAssets, err := buildHoldingsList(holdings, date, sums.TotalValue)
 		if err != nil {
 			return err
 		}
 
 		// update riskFreeValue
-		sums.RiskFreeValue *= getRiskFreeRate(ctx, date)
+		sums.RiskFreeValue *= getRiskFreeRate(date)
 
 		measurement := PerformanceMeasurement{
 			Time:                 date,

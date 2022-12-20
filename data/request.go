@@ -26,15 +26,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type DataRequest struct {
+type Request struct {
 	securities []*Security
 	metrics    map[Metric]int
 }
 
 // NewDataRequest creates a new data request object for the requested securities. The frequency
 // is defaulted to Monthly and the metric defaults to Adjusted Close
-func NewDataRequest(securities ...*Security) *DataRequest {
-	req := &DataRequest{
+func NewDataRequest(securities ...*Security) *Request {
+	req := &Request{
 		securities: securities,
 		metrics:    make(map[Metric]int, 1),
 	}
@@ -44,12 +44,12 @@ func NewDataRequest(securities ...*Security) *DataRequest {
 	return req
 }
 
-func (req *DataRequest) Securities(securities ...*Security) *DataRequest {
+func (req *Request) Securities(securities ...*Security) *Request {
 	req.securities = securities
 	return req
 }
 
-func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
+func (req *Request) Metrics(metrics ...Metric) *Request {
 	req.metrics = make(map[Metric]int, len(metrics))
 
 	if len(metrics) == 0 {
@@ -64,9 +64,9 @@ func (req *DataRequest) Metrics(metrics ...Metric) *DataRequest {
 	return req
 }
 
-// Between queries the metric data store and returns a dataframe with metrics betwen the specified dates
+// Between queries the metric data store and returns a dataframe with metrics between the specified dates
 // columns are named `CompositeFigi:MetricName`
-func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (dataframe.DataFrameMap, error) {
+func (req *Request) Between(ctx context.Context, a, b time.Time) (dataframe.Map, error) {
 	manager := GetManagerInstance()
 	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
@@ -76,7 +76,7 @@ func (req *DataRequest) Between(ctx context.Context, a, b time.Time) (dataframe.
 }
 
 // OnSingle is a convenience function that returns the price for a single security and metric
-func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
+func (req *Request) OnSingle(a time.Time) (float64, error) {
 	metrics := req.metricsArray()
 	if len(req.securities) > 1 || len(metrics) > 1 {
 		return 0, ErrSingle
@@ -95,13 +95,13 @@ func (req *DataRequest) OnSingle(a time.Time) (float64, error) {
 	priceVal, ok := price[securityMetric]
 	if ok {
 		return priceVal, err
-	} else {
-		return math.NaN(), err
 	}
+
+	return math.NaN(), err
 }
 
 // On returns the price for the requested date
-func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
+func (req *Request) On(a time.Time) (map[SecurityMetric]float64, error) {
 	manager := GetManagerInstance()
 
 	start := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, common.GetTimezone())
@@ -144,7 +144,7 @@ func (req *DataRequest) On(a time.Time) (map[SecurityMetric]float64, error) {
 	return res, nil
 }
 
-func (req *DataRequest) OnOrBefore(a time.Time) (float64, time.Time, error) {
+func (req *Request) OnOrBefore(a time.Time) (float64, time.Time, error) {
 	var requestedMetric Metric
 	var metricCnt int
 	for k, v := range req.metrics {
@@ -170,7 +170,7 @@ func (req *DataRequest) OnOrBefore(a time.Time) (float64, time.Time, error) {
 
 // private methods
 
-func (req *DataRequest) metricsArray() []Metric {
+func (req *Request) metricsArray() []Metric {
 	metrics := make([]Metric, 0, len(req.metrics))
 	for k := range req.metrics {
 		metrics = append(metrics, k)

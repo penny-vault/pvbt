@@ -56,13 +56,13 @@ func (df *DataFrame) Count(lambda func(x float64) bool) *DataFrame {
 	}
 
 	for rowIdx := range df.Dates {
-		count := 0
+		cnt := 0
 		for _, col := range df.Vals {
 			if lambda(col[rowIdx]) {
-				count += 1
+				cnt++
 			}
 		}
-		res.Vals[0][rowIdx] = float64(count)
+		res.Vals[0][rowIdx] = float64(cnt)
 	}
 
 	return res
@@ -107,7 +107,7 @@ func Mean(dfs ...*DataFrame) *DataFrame {
 				df := dfs[dfIdx]
 				colIdx := otherMaps[dfIdx][colName]
 				row += df.Vals[colIdx][rowIdx]
-				cnt += 1
+				cnt++
 			}
 			resDf.Vals[resColIdx][rowIdx] = row / cnt
 		}
@@ -155,15 +155,16 @@ func (df *DataFrame) RollingSumScaled(ii int, scalar float64) *DataFrame {
 		roll := 0.0
 		dropIdx := 0
 		for rowIdx := range df.Vals[colIdx] {
-			if rowIdx >= ii {
+			switch {
+			case rowIdx >= ii:
 				roll += df.Vals[colIdx][rowIdx]
 				roll -= df.Vals[colIdx][dropIdx]
 				df2.Vals[colIdx][rowIdx] = roll * scalar
-				dropIdx += 1
-			} else if rowIdx == (ii - 1) {
+				dropIdx++
+			case rowIdx == (ii - 1):
 				roll += df.Vals[colIdx][rowIdx]
 				df2.Vals[colIdx][rowIdx] = roll * scalar
-			} else {
+			default:
 				df2.Vals[colIdx][rowIdx] = math.NaN()
 				roll += df.Vals[colIdx][rowIdx]
 			}
