@@ -25,6 +25,8 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const DIFFERENT = "Different"
+
 var _ = Describe("DataFrame", func() {
 	Context("with no values", func() {
 		var (
@@ -389,7 +391,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("different named columns do not divide", func() {
 			df2 := df.Copy()
-			df2.ColNames[0] = "Different"
+			df2.ColNames[0] = DIFFERENT
 			df3 := df.Div(df2)
 			Expect(df3.Len()).To(Equal(5))
 			Expect(df3.Vals[0][0]).To(Equal(0.0))
@@ -401,7 +403,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("non-column aligned dfs still divide", func() {
 			df2 := df.Copy()
-			df2.ColNames[0] = "Different"
+			df2.ColNames[0] = DIFFERENT
 			df2.ColNames = append(df2.ColNames, "Col1")
 			df2.Vals = append(df2.Vals, []float64{2, 2, 2, 2, 2})
 			df3 := df.Div(df2)
@@ -426,7 +428,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("different named columns do not multiply", func() {
 			df2 := df.Copy()
-			df2.ColNames[0] = "Different"
+			df2.ColNames[0] = DIFFERENT
 			df3 := df.Div(df2)
 			Expect(df3.Len()).To(Equal(5))
 			Expect(df3.Vals[0][0]).To(Equal(0.0))
@@ -438,7 +440,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("non-column aligned dfs still multiply", func() {
 			df2 := df.Copy()
-			df2.ColNames[0] = "Different"
+			df2.ColNames[0] = DIFFERENT
 			df2.ColNames = append(df2.ColNames, "Col1")
 			df2.Vals = append(df2.Vals, []float64{2, 2, 2, 2, 2})
 			df3 := df.Mul(df2)

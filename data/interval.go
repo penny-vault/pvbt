@@ -27,13 +27,13 @@ type Interval struct {
 	End   time.Time
 }
 
-// Adjacent checks if offset touches the begining or ending of interval (daily resolution)
+// Adjacent checks if offset touches the beginning or ending of interval (daily resolution)
 // NOTE: Adjaceny implies the two intervals DO NOT overlap
 func (interval *Interval) Adjacent(other *Interval) bool {
 	return interval.AdjacentLeft(other) || interval.AdjacentRight(other)
 }
 
-// Adjacent checks if offset touches the begining of interval (daily resolution)
+// Adjacent checks if offset touches the beginning of interval (daily resolution)
 // NOTE: Adjaceny implies the two intervals DO NOT overlap
 func (interval *Interval) AdjacentLeft(other *Interval) bool {
 	// if other is prior to interval - check if they touch
@@ -58,7 +58,7 @@ func (interval *Interval) Contains(other *Interval) bool {
 }
 
 // Contiguous returns true if the other interval shares a common boarder with this interval
-// this can mean they are adjacent or overlaping
+// this can mean they are adjacent or overlapping
 // NOTE: contiguous implies that other is not a subset of interval
 func (interval *Interval) Contiguous(other *Interval) bool {
 	if interval.Adjacent(other) {

@@ -76,7 +76,7 @@ func (pl PortfolioPlan) Trim(begin, end time.Time) PortfolioPlan {
 	})
 
 	if endIdx != len(pl) {
-		endIdx += 1
+		endIdx++
 	}
 
 	return pl[beginIdx:endIdx]

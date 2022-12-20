@@ -1123,7 +1123,8 @@ var _ = Describe("Cache", func() {
 				ColNames: []string{"vals"},
 			}
 
-			cache.Set(security, data.MetricAdjustedClose, begin, end, df)
+			err := cache.Set(security, data.MetricAdjustedClose, begin, end, df)
+			Expect(err).To(BeNil(), "cache set")
 
 			result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 			Expect(err).To(BeNil())
@@ -1685,12 +1686,13 @@ var _ = Describe("Cache", func() {
 			end := time.Date(2022, 8, 9, 0, 0, 0, 0, tz())
 			vals := []float64{4, 5}
 
-			cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
+			err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
 				&dataframe.DataFrame{
 					ColNames: []string{"vals"},
 					Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{vals},
 				})
+			Expect(err).To(BeNil(), "SetWithLocalDates error check")
 
 			result, err := cache.Get(security, data.MetricAdjustedClose, begin, end)
 			Expect(err).To(BeNil())

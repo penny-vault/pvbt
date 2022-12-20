@@ -121,6 +121,106 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	return false, touchingIntervals
 }
 
+func (cache *SecurityMetricCache) getPeriodSubset(item *CacheItem) []time.Time {
+	var periodSubset []time.Time
+	if item.isLocalDate {
+		periodSubset = item.localDates
+	} else {
+		periodSubset = cache.periods[item.startIdx:]
+		if !item.Period.Begin.Equal(item.CoveredPeriod.Begin) {
+			coveredPeriodStart := sort.Search(len(periodSubset), func(i int) bool {
+				idxVal := periodSubset[i]
+				return (idxVal.After(item.CoveredPeriod.Begin) || idxVal.Equal(item.CoveredPeriod.Begin))
+			})
+			periodSubset = periodSubset[coveredPeriodStart:]
+		}
+	}
+	return periodSubset
+}
+
+func (cache *SecurityMetricCache) adjustEndToCoveredPeriod(end time.Time, item *CacheItem) time.Time {
+	if end.After(item.CoveredPeriod.End) {
+		return item.CoveredPeriod.End
+	}
+	return end
+}
+
+func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem, myKey string) *dataframe.DataFrame {
+	periodSubset := cache.getPeriodSubset(item)
+
+	var beginIdx int
+	var endIdx int
+
+	endExactMatch := false
+	noValuesFound := false
+
+	end = cache.adjustEndToCoveredPeriod(end, item)
+
+	if item.CoveredPeriod.Begin.Equal(begin) {
+		beginIdx = 0
+	} else {
+		beginIdx = sort.Search(len(periodSubset), func(i int) bool {
+			idxVal := periodSubset[i]
+			return (idxVal.After(begin) || idxVal.Equal(begin))
+		})
+		if begin.After(item.CoveredPeriod.End) {
+			noValuesFound = true
+		}
+		if beginIdx == len(periodSubset) && item.isLocalDate {
+			noValuesFound = true
+		}
+	}
+
+	if item.CoveredPeriod.End.Equal(end) {
+		endIdx = len(item.Values) - 1
+		endExactMatch = true
+	} else {
+		endIdx = sort.Search(len(periodSubset), func(i int) bool {
+			idxVal := periodSubset[i]
+			return (idxVal.After(end) || idxVal.Equal(end))
+		})
+
+		if end.Before(item.CoveredPeriod.Begin) || len(periodSubset) == 0 {
+			noValuesFound = true
+		}
+
+		if endIdx == len(periodSubset) && endIdx != 0 {
+			endIdx--
+		}
+
+		if endIdx < len(periodSubset) && periodSubset[endIdx].Equal(end) {
+			endExactMatch = true
+		}
+	}
+
+	if !endExactMatch && endIdx != 0 && beginIdx != endIdx {
+		endIdx--
+	}
+
+	endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
+	if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
+		noValuesFound = true
+	}
+
+	vals := make([][]float64, 1)
+	var dates []time.Time
+	if noValuesFound {
+		vals[0] = []float64{}
+		dates = []time.Time{}
+	} else {
+		vals[0] = item.Values[beginIdx : endIdx+1]
+		dates = periodSubset[beginIdx : endIdx+1]
+	}
+
+	df := &dataframe.DataFrame{
+		Dates:    dates,
+		Vals:     vals,
+		ColNames: []string{myKey},
+	}
+
+	return df
+}
+
 // Get returns the requested data over the range. If no data matches the hash key return ErrRangeDoesNotExist
 func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
 	cache.locker.RLock()
@@ -149,93 +249,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 	if items, ok := cache.values[myKey]; ok {
 		for _, item := range items {
 			if item.Period.Contains(requestedInterval) {
-				var periodSubset []time.Time
-				if item.isLocalDate {
-					periodSubset = item.localDates
-				} else {
-					periodSubset = cache.periods[item.startIdx:]
-					if !item.Period.Begin.Equal(item.CoveredPeriod.Begin) {
-						coveredPeriodStart := sort.Search(len(periodSubset), func(i int) bool {
-							idxVal := periodSubset[i]
-							return (idxVal.After(item.CoveredPeriod.Begin) || idxVal.Equal(item.CoveredPeriod.Begin))
-						})
-						periodSubset = periodSubset[coveredPeriodStart:]
-					}
-				}
-
-				var beginIdx int
-				var endIdx int
-
-				endExactMatch := false
-				noValuesFound := false
-
-				if end.After(item.CoveredPeriod.End) {
-					end = item.CoveredPeriod.End
-				}
-
-				if item.CoveredPeriod.Begin.Equal(begin) {
-					beginIdx = 0
-				} else {
-					beginIdx = sort.Search(len(periodSubset), func(i int) bool {
-						idxVal := periodSubset[i]
-						return (idxVal.After(begin) || idxVal.Equal(begin))
-					})
-					if begin.After(item.CoveredPeriod.End) {
-						noValuesFound = true
-					}
-					if beginIdx == len(periodSubset) && item.isLocalDate {
-						noValuesFound = true
-					}
-				}
-
-				if item.CoveredPeriod.End.Equal(end) {
-					endIdx = len(item.Values) - 1
-					endExactMatch = true
-				} else {
-					endIdx = sort.Search(len(periodSubset), func(i int) bool {
-						idxVal := periodSubset[i]
-						return (idxVal.After(end) || idxVal.Equal(end))
-					})
-
-					if end.Before(item.CoveredPeriod.Begin) || len(periodSubset) == 0 {
-						noValuesFound = true
-					}
-
-					if endIdx == len(periodSubset) && endIdx != 0 {
-						endIdx -= 1
-					}
-
-					if endIdx < len(periodSubset) && periodSubset[endIdx].Equal(end) {
-						endExactMatch = true
-					}
-				}
-
-				if !endExactMatch && endIdx != 0 && beginIdx != endIdx {
-					endIdx--
-				}
-
-				endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
-				if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
-					noValuesFound = true
-				}
-
-				vals := make([][]float64, 1)
-				var dates []time.Time
-				if noValuesFound {
-					vals[0] = []float64{}
-					dates = []time.Time{}
-				} else {
-					vals[0] = item.Values[beginIdx : endIdx+1]
-					dates = periodSubset[beginIdx : endIdx+1]
-				}
-
-				df := &dataframe.DataFrame{
-					Dates:    dates,
-					Vals:     vals,
-					ColNames: []string{myKey},
-				}
-
-				return df, nil
+				return cache.extract(begin, end, item, myKey), nil
 			}
 		}
 	}
@@ -275,93 +289,7 @@ func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, 
 	if items, ok := cache.values[myKey]; ok {
 		for _, item := range items {
 			if item.Period.Overlaps(requestedInterval) {
-				var periodSubset []time.Time
-				if item.isLocalDate {
-					periodSubset = item.localDates
-				} else {
-					periodSubset = cache.periods[item.startIdx:]
-					if !item.Period.Begin.Equal(item.CoveredPeriod.Begin) {
-						coveredPeriodStart := sort.Search(len(periodSubset), func(i int) bool {
-							idxVal := periodSubset[i]
-							return (idxVal.After(item.CoveredPeriod.Begin) || idxVal.Equal(item.CoveredPeriod.Begin))
-						})
-						periodSubset = periodSubset[coveredPeriodStart:]
-					}
-				}
-
-				var beginIdx int
-				var endIdx int
-
-				endExactMatch := false
-				noValuesFound := false
-
-				if end.After(item.CoveredPeriod.End) {
-					end = item.CoveredPeriod.End
-				}
-
-				if item.CoveredPeriod.Begin.Equal(begin) {
-					beginIdx = 0
-				} else {
-					beginIdx = sort.Search(len(periodSubset), func(i int) bool {
-						idxVal := periodSubset[i]
-						return (idxVal.After(begin) || idxVal.Equal(begin))
-					})
-					if begin.After(item.CoveredPeriod.End) {
-						noValuesFound = true
-					}
-					if beginIdx == len(periodSubset) && item.isLocalDate {
-						noValuesFound = true
-					}
-				}
-
-				if item.CoveredPeriod.End.Equal(end) {
-					endIdx = len(item.Values) - 1
-					endExactMatch = true
-				} else {
-					endIdx = sort.Search(len(periodSubset), func(i int) bool {
-						idxVal := periodSubset[i]
-						return (idxVal.After(end) || idxVal.Equal(end))
-					})
-
-					if end.Before(item.CoveredPeriod.Begin) || len(periodSubset) == 0 {
-						noValuesFound = true
-					}
-
-					if endIdx == len(periodSubset) && endIdx != 0 {
-						endIdx -= 1
-					}
-
-					if endIdx < len(periodSubset) && periodSubset[endIdx].Equal(end) {
-						endExactMatch = true
-					}
-				}
-
-				if !endExactMatch && endIdx != 0 && beginIdx != endIdx {
-					endIdx--
-				}
-
-				endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
-				if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
-					noValuesFound = true
-				}
-
-				vals := make([][]float64, 1)
-				var dates []time.Time
-				if noValuesFound {
-					vals[0] = []float64{}
-					dates = []time.Time{}
-				} else {
-					vals[0] = item.Values[beginIdx : endIdx+1]
-					dates = periodSubset[beginIdx : endIdx+1]
-				}
-
-				df := &dataframe.DataFrame{
-					Dates:    dates,
-					Vals:     vals,
-					ColNames: []string{myKey},
-				}
-
-				return df
+				return cache.extract(begin, end, item, myKey)
 			}
 		}
 	}
@@ -690,9 +618,7 @@ func (cache *SecurityMetricCache) deleteLRU(bytesToDelete int64) {
 func (cache *SecurityMetricCache) contiguousByDateIndex(a, b *CacheItem) bool {
 	// if a is after b swap a and b
 	if a.startIdx > b.startIdx {
-		c := a
-		a = b
-		b = c
+		a, b = b, a
 	}
 
 	dateIdx := cache.periods[a.startIdx:]
@@ -753,7 +679,6 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
 func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
-	//log.Debug().Time("A", new.CoveredPeriod.Begin).Time("B", new.CoveredPeriod.End).Msg("covered period for insertItem")
 	if len(items) == 0 {
 		return []*CacheItem{new}, len(new.Values)
 	}
@@ -851,7 +776,7 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 				idxVal := a.localDates[i]
 				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
 			})
-			endIdx += 1
+			endIdx++
 			added += endIdx
 			if endIdx > len(a.Values) {
 				mergedValues = a.Values[:endIdx-1]
@@ -952,5 +877,4 @@ func (item *CacheItem) MarshalZerologObject(e *zerolog.Event) {
 	e.Object("Period", item.Period)
 	e.Object("CoveredPeriod", item.CoveredPeriod)
 	e.Int("Length", len(item.Values))
-	//e.Floats64("Values", item.Values)
 }

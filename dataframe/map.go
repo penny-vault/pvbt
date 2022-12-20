@@ -22,10 +22,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type DataFrameMap map[string]*DataFrame
+type Map map[string]*DataFrame
 
 // Align finds the maximum start and minimum end across all dataframes and trims them to match
-func (dfMap DataFrameMap) Align() DataFrameMap {
+func (dfMap Map) Align() Map {
 	// find max start and min end
 	var start time.Time
 	var end time.Time
@@ -42,7 +42,7 @@ func (dfMap DataFrameMap) Align() DataFrameMap {
 	}
 
 	// trim df's to expected time range
-	dfMapTrimmed := make(DataFrameMap, len(dfMap))
+	dfMapTrimmed := make(Map, len(dfMap))
 	for k, df := range dfMap {
 		dfMapTrimmed[k] = df.Trim(start, end)
 	}
@@ -51,15 +51,15 @@ func (dfMap DataFrameMap) Align() DataFrameMap {
 }
 
 // Drop calls dataframe.Drop on each dataframe in the map
-func (dfMap DataFrameMap) Drop(val float64) DataFrameMap {
+func (dfMap Map) Drop(val float64) Map {
 	for _, v := range dfMap {
 		v.Drop(val)
 	}
 	return dfMap
 }
 
-func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
-	newDfMap := make(DataFrameMap, len(dfMap))
+func (dfMap Map) Frequency(frequency Frequency) Map {
+	newDfMap := make(Map, len(dfMap))
 	for k, v := range dfMap {
 		newDfMap[k] = v.Frequency(frequency)
 	}
@@ -69,7 +69,7 @@ func (dfMap DataFrameMap) Frequency(frequency Frequency) DataFrameMap {
 
 // DataFrame converts each item in the map to a column in the dataframe. If dataframes do not align they are trimmed to the max start and
 // min end
-func (dfMap DataFrameMap) DataFrame() *DataFrame {
+func (dfMap Map) DataFrame() *DataFrame {
 	df := &DataFrame{}
 	first := true
 	dfMap2 := dfMap.Align()

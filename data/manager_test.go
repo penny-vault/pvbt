@@ -78,7 +78,6 @@ var _ = Describe("Manager tests", func() {
 				data.MetricClose,
 			}
 
-			// event_date  composite_figi  open      high      low       close     adj_close  split_factor  dividend
 			// 2021-01-04  BBG000N9MNX3    719.4600  744.4899  717.1895  729.7700  729.7700   1.000000      0.0000
 			// 2021-01-05  BBG000N9MNX3    723.6600  740.8400  719.2000  735.1100  735.1100   1.000000      0.0000
 
@@ -106,7 +105,6 @@ var _ = Describe("Manager tests", func() {
 				data.MetricClose,
 			}
 
-			// event_date  composite_figi  open      high      low       close     adj_close  split_factor  dividend
 			// 2021-01-04  BBG000N9MNX3    719.4600  744.4899  717.1895  729.7700  729.7700   1.000000      0.0000
 			// 2021-01-05  BBG000N9MNX3    723.6600  740.8400  719.2000  735.1100  735.1100   1.000000      0.0000
 			// 2021-01-06  BBG000N9MNX3    758.4900  774.0000  749.1000  755.9800  755.9800   1.000000      0.0000
@@ -132,18 +130,18 @@ var _ = Describe("Manager tests", func() {
 
 		DescribeTable("check all metrics",
 			func(a, b int, metric data.Metric, expectedVals [][]float64) {
-				metricColumn := "close"
+				metricColumn := "close" //nolint:goconst
 				switch metric {
 				case data.MetricAdjustedClose:
-					metricColumn = "adj_close"
+					metricColumn = "adj_close" //nolint:goconst
 				case data.MetricClose:
-					metricColumn = "close"
+					metricColumn = "close" //nolint:goconst
 				case data.MetricHigh:
-					metricColumn = "high"
+					metricColumn = "high" //nolint:goconst
 				case data.MetricOpen:
-					metricColumn = "open"
+					metricColumn = "open" //nolint:goconst
 				case data.MetricLow:
-					metricColumn = "low"
+					metricColumn = "low" //nolint:goconst
 				}
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, a, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, b, 0, 0, 0, 0, common.GetTimezone()), metricColumn, "split_factor", "dividend")
