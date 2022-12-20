@@ -87,7 +87,7 @@ var notifyCmd = &cobra.Command{
 		} else {
 			users = getUsers(ctx)
 		}
-		portfolios := getPortfolios(ctx, "", users)
+		portfolios := getAllPortfoliosForUsers(ctx, users)
 
 		for _, pm := range portfolios {
 			var perf *portfolio.Performance

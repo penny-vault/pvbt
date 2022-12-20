@@ -26,6 +26,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/penny-vault/pv-api/backtest"
 	"github.com/penny-vault/pv-api/common"
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
@@ -64,6 +65,8 @@ var updateCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal().Err(err).Msg("database connection failed")
 		}
+		// setup manaager and other odds and ends
+		data.GetManagerInstance()
 
 		// get time
 		var dt time.Time
@@ -107,7 +110,11 @@ var updateCmd = &cobra.Command{
 		case "from-db":
 			users := getUsers(ctx)
 			users = append(users, "pvuser")
-			portfolios = getPortfolios(ctx, updateCmdPortfolioID, users)
+			if updateCmdPortfolioID != "" {
+				portfolios = append(portfolios, getPortfolioFromID(ctx, updateCmdPortfolioID))
+			} else {
+				portfolios = getAllPortfoliosForUsers(ctx, users)
+			}
 			log.Info().Int("NumPortfolios", len(portfolios)).Time("Date", dt).Msg("updating portfolios")
 			for _, pm := range portfolios {
 				if err := updatePortfolio(ctx, pm, dt); err != nil {
