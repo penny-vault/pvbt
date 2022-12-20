@@ -113,6 +113,11 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 
 	startIdx := len(perf.Measurements) - int(periods) - 1
 	if startIdx < 0 {
+		log.Warn().Int("startIdx", startIdx).
+			Int("nMeasurements", n).
+			Uint("requestedPeriods", periods).
+			Str("StrategyOrBenchmark", kind).
+			Msg("startIdx is less than 0 returning no draw downs")
 		return allDrawDowns
 	}
 
@@ -147,10 +152,13 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 				drawDown = &DrawDown{
 					Begin:       prev,
 					End:         v.Time,
+					Recovery:    v.Time,
 					LossPercent: float64((value / peak) - 1.0),
 				}
 			}
 
+			// update recovery (for on-going draw downs the recovery is meaningless but a nil value screws up charts, etc.)
+			drawDown.Recovery = v.Time
 			loss := (value/peak - 1.0)
 			if loss < drawDown.LossPercent {
 				drawDown.End = v.Time
@@ -162,6 +170,11 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 			drawDown = nil
 		}
 		prev = v.Time
+	}
+
+	// add current draw down if we are in the middle of one
+	if drawDown != nil {
+		allDrawDowns = append(allDrawDowns, drawDown)
 	}
 
 	return allDrawDowns
