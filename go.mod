@@ -38,7 +38,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/alphadose/haxmap v1.2.0
 	github.com/hashicorp/golang-lru/v2 v2.0.1
-	github.com/nats-io/nats.go v1.21.0
+	github.com/nats-io/nats.go v1.22.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.6.1
 	github.com/pashagolub/pgxmock v1.8.0
@@ -56,8 +56,6 @@ require (
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
-	github.com/minio/highwayhash v1.0.2 // indirect
-	github.com/nats-io/jwt/v2 v2.3.0 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.9 // indirect
 	github.com/nats-io/nkeys v0.3.0 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
@@ -66,7 +64,6 @@ require (
 	github.com/sendgrid/rest v2.6.9+incompatible // indirect
 	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.2 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
-	go.uber.org/automaxprocs v1.5.1 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	google.golang.org/genproto v0.0.0-20221207170731-23e4bf6bdc37 // indirect
 )
