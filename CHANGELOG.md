@@ -5,20 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.5.0] - 2022-12-19
-### Added
-
 ### Changed
 - Completely revamped the way data is handled internally. This will enable faster development of new features.
-
-### Deprecated
-
-### Removed
 
 ### Fixed
 - Draw downs that are still on-going were not being included in performance metrics
 - The way corporate actions were added had the possibility of creating duplicate transactions
-
-### Security
 
 ## [0.4.0] - 2022-08-11
 ### Added
