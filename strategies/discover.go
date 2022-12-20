@@ -73,6 +73,7 @@ func Register(strategyPkg string, factory strategy.Factory) {
 
 	// load config file
 	fn = fmt.Sprintf("%s/strategy.toml", strategyPkg)
+	subLog = log.With().Str("FileName", fn).Logger()
 	file, err = resources.Open(fn)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("failed to open file")
@@ -98,12 +99,13 @@ func Register(strategyPkg string, factory strategy.Factory) {
 
 // Ensure all strategies have portfolio entries in the database so metrics are calculated
 func LoadStrategyMetricsFromDb() {
+	ctx := context.Background()
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
 		log.Info().Str("StrategyName", strat.Name).Msg("Refresh metrics for strategy")
 
 		// load results from the database
-		trx, err := database.TrxForUser("pvuser")
+		trx, err := database.TrxForUser(ctx, "pvuser")
 		if err != nil {
 			log.Panic().Str("Endpoint", "UpdatePortfolio").Str("UserID", "pvuser").Msg("unable to get database transaction for user")
 		}

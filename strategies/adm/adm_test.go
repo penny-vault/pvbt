@@ -17,9 +17,9 @@ package adm_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
-	"github.com/jackc/pgconn"
 	"github.com/pashagolub/pgxmock"
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
@@ -28,130 +28,253 @@ import (
 	"github.com/penny-vault/pv-api/strategies/adm"
 
 	"github.com/goccy/go-json"
-	"github.com/jdfergason/dataframe-go"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = Describe("Adm", func() {
+var _ = Describe("Adm", Ordered, func() {
 	var (
+		begin   time.Time
+		end     time.Time
 		dbPool  pgxmock.PgxConnIface
-		strat   *adm.AcceleratingDualMomentum
-		manager *data.Manager
-		tz      *time.Location
-		target  *dataframe.DataFrame
 		err     error
+		strat   *adm.AcceleratingDualMomentum
+		tz      *time.Location
+		vustx   *data.Security
+		vfinx   *data.Security
+		pridx   *data.Security
+		manager *data.Manager
 	)
 
-	BeforeEach(func() {
-		tz = common.GetTimezone()
-		jsonParams := `{"inTickers": ["VFINX", "PRIDX"], "outTicker": "VUSTX"}`
-		params := map[string]json.RawMessage{}
-		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
-			panic(err)
-		}
-
-		tmp, _ := adm.New(params)
-		strat = tmp.(*adm.AcceleratingDualMomentum)
-
-		manager = data.NewManager()
-
+	BeforeAll(func() {
 		dbPool, err = pgxmock.NewConn()
 		Expect(err).To(BeNil())
 		database.SetPool(dbPool)
 
 		// Expect trading days transaction and query
-		pgxmockhelper.MockDBEodQuery(dbPool, []string{"riskfree.csv"},
-			time.Date(1969, 12, 25, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC),
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
-		pgxmockhelper.MockDBCorporateQuery(dbPool, []string{"riskfree_corporate.csv"},
-			time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC))
+		pgxmockhelper.MockHolidays(dbPool)
+		pgxmockhelper.MockAssets(dbPool)
+		pgxmockhelper.MockTradingDays(dbPool)
+		manager = data.GetManagerInstance()
 
-		data.InitializeDataManager()
+		vustx, err = data.SecurityFromTicker("VUSTX")
+		Expect(err).To(BeNil())
+		vfinx, err = data.SecurityFromTicker("VFINX")
+		Expect(err).To(BeNil())
+		pridx, err = data.SecurityFromTicker("PRIDX")
+		Expect(err).To(BeNil())
+	})
+
+	BeforeEach(func() {
+		tz = common.GetTimezone()
+		jsonParams := `{"inTickers": [{"compositeFigi": "BBG000BHTMY2", "ticker": "VFINX"}, {"compositeFigi": "BBG000BBVR08", "ticker": "PRIDX"}], "outTickers": [{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX"}]}`
+		params := map[string]json.RawMessage{}
+		if err := json.Unmarshal([]byte(jsonParams), &params); err != nil {
+			panic(err)
+		}
+
+		tmp, err := adm.New(params)
+		Expect(err).To(BeNil())
+		strat = tmp.(*adm.AcceleratingDualMomentum)
+		manager.Reset()
 	})
 
 	Describe("Compute momentum scores", func() {
 		Context("with full stock history", func() {
 			BeforeEach(func() {
-				manager.Begin = time.Date(1980, time.January, 1, 0, 0, 0, 0, tz)
-				manager.End = time.Date(2021, time.January, 1, 0, 0, 0, 0, tz)
+				begin = time.Date(2019, time.July, 1, 0, 0, 0, 0, tz)
+				end = time.Date(2022, time.January, 1, 0, 0, 0, 0, tz)
 
 				pgxmockhelper.MockDBEodQuery(dbPool,
 					[]string{
 						"vfinx.csv",
 						"pridx.csv",
 						"vustx.csv",
-						"riskfree.csv",
+						"dgs3mo.csv",
 					},
-					time.Date(1979, 6, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC),
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-
-				pgxmockhelper.MockDBCorporateQuery(dbPool,
-					[]string{
-						"vfinx_corporate.csv",
-						"pridx_corporate.csv",
-						"vustx_corporate.csv",
-						"riskfree_corporate.csv",
-					},
-					time.Date(1979, 7, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC))
-
-				dbPool.ExpectBegin()
-				dbPool.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
-				dbPool.ExpectQuery("SELECT").WillReturnRows(
-					pgxmockhelper.NewCSVRows([]string{"market_holidays.csv"}, map[string]string{
-						"event_date":  "date",
-						"early_close": "bool",
-						"close_time":  "int",
-					}).Rows())
-				dbPool.ExpectCommit()
-
-				target, _, err = strat.Compute(context.Background(), manager)
+					time.Date(2019, time.January, 2, 0, 0, 0, 0, time.UTC), time.Date(2022, time.January, 3, 0, 0, 0, 0, time.UTC),
+					"adj_close", "split_factor", "dividend")
 			})
 
 			It("should not error", func() {
+				_, _, err := strat.Compute(context.Background(), begin, end)
 				Expect(err).To(BeNil())
 			})
 
 			It("should have length", func() {
-				Expect(target.NRows()).To(Equal(379))
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				Expect(len(target)).To(Equal(30))
 			})
 
 			It("should begin on", func() {
-				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(1989, time.June, 30, 16, 0, 0, 0, tz)))
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				Expect(target[0].Date).To(Equal(time.Date(2019, time.July, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should end on", func() {
-				n := target.NRows()
-				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[common.DateIdx].(time.Time)).To(Equal(time.Date(2020, time.December, 31, 16, 0, 0, 0, tz)))
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				Expect(target.Last().Date).To(Equal(time.Date(2021, time.December, 31, 16, 0, 0, 0, tz)))
 			})
 
 			It("should be invested in VFINX to start", func() {
-				val := target.Row(0, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				v, ok := target[0].Members[*vfinx]
+				Expect(ok).To(BeTrue())
+				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("should be invested in PRIDX to end", func() {
-				n := target.NRows()
-				val := target.Row(n-1, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
+			It("should be invested in VFINX to end", func() {
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				v, ok := target.Last().Members[*vfinx]
+				Expect(ok).To(BeTrue())
+				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("should be invested in PRIDX on 1997-11-28", func() {
-				val := target.Row(100, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+			It("be fully invested in correct assets over investment period", func() {
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+
+				expectedDates := []time.Time{
+					time.Date(2019, 7, 31, 16, 0, 0, 0, tz),
+					time.Date(2019, 8, 30, 16, 0, 0, 0, tz),
+					time.Date(2019, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2019, 10, 31, 16, 0, 0, 0, tz),
+					time.Date(2019, 11, 29, 16, 0, 0, 0, tz),
+					time.Date(2019, 12, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 1, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 2, 28, 16, 0, 0, 0, tz),
+					time.Date(2020, 3, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 4, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 5, 29, 16, 0, 0, 0, tz),
+					time.Date(2020, 6, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 7, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 8, 31, 16, 0, 0, 0, tz),
+					time.Date(2020, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 10, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 11, 30, 16, 0, 0, 0, tz),
+					time.Date(2020, 12, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 1, 29, 16, 0, 0, 0, tz),
+					time.Date(2021, 2, 26, 16, 0, 0, 0, tz),
+					time.Date(2021, 3, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 4, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 5, 28, 16, 0, 0, 0, tz),
+					time.Date(2021, 6, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 7, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 8, 31, 16, 0, 0, 0, tz),
+					time.Date(2021, 9, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 10, 29, 16, 0, 0, 0, tz),
+					time.Date(2021, 11, 30, 16, 0, 0, 0, tz),
+					time.Date(2021, 12, 31, 16, 0, 0, 0, tz),
+				}
+
+				expectedSecurities := []data.Security{
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*pridx,
+					*vfinx,
+					*vustx,
+					*vustx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*pridx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+					*vfinx,
+				}
+
+				for idx := range expectedDates {
+					v, ok := target[idx].Members[expectedSecurities[idx]]
+					var actual data.Security
+					for k := range target[idx].Members {
+						actual = k
+						break
+					}
+					Expect(ok).To(BeTrue(), fmt.Sprintf("[%d] securities match (%s != %s)", idx, expectedSecurities[idx].Ticker, actual.Ticker))
+					Expect(v).To(BeNumerically("~", 1.0), fmt.Sprintf("[%d] percent matches", idx))
+					Expect(target[idx].Date).To(Equal(expectedDates[idx]), fmt.Sprintf("[%d] date", idx))
+				}
 			})
 
-			It("should be invested in PRIDX on 2006-03-31", func() {
-				val := target.Row(200, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("PRIDX"))
+			It("predicted should be VFINX", func() {
+				_, predicted, _ := strat.Compute(context.Background(), begin, end)
+				v, ok := predicted.Members[*vfinx]
+				Expect(ok).To(BeTrue())
+				Expect(v).To(BeNumerically("~", 1.0))
 			})
 
-			It("should be invested in VFINX on 2014-07-31", func() {
-				val := target.Row(300, true, dataframe.SeriesName)
-				Expect(val[common.TickerName].(string)).To(Equal("VFINX"))
+			It("predicted date should be 2022/01/31", func() {
+				_, predicted, _ := strat.Compute(context.Background(), begin, end)
+				Expect(predicted.Date).To(Equal(time.Date(2022, time.January, 31, 16, 0, 0, 0, tz)))
+			})
+		})
+	})
+
+	Describe("Check predicted portfolio", func() {
+		Context("with full stock history", func() {
+			BeforeEach(func() {
+				begin = time.Date(2019, time.July, 1, 0, 0, 0, 0, tz)
+				end = time.Date(2020, time.April, 29, 0, 0, 0, 0, tz)
+
+				pgxmockhelper.MockDBEodQuery(dbPool,
+					[]string{
+						"vfinx.csv",
+						"pridx.csv",
+						"vustx.csv",
+						"dgs3mo.csv",
+					},
+					time.Date(2019, time.January, 2, 0, 0, 0, 0, time.UTC), time.Date(2020, time.April, 30, 0, 0, 0, 0, time.UTC),
+					"adj_close", "split_factor", "dividend")
+			})
+
+			It("should have length", func() {
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				Expect(len(target)).To(Equal(9))
+			})
+
+			It("should end on", func() {
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				Expect(target.Last().Date).To(Equal(time.Date(2020, time.March, 31, 16, 0, 0, 0, tz)))
+			})
+
+			It("should be invested in VUSTX to end", func() {
+				target, _, _ := strat.Compute(context.Background(), begin, end)
+				v, ok := target[len(target)-1].Members[*vustx]
+				Expect(ok).To(BeTrue())
+				Expect(v).To(BeNumerically("~", 1.0))
+			})
+
+			It("PRIDX should be predicted asset", func() {
+				_, predicted, _ := strat.Compute(context.Background(), begin, end)
+				v, ok := predicted.Members[*pridx]
+				var actual string
+				for k := range predicted.Members {
+					actual = k.Ticker
+				}
+				Expect(ok).To(BeTrue(), fmt.Sprintf("check security: PRIDX != %s", actual))
+				Expect(v).To(BeNumerically("~", 1.0))
+			})
+
+			It("predicted asset should be 4/30", func() {
+				_, predicted, _ := strat.Compute(context.Background(), begin, end)
+				Expect(predicted.Date).To(Equal(time.Date(2020, time.April, 30, 16, 0, 0, 0, tz)))
 			})
 		})
 	})

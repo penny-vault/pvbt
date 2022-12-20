@@ -32,11 +32,11 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strings"
 	"time"
 
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
-	"github.com/penny-vault/pv-api/dfextras"
+	"github.com/penny-vault/pv-api/indicators"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 	"github.com/penny-vault/pv-api/tradecron"
@@ -44,7 +44,7 @@ import (
 
 	"github.com/goccy/go-json"
 
-	"github.com/jdfergason/dataframe-go"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/rs/zerolog/log"
 )
 
@@ -56,22 +56,22 @@ var (
 type KellersDefensiveAssetAllocation struct {
 	// arguments
 	breadth            float64
-	cashUniverse       []string
-	protectiveUniverse []string
-	riskUniverse       []string
+	cashUniverse       []*data.Security
+	protectiveUniverse []*data.Security
+	riskUniverse       []*data.Security
 	topT               int64
 
 	// class variables
 	momentum           *dataframe.DataFrame
-	predictedPortfolio *strategy.Prediction
+	predictedPortfolio *data.SecurityAllocation
 	prices             *dataframe.DataFrame
 	schedule           *tradecron.TradeCron
-	targetPortfolio    *dataframe.DataFrame
+	targetPortfolio    data.PortfolioPlan
 }
 
 type momScore struct {
-	Ticker string
-	Score  float64
+	Security *data.Security
+	Score    float64
 }
 
 type byTicker []momScore
@@ -82,23 +82,20 @@ func (a byTicker) Less(i, j int) bool { return a[i].Score > a[j].Score }
 
 // New constructs a new Kellers DAA strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	cashUniverse := []string{}
+	cashUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["cashUniverse"], &cashUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(cashUniverse)
 
-	protectiveUniverse := []string{}
+	protectiveUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["protectiveUniverse"], &protectiveUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(protectiveUniverse)
 
-	riskUniverse := []string{}
+	riskUniverse := []*data.Security{}
 	if err := json.Unmarshal(args["riskUniverse"], &riskUniverse); err != nil {
 		return nil, err
 	}
-	common.ArrToUpper(riskUniverse)
 
 	var breadth float64
 	if err := json.Unmarshal(args["breadth"], &breadth); err != nil {
@@ -110,7 +107,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 		return nil, err
 	}
 
-	schedule, err := tradecron.New("@monthend", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthend 0 16 * *", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
@@ -127,208 +124,184 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return daa, nil
 }
 
-func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Context, manager *data.Manager) error {
+func (daa *KellersDefensiveAssetAllocation) downloadPriceData(ctx context.Context, begin, end time.Time) error {
 	// Load EOD quotes for in tickers
-	manager.Frequency = data.FrequencyMonthly
-
-	tickers := []string{}
+	tickers := []*data.Security{}
 	tickers = append(tickers, daa.cashUniverse...)
 	tickers = append(tickers, daa.protectiveUniverse...)
 	tickers = append(tickers, daa.riskUniverse...)
 
-	prices, errs := manager.GetDataFrame(ctx, data.MetricAdjustedClose, tickers...)
-
-	if errs != nil {
+	prices, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
+	if err != nil {
 		return ErrCouldNotRetrieveData
 	}
 
-	prices, err := dfextras.DropNA(ctx, prices)
+	prices = prices.Frequency(dataframe.Monthly)
+	prices = prices.Drop(math.NaN())
+	daa.prices = prices.DataFrame()
+
+	// include last day if it is a non-trade day
+	log.Debug().Msg("getting last day eod prices of requested range")
+	finalPricesMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, end.AddDate(0, 0, -10), end)
 	if err != nil {
+		log.Error().Err(err).Msg("error getting final prices in daa")
 		return err
 	}
-	daa.prices = prices
+
+	finalPrices := finalPricesMap.DataFrame()
+	finalPrices = finalPrices.Drop(math.NaN())
+	daa.prices.Append(finalPrices.Last())
+
+	// Rename columns to composite figi only -- this is to promote readability when debugging
+	for ii := range daa.prices.ColNames {
+		daa.prices.ColNames[ii] = strings.Split(daa.prices.ColNames[ii], ":")[0]
+	}
 
 	return nil
 }
 
-func (daa *KellersDefensiveAssetAllocation) findTopTRiskAssets() {
-	targetAssets := make([]interface{}, daa.momentum.NRows())
-	tArray := make([]interface{}, daa.momentum.NRows())
-	wArray := make([]interface{}, daa.momentum.NRows())
-	iterator := daa.momentum.ValuesIterator(dataframe.ValuesOptions{InitialRow: 0, Step: 1, DontReadLock: true})
+func (daa *KellersDefensiveAssetAllocation) calculatePortfolio() {
+	pies := make(data.PortfolioPlan, daa.momentum.Len())
+	securityMap := make(map[string]*data.Security) // create a local lookup table for securities for performance reasons
+	daa.momentum.ForEach(func(rowIdx int, rowDt time.Time, vals map[string]float64) map[string]float64 {
+		pie := &data.SecurityAllocation{
+			Date:           rowDt,
+			Members:        make(map[data.Security]float64),
+			Justifications: make(map[string]float64),
+		}
+		pies[rowIdx] = pie
 
-	for {
-		row, val, _ := iterator(dataframe.SeriesName)
-		if row == nil {
-			break
+		// copy momentum's over to justification using the securities ticker as the column name
+		for k, v := range vals {
+			var sec *data.Security
+			var ok bool
+			var err error
+
+			if sec, ok = securityMap[k]; !ok {
+				if sec, err = data.SecurityFromFigi(k); err == nil {
+					securityMap[k] = sec
+				}
+			}
+
+			pie.Justifications[sec.Ticker] = v
 		}
 
 		// compute the number of bad assets in canary (protective) universe
 		var b float64
-		for _, ticker := range daa.protectiveUniverse {
-			v := val[ticker].(float64)
+		for _, security := range daa.protectiveUniverse {
+			v := vals[security.CompositeFigi]
 			if v < 0 {
 				b++
 			}
 		}
+		pie.Justifications["B"] = b
 
 		// compute the cash fraction
 		cf := math.Min(1.0, 1.0/float64(daa.topT)*math.Floor(b*float64(daa.topT)/daa.breadth))
+		pie.Justifications["CF"] = cf
 
 		// compute the t parameter for daa
 		t := int(math.Round((1.0 - cf) * float64(daa.topT)))
+		pie.Justifications["T"] = float64(t)
+
+		// select the top-T risk assets
 		riskyScores := make([]momScore, len(daa.riskUniverse))
-		for ii, ticker := range daa.riskUniverse {
+		for ii, security := range daa.riskUniverse {
 			riskyScores[ii] = momScore{
-				Ticker: ticker,
-				Score:  val[ticker].(float64),
+				Security: security,
+				Score:    vals[security.CompositeFigi],
 			}
 		}
-		tArray[*row] = float64(t)
 		sort.Sort(byTicker(riskyScores))
-
-		// get t risk assets
-		riskAssets := make([]string, t)
-		for ii := 0; ii < t; ii++ {
-			riskAssets[ii] = riskyScores[ii].Ticker
-		}
 
 		// select highest scored cash instrument
 		cashScores := make([]momScore, len(daa.cashUniverse))
-		for ii, ticker := range daa.cashUniverse {
+		for ii, security := range daa.cashUniverse {
 			cashScores[ii] = momScore{
-				Ticker: ticker,
-				Score:  val[ticker].(float64),
+				Security: security,
+				Score:    vals[security.CompositeFigi],
 			}
 		}
 		sort.Sort(byTicker(cashScores))
-		cashAsset := cashScores[0].Ticker
+		cashSecurity := cashScores[0].Security
 
-		// build investment map
-		targetMap := make(map[string]float64)
+		// build portfolio
 		if cf > 1.0e-5 {
-			targetMap[cashAsset] = cf
+			pie.Members[*cashSecurity] = cf
 		}
+
 		w := (1.0 - cf) / float64(t)
 		if t == 0 {
-			wArray[*row] = 0
+			pie.Justifications["W"] = 0
 		} else {
-			wArray[*row] = w
+			pie.Justifications["W"] = w
 		}
 
-		for _, asset := range riskAssets {
-			if alloc, ok := targetMap[asset]; ok {
-				shares := w + alloc
-				if shares > 1.0e-5 {
-					targetMap[asset] = shares
+		// get t risk assets
+		for ii := 0; ii < t; ii++ {
+			security := riskyScores[ii].Security
+			if alloc, ok := pie.Members[*security]; ok {
+				alloc = w + alloc
+				if alloc > 1.0e-5 {
+					pie.Members[*security] = alloc
 				}
 			} else if w > 1.0e-5 {
-				targetMap[asset] = w
+				pie.Members[*security] = w
 			}
 		}
 
-		targetAssets[*row] = targetMap
-	}
+		return nil
+	})
 
-	timeIdx, err := daa.momentum.NameToColumn(common.DateIdx)
-	if err != nil {
-		log.Error().Stack().Err(err).Msg("time series not set on momentum series")
-	}
-	timeSeries := daa.momentum.Series[timeIdx]
-	targetSeries := dataframe.NewSeriesMixed(common.TickerName, &dataframe.SeriesInit{Size: len(targetAssets)}, targetAssets...)
-	tSeries := dataframe.NewSeriesFloat64("T", &dataframe.SeriesInit{Size: len(tArray)}, tArray...)
-	wSeries := dataframe.NewSeriesFloat64("W", &dataframe.SeriesInit{Size: len(wArray)}, wArray...)
-
-	series := make([]dataframe.Series, 0, 4+len(daa.riskUniverse)+len(daa.cashUniverse)+len(daa.protectiveUniverse))
-	series = append(series, timeSeries)
-	series = append(series, targetSeries)
-	series = append(series, tSeries)
-	series = append(series, wSeries)
-
-	assetMap := make(map[string]bool)
-
-	universe := make([]string, 0, len(daa.cashUniverse)+len(daa.riskUniverse)+len(daa.protectiveUniverse))
-	universe = append(universe, daa.cashUniverse...)
-	universe = append(universe, daa.protectiveUniverse...)
-	universe = append(universe, daa.riskUniverse...)
-
-	for _, asset := range universe {
-		if _, ok := assetMap[asset]; ok {
-			continue
-		} else {
-			assetMap[asset] = true
-		}
-		idx, err := daa.momentum.NameToColumn(asset)
-		if err != nil {
-			log.Warn().Str("Asset", asset).Msg("could not transalate asset name to series")
-		}
-		series = append(series, daa.momentum.Series[idx].Copy())
-	}
-
-	daa.targetPortfolio = dataframe.NewDataFrame(series...)
+	daa.targetPortfolio = pies
 }
 
 func (daa *KellersDefensiveAssetAllocation) setPredictedPortfolio() {
-	if daa.targetPortfolio.NRows() >= 2 {
-		lastRow := daa.targetPortfolio.Row(daa.targetPortfolio.NRows()-1, true, dataframe.SeriesName)
-		predictedJustification := make(map[string]float64, len(lastRow)-1)
-		for k, v := range lastRow {
-			if k != common.TickerName && k != common.DateIdx {
-				if val, ok := v.(float64); ok {
-					predictedJustification[k.(string)] = val
-				}
-			}
+	numPeriods := len(daa.targetPortfolio)
+	if numPeriods >= 2 {
+		lastPie := daa.targetPortfolio[numPeriods-1]
+		if !daa.schedule.IsTradeDay(lastPie.Date) {
+			daa.targetPortfolio = daa.targetPortfolio[:numPeriods-1]
 		}
 
-		lastTradeDate := lastRow[common.DateIdx].(time.Time)
-		nextTradeDate, err := daa.schedule.Next(lastTradeDate)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get next trade date")
-			return
-		}
-		if !lastTradeDate.Equal(nextTradeDate) {
-			daa.targetPortfolio.Remove(daa.targetPortfolio.NRows() - 1)
-		}
-
-		daa.predictedPortfolio = &strategy.Prediction{
-			TradeDate:     nextTradeDate,
-			Target:        lastRow[common.TickerName].(map[string]float64),
-			Justification: predictedJustification,
+		nextTradeDate := daa.schedule.Next(lastPie.Date)
+		daa.predictedPortfolio = &data.SecurityAllocation{
+			Date:           nextTradeDate,
+			Members:        lastPie.Members,
+			Justifications: lastPie.Justifications,
 		}
 	}
 }
 
 // Compute signal
-func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *strategy.Prediction, error) {
+func (daa *KellersDefensiveAssetAllocation) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
 	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "daa.Compute")
 	defer span.End()
 
 	// Ensure time range is valid (need at least 12 months)
 	nullTime := time.Time{}
-	if manager.End.Equal(nullTime) {
-		manager.End = time.Now()
+	if end.Equal(nullTime) {
+		end = time.Now()
 	}
-	if manager.Begin.Equal(nullTime) {
+	if begin.Equal(nullTime) {
 		// Default computes things 50 years into the past
-		manager.Begin = manager.End.AddDate(-50, 0, 0)
+		begin = end.AddDate(-50, 0, 0)
 	} else {
-		// Set Begin 12 months in the past so we actually get the requested time range
-		manager.Begin = manager.Begin.AddDate(0, -12, 0)
+		// Set begin 12 months in the past so we actually get the requested time range
+		begin = begin.AddDate(0, -12, 0)
 	}
 
-	err := daa.downloadPriceData(ctx, manager)
+	err := daa.downloadPriceData(ctx, begin, end)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Compute momentum scores
-	momentum, err := dfextras.Momentum13612(ctx, daa.prices)
-	if err != nil {
-		return nil, nil, err
-	}
+	daa.momentum = indicators.Momentum12631(daa.prices)
+	daa.momentum = daa.momentum.Drop(math.NaN())
 
-	daa.momentum = momentum
-	daa.findTopTRiskAssets()
+	// Calculate the portfolio
+	daa.calculatePortfolio()
 
 	// compute the predicted asset
 	daa.setPredictedPortfolio()

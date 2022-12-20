@@ -19,21 +19,22 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/rs/zerolog/log"
 )
 
 type Filterable interface {
 	GetMeasurements(field1 string, field2 string, since time.Time) ([]byte, error)
-	GetHoldings(frequency data.Frequency, since time.Time) ([]byte, error)
+	GetHoldings(frequency dataframe.Frequency, since time.Time) ([]byte, error)
 	GetTransactions(since time.Time) ([]byte, error)
 }
 
 func getPortfolio(portfolioID string) *portfolio.Portfolio {
-	raw, _ := common.CacheGet(portfolioID)
+	manager := data.GetManagerInstance()
+	raw := manager.GetLRU(portfolioID)
 	subLog := log.With().Str("PortfolioID", portfolioID).Logger()
 	if len(raw) > 0 {
 		port := portfolio.Portfolio{}
@@ -49,7 +50,8 @@ func getPortfolio(portfolioID string) *portfolio.Portfolio {
 
 func getPerformance(portfolioID string) *portfolio.Performance {
 	subLog := log.With().Str("PortfolioID", portfolioID).Logger()
-	raw, _ := common.CacheGet(fmt.Sprintf("%s:performance", portfolioID))
+	manager := data.GetManagerInstance()
+	raw := manager.GetLRU(fmt.Sprintf("%s:performance", portfolioID))
 	if len(raw) > 0 {
 		perf := portfolio.Performance{}
 		_, err := perf.Unmarshal(raw)
@@ -82,15 +84,15 @@ func New(portfolioID string, userID string) Filterable {
 	return &db
 }
 
-func getPeriodReturnFieldForFrequency(frequency data.Frequency) string {
+func getPeriodReturnFieldForFrequency(frequency dataframe.Frequency) string {
 	switch frequency {
-	case data.FrequencyAnnually:
+	case dataframe.Annually:
 		return database.TWRRYtd
-	case data.FrequencyMonthly:
+	case dataframe.Monthly:
 		return database.TWRRMtd
-	case data.FrequencyWeekly:
+	case dataframe.Weekly:
 		return database.TWRRWtd
-	case data.FrequencyDaily:
+	case dataframe.Daily:
 		return database.TWRROneDay
 	default:
 		return database.TWRRMtd

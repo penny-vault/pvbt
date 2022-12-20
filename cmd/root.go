@@ -86,14 +86,6 @@ func initLogging() {
 		log.Panic().Err(err).Msg("could not bind log-output")
 	}
 
-	if err := viper.BindEnv("log.loki_url", "LOKI_URL"); err != nil {
-		log.Panic().Err(err).Msg("could not bind LOKI_URL")
-	}
-	rootCmd.PersistentFlags().String("log-loki-url", "", "Loki server to send log messages to, if blank don't send to Loki")
-	if err := viper.BindPFlag("log.loki_url", rootCmd.PersistentFlags().Lookup("log-loki-url")); err != nil {
-		log.Panic().Err(err).Msg("could not bind log-loki-url")
-	}
-
 	if err := viper.BindEnv("log.otlp_url", "OTLP_URL"); err != nil {
 		log.Panic().Err(err).Msg("could not bind OTLP_URL")
 	}

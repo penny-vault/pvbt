@@ -57,18 +57,19 @@ func GetPortfolioActivity(c *fiber.Ctx) error {
 }
 
 func GetActivity(c *fiber.Ctx, sqlQuery string, args ...any) error {
+	ctx := context.Background()
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("UserID", userID).Str("Endpoint", "GetActivity").Logger()
-	trx, err := database.TrxForUser(userID)
+	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
 
-	rows, err := trx.Query(context.Background(), sqlQuery, args...)
+	rows, err := trx.Query(ctx, sqlQuery, args...)
 	if err != nil {
-		subLog.Warn().Stack().Err(err).Str("Query", sqlQuery).Msg("datdabase query failed")
-		if err := trx.Rollback(context.Background()); err != nil {
+		subLog.Warn().Stack().Err(err).Str("Query", sqlQuery).Msg("database query failed")
+		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 
@@ -81,14 +82,14 @@ func GetActivity(c *fiber.Ctx, sqlQuery string, args ...any) error {
 		err := rows.Scan(&a.ID, &a.PortfolioID, &a.Date, &a.Activity, &a.Tags)
 		if err != nil {
 			subLog.Warn().Err(err).Msg("could not scan activity")
-			if err := trx.Rollback(context.Background()); err != nil {
+			if err := trx.Rollback(ctx); err != nil {
 				log.Error().Stack().Err(err).Msg("could not rollback transaction")
 			}
 		}
 		activities = append(activities, a)
 	}
 
-	if err := trx.Commit(context.Background()); err != nil {
+	if err := trx.Commit(ctx); err != nil {
 		log.Error().Stack().Err(err).Msg("could not commit database transaction")
 	}
 	return c.JSON(activities)

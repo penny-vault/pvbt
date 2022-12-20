@@ -1,9 +1,9 @@
-name = "Seeking Alpha Quant Rank"
+name = "SEEK Fundamental Quant Rank"
 shortcode = "seek"
-description = "A strategy that invests directly in stocks based on quantitative ratings from Seeking Alpha"
+description = "A strategy that invests directly in stocks based on quantitative ratings of the stocks fundamentals relative to its peer group"
 source = "https://seekingalpha.com"
-version = "1.0.0"
-benchmark = "VFINX"
+version = "1.1.0"
+benchmark = { compositeFigi = "BBG000BHTMY2", ticker = "VFINX", name = "Vanguard 500 Index Fund Investor Shares" }
 
 [arguments.numHoldings]
 name = "Number of Holdings"
@@ -21,8 +21,8 @@ options = ["None", "Momentum"]
 [arguments.outTicker]
 name = "Out-of-Market Ticker"
 description = "Ticker to use when sentiment model score is below 0"
-typecode = "string"
-default = "VUSTX"
+typecode = "stock"
+default = '{"compositeFigi": "BBG000BCKYB1", "ticker": "VUSTX", "name": "Vanguard Long Term Treasury Fund"}'
 
 [arguments.period]
 name = "Rebalance Frequency"

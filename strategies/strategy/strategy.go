@@ -24,7 +24,6 @@ import (
 
 	"github.com/goccy/go-json"
 	"github.com/google/uuid"
-	"github.com/jdfergason/dataframe-go"
 )
 
 // Factory method implementing the Factory pattern to create a new Strategy object
@@ -65,7 +64,7 @@ type Info struct {
 	LongDescription string                       `json:"longDescription"`
 	Source          string                       `json:"source"`
 	Version         string                       `json:"version"`
-	Benchmark       string                       `json:"benchmark"`
+	Benchmark       data.Security                `json:"benchmark"`
 	Arguments       map[string]Argument          `json:"arguments"`
 	Suggested       map[string]map[string]string `json:"suggestedParams"`
 	Schedule        string                       `json:"Schedule"`
@@ -73,15 +72,9 @@ type Info struct {
 	Factory         Factory                      `json:"-"`
 }
 
-type Prediction struct {
-	TradeDate     time.Time
-	Target        map[string]float64
-	Justification map[string]float64
-}
-
 // Strategy an investing strategy
 type Strategy interface {
 	// Compute calculates the list of historical trades and returns a dataframe. Additionally, it
 	// returns a dataframe that indicates what assets to hold at the next trading time.
-	Compute(ctx context.Context, manager *data.Manager) (*dataframe.DataFrame, *Prediction, error)
+	Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error)
 }

@@ -113,6 +113,11 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 
 	startIdx := len(perf.Measurements) - int(periods) - 1
 	if startIdx < 0 {
+		log.Warn().Int("startIdx", startIdx).
+			Int("nMeasurements", n).
+			Uint("requestedPeriods", periods).
+			Str("StrategyOrBenchmark", kind).
+			Msg("startIdx is less than 0 returning no draw downs")
 		return allDrawDowns
 	}
 
@@ -145,12 +150,16 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 		if diff < 0 {
 			if drawDown == nil {
 				drawDown = &DrawDown{
+					Active:      true,
 					Begin:       prev,
 					End:         v.Time,
+					Recovery:    v.Time,
 					LossPercent: float64((value / peak) - 1.0),
 				}
 			}
 
+			// update recovery (for on-going draw downs the recovery is meaningless but a nil value screws up charts, etc.)
+			drawDown.Recovery = v.Time
 			loss := (value/peak - 1.0)
 			if loss < drawDown.LossPercent {
 				drawDown.End = v.Time
@@ -158,10 +167,16 @@ func (perf *Performance) AllDrawDowns(periods uint, kind string) []*DrawDown {
 			}
 		} else if drawDown != nil {
 			drawDown.Recovery = v.Time
+			drawDown.Active = false
 			allDrawDowns = append(allDrawDowns, drawDown)
 			drawDown = nil
 		}
 		prev = v.Time
+	}
+
+	// add current draw down if we are in the middle of one
+	if drawDown != nil {
+		allDrawDowns = append(allDrawDowns, drawDown)
 	}
 
 	return allDrawDowns
@@ -532,7 +547,7 @@ func SafeWithdrawalRate(mc [][]float64, inflation float64) float64 {
 		f := func(r float64) float64 { return constantWithdrawalRate(r, inflation, xx) }
 		x0, err := fsolve(f, .05)
 		if err != nil {
-			log.Warn().Stack().Err(err).Msg("fsolve failed")
+			// fsolve didn't converge... just continue
 			continue
 		}
 		rets[ii] = x0
@@ -736,9 +751,11 @@ func (perf *Performance) TWRR(periods uint, kind string) float64 {
 			eValue = e.RiskFreeValue
 		}
 		r0 := (eValue - deposit + withdraw) / sValue
-		if math.IsNaN(r0) {
-			subLog.Warn().Time("sTime", s.Time).Time("eTime", e.Time).Float64("eValue", eValue).Float64("deposit", deposit).Float64("withdraw", withdraw).Float64("sValue", sValue).Msg("r0 is NaN")
-		}
+		/*
+			if math.IsNaN(r0) {
+				subLog.Warn().Time("sTime", s.Time).Time("eTime", e.Time).Float64("eValue", eValue).Float64("deposit", deposit).Float64("withdraw", withdraw).Float64("sValue", sValue).Msg("r0 is NaN")
+			}
+		*/
 		rate *= r0
 	}
 

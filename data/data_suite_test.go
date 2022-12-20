@@ -20,11 +20,23 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/pashagolub/pgxmock"
+	"github.com/penny-vault/pv-api/data"
+	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/pgxmockhelper"
 	"github.com/rs/zerolog/log"
 )
 
 func TestData(t *testing.T) {
 	log.Logger = log.Output(GinkgoWriter)
 	RegisterFailHandler(Fail)
+
+	dbPool, err := pgxmock.NewConn()
+	Expect(err).To(BeNil())
+	database.SetPool(dbPool)
+
+	pgxmockhelper.MockManager(dbPool)
+	data.GetManagerInstance()
+
 	RunSpecs(t, "Data Suite")
 }

@@ -16,12 +16,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/hex"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/penny-vault/pv-api/common"
-	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
@@ -55,13 +55,14 @@ var notifyCmd = &cobra.Command{
 	Use:   "notify",
 	Short: "send notification emails for saved portfolios",
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx := context.Background()
+
 		// setup database
-		err := database.Connect()
+		err := database.Connect(ctx)
 		if err != nil {
 			log.Panic().Err(err).Msg("could not connect to database")
 		}
 
-		data.InitializeDataManager()
 		strategies.InitializeStrategyMap()
 
 		// calculate notification date
@@ -84,21 +85,21 @@ var notifyCmd = &cobra.Command{
 		if notifyUser != "" {
 			users = []string{notifyUser}
 		} else {
-			users = getUsers()
+			users = getUsers(ctx)
 		}
-		portfolios := getPortfolios("", users)
+		portfolios := getAllPortfoliosForUsers(ctx, users)
 
 		for _, pm := range portfolios {
 			var perf *portfolio.Performance
 			portfolioID, _ := uuid.FromBytes(pm.Portfolio.ID)
-			perf, err = portfolio.LoadPerformanceFromDB(portfolioID, pm.Portfolio.UserID)
+			perf, err = portfolio.LoadPerformanceFromDB(ctx, portfolioID, pm.Portfolio.UserID)
 			subLog := log.With().Str("UserID", pm.Portfolio.UserID).Str("PortfolioName", pm.Portfolio.Name).Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Logger()
 			if err != nil {
 				subLog.Error().Err(err).Msg("could not load portfolio performance; skipping...")
 				continue
 			}
 
-			notifications := pm.NotificationsForDate(forDate, perf)
+			notifications := pm.NotificationsForDate(ctx, forDate, perf)
 			subLog.Debug().Int("NumNotifications", len(notifications)).Msg("portfolio has notifications")
 			for _, notification := range notifications {
 				contact, err := common.GetAuth0User(pm.Portfolio.UserID)

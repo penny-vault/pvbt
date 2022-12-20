@@ -13,18 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package dfextras_test
+package portfolio
 
-import (
-	"testing"
+import "github.com/rs/zerolog"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/rs/zerolog/log"
-)
-
-func TestDfextras(t *testing.T) {
-	log.Logger = log.Output(GinkgoWriter)
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Dfextras Suite")
+func (o *DrawDown) MarshalZerologObject(e *zerolog.Event) {
+	e.Time("Begin", o.Begin).Time("End", o.End).Time("RecoveryDate", o.Recovery).Float64("LossPercent", o.LossPercent)
 }

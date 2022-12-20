@@ -1178,6 +1178,8 @@ func (o *Transaction) UnmarshalBinary(data []byte) error {
 type Holding struct {
 	Date time.Time
 
+	CompositeFIGI string
+
 	Ticker string
 
 	Shares float64
@@ -1203,8 +1205,22 @@ func (o *Holding) MarshalTo(buf []byte) int {
 		i += 4
 	}
 
-	if l := len(o.Ticker); l != 0 {
+	if l := len(o.CompositeFIGI); l != 0 {
 		buf[i] = 1
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.CompositeFIGI)
+	}
+
+	if l := len(o.Ticker); l != 0 {
+		buf[i] = 2
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -1218,7 +1234,7 @@ func (o *Holding) MarshalTo(buf []byte) int {
 	}
 
 	if v := o.Shares; v != 0 {
-		buf[i] = 2
+		buf[i] = 3
 		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
 		i += 9
 	}
@@ -1238,6 +1254,15 @@ func (o *Holding) MarshalLen() (int, error) {
 			l += 9
 		} else {
 			l += 13
+		}
+	}
+
+	if x := len(o.CompositeFIGI); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Holding.CompositeFIGI exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
 		}
 	}
 
@@ -1326,6 +1351,45 @@ func (o *Holding) Unmarshal(data []byte) (int, error) {
 		}
 
 		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Holding.CompositeFIGI size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.CompositeFIGI = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 2 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
 			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.Holding.Ticker size %d exceeds %d bytes", x, ColferSizeMax))
 		}
 
@@ -1340,7 +1404,7 @@ func (o *Holding) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 2 {
+	if header == 3 {
 		start := i
 		i += 8
 		if i >= len(data) {
@@ -2311,6 +2375,8 @@ type DrawDown struct {
 	Recovery time.Time
 
 	LossPercent float64
+
+	Active bool
 }
 
 // MarshalTo encodes o as Colfer into buf and returns the number of bytes written.
@@ -2369,6 +2435,11 @@ func (o *DrawDown) MarshalTo(buf []byte) int {
 		i += 9
 	}
 
+	if o.Active {
+		buf[i] = 4
+		i++
+	}
+
 	buf[i] = 0x7f
 	i++
 	return i
@@ -2405,6 +2476,10 @@ func (o *DrawDown) MarshalLen() (int, error) {
 
 	if o.LossPercent != 0 {
 		l += 9
+	}
+
+	if o.Active {
+		l++
 	}
 
 	if l > ColferSizeMax {
@@ -2501,6 +2576,15 @@ func (o *DrawDown) Unmarshal(data []byte) (int, error) {
 			goto eof
 		}
 		o.LossPercent = math.Float64frombits(intconv.Uint64(data[start:]))
+		header = data[i]
+		i++
+	}
+
+	if header == 4 {
+		if i >= len(data) {
+			goto eof
+		}
+		o.Active = true
 		header = data[i]
 		i++
 	}
@@ -5890,6 +5974,8 @@ func (o *PerformanceMeasurement) UnmarshalBinary(data []byte) error {
 }
 
 type ReportableHolding struct {
+	CompositeFIGI string
+
 	Ticker string
 
 	Shares float64
@@ -5904,8 +5990,22 @@ type ReportableHolding struct {
 func (o *ReportableHolding) MarshalTo(buf []byte) int {
 	var i int
 
-	if l := len(o.Ticker); l != 0 {
+	if l := len(o.CompositeFIGI); l != 0 {
 		buf[i] = 0
+		i++
+		x := uint(l)
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+		i += copy(buf[i:], o.CompositeFIGI)
+	}
+
+	if l := len(o.Ticker); l != 0 {
+		buf[i] = 1
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -5919,19 +6019,19 @@ func (o *ReportableHolding) MarshalTo(buf []byte) int {
 	}
 
 	if v := o.Shares; v != 0 {
-		buf[i] = 1
+		buf[i] = 2
 		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
 		i += 9
 	}
 
 	if v := o.PercentPortfolio; v != 0 {
-		buf[i] = 2
+		buf[i] = 3
 		intconv.PutUint32(buf[i+1:], math.Float32bits(v))
 		i += 5
 	}
 
 	if v := o.Value; v != 0 {
-		buf[i] = 3
+		buf[i] = 4
 		intconv.PutUint64(buf[i+1:], math.Float64bits(v))
 		i += 9
 	}
@@ -5945,6 +6045,15 @@ func (o *ReportableHolding) MarshalTo(buf []byte) int {
 // The error return option is portfolio.ColferMax.
 func (o *ReportableHolding) MarshalLen() (int, error) {
 	l := 1
+
+	if x := len(o.CompositeFIGI); x != 0 {
+		if x > ColferSizeMax {
+			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.ReportableHolding.CompositeFIGI exceeds %d bytes", ColferSizeMax))
+		}
+		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
 
 	if x := len(o.Ticker); x != 0 {
 		if x > ColferSizeMax {
@@ -6019,6 +6128,45 @@ func (o *ReportableHolding) Unmarshal(data []byte) (int, error) {
 		}
 
 		if x > uint(ColferSizeMax) {
+			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.ReportableHolding.CompositeFIGI size %d exceeds %d bytes", x, ColferSizeMax))
+		}
+
+		start := i
+		i += int(x)
+		if i >= len(data) {
+			goto eof
+		}
+		o.CompositeFIGI = string(data[start:i])
+
+		header = data[i]
+		i++
+	}
+
+	if header == 1 {
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint(data[i])
+		i++
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				if i >= len(data) {
+					goto eof
+				}
+				b := uint(data[i])
+				i++
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+
+		if x > uint(ColferSizeMax) {
 			return 0, ColferMax(fmt.Sprintf("colfer: portfolio.ReportableHolding.Ticker size %d exceeds %d bytes", x, ColferSizeMax))
 		}
 
@@ -6033,7 +6181,7 @@ func (o *ReportableHolding) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 1 {
+	if header == 2 {
 		start := i
 		i += 8
 		if i >= len(data) {
@@ -6044,7 +6192,7 @@ func (o *ReportableHolding) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 2 {
+	if header == 3 {
 		start := i
 		i += 4
 		if i >= len(data) {
@@ -6055,7 +6203,7 @@ func (o *ReportableHolding) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 3 {
+	if header == 4 {
 		start := i
 		i += 8
 		if i >= len(data) {
