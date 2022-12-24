@@ -26,11 +26,13 @@ type Transaction struct {
 	Commission     float64
 	CompositeFIGI  text
 	Date           timestamp
+	GainLoss       float64
 	Justification  []Justification
 	Kind           text
 	Memo           text
 	Predicted      bool
 	PricePerShare  float64
+	Related        []binary
 	Shares         float64
 	Source         text
 	SourceID       text
@@ -47,10 +49,28 @@ type Holding struct {
 	Shares        float64
 }
 
+type TaxLot struct {
+	Date          timestamp
+	TransactionID binary
+	CompositeFIGI text
+	Ticker        text
+	Shares        float64
+	PricePerShare float64
+}
+
+type TaxLotList struct {
+	items []TaxLot
+}
+
 type Portfolio struct {
 	ID                binary
 	UserID            text
+	AccountNumber     text
+	Brokerage         text
+	AccountType       text
 	Name              text
+	IsOpen            bool
+	LastViewed        timestamp
 	StartDate         timestamp
 	EndDate           timestamp
 	Benchmark         text
@@ -60,6 +80,10 @@ type Portfolio struct {
 	Notifications     int32
 	Transactions      []Transaction
 	CurrentHoldings   []Holding
+	TaxLots           []TaxLot
+	TaxLotMethod      text
+	PortfolioType     text
+	LinkedPortfolios  []binary
 	PredictedAssets   PortfolioHoldingItem
 }
 

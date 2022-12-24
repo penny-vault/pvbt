@@ -279,7 +279,7 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 	where := make(map[string]string)
 	tz := common.GetTimezone()
 	fields := []string{"event_date", "id", "cleared", "commission", "composite_figi", "justification",
-		"transaction_type", "memo", "price_per_share", "num_shares", "source", "source_id", "tags",
+		"transaction_type", "memo", "price_per_share", "num_shares", "gain_loss", "source", "source_id", "tags",
 		"tax_type", "ticker", "total_value"}
 
 	where["portfolio_id"] = fmt.Sprintf("eq.%s", f.PortfolioID)
@@ -320,6 +320,7 @@ func (f *Database) GetTransactions(since time.Time) ([]byte, error) {
 			&memo,
 			&t.PricePerShare,
 			&t.Shares,
+			&t.GainLoss,
 			&t.Source,
 			&sourceID,
 			&t.Tags,
