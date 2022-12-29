@@ -58,8 +58,10 @@ type TaxLot struct {
 	PricePerShare float64
 }
 
-type TaxLotList struct {
-	items []TaxLot
+type TaxLotInfo struct {
+	AsOf   timestamp
+	Items  []TaxLot
+	Method text
 }
 
 type Portfolio struct {
@@ -80,8 +82,7 @@ type Portfolio struct {
 	Notifications     int32
 	Transactions      []Transaction
 	CurrentHoldings   []Holding
-	TaxLots           []TaxLot
-	TaxLotMethod      text
+	TaxLots           TaxLotInfo
 	PortfolioType     text
 	LinkedPortfolios  []binary
 	PredictedAssets   PortfolioHoldingItem
@@ -101,24 +102,25 @@ type AnnualReturn struct {
 }
 
 type Metrics struct {
-	AlphaSinceInception             float64
-	AvgDrawDown                     float64
-	BestYear                        AnnualReturn
-	BetaSinceInception              float64
-	DownsideDeviationSinceInception float64
-	ExcessKurtosisSinceInception    float64
-	FinalBalance                    float64
-	SharpeRatioSinceInception       float64
-	Skewness                        float64
-	SortinoRatioSinceInception      float64
-	StdDevSinceInception            float64
-	TotalDeposited                  float64
-	TotalWithdrawn                  float64
-	UlcerIndexAvg                   float64
-	UlcerIndexP50                   float64
-	UlcerIndexP90                   float64
-	UlcerIndexP99                   float64
-	WorstYear                       AnnualReturn
+	AlphaSinceInception                 float64
+	AvgDrawDown                         float64
+	BestYear                            AnnualReturn
+	BetaSinceInception                  float64
+	DownsideDeviationSinceInception     float64
+	ExcessKurtosisSinceInception        float64
+	FinalBalance                        float64
+	SharpeRatioSinceInception           float64
+	Skewness                            float64
+	SortinoRatioSinceInception          float64
+	StdDevSinceInception                float64
+	TaxCostRatio                        float64
+	TotalDeposited                      float64
+	TotalWithdrawn                      float64
+	UlcerIndexAvg                       float64
+	UlcerIndexP50                       float64
+	UlcerIndexP90                       float64
+	UlcerIndexP99                       float64
+	WorstYear                           AnnualReturn
 
 	DynamicWithdrawalRateSinceInception   float64
 	PerpetualWithdrawalRateSinceInception float64
@@ -169,6 +171,8 @@ type PerformanceMeasurement struct {
 
 	Holdings       []ReportableHolding
 	Justification  []Justification
+	TaxLots        TaxLotInfo
+
 	TotalDeposited float64
 	TotalWithdrawn float64
 
@@ -197,6 +201,17 @@ type PerformanceMeasurement struct {
 	MWRRThreeYear   float32
 	MWRRFiveYear    float32
 	MWRRTenYear     float32
+
+	// GainLoss bucketed by tax treatment
+	AfterTaxReturn                       float64
+	BeforeTaxReturn                      float64
+	TaxCostRatio                         float64
+	LongTermCapitalGain                  float64
+	ShortTermCapitalGain                 float64
+	UnrealizedLongTermCapitalGain        float64
+	UnrealizedShortTermCapitalGain       float64
+	QualifiedDividend                    float64
+	NonQualifiedDividendAndInterestIncome float64
 
 	// active return
 	ActiveReturnOneYear   float32

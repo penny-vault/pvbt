@@ -71,6 +71,10 @@ const (
 	WithdrawTransaction = "WITHDRAW"
 )
 
+const (
+	SplitFactor = "SplitFactor"
+)
+
 type Activity struct {
 	Date time.Time
 	Msg  string
@@ -102,7 +106,12 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 		AccountType:  Taxable,
 		Benchmark:    "BBG000BHTMY2",
 		Transactions: []*Transaction{},
-		StartDate:    startDate,
+		TaxLots: &TaxLotInfo{
+			AsOf:   time.Time{},
+			Method: TaxLotFIFOMethod,
+			Items:  make([]*TaxLot, 0, 5),
+		},
+		StartDate: startDate,
 	}
 
 	model := Model{
@@ -204,13 +213,20 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 				totalValue := nShares * dividend
 				// there is a dividend, record it
 				pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
-				t, err := createTransaction(date, &securityMetric.SecurityObject, DividendTransaction, 1.0, totalValue, pm.Portfolio.AccountType, nil)
+				justification := []*Justification{{Key: "Dividend", Value: dividend}}
+				trx, err := createTransaction(date, &securityMetric.SecurityObject, DividendTransaction, 1.0,
+					totalValue, pm.Portfolio.AccountType, justification)
 				if err != nil {
 					log.Error().Stack().Err(err).Msg("failed to create transaction")
 				}
 				// update cash position in holdings
-				pm.holdings[data.CashSecurity] += nShares * dividend
-				addTransactions = append(addTransactions, t)
+				pm.holdings[data.CashSecurity] += totalValue
+				if pm.Portfolio.TaxLots.CheckIfDividendIsQualified(trx) {
+					trx.TaxDisposition = QualifiedDividend
+				} else {
+					trx.TaxDisposition = NonQualifiedDividend
+				}
+				addTransactions = append(addTransactions, trx)
 			}
 		case data.MetricSplitFactor:
 			for idx, date := range v.Dates {
@@ -220,11 +236,14 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 				shares := splitFactor * nShares
 				// there is a split, record it
 				pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
-				t, err := createTransaction(date, &securityMetric.SecurityObject, SplitTransaction, 0.0, shares, pm.Portfolio.AccountType, nil)
+				justification := []*Justification{{Key: SplitFactor, Value: splitFactor}}
+				trx, err := createTransaction(date, &securityMetric.SecurityObject, SplitTransaction, 0.0, shares,
+					pm.Portfolio.AccountType, justification)
+				pm.Portfolio.TaxLots.AdjustForSplit(&securityMetric.SecurityObject, splitFactor)
 				if err != nil {
 					log.Error().Stack().Err(err).Msg("failed to create transaction")
 				}
-				addTransactions = append(addTransactions, t)
+				addTransactions = append(addTransactions, trx)
 				// update holdings
 				pm.holdings[securityMetric.SecurityObject] = shares
 			}
@@ -349,7 +368,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 		newHoldings[security] = numShares
 	}
 
-	sells = pm.updateTaxLots(buys, sells)
+	sells = pm.Portfolio.TaxLots.Update(allocation.Date, buys, sells)
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
 	if cash > 1.0e-05 {
@@ -1017,9 +1036,7 @@ func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID str
 		subLog.Error().Stack().Err(err).Msg("Could not marshal predicted bytes")
 	}
 
-	var taxLotList TaxLotList
-	taxLotList.Items = p.TaxLots
-	taxLotBytes, err := taxLotList.MarshalBinary()
+	taxLotBytes, err := p.TaxLots.MarshalBinary()
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("Could not marshal tax lot bytes")
 	}
@@ -1413,38 +1430,4 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 	}
 
 	return t, targetShares, nil
-}
-
-func (pm *Model) updateTaxLots(buys []*Transaction, sells []*Transaction) []*Transaction {
-	// record buys as new tax lots
-	for _, buy := range buys {
-		// double check that it's a buy transaction
-		if buy.Kind != BuyTransaction {
-			continue
-		}
-
-		taxLot := &TaxLot{
-			Date:          buy.Date,
-			TransactionID: buy.ID,
-			CompositeFIGI: buy.CompositeFIGI,
-			Ticker:        buy.Ticker,
-			Shares:        buy.Shares,
-			PricePerShare: buy.PricePerShare,
-		}
-		pm.Portfolio.TaxLots = append(pm.Portfolio.TaxLots, taxLot)
-	}
-
-	// link sell transactions with tax lots and calculate GainLoss
-	newSells := make([]*Transaction, 0, len(sells))
-	for _, sell := range sells {
-		// double check that it's a sell transaction
-		if sell.Kind != SellTransaction {
-			continue
-		}
-
-		enrichedTransactions := pm.identifyTaxLots(sell)
-		newSells = append(newSells, enrichedTransactions...)
-	}
-
-	return newSells
 }

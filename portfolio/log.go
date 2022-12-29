@@ -21,6 +21,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+func (o *TaxLot) MarshalZerologObject(e *zerolog.Event) {
+	e.Time("Date", o.Date).Str("CompositeFIGI", o.CompositeFIGI).Str("Ticker", o.Ticker).Float64("Shares", o.Shares).Float64("PricePerShare", o.PricePerShare)
+}
+
 func (o *DrawDown) MarshalZerologObject(e *zerolog.Event) {
 	e.Time("Begin", o.Begin).Time("End", o.End).Time("RecoveryDate", o.Recovery).Float64("LossPercent", o.LossPercent)
 }
