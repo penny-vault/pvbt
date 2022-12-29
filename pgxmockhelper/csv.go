@@ -235,6 +235,19 @@ func MockHolidays(db pgxmock.PgxConnIface) {
 	db.ExpectCommit()
 }
 
+func MockTaxRates(db pgxmock.PgxConnIface) {
+	db.ExpectBegin()
+	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
+	db.ExpectQuery("SELECT interest_income_and_non_qualified_dividends, qualified_dividend_rate, ltc_tax_rate, stc_tax_rate").WillReturnRows(
+		NewCSVRows([]string{"tax_rates.csv"}, map[string]string{
+			"interest_income_and_non_qualified_dividends": "float64",
+			"qualified_dividend_rate":                     "float64",
+			"ltc_tax_rate":                                "float64",
+			"stc_tax_rate":                                "float64",
+		}).Rows())
+	db.ExpectCommit()
+}
+
 func MockTradingDays(db pgxmock.PgxConnIface) {
 	db.ExpectBegin()
 	db.ExpectExec("SET ROLE").WillReturnResult(pgconn.CommandTag("SET ROLE"))
