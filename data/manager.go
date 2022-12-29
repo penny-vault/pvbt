@@ -60,7 +60,11 @@ func GetManagerInstance() *Manager {
 			cacheMaxSize = 10485760 // 10 MB
 		}
 
-		lruCache, err := lru.New[string, []byte](viper.GetInt("cache.lru_size"))
+		cacheSize := viper.GetInt("cache.lru_size")
+		if cacheSize <= 0 {
+			cacheSize = 32
+		}
+		lruCache, err := lru.New[string, []byte](cacheSize)
 		if err != nil {
 			log.Error().Err(err).Msg("could not create lru cache")
 		}
