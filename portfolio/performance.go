@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math"
 	"sort"
 	"time"
@@ -44,11 +45,15 @@ var (
 )
 
 type cumulativeSums struct {
-	Deposited      float64
-	BenchmarkValue float64
-	RiskFreeValue  float64
-	TotalValue     float64
-	Withdrawn      float64
+	BenchmarkValue                   float64
+	Deposited                        float64
+	LTCGain                          float64
+	STCGain                          float64
+	QualifiedDividends               float64
+	NonQualifiedDividendsAndInterest float64
+	RiskFreeValue                    float64
+	TotalValue                       float64
+	Withdrawn                        float64
 }
 
 type dateBundle struct {
@@ -59,6 +64,13 @@ type dateBundle struct {
 	StartOfMonth          time.Time
 	StartOfWeek           time.Time
 	StartOfYear           time.Time
+}
+
+type taxRates struct {
+	NonQualifiedDividendsAndInterestIncome float64
+	QualifiedDividends                     float64
+	LTCTaxRate                             float64
+	STCTaxRate                             float64
 }
 
 // METHODS
@@ -237,7 +249,27 @@ func holdingsMapFromMeasurement(measurement *PerformanceMeasurement) map[data.Se
 	return holdings
 }
 
-func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxIdx int, date time.Time, sums *cumulativeSums) (map[data.Security]float64, int, error) {
+func getCashFromHoldings(holdings map[data.Security]float64) float64 {
+	if val, ok := holdings[data.CashSecurity]; ok {
+		return val
+	}
+	return 0.0
+}
+
+func setCashPosition(cashPosition float64, holdings map[data.Security]float64) {
+	if cashPosition < 1e-5 {
+		if cashPosition < -1e-5 {
+			log.Warn().Float64("cash", cashPosition).Msg("transaction would take cash balance below zero. using a floor of zero")
+		}
+		delete(holdings, data.CashSecurity)
+	} else {
+		holdings[data.CashSecurity] = cashPosition
+	}
+}
+
+// processTransactions evaluates all transactions from trxIdx through the specified date (inclusive) and updates the holdings and running
+// sums for the portfolio `p`
+func processTransactions(p *Portfolio, holdings map[data.Security]float64, taxLots *TaxLotInfo, trxIdx int, date time.Time, sums *cumulativeSums) (map[data.Security]float64, int, error) {
 	numTrxs := len(p.Transactions)
 
 	for ; trxIdx < numTrxs; trxIdx++ {
@@ -264,52 +296,58 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, trxId
 			sums.Deposited += trx.TotalValue
 			sums.RiskFreeValue += trx.TotalValue
 			sums.BenchmarkValue += trx.TotalValue
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val + trx.TotalValue
-			} else {
-				holdings[data.CashSecurity] = trx.TotalValue
-			}
+			val := getCashFromHoldings(holdings)
+			holdings[data.CashSecurity] = val + trx.TotalValue
 			continue
 		case WithdrawTransaction:
 			sums.Withdrawn += trx.TotalValue
 			sums.RiskFreeValue -= trx.TotalValue
 			sums.BenchmarkValue -= trx.TotalValue
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val - trx.TotalValue
-			}
+			val := getCashFromHoldings(holdings)
+			cash := val - trx.TotalValue
+			setCashPosition(cash, holdings)
 			continue
 		case BuyTransaction:
 			shares += trx.Shares
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val - trx.TotalValue
-			}
+			val := getCashFromHoldings(holdings)
+			cash := val - trx.TotalValue
+			setCashPosition(cash, holdings)
+			taxLots.Update(trx.Date, []*Transaction{trx}, []*Transaction{})
 			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process buy shares transaction")
 		case InterestTransaction:
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val + trx.TotalValue
-			} else {
-				holdings[data.CashSecurity] = trx.TotalValue
-			}
+			val := getCashFromHoldings(holdings)
+			cash := val + trx.TotalValue
+			setCashPosition(cash, holdings)
+			sums.NonQualifiedDividendsAndInterest += trx.TotalValue
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process interest transaction")
 			continue
 		case DividendTransaction:
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val + trx.TotalValue
+			val := getCashFromHoldings(holdings)
+			cash := val + trx.TotalValue
+			setCashPosition(cash, holdings)
+			if trx.TaxDisposition == QualifiedDividend {
+				sums.QualifiedDividends += trx.TotalValue
 			} else {
-				holdings[data.CashSecurity] = trx.TotalValue
+				sums.NonQualifiedDividendsAndInterest += trx.TotalValue
 			}
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process dividend transaction")
 			continue
 		case SplitTransaction:
 			shares = trx.Shares
+			taxLots.AdjustForSplit(trx.Security(), trx.SplitFactor())
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Shares", trx.Shares).Msg("process split transaction")
 		case SellTransaction:
 			shares -= trx.Shares
-			if val, ok := holdings[data.CashSecurity]; ok {
-				holdings[data.CashSecurity] = val + trx.TotalValue
-			} else {
-				holdings[data.CashSecurity] = trx.TotalValue
+			val := getCashFromHoldings(holdings)
+			cash := val + trx.TotalValue
+			setCashPosition(cash, holdings)
+			switch trx.TaxDisposition {
+			case LTC:
+				sums.LTCGain += trx.GainLoss
+			case STC:
+				sums.STCGain += trx.GainLoss
 			}
+			taxLots.Update(trx.Date, []*Transaction{}, []*Transaction{trx})
 			log.Debug().Time("Date", trx.Date).Str("Kind", "sell").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process sell transaction")
 		default:
 			log.Warn().Stack().Time("TransactionDate", trx.Date).Str("TransactionKind", trx.Kind).Msg("unrecognized transaction")
@@ -403,16 +441,19 @@ func (perf *Performance) updateSummaryMetrics(metrics *Metrics, kind string) {
 
 	switch kind {
 	case STRATEGY:
+		lastMeasurement := perf.Measurements[len(perf.Measurements)-1]
 		metrics.AlphaSinceInception = perf.Alpha(sinceInceptionPeriods)
 		metrics.BetaSinceInception = perf.Beta(sinceInceptionPeriods)
 		metrics.ExcessKurtosisSinceInception = perf.ExcessKurtosis(sinceInceptionPeriods)
-		metrics.FinalBalance = perf.Measurements[len(perf.Measurements)-1].Value
-		metrics.TotalDeposited = perf.Measurements[len(perf.Measurements)-1].TotalDeposited
-		metrics.TotalWithdrawn = perf.Measurements[len(perf.Measurements)-1].TotalWithdrawn
+		metrics.FinalBalance = lastMeasurement.Value
+		metrics.TotalDeposited = lastMeasurement.TotalDeposited
+		metrics.TotalWithdrawn = lastMeasurement.TotalWithdrawn
 		metrics.UlcerIndexAvg = perf.AvgUlcerIndex(sinceInceptionPeriods)
 		metrics.UlcerIndexP50 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .5)
 		metrics.UlcerIndexP90 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .9)
 		metrics.UlcerIndexP99 = perf.UlcerIndexPercentile(sinceInceptionPeriods, .99)
+		metrics.TaxCostRatio = (1 - ((1 + lastMeasurement.AfterTaxReturn) / (1 + lastMeasurement.BeforeTaxReturn)))
+
 		perf.DrawDowns = perf.Top10DrawDowns(sinceInceptionPeriods, STRATEGY)
 	case BENCHMARK:
 		metrics.FinalBalance = perf.Measurements[len(perf.Measurements)-1].BenchmarkValue
@@ -571,6 +612,40 @@ func (perf *Performance) calculateRiskMeasures(measurement *PerformanceMeasureme
 	measurement.UlcerIndex = float32(perf.UlcerIndex())
 }
 
+func calculateTaxMetrics(measurement *PerformanceMeasurement, rates *taxRates) {
+	var unrealizedLTC float64
+	var unrealizedSTC float64
+
+	ltcDate := measurement.Time.AddDate(-1, 0, 0).Add(time.Nanosecond * -1) // subtract 1 nanosecond so we don't have to do before and equal
+
+	for _, taxLot := range measurement.TaxLots.Items {
+		price, _, err := data.NewDataRequest(taxLot.Security()).Metrics(data.MetricClose).OnOrBefore(measurement.Time)
+		if err != nil {
+			log.Error().Err(err).Msg("fetch price failed when updating unrealized gains")
+		}
+		if ltcDate.After(taxLot.Date) {
+			// long-term gain
+			unrealizedLTC += (taxLot.Shares * price) - (taxLot.Shares * taxLot.PricePerShare)
+		} else {
+			// short-term gain
+			unrealizedSTC += (taxLot.Shares * price) - (taxLot.Shares * taxLot.PricePerShare)
+		}
+	}
+
+	measurement.UnrealizedLongTermCapitalGain = unrealizedLTC
+	measurement.UnrealizedShortTermCapitalGain = unrealizedSTC
+
+	measurement.BeforeTaxReturn = (measurement.LongTermCapitalGain + measurement.ShortTermCapitalGain +
+		measurement.QualifiedDividend + measurement.NonQualifiedDividendAndInterestIncome +
+		measurement.UnrealizedLongTermCapitalGain + measurement.UnrealizedShortTermCapitalGain)
+	taxesPaid := ((measurement.LongTermCapitalGain+measurement.UnrealizedLongTermCapitalGain)*rates.LTCTaxRate +
+		(measurement.ShortTermCapitalGain+measurement.UnrealizedShortTermCapitalGain)*rates.STCTaxRate +
+		measurement.QualifiedDividend*rates.QualifiedDividends +
+		measurement.NonQualifiedDividendAndInterestIncome*rates.NonQualifiedDividendsAndInterestIncome)
+	measurement.AfterTaxReturn = measurement.BeforeTaxReturn - taxesPaid
+	measurement.TaxCostRatio = (1 - ((1 + measurement.AfterTaxReturn) / (1 + measurement.BeforeTaxReturn)))
+}
+
 func (perf *Performance) calculateWithdrawalRates() {
 	sinceInceptionPeriods := uint(len(perf.Measurements) - 1)
 	monthlyRets := perf.monthlyReturns(sinceInceptionPeriods, STRATEGY)
@@ -640,6 +715,10 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	p := pm.Portfolio
 	var err error
 
+	subLog := log.With().
+		Str("PortfolioName", pm.Portfolio.Name).
+		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Logger()
+
 	// make sure we can check the data
 	if len(p.Transactions) == 0 {
 		return ErrNoTransactions
@@ -651,10 +730,15 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 			StrategyGrowthOf10K:  10_000,
 			BenchmarkGrowthOf10K: 10_000,
 			RiskFreeGrowthOf10K:  10_000,
-			TotalDeposited:       0,
-			TotalWithdrawn:       0,
-			Value:                0,
-			BenchmarkValue:       0,
+			TaxLots: &TaxLotInfo{
+				AsOf:   time.Time{},
+				Method: TaxLotFIFOMethod,
+				Items:  make([]*TaxLot, 0, 5),
+			},
+			TotalDeposited: 0,
+			TotalWithdrawn: 0,
+			Value:          0,
+			BenchmarkValue: 0,
 		}
 	} else {
 		prevMeasurement = perf.Measurements[len(perf.Measurements)-1]
@@ -669,11 +753,9 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	nyc := common.GetTimezone()
 	calculationStart = time.Date(calculationStart.Year(), calculationStart.Month(), calculationStart.Day(), 0, 0, 0, 0, nyc)
 
-	log.Info().
+	subLog.Info().
 		Time("CalculationPeriod.Start", calculationStart).
 		Time("CalculationPeriod.End", through).
-		Str("PortfolioName", pm.Portfolio.Name).
-		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).
 		Msg("calculate performance over requested period")
 
 	// Get the days performance should be calculated on
@@ -685,17 +767,27 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)
-	log.Debug().Int("TrxIdx", trxIdx).Msg("starting from transaction index")
+	subLog.Debug().Int("TrxIdx", trxIdx).Msg("starting from transaction index")
 
 	// fill holdings
 	holdings := holdingsMapFromMeasurement(prevMeasurement)
 
+	// get tax Lot info up to the current date
+	taxLots := prevMeasurement.TaxLots.Copy()
+
+	taxRates := taxRatesForUser(ctx, p.UserID)
+	log.Info().Str("taxRates", fmt.Sprintf("%+v", taxRates)).Msg("tax rates")
+
 	sums := &cumulativeSums{
-		TotalValue:     prevMeasurement.Value,
-		BenchmarkValue: prevMeasurement.BenchmarkValue,
-		Deposited:      prevMeasurement.TotalDeposited,
-		RiskFreeValue:  prevMeasurement.RiskFreeValue,
-		Withdrawn:      prevMeasurement.TotalWithdrawn,
+		TotalValue:                       prevMeasurement.Value,
+		LTCGain:                          prevMeasurement.LongTermCapitalGain,
+		STCGain:                          prevMeasurement.ShortTermCapitalGain,
+		QualifiedDividends:               prevMeasurement.QualifiedDividend,
+		NonQualifiedDividendsAndInterest: prevMeasurement.NonQualifiedDividendAndInterestIncome,
+		BenchmarkValue:                   prevMeasurement.BenchmarkValue,
+		Deposited:                        prevMeasurement.TotalDeposited,
+		RiskFreeValue:                    prevMeasurement.RiskFreeValue,
+		Withdrawn:                        prevMeasurement.TotalWithdrawn,
 	}
 
 	benchmarkSecurity, err := data.SecurityFromFigi(pm.Portfolio.Benchmark)
@@ -735,8 +827,8 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 
 		sums.BenchmarkValue = calculateValue(benchmarkSecurity, benchmarkShares, date)
 
-		// update holdings
-		holdings, trxIdx, err = processTransactions(p, holdings, trxIdx, date, sums)
+		// update holdings and tax lots
+		holdings, trxIdx, err = processTransactions(p, holdings, taxLots, trxIdx, date, sums)
 		if err != nil {
 			return err
 		}
@@ -765,38 +857,44 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		// update riskFreeValue
 		sums.RiskFreeValue *= getRiskFreeRate(date)
 
-		measurement := PerformanceMeasurement{
-			Time:                 date,
-			Justification:        justificationArray,
-			Value:                sums.TotalValue,
-			BenchmarkValue:       sums.BenchmarkValue,
-			RiskFreeValue:        sums.RiskFreeValue,
-			StrategyGrowthOf10K:  prevMeasurement.StrategyGrowthOf10K,
-			BenchmarkGrowthOf10K: prevMeasurement.BenchmarkGrowthOf10K,
-			RiskFreeGrowthOf10K:  prevMeasurement.RiskFreeGrowthOf10K,
-			Holdings:             currentAssets,
-			TotalDeposited:       sums.Deposited,
-			TotalWithdrawn:       sums.Withdrawn,
+		measurement := &PerformanceMeasurement{
+			Time:                                  date,
+			Justification:                         justificationArray,
+			Value:                                 sums.TotalValue,
+			BenchmarkValue:                        sums.BenchmarkValue,
+			RiskFreeValue:                         sums.RiskFreeValue,
+			LongTermCapitalGain:                   sums.LTCGain,
+			ShortTermCapitalGain:                  sums.STCGain,
+			QualifiedDividend:                     sums.QualifiedDividends,
+			NonQualifiedDividendAndInterestIncome: sums.NonQualifiedDividendsAndInterest,
+			StrategyGrowthOf10K:                   prevMeasurement.StrategyGrowthOf10K,
+			BenchmarkGrowthOf10K:                  prevMeasurement.BenchmarkGrowthOf10K,
+			RiskFreeGrowthOf10K:                   prevMeasurement.RiskFreeGrowthOf10K,
+			Holdings:                              currentAssets,
+			TaxLots:                               taxLots,
+			TotalDeposited:                        sums.Deposited,
+			TotalWithdrawn:                        sums.Withdrawn,
 		}
 
-		perf.Measurements = append(perf.Measurements, &measurement)
+		calculateTaxMetrics(measurement, taxRates)
+
+		perf.Measurements = append(perf.Measurements, measurement)
 
 		if len(perf.Measurements) >= 2 {
-
 			// time-weighted rate of return
 			if int(dates.DaysToStartOfYear) == len(perf.Measurements) {
 				dates.DaysToStartOfYear--
 			}
 
-			perf.calculateGrowthOf10k(&measurement)
-			perf.calculateReturns(&measurement, dates)
-			perf.calculateRiskMeasures(&measurement)
+			perf.calculateGrowthOf10k(measurement)
+			perf.calculateReturns(measurement, dates)
+			perf.calculateRiskMeasures(measurement)
 		}
 
 		perf.updateAnnualPerformance(prevDate, date, prevMeasurement, ytdBench)
 		ytdBench = float32(perf.TWRR(dates.DaysToStartOfYear, BENCHMARK))
 
-		prevMeasurement = &measurement
+		prevMeasurement = measurement
 		prevDate = date
 
 		if date.Before(today) || date.Equal(today) {
@@ -882,6 +980,16 @@ func LoadMeasurementFromDB(ctx context.Context, portfolioID []byte, userID strin
 	measurementSQL := `SELECT
 		event_date,
 		holdings,
+		tax_lots,
+		after_tax_return,
+		before_tax_return,
+		tax_cost_ratio,
+		long_term_capital_gain,
+		short_term_capital_gain,
+		unrealized_long_term_capital_gain,
+		unrealized_short_term_capital_gain,
+		qualified_dividend,
+		non_qualified_dividend_and_interest_income,
 		alpha_1yr,
 		alpha_3yr,
 		alpha_5yr,
@@ -942,9 +1050,20 @@ func LoadMeasurementFromDB(ctx context.Context, portfolioID []byte, userID strin
 	LIMIT 1`
 	row := trx.QueryRow(ctx, measurementSQL, portfolioID, userID, forDate)
 	m := PerformanceMeasurement{}
+	var taxLotBytes []byte
 	if err := row.Scan(
 		&m.Time,
 		&m.Holdings,
+		&taxLotBytes,
+		&m.AfterTaxReturn,
+		&m.BeforeTaxReturn,
+		&m.TaxCostRatio,
+		&m.LongTermCapitalGain,
+		&m.ShortTermCapitalGain,
+		&m.UnrealizedLongTermCapitalGain,
+		&m.UnrealizedShortTermCapitalGain,
+		&m.QualifiedDividend,
+		&m.NonQualifiedDividendAndInterestIncome,
 		&m.AlphaOneYear,
 		&m.AlphaThreeYear,
 		&m.AlphaFiveYear,
@@ -1004,6 +1123,13 @@ func LoadMeasurementFromDB(ctx context.Context, portfolioID []byte, userID strin
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
 		}
 		return nil, err
+	}
+
+	taxLotInfo := &TaxLotInfo{}
+	if _, err := taxLotInfo.Unmarshal(taxLotBytes); err != nil {
+		log.Error().Stack().Err(err).Msg("could not deserialize tax lot info")
+	} else {
+		m.TaxLots = taxLotInfo
 	}
 
 	if err := trx.Commit(ctx); err != nil {
@@ -1220,7 +1346,8 @@ func (perf *Performance) SaveWithTransaction(ctx context.Context, trx pgx.Tx, us
 		avg_draw_down=$11,
 		sharpe_ratio=$12,
 		sortino_ratio=$13,
-		ulcer_index=$14
+		ulcer_index=$14,
+		tax_cost_ratio=$15
 	WHERE id=$1`
 
 	tmp := perf.Measurements
@@ -1254,7 +1381,8 @@ func (perf *Performance) SaveWithTransaction(ctx context.Context, trx pgx.Tx, us
 		perf.PortfolioMetrics.AvgDrawDown,
 		perf.PortfolioMetrics.SharpeRatioSinceInception,
 		perf.PortfolioMetrics.SortinoRatioSinceInception,
-		perf.PortfolioMetrics.UlcerIndexP90)
+		perf.PortfolioMetrics.UlcerIndexP90,
+		perf.PortfolioMetrics.TaxCostRatio)
 	if err != nil {
 		if err := trx.Rollback(ctx); err != nil {
 			log.Error().Stack().Err(err).Msg("could not rollback transaction")
@@ -1333,7 +1461,17 @@ func (perf *Performance) saveMeasurements(ctx context.Context, trx pgx.Tx, userI
 		twrr_ytd,
 		mwrr_wtd,
 		mwrr_mtd,
-		mwrr_ytd
+		mwrr_ytd,
+		tax_lots,
+		after_tax_return,
+		before_tax_return,
+		tax_cost_ratio,
+		long_term_capital_gain,
+		short_term_capital_gain,
+		unrealized_long_term_capital_gain,
+		unrealized_short_term_capital_gain,
+		qualified_dividend,
+		non_qualified_dividend_and_interest_income
 	) VALUES (
 		$1,
 		$2,
@@ -1391,7 +1529,17 @@ func (perf *Performance) saveMeasurements(ctx context.Context, trx pgx.Tx, userI
 		$54,
 		$55,
 		$56,
-		$57
+		$57,
+		$58,
+		$59,
+		$60,
+		$61,
+		$62,
+		$63,
+		$64,
+		$65,
+		$66,
+		$67
 	) ON CONFLICT ON CONSTRAINT portfolio_measurements_pkey
 	DO NOTHING`
 
@@ -1410,64 +1558,79 @@ func (perf *Performance) saveMeasurements(ctx context.Context, trx pgx.Tx, userI
 			return ErrSerialize
 		}
 
+		taxLotBytes, err := m.TaxLots.MarshalBinary()
+		if err != nil {
+			log.Error().Stack().Err(err).Msg("marshal tax lots to binary failed")
+		}
+
 		_, err = trx.Exec(ctx, sql,
-			m.Time,                  // 1
-			perf.PortfolioID,        // 2
-			m.RiskFreeValue,         // 3
-			m.TotalDeposited,        // 4
-			m.TotalWithdrawn,        // 5
-			userID,                  // 6
-			m.Value,                 // 7
-			holdings,                // 8
-			justification,           // 9
-			m.AlphaOneYear,          // 10
-			m.AlphaThreeYear,        // 11
-			m.AlphaFiveYear,         // 12
-			m.AlphaTenYear,          // 13
-			m.BetaOneYear,           // 14
-			m.BetaThreeYear,         // 15
-			m.BetaFiveYear,          // 16
-			m.BetaTenYear,           // 17
-			m.TWRROneDay,            // 18
-			m.TWRROneWeek,           // 19
-			m.TWRROneMonth,          // 20
-			m.TWRRThreeMonth,        // 21
-			m.TWRROneYear,           // 22
-			m.TWRRThreeYear,         // 23
-			m.TWRRFiveYear,          // 24
-			m.TWRRTenYear,           // 25
-			m.MWRROneDay,            // 26
-			m.MWRROneWeek,           // 27
-			m.MWRROneMonth,          // 28
-			m.MWRRThreeMonth,        // 29
-			m.MWRROneYear,           // 30
-			m.MWRRThreeYear,         // 31
-			m.MWRRFiveYear,          // 32
-			m.MWRRTenYear,           // 33
-			m.ActiveReturnOneYear,   // 34
-			m.ActiveReturnThreeYear, // 35
-			m.ActiveReturnFiveYear,  // 36
-			m.ActiveReturnTenYear,   // 37
-			m.CalmarRatio,           // 38
-			m.DownsideDeviation,     // 39
-			m.InformationRatio,      // 40
-			m.KRatio,                // 41
-			m.KellerRatio,           // 42
-			m.SharpeRatio,           // 43
-			m.SortinoRatio,          // 44
-			m.StdDev,                // 45
-			m.TreynorRatio,          // 46
-			m.UlcerIndex,            // 47
-			m.BenchmarkValue,        // 48
-			m.StrategyGrowthOf10K,   // 49
-			m.BenchmarkGrowthOf10K,  // 50
-			m.RiskFreeGrowthOf10K,   // 51
-			m.TWRRWeekToDate,        // 52
-			m.TWRRMonthToDate,       // 53
-			m.TWRRYearToDate,        // 54
-			m.MWRRWeekToDate,        // 55
-			m.MWRRMonthToDate,       // 56
-			m.MWRRYearToDate,        // 57
+			m.Time,                                  // 1
+			perf.PortfolioID,                        // 2
+			m.RiskFreeValue,                         // 3
+			m.TotalDeposited,                        // 4
+			m.TotalWithdrawn,                        // 5
+			userID,                                  // 6
+			m.Value,                                 // 7
+			holdings,                                // 8
+			justification,                           // 9
+			m.AlphaOneYear,                          // 10
+			m.AlphaThreeYear,                        // 11
+			m.AlphaFiveYear,                         // 12
+			m.AlphaTenYear,                          // 13
+			m.BetaOneYear,                           // 14
+			m.BetaThreeYear,                         // 15
+			m.BetaFiveYear,                          // 16
+			m.BetaTenYear,                           // 17
+			m.TWRROneDay,                            // 18
+			m.TWRROneWeek,                           // 19
+			m.TWRROneMonth,                          // 20
+			m.TWRRThreeMonth,                        // 21
+			m.TWRROneYear,                           // 22
+			m.TWRRThreeYear,                         // 23
+			m.TWRRFiveYear,                          // 24
+			m.TWRRTenYear,                           // 25
+			m.MWRROneDay,                            // 26
+			m.MWRROneWeek,                           // 27
+			m.MWRROneMonth,                          // 28
+			m.MWRRThreeMonth,                        // 29
+			m.MWRROneYear,                           // 30
+			m.MWRRThreeYear,                         // 31
+			m.MWRRFiveYear,                          // 32
+			m.MWRRTenYear,                           // 33
+			m.ActiveReturnOneYear,                   // 34
+			m.ActiveReturnThreeYear,                 // 35
+			m.ActiveReturnFiveYear,                  // 36
+			m.ActiveReturnTenYear,                   // 37
+			m.CalmarRatio,                           // 38
+			m.DownsideDeviation,                     // 39
+			m.InformationRatio,                      // 40
+			m.KRatio,                                // 41
+			m.KellerRatio,                           // 42
+			m.SharpeRatio,                           // 43
+			m.SortinoRatio,                          // 44
+			m.StdDev,                                // 45
+			m.TreynorRatio,                          // 46
+			m.UlcerIndex,                            // 47
+			m.BenchmarkValue,                        // 48
+			m.StrategyGrowthOf10K,                   // 49
+			m.BenchmarkGrowthOf10K,                  // 50
+			m.RiskFreeGrowthOf10K,                   // 51
+			m.TWRRWeekToDate,                        // 52
+			m.TWRRMonthToDate,                       // 53
+			m.TWRRYearToDate,                        // 54
+			m.MWRRWeekToDate,                        // 55
+			m.MWRRMonthToDate,                       // 56
+			m.MWRRYearToDate,                        // 57
+			taxLotBytes,                             // 58
+			m.AfterTaxReturn,                        // 59
+			m.BeforeTaxReturn,                       // 60
+			m.TaxCostRatio,                          // 61
+			m.LongTermCapitalGain,                   // 62
+			m.ShortTermCapitalGain,                  // 63
+			m.UnrealizedLongTermCapitalGain,         // 64
+			m.UnrealizedShortTermCapitalGain,        // 65
+			m.QualifiedDividend,                     // 66
+			m.NonQualifiedDividendAndInterestIncome, // 67
 		)
 		if err != nil {
 			log.Error().Stack().Err(err).Msg("could not save portfolio measurement")

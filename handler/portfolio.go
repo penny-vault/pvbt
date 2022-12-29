@@ -37,9 +37,14 @@ import (
 type PortfolioResponse struct {
 	ID                 uuid.UUID              `json:"id"`
 	Name               string                 `json:"name"`
+	AccountType        string                 `json:"accountType"`
+	AccountNumber      string                 `json:"accountNumber"`
+	Brokerage          string                 `json:"brokerage"`
+	IsOpen             bool                   `json:"isOpen"`
 	Strategy           string                 `json:"strategy"`
 	Arguments          map[string]interface{} `json:"arguments"`
 	StartDate          int64                  `json:"startDate"`
+	TaxLotMethod       string                 `json:"taxLotMethod"`
 	BenchmarkTicker    string                 `json:"benchmarkTicker"`
 	Status             string                 `json:"status"`
 	YTDReturn          pgtype.Float8          `json:"ytdReturn"`
@@ -56,6 +61,7 @@ type PortfolioResponse struct {
 	SortinoRatio       pgtype.Float4          `json:"sortinoRatio"`
 	UlcerIndex         pgtype.Float4          `json:"ulcerIndex"`
 	NextTradeDate      pgtype.Int4            `json:"nextTradeDate"`
+	LastViewed         int64                  `json:"lastViewed"`
 	Created            int64                  `json:"created"`
 	LastChanged        int64                  `json:"lastChanged"`
 }
@@ -191,13 +197,56 @@ func CreatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	portfolioSQL := fmt.Sprintf(`INSERT INTO portfolios ("id", "name", "strategy_shortcode", "arguments", "benchmark", "start_date", "temporary", "user_id", "holdings") VALUES ($1, $2, $3, $4, $5, $6, 'f', $7, '{"%s": 10000}')`, data.CashAsset)
+	portfolioSQL := fmt.Sprintf(`INSERT INTO portfolios (
+		"id",
+		"name",
+		"account_number",
+		"brokerage",
+		"account_type",
+		"is_open",
+		"tax_lot_method",
+		"strategy_shortcode",
+		"arguments",
+		"benchmark",
+		"start_date",
+		"temporary",
+		"user_id",
+		"holdings"
+	) VALUES (
+		$1,
+		$2,
+		$3,
+		$4,
+		$5,
+		't',
+		$6,
+		$7,
+		$8,
+		$9,
+		$10,
+		'f',
+		$11,
+		'{"%s": 10000}'
+	)`, data.CashAsset)
 	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
 		return fiber.ErrServiceUnavailable
 	}
-	_, err = trx.Exec(ctx, portfolioSQL, portfolioID, portfolioParams.Name, portfolioParams.Strategy, jsonArgs, portfolioParams.BenchmarkTicker, time.Unix(portfolioParams.StartDate, 0), userID)
+	_, err = trx.Exec(ctx,
+		portfolioSQL,
+		portfolioID,                             // $1
+		portfolioParams.Name,                    // $2
+		portfolioParams.AccountNumber,           // $3
+		portfolioParams.Brokerage,               // $4
+		portfolioParams.AccountType,             // $5
+		portfolioParams.TaxLotMethod,            // $6
+		portfolioParams.Strategy,                // $7
+		jsonArgs,                                // $8
+		portfolioParams.BenchmarkTicker,         // $9
+		time.Unix(portfolioParams.StartDate, 0), // $10
+		userID,                                  // $11
+	)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not save new portfolio")
 		if err := trx.Rollback(ctx); err != nil {
@@ -241,7 +290,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID).Str("UserID", userID).Logger()
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT id, name, account_number, brokerage, account_type, is_open, tax_lot_method, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from last_viewed)::int as last_viewed, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
@@ -249,7 +298,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 	}
 	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
 	p := NewPortfolioResponse()
-	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+	err = row.Scan(&p.ID, &p.Name, &p.AccountNumber, &p.Brokerage, &p.AccountType, &p.IsOpen, &p.TaxLotMethod, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.LastViewed, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not scan row from db into Performance struct")
 		if err := trx.Rollback(ctx); err != nil {
@@ -403,6 +452,11 @@ func ListPortfolios(c *fiber.Ctx) error {
 		arguments,
 		extract(epoch from start_date)::int as start_date,
 		benchmark,
+		account_type,
+		account_number,
+		brokerage,
+		is_open,
+		tax_lot_method,
 		ytd_return,
 		cagr_since_inception,
 		notifications,
@@ -418,6 +472,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 		sortino_ratio,
 		ulcer_index,
 		extract(epoch from next_trade_date)::int as next_trade_date,
+		extract(epoch from last_viewed)::int as last_viewed,
 		extract(epoch from created)::int as created,
 		extract(epoch from lastchanged)::int as lastchanged
 	FROM portfolios WHERE user_id=$1 AND temporary=false ORDER BY name, created`
@@ -447,23 +502,29 @@ func ListPortfolios(c *fiber.Ctx) error {
 			&p.Arguments,          // 3
 			&p.StartDate,          // 4
 			&p.BenchmarkTicker,    // 5
-			&p.YTDReturn,          // 6
-			&p.CAGRSinceInception, // 7
-			&p.Notifications,      // 8
-			&p.Status,             // 9
-			&p.Cagr3Year,          // 10
-			&p.Cagr5Year,          // 11
-			&p.Cagr10Year,         // 12
-			&p.StdDev,             // 13
-			&p.DownsideDeviation,  // 14
-			&p.MaxDrawDown,        // 15
-			&p.AvgDrawDown,        // 16
-			&p.SharpeRatio,        // 17
-			&p.SortinoRatio,       // 18
-			&p.UlcerIndex,         // 19
-			&p.NextTradeDate,      // 20
-			&p.Created,            // 21
-			&p.LastChanged,        // 22
+			&p.AccountType,        // 6
+			&p.AccountNumber,      // 7
+			&p.Brokerage,          // 8
+			&p.IsOpen,             // 9
+			&p.TaxLotMethod,       // 10
+			&p.YTDReturn,          // 11
+			&p.CAGRSinceInception, // 12
+			&p.Notifications,      // 13
+			&p.Status,             // 14
+			&p.Cagr3Year,          // 15
+			&p.Cagr5Year,          // 16
+			&p.Cagr10Year,         // 17
+			&p.StdDev,             // 18
+			&p.DownsideDeviation,  // 19
+			&p.MaxDrawDown,        // 20
+			&p.AvgDrawDown,        // 21
+			&p.SharpeRatio,        // 22
+			&p.SortinoRatio,       // 23
+			&p.UlcerIndex,         // 24
+			&p.NextTradeDate,      // 25
+			&p.LastViewed,         // 26
+			&p.Created,            // 27
+			&p.LastChanged,        // 28
 		)
 		if err != nil {
 			subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("ListPortfolio scan failed")
@@ -510,10 +571,11 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		return fiber.ErrServiceUnavailable
 	}
 
-	portfolioSQL := `SELECT id, name, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT id, name, account_type, account_number, brokerage, is_open, tax_lot_method, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from last_viewed)::int as last_viewed, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
 	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
 	p := NewPortfolioResponse()
-	err = row.Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+
+	err = row.Scan(&p.ID, &p.Name, &p.AccountType, &p.AccountNumber, &p.Brokerage, &p.IsOpen, &p.TaxLotMethod, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.LastViewed, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("select portfolio info failed")
 		if err := trx.Rollback(ctx); err != nil {
@@ -533,8 +595,24 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 		params.Notifications = p.Notifications
 	}
 
-	updateSQL := `UPDATE portfolios SET name=$1, notifications=$2 WHERE id=$3 AND user_id=$4`
-	_, err = trx.Exec(ctx, updateSQL, params.Name, params.Notifications, portfolioID, userID)
+	if params.AccountType == "" {
+		params.AccountType = p.AccountType
+	}
+
+	if params.AccountNumber == "" {
+		params.AccountNumber = p.AccountNumber
+	}
+
+	if params.Brokerage == "" {
+		params.Brokerage = p.Brokerage
+	}
+
+	if params.TaxLotMethod == "" {
+		params.TaxLotMethod = p.TaxLotMethod
+	}
+
+	updateSQL := `UPDATE portfolios SET name=$1, notifications=$2, account_type=$3, account_number=$4, brokerage=$5, tax_lot_method=$6 WHERE id=$7 AND user_id=$8`
+	_, err = trx.Exec(ctx, updateSQL, params.Name, params.Notifications, params.AccountType, params.AccountNumber, params.Brokerage, params.TaxLotMethod, portfolioID, userID)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", updateSQL).Msg("update portfolio settings failed")
 		if err := trx.Rollback(ctx); err != nil {
@@ -546,7 +624,7 @@ func UpdatePortfolio(c *fiber.Ctx) error {
 
 	p = NewPortfolioResponse()
 	err = trx.QueryRow(ctx, portfolioSQL, portfolioID, userID).
-		Scan(&p.ID, &p.Name, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.Created, &p.LastChanged)
+		Scan(&p.ID, &p.Name, &p.AccountType, &p.AccountNumber, &p.Brokerage, &p.IsOpen, &p.TaxLotMethod, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.LastViewed, &p.Created, &p.LastChanged)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Bytes("Body", c.Body()).Msg("sacn portfolio statistics failed")
 		if err := trx.Rollback(ctx); err != nil {

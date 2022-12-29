@@ -26,11 +26,13 @@ type Transaction struct {
 	Commission     float64
 	CompositeFIGI  text
 	Date           timestamp
+	GainLoss       float64
 	Justification  []Justification
 	Kind           text
 	Memo           text
 	Predicted      bool
 	PricePerShare  float64
+	Related        []binary
 	Shares         float64
 	Source         text
 	SourceID       text
@@ -47,10 +49,30 @@ type Holding struct {
 	Shares        float64
 }
 
+type TaxLot struct {
+	Date          timestamp
+	TransactionID binary
+	CompositeFIGI text
+	Ticker        text
+	Shares        float64
+	PricePerShare float64
+}
+
+type TaxLotInfo struct {
+	AsOf   timestamp
+	Items  []TaxLot
+	Method text
+}
+
 type Portfolio struct {
 	ID                binary
 	UserID            text
+	AccountNumber     text
+	Brokerage         text
+	AccountType       text
 	Name              text
+	IsOpen            bool
+	LastViewed        timestamp
 	StartDate         timestamp
 	EndDate           timestamp
 	Benchmark         text
@@ -60,6 +82,9 @@ type Portfolio struct {
 	Notifications     int32
 	Transactions      []Transaction
 	CurrentHoldings   []Holding
+	TaxLots           TaxLotInfo
+	PortfolioType     text
+	LinkedPortfolios  []binary
 	PredictedAssets   PortfolioHoldingItem
 }
 
@@ -77,24 +102,25 @@ type AnnualReturn struct {
 }
 
 type Metrics struct {
-	AlphaSinceInception             float64
-	AvgDrawDown                     float64
-	BestYear                        AnnualReturn
-	BetaSinceInception              float64
-	DownsideDeviationSinceInception float64
-	ExcessKurtosisSinceInception    float64
-	FinalBalance                    float64
-	SharpeRatioSinceInception       float64
-	Skewness                        float64
-	SortinoRatioSinceInception      float64
-	StdDevSinceInception            float64
-	TotalDeposited                  float64
-	TotalWithdrawn                  float64
-	UlcerIndexAvg                   float64
-	UlcerIndexP50                   float64
-	UlcerIndexP90                   float64
-	UlcerIndexP99                   float64
-	WorstYear                       AnnualReturn
+	AlphaSinceInception                 float64
+	AvgDrawDown                         float64
+	BestYear                            AnnualReturn
+	BetaSinceInception                  float64
+	DownsideDeviationSinceInception     float64
+	ExcessKurtosisSinceInception        float64
+	FinalBalance                        float64
+	SharpeRatioSinceInception           float64
+	Skewness                            float64
+	SortinoRatioSinceInception          float64
+	StdDevSinceInception                float64
+	TaxCostRatio                        float64
+	TotalDeposited                      float64
+	TotalWithdrawn                      float64
+	UlcerIndexAvg                       float64
+	UlcerIndexP50                       float64
+	UlcerIndexP90                       float64
+	UlcerIndexP99                       float64
+	WorstYear                           AnnualReturn
 
 	DynamicWithdrawalRateSinceInception   float64
 	PerpetualWithdrawalRateSinceInception float64
@@ -145,6 +171,8 @@ type PerformanceMeasurement struct {
 
 	Holdings       []ReportableHolding
 	Justification  []Justification
+	TaxLots        TaxLotInfo
+
 	TotalDeposited float64
 	TotalWithdrawn float64
 
@@ -173,6 +201,17 @@ type PerformanceMeasurement struct {
 	MWRRThreeYear   float32
 	MWRRFiveYear    float32
 	MWRRTenYear     float32
+
+	// GainLoss bucketed by tax treatment
+	AfterTaxReturn                       float64
+	BeforeTaxReturn                      float64
+	TaxCostRatio                         float64
+	LongTermCapitalGain                  float64
+	ShortTermCapitalGain                 float64
+	UnrealizedLongTermCapitalGain        float64
+	UnrealizedShortTermCapitalGain       float64
+	QualifiedDividend                    float64
+	NonQualifiedDividendAndInterestIncome float64
 
 	// active return
 	ActiveReturnOneYear   float32

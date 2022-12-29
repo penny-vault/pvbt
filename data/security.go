@@ -82,6 +82,15 @@ func LoadSecuritiesFromDB() error {
 	return nil
 }
 
+// MustSecurityFromFigi loads a security from database using the Composite FIGI as the lookup key
+func MustSecurityFromFigi(figi string) *Security {
+	security, err := SecurityFromFigi(figi)
+	if err != nil {
+		log.Panic().Err(err).Str("figi", figi).Msg("security not found for specified figi")
+	}
+	return security
+}
+
 // SecurityFromFigi loads a security from database using the Composite FIGI as the lookup key
 func SecurityFromFigi(figi string) (*Security, error) {
 	if managerInstance == nil {

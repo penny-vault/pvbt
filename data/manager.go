@@ -17,6 +17,7 @@ package data
 
 import (
 	"context"
+	"math"
 	"sort"
 	"sync"
 	"time"
@@ -60,7 +61,11 @@ func GetManagerInstance() *Manager {
 			cacheMaxSize = 10485760 // 10 MB
 		}
 
-		lruCache, err := lru.New[string, []byte](viper.GetInt("cache.lru_size"))
+		cacheSize := viper.GetInt("cache.lru_size")
+		if cacheSize <= 0 {
+			cacheSize = 32
+		}
+		lruCache, err := lru.New[string, []byte](cacheSize)
 		if err != nil {
 			log.Error().Err(err).Msg("could not create lru cache")
 		}
@@ -184,17 +189,12 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	return dfMap, nil
 }
 
-// GetMetricsOnOrBefore finds a single metric value on the requested date or the closest date available prior to the requested date
-func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
-	ctx := context.Background()
-	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
-
-	// check if the date is currently in the cache
+func (manager *Manager) cacheFetchOnOrBefore(security *Security, metric Metric, date time.Time) (float64, time.Time, bool) {
 	if contains, intervals := manager.metricCache.Check(security, metric, date, date); contains {
 		if vals, err := manager.metricCache.Get(security, metric, date, date); err == nil {
 			if vals.Len() > 0 {
 				// the date is part of the covered period
-				return vals.Vals[0][0], date, nil
+				return vals.Vals[0][0], date, true
 			}
 
 			// the date is not part of the covered period
@@ -202,21 +202,51 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 			lastInterval := intervals[len(intervals)-1]
 			if vals2, err := manager.metricCache.Get(security, metric, lastInterval.Begin, date); err == nil {
 				last := vals2.Last()
-				return last.Vals[0][0], last.Dates[0], nil
+				if len(last.Vals) < 1 || len(last.Vals[0]) < 1 {
+					return math.NaN(), time.Time{}, false
+				}
+				return last.Vals[0][0], last.Dates[0], true
 			}
 			log.Error().Err(err).Object("LastInterval", lastInterval).Msg("error while fetching value from cache in GetMetricOnOrBefore in second query")
 		} else {
 			log.Error().Err(err).Msg("error while fetching value from cache in GetMetricOnOrBefore")
 		}
 	}
+	return math.NaN(), time.Time{}, false
+}
 
-	// not currently in the cache ... load from DB
-	val, forDate, err := manager.pvdb.GetEODOnOrBefore(ctx, security, metric, date)
+// GetMetricsOnOrBefore finds a single metric value on the requested date or the closest date available prior to the requested date
+func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, date time.Time) (float64, time.Time, error) {
+	ctx := context.Background()
+	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
+
+	var val float64
+	var forDate time.Time
+	var ok bool
+
+	// check if the date is currently in the cache
+	if val, forDate, ok = manager.cacheFetchOnOrBefore(security, metric, date); ok && !math.IsNaN(val) {
+		return val, forDate, nil
+	}
+
+	// first try and pull the data into the cache
+	_, err := manager.GetMetrics([]*Security{security}, []Metric{metric}, date, date)
+	if err != nil {
+		subLog.Error().Err(err).Msg("could not fetch metrics from DB")
+	} else {
+		// check if the date is now in the cache
+		if val, forDate, ok = manager.cacheFetchOnOrBefore(security, metric, date); ok && !math.IsNaN(val) {
+			return val, forDate, nil
+		}
+	}
+
+	// still not in the cache ... load from DB
+	val, forDate, err = manager.pvdb.GetEODOnOrBefore(ctx, security, metric, date)
 	if err != nil {
 		subLog.Error().Err(err).Msg("could not fetch data")
 		return 0.0, time.Time{}, err
 	}
-	return val, forDate, err
+	return val, forDate, nil
 }
 
 // GetPortfolio returns a cached portfolio

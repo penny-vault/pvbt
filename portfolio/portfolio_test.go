@@ -304,6 +304,8 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
+				pgxmockhelper.MockTaxRates(dbPool)
+
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 30, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
@@ -364,12 +366,15 @@ var _ = Describe("Portfolio", Ordered, func() {
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2021, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 29, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
+				pgxmockhelper.MockTaxRates(dbPool)
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"dgs3mo.csv"},
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
+				pgxmockhelper.MockDBEodQuery(dbPool, []string{"pridx.csv"},
+					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
-					time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 4, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
+					time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 3, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"dgs3mo.csv"},
 					time.Date(2020, 2, 3, 0, 0, 0, 0, time.UTC), time.Date(2021, 2, 4, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
@@ -385,11 +390,15 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("should have a balance of $10,000 on Jan 31, 2018", func() {
-				Expect(perf.Measurements[0].Time).To(Equal(time.Date(2019, 1, 31, 23, 59, 59, 999999999, tz)))
-				Expect(perf.Measurements[0].Value).Should(BeNumerically("~", 10_000.0, 1e-5))
-				Expect(perf.Measurements[0].BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
-				Expect(perf.Measurements[0].Holdings[0].Ticker).To(Equal("VFINX"))
-				Expect(perf.Measurements[0].Holdings[0].CompositeFIGI).To(Equal("BBG000BHTMY2"))
+				meas := perf.Measurements[0]
+				Expect(meas.Time).To(Equal(time.Date(2019, 1, 31, 23, 59, 59, 999999999, tz)))
+				Expect(meas.Value).Should(BeNumerically("~", 10_000.0, 1e-5))
+				Expect(meas.BenchmarkValue).Should(BeNumerically("~", 10_000.0, 1e-5))
+				Expect(meas.Holdings[0].Ticker).To(Equal("VFINX"))
+				Expect(meas.TaxCostRatio).To(BeNumerically("~", 0.0, 1e-5))
+				Expect(meas.BeforeTaxReturn).To(BeNumerically("~", 0.0, 1e-5))
+				Expect(meas.AfterTaxReturn).To(BeNumerically("~", 0.0, 1e-5))
+				Expect(meas.Holdings[0].CompositeFIGI).To(Equal("BBG000BHTMY2"))
 			})
 
 			It("value should not be calculated on non-trading days", func() {
@@ -399,13 +408,23 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("value should include the dividend released on 2019-03-20", func() {
-				Expect(perf.Measurements[33].Time).To(Equal(time.Date(2019, 3, 20, 23, 59, 59, 999999999, tz)))
-				Expect(perf.Measurements[33].Value).Should(BeNumerically("~", 10478.08449, 1e-5))
-				Expect(perf.Measurements[33].BenchmarkValue).Should(BeNumerically("~", 10478.08449, 1e-2))
+				meas := perf.Measurements[33]
+				Expect(meas.Time).To(Equal(time.Date(2019, 3, 20, 23, 59, 59, 999999999, tz)))
+				Expect(meas.Value).Should(BeNumerically("~", 10478.08449, 1e-5))
+				Expect(meas.BeforeTaxReturn).To(BeNumerically("~", 478.08449, 1e-5), "Before tax return")
+				Expect(meas.AfterTaxReturn).To(BeNumerically("~", 321.8783, 1e-5), "After tax return")
+				Expect(meas.TaxCostRatio).To(BeNumerically("~", .32605, 1e-5), "Tax cost ratio")
+				Expect(meas.BenchmarkValue).Should(BeNumerically("~", 10478.08449, 1e-2))
 			})
 
 			It("should have a final measurement on November 30, 2020", func() {
-				Expect(perf.Measurements[462].Time).To(Equal(time.Date(2020, 11, 30, 23, 59, 59, 999999999, tz)))
+				meas := perf.Measurements[462]
+				log.Debug().Float64("LTC", meas.LongTermCapitalGain).Float64("STC", meas.ShortTermCapitalGain).Float64("Qualified", meas.QualifiedDividend).Float64("Non-qualified", meas.NonQualifiedDividendAndInterestIncome).Float64("Unrealzied-LTC", meas.UnrealizedLongTermCapitalGain).Float64("Unrealized-STC", meas.UnrealizedShortTermCapitalGain).Msg("before tax return components")
+				Expect(meas.Time).To(Equal(time.Date(2020, 11, 30, 23, 59, 59, 999999999, tz)))
+				Expect(meas.Value).Should(BeNumerically("~", 15922.73086, 1e-5), "Portfolio value")
+				Expect(meas.BeforeTaxReturn).To(BeNumerically("~", 5922.73086, 1e-5), "Before tax return")
+				Expect(meas.AfterTaxReturn).To(BeNumerically("~", 3892.11623, 1e-5), "After tax return")
+				Expect(meas.TaxCostRatio).To(BeNumerically("~", 0.34279, 1e-5), "Tax cost ratio")
 			})
 		})
 	})
@@ -497,6 +516,8 @@ var _ = Describe("Portfolio", Ordered, func() {
 				Expect(p.Transactions[6].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[6].Ticker).To(Equal("VFINX"))
 				Expect(p.Transactions[6].CompositeFIGI).To(Equal("BBG000BHTMY2"))
+				Expect(p.Transactions[6].GainLoss).Should(BeNumerically("~", 1433.19701, 1e-5))
+				Expect(p.Transactions[6].TaxDisposition).To(Equal(portfolio.STC))
 				Expect(p.Transactions[6].PricePerShare).Should(BeNumerically("~", 298.01, 1e-2), "Price per share")
 				Expect(p.Transactions[6].Shares).Should(BeNumerically("~", 29.8272, 1e-5), "Shares")
 				Expect(p.Transactions[6].TotalValue).Should(BeNumerically("~", 8888.80421, 1e-5), "Total value")
@@ -575,6 +596,8 @@ var _ = Describe("Portfolio", Ordered, func() {
 				Expect(p.Transactions[vustxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vustxIdx].Ticker).To(Equal("VUSTX"))
 				Expect(p.Transactions[vustxIdx].CompositeFIGI).To(Equal("BBG000BCKYB1"))
+				Expect(p.Transactions[vustxIdx].GainLoss).Should(BeNumerically("~", -107.95385, 1e-5))
+				Expect(p.Transactions[vustxIdx].TaxDisposition).To(Equal(portfolio.STC))
 				Expect(p.Transactions[vustxIdx].Shares).Should(BeNumerically("~", 215.90771, 1e-2))
 				Expect(p.Transactions[vustxIdx].TotalValue).Should(BeNumerically("~", 2925.5495, 1e-2))
 			})
@@ -589,7 +612,9 @@ var _ = Describe("Portfolio", Ordered, func() {
 				Expect(p.Transactions[vfinxIdx].Date).To(Equal(time.Date(2021, 01, 29, 16, 0, 0, 0, tz)))
 				Expect(p.Transactions[vfinxIdx].Kind).To(Equal(portfolio.SellTransaction))
 				Expect(p.Transactions[vfinxIdx].Ticker).To(Equal("VFINX"))
+				Expect(p.Transactions[vfinxIdx].GainLoss).Should(BeNumerically("~", 947.68351, 1e-5))
 				Expect(p.Transactions[vfinxIdx].CompositeFIGI).To(Equal("BBG000BHTMY2"))
+				Expect(p.Transactions[vfinxIdx].TaxDisposition).To(Equal(portfolio.LTC))
 				Expect(p.Transactions[vfinxIdx].Shares).Should(BeNumerically("~", 10.1792, 1e-2))
 				Expect(p.Transactions[vfinxIdx].TotalValue).Should(BeNumerically("~", 3492.07631, 1e-2))
 			})
