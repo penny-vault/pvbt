@@ -260,6 +260,7 @@ func (p *PvDb) GetEODOnOrBefore(ctx context.Context, security *Security, metric 
 	}
 
 	sql := fmt.Sprintf("SELECT event_date, %s FROM eod WHERE composite_figi=$1 AND event_date <= $2 ORDER BY event_date DESC, ticker LIMIT 1", columns)
+	log.Debug().Str("SQL", sql).Msg("will run query for GetEODOnOrBefore")
 
 	// execute the query
 	rows, err := trx.Query(ctx, sql, security.CompositeFigi, date)
