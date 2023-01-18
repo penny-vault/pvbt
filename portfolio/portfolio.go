@@ -1343,7 +1343,7 @@ func (pm *Model) getPriceSafe(date time.Time, security *data.Security) float64 {
 		price = 0.0
 	}
 	if math.IsNaN(price) {
-		log.Warn().Stack().Str("Ticker", security.Ticker).Msg("price is NaN")
+		log.Warn().Stack().Str("Ticker", security.Ticker).Time("ForDate", date).Msg("price is NaN")
 		price = 0.0
 	}
 	return price
