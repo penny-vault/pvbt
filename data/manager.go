@@ -230,7 +230,8 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	}
 
 	// first try and pull the data into the cache
-	_, err := manager.GetMetrics([]*Security{security}, []Metric{metric}, date, date)
+	adjustedDate := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
+	_, err := manager.GetMetrics([]*Security{security}, []Metric{metric}, adjustedDate, adjustedDate)
 	if err != nil {
 		subLog.Error().Err(err).Msg("could not fetch metrics from DB")
 	} else {
