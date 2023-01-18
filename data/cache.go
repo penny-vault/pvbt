@@ -208,8 +208,16 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 		vals[0] = []float64{}
 		dates = []time.Time{}
 	} else {
-		vals[0] = item.Values[beginIdx : endIdx+1]
-		dates = periodSubset[beginIdx : endIdx+1]
+		if beginIdx > endIdx {
+			log.Error().Str("myKey", myKey).Int("beginIdx", beginIdx).Int("endIdx", endIdx).Time("begin", begin).Time("end", end).Object("item", item).Msg("corruption detected")
+		}
+		if len(item.Values) <= endIdx {
+			vals[0] = item.Values[beginIdx:endIdx]
+			dates = periodSubset[beginIdx:endIdx]
+		} else {
+			vals[0] = item.Values[beginIdx : endIdx+1]
+			dates = periodSubset[beginIdx : endIdx+1]
+		}
 	}
 
 	df := &dataframe.DataFrame{
