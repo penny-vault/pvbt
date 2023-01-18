@@ -168,12 +168,7 @@ func SetupLogging() {
 		if err != nil {
 			panic(err)
 		}
-		defer fh.Close()
-		if viper.GetBool("log.pretty") {
-			log.Logger = log.Output(zerolog.ConsoleWriter{Out: fh})
-		} else {
-			log.Logger = log.Output(fh)
-		}
+		log.Logger = log.Output(fh)
 	}
 
 	// setup stack marshaler
