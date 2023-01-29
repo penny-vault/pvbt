@@ -256,10 +256,10 @@ func getCashFromHoldings(holdings map[data.Security]float64) float64 {
 	return 0.0
 }
 
-func setCashPosition(cashPosition float64, holdings map[data.Security]float64) {
+func setCashPosition(cashPosition float64, holdings map[data.Security]float64, trx *Transaction, origCash float64) {
 	if cashPosition < 1e-5 {
 		if cashPosition < -1e-5 {
-			log.Warn().Float64("cash", cashPosition).Msg("transaction would take cash balance below zero. using a floor of zero")
+			log.Warn().Float64("cash", cashPosition).Object("Trx", trx).Float64("OriginalCash", origCash).Msg("transaction would take cash balance below zero. using a floor of zero")
 		}
 		delete(holdings, data.CashSecurity)
 	} else {
@@ -305,26 +305,26 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, taxLo
 			sums.BenchmarkValue -= trx.TotalValue
 			val := getCashFromHoldings(holdings)
 			cash := val - trx.TotalValue
-			setCashPosition(cash, holdings)
+			setCashPosition(cash, holdings, trx, val)
 			continue
 		case BuyTransaction:
 			shares += trx.Shares
 			val := getCashFromHoldings(holdings)
 			cash := val - trx.TotalValue
-			setCashPosition(cash, holdings)
+			setCashPosition(cash, holdings, trx, val)
 			taxLots.Update(trx.Date, []*Transaction{trx}, []*Transaction{})
 			log.Debug().Time("Date", trx.Date).Str("Kind", "buy").Float64("Shares", trx.Shares).Str("Ticker", trx.Ticker).Float64("TotalValue", trx.TotalValue).Float64("Price", trx.PricePerShare).Msg("process buy shares transaction")
 		case InterestTransaction:
 			val := getCashFromHoldings(holdings)
 			cash := val + trx.TotalValue
-			setCashPosition(cash, holdings)
+			setCashPosition(cash, holdings, trx, val)
 			sums.NonQualifiedDividendsAndInterest += trx.TotalValue
 			log.Debug().Time("Date", trx.Date).Str("Ticker", trx.Ticker).Float64("Amount", trx.TotalValue).Msg("process interest transaction")
 			continue
 		case DividendTransaction:
 			val := getCashFromHoldings(holdings)
 			cash := val + trx.TotalValue
-			setCashPosition(cash, holdings)
+			setCashPosition(cash, holdings, trx, val)
 			if trx.TaxDisposition == QualifiedDividend {
 				sums.QualifiedDividends += trx.TotalValue
 			} else {
@@ -340,7 +340,7 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, taxLo
 			shares -= trx.Shares
 			val := getCashFromHoldings(holdings)
 			cash := val + trx.TotalValue
-			setCashPosition(cash, holdings)
+			setCashPosition(cash, holdings, trx, val)
 			switch trx.TaxDisposition {
 			case LTC:
 				sums.LTCGain += trx.GainLoss

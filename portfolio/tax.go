@@ -292,6 +292,17 @@ func (t *TaxLotInfo) Copy() *TaxLotInfo {
 func taxRatesForUser(ctx context.Context, userID string) *taxRates {
 	subLog := log.With().Str("Method", "taxRatesForUser").Str("UserID", userID).Logger()
 	subLog.Debug().Msg("Fetching users tax rates")
+
+	if userID == "" {
+		subLog.Debug().Msg("using default tax rates")
+		return &taxRates{
+			NonQualifiedDividendsAndInterestIncome: .35,
+			QualifiedDividends:                     .15,
+			LTCTaxRate:                             .15,
+			STCTaxRate:                             .35,
+		}
+	}
+
 	taxRatesSQL := `SELECT interest_income_and_non_qualified_dividends, qualified_dividend_rate, ltc_tax_rate, stc_tax_rate FROM profile WHERE user_id=$1`
 	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
