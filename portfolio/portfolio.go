@@ -33,6 +33,7 @@ import (
 	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
+	"github.com/penny-vault/pv-api/dataframe"
 	"github.com/penny-vault/pv-api/observability/opentelemetry"
 	"github.com/penny-vault/pv-api/strategies"
 	"github.com/rs/zerolog/log"
@@ -145,6 +146,79 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 	return &model
 }
 
+func (pm *Model) processDividends(dividends dataframe.Map) []*Transaction {
+	addTransactions := make([]*Transaction, 0, len(dividends))
+
+	// for each holding check if there are splits
+	for k, v := range dividends {
+		securityMetric := data.NewSecurityMetricFromString(k)
+		if securityMetric.SecurityObject.Ticker == data.CashAsset {
+			continue
+		}
+
+		for idx, date := range v.Dates {
+			// it's in range
+			dividend := v.Vals[0][idx]
+			nShares := pm.holdings[securityMetric.SecurityObject]
+			totalValue := nShares * dividend
+			// there is a dividend, record it
+			pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
+			justification := []*Justification{{Key: "Dividend", Value: dividend}}
+			trx, err := createTransaction(date, &securityMetric.SecurityObject, DividendTransaction, 1.0,
+				totalValue, pm.Portfolio.AccountType, justification)
+			if err != nil {
+				log.Error().Stack().Err(err).Msg("failed to create transaction")
+			}
+			trx.Memo = fmt.Sprintf("$%.2f/share dividend", dividend)
+
+			// update cash position in holdings
+			pm.holdings[data.CashSecurity] += totalValue
+			if pm.Portfolio.TaxLots.CheckIfDividendIsQualified(trx) {
+				trx.TaxDisposition = QualifiedDividend
+			} else {
+				trx.TaxDisposition = NonQualifiedDividend
+			}
+			addTransactions = append(addTransactions, trx)
+		}
+	}
+
+	return addTransactions
+}
+
+func (pm *Model) processSplits(splits dataframe.Map) []*Transaction {
+	addTransactions := make([]*Transaction, 0, len(splits))
+
+	// for each holding check if there are splits
+	for k, v := range splits {
+		securityMetric := data.NewSecurityMetricFromString(k)
+		if securityMetric.SecurityObject.Ticker == data.CashAsset {
+			continue
+		}
+
+		for idx, date := range v.Dates {
+			// it's in range
+			splitFactor := v.Vals[0][idx]
+			nShares := pm.holdings[securityMetric.SecurityObject]
+			shares := splitFactor * nShares
+			// there is a split, record it
+			pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
+			justification := []*Justification{{Key: SplitFactor, Value: splitFactor}}
+			trx, err := createTransaction(date, &securityMetric.SecurityObject, SplitTransaction, 0.0, shares,
+				pm.Portfolio.AccountType, justification)
+			trx.Memo = fmt.Sprintf("split by a factor of %.2f", splitFactor)
+			pm.Portfolio.TaxLots.AdjustForSplit(&securityMetric.SecurityObject, splitFactor)
+			if err != nil {
+				log.Error().Stack().Err(err).Msg("failed to create transaction")
+			}
+			addTransactions = append(addTransactions, trx)
+			// update holdings
+			pm.holdings[securityMetric.SecurityObject] = shares
+		}
+	}
+
+	return addTransactions
+}
+
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
 func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) error {
@@ -181,8 +255,6 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		return nil // nothing to do
 	}
 
-	addTransactions := make([]*Transaction, 0, 10)
-
 	holdings := make([]*data.Security, 0, len(pm.holdings))
 	for holding := range pm.holdings {
 		holdings = append(holdings, &data.Security{
@@ -191,64 +263,23 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		})
 	}
 
-	divSplits, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash, data.MetricSplitFactor).Between(ctx, from, through)
+	dividends, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash).Between(ctx, from, through)
 	if err != nil {
-		log.Error().Err(err).Msg("could not load dividends/splits")
+		log.Error().Err(err).Msg("could not load dividends")
 		return err
 	}
 
-	// for each holding check if there are splits
-	for k, v := range divSplits {
-		securityMetric := data.NewSecurityMetricFromString(k)
-		if securityMetric.SecurityObject.Ticker == data.CashAsset {
-			continue
-		}
-
-		switch securityMetric.MetricObject {
-		case data.MetricDividendCash:
-			for idx, date := range v.Dates {
-				// it's in range
-				dividend := v.Vals[0][idx]
-				nShares := pm.holdings[securityMetric.SecurityObject]
-				totalValue := nShares * dividend
-				// there is a dividend, record it
-				pm.AddActivity(date, fmt.Sprintf("%s paid a $%.2f/share dividend", k, dividend), []string{"dividend"})
-				justification := []*Justification{{Key: "Dividend", Value: dividend}}
-				trx, err := createTransaction(date, &securityMetric.SecurityObject, DividendTransaction, 1.0,
-					totalValue, pm.Portfolio.AccountType, justification)
-				if err != nil {
-					log.Error().Stack().Err(err).Msg("failed to create transaction")
-				}
-				// update cash position in holdings
-				pm.holdings[data.CashSecurity] += totalValue
-				if pm.Portfolio.TaxLots.CheckIfDividendIsQualified(trx) {
-					trx.TaxDisposition = QualifiedDividend
-				} else {
-					trx.TaxDisposition = NonQualifiedDividend
-				}
-				addTransactions = append(addTransactions, trx)
-			}
-		case data.MetricSplitFactor:
-			for idx, date := range v.Dates {
-				// it's in range
-				splitFactor := v.Vals[0][idx]
-				nShares := pm.holdings[securityMetric.SecurityObject]
-				shares := splitFactor * nShares
-				// there is a split, record it
-				pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
-				justification := []*Justification{{Key: SplitFactor, Value: splitFactor}}
-				trx, err := createTransaction(date, &securityMetric.SecurityObject, SplitTransaction, 0.0, shares,
-					pm.Portfolio.AccountType, justification)
-				pm.Portfolio.TaxLots.AdjustForSplit(&securityMetric.SecurityObject, splitFactor)
-				if err != nil {
-					log.Error().Stack().Err(err).Msg("failed to create transaction")
-				}
-				addTransactions = append(addTransactions, trx)
-				// update holdings
-				pm.holdings[securityMetric.SecurityObject] = shares
-			}
-		}
+	splits, err := data.NewDataRequest(holdings...).Metrics(data.MetricSplitFactor).Between(ctx, from, through)
+	if err != nil {
+		log.Error().Err(err).Msg("could not load splits")
+		return err
 	}
+
+	divTrx := pm.processDividends(dividends)
+	splitTrx := pm.processSplits(splits)
+	addTransactions := make([]*Transaction, 0, len(divTrx)+len(splitTrx))
+	addTransactions = append(addTransactions, divTrx...)
+	addTransactions = append(addTransactions, splitTrx...)
 
 	sort.SliceStable(addTransactions, func(i, j int) bool { return addTransactions[i].Date.Before(addTransactions[j].Date) })
 	p.Transactions = append(p.Transactions, addTransactions...)
