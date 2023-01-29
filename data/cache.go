@@ -102,7 +102,7 @@ func (cache *SecurityMetricCache) Check(security *Security, metric Metric, begin
 	}
 
 	if err := requestedInterval.Valid(); err != nil {
-		log.Error().Err(err).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Str("Security", security.CompositeFigi).Str("Metric", string(metric)).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
 		return false, []*Interval{}
 	}
 
@@ -403,7 +403,7 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 	}
 
 	if err := interval.Valid(); err != nil {
-		log.Error().Err(err).Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
+		log.Error().Err(err).Stack().Time("Begin", interval.Begin).Time("End", interval.End).Msg("cannot set cache value with invalid interval")
 		return ErrInvalidTimeRange
 	}
 

@@ -220,6 +220,8 @@ func (manager *Manager) GetMetricOnOrBefore(security *Security, metric Metric, d
 	ctx := context.Background()
 	subLog := log.With().Time("Date", date).Str("SecurityFigi", security.CompositeFigi).Str("SecurityTicker", security.Ticker).Str("Metric", string(metric)).Logger()
 
+	date = dateOnly(date)
+
 	var val float64
 	var forDate time.Time
 	var ok bool

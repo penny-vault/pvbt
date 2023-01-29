@@ -173,7 +173,7 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
 	t1 := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 	t2 := t1.AddDate(0, 0, -1)
-	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 23, 59, 59, 0, tc.marketStatus.tz)
+	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 23, 59, 59, 999_999_999, tc.marketStatus.tz)
 	next := tc.Next(t2)
 	nextDate := time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 	return nextDate.Equal(t1)
@@ -203,7 +203,7 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 		}
 	case AtMonthBegin:
 		// get the first trading day of the current month
-		lastMonth := time.Date(forDate.Year(), forDate.Month(), 1, 23, 59, 59, 0, tc.marketStatus.tz).AddDate(0, 0, -1)
+		lastMonth := time.Date(forDate.Year(), forDate.Month(), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1)
 		firstTradingDayOfThisMonth := tc.marketStatus.NextFirstTradingDayOfMonth(lastMonth)
 		dateOnly := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 		if firstTradingDayOfThisMonth.After(dateOnly) || firstTradingDayOfThisMonth.Equal(dateOnly) {

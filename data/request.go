@@ -105,9 +105,7 @@ func (req *Request) On(a time.Time) (map[SecurityMetric]float64, error) {
 	manager := GetManagerInstance()
 
 	start := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, common.GetTimezone())
-	end := start.AddDate(0, 0, 1).Add(time.Nanosecond * -1)
-
-	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), start, end)
+	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), start, start)
 	if err != nil {
 		return nil, err
 	}
