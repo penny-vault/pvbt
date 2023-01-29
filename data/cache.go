@@ -145,17 +145,7 @@ func (cache *SecurityMetricCache) adjustEndToCoveredPeriod(end time.Time, item *
 	return end
 }
 
-func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem, myKey string) *dataframe.DataFrame {
-	periodSubset := cache.getPeriodSubset(item)
-
-	var beginIdx int
-	var endIdx int
-
-	endExactMatch := false
-	noValuesFound := false
-
-	end = cache.adjustEndToCoveredPeriod(end, item)
-
+func extractFindBegin(begin time.Time, item *CacheItem, periodSubset []time.Time) (beginIdx int, noValuesFound bool) {
 	if item.CoveredPeriod.Begin.Equal(begin) {
 		beginIdx = 0
 	} else {
@@ -163,13 +153,16 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 			idxVal := periodSubset[i]
 			return (idxVal.After(begin) || idxVal.Equal(begin))
 		})
-		if begin.After(item.CoveredPeriod.End) {
-			noValuesFound = true
-		}
-		if beginIdx == len(periodSubset) && item.isLocalDate {
+		if (begin.After(item.CoveredPeriod.End)) || (beginIdx == len(periodSubset) && item.isLocalDate) {
 			noValuesFound = true
 		}
 	}
+
+	return beginIdx, noValuesFound
+}
+
+func extractFindEnd(beginIdx int, end time.Time, item *CacheItem, periodSubset []time.Time) (endIdx int, noValuesFound bool) {
+	endExactMatch := false
 
 	if item.CoveredPeriod.End.Equal(end) {
 		endIdx = len(item.Values) - 1
@@ -197,6 +190,17 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 		endIdx--
 	}
 
+	return endIdx, noValuesFound
+}
+
+func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem, myKey string) *dataframe.DataFrame {
+	periodSubset := cache.getPeriodSubset(item)
+	end = cache.adjustEndToCoveredPeriod(end, item)
+
+	beginIdx, beginNoValuesFound := extractFindBegin(begin, item, periodSubset)
+	endIdx, endNoValuesFound := extractFindEnd(beginIdx, end, item, periodSubset)
+	noValuesFound := beginNoValuesFound || endNoValuesFound
+
 	endModified := time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 999999999, common.GetTimezone())
 	if beginIdx < len(periodSubset) && periodSubset[beginIdx].After(endModified) {
 		noValuesFound = true
@@ -209,7 +213,7 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 		dates = []time.Time{}
 	} else {
 		if beginIdx > endIdx {
-			log.Error().Str("myKey", myKey).Int("beginIdx", beginIdx).Int("endIdx", endIdx).Time("begin", begin).Time("end", end).Object("item", item).Msg("corruption detected")
+			log.Fatal().Str("myKey", myKey).Int("beginIdx", beginIdx).Int("endIdx", endIdx).Time("begin", begin).Time("end", end).Object("item", item).Msg("corruption detected")
 		}
 		if len(item.Values) <= endIdx {
 			vals[0] = item.Values[beginIdx:endIdx]
