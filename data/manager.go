@@ -304,9 +304,13 @@ func (manager *Manager) Reset() {
 	periods := manager.metricCache.periods
 	manager.metricCache = NewSecurityMetricCache(cacheMaxSize, periods)
 
-	lruCache, err := lru.New[string, []byte](viper.GetInt("cache.lru_size"))
+	lruCacheSize := viper.GetInt("cache.lru_size")
+	if lruCacheSize < 1 {
+		lruCacheSize = 64
+	}
+	lruCache, err := lru.New[string, []byte](lruCacheSize)
 	if err != nil {
-		log.Error().Err(err).Msg("could not create lru cache")
+		log.Error().Err(err).Int("lruCacheSize", lruCacheSize).Msg("could not create lru cache")
 	}
 	manager.lruCache = lruCache
 }
