@@ -304,8 +304,6 @@ var _ = Describe("Portfolio", Ordered, func() {
 			})
 
 			It("shouldn't change value after SPLIT on 2020-08-31", func() {
-				pgxmockhelper.MockTaxRates(dbPool)
-
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2020, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2021, 1, 30, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 
@@ -366,7 +364,6 @@ var _ = Describe("Portfolio", Ordered, func() {
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2021, 1, 29, 0, 0, 0, 0, time.UTC), time.Date(2022, 1, 29, 0, 0, 0, 0, time.UTC), "close", "split_factor", "dividend")
 
-				pgxmockhelper.MockTaxRates(dbPool)
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"vfinx.csv"},
 					time.Date(2019, 1, 31, 0, 0, 0, 0, time.UTC), time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC), "adj_close", "split_factor", "dividend")
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"dgs3mo.csv"},
