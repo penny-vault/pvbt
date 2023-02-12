@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2023-02-12
+### Added
+- Calculation of tax-adjusted returns
+
+### Fixed
+- Bug in data API that would cause dividends or splits to be duplicated on multiple runs
+- Bug in application of corporate actions that caused dividends and splits to be applied in an inconsistent order
+  this could result in unpredictable outcomes depending on the order that was used if a stock had a split and
+  a dividend on the same day.
+- Sortino ratio was showing as NA when it should have been computed
+
 ## [0.5.0] - 2022-12-19
 ### Changed
 - Completely revamped the way data is handled internally. This will enable faster development of new features.
@@ -75,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock data retrieval interface
 - Acclerating Dual Momentum strategy
 
+[0.6.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.6.0
 [0.5.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.5.0
 [0.4.0]: https://github.com/penny-vault/pv-api/releases/tag/v0.4.0
 [0.3.2]: https://github.com/penny-vault/pv-api/releases/tag/v0.3.2
