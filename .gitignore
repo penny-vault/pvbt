@@ -12,6 +12,7 @@
 *.out
 coverage.txt
 test-report.xml
+debug*.log
 
 # compiled binaries
 pvapi
