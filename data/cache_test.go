@@ -150,6 +150,98 @@ var _ = Describe("Cache", func() {
 			}))
 			Expect(df2.Vals).To(Equal([][]float64{{8}}))
 		})
+
+		It("should merge overlapping cache items with local dates", func() {
+			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 1, 20, 0, 0, 0, 0, tz()), time.Date(2022, 8, 21, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 1, 4, 0, 0, 0, 0, tz()), time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.39, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			contains, _ := cache.Check(security, data.MetricDividendCash, time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 6, 27, 0, 0, 0, 0, tz()))
+			Expect(contains).To(BeTrue(), "cache contains expected date")
+
+			items := cache.Items(security, data.MetricDividendCash)
+			Expect(items).To(HaveLen(1), "there should be only 1 CacheItem")
+			Expect(items[0].Values).To(HaveLen(5), "Values should have length 5")
+			Expect(items[0].Values).To(Equal([]float64{0.39, 0.4, 0.4, 0.4, 0.4}))
+			Expect(items[0].LocalDateIndex()).To(HaveLen(5), "there should be 5 local dates")
+			Expect(items[0].LocalDateIndex()).To(Equal([]time.Time{time.Date(2022, 1, 4, 0, 0, 0, 0, tz()), time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())}))
+		})
+
+		It("should merge overlapping cache items when only extending the covered period (left)", func() {
+			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			// second cache period is not a superset but has more dates covered on the left side
+			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 4, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 18, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			contains, _ := cache.Check(security, data.MetricDividendCash, time.Date(2022, 4, 27, 0, 0, 0, 0, tz()), time.Date(2022, 4, 27, 0, 0, 0, 0, tz()))
+			Expect(contains).To(BeTrue(), "cache contains expected date")
+
+			items := cache.Items(security, data.MetricDividendCash)
+			Expect(items).To(HaveLen(1), "there should be only 1 CacheItem")
+			Expect(items[0].Values).To(HaveLen(4), "Values should have length 4")
+			Expect(items[0].Values).To(Equal([]float64{0.4, 0.4, 0.4, 0.4}))
+			Expect(items[0].LocalDateIndex()).To(HaveLen(4), "there should be 4 local dates")
+			Expect(items[0].LocalDateIndex()).To(Equal([]time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())}))
+		})
+
+		It("should merge overlapping cache items when only extending the covered period (right)", func() {
+			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			// second cache period is not a superset but has more dates covered on the left side
+			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
+				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 12, 18, 0, 0, 0, 0, tz()),
+				&dataframe.DataFrame{
+					ColNames: []string{"vals"},
+					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
+				})
+			Expect(err).To(BeNil(), "error during first cache set")
+
+			contains, _ := cache.Check(security, data.MetricDividendCash, time.Date(2022, 12, 1, 0, 0, 0, 0, tz()), time.Date(2022, 12, 1, 0, 0, 0, 0, tz()))
+			Expect(contains).To(BeTrue(), "cache contains expected date")
+
+			items := cache.Items(security, data.MetricDividendCash)
+			Expect(items).To(HaveLen(1), "there should be only 1 CacheItem")
+			Expect(items[0].Values).To(HaveLen(4), "Values should have length 4")
+			Expect(items[0].Values).To(Equal([]float64{0.4, 0.4, 0.4, 0.4}))
+			Expect(items[0].LocalDateIndex()).To(HaveLen(4), "there should be 4 local dates")
+			Expect(items[0].LocalDateIndex()).To(Equal([]time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())}))
+		})
 	})
 
 	Context("with ranges where covered period does not equal the whole period", func() {
@@ -1611,6 +1703,24 @@ var _ = Describe("Cache", func() {
 					Vals: [][]float64{{2, 3}},
 				}},
 			}, 1, 1, 3, []float64{1, 2, 3}),
+			Entry("when segments overlap by 2 items on the right", []segment{
+				{1, 3, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{1, 2, 3}},
+				}},
+				{2, 4, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{2, 3, 4}},
+				}},
+			}, 1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are left contiguous with overlap", []segment{
 				{2, 3, &dataframe.DataFrame{
 					Dates: []time.Time{
@@ -1627,8 +1737,41 @@ var _ = Describe("Cache", func() {
 					Vals: [][]float64{{1, 2}},
 				}},
 			}, 1, 1, 3, []float64{1, 2, 3}),
+			Entry("when segments are left contiguous with overlap (more items)", []segment{
+				{3, 5, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{3, 4, 5}},
+				}},
+				{1, 3, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{1, 2, 3}},
+				}},
+			}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
+			Entry("when segments are sparse but they overlap", []segment{
+				{1, 3, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{1, 3}},
+				}},
+				{3, 4, &dataframe.DataFrame{
+					Dates: []time.Time{
+						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
+						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
+					},
+					Vals: [][]float64{{3, 4}},
+				}},
+			}, 1, 1, 4, []float64{1, 3, 4}),
 		)
-
 		It("should collapse multiple overlapping cache items", func() {
 			// add two single item entries into the cache that are separated by a day
 			err := cache.SetWithLocalDates(security, data.MetricAdjustedClose,

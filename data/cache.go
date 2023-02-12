@@ -788,14 +788,30 @@ func (cache *SecurityMetricCache) merge(a, b *CacheItem) (*CacheItem, int) {
 				idxVal := a.localDates[i]
 				return (idxVal.After(searchVal) || idxVal.Equal(searchVal))
 			})
-			endIdx++
-			added += endIdx
-			if endIdx > len(a.Values) {
-				mergedValues = a.Values[:endIdx-1]
-				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx-1]...)
-			} else {
+
+			log.Info().Int("endIdx", endIdx).Time("searchVal", searchVal).Times("localDates", a.localDates).Msg("merge local path")
+
+			switch {
+			case len(a.Values) == 0: // empty list
+				added = 0
+			case endIdx == 0 && searchVal.Before(a.localDates[0]): // cut off is before all items in a
+				added = 0
+			case endIdx == 0: // only first item selected
+				mergedValues = a.Values[:1]
+				mergedLocalDates = append(mergedLocalDates, a.localDates[:1]...)
+				added += 1
+			case endIdx < len(a.localDates) && searchVal.Before(a.localDates[endIdx]): // its not an exact match but its in the middle of the array
 				mergedValues = a.Values[:endIdx]
 				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx]...)
+				added += endIdx
+			case endIdx < len(a.Values): // its somewhere in the array but not the first item
+				mergedValues = a.Values[:endIdx+1]
+				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx+1]...)
+				added += endIdx
+			default: // item was not found so the array length was returned
+				mergedValues = a.Values[:endIdx]
+				mergedLocalDates = append(mergedLocalDates, a.localDates[:endIdx]...)
+				added += endIdx
 			}
 		} else {
 			coveredStartIdx := sort.Search(len(cache.periods), func(i int) bool {

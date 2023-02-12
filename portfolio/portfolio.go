@@ -281,7 +281,20 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 	addTransactions = append(addTransactions, divTrx...)
 	addTransactions = append(addTransactions, splitTrx...)
 
-	sort.SliceStable(addTransactions, func(i, j int) bool { return addTransactions[i].Date.Before(addTransactions[j].Date) })
+	sort.SliceStable(addTransactions, func(i, j int) bool {
+		a := addTransactions[i]
+		b := addTransactions[j]
+		if a.Date.Equal(b.Date) {
+			if a.Kind == b.Kind {
+				// same type sort by ID
+				return hex.EncodeToString(a.ID) < hex.EncodeToString(b.ID)
+			}
+
+			// different types dividend first then splits
+			return a.Kind == DividendTransaction
+		}
+		return a.Date.Before(b.Date)
+	})
 	p.Transactions = append(p.Transactions, addTransactions...)
 
 	return nil
