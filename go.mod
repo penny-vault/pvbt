@@ -38,7 +38,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/alphadose/haxmap v1.2.0
 	github.com/hashicorp/golang-lru/v2 v2.0.1
-	github.com/nats-io/nats.go v1.23.0
+	github.com/nats-io/nats.go v1.24.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.8.3
 	github.com/pashagolub/pgxmock v1.8.0
