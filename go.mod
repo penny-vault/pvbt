@@ -44,7 +44,7 @@ require (
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.29.0
 	github.com/sendgrid/sendgrid-go v3.12.0+incompatible
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.13.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.14.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.13.0
 )
 
@@ -68,7 +68,7 @@ require (
 	github.com/savsgio/gotils v0.0.0-20220530130905-52f3993e8d6d // indirect
 	github.com/sendgrid/rest v2.6.9+incompatible // indirect
 	github.com/tinylib/msgp v1.1.6 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.13.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.14.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
@@ -110,7 +110,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.14.0
 	go.opentelemetry.io/otel/trace v1.14.0
 	golang.org/x/sync v0.1.0 // indirect
-	google.golang.org/grpc v1.52.3 // indirect
+	google.golang.org/grpc v1.53.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
