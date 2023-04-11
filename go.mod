@@ -38,7 +38,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/alphadose/haxmap v1.2.0
 	github.com/hashicorp/golang-lru/v2 v2.0.2
-	github.com/nats-io/nats.go v1.24.0
+	github.com/nats-io/nats.go v1.25.0
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.9.2
 	github.com/pashagolub/pgxmock v1.8.0
@@ -59,7 +59,7 @@ require (
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/mattn/go-runewidth v0.0.14 // indirect
 	github.com/nats-io/nats-server/v2 v2.9.9 // indirect
-	github.com/nats-io/nkeys v0.3.0 // indirect
+	github.com/nats-io/nkeys v0.4.4 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/rivo/uniseg v0.4.3 // indirect
