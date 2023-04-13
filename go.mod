@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/andybalholm/brotli v1.0.5 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
-	github.com/go-co-op/gocron v1.19.0
+	github.com/go-co-op/gocron v1.21.1
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.43.0
 	github.com/google/uuid v1.3.0
