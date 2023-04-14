@@ -19,7 +19,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.0.7
 	github.com/pierrec/lz4/v4 v4.1.17
 	github.com/spf13/cast v1.5.0 // indirect
-	github.com/spf13/cobra v1.6.1
+	github.com/spf13/cobra v1.7.0
 	github.com/spf13/viper v1.15.0
 	github.com/valyala/fasthttp v1.45.0 // indirect
 	github.com/zeebo/blake3 v0.2.3
