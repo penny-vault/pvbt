@@ -67,7 +67,7 @@ func Momentum12631(prices *dataframe.DataFrame) *dataframe.DataFrame {
 	return avgMomentum
 }
 
-func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
+func (m *Momentum) IndicatorForPeriod(_ context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
 	begin := start.AddDate(0, -6, 0)
 
 	// Add the risk free asset
@@ -79,7 +79,7 @@ func (m *Momentum) IndicatorForPeriod(ctx context.Context, start time.Time, end 
 	securities = append(securities, m.Securities...)
 
 	// fetch prices
-	priceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
+	priceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(begin, end)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load data for momentum indicator")
 		return nil, err

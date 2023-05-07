@@ -42,8 +42,8 @@ func (ms *MarketStatus) EarlyClose(t time.Time) int {
 	defer holidayLocker.RUnlock()
 
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
-	if close, ok := holidays[d.Unix()]; ok {
-		return close
+	if marketClose, ok := holidays[d.Unix()]; ok {
+		return marketClose
 	}
 	return 0
 }
@@ -54,8 +54,8 @@ func (ms *MarketStatus) IsMarketHoliday(t time.Time) bool {
 	defer holidayLocker.RUnlock()
 
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
-	close, ok := holidays[d.Unix()]
-	if close != 0 {
+	marketHoliday, ok := holidays[d.Unix()]
+	if marketHoliday != 0 {
 		return false
 	}
 	return ok

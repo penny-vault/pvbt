@@ -16,7 +16,6 @@
 package data
 
 import (
-	"context"
 	"math"
 	"strings"
 	"time"
@@ -66,7 +65,7 @@ func (req *Request) Metrics(metrics ...Metric) *Request {
 
 // Between queries the metric data store and returns a dataframe with metrics between the specified dates
 // columns are named `CompositeFigi:MetricName`
-func (req *Request) Between(ctx context.Context, a, b time.Time) (dataframe.Map, error) {
+func (req *Request) Between(a, b time.Time) (dataframe.Map, error) {
 	manager := GetManagerInstance()
 	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {

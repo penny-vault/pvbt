@@ -16,7 +16,6 @@
 package data_test
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"time"
@@ -33,7 +32,6 @@ import (
 var _ = Describe("Request tests", func() {
 	var (
 		manager *data.Manager
-		ctx     context.Context
 		dbPool  pgxmock.PgxConnIface
 	)
 
@@ -45,8 +43,6 @@ var _ = Describe("Request tests", func() {
 
 		manager = data.GetManagerInstance()
 		manager.Reset()
-
-		ctx = context.Background()
 	})
 
 	Context("when fetching metrics", func() {
@@ -60,7 +56,7 @@ var _ = Describe("Request tests", func() {
 
 			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
 
-			_, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
+			_, err := req.Between(time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 0, 0, 0, 0, common.GetTimezone()))
 			Expect(err).ToNot(BeNil())
 			Expect(errors.Is(err, data.ErrSecurityNotFound)).To(BeTrue())
 		})
@@ -80,7 +76,7 @@ var _ = Describe("Request tests", func() {
 			pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"}, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 23, 59, 59, 0, common.GetTimezone()), "close", "split_factor", "dividend")
 
 			req := data.NewDataRequest(securities...).Metrics(data.MetricClose)
-			dfMap, err := req.Between(ctx, time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 23, 59, 59, 0, common.GetTimezone()))
+			dfMap, err := req.Between(time.Date(2021, 1, 4, 0, 0, 0, 0, common.GetTimezone()), time.Date(2021, 1, 5, 23, 59, 59, 0, common.GetTimezone()))
 			Expect(err).To(BeNil(), "error when fetching data")
 			df := dfMap.DataFrame()
 
@@ -122,7 +118,7 @@ var _ = Describe("Request tests", func() {
 				colNames := []string{fmt.Sprintf("BBG000N9MNX3:%s", metric)}
 
 				req := data.NewDataRequest(securities...).Metrics(metric)
-				dfMap, err := req.Between(ctx, begin, end)
+				dfMap, err := req.Between(begin, end)
 				Expect(err).To(BeNil())
 				Expect(err).To(BeNil(), "error when fetching data")
 				df := dfMap.DataFrame()

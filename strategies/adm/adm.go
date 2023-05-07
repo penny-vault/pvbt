@@ -83,7 +83,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 }
 
 // donloadPriceData loads EOD quotes for in tickers
-func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begin, end time.Time) error {
+func (adm *AcceleratingDualMomentum) downloadPriceData(begin, end time.Time) error {
 	tickers := []*data.Security{}
 	tickers = append(tickers, adm.inTickers...)
 	riskFreeSymbol, err := data.SecurityFromTicker("DGS3MO")
@@ -94,7 +94,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 	tickers = append(tickers, adm.outTickers...)
 	tickers = append(tickers, riskFreeSymbol)
 
-	priceMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
+	priceMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(begin, end)
 	if err != nil {
 		return ErrCouldNotRetrieveData
 	}
@@ -105,7 +105,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 
 	// include last day if it is a non-trade day
 	log.Debug().Msg("getting last day eod prices of requested range")
-	finalPricesMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(ctx, end.AddDate(0, 0, -10), end)
+	finalPricesMap, err := data.NewDataRequest(tickers...).Metrics(data.MetricAdjustedClose).Between(end.AddDate(0, 0, -10), end)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting final prices in adm")
 		return err
@@ -129,7 +129,7 @@ func (adm *AcceleratingDualMomentum) downloadPriceData(ctx context.Context, begi
 // Compute signal for strategy and return list of positions along with the next predicted
 // set of assets to hold
 func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "adm.Compute")
 	defer span.End()
 
 	// Ensure time range is valid (need at least 6 months)
@@ -145,7 +145,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 		begin = begin.AddDate(0, -6, 0)
 	}
 
-	err := adm.downloadPriceData(ctx, begin, end)
+	err := adm.downloadPriceData(begin, end)
 	if err != nil {
 		return nil, nil, err
 	}

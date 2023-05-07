@@ -37,14 +37,14 @@ type PvDbTx struct {
 }
 
 // Begin starts a pseudo nested transaction.
-func (t *PvDbTx) Begin(ctx context.Context) (pgx.Tx, error) {
+func (t *PvDbTx) Begin(_ context.Context) (pgx.Tx, error) {
 	log.Panic().Msg("sub-transactions not supported in pvdb")
 	return nil, ErrUnsupported
 }
 
 // BeginFunc starts a pseudo nested transaction and executes f. If f does not return an err the pseudo nested
 // transaction will be committed. If it does then it will be rolled back.
-func (t *PvDbTx) BeginFunc(ctx context.Context, f func(pgx.Tx) error) (err error) {
+func (t *PvDbTx) BeginFunc(_ context.Context, _ func(pgx.Tx) error) (err error) {
 	log.Panic().Msg("sub-transactions not supported in pvdb")
 	return ErrUnsupported
 }

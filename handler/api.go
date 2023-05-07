@@ -155,7 +155,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 	}
 
 	if snapToStart {
-		securityStart, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).Between(context.Background(), startDate, endDate)
+		securityStart, err := data.NewDataRequest(security).Metrics(data.MetricAdjustedClose).Between(startDate, endDate)
 		if err != nil {
 			return fiber.ErrBadRequest
 		}

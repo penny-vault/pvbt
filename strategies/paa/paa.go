@@ -114,14 +114,14 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	return paa, nil
 }
 
-func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Context, begin, end time.Time) error {
+func (paa *KellersProtectiveAssetAllocation) downloadPriceData(begin, end time.Time) error {
 	// Load EOD quotes for in tickers
 
 	securities := []*data.Security{}
 	securities = append(securities, paa.protectiveUniverse...)
 	securities = append(securities, paa.riskUniverse...)
 
-	priceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(ctx, begin, end)
+	priceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(begin, end)
 	if err != nil {
 		return ErrDataRetrievalFailed
 	}
@@ -132,7 +132,7 @@ func (paa *KellersProtectiveAssetAllocation) downloadPriceData(ctx context.Conte
 
 	// include last day if it is a non-trade day
 	log.Debug().Msg("getting last day eod prices of requested range")
-	finalPriceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(ctx, end.AddDate(0, 0, -10), end)
+	finalPriceMap, err := data.NewDataRequest(securities...).Metrics(data.MetricAdjustedClose).Between(end.AddDate(0, 0, -10), end)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting final eod prices")
 		return err
@@ -326,12 +326,12 @@ func (paa *KellersProtectiveAssetAllocation) calculatePredictedPortfolio(plan da
 
 // Compute signal
 func (paa *KellersProtectiveAssetAllocation) Compute(ctx context.Context, begin, end time.Time) (data.PortfolioPlan, *data.SecurityAllocation, error) {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "paa.Compute")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "paa.Compute")
 	defer span.End()
 
 	begin, end = paa.validateTimeRange(begin, end)
 
-	if err := paa.downloadPriceData(ctx, begin, end); err != nil {
+	if err := paa.downloadPriceData(begin, end); err != nil {
 		return nil, nil, err
 	}
 

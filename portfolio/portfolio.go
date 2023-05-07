@@ -222,7 +222,7 @@ func (pm *Model) processSplits(splits dataframe.Map) []*Transaction {
 // FillCorporateActions finds any corporate actions and creates transactions for them. The
 // search occurs from the date of the last transaction to `through`
 func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) error {
-	ctx, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
+	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "FillCorporateActions")
 	defer span.End()
 
 	p := pm.Portfolio
@@ -263,13 +263,13 @@ func (pm *Model) FillCorporateActions(ctx context.Context, through time.Time) er
 		})
 	}
 
-	dividends, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash).Between(ctx, from, through)
+	dividends, err := data.NewDataRequest(holdings...).Metrics(data.MetricDividendCash).Between(from, through)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load dividends")
 		return err
 	}
 
-	splits, err := data.NewDataRequest(holdings...).Metrics(data.MetricSplitFactor).Between(ctx, from, through)
+	splits, err := data.NewDataRequest(holdings...).Metrics(data.MetricSplitFactor).Between(from, through)
 	if err != nil {
 		log.Error().Err(err).Msg("could not load splits")
 		return err
