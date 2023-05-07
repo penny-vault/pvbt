@@ -24,11 +24,11 @@ require (
 	github.com/valyala/fasthttp v1.45.0 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.7.0 // indirect
-	golang.org/x/exp v0.0.0-20230127193734-31bee513bff7 // indirect
+	golang.org/x/exp v0.0.0-20230321023759-10a507213a29 // indirect
 	golang.org/x/net v0.8.0 // indirect
 	golang.org/x/sys v0.7.0 // indirect
 	golang.org/x/text v0.8.0 // indirect
-	gonum.org/v1/gonum v0.12.0
+	gonum.org/v1/gonum v0.13.0
 	google.golang.org/protobuf v1.28.1 // indirect
 )
 
