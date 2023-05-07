@@ -274,7 +274,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 		numRiskAssetsToHold := min(paa.topN, len(riskAssets))
 		riskAssetsEqualWeightPercentage := sf / float64(numRiskAssetsToHold)
 
-		if riskAssetsEqualWeightPercentage > 1.0e-5 {
+		if riskAssetsEqualWeightPercentage > 1.0e-3 {
 			for _, asset := range riskAssets {
 				security, err := data.SecurityFromFigi(asset.Key)
 				if err != nil {

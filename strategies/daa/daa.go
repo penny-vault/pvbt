@@ -226,7 +226,7 @@ func (daa *KellersDefensiveAssetAllocation) calculatePortfolio() {
 		cashSecurity := cashScores[0].Security
 
 		// build portfolio
-		if cf > 1.0e-5 {
+		if cf > 1.0e-3 {
 			pie.Members[*cashSecurity] = cf
 		}
 
@@ -242,10 +242,10 @@ func (daa *KellersDefensiveAssetAllocation) calculatePortfolio() {
 			security := riskyScores[ii].Security
 			if alloc, ok := pie.Members[*security]; ok {
 				alloc = w + alloc
-				if alloc > 1.0e-5 {
+				if alloc > 1.0e-3 {
 					pie.Members[*security] = alloc
 				}
-			} else if w > 1.0e-5 {
+			} else if w > 1.0e-3 {
 				pie.Members[*security] = w
 			}
 		}

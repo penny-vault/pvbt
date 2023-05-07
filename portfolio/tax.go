@@ -191,7 +191,7 @@ func (t *TaxLotInfo) LinkWithFIFOMethod(sell *Transaction) []*Transaction {
 
 	// double check that all taxLots are applied
 	if numSharesToFind >= 1e-5 {
-		log.Panic().Object("SellTransaction", sell).Float64("NumSharesLeft", numSharesToFind).Float64("ltcGainLoss", ltcGainLoss).Float64("stcGainLoss", stcGainLoss).Msg("taxLots and transactions are out-of-sync")
+		log.Warn().Object("SellTransaction", sell).Float64("NumSharesLeft", numSharesToFind).Float64("ltcGainLoss", ltcGainLoss).Float64("stcGainLoss", stcGainLoss).Msg("taxLots and transactions are out-of-sync")
 	}
 
 	t.Items = remainingTaxLots

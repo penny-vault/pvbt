@@ -65,7 +65,7 @@ func New(ctx context.Context, shortcode string, params map[string]json.RawMessag
 		return nil, err
 	}
 
-	pm := portfolio.NewPortfolio(strat.Name, startDate, 10000)
+	pm := portfolio.New(strat.Name, startDate, 10000)
 	pm.Portfolio.Benchmark = benchmark.CompositeFigi
 
 	pm.Portfolio.StrategyShortcode = shortcode

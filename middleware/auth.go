@@ -16,9 +16,7 @@
 package middleware
 
 import (
-	"bytes"
-	"compress/gzip"
-	"encoding/hex"
+	"encoding/base64"
 
 	"github.com/penny-vault/pv-api/common"
 
@@ -31,7 +29,7 @@ import (
 )
 
 type apiToken struct {
-	userID string
+	UserID string `json:"sub"`
 }
 
 // JWTAuth instantiate JWT auth middleware
@@ -45,39 +43,20 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 		},
 	})
 
-	apiKey := func(c *fiber.Ctx) error {
-		token := c.Query("apikey")
+	apiKey := func(c *fiber.Ctx, token string) error {
 		if token == "" {
 			return c.Status(fiber.StatusBadRequest).SendString("apikey may not be empty")
 		}
 
-		tokenBytes, err := hex.DecodeString(token)
+		tokenBytes, err := base64.URLEncoding.DecodeString(token)
 		if err != nil {
-			log.Warn().Stack().Err(err).Msg("could not hex decode apiKey")
-			return c.Status(fiber.StatusBadRequest).SendString("could not hex decode apikey")
+			log.Warn().Stack().Err(err).Msg("could not base64 decode apiKey")
+			return c.Status(fiber.StatusBadRequest).SendString("could not base64 decode apikey")
 		}
 
-		unencryptedBytes, err := common.Decrypt(tokenBytes)
+		jsonBytes, err := common.Decrypt(tokenBytes)
 		if err != nil {
 			log.Warn().Stack().Err(err).Msg("could not unencrypt apiKey")
-			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
-		}
-
-		buf := bytes.NewBuffer(unencryptedBytes)
-		zr, err := gzip.NewReader(buf)
-		if err != nil {
-			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
-			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
-		}
-
-		jsonBytes := make([]byte, 0, 100)
-		if _, err := zr.Read(jsonBytes); err != nil {
-			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
-			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
-		}
-
-		if err := zr.Close(); err != nil {
-			log.Warn().Stack().Err(err).Msg("could not ungzip apiKey")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
 
@@ -86,14 +65,18 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 			log.Warn().Stack().Err(err).Msg("could not unmarshal json from apikey - maybe apikey is corrupt?")
 			return c.Status(fiber.StatusBadRequest).SendString("invalid apikey")
 		}
-		c.Locals("userID", v.userID)
+		c.Locals("userID", v.UserID)
 		return c.Next()
 	}
 
 	return func(c *fiber.Ctx) error {
 		token := c.Query("apikey")
 		if token != "" {
-			return apiKey(c)
+			return apiKey(c, token)
+		}
+
+		if token, ok := c.GetReqHeaders()["X-Pv-Api"]; ok {
+			return apiKey(c, token)
 		}
 
 		res := jwtMiddleware(c)

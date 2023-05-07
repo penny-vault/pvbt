@@ -65,27 +65,28 @@ type TaxLotInfo struct {
 }
 
 type Portfolio struct {
-	ID                binary
-	UserID            text
-	AccountNumber     text
-	Brokerage         text
-	AccountType       text
-	Name              text
-	IsOpen            bool
-	LastViewed        timestamp
-	StartDate         timestamp
-	EndDate           timestamp
-	Benchmark         text
-	StrategyShortcode text
-	StrategyArguments text
-	Schedule          text
-	Notifications     int32
-	Transactions      []Transaction
-	CurrentHoldings   []Holding
-	TaxLots           TaxLotInfo
-	PortfolioType     text
-	LinkedPortfolios  []binary
-	PredictedAssets   PortfolioHoldingItem
+	ID                        binary
+	UserID                    text
+	AccountNumber             text
+	Brokerage                 text
+	AccountType               text
+	FractionalSharesPrecision uint32
+	Name                      text
+	IsOpen                    bool
+	LastViewed                timestamp
+	StartDate                 timestamp
+	EndDate                   timestamp
+	Benchmark                 text
+	StrategyShortcode         text
+	StrategyArguments         text
+	Schedule                  text
+	Notifications             int32
+	Transactions              []Transaction
+	CurrentHoldings           []Holding
+	TaxLots                   TaxLotInfo
+	PortfolioType             text
+	LinkedPortfolios          []binary
+	PredictedAssets           PortfolioHoldingItem
 }
 
 type DrawDown struct {

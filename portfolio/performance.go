@@ -354,14 +354,15 @@ func processTransactions(p *Portfolio, holdings map[data.Security]float64, taxLo
 			return holdings, trxIdx, ErrInvalidTransactionType
 		}
 
+		minPortfolioNum := math.Pow(10, float64(p.FractionalSharesPrecision)*-1.0)
 		if val, ok := holdings[data.CashSecurity]; ok {
-			if val <= 1.0e-5 {
+			if val <= minPortfolioNum {
 				delete(holdings, data.CashSecurity)
 			}
 		}
 
 		// Protect against floating point noise
-		if shares <= 1.0e-5 {
+		if shares <= minPortfolioNum {
 			shares = 0
 			delete(holdings, security)
 		} else {
@@ -393,13 +394,13 @@ func calculateValue(security *data.Security, shares float64, date time.Time) flo
 	return shares * price
 }
 
-func buildHoldingsList(holdings map[data.Security]float64, date time.Time, totalValue float64) ([]*ReportableHolding, error) {
+func buildHoldingsList(holdings map[data.Security]float64, date time.Time, totalValue, minPortfolioNum float64) ([]*ReportableHolding, error) {
 	currentAssets := make([]*ReportableHolding, 0, len(holdings))
 	for security, qty := range holdings {
 		var value float64
 		if security.Ticker == data.CashAsset {
 			value = qty
-		} else if qty > 1.0e-5 {
+		} else if qty > minPortfolioNum {
 			price, err := data.NewDataRequest(&security).Metrics(data.MetricClose).OnSingle(date)
 			if err != nil {
 				return nil, ErrSecurityPriceNotAvailable
@@ -409,7 +410,7 @@ func buildHoldingsList(holdings map[data.Security]float64, date time.Time, total
 		if math.IsNaN(value) {
 			value = 0.0
 		}
-		if qty > 1.0e-5 {
+		if qty > minPortfolioNum {
 			currentAssets = append(currentAssets, &ReportableHolding{
 				CompositeFIGI:    security.CompositeFigi,
 				Ticker:           security.Ticker,
@@ -715,6 +716,8 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	p := pm.Portfolio
 	var err error
 
+	minPortfolioNum := math.Pow(10, float64(p.FractionalSharesPrecision)*-1.0)
+
 	subLog := log.With().
 		Str("PortfolioName", pm.Portfolio.Name).
 		Str("PortfolioID", hex.EncodeToString(pm.Portfolio.ID)).Logger()
@@ -849,7 +852,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 		}
 
 		// generate a new list of holdings for current measurement date
-		currentAssets, err := buildHoldingsList(holdings, date, sums.TotalValue)
+		currentAssets, err := buildHoldingsList(holdings, date, sums.TotalValue, minPortfolioNum)
 		if err != nil {
 			return err
 		}

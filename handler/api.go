@@ -16,10 +16,8 @@
 package handler
 
 import (
-	"bytes"
-	"compress/gzip"
 	"context"
-	"encoding/hex"
+	"encoding/base64"
 	"runtime"
 	"strconv"
 	"time"
@@ -39,7 +37,7 @@ type APIKeyResponse struct {
 
 func GetAPIKey(c *fiber.Ctx) error {
 	pvToken := make(map[string]string)
-	pvToken["userID"] = c.Locals("userID").(string)
+	pvToken["sub"] = c.Locals("userID").(string)
 
 	jsonPVToken, err := json.Marshal(pvToken)
 	if err != nil {
@@ -47,29 +45,17 @@ func GetAPIKey(c *fiber.Ctx) error {
 		return fiber.ErrBadRequest
 	}
 
-	// gzip result
-	var buf bytes.Buffer
-	zw := gzip.NewWriter(&buf)
-	_, err = zw.Write(jsonPVToken)
-	if err != nil {
-		log.Warn().Stack().Err(err).Msg("could not gzip data")
-		return fiber.ErrInternalServerError
-	}
-
-	if err := zw.Close(); err != nil {
-		log.Warn().Stack().Err(err).Msg("could not close gzipper")
-		return fiber.ErrInternalServerError
-	}
-
 	// encrypt it
-	encryptedToken, err := common.Encrypt(buf.Bytes())
+	// encryptedToken, err := common.Encrypt(buf.Bytes())
+	encryptedToken, err := common.Encrypt(jsonPVToken)
 	if err != nil {
 		log.Warn().Stack().Err(err).Msg("could not encrypt data")
 		return fiber.ErrBadRequest
 	}
 
 	resp := APIKeyResponse{
-		Token: hex.EncodeToString(encryptedToken),
+		//	Token: hex.EncodeToString(encryptedToken),
+		Token: base64.URLEncoding.EncodeToString([]byte(encryptedToken)),
 	}
 
 	return c.JSON(resp)
@@ -175,7 +161,8 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 		},
 	}
 
-	p := portfolio.NewPortfolio(security.Ticker, startDate, 10000)
+	p := portfolio.New(security.Ticker, startDate, 10000)
+	p.Portfolio.UserID = c.Locals("userID").(string)
 	err = p.TargetPortfolio(context.Background(), target)
 	if err != nil {
 		return fiber.ErrBadRequest

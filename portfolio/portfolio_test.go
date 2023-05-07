@@ -97,7 +97,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 					},
 				}
 
-				pm = portfolio.NewPortfolio("Test", time.Date(2019, time.January, 31, 0, 0, 0, 0, tz), 10000)
+				pm = portfolio.New("Test", time.Date(2019, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
 
 				// Expect dataframe transaction and query for VFINX
@@ -278,7 +278,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 					},
 				}
 
-				pm = portfolio.NewPortfolio("Test", time.Date(2020, time.January, 31, 0, 0, 0, 0, tz), 10000)
+				pm = portfolio.New("Test", time.Date(2020, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
 
 				pgxmockhelper.MockDBEodQuery(dbPool, []string{"tsla.csv"},
@@ -353,7 +353,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 					},
 				}
 
-				pm = portfolio.NewPortfolio("Test", time.Date(2019, time.January, 31, 0, 0, 0, 0, tz), 10000)
+				pm = portfolio.New("Test", time.Date(2019, time.January, 31, 0, 0, 0, 0, tz), 10000)
 
 				// Expect database transactions
 				// Expect dataframe transaction and query for VFINX
@@ -455,7 +455,7 @@ var _ = Describe("Portfolio", Ordered, func() {
 					},
 				}
 
-				pm = portfolio.NewPortfolio("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
+				pm = portfolio.New("Test", time.Date(2018, time.January, 31, 0, 0, 0, 0, tz), 10000)
 				p = pm.Portfolio
 
 				// Setup database

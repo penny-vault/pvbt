@@ -98,7 +98,7 @@ var backtestCmd = &cobra.Command{
 		fmt.Printf("Predicted Target: %+v\n", predicted.Members)
 		fmt.Printf("Predicted Justification: %+v\n", predicted.Justifications)
 
-		pm := portfolio.NewPortfolio("Backtest Portfolio", startDate, 10_000)
+		pm := portfolio.New("Backtest Portfolio", startDate, 10_000)
 		fmt.Println("Building portfolio...")
 		if err := pm.TargetPortfolio(ctx, target); err != nil {
 			log.Fatal().Stack().Err(err).Msg("could not invest portfolio")

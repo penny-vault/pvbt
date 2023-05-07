@@ -18,11 +18,13 @@ package handler
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/jackc/pgx/v4"
+	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/rs/zerolog/log"
 )
@@ -74,6 +76,36 @@ func parseRange(r string) (int, int, error) {
 }
 
 func LookupSecurity(c *fiber.Ctx) error {
+	var err error
+	symbol := c.Params("symbol")
+	symbol, err = url.QueryUnescape(symbol)
+	if err != nil {
+		log.Error().Err(err).Msg("could not unencode ticker")
+		return fiber.ErrBadRequest
+	}
+	subLog := log.With().Str("Endpoint", "LookupSecurityByTicker").Logger()
+
+	var security *data.Security
+	if len(symbol) == 12 {
+		// it's a figi
+		security, err = data.SecurityFromFigi(symbol)
+		if err != nil {
+			subLog.Error().Str("Ticker", symbol).Msg("could not find ticker")
+			return fiber.ErrNotFound
+		}
+	} else {
+		// if it's not a figi it must be a ticker
+		security, err = data.SecurityFromTicker(symbol)
+		if err != nil {
+			subLog.Error().Str("Ticker", symbol).Msg("could not find ticker")
+			return fiber.ErrNotFound
+		}
+	}
+
+	return c.JSON(security)
+}
+
+func SearchSecurity(c *fiber.Ctx) error {
 	ctx := context.Background()
 	query := c.Query("q")
 	rangeHeader := c.Get("range")
@@ -83,7 +115,7 @@ func LookupSecurity(c *fiber.Ctx) error {
 		return fiber.ErrRequestedRangeNotSatisfiable
 	}
 
-	subLog := log.With().Str("Query", query).Str("Endpoint", "LookupSecurity").Logger()
+	subLog := log.With().Str("Query", query).Str("Endpoint", "SearchSecurity").Logger()
 
 	trx, err := database.TrxForUser(ctx, "pvuser")
 	if err != nil {

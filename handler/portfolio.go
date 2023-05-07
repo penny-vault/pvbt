@@ -31,39 +31,41 @@ import (
 	"github.com/penny-vault/pv-api/filter"
 	"github.com/penny-vault/pv-api/messenger"
 	"github.com/penny-vault/pv-api/portfolio"
+	"github.com/penny-vault/pv-api/strategies"
 	"github.com/rs/zerolog/log"
 )
 
 type PortfolioResponse struct {
-	ID                 uuid.UUID              `json:"id"`
-	Name               string                 `json:"name"`
-	AccountType        string                 `json:"accountType"`
-	AccountNumber      string                 `json:"accountNumber"`
-	Brokerage          string                 `json:"brokerage"`
-	IsOpen             bool                   `json:"isOpen"`
-	Strategy           string                 `json:"strategy"`
-	Arguments          map[string]interface{} `json:"arguments"`
-	StartDate          int64                  `json:"startDate"`
-	TaxLotMethod       string                 `json:"taxLotMethod"`
-	BenchmarkTicker    string                 `json:"benchmarkTicker"`
-	Status             string                 `json:"status"`
-	YTDReturn          pgtype.Float8          `json:"ytdReturn"`
-	CAGRSinceInception pgtype.Float8          `json:"cagrSinceInception"`
-	Notifications      int                    `json:"notifications"`
-	Cagr3Year          pgtype.Float4          `json:"cagr3Year"`
-	Cagr5Year          pgtype.Float4          `json:"cagr5Year"`
-	Cagr10Year         pgtype.Float4          `json:"cagr10Year"`
-	StdDev             pgtype.Float4          `json:"stdDev"`
-	DownsideDeviation  pgtype.Float4          `json:"downsideDeviation"`
-	MaxDrawDown        pgtype.Float4          `json:"maxDrawDown"`
-	AvgDrawDown        pgtype.Float4          `json:"avgDrawDown"`
-	SharpeRatio        pgtype.Float4          `json:"sharpeRatio"`
-	SortinoRatio       pgtype.Float4          `json:"sortinoRatio"`
-	UlcerIndex         pgtype.Float4          `json:"ulcerIndex"`
-	NextTradeDate      pgtype.Int4            `json:"nextTradeDate"`
-	LastViewed         int64                  `json:"lastViewed"`
-	Created            int64                  `json:"created"`
-	LastChanged        int64                  `json:"lastChanged"`
+	ID                        uuid.UUID              `json:"id"`
+	Name                      string                 `json:"name"`
+	AccountType               string                 `json:"accountType"`
+	AccountNumber             string                 `json:"accountNumber"`
+	Brokerage                 string                 `json:"brokerage"`
+	IsOpen                    bool                   `json:"isOpen"`
+	Strategy                  string                 `json:"strategy"`
+	Arguments                 map[string]interface{} `json:"arguments"`
+	StartDate                 int64                  `json:"startDate"`
+	TaxLotMethod              string                 `json:"taxLotMethod"`
+	BenchmarkTicker           string                 `json:"benchmarkTicker"`
+	Status                    string                 `json:"status"`
+	YTDReturn                 pgtype.Float8          `json:"ytdReturn"`
+	CAGRSinceInception        pgtype.Float8          `json:"cagrSinceInception"`
+	Notifications             int                    `json:"notifications"`
+	FractionalSharesPrecision uint16                 `json:"fractionalSharesPrecision"`
+	Cagr3Year                 pgtype.Float4          `json:"cagr3Year"`
+	Cagr5Year                 pgtype.Float4          `json:"cagr5Year"`
+	Cagr10Year                pgtype.Float4          `json:"cagr10Year"`
+	StdDev                    pgtype.Float4          `json:"stdDev"`
+	DownsideDeviation         pgtype.Float4          `json:"downsideDeviation"`
+	MaxDrawDown               pgtype.Float4          `json:"maxDrawDown"`
+	AvgDrawDown               pgtype.Float4          `json:"avgDrawDown"`
+	SharpeRatio               pgtype.Float4          `json:"sharpeRatio"`
+	SortinoRatio              pgtype.Float4          `json:"sortinoRatio"`
+	UlcerIndex                pgtype.Float4          `json:"ulcerIndex"`
+	NextTradeDate             pgtype.Int4            `json:"nextTradeDate"`
+	LastViewed                int64                  `json:"lastViewed"`
+	Created                   int64                  `json:"created"`
+	LastChanged               int64                  `json:"lastChanged"`
 }
 
 func NewPortfolioResponse() PortfolioResponse {
@@ -290,7 +292,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 	userID := c.Locals("userID").(string)
 	subLog := log.With().Str("Endpoint", "GetPortfolio").Str("PortfolioID", portfolioID).Str("UserID", userID).Logger()
 
-	portfolioSQL := `SELECT id, name, account_number, brokerage, account_type, is_open, tax_lot_method, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from last_viewed)::int as last_viewed, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged FROM portfolios WHERE id=$1 AND user_id=$2`
+	portfolioSQL := `SELECT id, name, account_number, brokerage, account_type, is_open, tax_lot_method, strategy_shortcode, arguments, extract(epoch from start_date)::int as start_date, ytd_return, cagr_since_inception, notifications, extract(epoch from last_viewed)::int as last_viewed, extract(epoch from created)::int as created, extract(epoch from lastchanged)::int as lastchanged, fractional_shares_precision FROM portfolios WHERE id=$1 AND user_id=$2`
 	trx, err := database.TrxForUser(ctx, userID)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
@@ -298,7 +300,7 @@ func GetPortfolio(c *fiber.Ctx) error {
 	}
 	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
 	p := NewPortfolioResponse()
-	err = row.Scan(&p.ID, &p.Name, &p.AccountNumber, &p.Brokerage, &p.AccountType, &p.IsOpen, &p.TaxLotMethod, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.LastViewed, &p.Created, &p.LastChanged)
+	err = row.Scan(&p.ID, &p.Name, &p.AccountNumber, &p.Brokerage, &p.AccountType, &p.IsOpen, &p.TaxLotMethod, &p.Strategy, &p.Arguments, &p.StartDate, &p.YTDReturn, &p.CAGRSinceInception, &p.Notifications, &p.LastViewed, &p.Created, &p.LastChanged, &p.FractionalSharesPrecision)
 	if err != nil {
 		subLog.Warn().Stack().Err(err).Msg("could not scan row from db into Performance struct")
 		if err := trx.Rollback(ctx); err != nil {
@@ -492,6 +494,13 @@ func ListPortfolios(c *fiber.Ctx) error {
 		return fiber.ErrInternalServerError
 	}
 
+	var accountType pgtype.Text
+	var accountNumber pgtype.Text
+	var brokerage pgtype.Text
+	var isOpen pgtype.Bool
+	var taxLotMethod pgtype.Text
+	var lastViewed pgtype.Int8
+
 	portfolios := make([]PortfolioResponse, 0, 10)
 	for rows.Next() {
 		p := NewPortfolioResponse()
@@ -502,11 +511,11 @@ func ListPortfolios(c *fiber.Ctx) error {
 			&p.Arguments,          // 3
 			&p.StartDate,          // 4
 			&p.BenchmarkTicker,    // 5
-			&p.AccountType,        // 6
-			&p.AccountNumber,      // 7
-			&p.Brokerage,          // 8
-			&p.IsOpen,             // 9
-			&p.TaxLotMethod,       // 10
+			&accountType,          // 6
+			&accountNumber,        // 7
+			&brokerage,            // 8
+			&isOpen,               // 9
+			&taxLotMethod,         // 10
 			&p.YTDReturn,          // 11
 			&p.CAGRSinceInception, // 12
 			&p.Notifications,      // 13
@@ -522,7 +531,7 @@ func ListPortfolios(c *fiber.Ctx) error {
 			&p.SortinoRatio,       // 23
 			&p.UlcerIndex,         // 24
 			&p.NextTradeDate,      // 25
-			&p.LastViewed,         // 26
+			&lastViewed,           // 26
 			&p.Created,            // 27
 			&p.LastChanged,        // 28
 		)
@@ -530,6 +539,31 @@ func ListPortfolios(c *fiber.Ctx) error {
 			subLog.Warn().Stack().Err(err).Str("Query", portfolioSQL).Msg("ListPortfolio scan failed")
 			continue
 		}
+
+		if accountType.Status == pgtype.Present {
+			p.AccountType = accountType.String
+		}
+
+		if accountNumber.Status == pgtype.Present {
+			p.AccountNumber = accountNumber.String
+		}
+
+		if brokerage.Status == pgtype.Present {
+			p.Brokerage = brokerage.String
+		}
+
+		if isOpen.Status == pgtype.Present {
+			p.IsOpen = isOpen.Bool
+		}
+
+		if taxLotMethod.Status == pgtype.Present {
+			p.TaxLotMethod = taxLotMethod.String
+		}
+
+		if lastViewed.Status == pgtype.Present {
+			p.LastViewed = lastViewed.Int
+		}
+
 		p.Sanitize()
 		portfolios = append(portfolios, p)
 	}
@@ -549,6 +583,124 @@ func ListPortfolios(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(portfolios)
+}
+
+// ReblanacePositions takes a list of positions and calculates the necessary transactions to bring the supplied positions into alignment
+// with the portfolios current target holdings.
+func RebalancePositions(c *fiber.Ctx) error {
+	ctx := context.Background()
+	portfolioID := c.Params("id")
+	userID := c.Locals("userID").(string)
+	subLog := log.With().Str("PortfolioID", portfolioID).Str("UserID", userID).Str("Endpoint", "RebalancePositions").Logger()
+
+	type RebalancePositionsParams struct {
+		AllocationOnly bool
+		Positions      []*portfolio.Holding
+		Precision      uint32
+		PriceData      map[string]float64
+	}
+	params := RebalancePositionsParams{
+		AllocationOnly: false,
+		Positions:      make([]*portfolio.Holding, 0, 50),
+		PriceData:      make(map[string]float64),
+	}
+
+	// Create the portfolio's strategy
+	portfolioSQL := `SELECT strategy_shortcode, arguments, fractional_shares_precision FROM portfolios WHERE id=$1 AND user_id=$2`
+	trx, err := database.TrxForUser(ctx, userID)
+	if err != nil {
+		subLog.Error().Stack().Err(err).Msg("unable to get database transaction for user")
+		return fiber.ErrServiceUnavailable
+	}
+
+	row := trx.QueryRow(ctx, portfolioSQL, portfolioID, userID)
+	var strategyShortcode string
+	var strategyArgumentsJSON string
+	strategyArguments := make(map[string]json.RawMessage)
+	err = row.Scan(&strategyShortcode, &strategyArgumentsJSON, &params.Precision)
+	if err != nil {
+		subLog.Warn().Stack().Err(err).Bytes("Body", c.Body()).Str("Query", portfolioSQL).Msg("select portfolio info failed")
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Stack().Err(err).Msg("could not rollback transaction")
+		}
+
+		return fiber.ErrNotFound
+	}
+
+	// unmarshal rebalance parameters
+	if err := json.Unmarshal(c.Body(), &params); err != nil {
+		subLog.Warn().Stack().Err(err).Msg("unmarshal json RebalancePositions body failed")
+		return fiber.ErrBadRequest
+	}
+
+	// Create a temporary portfolio and set the current holdings to the positions passed in
+	pm := portfolio.NewWithHoldings("temp", time.Now(), params.Positions)
+	pm.Portfolio.FractionalSharesPrecision = params.Precision
+
+	// unmarshal strategy arguments
+	if err := json.Unmarshal([]byte(strategyArgumentsJSON), &strategyArguments); err != nil {
+		subLog.Error().Err(err).Str("strategyArgumentsJSON", strategyArgumentsJSON).Str("strategyShortcode", strategyShortcode).Msg("could not unmarshal strategy arguments")
+		return fiber.ErrExpectationFailed
+	}
+
+	// create instance of strategy
+	strat, ok := strategies.StrategyMap[strategyShortcode]
+	if !ok {
+		subLog.Error().Str("StrategyShortcode", strategyShortcode).Msg("could not find strategy")
+		return fiber.ErrExpectationFailed
+	}
+
+	stratObject, err := strat.Factory(strategyArguments)
+	if err != nil {
+		subLog.Error().Err(err).Str("StrategyArguments", strategyArgumentsJSON).Str("StrategyShortcode", strategyShortcode).Msg("could not create strategy")
+		return fiber.ErrExpectationFailed
+	}
+
+	end := time.Now()
+	begin := end.AddDate(-1, -1, 0)
+	plan, predicted, err := stratObject.Compute(ctx, begin, end)
+	if err != nil {
+		subLog.Error().Err(err).Str("StrategyArguments", strategyArgumentsJSON).Str("StrategyShortcode", strategyShortcode).Msg("could not compute strategy")
+		return fiber.ErrExpectationFailed
+	}
+
+	allocation := plan[len(plan)-1]
+
+	transactions := make([]*portfolio.Transaction, 0)
+	if !params.AllocationOnly {
+		prices := make(map[data.Security]float64)
+		for k, v := range params.PriceData {
+			security := data.MustSecurityFromFigi(k)
+			prices[*security] = v
+		}
+		transactions, err = pm.ExpectedTransactions(allocation, prices)
+		if err != nil {
+			subLog.Error().Err(err).Str("StrategyArguments", strategyArgumentsJSON).Str("StrategyShortcode", strategyShortcode).Msg("could not rebalance portfolio")
+			return fiber.ErrExpectationFailed
+		}
+	}
+
+	type serializeAllocation struct {
+		Date           time.Time
+		Members        map[string]float64
+		Justifications map[string]float64
+	}
+
+	allocationTmp := serializeAllocation{
+		Date:           allocation.Date,
+		Members:        make(map[string]float64, len(allocation.Members)),
+		Justifications: allocation.Justifications,
+	}
+
+	for k, v := range allocation.Members {
+		allocationTmp.Members[k.CompositeFigi] = v
+	}
+
+	return c.JSON(map[string]any{
+		"NextTradeDate": predicted.Date,
+		"Allocation":    allocationTmp,
+		"Transactions":  transactions,
+	})
 }
 
 // UpdatePortfolio loads the portfolio from the database and updates it with the values passed

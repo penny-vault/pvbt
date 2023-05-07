@@ -98,8 +98,8 @@ type Period struct {
 	End   time.Time
 }
 
-// NewPortfolio create a portfolio
-func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
+// New create a portfolio
+func New(name string, startDate time.Time, initial float64) *Model {
 	id, _ := uuid.New().MarshalBinary()
 	p := Portfolio{
 		ID:           id,
@@ -112,7 +112,8 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 			Method: TaxLotFIFOMethod,
 			Items:  make([]*TaxLot, 0, 5),
 		},
-		StartDate: startDate,
+		StartDate:                 startDate,
+		FractionalSharesPrecision: 3,
 	}
 
 	model := Model{
@@ -143,6 +144,46 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 		data.CashSecurity: initial,
 	}
 
+	return &model
+}
+
+// New create a portfolio
+func NewWithHoldings(name string, startDate time.Time, holdings []*Holding) *Model {
+	id, _ := uuid.New().MarshalBinary()
+	p := Portfolio{
+		ID:           id,
+		Name:         name,
+		AccountType:  Taxable,
+		Benchmark:    "BBG000BHTMY2",
+		Transactions: []*Transaction{},
+		TaxLots: &TaxLotInfo{
+			AsOf:   time.Time{},
+			Method: TaxLotFIFOMethod,
+			Items:  make([]*TaxLot, 0, 5),
+		},
+		StartDate:                 startDate,
+		FractionalSharesPrecision: 3,
+	}
+
+	model := Model{
+		Portfolio:      &p,
+		justifications: make(map[string][]*Justification),
+	}
+
+	model.holdings = make(map[data.Security]float64)
+	for _, h := range holdings {
+		var security *data.Security
+		var err error
+		if h.CompositeFIGI == data.CashSecurity.CompositeFigi {
+			security = &data.CashSecurity
+		} else {
+			security, err = data.SecurityFromFigi(h.CompositeFIGI)
+			if err != nil {
+				log.Error().Err(err).Str("CompositeFIGI", h.CompositeFIGI).Str("Ticker", h.Ticker).Msg("could not add holding to portfolio")
+			}
+		}
+		model.holdings[*security] = h.Shares
+	}
 	return &model
 }
 
@@ -199,7 +240,7 @@ func (pm *Model) processSplits(splits dataframe.Map) []*Transaction {
 			// it's in range
 			splitFactor := v.Vals[0][idx]
 			nShares := pm.holdings[securityMetric.SecurityObject]
-			shares := splitFactor * nShares
+			shares := roundFloat(splitFactor*nShares, uint(pm.Portfolio.FractionalSharesPrecision))
 			// there is a split, record it
 			pm.AddActivity(date, fmt.Sprintf("shares of %s split by a factor of %.2f", k, splitFactor), []string{"split"})
 			justification := []*Justification{{Key: SplitFactor, Value: splitFactor}}
@@ -314,11 +355,15 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	)
 
 	p := pm.Portfolio
+	minPortfolioNum := math.Pow(10, float64(p.FractionalSharesPrecision)*-1.0)
+
+	// Make sure all corporate actions have been accounted for up to this poiint
 	err := pm.FillCorporateActions(ctx, allocation.Date)
 	if err != nil {
 		return err
 	}
 
+	// Ensure that transactions are being inserted at the end of the register
 	nTrx := len(p.Transactions)
 	if nTrx > 0 {
 		lastDate := p.Transactions[nTrx-1].Date
@@ -335,7 +380,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 		total += v
 	}
 
-	// Allow for floating point error
+	// Allow for floating point error in total percent allocated check
 	diff := math.Abs(1.0 - total)
 	if diff > 1.0e-11 {
 		log.Error().Stack().Float64("TotalPercentAllocated", total).Time("Date", allocation.Date).
@@ -343,7 +388,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 		return ErrRebalancePercentWrong
 	}
 
-	// cash position of the portfolio
+	// get current cash position of the portfolio
 	var cash float64
 	if currCash, ok := pm.holdings[data.CashSecurity]; ok {
 		cash += currCash
@@ -371,8 +416,8 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 			continue
 		}
 
-		if shares <= 1.0e-5 {
-			log.Warn().Stack().Str("Ticker", security.Ticker).Float64("Shares", shares).Msg("holdings are out of sync")
+		if shares <= minPortfolioNum {
+			log.Warn().Stack().Str("Ticker", security.Ticker).Float64("Shares", shares).Msg("holdings are incorrect; negative or near 0 holdings in pm.holdings")
 			return ErrHoldings
 		}
 
@@ -388,15 +433,22 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	}
 
 	// purchase holdings based on target
+	dollarsLeft := investable
 	newHoldings := make(map[data.Security]float64)
 	for security, targetPercent := range allocation.Members {
 		targetDollars := investable * targetPercent
-		t, numShares, err := pm.modifyPosition(allocation.Date, &security, targetDollars, justifications)
+		price := pm.getPriceSafe(allocation.Date, &security)
+		if targetDollars > dollarsLeft {
+			targetDollars = dollarsLeft
+		}
+		t, numShares, err := pm.modifyPosition(allocation.Date, &security, price, targetDollars, dollarsLeft, justifications)
 		if err != nil {
 			// don't fail if position could not be modified, just continue -- writing off asset as $0
 			log.Warn().Err(err).Time("Date", allocation.Date).Str("Ticker", security.Ticker).Msg("writing off asset")
 			continue
 		}
+
+		dollarsLeft -= (numShares * price)
 
 		if t != nil {
 			switch t.Kind {
@@ -415,7 +467,7 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	sells = pm.Portfolio.TaxLots.Update(allocation.Date, buys, sells)
 	p.Transactions = append(p.Transactions, sells...)
 	p.Transactions = append(p.Transactions, buys...)
-	if cash > 1.0e-05 {
+	if cash > minPortfolioNum {
 		newHoldings[data.CashSecurity] = cash
 	}
 	pm.holdings = newHoldings
@@ -423,6 +475,100 @@ func (pm *Model) RebalanceTo(ctx context.Context, allocation *data.SecurityAlloc
 	p.CurrentHoldings = buildHoldingsArray(allocation.Date, newHoldings)
 
 	return nil
+}
+
+// ExpectedTransactions calculates transactions with the given prices
+func (pm *Model) ExpectedTransactions(allocation *data.SecurityAllocation, prices map[data.Security]float64) ([]*Transaction, error) {
+	// check that target sums to 1.0
+	var total float64
+	for _, v := range allocation.Members {
+		total += v
+	}
+
+	p := pm.Portfolio
+	minPortfolioNum := math.Pow(10, float64(p.FractionalSharesPrecision)*-1.0)
+
+	// Allow for floating point error
+	diff := math.Abs(1.0 - total)
+	if diff > 1.0e-11 {
+		log.Error().Stack().Float64("TotalPercentAllocated", total).Time("Date", allocation.Date).
+			Msg("TotalPercentAllocated must equal 1.0")
+		return nil, ErrRebalancePercentWrong
+	}
+
+	// cash position of the portfolio
+	var cash float64
+	if currCash, ok := pm.holdings[data.CashSecurity]; ok {
+		cash += currCash
+	}
+
+	// get the current value of non-cash holdings
+	securityValue := pm.getPortfolioSecuritiesValueWithPrices(prices)
+
+	// compute the investable value in the portfolio
+	investable := cash + securityValue
+	pm.value = investable
+
+	// process all targets
+	sells := make([]*Transaction, 0, 10)
+	buys := make([]*Transaction, 0, 10)
+
+	// sell any holdings that we no longer want
+	for security, shares := range pm.holdings {
+		if security.Ticker == data.CashAsset {
+			continue
+		}
+
+		if shares <= minPortfolioNum {
+			log.Warn().Stack().Str("Ticker", security.Ticker).Float64("Shares", shares).Msg("holdings are incorrect; negative or near 0 holdings in pm.holdings")
+			return nil, ErrHoldings
+		}
+
+		if _, ok := allocation.Members[security]; !ok {
+			price := prices[security]
+			t, err := createTransaction(allocation.Date, &security, SellTransaction, price, shares, pm.Portfolio.AccountType, []*Justification{})
+			if err != nil {
+				return nil, err
+			}
+			cash += t.TotalValue
+			sells = append(sells, t)
+		}
+	}
+
+	// purchase holdings based on target
+	dollarsLeft := investable
+	for security, targetPercent := range allocation.Members {
+		targetDollars := investable * targetPercent
+		price := prices[security]
+		if targetDollars > dollarsLeft {
+			targetDollars = dollarsLeft
+		}
+		t, numShares, err := pm.modifyPosition(allocation.Date, &security, price, targetDollars, dollarsLeft, []*Justification{})
+		if err != nil {
+			// don't fail if position could not be modified, just continue -- writing off asset as $0
+			log.Warn().Err(err).Time("Date", allocation.Date).Str("Ticker", security.Ticker).Msg("writing off asset")
+			continue
+		}
+
+		dollarsLeft -= (numShares * price)
+
+		if t != nil {
+			switch t.Kind {
+			case SellTransaction:
+				sells = append(sells, t)
+				cash += t.TotalValue
+			case BuyTransaction:
+				buys = append(buys, t)
+				cash -= t.TotalValue
+			}
+		}
+	}
+
+	transactions := make([]*Transaction, 0, len(sells)+len(buys))
+	transactions = append(transactions, sells...)
+	transactions = append(transactions, buys...)
+
+	return transactions, nil
 }
 
 // Table formats the portfolio into a human-readable string representation
@@ -794,7 +940,8 @@ func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string) ([]*M
 			END AS end_date,
 			holdings,
 			notifications,
-			benchmark
+			benchmark,
+			fractional_shares_precision
 		FROM
 			portfolios
 		WHERE
@@ -813,7 +960,8 @@ func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string) ([]*M
 			END AS end_date,
 			holdings,
 			notifications,
-			benchmark
+			benchmark,
+			fractional_shares_precision
 		FROM
 			portfolios
 		WHERE
@@ -849,7 +997,7 @@ func LoadFromDB(ctx context.Context, portfolioIDs []string, userID string) ([]*M
 
 		tz := common.GetTimezone()
 		tmpHoldings := make(map[string]float64)
-		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &tmpHoldings, &p.Notifications, &p.Benchmark)
+		err = rows.Scan(&p.ID, &p.Name, &p.StrategyShortcode, &p.StrategyArguments, &p.StartDate, &p.EndDate, &tmpHoldings, &p.Notifications, &p.Benchmark, &p.FractionalSharesPrecision)
 
 		pm.holdings = make(map[data.Security]float64, len(tmpHoldings))
 		for k, v := range tmpHoldings {
@@ -1032,7 +1180,8 @@ func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID str
 		"temporary",
 		"user_id",
 		"predicted_bytes",
-		"tax_lot_bytes"
+		"tax_lot_bytes",
+		"fractional_shares_precision"
 	) VALUES (
 		$1,
 		$2,
@@ -1046,7 +1195,8 @@ func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID str
 		$10,
 		$11,
 		$12,
-		$13
+		$13,
+		$14
 	) ON CONFLICT ON CONSTRAINT portfolios_pkey
 	DO UPDATE SET
 		name=$2,
@@ -1058,7 +1208,8 @@ func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID str
 		holdings=$8,
 		notifications=$9,
 		predicted_bytes=$12,
-		tax_lot_bytes=$13`
+		tax_lot_bytes=$13,
+		fractional_shares_precision=$14`
 
 	marshableHoldings := make(map[string]float64, len(pm.holdings))
 	for k, v := range pm.holdings {
@@ -1087,7 +1238,7 @@ func (pm *Model) SaveWithTransaction(ctx context.Context, trx pgx.Tx, userID str
 
 	_, err = trx.Exec(ctx, portfolioSQL, p.ID, p.Name, p.StrategyShortcode,
 		p.StrategyArguments, p.Benchmark, p.StartDate, p.EndDate, holdings, p.Notifications, temporary, userID,
-		predictedBytes, taxLotBytes)
+		predictedBytes, taxLotBytes, p.FractionalSharesPrecision)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Str("Query", portfolioSQL).Msg("failed to save portfolio")
 		if err := trx.Rollback(ctx); err != nil {
@@ -1380,6 +1531,21 @@ func (pm *Model) getPortfolioSecuritiesValue(date time.Time) (float64, error) {
 	return securityValue, nil
 }
 
+func (pm *Model) getPortfolioSecuritiesValueWithPrices(prices map[data.Security]float64) float64 {
+	var securityValue float64
+
+	for k, v := range pm.holdings {
+		if k != data.CashSecurity {
+			price := prices[k]
+			if !math.IsNaN(price) {
+				securityValue += v * price
+			}
+		}
+	}
+
+	return securityValue
+}
+
 func (pm *Model) getPriceSafe(date time.Time, security *data.Security) float64 {
 	price, err := data.NewDataRequest(security).Metrics(data.MetricClose).OnSingle(date)
 	if err != nil {
@@ -1395,15 +1561,23 @@ func (pm *Model) getPriceSafe(date time.Time, security *data.Security) float64 {
 
 // modifyPosition creates a new transaction such that the final holdings of the portfolio for the specified security matches the
 // targetDollars requested. Returns the new transaction, the number of shares transacted, and any errors that may have occurred.
-func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetDollars float64, justification []*Justification) (*Transaction, float64, error) {
+func (pm *Model) modifyPosition(date time.Time, security *data.Security, price float64, targetDollars float64, maxDollars float64, justification []*Justification) (*Transaction, float64, error) {
+	p := pm.Portfolio
+	minPortfolioNum := math.Pow(10, float64(p.FractionalSharesPrecision)*-1.0)
+
 	// is this security currently held? If so, do we need to buy more or sell some
-	price := pm.getPriceSafe(date, security)
 	subLog := log.With().Float64("Price", price).Time("Date", date).Str("Ticker", security.Ticker).Float64("TargetDollars", targetDollars).Logger()
-	if price < 1.0e-5 {
+	if price < 1.0e-3 {
 		subLog.Error().Stack().Msg("cannot purchase an asset when price is 0; skip asset")
 		return nil, 0, ErrSecurityPriceNotAvailable
 	}
-	targetShares := targetDollars / price
+	targetShares := roundFloat(targetDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+	targetDollars = targetShares * price
+
+	if targetDollars > maxDollars {
+		targetDollars = maxDollars
+	}
+
 	var t *Transaction
 	var err error
 
@@ -1411,7 +1585,7 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 		currentDollars := currentNumShares * price
 		diff := targetDollars - currentDollars
 
-		if math.Abs(diff) < 1.0e-5 {
+		if math.Abs(diff) < minPortfolioNum {
 			// already hold what we need
 			return nil, targetShares, nil
 		}
@@ -1419,8 +1593,17 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 		if diff < 0 {
 			// Need to sell to target amount
 			toSellDollars := currentDollars - targetDollars
-			toSellShares := toSellDollars / price
-			if toSellDollars <= 1.0e-5 || toSellShares <= 1.0e-5 {
+			toSellShares := roundFloat(toSellDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+			toSellDollars = toSellShares * price // update toSellDollars calculation after rounding to required precisions
+
+			dollarsHeld := currentDollars - toSellDollars
+			if dollarsHeld > maxDollars {
+				toSellDollars = currentDollars - targetDollars
+				toSellShares = truncateFloat(toSellDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+				toSellDollars = toSellShares * price // update toSellDollars calculation after rounding to required precisions
+			}
+
+			if toSellDollars <= minPortfolioNum || toSellShares <= minPortfolioNum {
 				log.Error().Stack().
 					Str("Ticker", security.Ticker).
 					Str("Kind", "SellTransaction").
@@ -1433,6 +1616,8 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 				return nil, currentNumShares, nil
 			}
 
+			targetShares = currentNumShares - toSellShares
+
 			t, err = createTransaction(date, security, SellTransaction, price, toSellShares, pm.Portfolio.AccountType, justification)
 			if err != nil {
 				return nil, 0, err
@@ -1440,10 +1625,18 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 		} else {
 			// Need to buy to target amount
 			toBuyDollars := targetDollars - currentDollars
-			toBuyShares := toBuyDollars / price
+			toBuyShares := roundFloat(toBuyDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+			toBuyDollars = toBuyShares * price // update toBuyDollars calculation to account for rounded shares
+
+			dollarsHeld := currentDollars + toBuyDollars
+			if dollarsHeld > maxDollars {
+				toBuyDollars = targetDollars - currentDollars
+				toBuyShares = truncateFloat(toBuyDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+				toBuyDollars = toBuyShares * price // update toBuyDollars calculation to account for rounded shares
+			}
 
 			subLog := log.With().Str("Ticker", security.Ticker).Str("Kind", "BuyTransaction").Float64("Shares", toBuyShares).Float64("TotalValue", toBuyDollars).Time("Date", date).Logger()
-			if toBuyShares <= 1.0e-5 {
+			if toBuyShares <= minPortfolioNum {
 				subLog.Warn().Stack().Msg("refusing to buy 0 shares")
 				return nil, currentNumShares, nil
 			}
@@ -1453,6 +1646,8 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 				return nil, 0, ErrSecurityPriceNotAvailable
 			}
 
+			targetShares = currentNumShares + toBuyShares
+
 			t, err = createTransaction(date, security, BuyTransaction, price, toBuyShares, pm.Portfolio.AccountType, justification)
 			if err != nil {
 				return nil, 0, err
@@ -1460,12 +1655,20 @@ func (pm *Model) modifyPosition(date time.Time, security *data.Security, targetD
 		}
 	} else {
 		// this is a new position
-		shares := targetDollars / price
+		shares := roundFloat(targetDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+
+		dollarsSpent := shares * price
+		if dollarsSpent > maxDollars {
+			shares = truncateFloat(targetDollars/price, uint(pm.Portfolio.FractionalSharesPrecision))
+		}
+
 		subLog := log.With().Str("Ticker", security.Ticker).Str("Kind", "BuyTransaction").Float64("Shares", shares).Float64("TotalValue", targetDollars).Time("Date", date).Logger()
-		if shares <= 1.0e-5 {
+		if shares <= minPortfolioNum {
 			subLog.Warn().Stack().Msg("refusing to buy 0 shares")
 			return nil, 0, ErrRebalancePercentWrong
 		}
+
+		targetShares = shares
 
 		t, err = createTransaction(date, security, BuyTransaction, price, shares, pm.Portfolio.AccountType, justification)
 		if err != nil {

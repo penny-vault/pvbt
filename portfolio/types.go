@@ -2222,6 +2222,8 @@ type Portfolio struct {
 
 	AccountType string
 
+	FractionalSharesPrecision uint32
+
 	Name string
 
 	IsOpen bool
@@ -2332,8 +2334,24 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 		i += copy(buf[i:], o.AccountType)
 	}
 
-	if l := len(o.Name); l != 0 {
+	if x := o.FractionalSharesPrecision; x >= 1<<21 {
+		buf[i] = 5 | 0x80
+		intconv.PutUint32(buf[i+1:], x)
+		i += 5
+	} else if x != 0 {
 		buf[i] = 5
+		i++
+		for x >= 0x80 {
+			buf[i] = byte(x | 0x80)
+			x >>= 7
+			i++
+		}
+		buf[i] = byte(x)
+		i++
+	}
+
+	if l := len(o.Name); l != 0 {
+		buf[i] = 6
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2347,26 +2365,11 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if o.IsOpen {
-		buf[i] = 6
+		buf[i] = 7
 		i++
 	}
 
 	if v := o.LastViewed; !v.IsZero() {
-		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
-		if s < 1<<32 {
-			buf[i] = 7
-			intconv.PutUint32(buf[i+1:], uint32(s))
-			i += 5
-		} else {
-			buf[i] = 7 | 0x80
-			intconv.PutUint64(buf[i+1:], s)
-			i += 9
-		}
-		intconv.PutUint32(buf[i:], ns)
-		i += 4
-	}
-
-	if v := o.StartDate; !v.IsZero() {
 		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
 		if s < 1<<32 {
 			buf[i] = 8
@@ -2381,7 +2384,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 		i += 4
 	}
 
-	if v := o.EndDate; !v.IsZero() {
+	if v := o.StartDate; !v.IsZero() {
 		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
 		if s < 1<<32 {
 			buf[i] = 9
@@ -2396,8 +2399,23 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 		i += 4
 	}
 
+	if v := o.EndDate; !v.IsZero() {
+		s, ns := uint64(v.Unix()), uint32(v.Nanosecond())
+		if s < 1<<32 {
+			buf[i] = 10
+			intconv.PutUint32(buf[i+1:], uint32(s))
+			i += 5
+		} else {
+			buf[i] = 10 | 0x80
+			intconv.PutUint64(buf[i+1:], s)
+			i += 9
+		}
+		intconv.PutUint32(buf[i:], ns)
+		i += 4
+	}
+
 	if l := len(o.Benchmark); l != 0 {
-		buf[i] = 10
+		buf[i] = 11
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2411,7 +2429,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.StrategyShortcode); l != 0 {
-		buf[i] = 11
+		buf[i] = 12
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2425,7 +2443,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.StrategyArguments); l != 0 {
-		buf[i] = 12
+		buf[i] = 13
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2439,7 +2457,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.Schedule); l != 0 {
-		buf[i] = 13
+		buf[i] = 14
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2455,10 +2473,10 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	if v := o.Notifications; v != 0 {
 		x := uint32(v)
 		if v >= 0 {
-			buf[i] = 14
+			buf[i] = 15
 		} else {
 			x = ^x + 1
-			buf[i] = 14 | 0x80
+			buf[i] = 15 | 0x80
 		}
 		i++
 		for x >= 0x80 {
@@ -2471,7 +2489,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.Transactions); l != 0 {
-		buf[i] = 15
+		buf[i] = 16
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2491,7 +2509,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.CurrentHoldings); l != 0 {
-		buf[i] = 16
+		buf[i] = 17
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2511,13 +2529,13 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if v := o.TaxLots; v != nil {
-		buf[i] = 17
+		buf[i] = 18
 		i++
 		i += v.MarshalTo(buf[i:])
 	}
 
 	if l := len(o.PortfolioType); l != 0 {
-		buf[i] = 18
+		buf[i] = 19
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2531,7 +2549,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if l := len(o.LinkedPortfolios); l != 0 {
-		buf[i] = 19
+		buf[i] = 20
 		i++
 		x := uint(l)
 		for x >= 0x80 {
@@ -2555,7 +2573,7 @@ func (o *Portfolio) MarshalTo(buf []byte) int {
 	}
 
 	if v := o.PredictedAssets; v != nil {
-		buf[i] = 20
+		buf[i] = 21
 		i++
 		i += v.MarshalTo(buf[i:])
 	}
@@ -2611,6 +2629,14 @@ func (o *Portfolio) MarshalLen() (int, error) {
 			return 0, ColferMax(fmt.Sprintf("colfer: field portfolio.Portfolio.AccountType exceeds %d bytes", ColferSizeMax))
 		}
 		for l += x + 2; x >= 0x80; l++ {
+			x >>= 7
+		}
+	}
+
+	if x := o.FractionalSharesPrecision; x >= 1<<21 {
+		l += 5
+	} else if x != 0 {
+		for l += 2; x >= 0x80; l++ {
 			x >>= 7
 		}
 	}
@@ -3017,6 +3043,45 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 	}
 
 	if header == 5 {
+		start := i
+		i++
+		if i >= len(data) {
+			goto eof
+		}
+		x := uint32(data[start])
+
+		if x >= 0x80 {
+			x &= 0x7f
+			for shift := uint(7); ; shift += 7 {
+				b := uint32(data[i])
+				i++
+				if i >= len(data) {
+					goto eof
+				}
+
+				if b < 0x80 {
+					x |= b << shift
+					break
+				}
+				x |= (b & 0x7f) << shift
+			}
+		}
+		o.FractionalSharesPrecision = x
+
+		header = data[i]
+		i++
+	} else if header == 5|0x80 {
+		start := i
+		i += 4
+		if i >= len(data) {
+			goto eof
+		}
+		o.FractionalSharesPrecision = intconv.Uint32(data[start:])
+		header = data[i]
+		i++
+	}
+
+	if header == 6 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3055,31 +3120,11 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 6 {
+	if header == 7 {
 		if i >= len(data) {
 			goto eof
 		}
 		o.IsOpen = true
-		header = data[i]
-		i++
-	}
-
-	if header == 7 {
-		start := i
-		i += 8
-		if i >= len(data) {
-			goto eof
-		}
-		o.LastViewed = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
-		header = data[i]
-		i++
-	} else if header == 7|0x80 {
-		start := i
-		i += 12
-		if i >= len(data) {
-			goto eof
-		}
-		o.LastViewed = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
 		header = data[i]
 		i++
 	}
@@ -3090,7 +3135,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.StartDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		o.LastViewed = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
 		header = data[i]
 		i++
 	} else if header == 8|0x80 {
@@ -3099,7 +3144,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.StartDate = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		o.LastViewed = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
 		header = data[i]
 		i++
 	}
@@ -3110,10 +3155,30 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		if i >= len(data) {
 			goto eof
 		}
-		o.EndDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		o.StartDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
 		header = data[i]
 		i++
 	} else if header == 9|0x80 {
+		start := i
+		i += 12
+		if i >= len(data) {
+			goto eof
+		}
+		o.StartDate = time.Unix(int64(intconv.Uint64(data[start:])), int64(intconv.Uint32(data[start+8:]))).In(time.UTC)
+		header = data[i]
+		i++
+	}
+
+	if header == 10 {
+		start := i
+		i += 8
+		if i >= len(data) {
+			goto eof
+		}
+		o.EndDate = time.Unix(int64(intconv.Uint32(data[start:])), int64(intconv.Uint32(data[start+4:]))).In(time.UTC)
+		header = data[i]
+		i++
+	} else if header == 10|0x80 {
 		start := i
 		i += 12
 		if i >= len(data) {
@@ -3124,7 +3189,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 10 {
+	if header == 11 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3163,7 +3228,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 11 {
+	if header == 12 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3202,7 +3267,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 12 {
+	if header == 13 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3241,7 +3306,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 13 {
+	if header == 14 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3280,7 +3345,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 14 {
+	if header == 15 {
 		if i+1 >= len(data) {
 			i++
 			goto eof
@@ -3308,7 +3373,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 
 		header = data[i]
 		i++
-	} else if header == 14|0x80 {
+	} else if header == 15|0x80 {
 		if i+1 >= len(data) {
 			i++
 			goto eof
@@ -3338,7 +3403,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 15 {
+	if header == 16 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3391,7 +3456,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 16 {
+	if header == 17 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3444,7 +3509,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 17 {
+	if header == 18 {
 		o.TaxLots = new(TaxLotInfo)
 		n, err := o.TaxLots.Unmarshal(data[i:])
 		if err != nil {
@@ -3462,7 +3527,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 18 {
+	if header == 19 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3501,7 +3566,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 19 {
+	if header == 20 {
 		if i >= len(data) {
 			goto eof
 		}
@@ -3576,7 +3641,7 @@ func (o *Portfolio) Unmarshal(data []byte) (int, error) {
 		i++
 	}
 
-	if header == 20 {
+	if header == 21 {
 		o.PredictedAssets = new(PortfolioHoldingItem)
 		n, err := o.PredictedAssets.Unmarshal(data[i:])
 		if err != nil {

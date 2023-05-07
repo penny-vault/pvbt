@@ -46,12 +46,14 @@ import (
 
 var (
 	ErrHoldings      = errors.New("portfolio must contain at least 2 holdings")
+	ErrMarketCap     = errors.New("minimum market cap must be greater or equal to 0")
 	ErrInvalidPeriod = errors.New("period must be one of 'Weekly' or 'Monthly'")
 	ErrInvalidRisk   = errors.New("risk i dicator must be one of 'None' or 'Momentum'")
 )
 
 type SeekingAlphaQuant struct {
 	NumHoldings   int
+	MinMarketCap  int
 	OutSecurity   *data.Security
 	RiskIndicator string
 	Period        dataframe.Frequency
@@ -86,6 +88,14 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 	}
 	if numHoldings < 1 {
 		return nil, ErrHoldings
+	}
+
+	minMarketCap := 0
+	if err := json.Unmarshal(args["minMarketCap"], &minMarketCap); err != nil {
+		return nil, err
+	}
+	if minMarketCap < 0 {
+		return nil, ErrMarketCap
 	}
 
 	var outSecurity *data.Security
@@ -138,6 +148,7 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 	var seek strategy.Strategy = &SeekingAlphaQuant{
 		NumHoldings:   numHoldings,
+		MinMarketCap:  minMarketCap,
 		OutSecurity:   outSecurity,
 		Period:        dataframe.Frequency(period),
 		RiskIndicator: riskIndicator,
@@ -312,7 +323,7 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	}
 
 	predictedPortfolio := &data.SecurityAllocation{
-		Date:           tradeDays[lastDateIdx],
+		Date:           seek.schedule.Next(tradeDays[lastDateIdx].AddDate(0, 0, 2)),
 		Members:        predictedTarget,
 		Justifications: make(map[string]float64),
 	}
@@ -320,11 +331,11 @@ func (seek *SeekingAlphaQuant) buildPredictedPortfolio(ctx context.Context, trad
 	return predictedPortfolio, nil
 }
 
-func getSeekAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx) (map[data.Security]float64, error) {
+func getSeekAssets(ctx context.Context, day time.Time, numAssets int, minMarketCap int, db pgx.Tx) (map[data.Security]float64, error) {
 	subLog := log.With().Str("Strategy", "seek").Logger()
 	targetMap := make(map[data.Security]float64)
 	cnt := 0
-	rows, err := db.Query(ctx, "SELECT composite_figi FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, numAssets)
+	rows, err := db.Query(ctx, "SELECT composite_figi FROM seeking_alpha WHERE quant_rating>=4.5 AND event_date=$1 AND market_cap_mil>=$3 ORDER BY quant_rating DESC, market_cap_mil DESC LIMIT $2", day, numAssets, minMarketCap)
 	if err != nil {
 		subLog.Error().Stack().Err(err).Msg("could not query database for portfolio")
 		return nil, err
@@ -382,7 +393,7 @@ func (seek *SeekingAlphaQuant) buildTargetPortfolio(ctx context.Context, tradeDa
 		}
 
 		if riskIndicator {
-			targetMap, err = getSeekAssets(ctx, day, seek.NumHoldings, db)
+			targetMap, err = getSeekAssets(ctx, day, seek.NumHoldings, seek.MinMarketCap, db)
 			if err != nil {
 				return nil, err
 			}

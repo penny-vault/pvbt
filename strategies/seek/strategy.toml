@@ -31,6 +31,13 @@ typecode = "choice"
 default = "Weekly"
 options = ["Weekly", "Monthly"]
 
+[arguments.minMarketCap]
+name = "Minimum Market Capitalization (mil)"
+description = "Minimum market capitalization in millions"
+typecode = "number"
+advanced = true
+default = "0"
+
 [suggested.SEEK-Default]
 numHoldings = "50"
 indicator = "None"
