@@ -40,7 +40,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.2
 	github.com/nats-io/nats.go v1.25.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo/v2 v2.9.5
+	github.com/onsi/ginkgo/v2 v2.10.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.29.1
 	github.com/sendgrid/sendgrid-go v3.12.0+incompatible
@@ -73,7 +73,7 @@ require (
 	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.9.1 // indirect
+	golang.org/x/tools v0.9.3 // indirect
 	google.golang.org/genproto v0.0.0-20230410155749-daa745c078e1 // indirect
 )
 
