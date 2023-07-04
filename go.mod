@@ -45,7 +45,7 @@ require (
 	github.com/rs/zerolog v1.29.1
 	github.com/sendgrid/sendgrid-go v3.12.0+incompatible
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.16.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.15.1
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.16.0
 )
 
 require (
