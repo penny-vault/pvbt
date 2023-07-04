@@ -16,11 +16,11 @@ require (
 	github.com/lestrrat-go/jwx v1.2.26
 	github.com/magefile/mage v1.15.0
 	github.com/onsi/gomega v1.27.7
-	github.com/pelletier/go-toml/v2 v2.0.7
+	github.com/pelletier/go-toml/v2 v2.0.8
 	github.com/pierrec/lz4/v4 v4.1.17
-	github.com/spf13/cast v1.5.0 // indirect
+	github.com/spf13/cast v1.5.1 // indirect
 	github.com/spf13/cobra v1.7.0
-	github.com/spf13/viper v1.15.0
+	github.com/spf13/viper v1.16.0
 	github.com/valyala/fasthttp v1.47.0 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.9.0 // indirect
@@ -63,7 +63,6 @@ require (
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/philhofer/fwd v1.1.2 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
-	github.com/rogpeppe/go-internal v1.9.0 // indirect
 	github.com/savsgio/dictpool v0.0.0-20221023140959-7bf2e61cea94 // indirect
 	github.com/savsgio/gotils v0.0.0-20230208104028-c358bd845dee // indirect
 	github.com/sendgrid/rest v2.6.9+incompatible // indirect
