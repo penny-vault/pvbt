@@ -43,7 +43,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.30.0
-	github.com/sendgrid/sendgrid-go v3.12.0+incompatible
+	github.com/sendgrid/sendgrid-go v3.13.0+incompatible
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.16.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.16.0
 )
