@@ -8,7 +8,7 @@ require (
 	github.com/go-co-op/gocron v1.31.2
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.48.0
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
 	github.com/jackc/pgx/v4 v4.18.1
 	github.com/jdfergason/jwt/v2 v2.2.7
