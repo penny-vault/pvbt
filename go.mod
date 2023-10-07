@@ -40,7 +40,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.6
 	github.com/nats-io/nats.go v1.29.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo/v2 v2.12.0
+	github.com/onsi/ginkgo/v2 v2.12.1
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.30.0
 	github.com/sendgrid/sendgrid-go v3.13.0+incompatible
