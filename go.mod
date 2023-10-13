@@ -15,7 +15,7 @@ require (
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.26
 	github.com/magefile/mage v1.15.0
-	github.com/onsi/gomega v1.27.10
+	github.com/onsi/gomega v1.28.0
 	github.com/pelletier/go-toml/v2 v2.1.0
 	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/spf13/cast v1.5.1 // indirect
@@ -40,7 +40,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/nats-io/nats.go v1.30.2
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo/v2 v2.12.1
+	github.com/onsi/ginkgo/v2 v2.13.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.31.0
 	github.com/sendgrid/sendgrid-go v3.13.0+incompatible
@@ -50,15 +50,19 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
+	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/golang/protobuf v1.5.3 // indirect
-	github.com/google/pprof v0.0.0-20210407192527-94a9f03dee38 // indirect
+	github.com/google/pprof v0.0.0-20230926050212-f7f687d19a98 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.18.0 // indirect
+	github.com/ianlancetaylor/demangle v0.0.0-20230524184225-eabc099b10ab // indirect
 	github.com/jackc/pgx/v5 v5.4.3 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/mattn/go-runewidth v0.0.15 // indirect
-	github.com/nats-io/nats-server/v2 v2.9.9 // indirect
+	github.com/minio/highwayhash v1.0.2 // indirect
+	github.com/nats-io/jwt/v2 v2.5.2 // indirect
+	github.com/nats-io/nats-server/v2 v2.10.3 // indirect
 	github.com/nats-io/nkeys v0.4.5 // indirect
 	github.com/nats-io/nuid v1.0.1 // indirect
 	github.com/rivo/uniseg v0.4.4 // indirect
@@ -69,17 +73,20 @@ require (
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
+	go.uber.org/automaxprocs v1.5.3 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231009173412-8bfb1ae86b6c // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231009173412-8bfb1ae86b6c // indirect
+	google.golang.org/genproto v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231012201019-e917dd12ba7a // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231012201019-e917dd12ba7a // indirect
 )
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.2.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
