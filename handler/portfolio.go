@@ -25,6 +25,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	"github.com/jackc/pgtype"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/dataframe"
@@ -365,7 +366,7 @@ func GetPortfolioMeasurements(c *fiber.Ctx) error {
 
 	var since time.Time
 	if sinceStr == "0" {
-		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, common.GetTimezone())
 	} else {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
@@ -394,7 +395,7 @@ func GetPortfolioHoldings(c *fiber.Ctx) error {
 
 	var since time.Time
 	if sinceStr == "0" {
-		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, common.GetTimezone())
 	} else {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
@@ -421,7 +422,7 @@ func GetPortfolioTransactions(c *fiber.Ctx) error {
 
 	var since time.Time
 	if sinceStr == "0" {
-		since = time.Date(1900, 1, 1, 0, 0, 0, 0, time.Local)
+		since = time.Date(1900, 1, 1, 0, 0, 0, 0, common.GetTimezone())
 	} else {
 		var err error
 		since, err = time.Parse("2006-01-02T15:04:05", sinceStr)
