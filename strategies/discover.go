@@ -28,7 +28,6 @@ import (
 	"github.com/penny-vault/pv-api/strategies/daa"
 	"github.com/penny-vault/pv-api/strategies/mdep"
 	"github.com/penny-vault/pv-api/strategies/paa"
-	"github.com/penny-vault/pv-api/strategies/seek"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 
 	"github.com/pelletier/go-toml/v2"
@@ -53,7 +52,6 @@ func InitializeStrategyMap() {
 	Register("daa", daa.New)
 	Register("mdep", mdep.New)
 	Register("paa", paa.New)
-	Register("seek", seek.New)
 }
 
 func Register(strategyPkg string, factory strategy.Factory) {
