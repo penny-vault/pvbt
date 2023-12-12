@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
-	github.com/go-co-op/gocron v1.36.0
+	github.com/go-co-op/gocron v1.37.0
 	github.com/goccy/go-json v0.10.2
 	github.com/gofiber/fiber/v2 v2.51.0
 	github.com/google/uuid v1.4.0
