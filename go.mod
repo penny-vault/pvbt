@@ -20,7 +20,7 @@ require (
 	github.com/pierrec/lz4/v4 v4.1.18
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.0
-	github.com/spf13/viper v1.17.0
+	github.com/spf13/viper v1.18.2
 	github.com/valyala/fasthttp v1.51.0 // indirect
 	github.com/zeebo/blake3 v0.2.3
 	golang.org/x/crypto v0.16.0 // indirect
