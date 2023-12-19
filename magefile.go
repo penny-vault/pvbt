@@ -85,7 +85,7 @@ func Check() {
 
 	// don't run two tests in parallel, they saturate the CPUs anyway, and running two
 	// causes memory issues in CI.
-	mg.Deps(TestRace)
+	mg.Deps(Test)
 }
 
 func testGoFlags() string {
@@ -94,27 +94,6 @@ func testGoFlags() string {
 
 // Run tests
 func Test() error {
-	fmt.Println("Running Ginkgo tests ...")
-
-	// set testdir
-	wd, err := os.Getwd()
-	if err != nil {
-		fmt.Println(err)
-		fmt.Println("could not get working directory")
-		os.Exit(1)
-	}
-	testDir := filepath.Join(wd, "testdata")
-
-	env := map[string]string{
-		"GOFLAGS":             testGoFlags(),
-		"PVAPI_TEST_DATA_DIR": testDir,
-	}
-	return runCmd(env, ginkgoexe, "run", "-r", "--junit-report", "test-report.xml")
-}
-
-// Run tests with race detector
-func TestRace() error {
-	fmt.Println("Go Test Race")
 	fmt.Println("Running Ginkgo tests ...")
 
 	// set testdir
