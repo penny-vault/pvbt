@@ -1,0 +1,13 @@
+name = "Net Current Asset Value Effect"
+shortcode = "ncave"
+description = "NCAVE forms portfolios from stocks with market capitalization lower than the amount of cash plus inventories they own."
+source = "https://papers.ssrn.com/sol3/papers.cfm?abstract_id=966188"
+version = "1.0.0"
+benchmark = { compositeFigi = "BBG000BHTMY2", ticker = "VFINX", name = "Vanguard 500 Index Fund Investor Shares" }
+schedule = "@monthbegin 0 10 * 7"
+
+[arguments.threshold]
+name = "Threhold"
+description = "Only invest in stocks with an NCAV greater than `threshold`"
+typecode = "number"
+default = "1.5"
