@@ -42,7 +42,7 @@ type USTradeableEquities struct {
 // on the size of the universe.
 func NewUSTradeableEquities() *USTradeableEquities {
 	return &USTradeableEquities{
-		limit: -1, // -1 means no limit to the number of securities returned
+		limit: 3000,
 	}
 }
 
@@ -60,8 +60,10 @@ func (usEquities *USTradeableEquities) Securities(ctx context.Context, forDate t
 	}
 	defer trx.Commit(ctx)
 
-	trx.Query(ctx, "SELECT ")
-	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi FROM eod WHERE event_date='$1' AND asset_type='Common Stock' AND market_cap != 'NaN'::float8 ORDER BY market_cap DESC LIMIT $2", forDate, usEquities.limit)
+	// First filter to the top equities by marketcap that are traded as 'Common Stock' (as defined by their 10-Q filing)
+	// the default setting of including the top 3000 securities (roughly like the russell 3000) means that approximately
+	// 98% of the tradeable universe is included
+	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi, close, market_cap FROM eod WHERE event_date='$1' AND asset_type='Common Stock' AND market_cap != 'NaN'::float8 ORDER BY market_cap DESC LIMIT $2", forDate, usEquities.limit)
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not query for US Equities Tradeable Universe")
 		if err := trx.Rollback(ctx); err != nil {
@@ -70,14 +72,20 @@ func (usEquities *USTradeableEquities) Securities(ctx context.Context, forDate t
 		return nil, err
 	}
 
-	securities := make([]*Security, 0, 1000)
+	// next filter out securities where the close price is less than $5. This is to prevent high transaction costs
+	// and is done as a second step to prevent lower capitalization stocks from seeping into the universe.
+	securities := make([]*Security, 0, 3000)
+	var marketCap float64
+	var closePrice float64
 	for rows.Next() {
 		sec := Security{}
-		if err := rows.Scan(&sec.Ticker, &sec.CompositeFigi); err != nil {
+		if err := rows.Scan(&sec.Ticker, &sec.CompositeFigi, &closePrice, &marketCap); err != nil {
 			log.Error().Err(err).Msg("could not scan query results for USTradeableEquities")
 			return nil, err
 		}
-		securities = append(securities, &sec)
+		if closePrice > 5 {
+			securities = append(securities, &sec)
+		}
 	}
 
 	return securities, nil

@@ -60,14 +60,16 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 func equitiesThatMeetNCAVCriteria(ctx context.Context, dt time.Time) (*data.SecurityAllocation, error) {
 	// get the 3000 most liquid securities
-	securities, err := data.NewUSTradeableEquities().Limit(3000).Securities(ctx, dt)
-	if err != nil {
-		log.Error().Err(err).Msg("could not get tradeable equities")
-		return nil, err
-	}
+	/*
+		securities, err := data.NewUSTradeableEquities().Limit(3000).Securities(ctx, dt)
+		if err != nil {
+			log.Error().Err(err).Msg("could not get tradeable equities")
+			return nil, err
+		}
+	*/
 
 	// get fundamental data
-	dfMap, err := data.NewDataRequest(securities...).Metrics(data.FundamentalMarketCap, data.FundamentalWorkingCapital).On(dt)
+	//dfMap, err := data.NewDataRequest(securities...).Metrics(data.FundamentalMarketCap, data.FundamentalWorkingCapital).On(dt)
 
 	// df.divide(Fundamentals.WorkingCapital, Fundamentals.MarketCap, "NCAV")
 	// df.Threshold(ncavThreshold)
@@ -76,7 +78,7 @@ func equitiesThatMeetNCAVCriteria(ctx context.Context, dt time.Time) (*data.Secu
 	// -> SP500Universe
 	// -> Russell1000Universe
 
-	return nil
+	return nil, nil
 }
 
 // Compute signal for strategy and return list of positions along with the next predicted
@@ -91,13 +93,19 @@ func (ncave *NetCurrentAssetValue) Compute(ctx context.Context, begin, end time.
 	currDate := ncave.schedule.Next(begin)
 	for currDate.Before(end) || currDate.Equal(end) {
 		log.Debug().Time("InvestmentDate", currDate).Msg("calculating holdings")
-		securityAllocation := equitiesThatMeetNCAVCriteria(currDate)
+		securityAllocation, err := equitiesThatMeetNCAVCriteria(ctx, currDate)
+		if err != nil {
+			log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
+		}
 		targetPortfolio = append(targetPortfolio, securityAllocation)
 		currDate = ncave.schedule.Next(begin)
 	}
 
 	// compute the predicted asset
-	predictedPortfolio := equitiesThatMeetNCAVCriteria(end)
+	predictedPortfolio, err := equitiesThatMeetNCAVCriteria(ctx, end)
+	if err != nil {
+		log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
+	}
 
 	return targetPortfolio, predictedPortfolio, nil
 }

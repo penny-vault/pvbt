@@ -1,6 +1,6 @@
 module github.com/penny-vault/pv-api
 
-go 1.20
+go 1.21
 
 require (
 	github.com/andybalholm/brotli v1.0.6 // indirect
