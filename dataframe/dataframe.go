@@ -30,19 +30,24 @@ import (
 
 // Append takes the date and values from other and appends them to df. If cols do not align, cols in df that are not in other are filled
 // with NaN. If the start date of other is not greater than df then do nothing
-func (df *DataFrame) Append(other *DataFrame) *DataFrame {
+func (df *DataFrame[T]) Append(other *DataFrame[T]) *DataFrame[T] {
 	// if there is no data in other then do nothing
-	if len(other.Dates) == 0 {
+	if len(other.Index) == 0 {
 		return df
 	}
 
 	// if the first date in other is not after the last date of df then do nothing
-	otherFirstDate := other.Dates[0]
-	if len(df.Dates) != 0 && (otherFirstDate.Before(df.Dates[len(df.Dates)-1]) || otherFirstDate.Equal(df.Dates[len(df.Dates)-1])) {
-		return df
+	otherFirstDate := other.Index[0]
+	if otherFirstDate, ok := any(otherFirstDate).(time.Time); ok {
+		if len(df.Index) != 0 {
+			lastDate := any(df.Index[len(df.Index)-1]).(time.Time)
+			if otherFirstDate.Before(lastDate) || otherFirstDate.Equal(lastDate) {
+				return df
+			}
+		}
 	}
 
-	df.Dates = append(df.Dates, other.Dates...)
+	df.Index = append(df.Index, other.Index...)
 	colMap := make(map[string]int, len(other.ColNames))
 
 	for colIdx, colName := range other.ColNames {
@@ -55,7 +60,7 @@ func (df *DataFrame) Append(other *DataFrame) *DataFrame {
 			df.Vals[colIdx] = append(df.Vals[colIdx], other.Vals[otherColIdx]...)
 		} else {
 			// fill with NaN
-			for ii := 0; ii < len(other.Dates); ii++ {
+			for ii := 0; ii < len(other.Index); ii++ {
 				df.Vals[colIdx] = append(df.Vals[colIdx], math.NaN())
 			}
 		}
@@ -65,11 +70,11 @@ func (df *DataFrame) Append(other *DataFrame) *DataFrame {
 }
 
 // Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
-func (df *DataFrame) Breakout() Map {
-	dfMap := Map{}
+func (df *DataFrame[T]) Breakout() Map[T] {
+	dfMap := Map[T]{}
 	for idx, col := range df.ColNames {
-		dfMap[col] = &DataFrame{
-			Dates:    df.Dates,
+		dfMap[col] = &DataFrame[T]{
+			Index:    df.Index,
 			ColNames: []string{col},
 			Vals:     [][]float64{df.Vals[idx]},
 		}
@@ -78,20 +83,20 @@ func (df *DataFrame) Breakout() Map {
 }
 
 // ColCount returns the number of columns in the dataframe
-func (df *DataFrame) ColCount() int {
+func (df *DataFrame[T]) ColCount() int {
 	return len(df.ColNames)
 }
 
 // Copy creates a copy of the dataframe
-func (df *DataFrame) Copy() *DataFrame {
-	df2 := &DataFrame{
+func (df *DataFrame[T]) Copy() *DataFrame[T] {
+	df2 := &DataFrame[T]{
 		ColNames: make([]string, len(df.ColNames)),
-		Dates:    make([]time.Time, len(df.Dates)),
+		Index:    make([]T, len(df.Index)),
 		Vals:     make([][]float64, len(df.Vals)),
 	}
 
 	copy(df2.ColNames, df.ColNames)
-	copy(df2.Dates, df.Dates)
+	copy(df2.Index, df.Index)
 
 	for idx := range df2.Vals {
 		df2.Vals[idx] = make([]float64, len(df.Vals[idx]))
@@ -102,15 +107,15 @@ func (df *DataFrame) Copy() *DataFrame {
 }
 
 // Drop removes rows that contain the value `val` from the dataframe
-func (df *DataFrame) Drop(val float64) *DataFrame {
+func (df *DataFrame[T]) Drop(val float64) *DataFrame[T] {
 	isNA := math.IsNaN(val)
 	newVals := make([][]float64, len(df.Vals))
-	newDates := make([]time.Time, 0, len(df.Vals))
+	newIndex := make([]T, 0, len(df.Vals))
 
-	for rowIdx, rowDate := range df.Dates {
+	for idx, rowIdx := range df.Index {
 		keep := true
 		for _, col := range df.Vals {
-			rowVal := col[rowIdx]
+			rowVal := col[idx]
 			keep = keep && !(rowVal == val || (isNA && math.IsNaN(rowVal)))
 			if !keep {
 				break
@@ -118,40 +123,45 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 		}
 
 		if keep {
-			newDates = append(newDates, rowDate)
+			newIndex = append(newIndex, rowIdx)
 			for colIdx, col := range df.Vals {
-				rowVal := col[rowIdx]
+				rowVal := col[idx]
 				newVals[colIdx] = append(newVals[colIdx], rowVal)
 			}
 		}
 	}
 
 	df.Vals = newVals
-	df.Dates = newDates
+	df.Index = newIndex
 	return df
 }
 
 // End returns the last time in the DataFrame
-func (df *DataFrame) End() time.Time {
-	if len(df.Dates) == 0 {
+func (df *DataFrame[T]) End() time.Time {
+	if len(df.Index) == 0 {
 		return time.Time{}
 	}
-	return df.Dates[len(df.Dates)-1]
+
+	if lastDate, ok := any(df.Index[len(df.Index)-1]).(time.Time); ok {
+		return lastDate
+	}
+
+	return time.Time{}
 }
 
 // ForEachMap takes a lambda function of prototype func(rowIdx int, rowDate time.Time, vals map[string]float64) map[string]float64
 // and updates the row with the returned value; if nil is returned then don't update the row, otherwise update row with returned values
-func (df *DataFrame) ForEach(lambda func(int, time.Time, map[string]float64) map[string]float64) {
+func (df *DataFrame[T]) ForEach(lambda func(int, T, map[string]float64) map[string]float64) {
 	res := make(map[string]float64, len(df.ColNames))
 	colMap := make(map[string]int, len(df.ColNames))
-	for rowIdx, dt := range df.Dates {
+	for idx, rowIdx := range df.Index {
 		for colIdx, colName := range df.ColNames {
-			res[colName] = df.Vals[colIdx][rowIdx]
+			res[colName] = df.Vals[colIdx][idx]
 		}
-		ret := lambda(rowIdx, dt, res)
+		ret := lambda(idx, rowIdx, res)
 		for colName, val := range ret {
 			if colIdx, ok := colMap[colName]; ok {
-				df.Vals[colIdx][rowIdx] = val
+				df.Vals[colIdx][idx] = val
 			}
 		}
 	}
@@ -159,7 +169,9 @@ func (df *DataFrame) ForEach(lambda func(int, time.Time, map[string]float64) map
 
 // Frequency returns a data frame filtered to the requested frequency; note this is not
 // an in-place function but creates a copy of the data
-func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
+//
+// NOTE: If the dataframe's index is not time.Time then the function will throw an exception
+func (df *DataFrame[T]) Frequency(frequency Frequency) *DataFrame[T] {
 	var schedule *tradecron.TradeCron
 	var err error
 
@@ -204,19 +216,20 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 		log.Panic().Str("Frequency", string(frequency)).Msg("Unknown frequncy provided to dataframe frequency function")
 	}
 
-	newDates := make([]time.Time, 0, len(df.Dates))
+	newIndex := make([]T, 0, len(df.Index))
 	newVals := make([][]float64, len(df.ColNames))
-	for rowIdx, xx := range df.Dates {
-		if schedule.IsTradeDay(xx) {
-			newDates = append(newDates, xx)
+	for idx, rowIdx := range df.Index {
+		dt := any(rowIdx).(time.Time)
+		if schedule.IsTradeDay(dt) {
+			newIndex = append(newIndex, rowIdx)
 			for colIdx := range newVals {
-				newVals[colIdx] = append(newVals[colIdx], df.Vals[colIdx][rowIdx])
+				newVals[colIdx] = append(newVals[colIdx], df.Vals[colIdx][idx])
 			}
 		}
 	}
 
-	newDf := &DataFrame{
-		Dates:    newDates,
+	newDf := &DataFrame[T]{
+		Index:    newIndex,
 		ColNames: df.ColNames,
 		Vals:     newVals,
 	}
@@ -225,10 +238,10 @@ func (df *DataFrame) Frequency(frequency Frequency) *DataFrame {
 }
 
 // IdxMax finds the column with the largest value for each row and stores it in a new dataframe with the column name 'idxmax'
-func (df *DataFrame) IdxMax() *DataFrame {
-	maxVals := make([]float64, 0, len(df.Dates))
+func (df *DataFrame[T]) IdxMax() *DataFrame[T] {
+	maxVals := make([]float64, 0, len(df.Index))
 
-	for rowIdx := range df.Dates {
+	for rowIdx := range df.Index {
 		max := math.NaN()
 		var ind int
 		for colIdx := range df.ColNames {
@@ -250,15 +263,15 @@ func (df *DataFrame) IdxMax() *DataFrame {
 		}
 	}
 
-	return &DataFrame{
-		Dates:    df.Dates,
+	return &DataFrame[T]{
+		Index:    df.Index,
 		Vals:     [][]float64{maxVals},
 		ColNames: []string{"idxmax"},
 	}
 }
 
 // Insert a new column to the end of the dataframe
-func (df *DataFrame) Insert(name string, col []float64) *DataFrame {
+func (df *DataFrame[T]) Insert(name string, col []float64) *DataFrame[T] {
 	df.ColNames = append(df.ColNames, name)
 	df.Vals = append(df.Vals, col)
 	return df
@@ -266,10 +279,15 @@ func (df *DataFrame) Insert(name string, col []float64) *DataFrame {
 
 // InsertRow adds a new row to the dataframe. Date must be after the last date in the dataframe and vals must equal the number
 // of columns. If either of these conditions are not met then panic
-func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
+func (df *DataFrame[T]) InsertRow(idx T, vals ...float64) *DataFrame[T] {
 	// Check that the last date in the dataframe is prior to the new date
-	if len(df.Dates) != 0 && !df.Dates[len(df.Dates)-1].Before(date) {
-		log.Panic().Time("lastDate", df.Dates[len(df.Dates)-1]).Time("newDate", date).Msg("newDate must be after lastDate")
+	if len(df.Index) != 0 {
+		if last, ok := any(df.Index[len(df.Index)-1]).(time.Time); ok {
+			newDate := any(idx).(time.Time)
+			if !last.Before(newDate) {
+				log.Panic().Time("lastDate", last).Time("newDate", newDate).Msg("newDate must be after lastDate")
+			}
+		}
 	}
 
 	// Check that the number of columns equals the number of vals passed
@@ -277,7 +295,7 @@ func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
 		log.Panic().Int("NumValsPassed", len(vals)).Int("NumColumns", len(df.ColNames)).Msg("number of vals passed must equal number of columns")
 	}
 
-	df.Dates = append(df.Dates, date)
+	df.Index = append(df.Index, idx)
 	for colIdx := range df.ColNames {
 		df.Vals[colIdx] = append(df.Vals[colIdx], vals[colIdx])
 	}
@@ -287,13 +305,18 @@ func (df *DataFrame) InsertRow(date time.Time, vals ...float64) *DataFrame {
 
 // InsertMap adds a new row to the dataframe. Date must be after the last date in the dataframe otherwise panic.
 // all columns must already exist in the dataframe, any additional columns in vals is ignored
-func (df *DataFrame) InsertMap(date time.Time, vals map[string]float64) *DataFrame {
+func (df *DataFrame[T]) InsertMap(idx T, vals map[string]float64) *DataFrame[T] {
 	// Check that the last date in the dataframe is prior to the new date
-	if len(df.Dates) != 0 && !df.Dates[len(df.Dates)-1].Before(date) {
-		log.Panic().Time("lastDate", df.Dates[len(df.Dates)-1]).Time("newDate", date).Msg("newDate must be after lastDate")
+	if len(df.Index) != 0 {
+		if last, ok := any(df.Index[len(df.Index)-1]).(time.Time); ok {
+			newDate := any(idx).(time.Time) // safe because if last is time.Time then idx must be time.Time
+			if !last.Before(newDate) {
+				log.Panic().Time("lastDate", last).Time("newDate", newDate).Msg("newDate must be after lastDate")
+			}
+		}
 	}
 
-	df.Dates = append(df.Dates, date)
+	df.Index = append(df.Index, idx)
 	for colIdx, colName := range df.ColNames {
 		if val, ok := vals[colName]; ok {
 			df.Vals[colIdx] = append(df.Vals[colIdx], val)
@@ -306,7 +329,7 @@ func (df *DataFrame) InsertMap(date time.Time, vals map[string]float64) *DataFra
 }
 
 // Lag shifts the dataframe by the specified number of rows, replacing shifted values by math.NaN() and returns a new dataframe
-func (df *DataFrame) Lag(n int) *DataFrame {
+func (df *DataFrame[T]) Lag(n int) *DataFrame[T] {
 	df = df.Copy()
 	prepend := make([]float64, n)
 	for idx := range prepend {
@@ -321,20 +344,20 @@ func (df *DataFrame) Lag(n int) *DataFrame {
 }
 
 // Last returns a new dataframe with only the last item of the current dataframe
-func (df *DataFrame) Last() *DataFrame {
+func (df *DataFrame[T]) Last() *DataFrame[T] {
 	if df.Len() == 0 {
 		return df
 	}
 
 	lastVals := make([][]float64, len(df.ColNames))
-	lastRow := len(df.Dates) - 1
+	lastRow := len(df.Index) - 1
 	for idx, col := range df.Vals {
 		lastVals[idx] = []float64{col[lastRow]}
 	}
 
-	newDf := &DataFrame{
+	newDf := &DataFrame[T]{
 		ColNames: df.ColNames,
-		Dates:    []time.Time{df.Dates[len(df.Dates)-1]},
+		Index:    []T{df.Index[len(df.Index)-1]},
 		Vals:     lastVals,
 	}
 
@@ -342,19 +365,19 @@ func (df *DataFrame) Last() *DataFrame {
 }
 
 // Len returns the number of rows in the dataframe
-func (df *DataFrame) Len() int {
-	return len(df.Dates)
+func (df *DataFrame[T]) Len() int {
+	return len(df.Index)
 }
 
 // Max selects the max value for each row and returns a new dataframe
-func (df *DataFrame) Max() *DataFrame {
-	maxDf := &DataFrame{
+func (df *DataFrame[T]) Max() *DataFrame[T] {
+	maxDf := &DataFrame[T]{
 		ColNames: []string{"max"},
-		Dates:    df.Dates,
-		Vals:     [][]float64{make([]float64, len(df.Dates))},
+		Index:    df.Index,
+		Vals:     [][]float64{make([]float64, len(df.Index))},
 	}
 
-	for rowIdx := range df.Dates {
+	for rowIdx := range df.Index {
 		row := make([]float64, 0, len(df.ColNames))
 		for colIdx := range df.ColNames {
 			row = append(row, df.Vals[colIdx][rowIdx])
@@ -366,14 +389,14 @@ func (df *DataFrame) Max() *DataFrame {
 }
 
 // Min selects the min value for each row and returns a new dataframe
-func (df *DataFrame) Min() *DataFrame {
-	minDf := &DataFrame{
+func (df *DataFrame[T]) Min() *DataFrame[T] {
+	minDf := &DataFrame[T]{
 		ColNames: []string{"min"},
-		Dates:    df.Dates,
-		Vals:     [][]float64{make([]float64, len(df.Dates))},
+		Index:    df.Index,
+		Vals:     [][]float64{make([]float64, len(df.Index))},
 	}
 
-	for rowIdx := range df.Dates {
+	for rowIdx := range df.Index {
 		row := make([]float64, 0, len(df.ColNames))
 		for colIdx := range df.ColNames {
 			row = append(row, df.Vals[colIdx][rowIdx])
@@ -386,14 +409,15 @@ func (df *DataFrame) Min() *DataFrame {
 
 // Split the dataframe into 2, with columns being in the first dataframe and
 // all remaining columns in the second
-func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
-	one := &DataFrame{
-		Dates:    df.Dates,
+func (df *DataFrame[T]) Split(columns ...string) (*DataFrame[T], *DataFrame[T]) {
+	one := &DataFrame[T]{
+		Index:    df.Index,
 		ColNames: []string{},
 		Vals:     [][]float64{},
 	}
-	two := &DataFrame{
-		Dates:    df.Dates,
+
+	two := &DataFrame[T]{
+		Index:    df.Index,
 		ColNames: []string{},
 		Vals:     [][]float64{},
 	}
@@ -418,21 +442,26 @@ func (df *DataFrame) Split(columns ...string) (*DataFrame, *DataFrame) {
 }
 
 // Start returns the first date of the dataframe
-func (df *DataFrame) Start() time.Time {
-	if len(df.Dates) == 0 {
+func (df *DataFrame[T]) Start() time.Time {
+	if len(df.Index) == 0 {
 		return time.Time{}
 	}
-	return df.Dates[0]
+
+	if firstDate, ok := any(df.Index[0]).(time.Time); ok {
+		return firstDate
+	}
+
+	return time.Time{}
 }
 
 // Table prints an ASCII formatted table to stdout
-func (df *DataFrame) Table() string {
-	if len(df.Dates) == 0 {
+func (df *DataFrame[T]) Table() string {
+	if len(df.Index) == 0 {
 		return "<NO DATA>" // nothing to do as there is no data available in the dataframe
 	}
 
 	// construct table header
-	tableCols := append([]string{"Date"}, df.ColNames...)
+	tableCols := append([]string{"Index"}, df.ColNames...)
 
 	// initialize table
 	s := &strings.Builder{}
@@ -444,11 +473,19 @@ func (df *DataFrame) Table() string {
 	table.SetFooter(footer)
 	table.SetBorder(false) // Set Border to false
 
-	for rowIdx, date := range df.Dates {
-		row := []string{date.Format("2006-01-02")}
-		for _, col := range df.Vals {
-			row = append(row, fmt.Sprintf("%.4f", col[rowIdx]))
+	for idx, rowIdx := range df.Index {
+		row := make([]string, 0, len(df.Vals)+1)
+
+		if date, ok := any(rowIdx).(time.Time); ok {
+			row = append(row, date.Format("2006-01-02"))
+		} else {
+			row = append(row, any(rowIdx).(string))
 		}
+
+		for _, col := range df.Vals {
+			row = append(row, fmt.Sprintf("%.4f", col[idx]))
+		}
+
 		table.Append(row)
 	}
 
@@ -457,17 +494,24 @@ func (df *DataFrame) Table() string {
 }
 
 // Trim the dataframe to the specified date range (inclusive)
-func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
-	df2 := &DataFrame{
+// NOTE: If T is not time.Time then an empty dataframe is returned
+func (df *DataFrame[T]) Trim(begin, end time.Time) *DataFrame[T] {
+	df2 := &DataFrame[T]{
 		ColNames: df.ColNames,
-		Dates:    df.Dates,
+		Index:    df.Index,
 		Vals:     df.Vals,
 	}
 
+	var (
+		first time.Time
+		last  time.Time
+		ok    bool
+	)
+
 	// special case 0: requested range is invalid
 	if end.Before(begin) {
-		df2.Dates = []time.Time{}
-		df2.Vals = [][]float64{}
+		df2.Index = make([]T, 0)
+		df2.Vals = make([][]float64, 0)
 		return df2
 	}
 
@@ -476,36 +520,45 @@ func (df *DataFrame) Trim(begin, end time.Time) *DataFrame {
 		return df2
 	}
 
+	// ensure that index is a date index
+	if first, ok = any(df.Index[0]).(time.Time); !ok {
+		return df2
+	}
+
+	if last, ok = any(df.Index[len(df.Index)-1]).(time.Time); !ok {
+		return df2
+	}
+
 	// special case 2: end time is before data frame start
-	if end.Before(df.Dates[0]) {
-		df2.Dates = []time.Time{}
+	if end.Before(first) {
+		df2.Index = []T{}
 		df2.Vals = [][]float64{}
 		return df2
 	}
 
 	// special case 3: start time is after data frame end
-	if begin.After(df.Dates[len(df.Dates)-1]) {
-		df2.Dates = []time.Time{}
+	if begin.After(last) {
+		df2.Index = []T{}
 		df2.Vals = [][]float64{}
 		return df2
 	}
 
 	// Use binary search to find the index corresponding to the start and end times
-	beginIdx := sort.Search(len(df.Dates), func(i int) bool {
-		idxVal := df.Dates[i]
+	beginIdx := sort.Search(len(df.Index), func(i int) bool {
+		idxVal := any(df.Index[i]).(time.Time)
 		return (idxVal.After(begin) || idxVal.Equal(begin))
 	})
 
-	endIdx := sort.Search(len(df.Dates), func(i int) bool {
-		idxVal := df.Dates[i]
+	endIdx := sort.Search(len(df.Index), func(i int) bool {
+		idxVal := any(df.Index[i]).(time.Time)
 		return (idxVal.After(end) || idxVal.Equal(end))
 	})
 
-	if endIdx != len(df.Dates) {
+	if endIdx != len(df.Index) {
 		endIdx++
 	}
 
-	df2.Dates = df.Dates[beginIdx:endIdx]
+	df2.Index = df.Index[beginIdx:endIdx]
 	for colIdx, col := range df.Vals {
 		df2.Vals[colIdx] = col[beginIdx:endIdx]
 	}

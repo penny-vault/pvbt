@@ -17,6 +17,7 @@ package dataframe
 
 import (
 	"math"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"gonum.org/v1/gonum/floats"
@@ -25,7 +26,7 @@ import (
 
 // AddScalar adds the scalar value to all columns in dataframe df and returns a new dataframe
 // panics if rows are not equal.
-func (df *DataFrame) AddScalar(scalar float64) *DataFrame {
+func (df *DataFrame[T]) AddScalar(scalar float64) *DataFrame[T] {
 	df = df.Copy()
 
 	for colIdx := range df.ColNames {
@@ -38,7 +39,7 @@ func (df *DataFrame) AddScalar(scalar float64) *DataFrame {
 
 // AddVec adds the vector to all columns in dataframe and returns a new dataframe
 // panics if rows are not equal.
-func (df *DataFrame) AddVec(vec []float64) *DataFrame {
+func (df *DataFrame[T]) AddVec(vec []float64) *DataFrame[T] {
 	df = df.Copy()
 	for idx := range df.ColNames {
 		floats.Add(df.Vals[idx], vec)
@@ -48,14 +49,14 @@ func (df *DataFrame) AddVec(vec []float64) *DataFrame {
 
 // Count creates a new dataframe with the number of columns where the expression lambda func(float64) bool evaluates to true is placed
 // in the `count` column
-func (df *DataFrame) Count(lambda func(x float64) bool) *DataFrame {
-	res := &DataFrame{
-		Dates:    df.Dates,
+func (df *DataFrame[T]) Count(lambda func(x float64) bool) *DataFrame[T] {
+	res := &DataFrame[T]{
+		Index:    df.Index,
 		Vals:     [][]float64{make([]float64, df.Len())},
 		ColNames: []string{"count"},
 	}
 
-	for rowIdx := range df.Dates {
+	for rowIdx := range df.Index {
 		cnt := 0
 		for _, col := range df.Vals {
 			if lambda(col[rowIdx]) {
@@ -70,7 +71,7 @@ func (df *DataFrame) Count(lambda func(x float64) bool) *DataFrame {
 
 // Div divides all columns in `df` by the corresponding column in `other` and returns a new dataframe.
 // Panics if rows are not equal.
-func (df *DataFrame) Div(other *DataFrame) *DataFrame {
+func (df *DataFrame[T]) Div(other *DataFrame[T]) *DataFrame[T] {
 	df = df.Copy()
 
 	otherMap := make(map[string]int, len(other.ColNames))
@@ -88,7 +89,7 @@ func (df *DataFrame) Div(other *DataFrame) *DataFrame {
 
 // Mean calculates the mean of all like columns in the dataframes and returns a new dataframe
 // panics if rows are not equal.
-func Mean(dfs ...*DataFrame) *DataFrame {
+func Mean[T time.Time | string](dfs ...*DataFrame[T]) *DataFrame[T] {
 	resDf := dfs[0].Copy()
 
 	otherMaps := make([]map[string]int, len(dfs))
@@ -118,7 +119,7 @@ func Mean(dfs ...*DataFrame) *DataFrame {
 
 // Mul multiplies all columns in dataframe df by the corresponding column in dataframe other and returns a new dataframe
 // panics if rows are not equal.
-func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
+func (df *DataFrame[T]) Mul(other *DataFrame[T]) *DataFrame[T] {
 	df = df.Copy()
 
 	otherMap := make(map[string]int, len(other.ColNames))
@@ -136,7 +137,7 @@ func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
 
 // MulScalar multiplies all columns in dataframe df by the scalar and returns a new dataframe
 // panics if rows are not equal.
-func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
+func (df *DataFrame[T]) MulScalar(scalar float64) *DataFrame[T] {
 	df = df.Copy()
 
 	for colIdx := range df.ColNames {
@@ -149,7 +150,7 @@ func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
 
 // RollingSumScaled computes ∑ df[ii] * scalar and returns a new dataframe
 // panics if rows are not equal.
-func (df *DataFrame) RollingSumScaled(ii int, scalar float64) *DataFrame {
+func (df *DataFrame[T]) RollingSumScaled(ii int, scalar float64) *DataFrame[T] {
 	df2 := df.Copy()
 	for colIdx := range df.ColNames {
 		roll := 0.0
@@ -177,12 +178,12 @@ func (df *DataFrame) RollingSumScaled(ii int, scalar float64) *DataFrame {
 // lookback period. The length of the resulting dataframe equals that of the input with NaNs during the warm-up period.
 // Invalid lookback periods result in a dataframe of all NaN.
 // NOTE: lookback is in terms of date periods. if the dataframe is sampled monthly then SMA is monthly,
-func (df *DataFrame) SMA(lookback int) *DataFrame {
+func (df *DataFrame[T]) SMA(lookback int) *DataFrame[T] {
 	// check that lookback is a valid period
 	if (lookback > df.Len()) || (lookback <= 0) {
 		log.Error().Stack().Int("Lookback", lookback).Int("NRows", df.Len()).Msg("lookback must be: 0 < lookback <= NRows")
-		nullDf := &DataFrame{
-			Dates:    df.Dates,
+		nullDf := &DataFrame[T]{
+			Index:    df.Index,
 			Vals:     make([][]float64, df.ColCount()),
 			ColNames: df.ColNames,
 		}
@@ -207,7 +208,7 @@ func (df *DataFrame) SMA(lookback int) *DataFrame {
 
 	warmup := true
 
-	for rowIdx := range df.Dates {
+	for rowIdx := range df.Index {
 		// if we have seen at least lookback rows then we are out of the warmup period
 		// NOTE: row is 0 based, lookback is 1 based; hence the test applied below
 		if rowIdx == (lookback - 1) {
@@ -226,8 +227,8 @@ func (df *DataFrame) SMA(lookback int) *DataFrame {
 		}
 	}
 
-	smaDf := &DataFrame{
-		Dates:    df.Dates,
+	smaDf := &DataFrame[T]{
+		Index:    df.Index,
 		Vals:     smaVals,
 		ColNames: df.ColNames,
 	}

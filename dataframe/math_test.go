@@ -28,15 +28,15 @@ import (
 var _ = Describe("When computing the SMA", func() {
 	Context("with 5 values", func() {
 		var (
-			df1 *dataframe.DataFrame
+			df1 *dataframe.DataFrame[time.Time]
 			tz  *time.Location
 		)
 
 		BeforeEach(func() {
 			tz = common.GetTimezone()
 
-			df1 = &dataframe.DataFrame{
-				Dates: []time.Time{
+			df1 = &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 					time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 					time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -53,7 +53,7 @@ var _ = Describe("When computing the SMA", func() {
 			Expect(sma.Len()).To(Equal(5))
 
 			// Confirm that the timeAxis has all the expected values
-			Expect(sma.Dates).To(Equal([]time.Time{
+			Expect(sma.Index).To(Equal([]time.Time{
 				time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -75,7 +75,7 @@ var _ = Describe("When computing the SMA", func() {
 			Expect(sma.Len()).To(Equal(5))
 
 			// Confirm that the timeAxis has all the expected values
-			Expect(sma.Dates).To(Equal([]time.Time{
+			Expect(sma.Index).To(Equal([]time.Time{
 				time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -97,7 +97,7 @@ var _ = Describe("When computing the SMA", func() {
 			Expect(sma.Len()).To(Equal(5))
 
 			// Confirm that the timeAxis has all the expected values
-			Expect(sma.Dates).To(Equal([]time.Time{
+			Expect(sma.Index).To(Equal([]time.Time{
 				time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -119,7 +119,7 @@ var _ = Describe("When computing the SMA", func() {
 			Expect(sma.Len()).To(Equal(5))
 
 			// Confirm that the timeAxis has all the expected values
-			Expect(sma.Dates).To(Equal([]time.Time{
+			Expect(sma.Index).To(Equal([]time.Time{
 				time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),
@@ -141,7 +141,7 @@ var _ = Describe("When computing the SMA", func() {
 			Expect(sma.Len()).To(Equal(5))
 
 			// Confirm that the timeAxis has all the expected values
-			Expect(sma.Dates).To(Equal([]time.Time{
+			Expect(sma.Index).To(Equal([]time.Time{
 				time.Date(2021, time.January, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.February, 1, 0, 0, 0, 0, tz),
 				time.Date(2021, time.March, 1, 0, 0, 0, 0, tz),

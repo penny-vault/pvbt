@@ -22,10 +22,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-type Map map[string]*DataFrame
+type Map[T time.Time | string] map[string]*DataFrame[T]
 
 // Align finds the maximum start and minimum end across all dataframes and trims them to match
-func (dfMap Map) Align() Map {
+func (dfMap Map[T]) Align() Map[T] {
 	// find max start and min end
 	var start time.Time
 	var end time.Time
@@ -42,7 +42,7 @@ func (dfMap Map) Align() Map {
 	}
 
 	// trim df's to expected time range
-	dfMapTrimmed := make(Map, len(dfMap))
+	dfMapTrimmed := make(Map[T], len(dfMap))
 	for k, df := range dfMap {
 		dfMapTrimmed[k] = df.Trim(start, end)
 	}
@@ -51,15 +51,15 @@ func (dfMap Map) Align() Map {
 }
 
 // Drop calls dataframe.Drop on each dataframe in the map
-func (dfMap Map) Drop(val float64) Map {
+func (dfMap Map[T]) Drop(val float64) Map[T] {
 	for _, v := range dfMap {
 		v.Drop(val)
 	}
 	return dfMap
 }
 
-func (dfMap Map) Frequency(frequency Frequency) Map {
-	newDfMap := make(Map, len(dfMap))
+func (dfMap Map[T]) Frequency(frequency Frequency) Map[T] {
+	newDfMap := make(Map[T], len(dfMap))
 	for k, v := range dfMap {
 		newDfMap[k] = v.Frequency(frequency)
 	}
@@ -69,18 +69,18 @@ func (dfMap Map) Frequency(frequency Frequency) Map {
 
 // DataFrame converts each item in the map to a column in the dataframe. If dataframes do not align they are trimmed to the max start and
 // min end
-func (dfMap Map) DataFrame() *DataFrame {
-	df := &DataFrame{}
+func (dfMap Map[T]) DataFrame() *DataFrame[T] {
+	df := &DataFrame[T]{}
 	first := true
 	dfMap2 := dfMap.Align()
 	for _, v := range dfMap2 {
 		if first {
-			df.Dates = v.Dates
+			df.Index = v.Index
 			df.ColNames = v.ColNames
 			df.Vals = v.Vals
 			first = false
 		} else {
-			if len(df.Dates) != len(v.Dates) ||
+			if len(df.Index) != len(v.Index) ||
 				!df.Start().Equal(v.Start()) ||
 				!df.End().Equal(v.End()) {
 				log.Panic().Time("df1.Start", df.Start()).Time("df1.End", df.End()).Time("df2.Start", v.Start()).Time("df2.End", v.End()).Msg("date indexes do not match - cannot merge into single dataframe")

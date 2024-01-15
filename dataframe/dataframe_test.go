@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/penny-vault/pv-api/dataframe"
-	"github.com/rs/zerolog/log"
 )
 
 const DIFFERENT = "Different"
@@ -30,11 +29,11 @@ const DIFFERENT = "Different"
 var _ = Describe("DataFrame", func() {
 	Context("with no values", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
-			df = &dataframe.DataFrame{}
+			df = &dataframe.DataFrame[time.Time]{}
 		})
 
 		It("has zero length", func() {
@@ -72,7 +71,7 @@ var _ = Describe("DataFrame", func() {
 
 	Context("with 2 years of values and a single column", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
@@ -84,9 +83,9 @@ var _ = Describe("DataFrame", func() {
 				dt = dt.AddDate(0, 0, 1)
 				vals[idx] = float64(idx)
 			}
-			df = &dataframe.DataFrame{
+			df = &dataframe.DataFrame[time.Time]{
 				ColNames: []string{"Col1"},
-				Dates:    dates,
+				Index:    dates,
 				Vals:     [][]float64{vals},
 			}
 		})
@@ -120,8 +119,8 @@ var _ = Describe("DataFrame", func() {
 			df = df.Trim(a, b)
 			Expect(df.Len()).To(Equal(expectedLen))
 			if expectedLen > 1 {
-				Expect(df.Dates[0]).To(Equal(expectedA), "expected begin date")
-				Expect(df.Dates[len(df.Dates)-1]).To(Equal(expectedB), "expected end date")
+				Expect(df.Index[0]).To(Equal(expectedA), "expected begin date")
+				Expect(df.Index[len(df.Index)-1]).To(Equal(expectedB), "expected end date")
 			}
 		},
 			Entry("whole range", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 12, 30, 0, 0, 0, 0, time.UTC), 730, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 12, 30, 0, 0, 0, 0, time.UTC)),
@@ -140,11 +139,10 @@ var _ = Describe("DataFrame", func() {
 
 		DescribeTable("test frequency filter", func(frequency dataframe.Frequency, expectedCnt int, expectedStart, expectedEnd time.Time) {
 			df = df.Frequency(frequency)
-			log.Info().Times("dates", df.Dates).Msg("lockhart")
 			Expect(df.Len()).To(Equal(expectedCnt), "expected count")
 			if expectedCnt > 0 {
-				Expect(df.Dates[0]).To(Equal(expectedStart), "expected start")
-				Expect(df.Dates[len(df.Dates)-1]).To(Equal(expectedEnd), "expected end")
+				Expect(df.Index[0]).To(Equal(expectedStart), "expected start")
+				Expect(df.Index[len(df.Index)-1]).To(Equal(expectedEnd), "expected end")
 			}
 		},
 			Entry("daily", dataframe.Daily, 522, time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2021, 12, 30, 0, 0, 0, 0, time.UTC)),
@@ -162,7 +160,7 @@ var _ = Describe("DataFrame", func() {
 
 	Context("with NaN values in dataframe", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
@@ -178,9 +176,9 @@ var _ = Describe("DataFrame", func() {
 					vals[idx] = math.NaN()
 				}
 			}
-			df = &dataframe.DataFrame{
+			df = &dataframe.DataFrame[time.Time]{
 				ColNames: []string{"Col1"},
-				Dates:    dates,
+				Index:    dates,
 				Vals:     [][]float64{vals},
 			}
 		})
@@ -194,7 +192,7 @@ var _ = Describe("DataFrame", func() {
 			df = df.Drop(math.NaN())
 			Expect(df.Len()).To(Equal(5), "length")
 			Expect(df.Vals[0]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals")
-			Expect(df.Dates).To(Equal([]time.Time{
+			Expect(df.Index).To(Equal([]time.Time{
 				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -206,7 +204,7 @@ var _ = Describe("DataFrame", func() {
 
 	Context("multi-column with NaN values in dataframe", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
@@ -234,9 +232,9 @@ var _ = Describe("DataFrame", func() {
 				}
 			}
 
-			df = &dataframe.DataFrame{
+			df = &dataframe.DataFrame[time.Time]{
 				ColNames: []string{"Col1", "Col2"},
-				Dates:    dates,
+				Index:    dates,
 				Vals:     [][]float64{vals1, vals2},
 			}
 		})
@@ -252,7 +250,7 @@ var _ = Describe("DataFrame", func() {
 			Expect(df.ColCount()).To(Equal(2), "col count")
 			Expect(df.Vals[0]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals1")
 			Expect(df.Vals[1]).To(Equal([]float64{0.0, 1.0, 2.0, 3.0, 4.0}), "vals2")
-			Expect(df.Dates).To(Equal([]time.Time{
+			Expect(df.Index).To(Equal([]time.Time{
 				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -264,7 +262,7 @@ var _ = Describe("DataFrame", func() {
 
 	Context("multi-column", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
@@ -278,9 +276,9 @@ var _ = Describe("DataFrame", func() {
 			vals1 := []float64{1, 2, 3, 4, 5, 6, 7, math.NaN(), 9, math.NaN()}
 			vals2 := []float64{1, 3, 2, 4, 6, 5, 6, math.NaN(), 10, 1}
 
-			df = &dataframe.DataFrame{
+			df = &dataframe.DataFrame[time.Time]{
 				ColNames: []string{"Col1", "Col2"},
-				Dates:    dates,
+				Index:    dates,
 				Vals:     [][]float64{vals1, vals2},
 			}
 		})
@@ -312,7 +310,7 @@ var _ = Describe("DataFrame", func() {
 			Expect(idxmax.Vals[0][8]).To(Equal(1.0), "vals[8]")
 			Expect(math.IsNaN(idxmax.Vals[0][9])).To(BeTrue(), "vals[9]")
 
-			Expect(idxmax.Dates).To(Equal([]time.Time{
+			Expect(idxmax.Index).To(Equal([]time.Time{
 				time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -329,7 +327,7 @@ var _ = Describe("DataFrame", func() {
 
 	Context("with 5 values for checking math functions", func() {
 		var (
-			df *dataframe.DataFrame
+			df *dataframe.DataFrame[time.Time]
 		)
 
 		BeforeEach(func() {
@@ -341,9 +339,9 @@ var _ = Describe("DataFrame", func() {
 				dt = dt.AddDate(0, 0, 1)
 				vals[idx] = float64(idx)
 			}
-			df = &dataframe.DataFrame{
+			df = &dataframe.DataFrame[time.Time]{
 				ColNames: []string{"Col1"},
-				Dates:    dates,
+				Index:    dates,
 				Vals:     [][]float64{vals},
 			}
 		})

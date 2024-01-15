@@ -29,8 +29,8 @@ import (
 //
 // Vals[0][0] = 1
 // Vals[0][1] = 2
-type DataFrame struct {
-	Dates    []time.Time
+type DataFrame[T time.Time | string] struct {
+	Index    []T
 	ColNames []string
 	Vals     [][]float64
 }
