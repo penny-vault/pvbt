@@ -34,20 +34,20 @@ type Momentum struct {
 
 // riskAdjustedMomentum calculates riskAdjustedMomentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
 // where riskFreeRate is the monthly yield of a risk free investment
-func riskAdjustedMomentum(period int, df, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+func riskAdjustedMomentum(period int, df, riskFreeRate *dataframe.DataFrame[time.Time]) *dataframe.DataFrame[time.Time] {
 	riskFreeRate = riskFreeRate.RollingSumScaled(period, -1.0/12.0)
 	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100).AddVec(riskFreeRate.Vals[0])
 }
 
 // momentum calculates momentum(period) = (df / lag(df, period) - 1) * 100
 // where riskFreeRate is the monthly yield of a risk free investment
-func momentum(period int, df *dataframe.DataFrame) *dataframe.DataFrame {
+func momentum(period int, df *dataframe.DataFrame[time.Time]) *dataframe.DataFrame[time.Time] {
 	return df.Div(df.Lag(period)).AddScalar(-1).MulScalar(100)
 }
 
 // Momentum631 computes the 6-3-1 momentum of each column in df
 // momentum(period) = (df / lag(df, period) - 1) * 100 - riskFreeRate
-func Momentum631(prices *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame) *dataframe.DataFrame {
+func Momentum631(prices *dataframe.DataFrame[time.Time], riskFreeRate *dataframe.DataFrame[time.Time]) *dataframe.DataFrame[time.Time] {
 	momentum6 := riskAdjustedMomentum(6, prices, riskFreeRate)
 	momentum3 := riskAdjustedMomentum(3, prices, riskFreeRate)
 	momentum1 := riskAdjustedMomentum(1, prices, riskFreeRate)
@@ -57,7 +57,7 @@ func Momentum631(prices *dataframe.DataFrame, riskFreeRate *dataframe.DataFrame)
 }
 
 // Momentum12631 computes the equal weighted average momentum score over 1-, 3-, 6-, and 12-month periods
-func Momentum12631(prices *dataframe.DataFrame) *dataframe.DataFrame {
+func Momentum12631(prices *dataframe.DataFrame[time.Time]) *dataframe.DataFrame[time.Time] {
 	momentum12 := momentum(12, prices).MulScalar(1.0 / 100.0)
 	momentum6 := momentum(6, prices).MulScalar(2.0 / 100.0)
 	momentum3 := momentum(3, prices).MulScalar(4.0 / 100.0)
@@ -67,7 +67,7 @@ func Momentum12631(prices *dataframe.DataFrame) *dataframe.DataFrame {
 	return avgMomentum
 }
 
-func (m *Momentum) IndicatorForPeriod(_ context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error) {
+func (m *Momentum) IndicatorForPeriod(_ context.Context, start time.Time, end time.Time) (*dataframe.DataFrame[time.Time], error) {
 	begin := start.AddDate(0, -6, 0)
 
 	// Add the risk free asset

@@ -27,5 +27,5 @@ var (
 )
 
 type Indicator interface {
-	IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame, error)
+	IndicatorForPeriod(ctx context.Context, start time.Time, end time.Time) (*dataframe.DataFrame[time.Time], error)
 }

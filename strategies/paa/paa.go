@@ -60,8 +60,8 @@ type KellersProtectiveAssetAllocation struct {
 	protectionFactor   int
 	topN               int
 	lookback           int
-	prices             *dataframe.DataFrame
-	momentum           *dataframe.DataFrame
+	prices             *dataframe.DataFrame[time.Time]
+	momentum           *dataframe.DataFrame[time.Time]
 	schedule           *tradecron.TradeCron
 }
 

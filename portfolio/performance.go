@@ -763,7 +763,7 @@ func (perf *Performance) CalculateThrough(ctx context.Context, pm *Model, throug
 	prevDate := prevMeasurement.Time
 	manager := data.GetManagerInstance()
 	tradingDaysDf := manager.TradingDays(calculationStart, through)
-	tradingDays := tradingDaysDf.Dates
+	tradingDays := tradingDaysDf.Index
 
 	// get transaction start index
 	trxIdx := pm.transactionIndexForDate(calculationStart)

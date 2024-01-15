@@ -162,7 +162,7 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, begin
 	manager := data.GetManagerInstance()
 	tradeDaysDf := manager.TradingDays(begin, end)
 	tradeDaysDf = tradeDaysDf.Frequency(mdep.Period)
-	tradeDays := tradeDaysDf.Dates
+	tradeDays := tradeDaysDf.Index
 
 	indicator, err := mdep.getRiskOnOffIndicator(ctx, begin, end)
 	if err != nil {
@@ -199,8 +199,8 @@ func (mdep *MomentumDrivenEarningsPrediction) Compute(ctx context.Context, begin
 	return targetPortfolio, predictedPortfolio, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, begin, end time.Time) (*dataframe.DataFrame, error) {
-	var indicator *dataframe.DataFrame
+func (mdep *MomentumDrivenEarningsPrediction) getRiskOnOffIndicator(ctx context.Context, begin, end time.Time) (*dataframe.DataFrame[time.Time], error) {
+	var indicator *dataframe.DataFrame[time.Time]
 
 	subLog := log.With().Str("Strategy", "mdep").Logger()
 
@@ -262,7 +262,7 @@ func getMDEPAssets(ctx context.Context, day time.Time, numAssets int, db pgx.Tx)
 	return targetMap, nil
 }
 
-func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame, db pgx.Tx) (data.PortfolioPlan, error) {
+func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.Context, tradeDays []time.Time, riskOn *dataframe.DataFrame[time.Time], db pgx.Tx) (data.PortfolioPlan, error) {
 	_, span := otel.Tracer(opentelemetry.Name).Start(ctx, "mdep.buildTargetPortfolio")
 	defer span.End()
 
@@ -285,7 +285,7 @@ func (mdep *MomentumDrivenEarningsPrediction) buildTargetPortfolio(ctx context.C
 		}
 
 		// check if risk indicator should be updated
-		riskDate = riskOn.Dates[riskIdx]
+		riskDate = riskOn.Index[riskIdx]
 		if !day.Before(riskDate) {
 			riskIndicator = riskOn.Vals[0][riskIdx] > 0
 			riskIdx++

@@ -48,10 +48,10 @@ var (
 
 type AcceleratingDualMomentum struct {
 	inTickers    []*data.Security
-	prices       *dataframe.DataFrame
+	prices       *dataframe.DataFrame[time.Time]
 	outTickers   []*data.Security
-	riskFreeRate *dataframe.DataFrame
-	momentum     *dataframe.DataFrame
+	riskFreeRate *dataframe.DataFrame[time.Time]
+	momentum     *dataframe.DataFrame[time.Time]
 	schedule     *tradecron.TradeCron
 }
 
@@ -197,7 +197,7 @@ func (adm *AcceleratingDualMomentum) Compute(ctx context.Context, begin, end tim
 
 	// create investment plan
 	targetPortfolio := data.PortfolioPlan{}
-	for rowIdx, date := range inMarketIdxMax.Dates {
+	for rowIdx, date := range inMarketIdxMax.Index {
 		inMarketIdx := int(inMarketIdxMax.Vals[0][rowIdx])
 		var security data.Security
 		if inMarket.Vals[inMarketIdx][rowIdx] < 0.0 {

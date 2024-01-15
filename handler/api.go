@@ -163,7 +163,7 @@ func Benchmark(c *fiber.Ctx) (resp error) {
 			SecurityObject: *security,
 			MetricObject:   data.MetricAdjustedClose,
 		}.String()]
-		startDate = df.Dates[0]
+		startDate = df.Index[0]
 	}
 
 	target := data.PortfolioPlan{

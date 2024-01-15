@@ -35,7 +35,7 @@ var _ = Describe("Momentum", Ordered, func() {
 	var (
 		dbPool    pgxmock.PgxConnIface
 		momentum  indicators.Indicator
-		indicator *dataframe.DataFrame
+		indicator *dataframe.DataFrame[time.Time]
 		tz        *time.Location
 		err       error
 	)
@@ -109,7 +109,7 @@ var _ = Describe("Momentum", Ordered, func() {
 			})
 
 			It("should have correct starting date", func() {
-				val := indicator.Dates[0]
+				val := indicator.Index[0]
 				Expect(val).To(Equal(time.Date(2019, 7, 31, 16, 0, 0, 0, tz)))
 			})
 
@@ -119,7 +119,7 @@ var _ = Describe("Momentum", Ordered, func() {
 			})
 
 			It("should have correct ending date", func() {
-				val := indicator.Dates[17]
+				val := indicator.Index[17]
 				Expect(val).To(Equal(time.Date(2020, 12, 31, 16, 0, 0, 0, tz)))
 			})
 		})

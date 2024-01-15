@@ -146,7 +146,7 @@ func NewPortfolio(name string, startDate time.Time, initial float64) *Model {
 	return &model
 }
 
-func (pm *Model) processDividends(dividends dataframe.Map) []*Transaction {
+func (pm *Model) processDividends(dividends dataframe.Map[time.Time]) []*Transaction {
 	addTransactions := make([]*Transaction, 0, len(dividends))
 
 	// for each holding check if there are splits
@@ -156,7 +156,7 @@ func (pm *Model) processDividends(dividends dataframe.Map) []*Transaction {
 			continue
 		}
 
-		for idx, date := range v.Dates {
+		for idx, date := range v.Index {
 			// it's in range
 			dividend := v.Vals[0][idx]
 			nShares := pm.holdings[securityMetric.SecurityObject]
@@ -185,7 +185,7 @@ func (pm *Model) processDividends(dividends dataframe.Map) []*Transaction {
 	return addTransactions
 }
 
-func (pm *Model) processSplits(splits dataframe.Map) []*Transaction {
+func (pm *Model) processSplits(splits dataframe.Map[time.Time]) []*Transaction {
 	addTransactions := make([]*Transaction, 0, len(splits))
 
 	// for each holding check if there are splits
@@ -195,7 +195,7 @@ func (pm *Model) processSplits(splits dataframe.Map) []*Transaction {
 			continue
 		}
 
-		for idx, date := range v.Dates {
+		for idx, date := range v.Index {
 			// it's in range
 			splitFactor := v.Vals[0][idx]
 			nShares := pm.holdings[securityMetric.SecurityObject]

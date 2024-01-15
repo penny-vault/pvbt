@@ -83,7 +83,7 @@ func GetManagerInstance() *Manager {
 }
 
 // GetMetrics returns metrics for the requested securities over the specified time range
-func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.Map, error) {
+func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, begin, end time.Time) (dataframe.Map[time.Time], error) {
 	ctx := context.Background()
 	subLog := log.With().Time("Begin", begin).Time("End", end).Logger()
 
@@ -130,7 +130,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	dates := manager.TradingDaysAtFrequency(dataframe.Daily, begin, modifiedEnd)
 
 	if len(dates) == 0 {
-		return dataframe.Map{}, nil
+		return dataframe.Map[time.Time]{}, nil
 	}
 
 	myBegin := dates[0]
@@ -174,7 +174,7 @@ func (manager *Manager) GetMetrics(securities []*Security, metrics []Metric, beg
 	}
 
 	// get specific time period
-	dfMap := make(dataframe.Map)
+	dfMap := make(dataframe.Map[time.Time])
 	for _, security := range normalizedSecurities {
 		for _, metric := range metrics {
 			df := manager.metricCache.GetPartial(security, metric, begin, end)
@@ -205,7 +205,7 @@ func (manager *Manager) cacheFetchOnOrBefore(security *Security, metric Metric, 
 				if len(last.Vals) < 1 || len(last.Vals[0]) < 1 {
 					return math.NaN(), time.Time{}, false
 				}
-				return last.Vals[0][0], last.Dates[0], true
+				return last.Vals[0][0], last.Index[0], true
 			}
 			log.Error().Err(err).Object("LastInterval", lastInterval).Msg("error while fetching value from cache in GetMetricOnOrBefore in second query")
 		} else {
@@ -321,9 +321,9 @@ func (manager *Manager) SetLRU(key string, val []byte) {
 }
 
 // TradingDays returns a dataframe over the specified date period, all values in the dataframe are 0
-func (manager *Manager) TradingDays(begin, end time.Time) *dataframe.DataFrame {
-	df := &dataframe.DataFrame{
-		Dates:    manager.tradingDays,
+func (manager *Manager) TradingDays(begin, end time.Time) *dataframe.DataFrame[time.Time] {
+	df := &dataframe.DataFrame[time.Time]{
+		Index:    manager.tradingDays,
 		Vals:     [][]float64{make([]float64, len(manager.tradingDays))},
 		ColNames: []string{"zeros"},
 	}

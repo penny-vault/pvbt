@@ -62,9 +62,9 @@ type KellersDefensiveAssetAllocation struct {
 	topT               int64
 
 	// class variables
-	momentum           *dataframe.DataFrame
+	momentum           *dataframe.DataFrame[time.Time]
 	predictedPortfolio *data.SecurityAllocation
-	prices             *dataframe.DataFrame
+	prices             *dataframe.DataFrame[time.Time]
 	schedule           *tradecron.TradeCron
 	targetPortfolio    data.PortfolioPlan
 }

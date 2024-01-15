@@ -65,7 +65,7 @@ func (req *Request) Metrics(metrics ...Metric) *Request {
 
 // Between queries the metric data store and returns a dataframe with metrics between the specified dates
 // columns are named `CompositeFigi:MetricName`
-func (req *Request) Between(a, b time.Time) (dataframe.Map, error) {
+func (req *Request) Between(a, b time.Time) (dataframe.Map[time.Time], error) {
 	manager := GetManagerInstance()
 	dfMap, err := manager.GetMetrics(req.securities, req.metricsArray(), a, b)
 	if err != nil {
@@ -100,7 +100,7 @@ func (req *Request) OnSingle(a time.Time) (float64, error) {
 }
 
 // On returns the price for the requested date
-func (req *Request) On(a time.Time) (map[SecurityMetric]float64, error) {
+func (req *Request) On(a time.Time) (SecurityMap, error) {
 	manager := GetManagerInstance()
 
 	start := time.Date(a.Year(), a.Month(), a.Day(), 0, 0, 0, 0, common.GetTimezone())

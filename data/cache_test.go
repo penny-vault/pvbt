@@ -37,7 +37,7 @@ func tz() *time.Location {
 type segment struct {
 	begin int
 	end   int
-	df    *dataframe.DataFrame
+	df    *dataframe.DataFrame[time.Time]
 }
 
 var _ = Describe("Cache", func() {
@@ -65,8 +65,8 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("can get all values available", func() {
-			df := &dataframe.DataFrame{
-				Dates: []time.Time{
+			df := &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -79,7 +79,7 @@ var _ = Describe("Cache", func() {
 			df2, err := cache.Get(security, data.MetricAdjustedClose, dates[125], dates[len(dates)-1])
 			Expect(err).To(BeNil(), "set does not return error")
 			Expect(df2.Len()).To(BeNumerically("==", 3))
-			Expect(df2.Dates).To(Equal([]time.Time{
+			Expect(df2.Index).To(Equal([]time.Time{
 				time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -88,8 +88,8 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("can get subset of values available (left)", func() {
-			df := &dataframe.DataFrame{
-				Dates: []time.Time{
+			df := &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -102,7 +102,7 @@ var _ = Describe("Cache", func() {
 			df2, err := cache.Get(security, data.MetricAdjustedClose, dates[125], time.Date(2022, 8, 8, 0, 0, 0, 0, tz()))
 			Expect(err).To(BeNil(), "set does not return error")
 			Expect(df2.Len()).To(BeNumerically("==", 2))
-			Expect(df2.Dates).To(Equal([]time.Time{
+			Expect(df2.Index).To(Equal([]time.Time{
 				time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 			}))
@@ -110,8 +110,8 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("can get a subset of values available (right)", func() {
-			df := &dataframe.DataFrame{
-				Dates: []time.Time{
+			df := &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -124,15 +124,15 @@ var _ = Describe("Cache", func() {
 			df2, err := cache.Get(security, data.MetricAdjustedClose, time.Date(2022, 8, 9, 0, 0, 0, 0, tz()), dates[len(dates)-1])
 			Expect(err).To(BeNil(), "set does not return error")
 			Expect(df2.Len()).To(BeNumerically("==", 1))
-			Expect(df2.Dates).To(Equal([]time.Time{
+			Expect(df2.Index).To(Equal([]time.Time{
 				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 			}))
 			Expect(df2.Vals).To(Equal([][]float64{{9}}))
 		})
 
 		It("can get a subset of values", func() {
-			df := &dataframe.DataFrame{
-				Dates: []time.Time{
+			df := &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2022, 8, 7, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -145,7 +145,7 @@ var _ = Describe("Cache", func() {
 			df2, err := cache.Get(security, data.MetricAdjustedClose, time.Date(2022, 8, 8, 0, 0, 0, 0, tz()), time.Date(2022, 8, 8, 0, 0, 0, 0, tz()))
 			Expect(err).To(BeNil(), "set does not return error")
 			Expect(df2.Len()).To(BeNumerically("==", 1))
-			Expect(df2.Dates).To(Equal([]time.Time{
+			Expect(df2.Index).To(Equal([]time.Time{
 				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 			}))
 			Expect(df2.Vals).To(Equal([][]float64{{8}}))
@@ -154,18 +154,18 @@ var _ = Describe("Cache", func() {
 		It("should merge overlapping cache items with local dates", func() {
 			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
 
 			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 1, 20, 0, 0, 0, 0, tz()), time.Date(2022, 8, 21, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 1, 4, 0, 0, 0, 0, tz()), time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 1, 4, 0, 0, 0, 0, tz()), time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.39, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
@@ -184,9 +184,9 @@ var _ = Describe("Cache", func() {
 		It("should merge overlapping cache items when only extending the covered period (left)", func() {
 			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
@@ -194,9 +194,9 @@ var _ = Describe("Cache", func() {
 			// second cache period is not a superset but has more dates covered on the left side
 			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 4, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 18, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
@@ -215,9 +215,9 @@ var _ = Describe("Cache", func() {
 		It("should merge overlapping cache items when only extending the covered period (right)", func() {
 			err := cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 11, 21, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
@@ -225,9 +225,9 @@ var _ = Describe("Cache", func() {
 			// second cache period is not a superset but has more dates covered on the left side
 			err = cache.SetWithLocalDates(security, data.MetricDividendCash,
 				time.Date(2022, 6, 14, 0, 0, 0, 0, tz()), time.Date(2022, 12, 18, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 6, 27, 0, 0, 0, 0, tz()), time.Date(2022, 7, 12, 0, 0, 0, 0, tz()), time.Date(2022, 7, 28, 0, 0, 0, 0, tz()), time.Date(2022, 11, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{0.4, 0.4, 0.4, 0.4}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
@@ -272,8 +272,8 @@ var _ = Describe("Cache", func() {
 		})
 
 		It("can set periods where the covered period and overall period are not equal", func() {
-			df := &dataframe.DataFrame{
-				Dates: []time.Time{
+			df := &dataframe.DataFrame[time.Time]{
+				Index: []time.Time{
 					time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 					time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
@@ -287,8 +287,8 @@ var _ = Describe("Cache", func() {
 			item := cacheItems[0]
 			Expect(item.Period.Begin).To(Equal(dates[0]), "has correct period begin")
 			Expect(item.Period.End).To(Equal(dates[6]), "has correct period end")
-			Expect(item.CoveredPeriod.Begin).To(Equal(df.Dates[0]), "has correct covered period begin")
-			Expect(item.CoveredPeriod.End).To(Equal(df.Dates[2]), "has correct covered period end")
+			Expect(item.CoveredPeriod.Begin).To(Equal(df.Index[0]), "has correct covered period begin")
+			Expect(item.CoveredPeriod.End).To(Equal(df.Index[2]), "has correct covered period end")
 		})
 
 		DescribeTable("with different types of merges",
@@ -314,28 +314,28 @@ var _ = Describe("Cache", func() {
 				for idx := range items {
 					Expect(items[idx].Period.Begin).To(Equal(time.Date(2022, 8, expectedSegs[idx].begin, 0, 0, 0, 0, tz())), fmt.Sprintf("item %d period begin", idx))
 					Expect(items[idx].Period.End).To(Equal(time.Date(2022, 8, expectedSegs[idx].end, 0, 0, 0, 0, tz())), fmt.Sprintf("item %d period end", idx))
-					Expect(items[idx].CoveredPeriod.Begin).To(Equal(expectedSegs[idx].df.Dates[0]), fmt.Sprintf("item %d covered begin", idx))
-					Expect(items[idx].CoveredPeriod.End).To(Equal(expectedSegs[idx].df.Dates[len(expectedSegs[idx].df.Dates)-1]), fmt.Sprintf("item %d covered end", idx))
+					Expect(items[idx].CoveredPeriod.Begin).To(Equal(expectedSegs[idx].df.Index[0]), fmt.Sprintf("item %d covered begin", idx))
+					Expect(items[idx].CoveredPeriod.End).To(Equal(expectedSegs[idx].df.Index[len(expectedSegs[idx].df.Index)-1]), fmt.Sprintf("item %d covered end", idx))
 					Expect(items[idx].Values).To(Equal(expectedSegs[idx].df.Vals[0]), fmt.Sprintf("item %d values", idx))
 				}
 			},
 			Entry("touching covered period on left->right (both partial)",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -344,22 +344,22 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on left->right (right partial)",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -369,13 +369,13 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on left->right (left partial)",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
@@ -383,8 +383,8 @@ var _ = Describe("Cache", func() {
 						Vals: [][]float64{{3, 4, 5}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -394,21 +394,21 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on right->left (both partial)",
 				[]segment{
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -417,22 +417,22 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on right->left (right partial)",
 				[]segment{
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -442,22 +442,22 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on right->left (left partial)",
 				[]segment{
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4, 5}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -467,25 +467,25 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("touching covered period on left->left and right->right",
 				[]segment{
-					{3, 3, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 3, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -494,26 +494,26 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("non-touching covered period on left",
 				[]segment{
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4, 5}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
 				},
 				2, []segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -521,8 +521,8 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("converts a single segment with gaps into multiple segments",
 				[]segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -531,14 +531,14 @@ var _ = Describe("Cache", func() {
 						Vals: [][]float64{{1, 2, 4, 5}}}},
 				},
 				2, []segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
-					{3, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -546,21 +546,21 @@ var _ = Describe("Cache", func() {
 				}),
 			Entry("properly merges overlapping segments",
 				[]segment{
-					{1, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4, 5}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -569,22 +569,22 @@ var _ = Describe("Cache", func() {
 			),
 			Entry("overlapping segments 2",
 				[]segment{
-					{1, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4, 5}}}},
 				},
 				1, []segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
@@ -637,8 +637,8 @@ var _ = Describe("Cache", func() {
 
 			experiment.SampleDuration("simple set", func(_ int) {
 				cache = data.NewSecurityMetricCache(1024, dates)
-				err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame{
-					Dates:    dateIdx,
+				err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame[time.Time]{
+					Index:    dateIdx,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				})
@@ -646,8 +646,8 @@ var _ = Describe("Cache", func() {
 			}, gmeasure.SamplingConfig{N: 1000})
 
 			cache = data.NewSecurityMetricCache(1024, dates)
-			err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame{
-				Dates:    dateIdx,
+			err := cache.Set(security, data.MetricAdjustedClose, begin, end, &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			})
@@ -679,8 +679,8 @@ var _ = Describe("Cache", func() {
 				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 			}
 
-			df := &dataframe.DataFrame{
-				Dates:    dateIdx,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -704,8 +704,8 @@ var _ = Describe("Cache", func() {
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}
 
-				df := &dataframe.DataFrame{
-					Dates:    dateIdx,
+				df := &dataframe.DataFrame[time.Time]{
+					Index:    dateIdx,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				}
@@ -767,8 +767,8 @@ var _ = Describe("Cache", func() {
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}
 
-				df := &dataframe.DataFrame{
-					Dates:    dateIdx,
+				df := &dataframe.DataFrame[time.Time]{
+					Index:    dateIdx,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				}
@@ -833,8 +833,8 @@ var _ = Describe("Cache", func() {
 					time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 				}
 
-				df := &dataframe.DataFrame{
-					Dates:    dateIdx,
+				df := &dataframe.DataFrame[time.Time]{
+					Index:    dateIdx,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				}
@@ -919,14 +919,14 @@ var _ = Describe("Cache", func() {
 			},
 			Entry("when segments are non contiguous",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -935,14 +935,14 @@ var _ = Describe("Cache", func() {
 				2, 4, 5, []float64{4, 5}),
 			Entry("when segments are left contiguous",
 				[]segment{
-					{3, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
@@ -951,14 +951,14 @@ var _ = Describe("Cache", func() {
 				1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are right contiguous",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
-					{3, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
@@ -967,40 +967,40 @@ var _ = Describe("Cache", func() {
 				1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are left contiguous (single)",
 				[]segment{
-					{2, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{2, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
-					{1, 1, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 1, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1}}}},
 				}, 1, 1, 2, []float64{1, 2}),
 			Entry("when segments are right contiguous (single)",
 				[]segment{
-					{1, 1, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 1, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1}}}},
-					{2, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{2, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2}}}},
 				}, 1, 1, 2, []float64{1, 2}),
 			Entry("when segments are equal",
 				[]segment{
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4, 5}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -1008,14 +1008,14 @@ var _ = Describe("Cache", func() {
 				}, 1, 4, 5, []float64{4, 5}),
 			Entry("when segment A is a subset of segment B",
 				[]segment{
-					{3, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{3, 4}}}},
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -1026,8 +1026,8 @@ var _ = Describe("Cache", func() {
 				}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
 			Entry("when segment B is a subset of segment A",
 				[]segment{
-					{1, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -1035,8 +1035,8 @@ var _ = Describe("Cache", func() {
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2, 3, 4, 5}}}},
-					{3, 4, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{3, 4, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						},
@@ -1044,14 +1044,14 @@ var _ = Describe("Cache", func() {
 				}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
 			Entry("when segments are left contiguous (weekend)",
 				[]segment{
-					{8, 9, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{8, 9, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{8, 9}}}},
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
@@ -1059,14 +1059,14 @@ var _ = Describe("Cache", func() {
 				}, 1, 4, 9, []float64{4, 5, 8, 9}),
 			Entry("when segments are right contiguous (weekend)",
 				[]segment{
-					{4, 5, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{4, 5, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{4, 5}}}},
-					{8, 9, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{8, 9, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 						},
@@ -1074,14 +1074,14 @@ var _ = Describe("Cache", func() {
 				}, 1, 4, 9, []float64{4, 5, 8, 9}),
 			Entry("when segments are right contiguous with overlap",
 				[]segment{
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{1, 2}}}},
-					{2, 3, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{2, 3, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						},
@@ -1089,14 +1089,14 @@ var _ = Describe("Cache", func() {
 				}, 1, 1, 3, []float64{1, 2, 3}),
 			Entry("when segments are left contiguous with overlap",
 				[]segment{
-					{2, 3, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{2, 3, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						},
 						Vals: [][]float64{{2, 3}}}},
-					{1, 2, &dataframe.DataFrame{
-						Dates: []time.Time{
+					{1, 2, &dataframe.DataFrame[time.Time]{
+						Index: []time.Time{
 							time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 							time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						},
@@ -1107,16 +1107,16 @@ var _ = Describe("Cache", func() {
 		It("should collapse multiple overlapping cache items", func() {
 			// add two single item entries into the cache that are separated by a day
 			err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
-				time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+				time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{1}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
 			err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
-				time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+				time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{3}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1126,9 +1126,9 @@ var _ = Describe("Cache", func() {
 
 			// now add a *CacheItem that connects the previous two entries
 			err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
-				time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+				time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), &dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{2}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1153,16 +1153,16 @@ var _ = Describe("Cache", func() {
 		It("should not collapse if items don't overlap", func() {
 			// add two single item entries into the cache that are separated by a day
 			err := cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
-				time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+				time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), &dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{1}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
 			err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
-				time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame{
+				time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), &dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{3}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1173,9 +1173,9 @@ var _ = Describe("Cache", func() {
 			// now add a *CacheItem that connects the previous two entries
 			err = cache.Set(security, data.MetricAdjustedClose, time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 				time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{4}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1209,8 +1209,8 @@ var _ = Describe("Cache", func() {
 				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 			}
 
-			df := &dataframe.DataFrame{
-				Dates:    dateIdx,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -1255,8 +1255,8 @@ var _ = Describe("Cache", func() {
 				time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 			}
 
-			df := &dataframe.DataFrame{
-				Dates:    dateIdx,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -1276,8 +1276,8 @@ var _ = Describe("Cache", func() {
 				time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 			}
 
-			df := &dataframe.DataFrame{
-				Dates:    dateIdx,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -1294,8 +1294,8 @@ var _ = Describe("Cache", func() {
 				time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 			}
 
-			df2 := &dataframe.DataFrame{
-				Dates:    dateIdx2,
+			df2 := &dataframe.DataFrame[time.Time]{
+				Index:    dateIdx2,
 				Vals:     [][]float64{vals2},
 				ColNames: []string{"vals"},
 			}
@@ -1344,8 +1344,8 @@ var _ = Describe("Cache", func() {
 			localDates := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}
 			vals := []float64{4, 5}
 
-			df := &dataframe.DataFrame{
-				Dates:    localDates,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    localDates,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -1366,8 +1366,8 @@ var _ = Describe("Cache", func() {
 			localDates := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())}
 			vals := []float64{4}
 
-			df := &dataframe.DataFrame{
-				Dates:    localDates,
+			df := &dataframe.DataFrame[time.Time]{
+				Index:    localDates,
 				Vals:     [][]float64{vals},
 				ColNames: []string{"vals"},
 			}
@@ -1383,8 +1383,8 @@ var _ = Describe("Cache", func() {
 				dt := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())}
 				vals := []float64{5.2}
 
-				df := &dataframe.DataFrame{
-					Dates:    dt,
+				df := &dataframe.DataFrame[time.Time]{
+					Index:    dt,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				}
@@ -1441,8 +1441,8 @@ var _ = Describe("Cache", func() {
 				dt := []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz())}
 				vals := []float64{2}
 
-				df := &dataframe.DataFrame{
-					Dates:    dt,
+				df := &dataframe.DataFrame[time.Time]{
+					Index:    dt,
 					Vals:     [][]float64{vals},
 					ColNames: []string{"vals"},
 				}
@@ -1526,15 +1526,15 @@ var _ = Describe("Cache", func() {
 				Expect(res.Vals[0]).To(Equal(expectedVals))
 			},
 			Entry("when segments are non contiguous", []segment{
-				{1, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1, 2}},
 				}},
-				{4, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{4, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
@@ -1542,15 +1542,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 2, 4, 5, []float64{4, 5}),
 			Entry("when segments are left contiguous", []segment{
-				{3, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{3, 4}},
 				}},
-				{1, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
@@ -1558,15 +1558,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are right contiguous", []segment{
-				{1, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1, 2}},
 				}},
-				{3, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 					},
@@ -1574,43 +1574,43 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are left contiguous (single)", []segment{
-				{2, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{2, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{2}},
 				}},
-				{1, 1, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 1, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1}},
 				}},
 			}, 1, 1, 2, []float64{1, 2}),
 			Entry("when segments are right contiguous (single)", []segment{
-				{1, 1, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 1, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1}},
 				}},
-				{2, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{2, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{2}},
 				}},
 			}, 1, 1, 2, []float64{1, 2}),
 			Entry("when segments are equal", []segment{
-				{4, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{4, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{4, 5}},
 				}},
-				{4, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{4, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
@@ -1618,15 +1618,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 4, 5, []float64{4, 5}),
 			Entry("when segment A is a subset of segment B", []segment{
-				{3, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{3, 4}},
 				}},
-				{1, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -1637,8 +1637,8 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
 			Entry("when segment B is a subset of segment A", []segment{
-				{1, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -1647,8 +1647,8 @@ var _ = Describe("Cache", func() {
 					},
 					Vals: [][]float64{{1, 2, 3, 4, 5}},
 				}},
-				{3, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 					},
@@ -1656,15 +1656,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
 			Entry("when segments are left contiguous (weekend)", []segment{
-				{8, 9, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{8, 9, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{8, 9}},
 				}},
-				{4, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{4, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
@@ -1672,15 +1672,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 4, 9, []float64{4, 5, 8, 9}),
 			Entry("when segments are right contiguous (weekend)", []segment{
-				{4, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{4, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{4, 5}},
 				}},
-				{8, 9, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{8, 9, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 8, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 9, 0, 0, 0, 0, tz()),
 					},
@@ -1688,15 +1688,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 4, 9, []float64{4, 5, 8, 9}),
 			Entry("when segments are right contiguous with overlap", []segment{
-				{1, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1, 2}},
 				}},
-				{2, 3, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{2, 3, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					},
@@ -1704,16 +1704,16 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 3, []float64{1, 2, 3}),
 			Entry("when segments overlap by 2 items on the right", []segment{
-				{1, 3, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 3, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1, 2, 3}},
 				}},
-				{2, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{2, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
@@ -1722,15 +1722,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 4, []float64{1, 2, 3, 4}),
 			Entry("when segments are left contiguous with overlap", []segment{
-				{2, 3, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{2, 3, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{2, 3}},
 				}},
-				{1, 2, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 2, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 					},
@@ -1738,16 +1738,16 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 3, []float64{1, 2, 3}),
 			Entry("when segments are left contiguous with overlap (more items)", []segment{
-				{3, 5, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 5, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 5, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{3, 4, 5}},
 				}},
-				{1, 3, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 3, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
@@ -1756,15 +1756,15 @@ var _ = Describe("Cache", func() {
 				}},
 			}, 1, 1, 5, []float64{1, 2, 3, 4, 5}),
 			Entry("when segments are sparse but they overlap", []segment{
-				{1, 3, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{1, 3, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 					},
 					Vals: [][]float64{{1, 3}},
 				}},
-				{3, 4, &dataframe.DataFrame{
-					Dates: []time.Time{
+				{3, 4, &dataframe.DataFrame[time.Time]{
+					Index: []time.Time{
 						time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
 						time.Date(2022, 8, 4, 0, 0, 0, 0, tz()),
 					},
@@ -1776,17 +1776,17 @@ var _ = Describe("Cache", func() {
 			// add two single item entries into the cache that are separated by a day
 			err := cache.SetWithLocalDates(security, data.MetricAdjustedClose,
 				time.Date(2022, 8, 1, 0, 0, 0, 0, tz()), time.Date(2022, 8, 1, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 1, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{1}},
 				})
 			Expect(err).To(BeNil(), "error during first cache set")
 			err = cache.SetWithLocalDates(security, data.MetricAdjustedClose,
 				time.Date(2022, 8, 3, 0, 0, 0, 0, tz()), time.Date(2022, 8, 3, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 3, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{3}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1797,9 +1797,9 @@ var _ = Describe("Cache", func() {
 			// now add a *CacheItem that connects the previous two entries
 			err = cache.SetWithLocalDates(security, data.MetricAdjustedClose,
 				time.Date(2022, 8, 2, 0, 0, 0, 0, tz()), time.Date(2022, 8, 2, 0, 0, 0, 0, tz()),
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 2, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{{2}},
 				})
 			Expect(err).To(BeNil(), "error during second cache set")
@@ -1830,9 +1830,9 @@ var _ = Describe("Cache", func() {
 			vals := []float64{4, 5}
 
 			err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{vals},
 				})
 			Expect(err).To(BeNil(), "SetWithLocalDates error check")
@@ -1849,9 +1849,9 @@ var _ = Describe("Cache", func() {
 			vals := []float64{0, 1, 2}
 
 			err := cache.SetWithLocalDates(security, data.MetricAdjustedClose, begin, end,
-				&dataframe.DataFrame{
+				&dataframe.DataFrame[time.Time]{
 					ColNames: []string{"vals"},
-					Dates:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())},
+					Index:    []time.Time{time.Date(2022, 8, 4, 0, 0, 0, 0, tz()), time.Date(2022, 8, 5, 0, 0, 0, 0, tz()), time.Date(2022, 8, 6, 0, 0, 0, 0, tz())},
 					Vals:     [][]float64{vals},
 				})
 			Expect(errors.Is(err, data.ErrDataLargerThanCache)).To(BeTrue(), "error should be data larger than cache")

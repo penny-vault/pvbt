@@ -193,7 +193,7 @@ func extractFindEnd(beginIdx int, end time.Time, item *CacheItem, periodSubset [
 	return endIdx, noValuesFound
 }
 
-func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem, myKey string) *dataframe.DataFrame {
+func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem, myKey string) *dataframe.DataFrame[time.Time] {
 	periodSubset := cache.getPeriodSubset(item)
 	end = cache.adjustEndToCoveredPeriod(end, item)
 
@@ -224,8 +224,8 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 		}
 	}
 
-	df := &dataframe.DataFrame{
-		Dates:    dates,
+	df := &dataframe.DataFrame[time.Time]{
+		Index:    dates,
 		Vals:     vals,
 		ColNames: []string{myKey},
 	}
@@ -234,7 +234,7 @@ func (cache *SecurityMetricCache) extract(begin, end time.Time, item *CacheItem,
 }
 
 // Get returns the requested data over the range. If no data matches the hash key return ErrRangeDoesNotExist
-func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) (*dataframe.DataFrame, error) {
+func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, end time.Time) (*dataframe.DataFrame[time.Time], error) {
 	cache.locker.RLock()
 	defer cache.locker.RUnlock()
 
@@ -270,7 +270,7 @@ func (cache *SecurityMetricCache) Get(security *Security, metric Metric, begin, 
 }
 
 // GetPartial returns the requested data over the range. If the requested period only partially exists, return what is available.
-func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, begin, end time.Time) *dataframe.DataFrame {
+func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, begin, end time.Time) *dataframe.DataFrame[time.Time] {
 	cache.locker.RLock()
 	defer cache.locker.RUnlock()
 
@@ -289,9 +289,9 @@ func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, 
 
 	if err := requestedInterval.Valid(); err != nil {
 		log.Error().Err(err).Time("Begin", requestedInterval.Begin).Time("End", requestedInterval.End).Msg("cannot set cache value with invalid interval")
-		return &dataframe.DataFrame{
+		return &dataframe.DataFrame[time.Time]{
 			ColNames: []string{""},
-			Dates:    []time.Time{},
+			Index:    []time.Time{},
 			Vals:     [][]float64{{}},
 		}
 	}
@@ -306,21 +306,21 @@ func (cache *SecurityMetricCache) GetPartial(security *Security, metric Metric, 
 		}
 	}
 
-	return &dataframe.DataFrame{
+	return &dataframe.DataFrame[time.Time]{
 		ColNames: []string{""},
-		Dates:    []time.Time{},
+		Index:    []time.Time{},
 		Vals:     [][]float64{{}},
 	}
 }
 
 // Set adds the data for the specified security and metric to the cache
-func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
+func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame[time.Time]) error {
 	if len(df.Vals) == 0 || len(df.Vals[0]) == 0 {
 		return ErrNoData
 	}
 
 	// check if the dataframe's dates match those of the date index
-	startDate := dateOnly(df.Dates[0])
+	startDate := dateOnly(df.Index[0])
 	startIdx := sort.Search(len(cache.periods), func(i int) bool {
 		idxVal := cache.periods[i]
 		return (idxVal.After(startDate) || idxVal.Equal(startDate))
@@ -328,15 +328,15 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 
 	prevIdx := 0
 	offset := 0
-	for idx, date := range df.Dates {
+	for idx, date := range df.Index {
 		myIdx := idx + startIdx - offset
 		if !cache.periods[myIdx].Equal(date) {
-			df2 := &dataframe.DataFrame{
-				Dates:    df.Dates[prevIdx:idx],
+			df2 := &dataframe.DataFrame[time.Time]{
+				Index:    df.Index[prevIdx:idx],
 				Vals:     [][]float64{df.Vals[0][prevIdx:idx]},
 				ColNames: df.ColNames,
 			}
-			myEnd := df2.Dates[len(df2.Dates)-1]
+			myEnd := df2.Index[len(df2.Index)-1]
 			err := cache.SetMatched(security, metric, begin, myEnd, df2)
 			if err != nil {
 				return err
@@ -356,8 +356,8 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 		return cache.SetMatched(security, metric, begin, end, df)
 	}
 
-	df2 := &dataframe.DataFrame{
-		Dates:    df.Dates[prevIdx:],
+	df2 := &dataframe.DataFrame[time.Time]{
+		Index:    df.Index[prevIdx:],
 		Vals:     [][]float64{df.Vals[0][prevIdx:]},
 		ColNames: df.ColNames,
 	}
@@ -366,7 +366,7 @@ func (cache *SecurityMetricCache) Set(security *Security, metric Metric, begin, 
 }
 
 // SetMatched adds the data for the specified security and metric to the cache assuming df's date frame matches cache.periods exactly
-func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
+func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame[time.Time]) error {
 	cache.locker.Lock()
 	defer cache.locker.Unlock()
 
@@ -402,8 +402,8 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 
 	// check if the covered period differs from the interval, if it does set it
 	coveredInterval := &Interval{
-		Begin: dateOnly(df.Dates[0]),
-		End:   dateOnly(df.Dates[len(df.Dates)-1]),
+		Begin: dateOnly(df.Index[0]),
+		End:   dateOnly(df.Index[len(df.Index)-1]),
 	}
 
 	if err := interval.Valid(); err != nil {
@@ -453,14 +453,14 @@ func (cache *SecurityMetricCache) SetMatched(security *Security, metric Metric, 
 }
 
 // Set adds the data for the specified security and metric to the cache
-func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame) error {
+func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric Metric, begin, end time.Time, df *dataframe.DataFrame[time.Time]) error {
 	cache.locker.Lock()
 	defer cache.locker.Unlock()
 
 	begin = dateOnly(begin)
 	end = dateOnly(end)
 
-	if len(df.Vals) > 0 && len(df.Vals[0]) != len(df.Dates) {
+	if len(df.Vals) > 0 && len(df.Vals[0]) != len(df.Index) {
 		return ErrDateLengthDoesNotMatch
 	}
 
@@ -488,10 +488,10 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 	}
 
 	var coveredInterval *Interval
-	if len(df.Dates) > 0 {
+	if len(df.Index) > 0 {
 		coveredInterval = &Interval{
-			Begin: dateOnly(df.Dates[0]),
-			End:   dateOnly(df.Dates[len(df.Dates)-1]),
+			Begin: dateOnly(df.Index[0]),
+			End:   dateOnly(df.Index[len(df.Index)-1]),
 		}
 	} else {
 		coveredInterval = &Interval{
@@ -532,7 +532,7 @@ func (cache *SecurityMetricCache) SetWithLocalDates(security *Security, metric M
 		Period:        interval,
 		CoveredPeriod: coveredInterval,
 		isLocalDate:   true,
-		localDates:    df.Dates,
+		localDates:    df.Index,
 		startIdx:      startIdx,
 	}
 

@@ -19,6 +19,8 @@ const (
 	CashAsset = "$CASH"
 )
 
+type SecurityMap map[SecurityMetric]float64
+
 // Security represents a tradeable asset
 type Security struct {
 	Ticker        string `json:"ticker"`
@@ -52,4 +54,7 @@ const (
 	MetricAdjustedClose Metric = "AdjustedClose"
 	MetricDividendCash  Metric = "DividendCash"
 	MetricSplitFactor   Metric = "SplitFactor"
+
+	FundamentalWorkingCapital Metric = "working_capital"
+	FundamentalMarketCap      Metric = "market_cap"
 )
