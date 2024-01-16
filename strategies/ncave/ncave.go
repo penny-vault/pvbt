@@ -60,13 +60,18 @@ func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
 
 func equitiesThatMeetNCAVCriteria(ctx context.Context, dt time.Time) (*data.SecurityAllocation, error) {
 	// get the 3000 most liquid securities
-	/*
-		securities, err := data.NewUSTradeableEquities().Limit(3000).Securities(ctx, dt)
-		if err != nil {
-			log.Error().Err(err).Msg("could not get tradeable equities")
-			return nil, err
-		}
-	*/
+	securities, err := data.NewUSTradeableEquities().Securities(ctx, dt)
+	if err != nil {
+		log.Error().Err(err).Msg("could not get tradeable equities")
+		return nil, err
+	}
+
+	tickers := make([]string, len(securities))
+	for idx, sec := range securities {
+		tickers[idx] = sec.Ticker
+	}
+
+	log.Info().Strs("Tickers", tickers).Time("ForDate", dt).Msg("getting ncav for specified date")
 
 	// get fundamental data
 	//dfMap, err := data.NewDataRequest(securities...).Metrics(data.FundamentalMarketCap, data.FundamentalWorkingCapital).On(dt)
@@ -98,7 +103,7 @@ func (ncave *NetCurrentAssetValue) Compute(ctx context.Context, begin, end time.
 			log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
 		}
 		targetPortfolio = append(targetPortfolio, securityAllocation)
-		currDate = ncave.schedule.Next(begin)
+		currDate = ncave.schedule.Next(currDate.Add(time.Second))
 	}
 
 	// compute the predicted asset

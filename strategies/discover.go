@@ -27,6 +27,7 @@ import (
 	"github.com/penny-vault/pv-api/strategies/adm"
 	"github.com/penny-vault/pv-api/strategies/daa"
 	"github.com/penny-vault/pv-api/strategies/mdep"
+	"github.com/penny-vault/pv-api/strategies/ncave"
 	"github.com/penny-vault/pv-api/strategies/paa"
 	"github.com/penny-vault/pv-api/strategies/strategy"
 
@@ -52,6 +53,7 @@ func InitializeStrategyMap() {
 	Register("daa", daa.New)
 	Register("mdep", mdep.New)
 	Register("paa", paa.New)
+	Register("ncave", ncave.New)
 }
 
 func Register(strategyPkg string, factory strategy.Factory) {
@@ -100,7 +102,7 @@ func LoadStrategyMetricsFromDb() {
 	ctx := context.Background()
 	for ii := range StrategyList {
 		strat := StrategyList[ii]
-		log.Info().Str("StrategyName", strat.Name).Msg("Refresh metrics for strategy")
+		log.Debug().Str("StrategyName", strat.Name).Msg("Refresh metrics for strategy")
 
 		// load results from the database
 		trx, err := database.TrxForUser(ctx, "pvuser")
@@ -144,5 +146,5 @@ func LoadStrategyMetricsFromDb() {
 			}
 		}
 	}
-	log.Info().Msg("Finished loading portfolio metrics")
+	log.Debug().Msg("Finished loading portfolio metrics")
 }

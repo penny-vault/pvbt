@@ -63,7 +63,7 @@ func (usEquities *USTradeableEquities) Securities(ctx context.Context, forDate t
 	// First filter to the top equities by marketcap that are traded as 'Common Stock' (as defined by their 10-Q filing)
 	// the default setting of including the top 3000 securities (roughly like the russell 3000) means that approximately
 	// 98% of the tradeable universe is included
-	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi, close, market_cap FROM eod WHERE event_date='$1' AND asset_type='Common Stock' AND market_cap != 'NaN'::float8 ORDER BY market_cap DESC LIMIT $2", forDate, usEquities.limit)
+	rows, err := trx.Query(ctx, "SELECT ticker, composite_figi, close, market_cap FROM eod WHERE event_date=$1 AND asset_type='Common Stock' AND market_cap != 'NaN'::float8 ORDER BY market_cap DESC LIMIT $2", forDate, usEquities.limit)
 	if err != nil {
 		log.Error().Stack().Err(err).Msg("could not query for US Equities Tradeable Universe")
 		if err := trx.Rollback(ctx); err != nil {

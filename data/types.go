@@ -54,7 +54,21 @@ const (
 	MetricAdjustedClose Metric = "AdjustedClose"
 	MetricDividendCash  Metric = "DividendCash"
 	MetricSplitFactor   Metric = "SplitFactor"
+)
 
-	FundamentalWorkingCapital Metric = "working_capital"
-	FundamentalMarketCap      Metric = "market_cap"
+type FundamentalMetric string
+
+const (
+	FundamentalWorkingCapital FundamentalMetric = "working_capital"
+	FundamentalMarketCap      FundamentalMetric = "market_cap"
+)
+
+type ReportingPeriod string
+
+const (
+	PeriodQ1     ReportingPeriod = "Q1"
+	PeriodQ2     ReportingPeriod = "Q2"
+	PeriodQ3     ReportingPeriod = "Q3"
+	PeriodQ4     ReportingPeriod = "Q4"
+	PeriodAnnual ReportingPeriod = "Annual"
 )
