@@ -40,7 +40,7 @@ type NetCurrentAssetValue struct {
 
 // New Construct a new Accelerating Dual Momentum strategy
 func New(args map[string]json.RawMessage) (strategy.Strategy, error) {
-	schedule, err := tradecron.New("@monthbegin 0 10 * 6", tradecron.RegularHours)
+	schedule, err := tradecron.New("@monthbegin 0 10 * 7", tradecron.RegularHours)
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +97,15 @@ func (ncave *NetCurrentAssetValue) Compute(ctx context.Context, begin, end time.
 	// Iterate over every investment period
 	currDate := ncave.schedule.Next(begin)
 	for currDate.Before(end) || currDate.Equal(end) {
-		log.Debug().Time("InvestmentDate", currDate).Msg("calculating holdings")
-		securityAllocation, err := equitiesThatMeetNCAVCriteria(ctx, currDate)
-		if err != nil {
-			log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
-		}
-		targetPortfolio = append(targetPortfolio, securityAllocation)
-		currDate = ncave.schedule.Next(currDate.Add(time.Second))
+		log.Info().Time("InvestmentDate", currDate).Msg("calculating holdings")
+		/*
+			securityAllocation, err := equitiesThatMeetNCAVCriteria(ctx, currDate)
+			if err != nil {
+				log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
+			}
+			targetPortfolio = append(targetPortfolio, securityAllocation)
+		*/
+		currDate = ncave.schedule.Next(currDate.Add(25 * time.Hour))
 	}
 
 	// compute the predicted asset
