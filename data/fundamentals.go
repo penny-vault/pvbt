@@ -96,7 +96,7 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 			}
 
 			if err := rows.Scan(args...); err != nil {
-				log.Error().Err(err).Msg("error scanning value from query")
+				log.Error().Err(err).Msg("error scanning value from query in GetFundamentals")
 				return nil, err
 			}
 
@@ -108,6 +108,8 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 
 			df.InsertMap(compositeFigi, vals)
 		}
+	} else {
+		log.Error().Err(err).Str("CalendarDate", calendarDate).Str("SQL", sql).Msg("Query fundamentals database failed in GetFundamentals")
 	}
 
 	return df, nil
