@@ -105,7 +105,7 @@ func (ncave *NetCurrentAssetValue) Compute(ctx context.Context, begin, end time.
 			}
 			targetPortfolio = append(targetPortfolio, securityAllocation)
 		*/
-		currDate = ncave.schedule.Next(currDate.Add(25 * time.Hour))
+		currDate = ncave.schedule.Next(currDate)
 	}
 
 	// compute the predicted asset

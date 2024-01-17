@@ -139,9 +139,9 @@ func (ms *MarketStatus) NextFirstTradingDayOfWeek(t time.Time) time.Time {
 	return t2
 }
 
-// NextLastTradingDayOfMonth returns the last trading day of the specified month; where a trading day is defined
+// LastTradingDayOfMonth returns the last trading day of the specified month; where a trading day is defined
 // as a day the market is open
-func (ms *MarketStatus) NextLastTradingDayOfMonth(t time.Time) time.Time {
+func (ms *MarketStatus) LastTradingDayOfMonth(t time.Time) time.Time {
 	firstOfMonth := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, ms.tz)
 	lastOfMonth := firstOfMonth.AddDate(0, 1, -1)
 
@@ -160,10 +160,13 @@ func (ms *MarketStatus) NextLastTradingDayOfMonth(t time.Time) time.Time {
 // NextLastTradingDayOfWeek returns the next last trading day of week
 func (ms *MarketStatus) NextLastTradingDayOfWeek(t time.Time) time.Time {
 	daysToFriday := time.Friday - t.Weekday()
+	if daysToFriday < 0 {
+		daysToFriday += 7
+	}
+
 	lastDayOfWeek := t.AddDate(0, 0, int(daysToFriday))
 
 	marketOpen := false
-
 	for !marketOpen {
 		marketOpen = ms.IsMarketDay(lastDayOfWeek)
 		if !marketOpen {
