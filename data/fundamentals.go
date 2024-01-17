@@ -63,7 +63,7 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 		calendarDate = fmt.Sprintf("%d-12-31", year)
 		dim = "As-Reported-Quarterly"
 	case PeriodAnnual:
-		calendarDate = fmt.Sprintf("%d-03-31", year)
+		calendarDate = fmt.Sprintf("%d-12-31", year)
 		dim = "As-Reported-Annual"
 	default:
 		calendarDate = fmt.Sprintf("%d-03-31", year)
@@ -72,7 +72,7 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 
 	figis := make([]string, 0, len(securities))
 	for _, security := range securities {
-		figis = append(figis, security.CompositeFigi)
+		figis = append(figis, fmt.Sprintf("'%s'", security.CompositeFigi))
 	}
 	figiStr := strings.Join(figis, ", ")
 
