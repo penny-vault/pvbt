@@ -69,6 +69,22 @@ func (df *DataFrame[T]) Append(other *DataFrame[T]) *DataFrame[T] {
 	return df
 }
 
+// AsMap creates a map with the index as the key and the specified column as the value
+func (df *DataFrame[T]) AsMap(colName string) map[T]float64 {
+	res := make(map[T]float64, df.Len())
+	colIdx := df.ColIndex(colName)
+	if colIdx == -1 {
+		// column does exist, return empty list
+		return res
+	}
+
+	for idx, rowKey := range df.Index {
+		res[rowKey] = df.Vals[colIdx][idx]
+	}
+
+	return res
+}
+
 // Breakout takes a dataframe with multiple columns and returns a map of dataframes, one per column
 func (df *DataFrame[T]) Breakout() Map[T] {
 	dfMap := Map[T]{}
@@ -80,6 +96,17 @@ func (df *DataFrame[T]) Breakout() Map[T] {
 		}
 	}
 	return dfMap
+}
+
+// Get index of specified column; returns -1 if column doesn't exist
+func (df *DataFrame[T]) ColIndex(colName string) int {
+	for idx, val := range df.ColNames {
+		if colName == val {
+			return idx
+		}
+	}
+
+	return -1
 }
 
 // ColCount returns the number of columns in the dataframe

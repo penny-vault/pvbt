@@ -18,6 +18,7 @@ package ncave
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	"github.com/goccy/go-json"
@@ -66,15 +67,18 @@ func equitiesThatMeetNCAVCriteria(ctx context.Context, dt time.Time) (*data.Secu
 		return nil, err
 	}
 
-	tickers := make([]string, len(securities))
-	for idx, sec := range securities {
-		tickers[idx] = sec.Ticker
-	}
-
-	log.Info().Strs("Tickers", tickers).Time("ForDate", dt).Msg("getting ncav for specified date")
+	log.Info().Int("NumTickers", len(securities)).Time("ForDate", dt).Msg("getting ncav for specified date")
 
 	// get fundamental data
-	//dfMap, err := data.NewDataRequest(securities...).Metrics(data.FundamentalMarketCap, data.FundamentalWorkingCapital).On(dt)
+	df, err := data.GetFundamentals(ctx, dt.Year(), data.PeriodQ1, securities, []data.FundamentalMetric{data.FundamentalWorkingCapital})
+	if err != nil {
+		log.Error().Err(err).Msg("error encountered in equitiesThatMeetNCAVCriteria")
+	}
+
+	df = df.Drop(math.NaN())
+	dfMap := df.AsMap(string(data.FundamentalWorkingCapital))
+
+	// get marketcap
 
 	// df.divide(Fundamentals.WorkingCapital, Fundamentals.MarketCap, "NCAV")
 	// df.Threshold(ncavThreshold)
@@ -98,13 +102,11 @@ func (ncave *NetCurrentAssetValue) Compute(ctx context.Context, begin, end time.
 	currDate := ncave.schedule.Next(begin)
 	for currDate.Before(end) || currDate.Equal(end) {
 		log.Info().Time("InvestmentDate", currDate).Msg("calculating holdings")
-		/*
-			securityAllocation, err := equitiesThatMeetNCAVCriteria(ctx, currDate)
-			if err != nil {
-				log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
-			}
-			targetPortfolio = append(targetPortfolio, securityAllocation)
-		*/
+		securityAllocation, err := equitiesThatMeetNCAVCriteria(ctx, currDate)
+		if err != nil {
+			log.Error().Err(err).Time("forDate", currDate).Msg("could not calculate NCAV/mv criteria for specified date")
+		}
+		targetPortfolio = append(targetPortfolio, securityAllocation)
 		currDate = ncave.schedule.Next(currDate)
 	}
 

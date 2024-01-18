@@ -76,14 +76,21 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 	}
 	figiStr := strings.Join(figis, ", ")
 
-	fields := strings.Join(any(metrics).([]string), ", ")
+	strMetrics := make([]string, len(metrics))
+	for idx, metric := range metrics {
+		strMetrics[idx] = string(metric)
+	}
+
+	fields := strings.Join(strMetrics, ", ")
 	sql := fmt.Sprintf("SELECT composite_figi, %s FROM fundamentals WHERE calendar_date=$1 AND dim=$2 AND composite_figi IN (%s) ORDER BY event_date, ticker", fields, figiStr)
 
 	df := &dataframe.DataFrame[string]{
-		ColNames: any(metrics).([]string),
+		Index:    make([]string, 0),
+		ColNames: strMetrics,
+		Vals:     make([][]float64, len(strMetrics)),
 	}
 
-	if rows, err := trx.Query(ctx, sql, calendarDate, dim); err != nil {
+	if rows, err := trx.Query(ctx, sql, calendarDate, dim); err == nil {
 		for rows.Next() {
 			var compositeFigi string
 
@@ -109,7 +116,15 @@ func GetFundamentals(ctx context.Context, year int, period ReportingPeriod, secu
 			df.InsertMap(compositeFigi, vals)
 		}
 	} else {
-		log.Error().Err(err).Str("CalendarDate", calendarDate).Str("SQL", sql).Msg("Query fundamentals database failed in GetFundamentals")
+		log.Error().Err(err).Str("CalendarDate", calendarDate).Msg("Query fundamentals database failed in GetFundamentals")
+		if err := trx.Rollback(ctx); err != nil {
+			log.Error().Err(err).Msg("error encountered when rolling back transaction")
+		}
+	}
+
+	// cleanup transaction
+	if err := trx.Commit(ctx); err != nil {
+		log.Error().Err(err).Msg("failed to cleanup transaction")
 	}
 
 	return df, nil

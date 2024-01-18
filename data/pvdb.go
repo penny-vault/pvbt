@@ -250,6 +250,8 @@ func (p *PvDb) GetEODOnOrBefore(ctx context.Context, security *Security, metric 
 		columns = "dividend AS val"
 	case MetricSplitFactor:
 		columns = "split_factor AS val"
+	case MetricMarketCap:
+		columns = "market_cap AS val"
 	default:
 		span.SetStatus(codes.Error, "un-supported metric")
 		subLog.Error().Stack().Msg("un-supported metric requested")
@@ -321,6 +323,8 @@ func metricsToColumns(metrics []Metric) string {
 			metricCols[idx] = "dividend"
 		case MetricVolume:
 			metricCols[idx] = "volume"
+		case MetricMarketCap:
+			metricCols[idx] = "market_cap"
 		default:
 			log.Warn().Str("Metric", string(metric)).Msg("unknown metric requested")
 		}

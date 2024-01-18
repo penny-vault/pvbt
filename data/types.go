@@ -54,6 +54,7 @@ const (
 	MetricAdjustedClose Metric = "AdjustedClose"
 	MetricDividendCash  Metric = "DividendCash"
 	MetricSplitFactor   Metric = "SplitFactor"
+	MetricMarketCap     Metric = "MarketCap"
 )
 
 type FundamentalMetric string
