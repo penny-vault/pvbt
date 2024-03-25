@@ -17,7 +17,7 @@ require (
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.29
 	github.com/magefile/mage v1.15.0
-	github.com/onsi/gomega v1.30.0
+	github.com/onsi/gomega v1.32.0
 	github.com/pelletier/go-toml/v2 v2.2.0
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/spf13/cast v1.6.0 // indirect
@@ -42,7 +42,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/nats-io/nats.go v1.34.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo/v2 v2.14.0
+	github.com/onsi/ginkgo/v2 v2.15.0
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.32.0
 	github.com/sendgrid/sendgrid-go v3.14.0+incompatible
