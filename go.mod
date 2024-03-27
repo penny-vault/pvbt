@@ -9,7 +9,7 @@ require (
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/go-co-op/gocron v1.37.0
 	github.com/goccy/go-json v0.10.2
-	github.com/gofiber/fiber/v2 v2.52.2
+	github.com/gofiber/fiber/v2 v2.52.4
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgsql v0.0.0-20220720200728-bf8deec3ac70
 	github.com/jackc/pgx/v4 v4.18.3
