@@ -40,7 +40,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/alphadose/haxmap v1.3.1
 	github.com/hashicorp/golang-lru/v2 v2.0.7
-	github.com/nats-io/nats.go v1.34.0
+	github.com/nats-io/nats.go v1.34.1
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/onsi/ginkgo/v2 v2.14.0
 	github.com/pashagolub/pgxmock v1.8.0
