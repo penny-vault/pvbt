@@ -18,7 +18,7 @@ require (
 	github.com/lestrrat-go/jwx v1.2.29
 	github.com/magefile/mage v1.15.0
 	github.com/onsi/gomega v1.30.0
-	github.com/pelletier/go-toml/v2 v2.2.1
+	github.com/pelletier/go-toml/v2 v2.2.2
 	github.com/pierrec/lz4/v4 v4.1.21
 	github.com/spf13/cast v1.6.0 // indirect
 	github.com/spf13/cobra v1.8.0
