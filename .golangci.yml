@@ -9,7 +9,6 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - goerr113
     - goheader
     - gofmt
     - goimports
@@ -59,12 +58,17 @@ issues:
       linters:
         - gocyclo
         - errorlint
-        - goerr113
+        - err113
+        - revive
     - path: backblaze/backblaze\.go
       text: "G401:" # Backblaze uses sha1 for file integrity check
       linters:
         - gosec
     - path: backblaze/backblaze\.go
       text: "G505:" # Backblaze uses sha1 for file integrity check
+      linters:
+        - gosec
+    - path: \.go
+      text: "G115:"
       linters:
         - gosec

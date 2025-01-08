@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -690,31 +690,31 @@ func (cache *SecurityMetricCache) defrag(items []*CacheItem) []*CacheItem {
 // overlaps with an existing interval they are merged, otherwise it is inserted in the
 // interval.Begin time sorted location in the list, returns the updated list of cache items and number
 // of values that were added
-func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
+func (cache *SecurityMetricCache) insertItem(other *CacheItem, items []*CacheItem) ([]*CacheItem, int) {
 	if len(items) == 0 {
-		return []*CacheItem{new}, len(new.Values)
+		return []*CacheItem{other}, len(other.Values)
 	}
 
 	insertIdx := len(items)
 	for idx, item := range items {
-		if item.Period.Contains(new.Period) {
+		if item.Period.Contains(other.Period) {
 			// nothing to be done data already in cache
 			return items, 0
 		}
 
-		if new.Period.Contains(item.Period) {
-			added := len(new.Values) - len(item.Values)
-			item.copyFrom(new)
+		if other.Period.Contains(item.Period) {
+			added := len(other.Values) - len(item.Values)
+			item.copyFrom(other)
 			return items, added
 		}
 
-		if (item.Period.Contiguous(new.Period) && item.CoveredPeriod.Contiguous(new.CoveredPeriod)) || cache.contiguousByDateIndex(new, item) {
-			merged, added := cache.merge(new, item)
+		if (item.Period.Contiguous(other.Period) && item.CoveredPeriod.Contiguous(other.CoveredPeriod)) || cache.contiguousByDateIndex(other, item) {
+			merged, added := cache.merge(other, item)
 			item.copyFrom(merged)
 			return items, added
 		}
 
-		if item.Period.Begin.After(new.Period.Begin) {
+		if item.Period.Begin.After(other.Period.Begin) {
 			// insert at the index
 			insertIdx = idx
 		}
@@ -722,13 +722,13 @@ func (cache *SecurityMetricCache) insertItem(new *CacheItem, items []*CacheItem)
 
 	// insert into array
 	if insertIdx >= len(items) {
-		items = append(items, new)
+		items = append(items, other)
 	} else {
 		items = append(items[:insertIdx+1], items[insertIdx:]...)
-		items[insertIdx] = new
+		items[insertIdx] = other
 	}
 
-	return items, len(new.Values)
+	return items, len(other.Values)
 }
 
 // merge takes to cache items and merges them into one
@@ -936,13 +936,13 @@ func (cache *SecurityMetricCache) mergeLocal(a, b *CacheItem) (*CacheItem, int) 
 	return mergedCacheItem, added
 }
 
-func (item *CacheItem) copyFrom(new *CacheItem) {
-	item.Period = new.Period
-	item.Values = new.Values
-	item.CoveredPeriod = new.CoveredPeriod
-	item.isLocalDate = new.isLocalDate
-	item.localDates = new.localDates
-	item.startIdx = new.startIdx
+func (item *CacheItem) copyFrom(other *CacheItem) {
+	item.Period = other.Period
+	item.Values = other.Values
+	item.CoveredPeriod = other.CoveredPeriod
+	item.isLocalDate = other.isLocalDate
+	item.localDates = other.localDates
+	item.startIdx = other.startIdx
 }
 
 func (item *CacheItem) MarshalZerologObject(e *zerolog.Event) {

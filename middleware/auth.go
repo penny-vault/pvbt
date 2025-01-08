@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -40,7 +40,7 @@ func PVAuth(jwks *jwk.AutoRefresh, jwksURL string) fiber.Handler {
 		Jwks:         jwks,
 		JwksUrl:      jwksURL,
 		ErrorHandler: jwtError,
-		SuccessHandler: func(c *fiber.Ctx) error {
+		SuccessHandler: func(_ *fiber.Ctx) error {
 			return nil
 		},
 	})

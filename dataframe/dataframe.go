@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -229,21 +229,21 @@ func (df *DataFrame) IdxMax() *DataFrame {
 	maxVals := make([]float64, 0, len(df.Dates))
 
 	for rowIdx := range df.Dates {
-		max := math.NaN()
+		maxVal := math.NaN()
 		var ind int
 		for colIdx := range df.ColNames {
 			v := df.Vals[colIdx][rowIdx]
 			if math.IsNaN(v) {
-				max = math.NaN()
+				maxVal = math.NaN()
 				break
 			}
-			if v > max || math.IsNaN(max) {
-				max = v
+			if v > maxVal || math.IsNaN(maxVal) {
+				maxVal = v
 				ind = colIdx
 			}
 		}
 
-		if !math.IsNaN(max) {
+		if !math.IsNaN(maxVal) {
 			maxVals = append(maxVals, float64(ind))
 		} else {
 			maxVals = append(maxVals, math.NaN())

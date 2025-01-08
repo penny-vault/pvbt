@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -678,7 +678,7 @@ func (perf *Performance) Top10DrawDowns(periods uint, kind string) []*DrawDown {
 		return allDrawDowns[i].LossPercent < allDrawDowns[j].LossPercent
 	})
 
-	return allDrawDowns[0:minInt(10, len(allDrawDowns))]
+	return allDrawDowns[0:min(10, len(allDrawDowns))]
 }
 
 // TrackingError is the divergence between the price behavior of a portfolio and
@@ -850,7 +850,7 @@ func (perf *Performance) UlcerIndexPercentile(periods uint, percentile float64) 
 	sort.Float64s(u)
 
 	cnt := len(u)
-	percentileIdx := minInt(int(math.Ceil(float64(cnt)*percentile))-1, len(u)-1)
+	percentileIdx := min(int(math.Ceil(float64(cnt)*percentile))-1, len(u)-1)
 	if percentileIdx < 0 {
 		percentileIdx = 0
 	}
@@ -970,21 +970,8 @@ func (perf *Performance) excessReturn(periods uint) []float64 {
 	for ii, xx := range Rp {
 		rets = append(rets, xx-Rf[ii])
 	}
+
 	return rets
-}
-
-func min(x, y float64) float64 {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-func minInt(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
 }
 
 func (perf *Performance) monthlyReturns(periods uint, kind string) []float64 {

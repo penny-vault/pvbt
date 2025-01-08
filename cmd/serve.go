@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -57,7 +57,7 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Run the pv-api server",
 	Long:  `Run HTTP server that implements the Penny Vault API`,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ctx := context.Background()
 
 		if Profile {

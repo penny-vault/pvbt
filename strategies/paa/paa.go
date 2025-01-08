@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,14 +43,6 @@ import (
 var (
 	ErrDataRetrievalFailed = errors.New("failed to retrieve data for tickers")
 )
-
-func min(x int, y int) int {
-	if x < y {
-		return x
-	}
-
-	return y
-}
 
 // KellersProtectiveAssetAllocation strategy type
 type KellersProtectiveAssetAllocation struct {
@@ -181,7 +173,7 @@ func (paa *KellersProtectiveAssetAllocation) rank() ([]common.PairList, []string
 	riskRanked := make([]common.PairList, df.Len())
 	protectiveSelection := make([]string, df.Len())
 
-	df.ForEach(func(rowIdx int, date time.Time, vals map[string]float64) map[string]float64 {
+	df.ForEach(func(rowIdx int, _ time.Time, vals map[string]float64) map[string]float64 {
 		// rank each risky asset if it's momentum is greater than 0
 		sortable := make(common.PairList, 0, len(paa.riskUniverse))
 		for _, security := range paa.riskUniverse {
@@ -240,7 +232,7 @@ func (paa *KellersProtectiveAssetAllocation) buildPortfolio(riskRanked []common.
 	// bf is the bond fraction that should be used in portfolio construction
 	// bf = (N-n) / (N-n1)
 	bondFraction := make([]float64, n.Len())
-	n.ForEach(func(rowIdx int, date time.Time, vals map[string]float64) map[string]float64 {
+	n.ForEach(func(rowIdx int, _ time.Time, vals map[string]float64) map[string]float64 {
 		bondFraction[rowIdx] = math.Min(1.0, (N-vals["n"])/(N-n1))
 		return nil
 	})

@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,7 +53,7 @@ func init() {
 var updateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update the metrics associated with portfolio's for a given date",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		ctx := context.Background()
 
 		common.SetupLogging()

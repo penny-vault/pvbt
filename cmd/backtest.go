@@ -1,4 +1,4 @@
-// Copyright 2021-2023
+// Copyright 2021-2025
 // SPDX-License-Identifier: Apache-2.0
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -43,7 +43,7 @@ var backtestCmd = &cobra.Command{
 	Short:      "Run a backtest of a strategy",
 	Args:       cobra.MinimumNArgs(2),
 	ArgAliases: []string{"StrategyShortcode", "StrategyArguments"},
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		ctx := context.Background()
 		// setup database
 		err := database.Connect(ctx)
