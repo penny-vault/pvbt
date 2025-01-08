@@ -17,7 +17,7 @@ require (
 	github.com/lestrrat-go/backoff/v2 v2.0.8 // indirect
 	github.com/lestrrat-go/jwx v1.2.30
 	github.com/magefile/mage v1.15.0
-	github.com/onsi/gomega v1.30.0
+	github.com/onsi/gomega v1.36.2
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/pierrec/lz4/v4 v4.1.22
 	github.com/spf13/cast v1.7.1 // indirect
@@ -42,7 +42,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/nats-io/nats.go v1.38.0
 	github.com/olekukonko/tablewriter v0.0.5
-	github.com/onsi/ginkgo/v2 v2.14.0
+	github.com/onsi/ginkgo/v2 v2.22.2
 	github.com/pashagolub/pgxmock v1.8.0
 	github.com/rs/zerolog v1.33.0
 	github.com/sendgrid/sendgrid-go v3.16.0+incompatible
@@ -52,8 +52,8 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
-	github.com/google/pprof v0.0.0-20230926050212-f7f687d19a98 // indirect
+	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
+	github.com/google/pprof v0.0.0-20241210010833-40e02aabc2ad // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.25.1 // indirect
 	github.com/jackc/pgx/v5 v5.7.2 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
