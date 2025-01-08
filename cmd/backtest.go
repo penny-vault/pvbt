@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/goccy/go-json"
+	"github.com/penny-vault/pv-api/common"
 	"github.com/penny-vault/pv-api/data/database"
 	"github.com/penny-vault/pv-api/portfolio"
 	"github.com/penny-vault/pv-api/strategies"
@@ -33,8 +34,8 @@ var backtestStartTime string
 var backtestEndTime string
 
 func init() {
-	backtestCmd.LocalFlags().StringVarP(&backtestStartTime, "start", "s", "1980-01-01", "start time for back test of form yyyy-mm-dd")
-	backtestCmd.LocalFlags().StringVarP(&backtestEndTime, "end", "e", "1980-01-01", "end time for back test of form yyyy-mm-dd")
+	backtestCmd.Flags().StringVarP(&backtestStartTime, "start", "s", "1980-01-01", "start time for back test of form yyyy-mm-dd")
+	backtestCmd.Flags().StringVarP(&backtestEndTime, "end", "e", "1980-01-01", "end time for back test of form yyyy-mm-dd")
 	rootCmd.AddCommand(backtestCmd)
 }
 
@@ -45,6 +46,10 @@ var backtestCmd = &cobra.Command{
 	ArgAliases: []string{"StrategyShortcode", "StrategyArguments"},
 	Run: func(_ *cobra.Command, args []string) {
 		ctx := context.Background()
+
+		// setup logging
+		common.SetupLogging()
+
 		// setup database
 		err := database.Connect(ctx)
 		if err != nil {
