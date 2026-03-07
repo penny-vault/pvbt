@@ -1,0 +1,74 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package portfolio
+
+import (
+	"time"
+
+	"github.com/penny-vault/pvbt/asset"
+)
+
+// TransactionType identifies the kind of portfolio event recorded in the
+// transaction log.
+type TransactionType int
+
+const (
+	// BuyTransaction records a purchase of an asset.
+	BuyTransaction TransactionType = iota
+
+	// SellTransaction records a sale of an asset.
+	SellTransaction
+
+	// DividendTransaction records a dividend payment received.
+	DividendTransaction
+
+	// FeeTransaction records a fee or commission charged.
+	FeeTransaction
+
+	// DepositTransaction records cash added to the portfolio.
+	DepositTransaction
+
+	// WithdrawalTransaction records cash removed from the portfolio.
+	WithdrawalTransaction
+)
+
+// Transaction is a single entry in the portfolio's transaction log. Every
+// event that changes the portfolio's cash balance or holdings produces a
+// transaction: trades, dividends, fees, deposits, and withdrawals.
+type Transaction struct {
+	// Date is when the transaction occurred.
+	Date time.Time
+
+	// Asset is the asset involved. Nil for cash-only events like
+	// deposits, withdrawals, and account-level fees.
+	Asset asset.Asset
+
+	// Type identifies the kind of event.
+	Type TransactionType
+
+	// Qty is the number of shares or units involved. Zero for cash-only
+	// events like fees, deposits, and withdrawals.
+	Qty float64
+
+	// Price is the per-share price at which a trade was executed. Zero
+	// for non-trade events.
+	Price float64
+
+	// Amount is the total cash impact of the transaction. Positive for
+	// cash inflows (sells, dividends, deposits), negative for cash
+	// outflows (buys, fees, withdrawals).
+	Amount float64
+}

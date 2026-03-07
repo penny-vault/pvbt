@@ -1,0 +1,33 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package portfolio
+
+import (
+	"time"
+
+	"github.com/penny-vault/pvbt/asset"
+)
+
+// Allocation is a single rebalance target: a date and a set of assets with
+// their target weight percentages (summing to 1.0).
+type Allocation struct {
+	Date    time.Time
+	Members map[asset.Asset]float64
+}
+
+// PortfolioPlan is a time-ordered series of allocations describing how the
+// portfolio should be invested over time.
+type PortfolioPlan []Allocation
