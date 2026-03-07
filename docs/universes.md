@@ -1,0 +1,103 @@
+# Universes
+
+A universe is a collection of assets that a strategy operates on. It defines the investable space -- which instruments the strategy can see and trade.
+
+Universes change over time. The S&P 500 adds and removes companies. ETFs get created and delisted. When the engine runs a strategy at a historical point in time, it resolves each universe to whatever its membership was on that date. This prevents survivorship bias -- you never accidentally trade a stock that didn't exist yet or had already been delisted.
+
+## The Universe interface
+
+```go
+type Universe interface {
+    Assets(t time.Time) []asset.Asset
+    Prefetch(ctx context.Context, start, end time.Time) error
+}
+```
+
+`Assets` returns the list of instruments in the universe at time `t`. The engine calls this at each computation step to resolve membership for the current simulation date.
+
+`Prefetch` allows the engine to tell the universe what time range it will operate over. The engine calls this before the run loop starts. Universes that need to load data (like index membership from a database) can fetch everything in one shot. Static universes ignore it.
+
+## Creating universes
+
+There are three ways to create a universe, depending on where the assets come from.
+
+### From configuration
+
+The most common case. The TOML file defines a parameter with `typecode = "[]stock"`, and the strategy declares a `universe.Universe` field:
+
+```go
+type ADM struct {
+    riskOn  universe.Universe
+    riskOff universe.Universe
+}
+```
+
+The engine matches the field name to the TOML argument, parses the tickers, builds a `StaticUniverse`, and registers it with the engine automatically before calling Setup. This is the preferred approach when the asset list should be user-configurable.
+
+### From explicit tickers
+
+When a strategy needs a fixed set of assets that isn't user-configurable:
+
+```go
+s.hedges = universe.NewStatic("GLD", "TLT")
+```
+
+This creates a `StaticUniverse` -- membership does not change over time.
+
+Tickers can include a namespace prefix to specify the data source:
+
+```go
+s.rates = universe.NewStatic("FRED:DGS3MO", "FRED:DGS10")
+```
+
+### From a predefined index
+
+For well-known indexes whose membership changes over time:
+
+```go
+s.stocks = universe.SP500(indexProvider)
+s.tech = universe.Nasdaq100(indexProvider)
+```
+
+These constructors take a `data.IndexProvider` -- a provider that knows how to supply historical index membership. The database provider implements this interface alongside `BatchProvider`. The returned universe's membership varies by date. If you backtest a strategy that uses `universe.SP500(p)` starting in 2010, the universe in January 2010 will contain whatever companies were in the S&P 500 at that time -- not today's list.
+
+Index universes cache membership in memory. The first call to `Assets(t)` for a given date fetches from the provider and caches the result. Subsequent calls for the same date are pure in-memory lookups. If the engine calls `Prefetch` before the run, the universe loads the entire range upfront.
+
+## Getting data for a universe
+
+The primary use of a universe is to get a DataFrame for its assets. The engine resolves `u.Assets(t)` into a `DataRequest`, fetches the data from providers, and hands the strategy a DataFrame. From there, the strategy operates on the DataFrame:
+
+```go
+func (s *ADM) Compute(ctx context.Context, p portfolio.Portfolio) {
+    // The engine provides a DataFrame populated with data for the
+    // universe's assets at the current simulation date.
+    mom1 := signal.Momentum(df, 1)
+    mom3 := signal.Momentum(df, 3)
+    mom6 := signal.Momentum(df, 6)
+
+    momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
+    // ...
+}
+```
+
+Filtering, ranking, and selection all happen through the DataFrame API. See [Data](data.md) for details.
+
+## Strategies as assets
+
+A strategy's equity curve is itself a time series. The engine can expose it as a synthetic asset, which means one strategy can be included in another strategy's universe:
+
+```go
+func (s *Blend) Setup(e *engine.Engine, config engine.Config) {
+    s.strategies = universe.NewStatic("strategy:ADM", "strategy:Value", "strategy:Growth")
+}
+```
+
+The `strategy:` prefix tells the engine to run that strategy first and expose its equity curve as the price series. From the meta-strategy's perspective these are just assets with price data in a DataFrame.
+
+## Universe membership and time
+
+A subtle but important point: universe membership is resolved at each computation step, not at setup time. During setup you declare which universe you want. During computation the engine calls `Assets(t)` to determine what's in it right now.
+
+This means a strategy that uses `universe.SP500(p)` might see 498 stocks on one date and 503 on another, depending on index changes. The strategy doesn't need to care about this -- it operates on whatever assets are currently available.
+
+For universes created from explicit tickers or configuration, membership is fixed. A universe created with `universe.NewStatic("SPY", "TLT")` always contains those two assets. But the engine still checks that each asset has valid data at each point in time -- if an ETF hadn't been created yet, it won't appear in the universe during that period.
