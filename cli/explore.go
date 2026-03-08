@@ -1,0 +1,165 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
+)
+
+// RunExplore is the entry point for the standalone explore tool.
+func RunExplore() {
+	cmd := newExploreCmd()
+
+	cmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
+	viper.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
+
+	cmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+		level, err := zerolog.ParseLevel(viper.GetString("log-level"))
+		if err != nil {
+			level = zerolog.InfoLevel
+		}
+		zerolog.SetGlobalLevel(level)
+		log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
+			With().Timestamp().Logger()
+	}
+
+	if err := cmd.Execute(); err != nil {
+		os.Exit(1)
+	}
+}
+
+func newExploreCmd() *cobra.Command {
+	now := time.Now()
+	oneYearAgo := now.AddDate(-1, 0, 0)
+
+	cmd := &cobra.Command{
+		Use:   "explore <tickers> <metrics> [flags]",
+		Short: "Query and visualize data from the PVDataProvider",
+		Long: `Explore fetches data for the given tickers and metrics from the
+PVDataProvider database and displays it as a table or graph.
+
+  explore AAPL,MSFT AdjClose,Volume
+  explore AAPL AdjClose --graph
+  explore --list-metrics`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if listMetrics, _ := cmd.Flags().GetBool("list-metrics"); listMetrics {
+				return nil
+			}
+			if len(args) < 2 {
+				return fmt.Errorf("requires 2 arguments: <tickers> <metrics>")
+			}
+			return nil
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if listMetrics, _ := cmd.Flags().GetBool("list-metrics"); listMetrics {
+				return runListMetrics()
+			}
+			return runExplore(args[0], args[1])
+		},
+	}
+
+	cmd.Flags().String("start", oneYearAgo.Format("2006-01-02"), "Start date (YYYY-MM-DD)")
+	cmd.Flags().String("end", now.Format("2006-01-02"), "End date (YYYY-MM-DD)")
+	cmd.Flags().Bool("graph", false, "Show TUI graph instead of table")
+	cmd.Flags().Bool("list-metrics", false, "List all available metric names and exit")
+
+	viper.BindPFlags(cmd.Flags())
+
+	return cmd
+}
+
+func runListMetrics() error {
+	names := data.AllMetricNames()
+	for _, name := range names {
+		fmt.Println(name)
+	}
+	return nil
+}
+
+func runExplore(tickersArg, metricsArg string) error {
+	ctx := context.Background()
+
+	tickers := strings.Split(tickersArg, ",")
+	metricNames := strings.Split(metricsArg, ",")
+
+	// resolve metrics
+	metrics := make([]data.Metric, 0, len(metricNames))
+	for _, name := range metricNames {
+		name = strings.TrimSpace(name)
+		m, ok := data.MetricByName(name)
+		if !ok {
+			return fmt.Errorf("unknown metric %q (use --list-metrics to see available names)", name)
+		}
+		metrics = append(metrics, m)
+	}
+
+	// parse dates
+	start, err := time.Parse("2006-01-02", viper.GetString("start"))
+	if err != nil {
+		return fmt.Errorf("invalid start date: %w", err)
+	}
+	end, err := time.Parse("2006-01-02", viper.GetString("end"))
+	if err != nil {
+		return fmt.Errorf("invalid end date: %w", err)
+	}
+
+	// create provider
+	provider, err := data.NewPVDataProvider(nil)
+	if err != nil {
+		return fmt.Errorf("create data provider: %w", err)
+	}
+	defer provider.Close()
+
+	// resolve tickers to assets
+	assets := make([]asset.Asset, 0, len(tickers))
+	for _, ticker := range tickers {
+		ticker = strings.TrimSpace(ticker)
+		a, err := provider.LookupAsset(ctx, ticker)
+		if err != nil {
+			return fmt.Errorf("lookup ticker %q: %w", ticker, err)
+		}
+		assets = append(assets, a)
+	}
+
+	// fetch data
+	req := data.DataRequest{
+		Assets:  assets,
+		Metrics: metrics,
+		Start:   start,
+		End:     end,
+	}
+
+	log.Info().
+		Strs("tickers", tickers).
+		Int("metrics", len(metrics)).
+		Time("start", start).
+		Time("end", end).
+		Msg("fetching data")
+
+	df, err := provider.Fetch(ctx, req)
+	if err != nil {
+		return fmt.Errorf("fetch data: %w", err)
+	}
+
+	if df.Len() == 0 {
+		fmt.Println("No data returned.")
+		return nil
+	}
+
+	if viper.GetBool("graph") {
+		return runExploreGraph(df)
+	}
+
+	fmt.Print(df.Table())
+	fmt.Printf("\n%d rows\n", df.Len())
+	return nil
+}
