@@ -39,6 +39,8 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 
 	viper.BindPFlags(cmd.Flags())
 
+	registerStrategyFlags(cmd, strategy)
+
 	return cmd
 }
 
@@ -93,6 +95,8 @@ func runBacktest(strategy engine.Strategy) error {
 		Str("output", outputPath).
 		Str("run_id", fullID).
 		Msg("starting backtest")
+
+	applyStrategyFlags(strategy)
 
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {
