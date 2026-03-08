@@ -94,7 +94,12 @@ func (m exploreGraphModel) View() string {
 	if chartHeight < 3 {
 		chartHeight = 3
 	}
-	chartWidth := m.width - 10 - 11 // reserve space for left Y-axis + right pct axis
+	multiSeries := len(m.series) > 1
+	rightMargin := 11 // always show right pct axis for single; left pct axis for multi
+	if multiSeries {
+		rightMargin = 0
+	}
+	chartWidth := m.width - 10 - rightMargin // reserve space for left Y-axis + optional right pct axis
 	if chartWidth < 10 {
 		chartWidth = 10
 	}
@@ -114,11 +119,44 @@ func (m exploreGraphModel) View() string {
 		Foreground(lipgloss.Color("7")).
 		Render(dateRange)
 
-	// Compute global min/max across all series
+	// Compute first valid value per series (for percent-change conversion)
+	firstVal := make([]float64, len(m.series))
+	for si, s := range m.series {
+		firstVal[si] = math.NaN()
+		for _, v := range s.values {
+			if !math.IsNaN(v) {
+				firstVal[si] = v
+				break
+			}
+		}
+	}
+
+	// For multi-series, convert values to percent change so they share a scale.
+	// For single series, use raw values.
+	plotSeries := make([][]float64, len(m.series))
+	if multiSeries {
+		for si, s := range m.series {
+			pct := make([]float64, len(s.values))
+			for i, v := range s.values {
+				if math.IsNaN(v) || math.IsNaN(firstVal[si]) || firstVal[si] == 0 {
+					pct[i] = math.NaN()
+				} else {
+					pct[i] = (v - firstVal[si]) / firstVal[si] * 100
+				}
+			}
+			plotSeries[si] = pct
+		}
+	} else {
+		for si, s := range m.series {
+			plotSeries[si] = s.values
+		}
+	}
+
+	// Compute global min/max across plot values
 	minVal := math.Inf(1)
 	maxVal := math.Inf(-1)
-	for _, s := range m.series {
-		for _, v := range s.values {
+	for _, vals := range plotSeries {
+		for _, v := range vals {
 			if !math.IsNaN(v) && v < minVal {
 				minVal = v
 			}
@@ -134,18 +172,6 @@ func (m exploreGraphModel) View() string {
 	valRange := maxVal - minVal
 	if valRange == 0 {
 		valRange = 1
-	}
-
-	// Compute first valid value per series for percent-change axis
-	firstVal := make([]float64, len(m.series))
-	for si, s := range m.series {
-		firstVal[si] = math.NaN()
-		for _, v := range s.values {
-			if !math.IsNaN(v) {
-				firstVal[si] = v
-				break
-			}
-		}
 	}
 
 	// Build the chart grid: each cell holds the index of the series that
@@ -170,15 +196,15 @@ func (m exploreGraphModel) View() string {
 		return row
 	}
 
-	for si, s := range m.series {
+	for si, vals := range plotSeries {
 		prevRow := -1
 		for col := 0; col < chartWidth; col++ {
 			// Map chart column to data index
 			idx := col * n / chartWidth
-			if idx >= len(s.values) {
-				idx = len(s.values) - 1
+			if idx >= len(vals) {
+				idx = len(vals) - 1
 			}
-			v := s.values[idx]
+			v := vals[idx]
 			if math.IsNaN(v) {
 				prevRow = -1
 				continue
@@ -214,15 +240,8 @@ func (m exploreGraphModel) View() string {
 		return row == 0 || row == chartHeight-1 || row%gridInterval == 0
 	}
 
-	// Percent-change axis: compute pct change for top and bottom values.
-	// Use the first series' first value as the reference.
-	refVal := math.NaN()
-	for _, fv := range firstVal {
-		if !math.IsNaN(fv) {
-			refVal = fv
-			break
-		}
-	}
+	// For single series: pct change on right axis using first value as reference
+	refVal := firstVal[0]
 	pctForRow := func(row int) string {
 		if math.IsNaN(refVal) || refVal == 0 {
 			return ""
@@ -235,14 +254,18 @@ func (m exploreGraphModel) View() string {
 	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
 	gridStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
 
-	// Render the chart with Y-axis labels and right-side percent-change axis
+	// Render the chart
 	var chartLines []string
 	for row := 0; row < chartHeight; row++ {
-		// Left Y-axis label: show at grid rows
+		// Left Y-axis label
 		yLabel := "        "
 		if isGridRow(row) {
 			val := maxVal - float64(row)/float64(chartHeight-1)*valRange
-			yLabel = fmt.Sprintf("%8.2f", val)
+			if multiSeries {
+				yLabel = fmt.Sprintf("%+7.1f%%", val)
+			} else {
+				yLabel = fmt.Sprintf("%8.2f", val)
+			}
 		}
 
 		var sb strings.Builder
@@ -265,12 +288,14 @@ func (m exploreGraphModel) View() string {
 			}
 		}
 
-		// Right Y-axis with percent change
-		if isGridRow(row) {
-			sb.WriteString(dimStyle.Render("\u251c"))
-			sb.WriteString(dimStyle.Render(fmt.Sprintf(" %-8s", pctForRow(row))))
-		} else {
-			sb.WriteString(dimStyle.Render("\u2502"))
+		// Right Y-axis with percent change (only for single series)
+		if !multiSeries {
+			if isGridRow(row) {
+				sb.WriteString(dimStyle.Render("\u251c"))
+				sb.WriteString(dimStyle.Render(fmt.Sprintf(" %-8s", pctForRow(row))))
+			} else {
+				sb.WriteString(dimStyle.Render("\u2502"))
+			}
 		}
 
 		chartLines = append(chartLines, sb.String())
