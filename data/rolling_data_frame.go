@@ -15,28 +15,153 @@
 
 package data
 
+import (
+	"math"
+	"sort"
+
+	"gonum.org/v1/gonum/floats"
+	"gonum.org/v1/gonum/stat"
+)
+
 // RollingDataFrame applies rolling-window operations to each column of
 // the source DataFrame. Created by DataFrame.Rolling(n).
 type RollingDataFrame struct {
-	df     *DataFrame //nolint:unused // referenced once methods are implemented
-	window int        //nolint:unused // referenced once methods are implemented
+	df     *DataFrame
+	window int
 }
 
 // Mean returns a DataFrame with the rolling mean over the window.
-func (r *RollingDataFrame) Mean() *DataFrame { return nil }
+func (r *RollingDataFrame) Mean() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			out[i] = stat.Mean(col[i-n+1:i+1], nil)
+		}
+
+		return out
+	})
+}
 
 // Sum returns a DataFrame with the rolling sum over the window.
-func (r *RollingDataFrame) Sum() *DataFrame { return nil }
+func (r *RollingDataFrame) Sum() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			out[i] = floats.Sum(col[i-n+1 : i+1])
+		}
+
+		return out
+	})
+}
 
 // Max returns a DataFrame with the rolling maximum over the window.
-func (r *RollingDataFrame) Max() *DataFrame { return nil }
+func (r *RollingDataFrame) Max() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			out[i] = floats.Max(col[i-n+1 : i+1])
+		}
+
+		return out
+	})
+}
 
 // Min returns a DataFrame with the rolling minimum over the window.
-func (r *RollingDataFrame) Min() *DataFrame { return nil }
+func (r *RollingDataFrame) Min() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
 
-// Std returns a DataFrame with the rolling standard deviation over the window.
-func (r *RollingDataFrame) Std() *DataFrame { return nil }
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			out[i] = floats.Min(col[i-n+1 : i+1])
+		}
+
+		return out
+	})
+}
+
+// Std returns a DataFrame with the rolling population standard deviation
+// over the window.
+func (r *RollingDataFrame) Std() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			window := col[i-n+1 : i+1]
+			mean := stat.Mean(window, nil)
+
+			variance := 0.0
+
+			for _, v := range window {
+				d := v - mean
+				variance += d * d
+			}
+
+			out[i] = math.Sqrt(variance / float64(n))
+		}
+
+		return out
+	})
+}
 
 // Percentile returns a DataFrame with the rolling p-th percentile over
 // the window. p should be in the range [0, 1].
-func (r *RollingDataFrame) Percentile(p float64) *DataFrame { return nil }
+func (r *RollingDataFrame) Percentile(p float64) *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			sorted := make([]float64, n)
+			copy(sorted, col[i-n+1:i+1])
+			sort.Float64s(sorted)
+
+			out[i] = stat.Quantile(p, stat.LinInterp, sorted, nil)
+		}
+
+		return out
+	})
+}
