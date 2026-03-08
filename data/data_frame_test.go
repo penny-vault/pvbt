@@ -240,6 +240,41 @@ var _ = Describe("DataFrame", func() {
 		})
 	})
 
+	Describe("DataFrame Accessors", func() {
+		var df2 *data.DataFrame
+
+		BeforeEach(func() {
+			t := []time.Time{
+				time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+			}
+			assets := []asset.Asset{
+				{Ticker: "AAPL", CompositeFigi: "BBG000B9XRY4"},
+			}
+			metrics := []data.Metric{data.AdjClose}
+			vals := []float64{100.0, 101.0}
+			df2 = data.NewDataFrame(t, assets, metrics, vals)
+		})
+
+		It("Times returns the time axis", func() {
+			times := df2.Times()
+			Expect(times).To(HaveLen(2))
+			Expect(times[0]).To(Equal(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)))
+		})
+
+		It("AssetList returns the assets", func() {
+			assets := df2.AssetList()
+			Expect(assets).To(HaveLen(1))
+			Expect(assets[0].Ticker).To(Equal("AAPL"))
+		})
+
+		It("MetricList returns the metrics", func() {
+			metrics := df2.MetricList()
+			Expect(metrics).To(HaveLen(1))
+			Expect(metrics[0]).To(Equal(data.AdjClose))
+		})
+	})
+
 	Describe("Narrowing and filtering", func() {
 		It("Assets narrows to requested assets", func() {
 			narrowed := df.Assets(aapl)
