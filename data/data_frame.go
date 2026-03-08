@@ -143,6 +143,27 @@ func (df *DataFrame) Len() int { return len(df.times) }
 // ColCount returns the number of columns (assets * metrics).
 func (df *DataFrame) ColCount() int { return len(df.assets) * len(df.metrics) }
 
+// Times returns a copy of the timestamp axis.
+func (df *DataFrame) Times() []time.Time {
+	out := make([]time.Time, len(df.times))
+	copy(out, df.times)
+	return out
+}
+
+// AssetList returns a copy of the asset list.
+func (df *DataFrame) AssetList() []asset.Asset {
+	out := make([]asset.Asset, len(df.assets))
+	copy(out, df.assets)
+	return out
+}
+
+// MetricList returns a copy of the metric list.
+func (df *DataFrame) MetricList() []Metric {
+	out := make([]Metric, len(df.metrics))
+	copy(out, df.metrics)
+	return out
+}
+
 // Value returns the most recent float64 for the given asset and metric.
 func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
 	aIdx, ok := df.assetIndex[a.CompositeFigi]
