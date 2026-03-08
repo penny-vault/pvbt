@@ -15,14 +15,17 @@ import (
 	"github.com/spf13/viper"
 )
 
-// RunExplore is the entry point for the standalone explore tool.
-func RunExplore() {
-	cmd := newExploreCmd()
+// RunPVBT is the entry point for the standalone pvbt tool.
+func RunPVBT() {
+	rootCmd := &cobra.Command{
+		Use:   "pvbt",
+		Short: "Penny Vault backtesting tools",
+	}
 
-	cmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
-	viper.BindPFlag("log-level", cmd.PersistentFlags().Lookup("log-level"))
+	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
+	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
 
-	cmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
+	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		level, err := zerolog.ParseLevel(viper.GetString("log-level"))
 		if err != nil {
 			level = zerolog.InfoLevel
@@ -32,7 +35,9 @@ func RunExplore() {
 			With().Timestamp().Logger()
 	}
 
-	if err := cmd.Execute(); err != nil {
+	rootCmd.AddCommand(newExploreCmd())
+
+	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
 }

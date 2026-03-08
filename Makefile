@@ -1,7 +1,7 @@
 .PHONY: build test lint
 
 build:
-	go build ./...
+	go build -o pvbt .
 
 test:
 	ginkgo run -race ./...
