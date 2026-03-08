@@ -50,7 +50,7 @@ type metricRecord struct {
 	SafeWithdrawalRate float64 `parquet:"safe_withdrawal_rate"`
 }
 
-func writePortfolioParquet(path, runID, strategy string, start, end time.Time, cash float64, acct *portfolio.Account) error {
+func writePortfolioParquet(path, runID, strategy string, start, end time.Time, cash float64, params map[string]any, acct *portfolio.Account) error {
 	// TODO: implement Parquet portfolio writer using parquet-go
 	return fmt.Errorf("parquet output not yet implemented")
 }

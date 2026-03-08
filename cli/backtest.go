@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -100,6 +101,12 @@ func runBacktest(strategy engine.Strategy) error {
 
 	applyStrategyFlags(strategy)
 
+	// validate output format early
+	_, ext := outputBasePath(outputPath)
+	if ext != ".jsonl" {
+		return fmt.Errorf("output format %q is not yet supported; use .jsonl or omit --output", ext)
+	}
+
 	if viper.GetBool("tui") {
 		return runBacktestWithTUI(strategy)
 	}
@@ -118,8 +125,10 @@ func runBacktest(strategy engine.Strategy) error {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
-	base, ext := outputBasePath(outputPath)
-	if err := writePortfolio(base, ext, fullID, strategy.Name(), start, end, cash, acct); err != nil {
+	params := strategyParams(strategy)
+
+	base, _ := outputBasePath(outputPath)
+	if err := writePortfolio(base, ext, fullID, strategy.Name(), start, end, cash, params, acct); err != nil {
 		return err
 	}
 
@@ -144,6 +153,30 @@ func runBacktest(strategy engine.Strategy) error {
 	printSummary(acct)
 
 	return nil
+}
+
+func strategyParams(strategy engine.Strategy) map[string]any {
+	params := make(map[string]any)
+	v := reflect.ValueOf(strategy)
+	if v.Kind() == reflect.Ptr {
+		v = v.Elem()
+	}
+	t := v.Type()
+	if t.Kind() != reflect.Struct {
+		return params
+	}
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if !field.IsExported() {
+			continue
+		}
+		name := field.Tag.Get("pvbt")
+		if name == "" {
+			name = strings.ToLower(field.Name)
+		}
+		params[name] = v.Field(i).Interface()
+	}
+	return params
 }
 
 func runBacktestWithTUI(strategy engine.Strategy) error {

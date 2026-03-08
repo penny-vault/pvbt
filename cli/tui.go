@@ -279,18 +279,6 @@ func (m tuiModel) renderProgress(width int) string {
 
 // -- zerolog writer adapter --------------------------------------------------
 
-type tuiLogWriter struct {
-	program *tea.Program
-}
-
-func (w *tuiLogWriter) Write(p []byte) (n int, err error) {
-	msg := strings.TrimRight(string(p), "\n")
-	if w.program != nil {
-		w.program.Send(logMsg(msg))
-	}
-	return len(p), nil
-}
-
 // newTUILogWriter creates a zerolog.LevelWriter that sends log messages to the TUI.
 func newTUILogWriter(p *tea.Program) zerolog.LevelWriter {
 	return &tuiLevelWriter{program: p}

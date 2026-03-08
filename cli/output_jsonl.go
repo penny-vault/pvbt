@@ -10,7 +10,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cash float64, acct *portfolio.Account) error {
+func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cash float64, params map[string]any, acct *portfolio.Account) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create portfolio file: %w", err)
@@ -27,6 +27,7 @@ func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cas
 		"start":    start.Format("2006-01-02"),
 		"end":      end.Format("2006-01-02"),
 		"cash":     cash,
+		"params":   params,
 	}
 	if err := enc.Encode(meta); err != nil {
 		return fmt.Errorf("write portfolio metadata: %w", err)
@@ -35,9 +36,12 @@ func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cas
 	// TODO: iterate per-step portfolio snapshots when Account supports time-series history
 	// For now, write a single summary line with current values
 	snapshot := map[string]any{
-		"date":  end.Format("2006-01-02"),
-		"value": acct.Value(),
-		"cash":  acct.Cash(),
+		"date":              end.Format("2006-01-02"),
+		"value":             acct.Value(),
+		"cash":              acct.Cash(),
+		"invested":          acct.Value() - acct.Cash(),
+		"daily_return":      0.0,
+		"cumulative_return": 0.0,
 	}
 	if err := enc.Encode(snapshot); err != nil {
 		return fmt.Errorf("write portfolio snapshot: %w", err)
@@ -77,13 +81,14 @@ func writeTransactionsJSONL(path string, acct *portfolio.Account) error {
 		}
 
 		rec := map[string]any{
-			"date":     tx.Date.Format("2006-01-02"),
-			"action":   action,
-			"ticker":   tx.Asset.Ticker,
-			"figi":     tx.Asset.CompositeFigi,
-			"quantity": tx.Qty,
-			"price":    tx.Price,
-			"total":    tx.Amount,
+			"date":       tx.Date.Format("2006-01-02"),
+			"action":     action,
+			"ticker":     tx.Asset.Ticker,
+			"figi":       tx.Asset.CompositeFigi,
+			"quantity":   tx.Qty,
+			"price":      tx.Price,
+			"commission": 0.0,
+			"total":      tx.Amount,
 		}
 		if err := enc.Encode(rec); err != nil {
 			return fmt.Errorf("write transaction: %w", err)
@@ -106,6 +111,9 @@ func writeHoldingsJSONL(path string, acct *portfolio.Account) error {
 		Ticker string  `json:"ticker"`
 		Figi   string  `json:"figi"`
 		Qty    float64 `json:"quantity"`
+		Price  float64 `json:"price"`
+		Value  float64 `json:"value"`
+		Weight float64 `json:"weight"`
 	}
 
 	var holdings []holding
