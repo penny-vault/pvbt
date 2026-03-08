@@ -7,10 +7,12 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -98,6 +100,10 @@ func runBacktest(strategy engine.Strategy) error {
 
 	applyStrategyFlags(strategy)
 
+	if viper.GetBool("tui") {
+		return runBacktestWithTUI(strategy)
+	}
+
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {
 		return fmt.Errorf("create data provider: %w", err)
@@ -136,6 +142,27 @@ func runBacktest(strategy engine.Strategy) error {
 	}
 
 	printSummary(acct)
+
+	return nil
+}
+
+func runBacktestWithTUI(strategy engine.Strategy) error {
+	m := newTUIModel()
+	p := tea.NewProgram(m, tea.WithAltScreen())
+
+	// redirect logs to TUI
+	w := newTUILogWriter(p)
+	log.Logger = zerolog.New(w).With().Timestamp().Logger()
+
+	// run backtest in background
+	go func() {
+		// simulate some progress for now since Engine.Run is a stub
+		p.Send(doneMsg{})
+	}()
+
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("TUI error: %w", err)
+	}
 
 	return nil
 }
