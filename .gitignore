@@ -30,3 +30,6 @@ Thumbs.db
 # Environment
 .env
 .env.*
+
+# Worktrees
+.worktrees/
