@@ -94,7 +94,7 @@ func (m exploreGraphModel) View() string {
 	if chartHeight < 3 {
 		chartHeight = 3
 	}
-	chartWidth := m.width - 10 // reserve space for Y-axis labels
+	chartWidth := m.width - 10 - 11 // reserve space for left Y-axis + right pct axis
 	if chartWidth < 10 {
 		chartWidth = 10
 	}
@@ -136,6 +136,18 @@ func (m exploreGraphModel) View() string {
 		valRange = 1
 	}
 
+	// Compute first valid value per series for percent-change axis
+	firstVal := make([]float64, len(m.series))
+	for si, s := range m.series {
+		firstVal[si] = math.NaN()
+		for _, v := range s.values {
+			if !math.IsNaN(v) {
+				firstVal[si] = v
+				break
+			}
+		}
+	}
+
 	// Build the chart grid: each cell holds the index of the series that
 	// occupies it, or -1 if empty.
 	grid := make([][]int, chartHeight)
@@ -147,7 +159,19 @@ func (m exploreGraphModel) View() string {
 	}
 
 	n := len(times)
+	valToRow := func(v float64) int {
+		row := int((maxVal - v) / valRange * float64(chartHeight-1))
+		if row < 0 {
+			row = 0
+		}
+		if row >= chartHeight {
+			row = chartHeight - 1
+		}
+		return row
+	}
+
 	for si, s := range m.series {
+		prevRow := -1
 		for col := 0; col < chartWidth; col++ {
 			// Map chart column to data index
 			idx := col * n / chartWidth
@@ -156,50 +180,99 @@ func (m exploreGraphModel) View() string {
 			}
 			v := s.values[idx]
 			if math.IsNaN(v) {
+				prevRow = -1
 				continue
 			}
-			// Map value to row (row 0 = top = maxVal)
-			row := int((maxVal - v) / valRange * float64(chartHeight-1))
-			if row < 0 {
-				row = 0
+			row := valToRow(v)
+
+			// Draw a vertical line connecting previous point to current
+			if prevRow >= 0 && prevRow != row {
+				lo, hi := prevRow, row
+				if lo > hi {
+					lo, hi = hi, lo
+				}
+				for r := lo; r <= hi; r++ {
+					if grid[r][col] == -1 {
+						grid[r][col] = si
+					}
+				}
+			} else {
+				if grid[row][col] == -1 {
+					grid[row][col] = si
+				}
 			}
-			if row >= chartHeight {
-				row = chartHeight - 1
-			}
-			// Only overwrite if empty (earlier series get priority)
-			if grid[row][col] == -1 {
-				grid[row][col] = si
-			}
+			prevRow = row
 		}
 	}
 
-	// Render the chart with Y-axis labels
+	// Determine which rows get horizontal grid lines (every ~5 rows)
+	gridInterval := chartHeight / 5
+	if gridInterval < 2 {
+		gridInterval = 2
+	}
+	isGridRow := func(row int) bool {
+		return row == 0 || row == chartHeight-1 || row%gridInterval == 0
+	}
+
+	// Percent-change axis: compute pct change for top and bottom values.
+	// Use the first series' first value as the reference.
+	refVal := math.NaN()
+	for _, fv := range firstVal {
+		if !math.IsNaN(fv) {
+			refVal = fv
+			break
+		}
+	}
+	pctForRow := func(row int) string {
+		if math.IsNaN(refVal) || refVal == 0 {
+			return ""
+		}
+		val := maxVal - float64(row)/float64(chartHeight-1)*valRange
+		pct := (val - refVal) / refVal * 100
+		return fmt.Sprintf("%+.1f%%", pct)
+	}
+
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	gridStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
+
+	// Render the chart with Y-axis labels and right-side percent-change axis
 	var chartLines []string
 	for row := 0; row < chartHeight; row++ {
-		// Y-axis label: show at top, middle, and bottom
+		// Left Y-axis label: show at grid rows
 		yLabel := "        "
-		switch {
-		case row == 0:
-			yLabel = fmt.Sprintf("%8.2f", maxVal)
-		case row == chartHeight-1:
-			yLabel = fmt.Sprintf("%8.2f", minVal)
-		case row == chartHeight/2:
-			yLabel = fmt.Sprintf("%8.2f", minVal+valRange/2)
+		if isGridRow(row) {
+			val := maxVal - float64(row)/float64(chartHeight-1)*valRange
+			yLabel = fmt.Sprintf("%8.2f", val)
 		}
 
 		var sb strings.Builder
-		sb.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("7")).Render(yLabel))
-		sb.WriteString(" ")
+		sb.WriteString(dimStyle.Render(yLabel))
+		if isGridRow(row) {
+			sb.WriteString(dimStyle.Render("\u2524"))
+		} else {
+			sb.WriteString(dimStyle.Render("\u2502"))
+		}
 
 		for col := 0; col < chartWidth; col++ {
 			si := grid[row][col]
 			if si >= 0 {
 				style := lipgloss.NewStyle().Foreground(m.series[si].color)
 				sb.WriteString(style.Render("\u2588"))
+			} else if isGridRow(row) {
+				sb.WriteString(gridStyle.Render("\u2500"))
 			} else {
 				sb.WriteString(" ")
 			}
 		}
+
+		// Right Y-axis with percent change
+		if isGridRow(row) {
+			sb.WriteString(dimStyle.Render("\u251c"))
+			sb.WriteString(dimStyle.Render(fmt.Sprintf(" %-8s", pctForRow(row))))
+		} else {
+			sb.WriteString(dimStyle.Render("\u2502"))
+		}
+
 		chartLines = append(chartLines, sb.String())
 	}
 
