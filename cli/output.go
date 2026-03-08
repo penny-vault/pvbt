@@ -7,12 +7,12 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-func writePortfolio(base, ext, runID, strategy string, start, end time.Time, cash float64, acct *portfolio.Account) error {
+func writePortfolio(base, ext, runID, strategy string, start, end time.Time, cash float64, params map[string]any, acct *portfolio.Account) error {
 	switch ext {
 	case ".jsonl":
-		return writePortfolioJSONL(base+ext, runID, strategy, start, end, cash, acct)
+		return writePortfolioJSONL(base+ext, runID, strategy, start, end, cash, params, acct)
 	case ".parquet":
-		return writePortfolioParquet(base+ext, runID, strategy, start, end, cash, acct)
+		return writePortfolioParquet(base+ext, runID, strategy, start, end, cash, params, acct)
 	default:
 		return fmt.Errorf("unsupported output format: %s", ext)
 	}

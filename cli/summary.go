@@ -58,6 +58,9 @@ func printSummary(acct *portfolio.Account) {
 		{"Information Ratio", fmtRatio(r.InformationRatio)},
 		{"Treynor", fmtRatio(r.Treynor)},
 		{"Ulcer Index", fmtRatio(r.UlcerIndex)},
+		{"Excess Kurtosis", fmtRatio(r.ExcessKurtosis)},
+		{"Skewness", fmtRatio(r.Skewness)},
+		{"R-Squared", fmtRatio(r.RSquared)},
 		{"Value at Risk", fmtPct(r.ValueAtRisk)},
 		{"Upside Capture", fmtPct(r.UpsideCaptureRatio)},
 		{"Downside Capture", fmtPct(r.DownsideCaptureRatio)},
@@ -71,6 +74,7 @@ func printSummary(acct *portfolio.Account) {
 		{"Profit Factor", fmtRatio(t.ProfitFactor)},
 		{"Avg Holding Period", fmt.Sprintf("%.0f days", t.AverageHoldingPeriod)},
 		{"Turnover", fmtPct(t.Turnover)},
+		{"Positive Periods", fmtPct(t.NPositivePeriods)},
 		{"Gain/Loss Ratio", fmtRatio(t.GainLossRatio)},
 	})))
 
