@@ -10,9 +10,9 @@ When a portfolio has an associated broker, order execution is delegated to the b
 type Broker interface {
     Connect(ctx context.Context) error
     Close() error
-    Submit(order Order) (Fill, error)
+    Submit(order Order) ([]Fill, error)
     Cancel(orderID string) error
-    Replace(orderID string, order Order) (Fill, error)
+    Replace(orderID string, order Order) ([]Fill, error)
     Orders() ([]Order, error)
     Positions() ([]Position, error)
     Balance() (Balance, error)
@@ -26,9 +26,9 @@ type Broker interface {
 
 ### Trading
 
-- **Submit** sends an order to the brokerage and returns a fill report.
+- **Submit** sends an order to the brokerage and returns one or more fill reports. Large orders may be filled in multiple lots at different prices.
 - **Cancel** requests cancellation of an open order by ID.
-- **Replace** performs an atomic cancel-replace: cancels an existing order and submits a replacement in one operation.
+- **Replace** performs an atomic cancel-replace: cancels an existing order and submits a replacement in one operation. Returns one or more fills for the replacement order.
 
 ### Queries
 
@@ -128,21 +128,18 @@ type Balance struct {
 
 ## Connecting a broker to a portfolio
 
-A broker is attached at construction or later:
+A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ```go
 // at construction
 p := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(b))
 
-// or later
-p.SetBroker(b)
-
-// detach
-p.SetBroker(nil)
+// swap brokers at runtime
+p.SetBroker(liveBroker)
 ```
 
 The portfolio translates its modifier-based orders (`Limit(150.00)`, `GoodTilCancel`, etc.) into `broker.Order` values with concrete `OrderType` and `TimeInForce` fields before calling `Submit`. Strategy code is never aware of the broker.
 
 ## Implementations
 
-Broker implementations live in sub-packages. The first planned implementation is for tastytrade, which provides a REST API supporting all the order types and time-in-force values listed above. Additional brokers (e.g., Interactive Brokers, Schwab) can be added by implementing the `Broker` interface.
+Broker implementations live in sub-packages under `broker/`. The first planned implementations are a simulated broker for backtesting and a tastytrade broker for live trading. Additional brokers (e.g., Interactive Brokers, Schwab) can be added by implementing the `Broker` interface.

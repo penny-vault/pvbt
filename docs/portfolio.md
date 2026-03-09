@@ -5,20 +5,16 @@ The portfolio is where strategy decisions become trades. It has two responsibili
 Strategy code interacts with the portfolio through the `Portfolio` interface -- it calls `RebalanceTo`, `Order`, reads state, and inspects the transaction log. The engine uses a separate `PortfolioManager` interface to inject external events like dividends and fees. Both interfaces are implemented by the concrete `Account` type.
 
 ```go
-// create a portfolio with $10K
-p := portfolio.New(portfolio.WithCash(10_000))
-e := engine.New(&MyStrategy{})
-p, err := e.Run(ctx, p, start, end)
-```
-
-For live trading, attach a broker:
-
-```go
+// create a portfolio with $10K and a broker
 p := portfolio.New(
     portfolio.WithCash(10_000),
     portfolio.WithBroker(b),
 )
+e := engine.New(&MyStrategy{})
+p, err := e.Run(ctx, p, start, end)
 ```
+
+A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ## Allocation and PortfolioPlan
 
@@ -86,7 +82,7 @@ plan := portfolio.EqualWeight(selected)
 p.RebalanceTo(plan...)
 ```
 
-`RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The engine diffs current holdings against each target and generates the necessary buy/sell orders.
+`RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The engine diffs current holdings against each target and generates the necessary buy/sell orders. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
 
 A more involved example -- select the 50 cheapest stocks by P/E and weight by market cap:
 
@@ -456,19 +452,16 @@ This is less common but occasionally useful for strategies that adapt to their o
 
 ## Broker integration
 
-A portfolio can optionally have a broker attached for live order execution. Without a broker, all orders are filled by the simulator (the backtesting path). With a broker, the same orders are submitted to a real brokerage.
+A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ```go
 // at construction
 p := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(b))
 
-// or attach later
-p.SetBroker(b)
-
-// detach to revert to simulated execution
-p.SetBroker(nil)
+// swap brokers at runtime
+p.SetBroker(liveBroker)
 ```
 
-This is the mechanism behind the "same code for backtest and production" guarantee. Strategy code never knows or cares whether a broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them.
+This is the mechanism behind the "same code for backtest and production" guarantee. Strategy code never knows or cares which broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
 
 See [Broker](broker.md) for the full broker interface and supported order types.
