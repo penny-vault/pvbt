@@ -15,10 +15,28 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+)
 
 // EqualWeight builds a PortfolioPlan from a DataFrame by assigning equal
 // weights to all selected assets at each timestep. For example, if three
 // assets are selected at a given date, each receives a weight of 1/3.
 // The DataFrame should have been filtered by a Selector first.
-func EqualWeight(df *data.DataFrame) PortfolioPlan { return nil }
+func EqualWeight(df *data.DataFrame) PortfolioPlan {
+	times := df.Times()
+	assets := df.AssetList()
+	weight := 1.0 / float64(len(assets))
+
+	plan := make(PortfolioPlan, len(times))
+	for i, t := range times {
+		members := make(map[asset.Asset]float64, len(assets))
+		for _, a := range assets {
+			members[a] = weight
+		}
+		plan[i] = Allocation{Date: t, Members: members}
+	}
+
+	return plan
+}
