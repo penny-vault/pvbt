@@ -17,8 +17,26 @@ package portfolio
 
 type alpha struct{}
 
-func (alpha) Name() string                                         { return "Alpha" }
-func (alpha) Compute(a *Account, window *Period) float64        { return 0 }
+func (alpha) Name() string { return "Alpha" }
+
+func (alpha) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+	rf := windowSlice(a.RiskFreePrices(), a.EquityTimes(), window)
+
+	if len(eq) < 2 || len(bm) < 2 || len(rf) < 2 {
+		return 0
+	}
+
+	portfolioReturn := (eq[len(eq)-1] / eq[0]) - 1
+	benchmarkReturn := (bm[len(bm)-1] / bm[0]) - 1
+	riskFreeReturn := (rf[len(rf)-1] / rf[0]) - 1
+
+	b := Beta.Compute(a, window)
+
+	return portfolioReturn - (riskFreeReturn + b*(benchmarkReturn-riskFreeReturn))
+}
+
 func (alpha) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Alpha is Jensen's alpha: the portfolio's excess return over what CAPM

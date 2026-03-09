@@ -17,8 +17,31 @@ package portfolio
 
 type rSquared struct{}
 
-func (rSquared) Name() string                                      { return "RSquared" }
-func (rSquared) Compute(a *Account, window *Period) float64         { return 0 }
+func (rSquared) Name() string { return "RSquared" }
+
+func (rSquared) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pReturns := returns(eq)
+	bReturns := returns(bm)
+
+	if len(pReturns) == 0 || len(bReturns) == 0 {
+		return 0
+	}
+
+	sp := stddev(pReturns)
+	sb := stddev(bReturns)
+
+	if sp == 0 || sb == 0 {
+		return 0
+	}
+
+	corr := covariance(pReturns, bReturns) / (sp * sb)
+
+	return corr * corr
+}
+
 func (rSquared) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // RSquared measures how well portfolio returns are explained by

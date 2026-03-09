@@ -15,10 +15,30 @@
 
 package portfolio
 
+import "math"
+
 type trackingError struct{}
 
-func (trackingError) Name() string                                         { return "TrackingError" }
-func (trackingError) Compute(a *Account, window *Period) float64        { return 0 }
+func (trackingError) Name() string { return "TrackingError" }
+
+func (trackingError) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pReturns := returns(eq)
+	bReturns := returns(bm)
+
+	activeReturns := excessReturns(pReturns, bReturns)
+	if len(activeReturns) == 0 {
+		return 0
+	}
+
+	times := a.EquityTimes()
+	af := annualizationFactor(times)
+
+	return stddev(activeReturns) * math.Sqrt(af)
+}
+
 func (trackingError) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // TrackingError is the standard deviation of the difference between

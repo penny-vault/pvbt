@@ -15,10 +15,35 @@
 
 package portfolio
 
+import "math"
+
 type informationRatio struct{}
 
-func (informationRatio) Name() string                                         { return "InformationRatio" }
-func (informationRatio) Compute(a *Account, window *Period) float64        { return 0 }
+func (informationRatio) Name() string { return "InformationRatio" }
+
+func (informationRatio) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pReturns := returns(eq)
+	bReturns := returns(bm)
+
+	activeReturns := excessReturns(pReturns, bReturns)
+	if len(activeReturns) == 0 {
+		return 0
+	}
+
+	te := stddev(activeReturns)
+	if te == 0 {
+		return 0
+	}
+
+	times := a.EquityTimes()
+	af := annualizationFactor(times)
+
+	return mean(activeReturns) / te * math.Sqrt(af)
+}
+
 func (informationRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // InformationRatio measures the portfolio's active return per unit of
