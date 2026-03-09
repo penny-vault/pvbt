@@ -131,8 +131,8 @@ type PortfolioManager interface {
 	// performance metrics (equity curve, drawdowns, returns, etc.).
 	UpdatePrices(df *data.DataFrame)
 
-	// SetBroker attaches or replaces the broker used for order
-	// execution. Pass nil to detach the broker and revert to simulated
-	// execution.
+	// SetBroker replaces the broker used for order execution. A broker
+	// is always required -- for backtesting the engine provides a
+	// simulated broker, for live trading a real one.
 	SetBroker(b broker.Broker)
 }

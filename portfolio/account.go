@@ -40,8 +40,8 @@ func New(opts ...Option) *Account {
 	return a
 }
 
-// WithBroker returns an Option that attaches a broker to the account
-// at construction time.
+// WithBroker returns an Option that sets the broker used for order
+// execution. A broker is always required.
 func WithBroker(b broker.Broker) Option {
 	return func(a *Account) {
 		a.SetBroker(b)

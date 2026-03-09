@@ -35,15 +35,17 @@ type Broker interface {
 	// Close tears down the broker session and releases resources.
 	Close() error
 
-	// Submit sends an order to the brokerage and returns a fill report.
-	Submit(order Order) (Fill, error)
+	// Submit sends an order to the brokerage and returns one or more fill
+	// reports. Large orders may be filled in multiple lots at different
+	// prices.
+	Submit(order Order) ([]Fill, error)
 
 	// Cancel requests cancellation of an open order by ID.
 	Cancel(orderID string) error
 
 	// Replace cancels an existing order and submits a replacement atomically
-	// (cancel-replace).
-	Replace(orderID string, order Order) (Fill, error)
+	// (cancel-replace). Returns one or more fills for the replacement order.
+	Replace(orderID string, order Order) ([]Fill, error)
 
 	// Orders returns all orders for the current trading day.
 	Orders() ([]Order, error)
