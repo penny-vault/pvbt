@@ -5,36 +5,39 @@ import (
 	"math"
 	"strings"
 
+	"github.com/NimbleMarkets/ntcharts/canvas"
+	"github.com/NimbleMarkets/ntcharts/canvas/graph"
+	"github.com/NimbleMarkets/ntcharts/canvas/runes"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/penny-vault/pvbt/data"
 )
 
-// series holds the label and values for one (asset, metric) combination.
-type series struct {
+// chartSeries holds the label and values for one (asset, metric) combination.
+type chartSeries struct {
 	label  string
 	values []float64
 	color  lipgloss.Color
 }
 
 // exploreGraphModel is a bubbletea Model that renders a multi-series
-// text-based line chart for a DataFrame.
+// line chart for a DataFrame using ntcharts line-drawing characters.
 type exploreGraphModel struct {
 	df     *data.DataFrame
-	series []series
+	series []chartSeries
 	width  int
 	height int
 }
 
 // seriesColors defines the palette used for chart series.
 var seriesColors = []lipgloss.Color{
-	lipgloss.Color("12"), // blue
-	lipgloss.Color("10"), // green
-	lipgloss.Color("9"),  // red
-	lipgloss.Color("11"), // yellow
-	lipgloss.Color("13"), // magenta
-	lipgloss.Color("14"), // cyan
-	lipgloss.Color("15"), // white
+	lipgloss.Color("12"),  // blue
+	lipgloss.Color("10"),  // green
+	lipgloss.Color("9"),   // red
+	lipgloss.Color("11"),  // yellow
+	lipgloss.Color("13"),  // magenta
+	lipgloss.Color("14"),  // cyan
+	lipgloss.Color("15"),  // white
 	lipgloss.Color("208"), // orange
 }
 
@@ -42,13 +45,13 @@ func newExploreGraphModel(df *data.DataFrame) exploreGraphModel {
 	assets := df.AssetList()
 	metrics := df.MetricList()
 
-	var allSeries []series
+	var allSeries []chartSeries
 	colorIdx := 0
 	for _, a := range assets {
 		for _, m := range metrics {
 			col := df.Column(a, m)
 			label := fmt.Sprintf("%s/%s", a.Ticker, string(m))
-			allSeries = append(allSeries, series{
+			allSeries = append(allSeries, chartSeries{
 				label:  label,
 				values: col,
 				color:  seriesColors[colorIdx%len(seriesColors)],
@@ -88,18 +91,22 @@ func (m exploreGraphModel) View() string {
 		return "Loading..."
 	}
 
-	// Layout: title (1) + chart + legend (series count + 1) + help (1)
+	multiSeries := len(m.series) > 1
+
+	// Layout: title (1) + blank (1) + chart + x-axis (1) + blank (1) + legend + help (1)
 	legendHeight := len(m.series) + 1
-	chartHeight := m.height - 2 - legendHeight - 1 // 2 for title+blank, 1 for help
+	chartHeight := m.height - 2 - 1 - legendHeight - 1
 	if chartHeight < 3 {
 		chartHeight = 3
 	}
-	multiSeries := len(m.series) > 1
-	rightMargin := 11 // always show right pct axis for single; left pct axis for multi
-	if multiSeries {
-		rightMargin = 0
+
+	// Reserve space for left Y-axis labels and optional right pct axis
+	leftMargin := 10 // "  nnn.nn "  + axis char
+	rightMargin := 0
+	if !multiSeries {
+		rightMargin = 11
 	}
-	chartWidth := m.width - 10 - rightMargin // reserve space for left Y-axis + optional right pct axis
+	chartWidth := m.width - leftMargin - rightMargin
 	if chartWidth < 10 {
 		chartWidth = 10
 	}
@@ -131,8 +138,7 @@ func (m exploreGraphModel) View() string {
 		}
 	}
 
-	// For multi-series, convert values to percent change so they share a scale.
-	// For single series, use raw values.
+	// For multi-series, convert to percent change so they share a scale.
 	plotSeries := make([][]float64, len(m.series))
 	if multiSeries {
 		for si, s := range m.series {
@@ -174,73 +180,88 @@ func (m exploreGraphModel) View() string {
 		valRange = 1
 	}
 
-	// Build the chart grid: each cell holds the index of the series that
-	// occupies it, or -1 if empty.
-	grid := make([][]int, chartHeight)
-	for r := range grid {
-		grid[r] = make([]int, chartWidth)
-		for c := range grid[r] {
-			grid[r][c] = -1
-		}
-	}
+	// Create an ntcharts canvas for the chart area
+	c := canvas.New(chartWidth, chartHeight)
 
+	// Map data to canvas Y coordinates and draw each series
 	n := len(times)
-	valToRow := func(v float64) int {
-		row := int((maxVal - v) / valRange * float64(chartHeight-1))
-		if row < 0 {
-			row = 0
-		}
-		if row >= chartHeight {
-			row = chartHeight - 1
-		}
-		return row
-	}
+	xAxisRow := chartHeight - 1 // x-axis at bottom of canvas
 
 	for si, vals := range plotSeries {
-		prevRow := -1
+		// Resample data to chart width
+		seqY := make([]int, chartWidth)
+		hasData := make([]bool, chartWidth)
 		for col := 0; col < chartWidth; col++ {
-			// Map chart column to data index
 			idx := col * n / chartWidth
 			if idx >= len(vals) {
 				idx = len(vals) - 1
 			}
 			v := vals[idx]
 			if math.IsNaN(v) {
-				prevRow = -1
+				hasData[col] = false
 				continue
 			}
-			row := valToRow(v)
+			// Map value to canvas Y: cartesian Y where 0=bottom, chartHeight-1=top
+			cartY := int((v - minVal) / valRange * float64(chartHeight-1))
+			if cartY < 0 {
+				cartY = 0
+			}
+			if cartY >= chartHeight {
+				cartY = chartHeight - 1
+			}
+			// Convert to canvas coordinates (0,0 is top-left)
+			seqY[col] = canvas.CanvasYCoordinate(xAxisRow, cartY)
+			hasData[col] = true
+		}
 
-			// Draw a vertical line connecting previous point to current
-			if prevRow >= 0 && prevRow != row {
-				lo, hi := prevRow, row
-				if lo > hi {
-					lo, hi = hi, lo
-				}
-				for r := lo; r <= hi; r++ {
-					if grid[r][col] == -1 {
-						grid[r][col] = si
-					}
+		// Build contiguous segments (skip NaN gaps)
+		style := lipgloss.NewStyle().Foreground(m.series[si].color)
+		startCol := -1
+		for col := 0; col <= chartWidth; col++ {
+			if col < chartWidth && hasData[col] {
+				if startCol < 0 {
+					startCol = col
 				}
 			} else {
-				if grid[row][col] == -1 {
-					grid[row][col] = si
+				if startCol >= 0 {
+					// Draw this segment
+					seg := seqY[startCol:col]
+					graph.DrawLineSequence(&c, false, startCol, seg, runes.ArcLineStyle, style)
+					startCol = -1
 				}
 			}
-			prevRow = row
 		}
 	}
 
-	// Determine which rows get horizontal grid lines (every ~5 rows)
+	// Draw horizontal grid lines
 	gridInterval := chartHeight / 5
 	if gridInterval < 2 {
 		gridInterval = 2
 	}
+	gridStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
+	for row := 0; row < chartHeight; row++ {
+		if row == 0 || row == chartHeight-1 || row%gridInterval == 0 {
+			for col := 0; col < chartWidth; col++ {
+				cell := c.Cell(canvas.Point{X: col, Y: row})
+				if cell.Rune == 0 || cell.Rune == ' ' {
+					c.SetRuneWithStyle(canvas.Point{X: col, Y: row}, '\u2500', gridStyle)
+				}
+			}
+		}
+	}
+
+	// Get the canvas view (string with newlines)
+	canvasView := c.View()
+	canvasLines := strings.Split(canvasView, "\n")
+
+	// Determine grid row positions for Y-axis labels
 	isGridRow := func(row int) bool {
 		return row == 0 || row == chartHeight-1 || row%gridInterval == 0
 	}
 
-	// For single series: pct change on right axis using first value as reference
+	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+
+	// For single series: pct change on right axis
 	refVal := firstVal[0]
 	pctForRow := func(row int) string {
 		if math.IsNaN(refVal) || refVal == 0 {
@@ -251,12 +272,11 @@ func (m exploreGraphModel) View() string {
 		return fmt.Sprintf("%+.1f%%", pct)
 	}
 
-	dimStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	gridStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("237"))
-
-	// Render the chart
+	// Combine Y-axis labels with canvas lines
 	var chartLines []string
-	for row := 0; row < chartHeight; row++ {
+	for row := 0; row < chartHeight && row < len(canvasLines); row++ {
+		var sb strings.Builder
+
 		// Left Y-axis label
 		yLabel := "        "
 		if isGridRow(row) {
@@ -267,8 +287,6 @@ func (m exploreGraphModel) View() string {
 				yLabel = fmt.Sprintf("%8.2f", val)
 			}
 		}
-
-		var sb strings.Builder
 		sb.WriteString(dimStyle.Render(yLabel))
 		if isGridRow(row) {
 			sb.WriteString(dimStyle.Render("\u2524"))
@@ -276,17 +294,8 @@ func (m exploreGraphModel) View() string {
 			sb.WriteString(dimStyle.Render("\u2502"))
 		}
 
-		for col := 0; col < chartWidth; col++ {
-			si := grid[row][col]
-			if si >= 0 {
-				style := lipgloss.NewStyle().Foreground(m.series[si].color)
-				sb.WriteString(style.Render("\u2588"))
-			} else if isGridRow(row) {
-				sb.WriteString(gridStyle.Render("\u2500"))
-			} else {
-				sb.WriteString(" ")
-			}
-		}
+		// Canvas row
+		sb.WriteString(canvasLines[row])
 
 		// Right Y-axis with percent change (only for single series)
 		if !multiSeries {
@@ -302,7 +311,7 @@ func (m exploreGraphModel) View() string {
 	}
 
 	// X-axis: show start and end dates
-	xAxis := strings.Repeat(" ", 9) +
+	xAxis := strings.Repeat(" ", leftMargin) +
 		times[0].Format("2006-01-02") +
 		strings.Repeat(" ", max(0, chartWidth-20)) +
 		times[len(times)-1].Format("2006-01-02")
