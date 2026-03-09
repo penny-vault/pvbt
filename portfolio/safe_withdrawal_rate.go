@@ -166,4 +166,4 @@ func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { 
 // (as a percentage of initial balance) where the portfolio balance
 // never reaches zero over the simulation period. Uses circular
 // bootstrap Monte Carlo simulation of historical returns.
-var SafeWithdrawalRate = safeWithdrawalRate{}
+var SafeWithdrawalRate PerformanceMetric = safeWithdrawalRate{}

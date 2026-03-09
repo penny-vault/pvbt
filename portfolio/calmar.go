@@ -54,4 +54,4 @@ func (calmar) Compute(a *Account, window *Period) float64 {
 func (calmar) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
-var Calmar = calmar{}
+var Calmar PerformanceMetric = calmar{}

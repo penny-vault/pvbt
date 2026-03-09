@@ -43,4 +43,4 @@ func (trackingError) ComputeSeries(a *Account, window *Period) []float64 { retur
 
 // TrackingError is the standard deviation of the difference between
 // portfolio returns and benchmark returns.
-var TrackingError = trackingError{}
+var TrackingError PerformanceMetric = trackingError{}

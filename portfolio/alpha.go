@@ -41,4 +41,4 @@ func (alpha) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Alpha is Jensen's alpha: the portfolio's excess return over what CAPM
 // would predict given its beta.
-var Alpha = alpha{}
+var Alpha PerformanceMetric = alpha{}

@@ -131,4 +131,4 @@ func (mwrr) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 // MWRR is the money-weighted rate of return: accounts for the timing
 // and size of cash flows (deposits/withdrawals) using XIRR. Unlike
 // TWRR, this metric reflects the investor's actual experience.
-var MWRR = mwrr{}
+var MWRR PerformanceMetric = mwrr{}

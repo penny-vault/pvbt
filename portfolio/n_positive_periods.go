@@ -42,4 +42,4 @@ func (nPositivePeriods) ComputeSeries(a *Account, window *Period) []float64 { re
 // NPositivePeriods is the percentage of periods with positive returns.
 // A higher value indicates the portfolio gains more often than it
 // loses, though it says nothing about the magnitude of gains vs losses.
-var NPositivePeriods = nPositivePeriods{}
+var NPositivePeriods PerformanceMetric = nPositivePeriods{}

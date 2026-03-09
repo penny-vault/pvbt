@@ -78,4 +78,4 @@ func (kRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 // KRatio measures the consistency of returns over time: the slope of
 // the log-VAMI regression line divided by N times the standard error
 // of the slope. Higher values indicate more consistent growth.
-var KRatio = kRatio{}
+var KRatio PerformanceMetric = kRatio{}

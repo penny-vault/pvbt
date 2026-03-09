@@ -47,4 +47,4 @@ func (gainLossRatio) ComputeSeries(a *Account, window *Period) []float64 { retur
 // average loss on losing periods. A ratio above 1.0 means wins are
 // larger than losses on average. Combined with NPositivePeriods, this
 // gives a complete picture of the win/loss profile.
-var GainLossRatio = gainLossRatio{}
+var GainLossRatio PerformanceMetric = gainLossRatio{}

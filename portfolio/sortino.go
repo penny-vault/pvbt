@@ -39,17 +39,17 @@ func (sortino) Compute(a *Account, window *Period) float64 {
 		return 0
 	}
 
-	af := annualizationFactor(a.EquityTimes())
-	dd := stddev(neg) * math.Sqrt(af)
-	if dd == 0 {
+	sd := stddev(neg)
+	if sd == 0 {
 		return 0
 	}
 
-	return mean(er) / stddev(neg) * math.Sqrt(af)
+	af := annualizationFactor(a.EquityTimes())
+	return mean(er) / sd * math.Sqrt(af)
 }
 
 func (sortino) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Sortino is the Sortino ratio: like Sharpe but uses downside deviation
 // instead of total standard deviation, penalizing only negative volatility.
-var Sortino = sortino{}
+var Sortino PerformanceMetric = sortino{}

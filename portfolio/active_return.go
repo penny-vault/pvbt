@@ -68,4 +68,4 @@ func (activeReturn) ComputeSeries(a *Account, window *Period) []float64 {
 // ActiveReturn is the difference between portfolio return and benchmark
 // return (strategy - benchmark). Measures the value added by active
 // management. Highly dependent on appropriate benchmark selection.
-var ActiveReturn = activeReturn{}
+var ActiveReturn PerformanceMetric = activeReturn{}

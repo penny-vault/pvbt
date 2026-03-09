@@ -62,4 +62,4 @@ func (avgDrawdown) ComputeSeries(a *Account, window *Period) []float64 { return 
 // AvgDrawdown is the mean loss percentage across all drawdown periods.
 // A drawdown is the decline from a peak to a subsequent trough.
 // Lower values indicate the portfolio recovers quickly from losses.
-var AvgDrawdown = avgDrawdown{}
+var AvgDrawdown PerformanceMetric = avgDrawdown{}

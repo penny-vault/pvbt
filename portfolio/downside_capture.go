@@ -61,4 +61,4 @@ func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 
 // benchmark return during periods when the benchmark is down. A ratio
 // below 100% means the portfolio loses less than the benchmark in
 // falling markets.
-var DownsideCaptureRatio = downsideCaptureRatio{}
+var DownsideCaptureRatio PerformanceMetric = downsideCaptureRatio{}

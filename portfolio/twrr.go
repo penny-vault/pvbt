@@ -58,4 +58,4 @@ func (twrr) ComputeSeries(a *Account, window *Period) []float64 {
 
 // TWRR is the time-weighted rate of return, which eliminates the effect
 // of cash flows (deposits/withdrawals) on portfolio returns.
-var TWRR = twrr{}
+var TWRR PerformanceMetric = twrr{}
