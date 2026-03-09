@@ -16,6 +16,8 @@
 package portfolio
 
 import (
+	"math"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
@@ -28,7 +30,45 @@ type maxAboveZero struct {
 // signal value above zero at each timestep. If no assets have a
 // positive value at a given timestep, the fallback assets are selected
 // instead.
-func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame { return nil }
+func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
+	times := df.Times()
+	assets := df.AssetList()
+	metric := df.MetricList()[0]
+
+	selected := make(map[string]asset.Asset)
+
+	for _, t := range times {
+		bestVal := math.Inf(-1)
+		var bestAsset *asset.Asset
+
+		for i := range assets {
+			v := df.ValueAt(assets[i], metric, t)
+			if math.IsNaN(v) {
+				continue
+			}
+
+			if v > 0 && v > bestVal {
+				bestVal = v
+				bestAsset = &assets[i]
+			}
+		}
+
+		if bestAsset != nil {
+			selected[bestAsset.CompositeFigi] = *bestAsset
+		} else {
+			for _, fb := range m.fallback {
+				selected[fb.CompositeFigi] = fb
+			}
+		}
+	}
+
+	result := make([]asset.Asset, 0, len(selected))
+	for _, a := range selected {
+		result = append(result, a)
+	}
+
+	return df.Assets(result...)
+}
 
 // MaxAboveZero returns a Selector that picks the asset with the highest
 // signal value above zero. If no assets qualify, the fallback assets
