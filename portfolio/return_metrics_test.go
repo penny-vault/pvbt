@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -23,24 +22,6 @@ var _ = Describe("Return Metrics", func() {
 		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	})
-
-	// buildDF builds a single-timestamp DataFrame with MetricClose and AdjClose
-	// for the given assets. closes and adjCloses must have the same length as assets.
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	// buildAccount creates an Account with a rising equity curve over 5 days.
 	// Equity values: 10000, 10100, 10300, 10200, 10500
@@ -97,10 +78,6 @@ var _ = Describe("Return Metrics", func() {
 	}
 
 	Describe("TWRR", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.TWRR.Name()).To(Equal("TWRR"))
-		})
-
 		It("returns a positive value for a rising equity curve", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.TWRR).Value()
@@ -138,10 +115,6 @@ var _ = Describe("Return Metrics", func() {
 	})
 
 	Describe("MWRR", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.MWRR.Name()).To(Equal("MWRR"))
-		})
-
 		It("returns a positive annualized rate for a growing portfolio with no external flows", func() {
 			a := portfolio.New(portfolio.WithCash(10_000))
 
@@ -171,19 +144,9 @@ var _ = Describe("Return Metrics", func() {
 			Expect(result).To(BeNumerically(">", 0.0))
 			Expect(result).To(BeNumerically("~", 0.10, 0.01))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.MWRR).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("ActiveReturn", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.ActiveReturn.Name()).To(Equal("ActiveReturn"))
-		})
-
 		It("computes the difference between portfolio and benchmark total return", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()

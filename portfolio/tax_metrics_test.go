@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -19,23 +18,6 @@ var _ = Describe("TaxMetrics", func() {
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 	})
-
-	// helper to build a single-timestamp DataFrame with Close and AdjClose
-	buildDF := func(t time.Time, assets []asset.Asset, closes []float64, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	Describe("realized gains", func() {
 		It("computes STCG for positions held less than one year", func() {

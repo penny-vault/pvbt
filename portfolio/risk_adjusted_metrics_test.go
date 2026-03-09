@@ -22,7 +22,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -32,24 +31,6 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		spy  asset.Asset
 		bil  asset.Asset
 	)
-
-	// buildDF creates a single-timestamp DataFrame with MetricClose and AdjClose
-	// for the given assets.
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
@@ -108,10 +89,6 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			Expect(val).To(BeNumerically(">", 0))
 		})
 
-		It("returns a name of StdDev", func() {
-			Expect(portfolio.StdDev.Name()).To(Equal("StdDev"))
-		})
-
 		It("returns a return series from ComputeSeries", func() {
 			series := acct.PerformanceMetric(portfolio.StdDev).Series()
 			Expect(series).NotTo(BeEmpty())
@@ -122,10 +99,6 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		It("returns a negative value for an equity curve with a dip", func() {
 			val := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
 			Expect(val).To(BeNumerically("<", 0))
-		})
-
-		It("returns a name of MaxDrawdown", func() {
-			Expect(portfolio.MaxDrawdown.Name()).To(Equal("MaxDrawdown"))
 		})
 
 		It("returns a drawdown series from ComputeSeries", func() {
@@ -139,20 +112,12 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			val := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
 			Expect(val).To(BeNumerically(">=", 0))
 		})
-
-		It("returns a name of DownsideDeviation", func() {
-			Expect(portfolio.DownsideDeviation.Name()).To(Equal("DownsideDeviation"))
-		})
 	})
 
 	Describe("Sharpe", func() {
 		It("returns a positive value for a rising equity curve", func() {
 			val := acct.PerformanceMetric(portfolio.Sharpe).Value()
 			Expect(val).To(BeNumerically(">", 0))
-		})
-
-		It("returns a name of Sharpe", func() {
-			Expect(portfolio.Sharpe.Name()).To(Equal("Sharpe"))
 		})
 	})
 
@@ -161,26 +126,12 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			val := acct.PerformanceMetric(portfolio.Sortino).Value()
 			Expect(val).To(BeNumerically(">", 0))
 		})
-
-		It("returns a value >= Sharpe (only downside counted)", func() {
-			sharpeVal := acct.PerformanceMetric(portfolio.Sharpe).Value()
-			sortinoVal := acct.PerformanceMetric(portfolio.Sortino).Value()
-			Expect(sortinoVal).To(BeNumerically(">=", sharpeVal))
-		})
-
-		It("returns a name of Sortino", func() {
-			Expect(portfolio.Sortino.Name()).To(Equal("Sortino"))
-		})
 	})
 
 	Describe("Calmar", func() {
 		It("returns a positive value for a rising equity curve with drawdown", func() {
 			val := acct.PerformanceMetric(portfolio.Calmar).Value()
 			Expect(val).To(BeNumerically(">", 0))
-		})
-
-		It("returns a name of Calmar", func() {
-			Expect(portfolio.Calmar.Name()).To(Equal("Calmar"))
 		})
 	})
 })

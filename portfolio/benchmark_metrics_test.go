@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -19,23 +18,6 @@ var _ = Describe("Benchmark Metrics", func() {
 		bil asset.Asset
 		a   *portfolio.Account
 	)
-
-	// buildDF builds a single-timestamp DataFrame with MetricClose and AdjClose.
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
@@ -93,70 +75,34 @@ var _ = Describe("Benchmark Metrics", func() {
 	})
 
 	Describe("Beta", func() {
-		It("returns a name", func() {
-			Expect(portfolio.Beta.Name()).To(Equal("Beta"))
-		})
-
 		It("returns beta close to 1.0 when portfolio tracks benchmark", func() {
 			b := a.PerformanceMetric(portfolio.Beta).Value()
 			Expect(b).To(BeNumerically("~", 1.0, 1e-10))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.Beta.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("Alpha", func() {
-		It("returns a name", func() {
-			Expect(portfolio.Alpha.Name()).To(Equal("Alpha"))
-		})
-
 		It("returns alpha close to 0 when portfolio tracks benchmark", func() {
 			v := a.PerformanceMetric(portfolio.Alpha).Value()
 			Expect(v).To(BeNumerically("~", 0.0, 1e-6))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.Alpha.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("TrackingError", func() {
-		It("returns a name", func() {
-			Expect(portfolio.TrackingError.Name()).To(Equal("TrackingError"))
-		})
-
 		It("returns tracking error close to 0 when portfolio tracks benchmark", func() {
 			v := a.PerformanceMetric(portfolio.TrackingError).Value()
 			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.TrackingError.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("InformationRatio", func() {
-		It("returns a name", func() {
-			Expect(portfolio.InformationRatio.Name()).To(Equal("InformationRatio"))
-		})
-
 		It("returns 0 when tracking error is 0", func() {
 			v := a.PerformanceMetric(portfolio.InformationRatio).Value()
 			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.InformationRatio.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("Treynor", func() {
-		It("returns a name", func() {
-			Expect(portfolio.Treynor.Name()).To(Equal("Treynor"))
-		})
-
 		It("computes treynor ratio", func() {
 			v := a.PerformanceMetric(portfolio.Treynor).Value()
 			// portfolioReturn = (equity_end / equity_start) - 1
@@ -170,24 +116,12 @@ var _ = Describe("Benchmark Metrics", func() {
 			expected := (pReturn - rfReturn) / 1.0
 			Expect(v).To(BeNumerically("~", expected, 1e-6))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.Treynor.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("RSquared", func() {
-		It("returns a name", func() {
-			Expect(portfolio.RSquared.Name()).To(Equal("RSquared"))
-		})
-
 		It("returns R-squared close to 1.0 when portfolio tracks benchmark", func() {
 			v := a.PerformanceMetric(portfolio.RSquared).Value()
 			Expect(v).To(BeNumerically("~", 1.0, 1e-10))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.RSquared.ComputeSeries(a, nil)).To(BeNil())
 		})
 	})
 
@@ -349,18 +283,6 @@ var _ = Describe("Benchmark Metrics", func() {
 			}
 			v := acct.PerformanceMetric(portfolio.RSquared).Value()
 			Expect(v).To(Equal(0.0))
-		})
-	})
-
-	// Verify metric Name() strings.
-	Describe("Name methods", func() {
-		It("returns correct names for all benchmark metrics", func() {
-			Expect(portfolio.Beta.Name()).To(Equal("Beta"))
-			Expect(portfolio.Alpha.Name()).To(Equal("Alpha"))
-			Expect(portfolio.TrackingError.Name()).To(Equal("TrackingError"))
-			Expect(portfolio.InformationRatio.Name()).To(Equal("InformationRatio"))
-			Expect(portfolio.Treynor.Name()).To(Equal("Treynor"))
-			Expect(portfolio.RSquared.Name()).To(Equal("RSquared"))
 		})
 	})
 

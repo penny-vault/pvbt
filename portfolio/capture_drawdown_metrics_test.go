@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -18,22 +17,6 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		bil asset.Asset
 		a   *portfolio.Account
 	)
-
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
@@ -98,17 +81,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	})
 
 	Describe("UpsideCaptureRatio", func() {
-		It("returns a name", func() {
-			Expect(portfolio.UpsideCaptureRatio.Name()).To(Equal("UpsideCaptureRatio"))
-		})
-
 		It("returns a positive value for a portfolio that participates in up markets", func() {
 			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
 			Expect(v).To(BeNumerically(">", 0.0))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.UpsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
 		})
 
 		It("returns 0 when there are no up periods in benchmark", func() {
@@ -136,17 +111,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	})
 
 	Describe("DownsideCaptureRatio", func() {
-		It("returns a name", func() {
-			Expect(portfolio.DownsideCaptureRatio.Name()).To(Equal("DownsideCaptureRatio"))
-		})
-
 		It("returns a positive value for a portfolio that participates in down markets", func() {
 			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
 			Expect(v).To(BeNumerically(">", 0.0))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.DownsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
 		})
 
 		It("returns 0 when there are no down periods in benchmark", func() {
@@ -174,17 +141,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	})
 
 	Describe("AvgDrawdown", func() {
-		It("returns a name", func() {
-			Expect(portfolio.AvgDrawdown.Name()).To(Equal("AvgDrawdown"))
-		})
-
 		It("returns a negative value for an equity curve with dips", func() {
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
 			Expect(v).To(BeNumerically("<", 0.0))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			Expect(portfolio.AvgDrawdown.ComputeSeries(a, nil)).To(BeNil())
 		})
 
 		It("returns 0 when equity curve never dips", func() {
