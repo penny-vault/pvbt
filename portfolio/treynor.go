@@ -17,10 +17,29 @@ package portfolio
 
 type treynor struct{}
 
-func (treynor) Name() string                                         { return "Treynor" }
-func (treynor) Compute(a *Account, window *Period) float64        { return 0 }
+func (treynor) Name() string { return "Treynor" }
+
+func (treynor) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	rf := windowSlice(a.RiskFreePrices(), a.EquityTimes(), window)
+
+	if len(eq) < 2 || len(rf) < 2 {
+		return 0
+	}
+
+	portfolioReturn := (eq[len(eq)-1] / eq[0]) - 1
+	riskFreeReturn := (rf[len(rf)-1] / rf[0]) - 1
+
+	b := Beta.Compute(a, window)
+	if b == 0 {
+		return 0
+	}
+
+	return (portfolioReturn - riskFreeReturn) / b
+}
+
 func (treynor) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Treynor is the Treynor ratio: excess return per unit of systematic
 // risk (beta).
-var Treynor = treynor{}
+var Treynor PerformanceMetric = treynor{}

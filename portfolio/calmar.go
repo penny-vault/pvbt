@@ -15,11 +15,43 @@
 
 package portfolio
 
+import "math"
+
 type calmar struct{}
 
-func (calmar) Name() string                                         { return "Calmar" }
-func (calmar) Compute(a *Account, window *Period) float64        { return 0 }
+func (calmar) Name() string { return "Calmar" }
+
+func (calmar) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	eqTimes := windowSliceTimes(a.EquityTimes(), window)
+
+	if len(eq) < 2 || len(eqTimes) < 2 {
+		return 0
+	}
+
+	years := eqTimes[len(eqTimes)-1].Sub(eqTimes[0]).Hours() / 24 / 365.25
+	if years <= 0 {
+		return 0
+	}
+
+	annualizedReturn := cagr(eq[0], eq[len(eq)-1], years)
+
+	dd := drawdownSeries(eq)
+	minDD := 0.0
+	for _, v := range dd {
+		if v < minDD {
+			minDD = v
+		}
+	}
+
+	if minDD == 0 {
+		return 0
+	}
+
+	return annualizedReturn / math.Abs(minDD)
+}
+
 func (calmar) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
-var Calmar = calmar{}
+var Calmar PerformanceMetric = calmar{}

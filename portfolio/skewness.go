@@ -17,11 +17,35 @@ package portfolio
 
 type skewness struct{}
 
-func (skewness) Name() string                                      { return "Skewness" }
-func (skewness) Compute(a *Account, window *Period) float64         { return 0 }
+func (skewness) Name() string { return "Skewness" }
+
+func (skewness) Compute(a *Account, window *Period) float64 {
+	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(prices)
+
+	n := len(r)
+	if n < 3 {
+		return 0
+	}
+
+	s := stddev(r)
+	if s == 0 {
+		return 0
+	}
+
+	m := mean(r)
+	sum := 0.0
+	for _, v := range r {
+		d := v - m
+		sum += d * d * d
+	}
+
+	return sum / float64(n) / (s * s * s)
+}
+
 func (skewness) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Skewness measures the asymmetry of the return distribution.
 // Negative skew means the left tail is longer (more large losses
 // than large gains). Positive skew means the right tail is longer.
-var Skewness = skewness{}
+var Skewness PerformanceMetric = skewness{}

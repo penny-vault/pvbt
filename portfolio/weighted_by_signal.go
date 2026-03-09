@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+)
 
 // WeightedBySignal builds a PortfolioPlan from a DataFrame by weighting
 // each selected asset proportionally to the values in the named metric
@@ -25,4 +30,43 @@ import "github.com/penny-vault/pvbt/data"
 // For example, weighting by market cap:
 //
 //	plan := WeightedBySignal(selected, data.MarketCap)
-func WeightedBySignal(df *data.DataFrame, metric data.Metric) PortfolioPlan { return nil }
+func WeightedBySignal(df *data.DataFrame, metric data.Metric) PortfolioPlan {
+	times := df.Times()
+	assets := df.AssetList()
+
+	plan := make(PortfolioPlan, len(times))
+	equalWeight := 1.0 / float64(len(assets))
+
+	for i, t := range times {
+		// Read signal values and sum positives.
+		values := make([]float64, len(assets))
+		sum := 0.0
+
+		for j, a := range assets {
+			v := df.ValueAt(a, metric, t)
+			if math.IsNaN(v) || v < 0 {
+				values[j] = 0
+			} else {
+				values[j] = v
+				sum += v
+			}
+		}
+
+		members := make(map[asset.Asset]float64, len(assets))
+
+		if sum == 0 {
+			// Fall back to equal weight.
+			for _, a := range assets {
+				members[a] = equalWeight
+			}
+		} else {
+			for j, a := range assets {
+				members[a] = values[j] / sum
+			}
+		}
+
+		plan[i] = Allocation{Date: t, Members: members}
+	}
+
+	return plan
+}

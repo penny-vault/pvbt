@@ -17,9 +17,28 @@ package portfolio
 
 type beta struct{}
 
-func (beta) Name() string                                         { return "Beta" }
-func (beta) Compute(a *Account, window *Period) float64        { return 0 }
+func (beta) Name() string { return "Beta" }
+
+func (beta) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pReturns := returns(eq)
+	bReturns := returns(bm)
+
+	if len(pReturns) == 0 || len(bReturns) == 0 {
+		return 0
+	}
+
+	v := variance(bReturns)
+	if v == 0 {
+		return 0
+	}
+
+	return covariance(pReturns, bReturns) / v
+}
+
 func (beta) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Beta measures the portfolio's sensitivity to benchmark movements.
-var Beta = beta{}
+var Beta PerformanceMetric = beta{}

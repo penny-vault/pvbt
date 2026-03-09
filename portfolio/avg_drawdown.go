@@ -17,11 +17,49 @@ package portfolio
 
 type avgDrawdown struct{}
 
-func (avgDrawdown) Name() string                                      { return "AvgDrawdown" }
-func (avgDrawdown) Compute(a *Account, window *Period) float64         { return 0 }
+func (avgDrawdown) Name() string { return "AvgDrawdown" }
+
+func (avgDrawdown) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	dd := drawdownSeries(eq)
+
+	// Identify drawdown episodes: contiguous sequences where dd < 0.
+	// For each episode, find the trough (most negative value).
+	var troughs []float64
+	inEpisode := false
+	trough := 0.0
+
+	for _, v := range dd {
+		if v < 0 {
+			if !inEpisode {
+				inEpisode = true
+				trough = v
+			} else if v < trough {
+				trough = v
+			}
+		} else {
+			if inEpisode {
+				troughs = append(troughs, trough)
+				inEpisode = false
+			}
+		}
+	}
+
+	// Close any open episode at the end.
+	if inEpisode {
+		troughs = append(troughs, trough)
+	}
+
+	if len(troughs) == 0 {
+		return 0
+	}
+
+	return mean(troughs)
+}
+
 func (avgDrawdown) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // AvgDrawdown is the mean loss percentage across all drawdown periods.
 // A drawdown is the decline from a peak to a subsequent trough.
 // Lower values indicate the portfolio recovers quickly from losses.
-var AvgDrawdown = avgDrawdown{}
+var AvgDrawdown PerformanceMetric = avgDrawdown{}

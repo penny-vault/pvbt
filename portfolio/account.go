@@ -16,10 +16,22 @@
 package portfolio
 
 import (
+	"math"
+	"time"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/rs/zerolog/log"
 )
+
+// taxLot tracks the purchase date, quantity, and price of a position for
+// tax gain/loss calculations.
+type taxLot struct {
+	Date  time.Time
+	Qty   float64
+	Price float64
+}
 
 // Option configures an Account during construction.
 type Option func(*Account)
@@ -29,11 +41,27 @@ type Option func(*Account)
 // the engine, and inspects it after the run. The engine holds it as
 // *Account (giving access to both interfaces): it passes it as Portfolio
 // to strategy Compute calls, and calls Record/SetBroker directly.
-type Account struct{}
+type Account struct {
+	cash            float64
+	holdings        map[asset.Asset]float64
+	transactions    []Transaction
+	broker          broker.Broker
+	prices          *data.DataFrame
+	equityCurve     []float64
+	equityTimes     []time.Time
+	benchmarkPrices []float64
+	riskFreePrices  []float64
+	benchmark       asset.Asset
+	riskFree        asset.Asset
+	taxLots         map[asset.Asset][]taxLot
+}
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
-	a := &Account{}
+	a := &Account{
+		holdings: make(map[asset.Asset]float64),
+		taxLots:  make(map[asset.Asset][]taxLot),
+	}
 	for _, opt := range opts {
 		opt(a)
 	}
@@ -48,21 +76,228 @@ func WithBroker(b broker.Broker) Option {
 	}
 }
 
-// WithCash returns an Option that sets the initial cash balance.
+// WithCash returns an Option that sets the initial cash balance and
+// records a DepositTransaction.
 func WithCash(amount float64) Option {
-	return func(a *Account) {}
+	return func(a *Account) {
+		a.cash = amount
+		a.transactions = append(a.transactions, Transaction{
+			Type:   DepositTransaction,
+			Amount: amount,
+		})
+	}
+}
+
+// WithBenchmark returns an Option that stores the benchmark asset.
+func WithBenchmark(b asset.Asset) Option {
+	return func(a *Account) {
+		a.benchmark = b
+	}
+}
+
+// WithRiskFree returns an Option that stores the risk-free asset.
+func WithRiskFree(rf asset.Asset) Option {
+	return func(a *Account) {
+		a.riskFree = rf
+	}
+}
+
+// Benchmark returns the benchmark asset.
+func (a *Account) Benchmark() asset.Asset {
+	return a.benchmark
+}
+
+// RiskFree returns the risk-free asset.
+func (a *Account) RiskFree() asset.Asset {
+	return a.riskFree
 }
 
 // --- Portfolio interface ---
 
-func (a *Account) RebalanceTo(alloc ...Allocation)                                     {}
-func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {}
-func (a *Account) Cash() float64                                                        { return 0 }
-func (a *Account) Value() float64                                                       { return 0 }
-func (a *Account) Position(ast asset.Asset) float64                                     { return 0 }
-func (a *Account) PositionValue(ast asset.Asset) float64                                { return 0 }
-func (a *Account) Holdings(fn func(asset.Asset, float64))                               {}
-func (a *Account) Transactions() []Transaction                                          { return nil }
+func (a *Account) RebalanceTo(allocs ...Allocation) {
+	for _, alloc := range allocs {
+		totalValue := a.Value()
+
+		type pendingOrder struct {
+			asset asset.Asset
+			side  Side
+			qty   float64
+		}
+
+		var sells, buys []pendingOrder
+
+		// Sell assets not in the target allocation.
+		for ast, qty := range a.holdings {
+			if _, ok := alloc.Members[ast]; !ok && qty > 0 {
+				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+			}
+		}
+
+		// Diff each target asset against current holdings.
+		for ast, weight := range alloc.Members {
+			price := a.prices.Value(ast, data.MetricClose)
+			if math.IsNaN(price) || price == 0 {
+				continue
+			}
+
+			targetShares := math.Floor(weight * totalValue / price)
+			currentShares := a.holdings[ast]
+			diff := targetShares - currentShares
+
+			if diff > 0 {
+				buys = append(buys, pendingOrder{asset: ast, side: Buy, qty: diff})
+			} else if diff < 0 {
+				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: -diff})
+			}
+		}
+
+		// Process sells first to free up cash, then buys.
+		for _, o := range sells {
+			a.Order(o.asset, o.side, o.qty)
+		}
+		for _, o := range buys {
+			a.Order(o.asset, o.side, o.qty)
+		}
+	}
+}
+func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {
+	order := broker.Order{
+		Asset:       ast,
+		Qty:         qty,
+		OrderType:   broker.Market,
+		TimeInForce: broker.Day,
+	}
+
+	// Map portfolio side to broker side.
+	switch side {
+	case Buy:
+		order.Side = broker.Buy
+	case Sell:
+		order.Side = broker.Sell
+	}
+
+	// Apply modifiers.
+	var hasLimit, hasStop bool
+	for _, mod := range mods {
+		switch m := mod.(type) {
+		case limitModifier:
+			order.LimitPrice = m.price
+			hasLimit = true
+		case stopModifier:
+			order.StopPrice = m.price
+			hasStop = true
+		case dayOrderModifier:
+			order.TimeInForce = broker.Day
+		case goodTilCancelModifier:
+			order.TimeInForce = broker.GTC
+		case fillOrKillModifier:
+			order.TimeInForce = broker.FOK
+		case immediateOrCancelModifier:
+			order.TimeInForce = broker.IOC
+		case onTheOpenModifier:
+			order.TimeInForce = broker.OnOpen
+		case onTheCloseModifier:
+			order.TimeInForce = broker.OnClose
+		case goodTilDateModifier:
+			order.TimeInForce = broker.GTD
+			order.GTDDate = m.date
+		}
+	}
+
+	// Determine order type from price modifiers.
+	if hasLimit && hasStop {
+		order.OrderType = broker.StopLimit
+	} else if hasLimit {
+		order.OrderType = broker.Limit
+	} else if hasStop {
+		order.OrderType = broker.Stop
+	}
+
+	// Submit to broker.
+	fills, err := a.broker.Submit(order)
+	if err != nil {
+		log.Error().Err(err).
+			Str("asset", ast.Ticker).
+			Float64("qty", qty).
+			Msg("order submission failed")
+		return
+	}
+
+	// Record each fill as a transaction.
+	for _, fill := range fills {
+		var txType TransactionType
+		var amount float64
+		switch side {
+		case Buy:
+			txType = BuyTransaction
+			amount = -(fill.Price * fill.Qty)
+		case Sell:
+			txType = SellTransaction
+			amount = fill.Price * fill.Qty
+		}
+
+		a.Record(Transaction{
+			Date:   fill.FilledAt,
+			Asset:  ast,
+			Type:   txType,
+			Qty:    fill.Qty,
+			Price:  fill.Price,
+			Amount: amount,
+		})
+	}
+}
+
+// Cash returns the current cash balance.
+func (a *Account) Cash() float64 {
+	return a.cash
+}
+
+// Value returns the total portfolio value: cash plus all holdings marked
+// to current prices. If no prices have been set yet, returns cash only.
+func (a *Account) Value() float64 {
+	total := a.cash
+	if a.prices != nil {
+		for ast, qty := range a.holdings {
+			v := a.prices.Value(ast, data.MetricClose)
+			if !math.IsNaN(v) {
+				total += qty * v
+			}
+		}
+	}
+	return total
+}
+
+// Position returns the quantity held of a specific asset.
+func (a *Account) Position(ast asset.Asset) float64 {
+	return a.holdings[ast]
+}
+
+// PositionValue returns the current market value of the position in a
+// specific asset (quantity * current price), or 0 if no prices or no position.
+func (a *Account) PositionValue(ast asset.Asset) float64 {
+	qty := a.holdings[ast]
+	if qty == 0 || a.prices == nil {
+		return 0
+	}
+	v := a.prices.Value(ast, data.MetricClose)
+	if math.IsNaN(v) {
+		return 0
+	}
+	return qty * v
+}
+
+// Holdings iterates over all current positions, calling fn with each
+// asset and its held quantity.
+func (a *Account) Holdings(fn func(asset.Asset, float64)) {
+	for ast, qty := range a.holdings {
+		fn(ast, qty)
+	}
+}
+
+// Transactions returns the full transaction log in chronological order.
+func (a *Account) Transactions() []Transaction {
+	return a.transactions
+}
 
 func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery {
 	return PerformanceMetricQuery{account: a, metric: m}
@@ -99,11 +334,211 @@ func (a *Account) RiskMetrics() RiskMetrics {
 }
 
 func (a *Account) TaxMetrics() TaxMetrics {
-	return TaxMetrics{}
+	var tm TaxMetrics
+
+	// Shadow FIFO lot tracker to replay buy/sell history for realized gains.
+	shadowLots := make(map[asset.Asset][]taxLot)
+
+	for _, tx := range a.transactions {
+		switch tx.Type {
+		case BuyTransaction:
+			shadowLots[tx.Asset] = append(shadowLots[tx.Asset], taxLot{
+				Date:  tx.Date,
+				Qty:   tx.Qty,
+				Price: tx.Price,
+			})
+
+		case SellTransaction:
+			remaining := tx.Qty
+			lots := shadowLots[tx.Asset]
+			i := 0
+			for i < len(lots) && remaining > 0 {
+				matched := lots[i].Qty
+				if matched > remaining {
+					matched = remaining
+				}
+
+				gain := (tx.Price - lots[i].Price) * matched
+				holdingDays := tx.Date.Sub(lots[i].Date).Hours() / 24
+				if holdingDays > 365 {
+					tm.LTCG += gain
+				} else {
+					tm.STCG += gain
+				}
+
+				if lots[i].Qty <= remaining {
+					remaining -= lots[i].Qty
+					i++
+				} else {
+					lots[i].Qty -= remaining
+					remaining = 0
+				}
+			}
+			shadowLots[tx.Asset] = lots[i:]
+			if len(shadowLots[tx.Asset]) == 0 {
+				delete(shadowLots, tx.Asset)
+			}
+
+		case DividendTransaction:
+			tm.QualifiedDividends += tx.Amount
+		}
+	}
+
+	// Unrealized gains: compare current tax lots to current prices.
+	if a.prices != nil && len(a.equityTimes) > 0 {
+		now := a.equityTimes[len(a.equityTimes)-1]
+		for ast, lots := range a.taxLots {
+			currentPrice := a.prices.Value(ast, data.MetricClose)
+			if math.IsNaN(currentPrice) {
+				continue
+			}
+			for _, lot := range lots {
+				gain := (currentPrice - lot.Price) * lot.Qty
+				holdingDays := now.Sub(lot.Date).Hours() / 24
+				if holdingDays > 365 {
+					tm.UnrealizedLTCG += gain
+				} else {
+					tm.UnrealizedSTCG += gain
+				}
+			}
+		}
+	}
+
+	// TaxCostRatio: estimated taxes / total portfolio gain.
+	if len(a.equityCurve) >= 2 {
+		initialEquity := a.equityCurve[0]
+		finalEquity := a.equityCurve[len(a.equityCurve)-1]
+		totalGain := finalEquity - initialEquity
+		if totalGain > 0 {
+			estimatedTax := 0.0
+			if tm.STCG > 0 {
+				estimatedTax += 0.25 * tm.STCG
+			}
+			if tm.LTCG > 0 {
+				estimatedTax += 0.15 * tm.LTCG
+			}
+			estimatedTax += 0.15 * tm.QualifiedDividends
+			tm.TaxCostRatio = estimatedTax / totalGain
+		}
+	}
+
+	return tm
 }
 
 func (a *Account) TradeMetrics() TradeMetrics {
-	return TradeMetrics{}
+	// roundTrip represents a completed buy-sell pair.
+	type roundTrip struct {
+		pnl      float64
+		holdDays float64
+	}
+
+	// Build round-trip trades using FIFO matching per asset.
+	// Each buy creates a lot; each sell consumes lots in order.
+	type openLot struct {
+		date  time.Time
+		qty   float64
+		price float64
+	}
+
+	openLots := make(map[asset.Asset][]openLot)
+	var trips []roundTrip
+	var totalSellValue float64
+
+	for _, tx := range a.transactions {
+		switch tx.Type {
+		case BuyTransaction:
+			openLots[tx.Asset] = append(openLots[tx.Asset], openLot{
+				date:  tx.Date,
+				qty:   tx.Qty,
+				price: tx.Price,
+			})
+		case SellTransaction:
+			totalSellValue += tx.Price * tx.Qty
+			remaining := tx.Qty
+			lots := openLots[tx.Asset]
+			for len(lots) > 0 && remaining > 0 {
+				matched := lots[0].qty
+				if matched > remaining {
+					matched = remaining
+				}
+				pnl := (tx.Price - lots[0].price) * matched
+				days := tx.Date.Sub(lots[0].date).Hours() / 24.0
+				trips = append(trips, roundTrip{pnl: pnl, holdDays: days})
+
+				lots[0].qty -= matched
+				remaining -= matched
+				if lots[0].qty == 0 {
+					lots = lots[1:]
+				}
+			}
+			openLots[tx.Asset] = lots
+		}
+	}
+
+	var tm TradeMetrics
+
+	// Round-trip metrics
+	if len(trips) > 0 {
+		var wins, losses int
+		var sumWin, sumLoss, sumHold float64
+
+		for _, rt := range trips {
+			sumHold += rt.holdDays
+			if rt.pnl > 0 {
+				wins++
+				sumWin += rt.pnl
+			} else {
+				losses++
+				sumLoss += rt.pnl // negative
+			}
+		}
+
+		tm.WinRate = float64(wins) / float64(len(trips))
+		tm.AverageHoldingPeriod = sumHold / float64(len(trips))
+
+		if wins > 0 {
+			tm.AverageWin = sumWin / float64(wins)
+		}
+		if losses > 0 {
+			tm.AverageLoss = sumLoss / float64(losses)
+		}
+		if sumLoss != 0 {
+			tm.ProfitFactor = sumWin / math.Abs(sumLoss)
+		}
+		if tm.AverageLoss != 0 {
+			tm.GainLossRatio = tm.AverageWin / math.Abs(tm.AverageLoss)
+		}
+	}
+
+	// NPositivePeriods: fraction of equity curve periods with positive returns.
+	ec := a.equityCurve
+	if len(ec) > 1 {
+		var positive int
+		for i := 1; i < len(ec); i++ {
+			if ec[i] > ec[i-1] {
+				positive++
+			}
+		}
+		tm.NPositivePeriods = float64(positive) / float64(len(ec)-1)
+	}
+
+	// Turnover: annualized total sell value / mean portfolio value.
+	if len(ec) > 1 && totalSellValue > 0 {
+		var sum float64
+		for _, v := range ec {
+			sum += v
+		}
+		meanValue := sum / float64(len(ec))
+		if meanValue > 0 {
+			et := a.equityTimes
+			periodDays := et[len(et)-1].Sub(et[0]).Hours() / 24.0
+			if periodDays > 0 {
+				tm.Turnover = (totalSellValue / meanValue) * (365.25 / periodDays)
+			}
+		}
+	}
+
+	return tm
 }
 
 func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
@@ -116,7 +551,85 @@ func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
 
 // --- PortfolioManager interface ---
 
-func (a *Account) Record(tx Transaction)                    {}
-func (a *Account) UpdatePrices(df *data.DataFrame) {}
-func (a *Account) SetBroker(b broker.Broker)                {}
+// Record appends a transaction to the log and updates cash, holdings,
+// and tax lots accordingly.
+func (a *Account) Record(tx Transaction) {
+	a.transactions = append(a.transactions, tx)
+	a.cash += tx.Amount
 
+	switch tx.Type {
+	case BuyTransaction:
+		a.holdings[tx.Asset] += tx.Qty
+		a.taxLots[tx.Asset] = append(a.taxLots[tx.Asset], taxLot{
+			Date:  tx.Date,
+			Qty:   tx.Qty,
+			Price: tx.Price,
+		})
+	case SellTransaction:
+		a.holdings[tx.Asset] -= tx.Qty
+		remaining := tx.Qty
+		lots := a.taxLots[tx.Asset]
+		i := 0
+		for i < len(lots) && remaining > 0 {
+			if lots[i].Qty <= remaining {
+				remaining -= lots[i].Qty
+				i++
+			} else {
+				lots[i].Qty -= remaining
+				remaining = 0
+			}
+		}
+		a.taxLots[tx.Asset] = lots[i:]
+		if a.holdings[tx.Asset] == 0 {
+			delete(a.holdings, tx.Asset)
+			delete(a.taxLots, tx.Asset)
+		}
+	}
+}
+// UpdatePrices stores the latest price DataFrame, computes the total
+// portfolio value, and appends it to the equity curve. It also tracks
+// benchmark and risk-free price series when those assets are configured.
+func (a *Account) UpdatePrices(df *data.DataFrame) {
+	a.prices = df
+
+	// Compute total portfolio value: cash + marked holdings.
+	total := a.cash
+	for ast, qty := range a.holdings {
+		v := df.Value(ast, data.MetricClose)
+		if !math.IsNaN(v) {
+			total += qty * v
+		}
+	}
+
+	a.equityCurve = append(a.equityCurve, total)
+	a.equityTimes = append(a.equityTimes, df.End())
+
+	// Track benchmark price series (AdjClose).
+	if a.benchmark != (asset.Asset{}) {
+		v := df.Value(a.benchmark, data.AdjClose)
+		if !math.IsNaN(v) {
+			a.benchmarkPrices = append(a.benchmarkPrices, v)
+		}
+	}
+
+	// Track risk-free price series (AdjClose).
+	if a.riskFree != (asset.Asset{}) {
+		v := df.Value(a.riskFree, data.AdjClose)
+		if !math.IsNaN(v) {
+			a.riskFreePrices = append(a.riskFreePrices, v)
+		}
+	}
+}
+
+// EquityCurve returns the equity curve slice.
+func (a *Account) EquityCurve() []float64 { return a.equityCurve }
+
+// EquityTimes returns the equity times slice.
+func (a *Account) EquityTimes() []time.Time { return a.equityTimes }
+
+// BenchmarkPrices returns the benchmark prices slice.
+func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
+
+// RiskFreePrices returns the risk-free prices slice.
+func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
+func (a *Account) SetBroker(b broker.Broker)      { a.broker = b }

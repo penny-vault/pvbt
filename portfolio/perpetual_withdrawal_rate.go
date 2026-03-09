@@ -17,12 +17,31 @@ package portfolio
 
 type perpetualWithdrawalRate struct{}
 
-func (perpetualWithdrawalRate) Name() string                                      { return "PerpetualWithdrawalRate" }
-func (perpetualWithdrawalRate) Compute(a *Account, window *Period) float64         { return 0 }
+func (perpetualWithdrawalRate) Name() string { return "PerpetualWithdrawalRate" }
+
+func (perpetualWithdrawalRate) Compute(a *Account, window *Period) float64 {
+	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(equity) < 12 {
+		return 0
+	}
+
+	monthly := monthlyReturnsFromEquity(equity)
+	if len(monthly) == 0 {
+		return 0
+	}
+
+	// Perpetual withdrawal: ending balance must be >= starting balance.
+	criterion := func(rate, startBalance, endBalance float64) bool {
+		return endBalance >= startBalance
+	}
+
+	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false)
+}
+
 func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // PerpetualWithdrawalRate is the maximum constant annual withdrawal
 // rate where the ending balance equals or exceeds the inflation-
 // adjusted starting balance. This ensures the portfolio maintains
 // its real purchasing power indefinitely.
-var PerpetualWithdrawalRate = perpetualWithdrawalRate{}
+var PerpetualWithdrawalRate PerformanceMetric = perpetualWithdrawalRate{}

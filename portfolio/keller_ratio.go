@@ -15,14 +15,41 @@
 
 package portfolio
 
+import "math"
+
 type kellerRatio struct{}
 
-func (kellerRatio) Name() string                                      { return "KellerRatio" }
-func (kellerRatio) Compute(a *Account, window *Period) float64         { return 0 }
+func (kellerRatio) Name() string { return "KellerRatio" }
+
+func (kellerRatio) Compute(a *Account, window *Period) float64 {
+	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(equity) < 2 {
+		return 0
+	}
+
+	totalReturn := (equity[len(equity)-1] / equity[0]) - 1
+	dd := drawdownSeries(equity)
+
+	// Find max drawdown as a positive number (abs of most negative drawdown).
+	minDD := 0.0
+	for _, d := range dd {
+		if d < minDD {
+			minDD = d
+		}
+	}
+	maxDD := math.Abs(minDD)
+
+	if totalReturn >= 0 && maxDD <= 0.5 {
+		return totalReturn * (1 - maxDD/(1-maxDD))
+	}
+
+	return 0
+}
+
 func (kellerRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // KellerRatio adjusts return for drawdown severity:
 // K = R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0.
 // Small drawdowns have limited impact; large drawdowns amplify the
 // penalty, making this a useful risk-adjusted measure.
-var KellerRatio = kellerRatio{}
+var KellerRatio PerformanceMetric = kellerRatio{}
