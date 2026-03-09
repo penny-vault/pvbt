@@ -15,10 +15,30 @@
 
 package portfolio
 
+import (
+	"math"
+	"sort"
+)
+
 type valueAtRisk struct{}
 
-func (valueAtRisk) Name() string                                      { return "ValueAtRisk" }
-func (valueAtRisk) Compute(a *Account, window *Period) float64         { return 0 }
+func (valueAtRisk) Name() string { return "ValueAtRisk" }
+
+func (valueAtRisk) Compute(a *Account, window *Period) float64 {
+	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(equity)
+	if len(r) == 0 {
+		return 0
+	}
+
+	sorted := make([]float64, len(r))
+	copy(sorted, r)
+	sort.Float64s(sorted)
+
+	idx := int(math.Floor(0.05 * float64(len(sorted))))
+	return sorted[idx]
+}
+
 func (valueAtRisk) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // ValueAtRisk estimates the maximum expected loss over a given time
