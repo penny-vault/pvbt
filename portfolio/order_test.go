@@ -17,6 +17,7 @@ package portfolio_test
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -29,9 +30,11 @@ import (
 
 // mockBroker records submitted orders and returns pre-configured fills.
 type mockBroker struct {
-	submitted []broker.Order
-	fills     [][]broker.Fill // one []Fill per Submit call, consumed in order
-	callIdx   int
+	submitted    []broker.Order
+	fills        [][]broker.Fill              // one []Fill per Submit call, consumed in order
+	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
+	defaultFill  *broker.Fill                 // when set, return a fill at this price/time with order qty
+	callIdx      int
 }
 
 func (m *mockBroker) Connect(context.Context) error                       { return nil }
@@ -44,16 +47,23 @@ func (m *mockBroker) Balance() (broker.Balance, error)                    { retu
 
 func (m *mockBroker) Submit(order broker.Order) ([]broker.Fill, error) {
 	m.submitted = append(m.submitted, order)
+	if fills, ok := m.fillsByAsset[order.Asset]; ok {
+		return fills, nil
+	}
 	if m.callIdx < len(m.fills) {
 		f := m.fills[m.callIdx]
 		m.callIdx++
 		return f, nil
 	}
-	return []broker.Fill{{
-		Price:    100.0,
-		Qty:      order.Qty,
-		FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
-	}}, nil
+	if m.defaultFill != nil {
+		return []broker.Fill{{
+			Price:    m.defaultFill.Price,
+			Qty:      order.Qty,
+			FilledAt: m.defaultFill.FilledAt,
+		}}, nil
+	}
+	Fail(fmt.Sprintf("mockBroker: unexpected Submit call #%d for %s with no configured fill", m.callIdx, order.Asset.Ticker))
+	return nil, nil
 }
 
 var _ broker.Broker = (*mockBroker)(nil)
@@ -67,7 +77,9 @@ var _ = Describe("Order", func() {
 
 	BeforeEach(func() {
 		testAsset = asset.Asset{CompositeFigi: "TEST001", Ticker: "TEST"}
-		mb = &mockBroker{}
+		mb = &mockBroker{
+			defaultFill: &broker.Fill{Price: 100.0, FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)},
+		}
 		acct = portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(mb))
 	})
 

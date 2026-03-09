@@ -54,13 +54,12 @@ var _ = Describe("RebalanceTo", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Configure mock broker to fill at correct prices.
+		// Configure mock broker to fill at correct prices (keyed by asset
+		// so map iteration order doesn't matter).
 		mb := &mockBroker{}
-		mb.fills = [][]broker.Fill{
-			// First order: buy SPY at 500
-			{{Price: 500.0, Qty: 120, FilledAt: fill}},
-			// Second order: buy AAPL at 200
-			{{Price: 200.0, Qty: 200, FilledAt: fill}},
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy:  {{Price: 500.0, Qty: 120, FilledAt: fill}},
+			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
 		}
 
 		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
@@ -117,9 +116,9 @@ var _ = Describe("RebalanceTo", func() {
 		// Sells happen first, then buys.
 		// Sell 100 SPY (200 held, target = floor(0.5*100000/500) = 100, diff = -100)
 		// Buy 250 AAPL (0 held, target = floor(0.5*100000/200) = 250, diff = +250)
-		mb.fills = [][]broker.Fill{
-			{{Price: 500.0, Qty: 100, FilledAt: fill}},  // sell SPY
-			{{Price: 200.0, Qty: 250, FilledAt: fill}},   // buy AAPL
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy:  {{Price: 500.0, Qty: 100, FilledAt: fill}},
+			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
 		}
 		acct.SetBroker(mb)
 
@@ -165,9 +164,9 @@ var _ = Describe("RebalanceTo", func() {
 		mb := &mockBroker{}
 		// Sell all SPY first, then buy GOOG.
 		// target GOOG = floor(1.0 * 50000 / 1000) = 50
-		mb.fills = [][]broker.Fill{
-			{{Price: 500.0, Qty: 100, FilledAt: fill}},  // sell SPY
-			{{Price: 1000.0, Qty: 50, FilledAt: fill}},   // buy GOOG
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy:  {{Price: 500.0, Qty: 100, FilledAt: fill}},
+			goog: {{Price: 1000.0, Qty: 50, FilledAt: fill}},
 		}
 		acct.SetBroker(mb)
 
