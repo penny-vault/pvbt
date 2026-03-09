@@ -255,5 +255,50 @@ func (a *Account) Record(tx Transaction) {
 		}
 	}
 }
-func (a *Account) UpdatePrices(df *data.DataFrame) {}
+// UpdatePrices stores the latest price DataFrame, computes the total
+// portfolio value, and appends it to the equity curve. It also tracks
+// benchmark and risk-free price series when those assets are configured.
+func (a *Account) UpdatePrices(df *data.DataFrame) {
+	a.prices = df
+
+	// Compute total portfolio value: cash + marked holdings.
+	total := a.cash
+	for ast, qty := range a.holdings {
+		v := df.Value(ast, data.MetricClose)
+		if !math.IsNaN(v) {
+			total += qty * v
+		}
+	}
+
+	a.equityCurve = append(a.equityCurve, total)
+	a.equityTimes = append(a.equityTimes, df.End())
+
+	// Track benchmark price series (AdjClose).
+	if a.benchmark != (asset.Asset{}) {
+		v := df.Value(a.benchmark, data.AdjClose)
+		if !math.IsNaN(v) {
+			a.benchmarkPrices = append(a.benchmarkPrices, v)
+		}
+	}
+
+	// Track risk-free price series (AdjClose).
+	if a.riskFree != (asset.Asset{}) {
+		v := df.Value(a.riskFree, data.AdjClose)
+		if !math.IsNaN(v) {
+			a.riskFreePrices = append(a.riskFreePrices, v)
+		}
+	}
+}
+
+// EquityCurve returns the equity curve slice.
+func (a *Account) EquityCurve() []float64 { return a.equityCurve }
+
+// EquityTimes returns the equity times slice.
+func (a *Account) EquityTimes() []time.Time { return a.equityTimes }
+
+// BenchmarkPrices returns the benchmark prices slice.
+func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
+
+// RiskFreePrices returns the risk-free prices slice.
+func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
 func (a *Account) SetBroker(b broker.Broker)      { a.broker = b }
