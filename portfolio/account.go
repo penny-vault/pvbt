@@ -114,7 +114,86 @@ func (a *Account) RiskFree() asset.Asset {
 // --- Portfolio interface ---
 
 func (a *Account) RebalanceTo(alloc ...Allocation)                                     {}
-func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {}
+func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {
+	order := broker.Order{
+		Asset:       ast,
+		Qty:         qty,
+		OrderType:   broker.Market,
+		TimeInForce: broker.Day,
+	}
+
+	// Map portfolio side to broker side.
+	switch side {
+	case Buy:
+		order.Side = broker.Buy
+	case Sell:
+		order.Side = broker.Sell
+	}
+
+	// Apply modifiers.
+	var hasLimit, hasStop bool
+	for _, mod := range mods {
+		switch m := mod.(type) {
+		case limitModifier:
+			order.LimitPrice = m.price
+			hasLimit = true
+		case stopModifier:
+			order.StopPrice = m.price
+			hasStop = true
+		case dayOrderModifier:
+			order.TimeInForce = broker.Day
+		case goodTilCancelModifier:
+			order.TimeInForce = broker.GTC
+		case fillOrKillModifier:
+			order.TimeInForce = broker.FOK
+		case immediateOrCancelModifier:
+			order.TimeInForce = broker.IOC
+		case onTheOpenModifier:
+			order.TimeInForce = broker.OnOpen
+		case onTheCloseModifier:
+			order.TimeInForce = broker.OnClose
+		case goodTilDateModifier:
+			order.TimeInForce = broker.GTD
+			order.GTDDate = m.date
+		}
+	}
+
+	// Determine order type from price modifiers.
+	if hasLimit && hasStop {
+		order.OrderType = broker.StopLimit
+	} else if hasLimit {
+		order.OrderType = broker.Limit
+	} else if hasStop {
+		order.OrderType = broker.Stop
+	}
+
+	// Submit to broker.
+	fill, err := a.broker.Submit(order)
+	if err != nil {
+		return
+	}
+
+	// Record the fill as a transaction.
+	var txType TransactionType
+	var amount float64
+	switch side {
+	case Buy:
+		txType = BuyTransaction
+		amount = -(fill.Price * fill.Qty)
+	case Sell:
+		txType = SellTransaction
+		amount = fill.Price * fill.Qty
+	}
+
+	a.Record(Transaction{
+		Date:   fill.FilledAt,
+		Asset:  ast,
+		Type:   txType,
+		Qty:    fill.Qty,
+		Price:  fill.Price,
+		Amount: amount,
+	})
+}
 
 // Cash returns the current cash balance.
 func (a *Account) Cash() float64 {
