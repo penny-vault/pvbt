@@ -17,9 +17,30 @@ package portfolio
 
 type maxDrawdown struct{}
 
-func (maxDrawdown) Name() string                                         { return "MaxDrawdown" }
-func (maxDrawdown) Compute(a *Account, window *Period) float64        { return 0 }
-func (maxDrawdown) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (maxDrawdown) Name() string { return "MaxDrawdown" }
+
+func (maxDrawdown) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(eq) == 0 {
+		return 0
+	}
+	dd := drawdownSeries(eq)
+	minDD := 0.0
+	for _, v := range dd {
+		if v < minDD {
+			minDD = v
+		}
+	}
+	return minDD
+}
+
+func (maxDrawdown) ComputeSeries(a *Account, window *Period) []float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(eq) == 0 {
+		return nil
+	}
+	return drawdownSeries(eq)
+}
 
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.
 var MaxDrawdown = maxDrawdown{}
