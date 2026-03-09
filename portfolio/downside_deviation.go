@@ -49,4 +49,4 @@ func (downsideDeviation) ComputeSeries(a *Account, window *Period) []float64 {
 
 // DownsideDeviation measures the volatility of returns below the
 // risk-free rate.
-var DownsideDeviation = downsideDeviation{}
+var DownsideDeviation PerformanceMetric = downsideDeviation{}

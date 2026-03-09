@@ -48,4 +48,4 @@ func (informationRatio) ComputeSeries(a *Account, window *Period) []float64 { re
 
 // InformationRatio measures the portfolio's active return per unit of
 // tracking error relative to the benchmark.
-var InformationRatio = informationRatio{}
+var InformationRatio PerformanceMetric = informationRatio{}

@@ -49,4 +49,4 @@ func (excessKurtosis) ComputeSeries(a *Account, window *Period) []float64 { retu
 // the return distribution are compared to a normal distribution.
 // Positive values indicate heavier tails (more extreme outcomes than
 // a normal distribution would predict).
-var ExcessKurtosis = excessKurtosis{}
+var ExcessKurtosis PerformanceMetric = excessKurtosis{}

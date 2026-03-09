@@ -77,4 +77,4 @@ func geometricMean(r []float64) float64 {
 // returns the portfolio captures. Computed as portfolio return /
 // benchmark return during periods when the benchmark is up. A ratio
 // above 100% means the portfolio outperforms in rising markets.
-var UpsideCaptureRatio = upsideCaptureRatio{}
+var UpsideCaptureRatio PerformanceMetric = upsideCaptureRatio{}

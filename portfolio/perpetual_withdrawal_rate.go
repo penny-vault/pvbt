@@ -44,4 +44,4 @@ func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) []float
 // rate where the ending balance equals or exceeds the inflation-
 // adjusted starting balance. This ensures the portfolio maintains
 // its real purchasing power indefinitely.
-var PerpetualWithdrawalRate = perpetualWithdrawalRate{}
+var PerpetualWithdrawalRate PerformanceMetric = perpetualWithdrawalRate{}

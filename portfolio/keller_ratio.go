@@ -52,4 +52,4 @@ func (kellerRatio) ComputeSeries(a *Account, window *Period) []float64 { return 
 // K = R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0.
 // Small drawdowns have limited impact; large drawdowns amplify the
 // penalty, making this a useful risk-adjusted measure.
-var KellerRatio = kellerRatio{}
+var KellerRatio PerformanceMetric = kellerRatio{}

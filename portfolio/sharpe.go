@@ -40,4 +40,4 @@ func (sharpe) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Sharpe is the Sharpe ratio: risk-adjusted return relative to a
 // risk-free rate, using standard deviation of returns as the risk measure.
-var Sharpe = sharpe{}
+var Sharpe PerformanceMetric = sharpe{}

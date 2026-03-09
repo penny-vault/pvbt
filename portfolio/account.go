@@ -22,6 +22,7 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/rs/zerolog/log"
 )
 
 // taxLot tracks the purchase date, quantity, and price of a position for
@@ -215,6 +216,10 @@ func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderMo
 	// Submit to broker.
 	fills, err := a.broker.Submit(order)
 	if err != nil {
+		log.Error().Err(err).
+			Str("asset", ast.Ticker).
+			Float64("qty", qty).
+			Msg("order submission failed")
 		return
 	}
 

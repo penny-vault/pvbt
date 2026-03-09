@@ -48,4 +48,4 @@ func (rSquared) ComputeSeries(a *Account, window *Period) []float64 { return nil
 // benchmark returns (coefficient of determination). Ranges from 0
 // to 1. A value near 1 means the portfolio closely tracks the
 // benchmark; a low value means returns are driven by other factors.
-var RSquared = rSquared{}
+var RSquared PerformanceMetric = rSquared{}

@@ -43,4 +43,4 @@ func (maxDrawdown) ComputeSeries(a *Account, window *Period) []float64 {
 }
 
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.
-var MaxDrawdown = maxDrawdown{}
+var MaxDrawdown PerformanceMetric = maxDrawdown{}

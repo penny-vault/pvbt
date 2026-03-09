@@ -41,4 +41,4 @@ func (beta) Compute(a *Account, window *Period) float64 {
 func (beta) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Beta measures the portfolio's sensitivity to benchmark movements.
-var Beta = beta{}
+var Beta PerformanceMetric = beta{}

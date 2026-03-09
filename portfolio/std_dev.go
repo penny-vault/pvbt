@@ -37,4 +37,4 @@ func (stdDev) ComputeSeries(a *Account, window *Period) []float64 {
 }
 
 // StdDev is the annualized standard deviation of portfolio returns.
-var StdDev = stdDev{}
+var StdDev PerformanceMetric = stdDev{}

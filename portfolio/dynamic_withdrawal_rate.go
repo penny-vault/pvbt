@@ -45,4 +45,4 @@ func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64
 // dynamic adjustments: each year's withdrawal is the lesser of the
 // inflation-adjusted initial withdrawal and the current balance
 // times the rate. This adapts spending to portfolio performance.
-var DynamicWithdrawalRate = dynamicWithdrawalRate{}
+var DynamicWithdrawalRate PerformanceMetric = dynamicWithdrawalRate{}

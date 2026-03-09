@@ -42,4 +42,4 @@ func (ulcerIndex) ComputeSeries(a *Account, window *Period) []float64 { return n
 // of drawdowns. Computed as the square root of the mean of squared
 // percentage drawdowns over a 14-day lookback. Higher values indicate
 // more painful drawdown experiences.
-var UlcerIndex = ulcerIndex{}
+var UlcerIndex PerformanceMetric = ulcerIndex{}

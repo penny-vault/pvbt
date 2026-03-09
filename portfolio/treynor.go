@@ -42,4 +42,4 @@ func (treynor) ComputeSeries(a *Account, window *Period) []float64 { return nil 
 
 // Treynor is the Treynor ratio: excess return per unit of systematic
 // risk (beta).
-var Treynor = treynor{}
+var Treynor PerformanceMetric = treynor{}
