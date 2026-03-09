@@ -1,0 +1,182 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package portfolio_test
+
+import (
+	"context"
+	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/broker"
+	"github.com/penny-vault/pvbt/portfolio"
+)
+
+// mockBroker records submitted orders and returns pre-configured fills.
+type mockBroker struct {
+	submitted []broker.Order
+	fills     [][]broker.Fill // one []Fill per Submit call, consumed in order
+	callIdx   int
+}
+
+func (m *mockBroker) Connect(context.Context) error                       { return nil }
+func (m *mockBroker) Close() error                                        { return nil }
+func (m *mockBroker) Cancel(string) error                                 { return nil }
+func (m *mockBroker) Replace(string, broker.Order) ([]broker.Fill, error) { return nil, nil }
+func (m *mockBroker) Orders() ([]broker.Order, error)                     { return nil, nil }
+func (m *mockBroker) Positions() ([]broker.Position, error)               { return nil, nil }
+func (m *mockBroker) Balance() (broker.Balance, error)                    { return broker.Balance{}, nil }
+
+func (m *mockBroker) Submit(order broker.Order) ([]broker.Fill, error) {
+	m.submitted = append(m.submitted, order)
+	if m.callIdx < len(m.fills) {
+		f := m.fills[m.callIdx]
+		m.callIdx++
+		return f, nil
+	}
+	return []broker.Fill{{
+		Price:    100.0,
+		Qty:      order.Qty,
+		FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
+	}}, nil
+}
+
+var _ broker.Broker = (*mockBroker)(nil)
+
+var _ = Describe("Order", func() {
+	var (
+		testAsset asset.Asset
+		mb        *mockBroker
+		acct      *portfolio.Account
+	)
+
+	BeforeEach(func() {
+		testAsset = asset.Asset{CompositeFigi: "TEST001", Ticker: "TEST"}
+		mb = &mockBroker{}
+		acct = portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(mb))
+	})
+
+	It("places a market buy order via broker", func() {
+		acct.Order(testAsset, portfolio.Buy, 10)
+
+		Expect(mb.submitted).To(HaveLen(1))
+		ord := mb.submitted[0]
+		Expect(ord.Side).To(Equal(broker.Buy))
+		Expect(ord.Qty).To(Equal(10.0))
+		Expect(ord.OrderType).To(Equal(broker.Market))
+		Expect(ord.TimeInForce).To(Equal(broker.Day))
+		Expect(acct.Cash()).To(Equal(9_000.0))
+		Expect(acct.Position(testAsset)).To(Equal(10.0))
+	})
+
+	It("places a limit order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0))
+
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.Limit))
+		Expect(mb.submitted[0].LimitPrice).To(Equal(50.0))
+	})
+
+	It("places a stop order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Stop(45.0))
+
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.Stop))
+		Expect(mb.submitted[0].StopPrice).To(Equal(45.0))
+	})
+
+	It("places a stop-limit order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0), portfolio.Stop(45.0))
+
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.StopLimit))
+		Expect(mb.submitted[0].LimitPrice).To(Equal(50.0))
+		Expect(mb.submitted[0].StopPrice).To(Equal(45.0))
+	})
+
+	It("handles GoodTilCancel modifier", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilCancel)
+
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTC))
+	})
+
+	It("handles GoodTilDate modifier", func() {
+		gtdDate := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilDate(gtdDate))
+
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTD))
+		Expect(mb.submitted[0].GTDDate).To(Equal(gtdDate))
+	})
+
+	It("places a sell order", func() {
+		fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+		mb.fills = [][]broker.Fill{
+			{{Price: 100.0, Qty: 10, FilledAt: fillTime}},
+			{{Price: 105.0, Qty: 10, FilledAt: fillTime}},
+		}
+
+		acct.Order(testAsset, portfolio.Buy, 10)
+		acct.Order(testAsset, portfolio.Sell, 10)
+
+		Expect(mb.submitted).To(HaveLen(2))
+		Expect(mb.submitted[1].Side).To(Equal(broker.Sell))
+		Expect(acct.Cash()).To(Equal(10_050.0)) // 10000 - 1000 + 1050
+		Expect(acct.Position(testAsset)).To(Equal(0.0))
+	})
+
+	It("handles multiple fills for a single order", func() {
+		fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+		mb.fills = [][]broker.Fill{
+			{
+				{Price: 300.0, Qty: 6, FilledAt: fillTime},
+				{Price: 299.0, Qty: 4, FilledAt: fillTime},
+			},
+		}
+
+		acct.Order(testAsset, portfolio.Buy, 10)
+
+		Expect(acct.Position(testAsset)).To(Equal(10.0))
+		// cash: 10_000 - (6*300 + 4*299) = 10_000 - 2996 = 7_004
+		Expect(acct.Cash()).To(Equal(7_004.0))
+		// should produce 2 BuyTransactions (one per fill) + 1 initial deposit
+		txns := acct.Transactions()
+		buyCount := 0
+		for _, tx := range txns {
+			if tx.Type == portfolio.BuyTransaction {
+				buyCount++
+			}
+		}
+		Expect(buyCount).To(Equal(2))
+	})
+
+	DescribeTable("time-in-force modifiers",
+		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
+			acct.Order(testAsset, portfolio.Buy, 1, mod)
+			Expect(mb.submitted).To(HaveLen(1))
+			Expect(mb.submitted[0].TimeInForce).To(Equal(expected))
+		},
+		Entry("DayOrder", portfolio.DayOrder, broker.Day),
+		Entry("GoodTilCancel", portfolio.GoodTilCancel, broker.GTC),
+		Entry("FillOrKill", portfolio.FillOrKill, broker.FOK),
+		Entry("ImmediateOrCancel", portfolio.ImmediateOrCancel, broker.IOC),
+		Entry("OnTheOpen", portfolio.OnTheOpen, broker.OnOpen),
+		Entry("OnTheClose", portfolio.OnTheClose, broker.OnClose),
+	)
+})

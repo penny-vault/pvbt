@@ -17,12 +17,36 @@ package portfolio
 
 type excessKurtosis struct{}
 
-func (excessKurtosis) Name() string                                      { return "ExcessKurtosis" }
-func (excessKurtosis) Compute(a *Account, window *Period) float64         { return 0 }
+func (excessKurtosis) Name() string { return "ExcessKurtosis" }
+
+func (excessKurtosis) Compute(a *Account, window *Period) float64 {
+	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(prices)
+
+	n := len(r)
+	if n < 4 {
+		return 0
+	}
+
+	s := stddev(r)
+	if s == 0 {
+		return 0
+	}
+
+	m := mean(r)
+	sum := 0.0
+	for _, v := range r {
+		d := v - m
+		sum += d * d * d * d
+	}
+
+	return sum/float64(n)/(s*s*s*s) - 3
+}
+
 func (excessKurtosis) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // ExcessKurtosis measures tail risk -- how much fatter the tails of
 // the return distribution are compared to a normal distribution.
 // Positive values indicate heavier tails (more extreme outcomes than
 // a normal distribution would predict).
-var ExcessKurtosis = excessKurtosis{}
+var ExcessKurtosis PerformanceMetric = excessKurtosis{}

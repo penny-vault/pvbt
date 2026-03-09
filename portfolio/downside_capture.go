@@ -17,8 +17,43 @@ package portfolio
 
 type downsideCaptureRatio struct{}
 
-func (downsideCaptureRatio) Name() string                                      { return "DownsideCaptureRatio" }
-func (downsideCaptureRatio) Compute(a *Account, window *Period) float64         { return 0 }
+func (downsideCaptureRatio) Name() string { return "DownsideCaptureRatio" }
+
+func (downsideCaptureRatio) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pRet := returns(eq)
+	bRet := returns(bm)
+
+	n := len(pRet)
+	if len(bRet) < n {
+		n = len(bRet)
+	}
+
+	// Filter periods where benchmark return < 0.
+	var downP, downB []float64
+	for i := 0; i < n; i++ {
+		if bRet[i] < 0 {
+			downP = append(downP, pRet[i])
+			downB = append(downB, bRet[i])
+		}
+	}
+
+	if len(downP) == 0 {
+		return 0
+	}
+
+	geoP := geometricMean(downP)
+	geoB := geometricMean(downB)
+
+	if geoB == 0 {
+		return 0
+	}
+
+	return (geoP / geoB) * 100
+}
+
 func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // DownsideCaptureRatio measures how much of the benchmark's negative
@@ -26,4 +61,4 @@ func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 
 // benchmark return during periods when the benchmark is down. A ratio
 // below 100% means the portfolio loses less than the benchmark in
 // falling markets.
-var DownsideCaptureRatio = downsideCaptureRatio{}
+var DownsideCaptureRatio PerformanceMetric = downsideCaptureRatio{}

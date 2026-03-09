@@ -15,11 +15,26 @@
 
 package portfolio
 
+import "math"
+
 type stdDev struct{}
 
-func (stdDev) Name() string                                         { return "StdDev" }
-func (stdDev) Compute(a *Account, window *Period) float64        { return 0 }
-func (stdDev) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (stdDev) Name() string { return "StdDev" }
 
-// StdDev is the standard deviation of monthly returns.
-var StdDev = stdDev{}
+func (stdDev) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(eq)
+	if len(r) == 0 {
+		return 0
+	}
+	af := annualizationFactor(a.EquityTimes())
+	return stddev(r) * math.Sqrt(af)
+}
+
+func (stdDev) ComputeSeries(a *Account, window *Period) []float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	return returns(eq)
+}
+
+// StdDev is the annualized standard deviation of portfolio returns.
+var StdDev PerformanceMetric = stdDev{}
