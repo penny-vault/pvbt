@@ -13,236 +13,170 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package portfolio
+package portfolio_test
 
 import (
 	"context"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // mockBroker records submitted orders and returns pre-configured fills.
 type mockBroker struct {
 	submitted []broker.Order
-	fills     []broker.Fill // one Fill per Submit call, consumed in order
+	fills     [][]broker.Fill // one []Fill per Submit call, consumed in order
 	callIdx   int
 }
 
-func (m *mockBroker) Connect(context.Context) error              { return nil }
-func (m *mockBroker) Close() error                               { return nil }
-func (m *mockBroker) Cancel(string) error                        { return nil }
-func (m *mockBroker) Replace(string, broker.Order) (broker.Fill, error) {
-	return broker.Fill{}, nil
-}
-func (m *mockBroker) Orders() ([]broker.Order, error)       { return nil, nil }
-func (m *mockBroker) Positions() ([]broker.Position, error) { return nil, nil }
-func (m *mockBroker) Balance() (broker.Balance, error)      { return broker.Balance{}, nil }
+func (m *mockBroker) Connect(context.Context) error                       { return nil }
+func (m *mockBroker) Close() error                                        { return nil }
+func (m *mockBroker) Cancel(string) error                                 { return nil }
+func (m *mockBroker) Replace(string, broker.Order) ([]broker.Fill, error) { return nil, nil }
+func (m *mockBroker) Orders() ([]broker.Order, error)                     { return nil, nil }
+func (m *mockBroker) Positions() ([]broker.Position, error)               { return nil, nil }
+func (m *mockBroker) Balance() (broker.Balance, error)                    { return broker.Balance{}, nil }
 
-func (m *mockBroker) Submit(order broker.Order) (broker.Fill, error) {
+func (m *mockBroker) Submit(order broker.Order) ([]broker.Fill, error) {
 	m.submitted = append(m.submitted, order)
 	if m.callIdx < len(m.fills) {
-		fill := m.fills[m.callIdx]
+		f := m.fills[m.callIdx]
 		m.callIdx++
-		return fill, nil
+		return f, nil
 	}
-	return broker.Fill{
+	return []broker.Fill{{
 		Price:    100.0,
 		Qty:      order.Qty,
 		FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC),
-	}, nil
+	}}, nil
 }
 
 var _ broker.Broker = (*mockBroker)(nil)
 
-var testAsset = asset.Asset{CompositeFigi: "TEST001", Ticker: "TEST"}
+var _ = Describe("Order", func() {
+	var (
+		testAsset asset.Asset
+		mb        *mockBroker
+		acct      *portfolio.Account
+	)
 
-func TestOrderMarketBuy(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
+	BeforeEach(func() {
+		testAsset = asset.Asset{CompositeFigi: "TEST001", Ticker: "TEST"}
+		mb = &mockBroker{}
+		acct = portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(mb))
+	})
 
-	acct.Order(testAsset, Buy, 10)
+	It("places a market buy order via broker", func() {
+		acct.Order(testAsset, portfolio.Buy, 10)
 
-	// Verify broker received the correct order.
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	ord := mb.submitted[0]
-	if ord.Side != broker.Buy {
-		t.Errorf("expected broker.Buy, got %d", ord.Side)
-	}
-	if ord.Qty != 10 {
-		t.Errorf("expected qty 10, got %f", ord.Qty)
-	}
-	if ord.OrderType != broker.Market {
-		t.Errorf("expected Market order type, got %d", ord.OrderType)
-	}
-	if ord.TimeInForce != broker.Day {
-		t.Errorf("expected Day TIF, got %d", ord.TimeInForce)
-	}
+		Expect(mb.submitted).To(HaveLen(1))
+		ord := mb.submitted[0]
+		Expect(ord.Side).To(Equal(broker.Buy))
+		Expect(ord.Qty).To(Equal(10.0))
+		Expect(ord.OrderType).To(Equal(broker.Market))
+		Expect(ord.TimeInForce).To(Equal(broker.Day))
+		Expect(acct.Cash()).To(Equal(9_000.0))
+		Expect(acct.Position(testAsset)).To(Equal(10.0))
+	})
 
-	// Cash should decrease by price * qty = 100 * 10 = 1000.
-	if acct.Cash() != 9000 {
-		t.Errorf("expected cash 9000, got %f", acct.Cash())
-	}
+	It("places a limit order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0))
 
-	// Position should be 10 shares.
-	if acct.Position(testAsset) != 10 {
-		t.Errorf("expected position 10, got %f", acct.Position(testAsset))
-	}
-}
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.Limit))
+		Expect(mb.submitted[0].LimitPrice).To(Equal(50.0))
+	})
 
-func TestOrderLimitBuy(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
+	It("places a stop order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Stop(45.0))
 
-	acct.Order(testAsset, Buy, 5, Limit(50.0))
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.Stop))
+		Expect(mb.submitted[0].StopPrice).To(Equal(45.0))
+	})
 
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	ord := mb.submitted[0]
-	if ord.OrderType != broker.Limit {
-		t.Errorf("expected Limit order type, got %d", ord.OrderType)
-	}
-	if ord.LimitPrice != 50.0 {
-		t.Errorf("expected LimitPrice 50.0, got %f", ord.LimitPrice)
-	}
-}
+	It("places a stop-limit order", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0), portfolio.Stop(45.0))
 
-func TestOrderStopBuy(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].OrderType).To(Equal(broker.StopLimit))
+		Expect(mb.submitted[0].LimitPrice).To(Equal(50.0))
+		Expect(mb.submitted[0].StopPrice).To(Equal(45.0))
+	})
 
-	acct.Order(testAsset, Buy, 5, Stop(45.0))
+	It("handles GoodTilCancel modifier", func() {
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilCancel)
 
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	ord := mb.submitted[0]
-	if ord.OrderType != broker.Stop {
-		t.Errorf("expected Stop order type, got %d", ord.OrderType)
-	}
-	if ord.StopPrice != 45.0 {
-		t.Errorf("expected StopPrice 45.0, got %f", ord.StopPrice)
-	}
-}
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTC))
+	})
 
-func TestOrderStopLimitBuy(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
+	It("handles GoodTilDate modifier", func() {
+		gtdDate := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
+		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilDate(gtdDate))
 
-	acct.Order(testAsset, Buy, 5, Limit(50.0), Stop(45.0))
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTD))
+		Expect(mb.submitted[0].GTDDate).To(Equal(gtdDate))
+	})
 
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	ord := mb.submitted[0]
-	if ord.OrderType != broker.StopLimit {
-		t.Errorf("expected StopLimit order type, got %d", ord.OrderType)
-	}
-	if ord.LimitPrice != 50.0 {
-		t.Errorf("expected LimitPrice 50.0, got %f", ord.LimitPrice)
-	}
-	if ord.StopPrice != 45.0 {
-		t.Errorf("expected StopPrice 45.0, got %f", ord.StopPrice)
-	}
-}
+	It("places a sell order", func() {
+		fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+		mb.fills = [][]broker.Fill{
+			{{Price: 100.0, Qty: 10, FilledAt: fillTime}},
+			{{Price: 105.0, Qty: 10, FilledAt: fillTime}},
+		}
 
-func TestOrderGoodTilCancel(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
+		acct.Order(testAsset, portfolio.Buy, 10)
+		acct.Order(testAsset, portfolio.Sell, 10)
 
-	acct.Order(testAsset, Buy, 5, GoodTilCancel)
+		Expect(mb.submitted).To(HaveLen(2))
+		Expect(mb.submitted[1].Side).To(Equal(broker.Sell))
+		Expect(acct.Cash()).To(Equal(10_050.0)) // 10000 - 1000 + 1050
+		Expect(acct.Position(testAsset)).To(Equal(0.0))
+	})
 
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	if mb.submitted[0].TimeInForce != broker.GTC {
-		t.Errorf("expected GTC, got %d", mb.submitted[0].TimeInForce)
-	}
-}
+	It("handles multiple fills for a single order", func() {
+		fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+		mb.fills = [][]broker.Fill{
+			{
+				{Price: 300.0, Qty: 6, FilledAt: fillTime},
+				{Price: 299.0, Qty: 4, FilledAt: fillTime},
+			},
+		}
 
-func TestOrderSell(t *testing.T) {
-	fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
-	mb := &mockBroker{
-		fills: []broker.Fill{
-			{Price: 100.0, Qty: 10, FilledAt: fillTime},
-			{Price: 105.0, Qty: 10, FilledAt: fillTime},
+		acct.Order(testAsset, portfolio.Buy, 10)
+
+		Expect(acct.Position(testAsset)).To(Equal(10.0))
+		// cash: 10_000 - (6*300 + 4*299) = 10_000 - 2996 = 7_004
+		Expect(acct.Cash()).To(Equal(7_004.0))
+		// should produce 2 BuyTransactions (one per fill) + 1 initial deposit
+		txns := acct.Transactions()
+		buyCount := 0
+		for _, tx := range txns {
+			if tx.Type == portfolio.BuyTransaction {
+				buyCount++
+			}
+		}
+		Expect(buyCount).To(Equal(2))
+	})
+
+	DescribeTable("time-in-force modifiers",
+		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
+			acct.Order(testAsset, portfolio.Buy, 1, mod)
+			Expect(mb.submitted).To(HaveLen(1))
+			Expect(mb.submitted[0].TimeInForce).To(Equal(expected))
 		},
-	}
-	acct := New(WithCash(10000), WithBroker(mb))
-
-	// Buy first, then sell.
-	acct.Order(testAsset, Buy, 10)
-	acct.Order(testAsset, Sell, 10)
-
-	if len(mb.submitted) != 2 {
-		t.Fatalf("expected 2 submitted orders, got %d", len(mb.submitted))
-	}
-
-	sellOrd := mb.submitted[1]
-	if sellOrd.Side != broker.Sell {
-		t.Errorf("expected broker.Sell, got %d", sellOrd.Side)
-	}
-
-	// Cash: 10000 - 1000 (buy) + 1050 (sell) = 10050.
-	if acct.Cash() != 10050 {
-		t.Errorf("expected cash 10050, got %f", acct.Cash())
-	}
-
-	// Position should be 0 after selling.
-	if acct.Position(testAsset) != 0 {
-		t.Errorf("expected position 0, got %f", acct.Position(testAsset))
-	}
-}
-
-func TestOrderGoodTilDate(t *testing.T) {
-	mb := &mockBroker{}
-	acct := New(WithCash(10000), WithBroker(mb))
-	gtdDate := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
-
-	acct.Order(testAsset, Buy, 5, GoodTilDate(gtdDate))
-
-	if len(mb.submitted) != 1 {
-		t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-	}
-	ord := mb.submitted[0]
-	if ord.TimeInForce != broker.GTD {
-		t.Errorf("expected GTD, got %d", ord.TimeInForce)
-	}
-	if !ord.GTDDate.Equal(gtdDate) {
-		t.Errorf("expected GTDDate %v, got %v", gtdDate, ord.GTDDate)
-	}
-}
-
-func TestOrderTimeInForceModifiers(t *testing.T) {
-	tests := []struct {
-		name string
-		mod  OrderModifier
-		want broker.TimeInForce
-	}{
-		{"DayOrder", DayOrder, broker.Day},
-		{"GoodTilCancel", GoodTilCancel, broker.GTC},
-		{"FillOrKill", FillOrKill, broker.FOK},
-		{"ImmediateOrCancel", ImmediateOrCancel, broker.IOC},
-		{"OnTheOpen", OnTheOpen, broker.OnOpen},
-		{"OnTheClose", OnTheClose, broker.OnClose},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			mb := &mockBroker{}
-			acct := New(WithCash(10000), WithBroker(mb))
-			acct.Order(testAsset, Buy, 1, tc.mod)
-			if len(mb.submitted) != 1 {
-				t.Fatalf("expected 1 submitted order, got %d", len(mb.submitted))
-			}
-			if mb.submitted[0].TimeInForce != tc.want {
-				t.Errorf("expected TIF %d, got %d", tc.want, mb.submitted[0].TimeInForce)
-			}
-		})
-	}
-}
+		Entry("DayOrder", portfolio.DayOrder, broker.Day),
+		Entry("GoodTilCancel", portfolio.GoodTilCancel, broker.GTC),
+		Entry("FillOrKill", portfolio.FillOrKill, broker.FOK),
+		Entry("ImmediateOrCancel", portfolio.ImmediateOrCancel, broker.IOC),
+		Entry("OnTheOpen", portfolio.OnTheOpen, broker.OnOpen),
+		Entry("OnTheClose", portfolio.OnTheClose, broker.OnClose),
+	)
+})
