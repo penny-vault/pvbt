@@ -15,10 +15,27 @@
 
 package portfolio
 
+import "math"
+
 type ulcerIndex struct{}
 
-func (ulcerIndex) Name() string                                      { return "UlcerIndex" }
-func (ulcerIndex) Compute(a *Account, window *Period) float64         { return 0 }
+func (ulcerIndex) Name() string { return "UlcerIndex" }
+
+func (ulcerIndex) Compute(a *Account, window *Period) float64 {
+	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(equity) < 2 {
+		return 0
+	}
+
+	dd := drawdownSeries(equity)
+	sumSq := 0.0
+	for _, d := range dd {
+		sumSq += d * d
+	}
+
+	return math.Sqrt(sumSq / float64(len(dd)))
+}
+
 func (ulcerIndex) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // UlcerIndex measures downside risk using both the depth and duration
