@@ -113,7 +113,52 @@ func (a *Account) RiskFree() asset.Asset {
 
 // --- Portfolio interface ---
 
-func (a *Account) RebalanceTo(alloc ...Allocation)                                     {}
+func (a *Account) RebalanceTo(allocs ...Allocation) {
+	for _, alloc := range allocs {
+		totalValue := a.Value()
+
+		type pendingOrder struct {
+			asset asset.Asset
+			side  Side
+			qty   float64
+		}
+
+		var sells, buys []pendingOrder
+
+		// Sell assets not in the target allocation.
+		for ast, qty := range a.holdings {
+			if _, ok := alloc.Members[ast]; !ok && qty > 0 {
+				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+			}
+		}
+
+		// Diff each target asset against current holdings.
+		for ast, weight := range alloc.Members {
+			price := a.prices.Value(ast, data.MetricClose)
+			if math.IsNaN(price) || price == 0 {
+				continue
+			}
+
+			targetShares := math.Floor(weight * totalValue / price)
+			currentShares := a.holdings[ast]
+			diff := targetShares - currentShares
+
+			if diff > 0 {
+				buys = append(buys, pendingOrder{asset: ast, side: Buy, qty: diff})
+			} else if diff < 0 {
+				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: -diff})
+			}
+		}
+
+		// Process sells first to free up cash, then buys.
+		for _, o := range sells {
+			a.Order(o.asset, o.side, o.qty)
+		}
+		for _, o := range buys {
+			a.Order(o.asset, o.side, o.qty)
+		}
+	}
+}
 func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {
 	order := broker.Order{
 		Asset:       ast,
