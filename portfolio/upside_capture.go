@@ -15,11 +15,63 @@
 
 package portfolio
 
+import "math"
+
 type upsideCaptureRatio struct{}
 
-func (upsideCaptureRatio) Name() string                                      { return "UpsideCaptureRatio" }
-func (upsideCaptureRatio) Compute(a *Account, window *Period) float64         { return 0 }
+func (upsideCaptureRatio) Name() string { return "UpsideCaptureRatio" }
+
+func (upsideCaptureRatio) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+
+	pRet := returns(eq)
+	bRet := returns(bm)
+
+	n := len(pRet)
+	if len(bRet) < n {
+		n = len(bRet)
+	}
+
+	// Filter periods where benchmark return > 0.
+	var upP, upB []float64
+	for i := 0; i < n; i++ {
+		if bRet[i] > 0 {
+			upP = append(upP, pRet[i])
+			upB = append(upB, bRet[i])
+		}
+	}
+
+	if len(upP) == 0 {
+		return 0
+	}
+
+	geoP := geometricMean(upP)
+	geoB := geometricMean(upB)
+
+	if geoB == 0 {
+		return 0
+	}
+
+	return (geoP / geoB) * 100
+}
+
 func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+
+// geometricMean computes the geometric mean of returns:
+// (product(1 + r_i))^(1/n) - 1
+func geometricMean(r []float64) float64 {
+	if len(r) == 0 {
+		return 0
+	}
+
+	product := 1.0
+	for _, v := range r {
+		product *= (1 + v)
+	}
+
+	return math.Pow(product, 1.0/float64(len(r))) - 1
+}
 
 // UpsideCaptureRatio measures how much of the benchmark's positive
 // returns the portfolio captures. Computed as portfolio return /
