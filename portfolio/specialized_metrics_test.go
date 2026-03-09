@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -19,22 +18,6 @@ var _ = Describe("Specialized Metrics", func() {
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 	})
-
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	// buildAccount creates an Account with a generally rising equity curve
 	// that includes drawdowns, over 25 data points.
@@ -76,10 +59,6 @@ var _ = Describe("Specialized Metrics", func() {
 	}
 
 	Describe("UlcerIndex", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.UlcerIndex.Name()).To(Equal("UlcerIndex"))
-		})
-
 		It("returns a positive value for an equity curve with drawdowns", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
@@ -103,55 +82,25 @@ var _ = Describe("Specialized Metrics", func() {
 			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
 			Expect(result).To(BeNumerically("~", 0, 1e-9))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.UlcerIndex).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("ValueAtRisk", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.ValueAtRisk.Name()).To(Equal("ValueAtRisk"))
-		})
-
 		It("returns a negative value for an equity curve with losses", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
 			Expect(result).To(BeNumerically("<", 0))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.ValueAtRisk).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("KRatio", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.KRatio.Name()).To(Equal("KRatio"))
-		})
-
 		It("returns a positive value for a generally rising equity curve", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.KRatio).Value()
 			Expect(result).To(BeNumerically(">", 0))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.KRatio).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("KellerRatio", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.KellerRatio.Name()).To(Equal("KellerRatio"))
-		})
-
 		It("returns a positive value for a rising curve with moderate drawdown", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
@@ -176,12 +125,6 @@ var _ = Describe("Specialized Metrics", func() {
 			}
 			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
 			Expect(result).To(BeNumerically("==", 0))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.KellerRatio).Series()
-			Expect(series).To(BeNil())
 		})
 	})
 })

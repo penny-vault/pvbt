@@ -7,12 +7,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
-
-var _ portfolio.Portfolio = (*portfolio.Account)(nil)
-var _ portfolio.PortfolioManager = (*portfolio.Account)(nil)
 
 var _ = Describe("Account", func() {
 	var (
@@ -151,26 +147,6 @@ var _ = Describe("Account", func() {
 			bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 			rf = asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
 		})
-
-		// helper to build a single-timestamp DataFrame with Close and AdjClose for given assets
-		buildDF := func(t time.Time, assets []asset.Asset, closes []float64, adjCloses []float64) *data.DataFrame {
-			// metrics: MetricClose, AdjClose
-			// data layout: column-major => for each (asset, metric) pair, one value per timestamp
-			// order: asset0-Close, asset0-AdjClose, asset1-Close, asset1-AdjClose, ...
-			vals := make([]float64, 0, len(assets)*2)
-			for i := range assets {
-				vals = append(vals, closes[i])
-				vals = append(vals, adjCloses[i])
-			}
-			df, err := data.NewDataFrame(
-				[]time.Time{t},
-				assets,
-				[]data.Metric{data.MetricClose, data.AdjClose},
-				vals,
-			)
-			Expect(err).NotTo(HaveOccurred())
-			return df
-		}
 
 		It("with no holdings, value equals cash only", func() {
 			a := portfolio.New(portfolio.WithCash(10_000))

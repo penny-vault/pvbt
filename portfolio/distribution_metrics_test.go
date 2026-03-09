@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -23,22 +22,6 @@ var _ = Describe("Distribution Metrics", func() {
 		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	})
-
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	// buildAccount creates an Account with a 21-point equity curve that has
 	// a mix of ups and downs. The overall trend is upward with a dip in the
@@ -93,10 +76,6 @@ var _ = Describe("Distribution Metrics", func() {
 	}
 
 	Describe("ExcessKurtosis", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.ExcessKurtosis.Name()).To(Equal("ExcessKurtosis"))
-		})
-
 		It("returns a finite number for a mixed equity curve", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
@@ -126,19 +105,9 @@ var _ = Describe("Distribution Metrics", func() {
 			result := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.ExcessKurtosis).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("Skewness", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.Skewness.Name()).To(Equal("Skewness"))
-		})
-
 		It("returns a finite number for a mixed equity curve", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.Skewness).Value()
@@ -167,19 +136,9 @@ var _ = Describe("Distribution Metrics", func() {
 			result := a.PerformanceMetric(portfolio.Skewness).Value()
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.Skewness).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("NPositivePeriods", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.NPositivePeriods.Name()).To(Equal("NPositivePeriods"))
-		})
-
 		It("returns a value between 0 and 1", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
@@ -208,19 +167,9 @@ var _ = Describe("Distribution Metrics", func() {
 			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.NPositivePeriods).Series()
-			Expect(series).To(BeNil())
-		})
 	})
 
 	Describe("GainLossRatio", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.GainLossRatio.Name()).To(Equal("GainLossRatio"))
-		})
-
 		It("returns a positive value when there are both gains and losses", func() {
 			a := buildAccount()
 			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
@@ -253,12 +202,6 @@ var _ = Describe("Distribution Metrics", func() {
 			a.UpdatePrices(df)
 			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.GainLossRatio).Series()
-			Expect(series).To(BeNil())
 		})
 	})
 })

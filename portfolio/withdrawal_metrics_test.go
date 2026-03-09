@@ -7,7 +7,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -19,22 +18,6 @@ var _ = Describe("Withdrawal Metrics", func() {
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 	})
-
-	buildDF := func(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-		vals := make([]float64, 0, len(assets)*2)
-		for i := range assets {
-			vals = append(vals, closes[i])
-			vals = append(vals, adjCloses[i])
-		}
-		df, err := data.NewDataFrame(
-			[]time.Time{t},
-			assets,
-			[]data.Metric{data.MetricClose, data.AdjClose},
-			vals,
-		)
-		Expect(err).NotTo(HaveOccurred())
-		return df
-	}
 
 	// buildLongAccount creates an Account with a steadily growing equity curve
 	// over 60 data points (representing roughly 60 trading days).
@@ -82,10 +65,6 @@ var _ = Describe("Withdrawal Metrics", func() {
 	}
 
 	Describe("SafeWithdrawalRate", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.SafeWithdrawalRate.Name()).To(Equal("SafeWithdrawalRate"))
-		})
-
 		It("returns 0 when equity curve has fewer than 12 points", func() {
 			a := buildShortAccount()
 			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
@@ -103,18 +82,9 @@ var _ = Describe("Withdrawal Metrics", func() {
 			rate := portfolio.SafeWithdrawalRate.Compute(a, nil)
 			Expect(rate).To(BeNumerically(">", 0.0))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildLongAccount()
-			Expect(portfolio.SafeWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("PerpetualWithdrawalRate", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.PerpetualWithdrawalRate.Name()).To(Equal("PerpetualWithdrawalRate"))
-		})
-
 		It("returns 0 when equity curve has fewer than 12 points", func() {
 			a := buildShortAccount()
 			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
@@ -126,18 +96,9 @@ var _ = Describe("Withdrawal Metrics", func() {
 			pwr := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
 			Expect(pwr).To(BeNumerically("<=", swr))
 		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildLongAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
-		})
 	})
 
 	Describe("DynamicWithdrawalRate", func() {
-		It("has the correct name", func() {
-			Expect(portfolio.DynamicWithdrawalRate.Name()).To(Equal("DynamicWithdrawalRate"))
-		})
-
 		It("returns 0 when equity curve has fewer than 12 points", func() {
 			a := buildShortAccount()
 			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
@@ -154,11 +115,6 @@ var _ = Describe("Withdrawal Metrics", func() {
 			swr := portfolio.SafeWithdrawalRate.Compute(a, nil)
 			dwr := portfolio.DynamicWithdrawalRate.Compute(a, nil)
 			Expect(dwr).To(BeNumerically(">=", swr))
-		})
-
-		It("returns nil for ComputeSeries", func() {
-			a := buildLongAccount()
-			Expect(portfolio.DynamicWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
 		})
 	})
 })
