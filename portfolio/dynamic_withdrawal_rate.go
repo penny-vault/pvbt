@@ -17,8 +17,28 @@ package portfolio
 
 type dynamicWithdrawalRate struct{}
 
-func (dynamicWithdrawalRate) Name() string                                      { return "DynamicWithdrawalRate" }
-func (dynamicWithdrawalRate) Compute(a *Account, window *Period) float64         { return 0 }
+func (dynamicWithdrawalRate) Name() string { return "DynamicWithdrawalRate" }
+
+func (dynamicWithdrawalRate) Compute(a *Account, window *Period) float64 {
+	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	if len(equity) < 12 {
+		return 0
+	}
+
+	monthly := monthlyReturnsFromEquity(equity)
+	if len(monthly) == 0 {
+		return 0
+	}
+
+	// Dynamic withdrawal: balance must never reach zero, but withdrawal
+	// adapts downward when portfolio drops.
+	criterion := func(rate, startBalance, endBalance float64) bool {
+		return true // survival is checked in-loop
+	}
+
+	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, true)
+}
+
 func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // DynamicWithdrawalRate is the maximum annual withdrawal rate using
