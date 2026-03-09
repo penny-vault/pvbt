@@ -48,7 +48,8 @@ var _ = Describe("TestProvider", func() {
 			100, 101, 102, 103, 104, // AAPL Price
 			200, 202, 204, 206, 208, // GOOG Price
 		}
-		frame := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, vals)
+		frame, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, vals)
+		Expect(err).NotTo(HaveOccurred())
 		provider = data.NewTestProvider([]data.Metric{data.Price}, frame)
 	})
 

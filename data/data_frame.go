@@ -57,11 +57,11 @@ type DataFrame struct {
 // NewDataFrame constructs a DataFrame from the given dimensions and data.
 // The data slice must have length len(times) * len(assets) * len(metrics),
 // laid out in column-major order as described on DataFrame.
-func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, data []float64) *DataFrame {
+func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, data []float64) (*DataFrame, error) {
 	expected := len(times) * len(assets) * len(metrics)
 	if len(data) != expected {
-		panic(fmt.Sprintf("data length %d does not match dimensions %d (T=%d, A=%d, M=%d)",
-			len(data), expected, len(times), len(assets), len(metrics)))
+		return nil, fmt.Errorf("data length %d does not match dimensions %d (times=%d, assets=%d, metrics=%d)",
+			len(data), expected, len(times), len(assets), len(metrics))
 	}
 
 	idx := make(map[string]int, len(assets))
@@ -75,40 +75,46 @@ func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, dat
 		assets:     assets,
 		metrics:    metrics,
 		assetIndex: idx,
+	}, nil
+}
+
+// mustNewDataFrame is an internal helper that calls NewDataFrame and panics
+// on error. Use only when dimensions are guaranteed correct by construction.
+func mustNewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, data []float64) *DataFrame {
+	df, err := NewDataFrame(times, assets, metrics, data)
+	if err != nil {
+		panic("internal error: " + err.Error())
 	}
+	return df
 }
 
 // -- Private helpers ---------------------------------------------------------
 
-func (df *DataFrame) metricIndex(m Metric) int {
+func (df *DataFrame) metricIndex(m Metric) (int, bool) {
 	for i, met := range df.metrics {
 		if met == m {
-			return i
+			return i, true
 		}
 	}
-
-	return -1
+	return 0, false
 }
 
 func (df *DataFrame) colOffset(aIdx, mIdx int) int {
 	return (aIdx*len(df.metrics) + mIdx) * len(df.times)
 }
 
-func (df *DataFrame) timeIndex(t time.Time) int {
+func (df *DataFrame) timeIndex(t time.Time) (int, bool) {
 	i := sort.Search(len(df.times), func(i int) bool {
 		return !df.times[i].Before(t)
 	})
-
 	if i < len(df.times) && df.times[i].Equal(t) {
-		return i
+		return i, true
 	}
-
-	return -1
+	return 0, false
 }
 
 func (df *DataFrame) colSlice(aIdx, mIdx int) []float64 {
 	off := df.colOffset(aIdx, mIdx)
-
 	return df.data[off : off+len(df.times)]
 }
 
@@ -120,7 +126,6 @@ func (df *DataFrame) Start() time.Time {
 	if len(df.times) == 0 {
 		return time.Time{}
 	}
-
 	return df.times[0]
 }
 
@@ -130,7 +135,6 @@ func (df *DataFrame) End() time.Time {
 	if len(df.times) == 0 {
 		return time.Time{}
 	}
-
 	return df.times[len(df.times)-1]
 }
 
@@ -171,13 +175,12 @@ func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
 		return math.NaN()
 	}
 
-	mIdx := df.metricIndex(m)
-	if mIdx < 0 {
+	mIdx, ok := df.metricIndex(m)
+	if !ok {
 		return math.NaN()
 	}
 
 	off := df.colOffset(aIdx, mIdx)
-
 	return df.data[off+len(df.times)-1]
 }
 
@@ -188,18 +191,17 @@ func (df *DataFrame) ValueAt(a asset.Asset, m Metric, t time.Time) float64 {
 		return math.NaN()
 	}
 
-	mIdx := df.metricIndex(m)
-	if mIdx < 0 {
+	mIdx, ok := df.metricIndex(m)
+	if !ok {
 		return math.NaN()
 	}
 
-	tIdx := df.timeIndex(t)
-	if tIdx < 0 {
+	tIdx, ok := df.timeIndex(t)
+	if !ok {
 		return math.NaN()
 	}
 
 	off := df.colOffset(aIdx, mIdx)
-
 	return df.data[off+tIdx]
 }
 
@@ -212,8 +214,8 @@ func (df *DataFrame) Column(a asset.Asset, m Metric) []float64 {
 		return nil
 	}
 
-	mIdx := df.metricIndex(m)
-	if mIdx < 0 {
+	mIdx, ok := df.metricIndex(m)
+	if !ok {
 		return nil
 	}
 
@@ -223,38 +225,37 @@ func (df *DataFrame) Column(a asset.Asset, m Metric) []float64 {
 // At returns a single-row DataFrame containing all assets and metrics at
 // the given timestamp.
 func (df *DataFrame) At(t time.Time) *DataFrame {
-	tIdx := df.timeIndex(t)
-	if tIdx < 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+	tIdx, ok := df.timeIndex(t)
+	if !ok {
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
-		for mIdx := 0; mIdx < M; mIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			srcOff := df.colOffset(aIdx, mIdx) + tIdx
-			dstOff := aIdx*M + mIdx
+			dstOff := aIdx*metricLen + mIdx
 			newData[dstOff] = df.data[srcOff]
 		}
 	}
 
 	times := []time.Time{df.times[tIdx]}
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
 // Last returns a single-row DataFrame containing the most recent timestamp.
 func (df *DataFrame) Last() *DataFrame {
 	if len(df.times) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
-
 	return df.At(df.times[len(df.times)-1])
 }
 
@@ -273,7 +274,7 @@ func (df *DataFrame) Copy() *DataFrame {
 	metrics := make([]Metric, len(df.metrics))
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
 // Table returns an ASCII table representation of the DataFrame for
@@ -317,11 +318,10 @@ func (df *DataFrame) Table() string {
 
 // Assets returns a new DataFrame containing only the specified assets.
 func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
-	T := len(df.times)
-	M := len(df.metrics)
+	timeLen := len(df.times)
+	metricLen := len(df.metrics)
 
 	var matched []asset.Asset
-
 	var matchedIdx []int
 
 	for _, a := range assets {
@@ -332,66 +332,65 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 	}
 
 	if len(matched) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
-	newData := make([]float64, len(matched)*M*T)
+	newData := make([]float64, len(matched)*metricLen*timeLen)
 
 	for newAIdx, oldAIdx := range matchedIdx {
-		for mIdx := 0; mIdx < M; mIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			srcOff := df.colOffset(oldAIdx, mIdx)
-			dstOff := (newAIdx*M + mIdx) * T
-			copy(newData[dstOff:dstOff+T], df.data[srcOff:srcOff+T])
+			dstOff := (newAIdx*metricLen + mIdx) * timeLen
+			copy(newData[dstOff:dstOff+timeLen], df.data[srcOff:srcOff+timeLen])
 		}
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, matched, metrics, newData)
+	return mustNewDataFrame(times, matched, metrics, newData)
 }
 
 // Metrics returns a new DataFrame containing only the specified metrics.
 func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
-	T := len(df.times)
-	A := len(df.assets)
+	timeLen := len(df.times)
+	assetLen := len(df.assets)
 
 	var matched []Metric
-
 	var matchedIdx []int
 
 	for _, m := range metrics {
-		if idx := df.metricIndex(m); idx >= 0 {
+		if idx, ok := df.metricIndex(m); ok {
 			matched = append(matched, m)
 			matchedIdx = append(matchedIdx, idx)
 		}
 	}
 
 	if len(matched) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
-	newM := len(matched)
-	newData := make([]float64, A*newM*T)
+	newMetricLen := len(matched)
+	newData := make([]float64, assetLen*newMetricLen*timeLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
 		for newMIdx, oldMIdx := range matchedIdx {
 			srcOff := df.colOffset(aIdx, oldMIdx)
-			dstOff := (aIdx*newM + newMIdx) * T
-			copy(newData[dstOff:dstOff+T], df.data[srcOff:srcOff+T])
+			dstOff := (aIdx*newMetricLen + newMIdx) * timeLen
+			copy(newData[dstOff:dstOff+timeLen], df.data[srcOff:srcOff+timeLen])
 		}
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	assetsCopy := make([]asset.Asset, A)
+	assetsCopy := make([]asset.Asset, assetLen)
 	copy(assetsCopy, df.assets)
 
-	return NewDataFrame(times, assetsCopy, matched, newData)
+	return mustNewDataFrame(times, assetsCopy, matched, newData)
 }
 
 // Between returns a new DataFrame containing only timestamps within the
@@ -406,36 +405,36 @@ func (df *DataFrame) Between(start, end time.Time) *DataFrame {
 	})
 
 	if startIdx >= endIdx {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
 	return df.sliceByTimeIndices(startIdx, endIdx)
 }
 
 func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
-	newT := endIdx - startIdx
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M*newT)
+	newTimeLen := endIdx - startIdx
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen*newTimeLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
-		for mIdx := 0; mIdx < M; mIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			srcOff := df.colOffset(aIdx, mIdx) + startIdx
-			dstOff := (aIdx*M + mIdx) * newT
-			copy(newData[dstOff:dstOff+newT], df.data[srcOff:srcOff+newT])
+			dstOff := (aIdx*metricLen + mIdx) * newTimeLen
+			copy(newData[dstOff:dstOff+newTimeLen], df.data[srcOff:srcOff+newTimeLen])
 		}
 	}
 
-	times := make([]time.Time, newT)
+	times := make([]time.Time, newTimeLen)
 	copy(times, df.times[startIdx:endIdx])
 
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
 // Filter returns a new DataFrame keeping only the timestamps for which fn
@@ -456,18 +455,18 @@ func (df *DataFrame) Filter(fn func(t time.Time, row *DataFrame) bool) *DataFram
 
 func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 	if len(indices) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
-	newT := len(indices)
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M*newT)
+	newTimeLen := len(indices)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen*newTimeLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
-		for mIdx := 0; mIdx < M; mIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			srcBase := df.colOffset(aIdx, mIdx)
-			dstBase := (aIdx*M + mIdx) * newT
+			dstBase := (aIdx*metricLen + mIdx) * newTimeLen
 
 			for newTIdx, oldTIdx := range indices {
 				newData[dstBase+newTIdx] = df.data[srcBase+oldTIdx]
@@ -475,18 +474,18 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 		}
 	}
 
-	times := make([]time.Time, newT)
+	times := make([]time.Time, newTimeLen)
 	for i, idx := range indices {
 		times[i] = df.times[idx]
 	}
 
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
 // Drop removes all timestamps where any value equals val (e.g. NaN).
@@ -510,14 +509,15 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 
 // -- Mutation ----------------------------------------------------------------
 
-// Insert adds a new column to the DataFrame for the given asset and metric.
-// The length of values must equal Len().
-func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) *DataFrame {
+// Insert adds or overwrites a column in the DataFrame for the given asset
+// and metric. The length of values must equal Len(). Returns an error if
+// the values length does not match.
+func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) error {
 	if len(values) != len(df.times) {
-		panic(fmt.Sprintf("Insert: values length %d does not match Len() %d", len(values), len(df.times)))
+		return fmt.Errorf("Insert: values length %d does not match Len() %d", len(values), len(df.times))
 	}
 
-	T := len(df.times)
+	timeLen := len(df.times)
 
 	// Check if asset exists; if not, add it.
 	_, assetExists := df.assetIndex[a.CompositeFigi]
@@ -527,34 +527,34 @@ func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) *DataFram
 	}
 
 	// Check if metric exists; if not, add it.
-	metricExists := df.metricIndex(m) >= 0
+	_, metricExists := df.metricIndex(m)
 	if !metricExists {
 		df.metrics = append(df.metrics, m)
 	}
 
 	// Rebuild data slab if dimensions changed.
-	A := len(df.assets)
-	M := len(df.metrics)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
 
 	if !assetExists || !metricExists {
-		oldA := A
-		oldM := M
+		oldAssetLen := assetLen
+		oldMetricLen := metricLen
 
 		if !assetExists {
-			oldA = A - 1
+			oldAssetLen = assetLen - 1
 		}
 
 		if !metricExists {
-			oldM = M - 1
+			oldMetricLen = metricLen - 1
 		}
 
-		newData := make([]float64, A*M*T)
+		newData := make([]float64, assetLen*metricLen*timeLen)
 
-		for oldAIdx := 0; oldAIdx < oldA; oldAIdx++ {
-			for oldMIdx := 0; oldMIdx < oldM; oldMIdx++ {
-				oldOff := (oldAIdx*oldM + oldMIdx) * T
-				newOff := (oldAIdx*M + oldMIdx) * T
-				copy(newData[newOff:newOff+T], df.data[oldOff:oldOff+T])
+		for oldAIdx := 0; oldAIdx < oldAssetLen; oldAIdx++ {
+			for oldMIdx := 0; oldMIdx < oldMetricLen; oldMIdx++ {
+				oldOff := (oldAIdx*oldMetricLen + oldMIdx) * timeLen
+				newOff := (oldAIdx*metricLen + oldMIdx) * timeLen
+				copy(newData[newOff:newOff+timeLen], df.data[oldOff:oldOff+timeLen])
 			}
 		}
 
@@ -563,11 +563,11 @@ func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) *DataFram
 
 	// Write the values into the correct column.
 	aIdx := df.assetIndex[a.CompositeFigi]
-	mIdx := df.metricIndex(m)
+	mIdx, _ := df.metricIndex(m)
 	off := df.colOffset(aIdx, mIdx)
-	copy(df.data[off:off+T], values)
+	copy(df.data[off:off+timeLen], values)
 
-	return df
+	return nil
 }
 
 // -- DataFrame arithmetic (align by asset and metric) ------------------------
@@ -581,13 +581,9 @@ type colPair struct {
 
 func (df *DataFrame) findIntersection(other *DataFrame) ([]colPair, []asset.Asset, []Metric) {
 	var pairs []colPair
-
 	var resAssets []asset.Asset
-
 	assetSeen := make(map[string]bool)
-
 	var resMetrics []Metric
-
 	metricSeen := make(map[Metric]bool)
 
 	for aIdx, a := range df.assets {
@@ -597,8 +593,8 @@ func (df *DataFrame) findIntersection(other *DataFrame) ([]colPair, []asset.Asse
 		}
 
 		for mIdx, m := range df.metrics {
-			otherMIdx := other.metricIndex(m)
-			if otherMIdx < 0 {
+			otherMIdx, ok := other.metricIndex(m)
+			if !ok {
 				continue
 			}
 
@@ -624,15 +620,23 @@ func (df *DataFrame) findIntersection(other *DataFrame) ([]colPair, []asset.Asse
 	return pairs, resAssets, resMetrics
 }
 
-func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64) []float64) *DataFrame {
-	T := len(df.times)
-	if len(other.times) != T {
-		panic(fmt.Sprintf("binOp: timestamp count mismatch: %d vs %d", T, len(other.times)))
+func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64) []float64) (*DataFrame, error) {
+	timeLen := len(df.times)
+	if len(other.times) != timeLen {
+		return nil, fmt.Errorf("elemWiseOp: timestamp count mismatch: %d vs %d", timeLen, len(other.times))
+	}
+
+	// Validate that timestamps match, not just count.
+	for i := 0; i < timeLen; i++ {
+		if !df.times[i].Equal(other.times[i]) {
+			return nil, fmt.Errorf("elemWiseOp: timestamp mismatch at index %d: %s vs %s",
+				i, df.times[i].Format(time.RFC3339), other.times[i].Format(time.RFC3339))
+		}
 	}
 
 	pairs, resAssets, resMetrics := df.findIntersection(other)
 	if len(pairs) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil), nil
 	}
 
 	resIdx := make(map[string]int, len(resAssets))
@@ -645,43 +649,43 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 		resMIdx[m] = i
 	}
 
-	RM := len(resMetrics)
-	newData := make([]float64, len(resAssets)*RM*T)
+	resMetricLen := len(resMetrics)
+	newData := make([]float64, len(resAssets)*resMetricLen*timeLen)
 
 	for _, p := range pairs {
 		raIdx := resIdx[p.a.CompositeFigi]
 		rmIdx := resMIdx[p.m]
-		dstOff := (raIdx*RM + rmIdx) * T
-		dst := newData[dstOff : dstOff+T]
-		s := df.data[p.selfOff : p.selfOff+T]
-		t := other.data[p.otherOff : p.otherOff+T]
+		dstOff := (raIdx*resMetricLen + rmIdx) * timeLen
+		dst := newData[dstOff : dstOff+timeLen]
+		s := df.data[p.selfOff : p.selfOff+timeLen]
+		t := other.data[p.otherOff : p.otherOff+timeLen]
 		apply(dst, s, t)
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	return NewDataFrame(times, resAssets, resMetrics, newData)
+	return mustNewDataFrame(times, resAssets, resMetrics, newData), nil
 }
 
 // Add returns a new DataFrame with element-wise addition of two DataFrames
 // aligned by asset and metric.
-func (df *DataFrame) Add(other *DataFrame) *DataFrame {
+func (df *DataFrame) Add(other *DataFrame) (*DataFrame, error) {
 	return df.elemWiseOp(other, floats.AddTo)
 }
 
 // Sub returns a new DataFrame with element-wise subtraction.
-func (df *DataFrame) Sub(other *DataFrame) *DataFrame {
+func (df *DataFrame) Sub(other *DataFrame) (*DataFrame, error) {
 	return df.elemWiseOp(other, floats.SubTo)
 }
 
 // Mul returns a new DataFrame with element-wise multiplication.
-func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
+func (df *DataFrame) Mul(other *DataFrame) (*DataFrame, error) {
 	return df.elemWiseOp(other, floats.MulTo)
 }
 
 // Div returns a new DataFrame with element-wise division.
-func (df *DataFrame) Div(other *DataFrame) *DataFrame {
+func (df *DataFrame) Div(other *DataFrame) (*DataFrame, error) {
 	return df.elemWiseOp(other, floats.DivTo)
 }
 
@@ -691,7 +695,6 @@ func (df *DataFrame) Div(other *DataFrame) *DataFrame {
 func (df *DataFrame) AddScalar(f float64) *DataFrame {
 	result := df.Copy()
 	floats.AddConst(f, result.data)
-
 	return result
 }
 
@@ -704,7 +707,6 @@ func (df *DataFrame) SubScalar(f float64) *DataFrame {
 func (df *DataFrame) MulScalar(f float64) *DataFrame {
 	result := df.Copy()
 	floats.Scale(f, result.data)
-
 	return result
 }
 
@@ -718,20 +720,20 @@ func (df *DataFrame) DivScalar(f float64) *DataFrame {
 // Max returns a new DataFrame with the maximum value across all assets for
 // each timestamp and metric.
 func (df *DataFrame) Max() *DataFrame {
-	T := len(df.times)
-	M := len(df.metrics)
-	A := len(df.assets)
+	timeLen := len(df.times)
+	metricLen := len(df.metrics)
+	assetLen := len(df.assets)
 
 	synth := asset.Asset{Ticker: "MAX"}
-	newData := make([]float64, M*T)
+	newData := make([]float64, metricLen*timeLen)
 
-	for mIdx := 0; mIdx < M; mIdx++ {
-		dstOff := mIdx * T
+	for mIdx := 0; mIdx < metricLen; mIdx++ {
+		dstOff := mIdx * timeLen
 
-		for tIdx := 0; tIdx < T; tIdx++ {
+		for tIdx := 0; tIdx < timeLen; tIdx++ {
 			best := math.Inf(-1)
 
-			for aIdx := 0; aIdx < A; aIdx++ {
+			for aIdx := 0; aIdx < assetLen; aIdx++ {
 				v := df.data[df.colOffset(aIdx, mIdx)+tIdx]
 				if v > best {
 					best = v
@@ -742,32 +744,32 @@ func (df *DataFrame) Max() *DataFrame {
 		}
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, []asset.Asset{synth}, metrics, newData)
+	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
 }
 
 // Min returns a new DataFrame with the minimum value across all assets for
 // each timestamp and metric.
 func (df *DataFrame) Min() *DataFrame {
-	T := len(df.times)
-	M := len(df.metrics)
-	A := len(df.assets)
+	timeLen := len(df.times)
+	metricLen := len(df.metrics)
+	assetLen := len(df.assets)
 
 	synth := asset.Asset{Ticker: "MIN"}
-	newData := make([]float64, M*T)
+	newData := make([]float64, metricLen*timeLen)
 
-	for mIdx := 0; mIdx < M; mIdx++ {
-		dstOff := mIdx * T
+	for mIdx := 0; mIdx < metricLen; mIdx++ {
+		dstOff := mIdx * timeLen
 
-		for tIdx := 0; tIdx < T; tIdx++ {
+		for tIdx := 0; tIdx < timeLen; tIdx++ {
 			best := math.Inf(1)
 
-			for aIdx := 0; aIdx < A; aIdx++ {
+			for aIdx := 0; aIdx < assetLen; aIdx++ {
 				v := df.data[df.colOffset(aIdx, mIdx)+tIdx]
 				if v < best {
 					best = v
@@ -778,30 +780,29 @@ func (df *DataFrame) Min() *DataFrame {
 		}
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, []asset.Asset{synth}, metrics, newData)
+	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
 }
 
-// IdxMax returns, for each timestamp and metric, the asset that holds the
-// maximum value.
+// IdxMax returns, for each timestamp, the asset that holds the maximum
+// value for the first metric.
 func (df *DataFrame) IdxMax() []asset.Asset {
-	T := len(df.times)
-	A := len(df.assets)
+	timeLen := len(df.times)
+	assetLen := len(df.assets)
 
-	// Use the first metric.
 	mIdx := 0
-	result := make([]asset.Asset, T)
+	result := make([]asset.Asset, timeLen)
 
-	for tIdx := 0; tIdx < T; tIdx++ {
+	for tIdx := 0; tIdx < timeLen; tIdx++ {
 		best := math.Inf(-1)
 		bestIdx := 0
 
-		for aIdx := 0; aIdx < A; aIdx++ {
+		for aIdx := 0; aIdx < assetLen; aIdx++ {
 			v := df.data[df.colOffset(aIdx, mIdx)+tIdx]
 			if v > best {
 				best = v
@@ -873,7 +874,6 @@ func (df *DataFrame) CumSum() *DataFrame {
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		floats.CumSum(out, col)
-
 		return out
 	})
 }
@@ -909,7 +909,7 @@ func (df *DataFrame) Shift(n int) *DataFrame {
 // values within each period using the specified method.
 func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {
 	if len(df.times) == 0 {
-		return NewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
 	// Group timestamps by period boundary.
@@ -919,7 +919,6 @@ func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {
 	}
 
 	var groups []group
-
 	groupStart := 0
 
 	for i := 1; i < len(df.times); i++ {
@@ -932,33 +931,33 @@ func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {
 	groups = append(groups, group{groupStart, len(df.times)})
 
 	// Build result.
-	newT := len(groups)
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M*newT)
-	newTimes := make([]time.Time, newT)
+	newTimeLen := len(groups)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen*newTimeLen)
+	newTimes := make([]time.Time, newTimeLen)
 
 	for gIdx, g := range groups {
 		newTimes[gIdx] = df.times[g.end-1]
 
-		for aIdx := 0; aIdx < A; aIdx++ {
-			for mIdx := 0; mIdx < M; mIdx++ {
+		for aIdx := 0; aIdx < assetLen; aIdx++ {
+			for mIdx := 0; mIdx < metricLen; mIdx++ {
 				srcOff := df.colOffset(aIdx, mIdx)
 				vals := df.data[srcOff+g.start : srcOff+g.end]
-				dstOff := (aIdx*M + mIdx) * newT
+				dstOff := (aIdx*metricLen + mIdx) * newTimeLen
 
 				newData[dstOff+gIdx] = aggregate(vals, agg)
 			}
 		}
 	}
 
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(newTimes, assets, metrics, newData)
+	return mustNewDataFrame(newTimes, assets, metrics, newData)
 }
 
 func periodChanged(prev, curr time.Time, freq Frequency) bool {
@@ -966,7 +965,6 @@ func periodChanged(prev, curr time.Time, freq Frequency) bool {
 	case Weekly:
 		_, pw := prev.ISOWeek()
 		_, cw := curr.ISOWeek()
-
 		return pw != cw
 	case Monthly:
 		return prev.Month() != curr.Month() || prev.Year() != curr.Year()
@@ -1012,43 +1010,43 @@ func (df *DataFrame) Rolling(n int) *RollingDataFrame {
 // transformed values. The function receives a contiguous []float64 column
 // and must return a slice of the same length.
 func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
-	T := len(df.times)
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M*T)
+	timeLen := len(df.times)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen*timeLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
-		for mIdx := 0; mIdx < M; mIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			col := df.colSlice(aIdx, mIdx)
 			transformed := fn(col)
-			dstOff := (aIdx*M + mIdx) * T
-			copy(newData[dstOff:dstOff+T], transformed)
+			dstOff := (aIdx*metricLen + mIdx) * timeLen
+			copy(newData[dstOff:dstOff+timeLen], transformed)
 		}
 	}
 
-	times := make([]time.Time, T)
+	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
 // Reduce runs fn on each column, collapsing it to a single value. The
 // result is a single-row DataFrame with the same assets and metrics.
 func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
-	A := len(df.assets)
-	M := len(df.metrics)
-	newData := make([]float64, A*M)
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	newData := make([]float64, assetLen*metricLen)
 
-	for aIdx := 0; aIdx < A; aIdx++ {
-		for mIdx := 0; mIdx < M; mIdx++ {
+	for aIdx := 0; aIdx < assetLen; aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			col := df.colSlice(aIdx, mIdx)
-			dstOff := aIdx*M + mIdx
+			dstOff := aIdx*metricLen + mIdx
 			newData[dstOff] = fn(col)
 		}
 	}
@@ -1058,11 +1056,11 @@ func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
 		lastTime = []time.Time{df.times[len(df.times)-1]}
 	}
 
-	assets := make([]asset.Asset, A)
+	assets := make([]asset.Asset, assetLen)
 	copy(assets, df.assets)
 
-	metrics := make([]Metric, M)
+	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return NewDataFrame(lastTime, assets, metrics, newData)
+	return mustNewDataFrame(lastTime, assets, metrics, newData)
 }
