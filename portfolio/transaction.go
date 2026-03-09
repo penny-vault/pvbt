@@ -16,10 +16,31 @@
 package portfolio
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 )
+
+// String returns a human-readable name for the transaction type.
+func (t TransactionType) String() string {
+	switch t {
+	case BuyTransaction:
+		return "Buy"
+	case SellTransaction:
+		return "Sell"
+	case DividendTransaction:
+		return "Dividend"
+	case FeeTransaction:
+		return "Fee"
+	case DepositTransaction:
+		return "Deposit"
+	case WithdrawalTransaction:
+		return "Withdrawal"
+	default:
+		return fmt.Sprintf("TransactionType(%d)", int(t))
+	}
+}
 
 // TransactionType identifies the kind of portfolio event recorded in the
 // transaction log.

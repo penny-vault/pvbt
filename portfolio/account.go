@@ -220,6 +220,40 @@ func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
 
 // --- PortfolioManager interface ---
 
-func (a *Account) Record(tx Transaction)         {}
+// Record appends a transaction to the log and updates cash, holdings,
+// and tax lots accordingly.
+func (a *Account) Record(tx Transaction) {
+	a.transactions = append(a.transactions, tx)
+	a.cash += tx.Amount
+
+	switch tx.Type {
+	case BuyTransaction:
+		a.holdings[tx.Asset] += tx.Qty
+		a.taxLots[tx.Asset] = append(a.taxLots[tx.Asset], taxLot{
+			Date:  tx.Date,
+			Qty:   tx.Qty,
+			Price: tx.Price,
+		})
+	case SellTransaction:
+		a.holdings[tx.Asset] -= tx.Qty
+		remaining := tx.Qty
+		lots := a.taxLots[tx.Asset]
+		i := 0
+		for i < len(lots) && remaining > 0 {
+			if lots[i].Qty <= remaining {
+				remaining -= lots[i].Qty
+				i++
+			} else {
+				lots[i].Qty -= remaining
+				remaining = 0
+			}
+		}
+		a.taxLots[tx.Asset] = lots[i:]
+		if a.holdings[tx.Asset] == 0 {
+			delete(a.holdings, tx.Asset)
+			delete(a.taxLots, tx.Asset)
+		}
+	}
+}
 func (a *Account) UpdatePrices(df *data.DataFrame) {}
 func (a *Account) SetBroker(b broker.Broker)      { a.broker = b }
