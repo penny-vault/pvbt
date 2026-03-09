@@ -15,10 +15,39 @@
 
 package portfolio
 
+import "math"
+
 type sortino struct{}
 
-func (sortino) Name() string                                         { return "Sortino" }
-func (sortino) Compute(a *Account, window *Period) float64        { return 0 }
+func (sortino) Name() string { return "Sortino" }
+
+func (sortino) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(eq)
+	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
+	er := excessReturns(r, rf)
+
+	// Downside deviation: stddev of only negative excess returns, annualized.
+	var neg []float64
+	for _, v := range er {
+		if v < 0 {
+			neg = append(neg, v)
+		}
+	}
+
+	if len(neg) == 0 {
+		return 0
+	}
+
+	af := annualizationFactor(a.EquityTimes())
+	dd := stddev(neg) * math.Sqrt(af)
+	if dd == 0 {
+		return 0
+	}
+
+	return mean(er) / stddev(neg) * math.Sqrt(af)
+}
+
 func (sortino) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Sortino is the Sortino ratio: like Sharpe but uses downside deviation

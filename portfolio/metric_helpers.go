@@ -149,6 +149,48 @@ func cagr(startValue, endValue, years float64) float64 {
 	return math.Pow(endValue/startValue, 1.0/years) - 1
 }
 
+// windowSliceTimes trims a time series to the trailing window.
+// If window is nil, returns the full series.
+func windowSliceTimes(times []time.Time, window *Period) []time.Time {
+	if window == nil || len(times) == 0 {
+		return times
+	}
+
+	last := times[len(times)-1]
+
+	var cutoff time.Time
+	switch window.Unit {
+	case UnitDay:
+		cutoff = last.AddDate(0, 0, -window.N)
+	case UnitMonth:
+		cutoff = last.AddDate(0, -window.N, 0)
+	case UnitYear:
+		cutoff = last.AddDate(-window.N, 0, 0)
+	}
+
+	for i, t := range times {
+		if !t.Before(cutoff) {
+			return times[i:]
+		}
+	}
+
+	return times
+}
+
+// annualizationFactor estimates the number of periods per year from timestamps.
+// If the average gap between timestamps exceeds 20 calendar days, it assumes
+// monthly data (factor 12); otherwise it assumes daily (factor 252).
+func annualizationFactor(times []time.Time) float64 {
+	if len(times) < 2 {
+		return 252 // default daily
+	}
+	avgDays := times[len(times)-1].Sub(times[0]).Hours() / 24 / float64(len(times)-1)
+	if avgDays > 20 {
+		return 12 // monthly
+	}
+	return 252 // daily
+}
+
 // drawdownSeries computes the drawdown at each point in the equity curve.
 // Values are negative (or zero at peaks).
 func drawdownSeries(equity []float64) []float64 {

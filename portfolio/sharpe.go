@@ -15,10 +15,27 @@
 
 package portfolio
 
+import "math"
+
 type sharpe struct{}
 
-func (sharpe) Name() string                                         { return "Sharpe" }
-func (sharpe) Compute(a *Account, window *Period) float64        { return 0 }
+func (sharpe) Name() string { return "Sharpe" }
+
+func (sharpe) Compute(a *Account, window *Period) float64 {
+	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(eq)
+	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
+	er := excessReturns(r, rf)
+
+	sd := stddev(er)
+	if sd == 0 {
+		return 0
+	}
+
+	af := annualizationFactor(a.EquityTimes())
+	return mean(er) / sd * math.Sqrt(af)
+}
+
 func (sharpe) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // Sharpe is the Sharpe ratio: risk-adjusted return relative to a
