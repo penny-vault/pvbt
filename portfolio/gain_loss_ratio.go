@@ -15,10 +15,32 @@
 
 package portfolio
 
+import "math"
+
 type gainLossRatio struct{}
 
-func (gainLossRatio) Name() string                                      { return "GainLossRatio" }
-func (gainLossRatio) Compute(a *Account, window *Period) float64         { return 0 }
+func (gainLossRatio) Name() string { return "GainLossRatio" }
+
+func (gainLossRatio) Compute(a *Account, window *Period) float64 {
+	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(prices)
+
+	var positive, negative []float64
+	for _, v := range r {
+		if v > 0 {
+			positive = append(positive, v)
+		} else if v < 0 {
+			negative = append(negative, v)
+		}
+	}
+
+	if len(positive) == 0 || len(negative) == 0 {
+		return 0
+	}
+
+	return mean(positive) / math.Abs(mean(negative))
+}
+
 func (gainLossRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // GainLossRatio is the average gain on winning periods divided by the

@@ -17,8 +17,26 @@ package portfolio
 
 type nPositivePeriods struct{}
 
-func (nPositivePeriods) Name() string                                      { return "NPositivePeriods" }
-func (nPositivePeriods) Compute(a *Account, window *Period) float64         { return 0 }
+func (nPositivePeriods) Name() string { return "NPositivePeriods" }
+
+func (nPositivePeriods) Compute(a *Account, window *Period) float64 {
+	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	r := returns(prices)
+
+	if len(r) == 0 {
+		return 0
+	}
+
+	count := 0
+	for _, v := range r {
+		if v > 0 {
+			count++
+		}
+	}
+
+	return float64(count) / float64(len(r))
+}
+
 func (nPositivePeriods) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // NPositivePeriods is the percentage of periods with positive returns.
