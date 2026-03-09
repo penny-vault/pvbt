@@ -168,31 +168,33 @@ func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderMo
 	}
 
 	// Submit to broker.
-	fill, err := a.broker.Submit(order)
+	fills, err := a.broker.Submit(order)
 	if err != nil {
 		return
 	}
 
-	// Record the fill as a transaction.
-	var txType TransactionType
-	var amount float64
-	switch side {
-	case Buy:
-		txType = BuyTransaction
-		amount = -(fill.Price * fill.Qty)
-	case Sell:
-		txType = SellTransaction
-		amount = fill.Price * fill.Qty
-	}
+	// Record each fill as a transaction.
+	for _, fill := range fills {
+		var txType TransactionType
+		var amount float64
+		switch side {
+		case Buy:
+			txType = BuyTransaction
+			amount = -(fill.Price * fill.Qty)
+		case Sell:
+			txType = SellTransaction
+			amount = fill.Price * fill.Qty
+		}
 
-	a.Record(Transaction{
-		Date:   fill.FilledAt,
-		Asset:  ast,
-		Type:   txType,
-		Qty:    fill.Qty,
-		Price:  fill.Price,
-		Amount: amount,
-	})
+		a.Record(Transaction{
+			Date:   fill.FilledAt,
+			Asset:  ast,
+			Type:   txType,
+			Qty:    fill.Qty,
+			Price:  fill.Price,
+			Amount: amount,
+		})
+	}
 }
 
 // Cash returns the current cash balance.
