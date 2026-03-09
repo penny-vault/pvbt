@@ -16,10 +16,21 @@
 package portfolio
 
 import (
+	"math"
+	"time"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
+
+// taxLot tracks the purchase date, quantity, and price of a position for
+// tax gain/loss calculations.
+type taxLot struct {
+	Date  time.Time
+	Qty   float64
+	Price float64
+}
 
 // Option configures an Account during construction.
 type Option func(*Account)
@@ -29,11 +40,27 @@ type Option func(*Account)
 // the engine, and inspects it after the run. The engine holds it as
 // *Account (giving access to both interfaces): it passes it as Portfolio
 // to strategy Compute calls, and calls Record/SetBroker directly.
-type Account struct{}
+type Account struct {
+	cash            float64
+	holdings        map[asset.Asset]float64
+	transactions    []Transaction
+	broker          broker.Broker
+	prices          *data.DataFrame
+	equityCurve     []float64
+	equityTimes     []time.Time
+	benchmarkPrices []float64
+	riskFreePrices  []float64
+	benchmark       asset.Asset
+	riskFree        asset.Asset
+	taxLots         map[asset.Asset][]taxLot
+}
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
-	a := &Account{}
+	a := &Account{
+		holdings: make(map[asset.Asset]float64),
+		taxLots:  make(map[asset.Asset][]taxLot),
+	}
 	for _, opt := range opts {
 		opt(a)
 	}
@@ -48,21 +75,98 @@ func WithBroker(b broker.Broker) Option {
 	}
 }
 
-// WithCash returns an Option that sets the initial cash balance.
+// WithCash returns an Option that sets the initial cash balance and
+// records a DepositTransaction.
 func WithCash(amount float64) Option {
-	return func(a *Account) {}
+	return func(a *Account) {
+		a.cash = amount
+		a.transactions = append(a.transactions, Transaction{
+			Type:   DepositTransaction,
+			Amount: amount,
+		})
+	}
+}
+
+// WithBenchmark returns an Option that stores the benchmark asset.
+func WithBenchmark(b asset.Asset) Option {
+	return func(a *Account) {
+		a.benchmark = b
+	}
+}
+
+// WithRiskFree returns an Option that stores the risk-free asset.
+func WithRiskFree(rf asset.Asset) Option {
+	return func(a *Account) {
+		a.riskFree = rf
+	}
+}
+
+// Benchmark returns the benchmark asset.
+func (a *Account) Benchmark() asset.Asset {
+	return a.benchmark
+}
+
+// RiskFree returns the risk-free asset.
+func (a *Account) RiskFree() asset.Asset {
+	return a.riskFree
 }
 
 // --- Portfolio interface ---
 
 func (a *Account) RebalanceTo(alloc ...Allocation)                                     {}
 func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {}
-func (a *Account) Cash() float64                                                        { return 0 }
-func (a *Account) Value() float64                                                       { return 0 }
-func (a *Account) Position(ast asset.Asset) float64                                     { return 0 }
-func (a *Account) PositionValue(ast asset.Asset) float64                                { return 0 }
-func (a *Account) Holdings(fn func(asset.Asset, float64))                               {}
-func (a *Account) Transactions() []Transaction                                          { return nil }
+
+// Cash returns the current cash balance.
+func (a *Account) Cash() float64 {
+	return a.cash
+}
+
+// Value returns the total portfolio value: cash plus all holdings marked
+// to current prices. If no prices have been set yet, returns cash only.
+func (a *Account) Value() float64 {
+	total := a.cash
+	if a.prices != nil {
+		for ast, qty := range a.holdings {
+			v := a.prices.Value(ast, data.MetricClose)
+			if !math.IsNaN(v) {
+				total += qty * v
+			}
+		}
+	}
+	return total
+}
+
+// Position returns the quantity held of a specific asset.
+func (a *Account) Position(ast asset.Asset) float64 {
+	return a.holdings[ast]
+}
+
+// PositionValue returns the current market value of the position in a
+// specific asset (quantity * current price), or 0 if no prices or no position.
+func (a *Account) PositionValue(ast asset.Asset) float64 {
+	qty := a.holdings[ast]
+	if qty == 0 || a.prices == nil {
+		return 0
+	}
+	v := a.prices.Value(ast, data.MetricClose)
+	if math.IsNaN(v) {
+		return 0
+	}
+	return qty * v
+}
+
+// Holdings iterates over all current positions, calling fn with each
+// asset and its held quantity.
+func (a *Account) Holdings(fn func(asset.Asset, float64)) {
+	for ast, qty := range a.holdings {
+		fn(ast, qty)
+	}
+}
+
+// Transactions returns the full transaction log in chronological order.
+func (a *Account) Transactions() []Transaction {
+	return a.transactions
+}
 
 func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery {
 	return PerformanceMetricQuery{account: a, metric: m}
@@ -116,7 +220,6 @@ func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
 
 // --- PortfolioManager interface ---
 
-func (a *Account) Record(tx Transaction)                    {}
+func (a *Account) Record(tx Transaction)         {}
 func (a *Account) UpdatePrices(df *data.DataFrame) {}
-func (a *Account) SetBroker(b broker.Broker)                {}
-
+func (a *Account) SetBroker(b broker.Broker)      { a.broker = b }
