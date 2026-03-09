@@ -49,7 +49,9 @@ var _ = Describe("RollingDataFrame", func() {
 			vals[i] = float64(i + 1)
 		}
 
-		df = data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+		var err error
+		df, err = data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	Describe("Rolling", func() {
@@ -202,8 +204,9 @@ var _ = Describe("RollingDataFrame", func() {
 				// GOOG Volume
 				1000, 2000, 3000, 4000, 5000,
 			}
-			multi := data.NewDataFrame(times, []asset.Asset{aapl, goog},
+			multi, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 				[]data.Metric{data.Price, data.Volume}, vals)
+			Expect(err).NotTo(HaveOccurred())
 
 			result := multi.Rolling(3).Sum()
 
@@ -228,7 +231,8 @@ var _ = Describe("RollingDataFrame", func() {
 
 			// NaN at index 2 should cause windows [0..2], [1..3], [2..4] to be NaN.
 			vals := []float64{1, 2, math.NaN(), 4, 5}
-			nanDF := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			nanDF, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			Expect(err).NotTo(HaveOccurred())
 			result := nanDF.Rolling(3).Mean()
 			col := result.Column(aapl, data.Price)
 
@@ -251,7 +255,8 @@ var _ = Describe("RollingDataFrame", func() {
 			}
 
 			vals := []float64{1, 2, math.NaN(), 4, 5}
-			nanDF := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			nanDF, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			Expect(err).NotTo(HaveOccurred())
 			result := nanDF.Rolling(3).Sum()
 			col := result.Column(aapl, data.Price)
 

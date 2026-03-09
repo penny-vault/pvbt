@@ -221,7 +221,11 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
 
 	if len(times) == 0 {
-		return NewDataFrame(nil, nil, nil, nil), nil
+		df, err := NewDataFrame(nil, nil, nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf("creating empty DataFrame: %w", err)
+		}
+		return df, nil
 	}
 
 	// build time index for fast lookup
@@ -267,7 +271,11 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		}
 	}
 
-	return NewDataFrame(times, req.Assets, req.Metrics, data), nil
+	df, err := NewDataFrame(times, req.Assets, req.Metrics, data)
+	if err != nil {
+		return nil, fmt.Errorf("building DataFrame: %w", err)
+	}
+	return df, nil
 }
 
 // Close releases resources. If the provider created its own pool it is closed.
