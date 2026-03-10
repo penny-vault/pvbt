@@ -27,111 +27,301 @@ import (
 
 var _ = Describe("Risk-Adjusted Metrics", func() {
 	var (
-		acct *portfolio.Account
-		spy  asset.Asset
-		bil  asset.Asset
+		spy asset.Asset
+		bil asset.Asset
 	)
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+	})
 
-		acct = portfolio.New(
-			portfolio.WithCash(10_000),
+	// buildAccount creates an account with the given SPY and BIL price series.
+	// It buys 5 shares of SPY at spyPrices[0], using WithCash = 5 * spyPrices[0].
+	// Equity curve = 5 * spyPrices[i] (no remaining cash).
+	buildAccount := func(spyPrices, bilPrices []float64) *portfolio.Account {
+		n := len(spyPrices)
+		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
+
+		acct := portfolio.New(
+			portfolio.WithCash(5*spyPrices[0]),
 			portfolio.WithBenchmark(spy),
 			portfolio.WithRiskFree(bil),
 		)
 
-		// Simulate buying 20 shares of SPY at 400 on day 0.
-		// This costs 8000, leaving 2000 cash.
-		// Portfolio value will then move with SPY price.
-		base := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-
-		// SPY prices: rise, dip, then recover above starting level.
-		spyPrices := []float64{
-			400, 404, 408, 412, 416,
-			412, 400, 380, 360, 368,
-			384, 400, 416, 432, 440,
-			448, 456, 464, 472, 480,
-		}
-		// BIL: nearly flat risk-free proxy.
-		bilPrices := []float64{
-			50.00, 50.005, 50.01, 50.015, 50.02,
-			50.025, 50.03, 50.035, 50.04, 50.045,
-			50.05, 50.055, 50.06, 50.065, 50.07,
-			50.075, 50.08, 50.085, 50.09, 50.095,
-		}
-
-		// Record buy on day 0 before first UpdatePrices.
 		acct.Record(portfolio.Transaction{
-			Date:   base,
+			Date:   times[0],
 			Asset:  spy,
 			Type:   portfolio.BuyTransaction,
-			Qty:    20,
-			Price:  400,
-			Amount: -8_000,
+			Qty:    5,
+			Price:  spyPrices[0],
+			Amount: -5 * spyPrices[0],
 		})
 
-		for i := 0; i < 20; i++ {
-			t := base.AddDate(0, 0, i)
-			df := buildDF(t,
+		for i := range n {
+			df := buildDF(times[i],
 				[]asset.Asset{spy, bil},
 				[]float64{spyPrices[i], bilPrices[i]},
 				[]float64{spyPrices[i], bilPrices[i]},
 			)
 			acct.UpdatePrices(df)
 		}
-	})
+
+		return acct
+	}
+
+	// ----------------------------------------------------------------
+	// Primary scenario: 6-point equity curve with two dips.
+	//
+	// SPY prices: [100, 105, 98, 103, 97, 110]
+	// BIL prices: [100, 100.01, 100.02, 100.03, 100.04, 100.05]
+	// Equity curve (5 * SPY): [500, 525, 490, 515, 485, 550]
+	//
+	// Equity returns:
+	//   r[0] = (525-500)/500  = 0.05
+	//   r[1] = (490-525)/525  = -0.066666...
+	//   r[2] = (515-490)/490  =  0.051020...
+	//   r[3] = (485-515)/515  = -0.058252...
+	//   r[4] = (550-485)/485  =  0.134020...
+	//
+	// RF returns (BIL):
+	//   rf[0] = 0.01/100       = 0.0001
+	//   rf[1] = 0.01/100.01    ~ 9.999e-5
+	//   rf[2] = 0.01/100.02    ~ 9.998e-5
+	//   rf[3] = 0.01/100.03    ~ 9.997e-5
+	//   rf[4] = 0.01/100.04    ~ 9.996e-5
+	//
+	// Excess returns: er[i] = r[i] - rf[i]
+	//   er[0] ~ 0.04990, er[1] ~ -0.06677,
+	//   er[2] ~ 0.05092, er[3] ~ -0.05835, er[4] ~ 0.13392
+	//
+	// Negative excess returns: er[1], er[3]
+	//
+	// annualizationFactor = 252 (daily data, avg gap < 20 days)
+	// ----------------------------------------------------------------
 
 	Describe("StdDev", func() {
-		It("returns a positive value for a volatile equity curve", func() {
+		It("returns annualized standard deviation of equity returns", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// stddev(r) = sqrt(variance(r))
+			// mean(r) = (0.05 + (-0.06667) + 0.05102 + (-0.05825) + 0.13402) / 5
+			//         = 0.11012 / 5 = 0.02202...
+			// variance(r) = sum((r[i]-mean)^2) / 4  (N-1 = 4)
+			// stddev(r) ~ 0.08438
+			// StdDev = stddev(r) * sqrt(252) ~ 1.33942
 			val := acct.PerformanceMetric(portfolio.StdDev).Value()
-			Expect(val).To(BeNumerically(">", 0))
+			Expect(val).To(BeNumerically("~", 1.3394, 1e-3))
 		})
 
-		It("returns a return series from ComputeSeries", func() {
+		It("returns the return series from ComputeSeries", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
 			series := acct.PerformanceMetric(portfolio.StdDev).Series()
-			Expect(series).NotTo(BeEmpty())
+			Expect(series).To(HaveLen(5))
+			Expect(series[0]).To(BeNumerically("~", 0.05, 1e-10))
+			Expect(series[1]).To(BeNumerically("~", -0.06667, 1e-4))
 		})
 	})
 
 	Describe("MaxDrawdown", func() {
-		It("returns a negative value for an equity curve with a dip", func() {
+		It("returns the largest peak-to-trough decline", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// Drawdown series from equity [500, 525, 490, 515, 485, 550]:
+			//   peak=500 -> dd=0
+			//   peak=525 -> dd=0
+			//   peak=525 -> dd=(490-525)/525 = -0.06667
+			//   peak=525 -> dd=(515-525)/525 = -0.01905
+			//   peak=525 -> dd=(485-525)/525 = -0.07619
+			//   peak=550 -> dd=0
+			// MaxDrawdown = -0.07619
 			val := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
-			Expect(val).To(BeNumerically("<", 0))
+			Expect(val).To(BeNumerically("~", -0.07619, 1e-4))
 		})
 
-		It("returns a drawdown series from ComputeSeries", func() {
+		It("returns the full drawdown series from ComputeSeries", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
 			series := acct.PerformanceMetric(portfolio.MaxDrawdown).Series()
-			Expect(series).NotTo(BeEmpty())
+			Expect(series).To(HaveLen(6))
+			Expect(series[0]).To(BeNumerically("~", 0.0, 1e-10))
+			Expect(series[1]).To(BeNumerically("~", 0.0, 1e-10))
+			Expect(series[2]).To(BeNumerically("~", -0.06667, 1e-4))
+			Expect(series[3]).To(BeNumerically("~", -0.01905, 1e-4))
+			Expect(series[4]).To(BeNumerically("~", -0.07619, 1e-4))
+			Expect(series[5]).To(BeNumerically("~", 0.0, 1e-10))
 		})
 	})
 
 	Describe("DownsideDeviation", func() {
-		It("returns a non-negative value", func() {
+		It("returns annualized stddev of negative excess returns", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// Negative excess returns: er[1] ~ -0.06677, er[3] ~ -0.05835
+			// mean(neg) = (-0.06677 + -0.05835) / 2 ~ -0.06256
+			// variance(neg) = ((neg[0]-mean)^2 + (neg[1]-mean)^2) / 1
+			// stddev(neg) ~ 0.005951
+			// DownsideDeviation = stddev(neg) * sqrt(252) ~ 0.09445
 			val := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
-			Expect(val).To(BeNumerically(">=", 0))
+			Expect(val).To(BeNumerically("~", 0.09445, 1e-3))
 		})
 	})
 
 	Describe("Sharpe", func() {
-		It("returns a positive value for a rising equity curve", func() {
+		It("returns annualized risk-adjusted return", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// mean(er) ~ 0.02440
+			// stddev(er) ~ 0.08438 (same as stddev(r) approximately)
+			// Sharpe = mean(er)/stddev(er) * sqrt(252) ~ 4.1249
 			val := acct.PerformanceMetric(portfolio.Sharpe).Value()
-			Expect(val).To(BeNumerically(">", 0))
+			Expect(val).To(BeNumerically("~", 4.1249, 1e-2))
 		})
 	})
 
 	Describe("Sortino", func() {
-		It("returns a positive value for a rising equity curve", func() {
+		It("returns annualized return per unit of downside deviation", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// mean(er) ~ 0.02440
+			// stddev(neg_er) ~ 0.005951  (2 negative excess returns)
+			// Sortino = mean(er)/stddev(neg_er) * sqrt(252) ~ 58.496
 			val := acct.PerformanceMetric(portfolio.Sortino).Value()
-			Expect(val).To(BeNumerically(">", 0))
+			Expect(val).To(BeNumerically("~", 58.496, 0.1))
 		})
 	})
 
 	Describe("Calmar", func() {
-		It("returns a positive value for a rising equity curve with drawdown", func() {
+		It("returns CAGR divided by max drawdown magnitude", func() {
+			acct := buildAccount(
+				[]float64{100, 105, 98, 103, 97, 110},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+
+			// daySeq from Jan 2 2025 (Thu): Jan 2, 3, 6, 7, 8, 9
+			// years = (Jan 9 - Jan 2).days / 365.25 = 7 / 365.25 ~ 0.01916
+			// cagr = (550/500)^(1/0.01916) - 1 ~ 143.48
+			// maxDD = 0.07619
+			// Calmar = 143.48 / 0.07619 ~ 1883.2
 			val := acct.PerformanceMetric(portfolio.Calmar).Value()
-			Expect(val).To(BeNumerically(">", 0))
+			Expect(val).To(BeNumerically("~", 1883.2, 1.0))
+		})
+	})
+
+	// ----------------------------------------------------------------
+	// Edge cases
+	// ----------------------------------------------------------------
+
+	Context("edge cases", func() {
+		Context("flat equity curve (all same values)", func() {
+			It("returns StdDev = 0", func() {
+				// SPY stays at 100 -> equity stays at 500
+				acct := buildAccount(
+					[]float64{100, 100, 100, 100, 100},
+					[]float64{100, 100, 100, 100, 100},
+				)
+				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
+			})
+
+			It("returns MaxDrawdown = 0", func() {
+				acct := buildAccount(
+					[]float64{100, 100, 100, 100, 100},
+					[]float64{100, 100, 100, 100, 100},
+				)
+				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
+			})
+
+			It("returns Sharpe = 0 when stddev of excess returns is 0", func() {
+				// Flat SPY and flat BIL -> all returns 0, all excess returns 0
+				acct := buildAccount(
+					[]float64{100, 100, 100, 100, 100},
+					[]float64{100, 100, 100, 100, 100},
+				)
+				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
+			})
+
+			It("returns Calmar = 0 when max drawdown is 0", func() {
+				acct := buildAccount(
+					[]float64{100, 100, 100, 100, 100},
+					[]float64{100, 100, 100, 100, 100},
+				)
+				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+			})
+		})
+
+		Context("monotonically rising curve", func() {
+			It("returns MaxDrawdown = 0", func() {
+				acct := buildAccount(
+					[]float64{100, 102, 104, 106, 108},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
+			})
+
+			It("returns Calmar = 0 when no drawdown exists", func() {
+				acct := buildAccount(
+					[]float64{100, 102, 104, 106, 108},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+			})
+		})
+
+		Context("all excess returns positive", func() {
+			It("returns DownsideDeviation = 0", func() {
+				// Large positive equity returns dwarf tiny RF returns
+				acct := buildAccount(
+					[]float64{100, 110, 121, 133, 146},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				Expect(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()).To(Equal(0.0))
+			})
+
+			It("returns Sortino = 0", func() {
+				acct := buildAccount(
+					[]float64{100, 110, 121, 133, 146},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				Expect(acct.PerformanceMetric(portfolio.Sortino).Value()).To(Equal(0.0))
+			})
+		})
+
+		Context("single data point", func() {
+			It("returns 0 for all metrics", func() {
+				acct := buildAccount(
+					[]float64{100},
+					[]float64{100},
+				)
+
+				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
+				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
+				Expect(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()).To(Equal(0.0))
+				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
+				Expect(acct.PerformanceMetric(portfolio.Sortino).Value()).To(Equal(0.0))
+				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+			})
 		})
 	})
 })
