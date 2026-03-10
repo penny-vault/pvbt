@@ -16,6 +16,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -111,5 +112,79 @@ var _ = Describe("MaxAboveZero", func() {
 
 		// Both assets are selected (each leads at one timestep).
 		Expect(result.AssetList()).To(HaveLen(2))
+	})
+
+	It("uses fallback when all signal values are NaN", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				math.NaN(), // SPY
+				math.NaN(), // AAPL
+				math.NaN(), // BIL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
+	})
+
+	It("deterministically selects first asset when all values are equal positive", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				5, // SPY
+				5, // AAPL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(nil)
+		result := sel.Select(df)
+
+		// Both have equal values; the first asset in iteration wins (strict >).
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+	})
+
+	It("returns empty result with nil fallback when no values are positive", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				-1, // SPY
+				0,  // AAPL (zero is not above zero)
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(nil)
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(0))
+	})
+
+	It("trivially selects a single asset with positive signal", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{42},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(nil)
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
 	})
 })

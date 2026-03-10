@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -124,5 +125,95 @@ var _ = Describe("WeightedBySignal", func() {
 			sum += w
 		}
 		Expect(sum).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("falls back to equal weight when all signal values are negative", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{-10, -20},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("skips NaN values and weights positive values proportionally", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{300, math.NaN()},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+		// SPY gets 300/300 = 1.0, AAPL gets 0/300 = 0.0
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+		Expect(plan[0].Members[aapl]).To(Equal(0.0))
+	})
+
+	It("assigns weight 1.0 to a single asset", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MarketCap},
+			[]float64{500},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+	})
+
+	It("falls back to equal weight when all signal values are zero", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{0, 0},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("computes weights independently at each timestep", func() {
+		t2 := time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{
+				// SPY: t1=300, t2=100
+				300, 100,
+				// AAPL: t1=100, t2=300
+				100, 300,
+			},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(2))
+
+		// t1: SPY=300/(300+100)=0.75, AAPL=100/400=0.25
+		Expect(plan[0].Date).To(Equal(t1))
+		Expect(plan[0].Members[spy]).To(Equal(0.75))
+		Expect(plan[0].Members[aapl]).To(Equal(0.25))
+
+		// t2: SPY=100/(100+300)=0.25, AAPL=300/400=0.75
+		Expect(plan[1].Date).To(Equal(t2))
+		Expect(plan[1].Members[spy]).To(Equal(0.25))
+		Expect(plan[1].Members[aapl]).To(Equal(0.75))
 	})
 })
