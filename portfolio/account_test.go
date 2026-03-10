@@ -440,3 +440,226 @@ var _ = Describe("TransactionType", func() {
 		Expect(t.String()).To(Equal("TransactionType(99)"))
 	})
 })
+
+var _ = Describe("Summary", func() {
+	It("matches individual PerformanceMetric calls", func() {
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+
+		spyPrices := []float64{100, 105, 98, 103, 97, 110}
+		bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
+		n := len(spyPrices)
+		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
+
+		acct := portfolio.New(
+			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithBenchmark(spy),
+			portfolio.WithRiskFree(bil),
+		)
+		acct.Record(portfolio.Transaction{
+			Date:   times[0],
+			Asset:  spy,
+			Type:   portfolio.BuyTransaction,
+			Qty:    5,
+			Price:  spyPrices[0],
+			Amount: -5 * spyPrices[0],
+		})
+		for i := range n {
+			df := buildDF(times[i],
+				[]asset.Asset{spy, bil},
+				[]float64{spyPrices[i], bilPrices[i]},
+				[]float64{spyPrices[i], bilPrices[i]},
+			)
+			acct.UpdatePrices(df)
+		}
+
+		s := acct.Summary()
+		Expect(s.TWRR).To(Equal(acct.PerformanceMetric(portfolio.TWRR).Value()))
+		Expect(s.MWRR).To(Equal(acct.PerformanceMetric(portfolio.MWRR).Value()))
+		Expect(s.Sharpe).To(Equal(acct.PerformanceMetric(portfolio.Sharpe).Value()))
+		Expect(s.Sortino).To(Equal(acct.PerformanceMetric(portfolio.Sortino).Value()))
+		Expect(s.Calmar).To(Equal(acct.PerformanceMetric(portfolio.Calmar).Value()))
+		Expect(s.MaxDrawdown).To(Equal(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()))
+		Expect(s.StdDev).To(Equal(acct.PerformanceMetric(portfolio.StdDev).Value()))
+	})
+})
+
+var _ = Describe("RiskMetrics", func() {
+	It("matches individual PerformanceMetric calls", func() {
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+
+		spyPrices := []float64{100, 105, 98, 103, 97, 110}
+		bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
+		n := len(spyPrices)
+		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
+
+		acct := portfolio.New(
+			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithBenchmark(spy),
+			portfolio.WithRiskFree(bil),
+		)
+		acct.Record(portfolio.Transaction{
+			Date:   times[0],
+			Asset:  spy,
+			Type:   portfolio.BuyTransaction,
+			Qty:    5,
+			Price:  spyPrices[0],
+			Amount: -5 * spyPrices[0],
+		})
+		for i := range n {
+			df := buildDF(times[i],
+				[]asset.Asset{spy, bil},
+				[]float64{spyPrices[i], bilPrices[i]},
+				[]float64{spyPrices[i], bilPrices[i]},
+			)
+			acct.UpdatePrices(df)
+		}
+
+		rm := acct.RiskMetrics()
+		Expect(rm.Beta).To(Equal(acct.PerformanceMetric(portfolio.Beta).Value()))
+		Expect(rm.Alpha).To(Equal(acct.PerformanceMetric(portfolio.Alpha).Value()))
+		Expect(rm.TrackingError).To(Equal(acct.PerformanceMetric(portfolio.TrackingError).Value()))
+		Expect(rm.DownsideDeviation).To(Equal(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()))
+		Expect(rm.InformationRatio).To(Equal(acct.PerformanceMetric(portfolio.InformationRatio).Value()))
+		Expect(rm.Treynor).To(Equal(acct.PerformanceMetric(portfolio.Treynor).Value()))
+		Expect(rm.UlcerIndex).To(Equal(acct.PerformanceMetric(portfolio.UlcerIndex).Value()))
+		Expect(rm.ExcessKurtosis).To(Equal(acct.PerformanceMetric(portfolio.ExcessKurtosis).Value()))
+		Expect(rm.Skewness).To(Equal(acct.PerformanceMetric(portfolio.Skewness).Value()))
+		Expect(rm.RSquared).To(Equal(acct.PerformanceMetric(portfolio.RSquared).Value()))
+		Expect(rm.ValueAtRisk).To(Equal(acct.PerformanceMetric(portfolio.ValueAtRisk).Value()))
+		Expect(rm.UpsideCaptureRatio).To(Equal(acct.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()))
+		Expect(rm.DownsideCaptureRatio).To(Equal(acct.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()))
+	})
+})
+
+var _ = Describe("WithdrawalMetrics", func() {
+	It("matches individual PerformanceMetric calls for a growing curve", func() {
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		acct := portfolio.New(portfolio.WithCash(100_000))
+		price := 100_000.0
+		start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+
+		for i := range 300 {
+			d := start.AddDate(0, 0, i)
+			if i > 0 {
+				growth := price * 0.0002
+				acct.Record(portfolio.Transaction{
+					Date:   d,
+					Type:   portfolio.DividendTransaction,
+					Amount: growth,
+				})
+				price += growth
+			}
+			df := buildDF(d, []asset.Asset{spy}, []float64{450 + float64(i)}, []float64{448 + float64(i)})
+			acct.UpdatePrices(df)
+		}
+
+		wm := acct.WithdrawalMetrics()
+		Expect(wm.SafeWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.SafeWithdrawalRate).Value()))
+		Expect(wm.PerpetualWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.PerpetualWithdrawalRate).Value()))
+		Expect(wm.DynamicWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.DynamicWithdrawalRate).Value()))
+
+		// Sanity: growing curve should produce non-zero rates.
+		Expect(wm.SafeWithdrawalRate).To(BeNumerically(">", 0.0))
+		Expect(wm.DynamicWithdrawalRate).To(BeNumerically(">", 0.0))
+	})
+})
+
+var _ = Describe("Period constructors", func() {
+	It("Days creates a Period with UnitDay", func() {
+		p := portfolio.Days(30)
+		Expect(p.N).To(Equal(30))
+		Expect(p.Unit).To(Equal(portfolio.UnitDay))
+	})
+
+	It("Months creates a Period with UnitMonth", func() {
+		p := portfolio.Months(6)
+		Expect(p.N).To(Equal(6))
+		Expect(p.Unit).To(Equal(portfolio.UnitMonth))
+	})
+
+	It("Years creates a Period with UnitYear", func() {
+		p := portfolio.Years(2)
+		Expect(p.N).To(Equal(2))
+		Expect(p.Unit).To(Equal(portfolio.UnitYear))
+	})
+})
+
+var _ = Describe("Window", func() {
+	// buildLongAccount creates an account with 40 daily data points showing
+	// steady growth, suitable for testing windowed metric computations.
+	buildLongAccount := func() *portfolio.Account {
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+
+		n := 40
+		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
+
+		// SPY grows ~0.5% per day with some noise to produce nonzero metrics.
+		spyPrices := make([]float64, n)
+		bilPrices := make([]float64, n)
+		spyPrices[0] = 100.0
+		bilPrices[0] = 100.0
+		for i := 1; i < n; i++ {
+			// Alternating growth pattern to create variance.
+			if i%3 == 0 {
+				spyPrices[i] = spyPrices[i-1] * 0.995
+			} else {
+				spyPrices[i] = spyPrices[i-1] * 1.008
+			}
+			bilPrices[i] = bilPrices[i-1] * 1.0001
+		}
+
+		acct := portfolio.New(
+			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithBenchmark(spy),
+			portfolio.WithRiskFree(bil),
+		)
+		acct.Record(portfolio.Transaction{
+			Date:   times[0],
+			Asset:  spy,
+			Type:   portfolio.BuyTransaction,
+			Qty:    5,
+			Price:  spyPrices[0],
+			Amount: -5 * spyPrices[0],
+		})
+		for i := range n {
+			df := buildDF(times[i],
+				[]asset.Asset{spy, bil},
+				[]float64{spyPrices[i], bilPrices[i]},
+				[]float64{spyPrices[i], bilPrices[i]},
+			)
+			acct.UpdatePrices(df)
+		}
+		return acct
+	}
+
+	It("Window(Days(10)) produces a different TWRR than full history", func() {
+		acct := buildLongAccount()
+
+		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
+		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Days(10)).Value()
+
+		Expect(fullTWRR).NotTo(Equal(windowedTWRR))
+	})
+
+	It("Window(Months(1)) produces a different TWRR than full history", func() {
+		acct := buildLongAccount()
+
+		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
+		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(1)).Value()
+
+		Expect(fullTWRR).NotTo(Equal(windowedTWRR))
+	})
+
+	It("Window(Days(10)) produces a different Sharpe than full history", func() {
+		acct := buildLongAccount()
+
+		fullSharpe := acct.PerformanceMetric(portfolio.Sharpe).Value()
+		windowedSharpe := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
+
+		Expect(fullSharpe).NotTo(Equal(windowedSharpe))
+	})
+})
