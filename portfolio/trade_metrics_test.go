@@ -246,6 +246,144 @@ var _ = Describe("TradeMetrics", func() {
 		})
 	})
 
+	Describe("with only losing trades", func() {
+		It("returns WinRate=0, AverageWin=0, ProfitFactor=0", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			// Trade 1: Buy 10 ACME at $100, Sell at $90 -> loss -$100
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  90.0,
+				Amount: 900.0,
+			})
+
+			// Trade 2: Buy 20 WIDG at $50, Sell at $40 -> loss -$200
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  widg,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  50.0,
+				Amount: -1_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  widg,
+				Type:   portfolio.SellTransaction,
+				Qty:    20,
+				Price:  40.0,
+				Amount: 800.0,
+			})
+
+			tm := a.TradeMetrics()
+			Expect(tm.WinRate).To(Equal(0.0))
+			Expect(tm.AverageWin).To(Equal(0.0))
+			Expect(tm.ProfitFactor).To(Equal(0.0))
+			Expect(tm.AverageLoss).To(Equal(-150.0))
+			Expect(tm.GainLossRatio).To(Equal(0.0))
+		})
+	})
+
+	Describe("with a break-even trade", func() {
+		It("counts break-even (PnL=0) as a loss", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			// Buy 10 ACME at $100, Sell at $100 -> PnL = 0
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: 1_000.0,
+			})
+
+			tm := a.TradeMetrics()
+			// PnL=0 is not > 0, so it is counted as a loss
+			Expect(tm.WinRate).To(Equal(0.0))
+			Expect(tm.AverageWin).To(Equal(0.0))
+			Expect(tm.AverageLoss).To(Equal(0.0))
+			Expect(tm.ProfitFactor).To(Equal(0.0))
+			Expect(tm.GainLossRatio).To(Equal(0.0))
+		})
+	})
+
+	Describe("with multiple assets", func() {
+		It("matches FIFO independently per asset", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+			// Buy 10 SPY at $200
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  200.0,
+				Amount: -2_000.0,
+			})
+
+			// Buy 20 AAPL at $150
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  150.0,
+				Amount: -3_000.0,
+			})
+
+			// Sell 10 SPY at $220 -> PnL = 10*(220-200) = 200 (win), 30 days
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  220.0,
+				Amount: 2_200.0,
+			})
+
+			// Sell 20 AAPL at $140 -> PnL = 20*(140-150) = -200 (loss), 56 days
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.SellTransaction,
+				Qty:    20,
+				Price:  140.0,
+				Amount: 2_800.0,
+			})
+
+			tm := a.TradeMetrics()
+			Expect(tm.WinRate).To(BeNumerically("~", 0.5, 1e-4))
+			Expect(tm.AverageWin).To(Equal(200.0))
+			Expect(tm.AverageLoss).To(Equal(-200.0))
+			Expect(tm.ProfitFactor).To(Equal(1.0))
+			Expect(tm.GainLossRatio).To(Equal(1.0))
+			// Average holding: SPY 30 days, AAPL 56 days => (30+56)/2 = 43
+			Expect(tm.AverageHoldingPeriod).To(BeNumerically("~", 43.0, 1e-4))
+		})
+	})
+
 	Describe("FIFO matching with partial fills", func() {
 		It("splits a buy lot across multiple sells", func() {
 			a := portfolio.New(portfolio.WithCash(10_000))

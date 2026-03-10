@@ -318,6 +318,145 @@ var _ = Describe("TaxMetrics", func() {
 		})
 	})
 
+	Describe("multiple assets", func() {
+		It("tracks FIFO gains independently per asset", func() {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+			// Buy 50 SPY at $200
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  200.0,
+				Amount: -10_000.0,
+			})
+
+			// Buy 30 AAPL at $150
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.BuyTransaction,
+				Qty:    30,
+				Price:  150.0,
+				Amount: -4_500.0,
+			})
+
+			// Sell 50 SPY at $220 (STCG = 50*(220-200) = 1000)
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 7, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  220.0,
+				Amount: 11_000.0,
+			})
+
+			// Sell 30 AAPL at $170 (STCG = 30*(170-150) = 600)
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 8, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.SellTransaction,
+				Qty:    30,
+				Price:  170.0,
+				Amount: 5_100.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(1_600.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+	})
+
+	Describe("partial lot consumption", func() {
+		It("consumes first lot fully and second lot partially via FIFO", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy 100 shares at $10 on day 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  10.0,
+				Amount: -1_000.0,
+			})
+
+			// Buy 50 shares at $12 on day 2
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 3, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  12.0,
+				Amount: -600.0,
+			})
+
+			// Sell 120 shares at $15 on day 3
+			// FIFO: 100 shares from lot 1 => gain = 100*(15-10) = 500
+			//        20 shares from lot 2 => gain =  20*(15-12) =  60
+			// Total STCG = 560
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 3, 3, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    120,
+				Price:  15.0,
+				Amount: 1_800.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(560.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+	})
+
+	Describe("capital losses and TaxCostRatio", func() {
+		It("records negative STCG and TaxCostRatio is zero when STCG is negative", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy 100 shares at $100
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// Establish initial equity
+			df1 := buildDF(
+				time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				[]asset.Asset{spy}, []float64{100.0}, []float64{100.0},
+			)
+			a.UpdatePrices(df1)
+
+			// Sell 100 at $80 => STCG = 100*(80-100) = -2000
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  80.0,
+				Amount: 8_000.0,
+			})
+
+			df2 := buildDF(
+				time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+				[]asset.Asset{spy}, []float64{80.0}, []float64{80.0},
+			)
+			a.UpdatePrices(df2)
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(-2_000.0))
+			// totalGain is negative (48000 - 50000 = -2000), so TaxCostRatio stays 0.
+			Expect(tm.TaxCostRatio).To(Equal(0.0))
+		})
+	})
+
 	Describe("complete scenario", func() {
 		It("computes all tax metrics correctly", func() {
 			a := portfolio.New(portfolio.WithCash(50_000))
