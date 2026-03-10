@@ -187,4 +187,43 @@ var _ = Describe("MaxAboveZero", func() {
 		Expect(result.AssetList()).To(HaveLen(1))
 		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
 	})
+
+	It("treats +Inf as above zero and selects it", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				math.Inf(1), // SPY
+				5,           // AAPL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(nil)
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+	})
+
+	It("treats -Inf as not above zero and falls back", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				math.Inf(-1), // SPY
+				math.Inf(-1), // AAPL
+				-1,           // BIL (also not positive, but selected via fallback)
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
+	})
 })

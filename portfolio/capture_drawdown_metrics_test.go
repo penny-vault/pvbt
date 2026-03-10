@@ -364,6 +364,77 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		})
 	})
 
+	Describe("Capture ratio edge cases", func() {
+		It("handles portfolio and benchmark moving in opposite directions", func() {
+			// Equity:    [10000, 9000, 11000, 10000]
+			// Benchmark: [100,   110,  95,    105  ]
+			//
+			// Portfolio returns:  [-0.1,  ~0.222, ~-0.0909]
+			// Benchmark returns:  [0.1,   -0.1364, ~0.1053 ]
+			//
+			// Up periods (bRet > 0): i=0 (pRet=-0.1, bRet=0.1), i=2 (pRet~-0.0909, bRet~0.1053)
+			// Portfolio declines when benchmark rises => negative upside capture ratio.
+			a := cashAccount(
+				[]float64{10000, 9000, 11000, 10000},
+				[]float64{100, 110, 95, 105},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("<", 0.0))
+		})
+
+		It("returns 0 for two data points with no up benchmark periods", func() {
+			// Equity:    [10000, 10500]
+			// Benchmark: [100,   95   ]
+			//
+			// Single return: benchmark falls (-0.05), no up periods => 0.
+			a := cashAccount(
+				[]float64{10000, 10500},
+				[]float64{100, 95},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(Equal(0.0))
+		})
+	})
+
+	Describe("AvgDrawdown edge cases", func() {
+		It("handles flat equity curve", func() {
+			// Equity:    [10000, 10000, 10000, 10000]
+			// Benchmark: [100,   105,   110,   115  ]
+			//
+			// drawdownSeries: all zeros, no episodes => AvgDrawdown = 0.
+			a := cashAccount(
+				[]float64{10000, 10000, 10000, 10000},
+				[]float64{100, 105, 110, 115},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("handles continuous drawdown without recovery", func() {
+			// Equity:    [10000, 9000, 8000, 7000]
+			// Benchmark: [100,   95,   90,   85  ]
+			//
+			// drawdownSeries:
+			//   i=0: peak=10000, dd=0
+			//   i=1: peak=10000, dd=(9000-10000)/10000 = -0.1
+			//   i=2: peak=10000, dd=(8000-10000)/10000 = -0.2
+			//   i=3: peak=10000, dd=(7000-10000)/10000 = -0.3
+			//
+			// One episode spanning i=1..3, trough = -0.3
+			// mean([-0.3]) = -0.3
+			a := cashAccount(
+				[]float64{10000, 9000, 8000, 7000},
+				[]float64{100, 95, 90, 85},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(BeNumerically("~", -0.3, 1e-9))
+		})
+	})
+
 	// Verify capture ratios with mixed magnitudes.
 	Describe("Capture ratios with non-uniform returns", func() {
 		It("computes upside capture with different up-period magnitudes", func() {

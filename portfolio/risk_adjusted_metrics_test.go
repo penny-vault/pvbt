@@ -308,6 +308,58 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			})
 		})
 
+		Context("negative mean excess return", func() {
+			It("returns negative Sharpe", func() {
+				// Declining equity [100,95,90,85,80] with rising risk-free [100,101,102,103,104]
+				// Equity returns are all negative; RF returns are positive -> excess returns all negative
+				// mean(er) < 0, so Sharpe < 0
+				acct := buildAccount(
+					[]float64{100, 95, 90, 85, 80},
+					[]float64{100, 101, 102, 103, 104},
+				)
+				val := acct.PerformanceMetric(portfolio.Sharpe).Value()
+				Expect(val).To(BeNumerically("<", 0.0))
+			})
+		})
+
+		Context("all returns negative (declining equity)", func() {
+			It("returns DownsideDeviation > 0", func() {
+				acct := buildAccount(
+					[]float64{100, 95, 90, 85, 80},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				val := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+				Expect(val).To(BeNumerically(">", 0.0))
+			})
+
+			It("returns negative Sortino", func() {
+				acct := buildAccount(
+					[]float64{100, 95, 90, 85, 80},
+					[]float64{100, 100.01, 100.02, 100.03, 100.04},
+				)
+				val := acct.PerformanceMetric(portfolio.Sortino).Value()
+				Expect(val).To(BeNumerically("<", 0.0))
+			})
+		})
+
+		Context("two data points (single return)", func() {
+			It("returns StdDev = 0 (sample variance with N-1=0)", func() {
+				acct := buildAccount(
+					[]float64{100, 110},
+					[]float64{100, 100.01},
+				)
+				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
+			})
+
+			It("returns Sharpe = 0 when stddev is 0", func() {
+				acct := buildAccount(
+					[]float64{100, 110},
+					[]float64{100, 100.01},
+				)
+				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
+			})
+		})
+
 		Context("single data point", func() {
 			It("returns 0 for all metrics", func() {
 				acct := buildAccount(
