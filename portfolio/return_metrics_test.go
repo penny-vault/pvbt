@@ -23,8 +23,8 @@ var _ = Describe("Return Metrics", func() {
 	})
 
 	// buildReturnAccount creates an account with the given equity curve.
-	// It uses DividendTransaction (positive) and FeeTransaction (negative)
-	// to move cash so equity = cash. These types are ignored by MWRR.
+	// It uses DepositTransaction (positive) and WithdrawalTransaction
+	// (negative) to move cash so equity = cash.
 	buildReturnAccount := func(dates []time.Time, equity []float64) *portfolio.Account {
 		a := portfolio.New(portfolio.WithCash(equity[0]))
 		for i, d := range dates {
@@ -33,13 +33,13 @@ var _ = Describe("Return Metrics", func() {
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
 						Date:   d,
-						Type:   portfolio.DividendTransaction,
+						Type:   portfolio.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
 						Date:   d,
-						Type:   portfolio.FeeTransaction,
+						Type:   portfolio.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}
@@ -104,7 +104,8 @@ var _ = Describe("Return Metrics", func() {
 
 	Describe("MWRR", func() {
 		It("matches TWRR when there are no mid-stream cash flows", func() {
-			// No external DepositTransaction or WithdrawalTransaction (only initial deposit).
+			// Build account manually with DividendTransaction for organic
+			// growth so MWRR sees only the initial deposit as a cash flow.
 			// Equity: [10000, 11000] over 367 days (Jan 2 2024 to Jan 3 2025).
 			// Flows: -10000 at t0 (synthetic), +11000 at t1.
 			// XIRR solves: -10000 + 11000/(1+r)^(367/365) = 0
@@ -114,7 +115,19 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
-			a := buildReturnAccount(dates, []float64{10_000, 11_000})
+
+			a := portfolio.New(portfolio.WithCash(10_000))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df0)
+
+			// Organic growth via dividend (not an external cash flow for MWRR).
+			a.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   portfolio.DividendTransaction,
+				Amount: 1000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df1)
 
 			result := a.PerformanceMetric(portfolio.MWRR).Value()
 			expected := math.Pow(1.1, 365.0/367.0) - 1
@@ -123,19 +136,17 @@ var _ = Describe("Return Metrics", func() {
 
 		It("differs from TWRR when there is a mid-stream deposit", func() {
 			// Day 0: deposit 10000, equity=10000
-			// Day 183 (Jul 3): deposit 5000, equity goes from 10500 to 15500
-			// Day 366 (Jan 3 next year): equity=16500
-			//
-			// TWRR: (10500/10000) * (16500/15500) - 1 = 1.05 * (330/310) - 1
-			//      = 1.05 * 1.0645161... - 1 = 0.117741935...
+			// Day 183 (Jul 3): deposit 500 + deposit 5000 -> equity 15500
+			// Day 366 (Jan 3 next year): deposit 1000 -> equity 16500
 			//
 			// MWRR flows (from MWRR source):
 			//   Initial deposit: -10000 at t0 (Jan 2 2024), date is zero so mapped to times[0]
-			//   Mid-stream deposit: -5000 at t1 (Jul 3 2024)
+			//   Deposit 500 + deposit 5000: -5500 at t1 (Jul 3 2024)
+			//   Deposit 1000: -1000 at t2 (Jan 3 2025)
 			//   Terminal value: +16500 at t2 (Jan 3 2025)
 			//
 			// Days from t0: d0=0, d1=183, d2=366
-			// NPV(r) = -10000 + (-5000)/(1+r)^(183/365) + 16500/(1+r)^(366/365) = 0
+			// NPV(r) = -10000 + (-5500)/(1+r)^(183/365) + 15500/(1+r)^(366/365) = 0
 			dates := []time.Time{
 				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2024, 7, 3, 0, 0, 0, 0, time.UTC),
@@ -148,10 +159,10 @@ var _ = Describe("Return Metrics", func() {
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
 
-			// Day 183: equity grew to 10500, then deposit 5000 -> equity 15500
+			// Day 183: deposit 500 (growth) then deposit 5000 -> equity 15500
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
+				Type:   portfolio.DepositTransaction,
 				Amount: 500, // growth
 			})
 			a.Record(portfolio.Transaction{
@@ -162,10 +173,10 @@ var _ = Describe("Return Metrics", func() {
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df1)
 
-			// Day 366: equity grew to 16500
+			// Day 366: deposit 1000 (growth) -> equity 16500
 			a.Record(portfolio.Transaction{
 				Date:   dates[2],
-				Type:   portfolio.DividendTransaction,
+				Type:   portfolio.DepositTransaction,
 				Amount: 1000, // growth
 			})
 			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -216,13 +227,13 @@ var _ = Describe("Return Metrics", func() {
 					if diff > 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   portfolio.DividendTransaction,
+							Type:   portfolio.DepositTransaction,
 							Amount: diff,
 						})
 					} else if diff < 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   portfolio.FeeTransaction,
+							Type:   portfolio.WithdrawalTransaction,
 							Amount: diff,
 						})
 					}

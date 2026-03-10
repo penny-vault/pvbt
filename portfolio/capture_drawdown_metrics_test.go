@@ -25,8 +25,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	})
 
 	// cashAccount builds a cash-only account whose equity curve matches the
-	// given equityVals by injecting dividend/fee transactions between each
-	// UpdatePrices call. benchVals are the benchmark AdjClose prices.
+	// given equityVals by injecting deposit/withdrawal transactions between
+	// each UpdatePrices call. benchVals are the benchmark AdjClose prices.
 	cashAccount := func(equityVals, benchVals []float64) *portfolio.Account {
 		Expect(len(equityVals)).To(Equal(len(benchVals)))
 		dates := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), len(equityVals))
@@ -43,13 +43,13 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.DividendTransaction,
+						Type:   portfolio.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.FeeTransaction,
+						Type:   portfolio.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}

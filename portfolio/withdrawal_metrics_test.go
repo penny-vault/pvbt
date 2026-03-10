@@ -31,7 +31,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 				growth := price * 0.0002
 				a.Record(portfolio.Transaction{
 					Date:   d,
-					Type:   portfolio.DividendTransaction,
+					Type:   portfolio.DepositTransaction,
 					Amount: growth,
 				})
 				price += growth
