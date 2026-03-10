@@ -176,4 +176,62 @@ var _ = Describe("Specialized Metrics", func() {
 			Expect(result).To(BeNumerically("==", 0))
 		})
 	})
+
+	Describe("KRatio edge cases", func() {
+		It("returns negative KRatio for a declining curve", func() {
+			// logVAMI has a negative slope -> KRatio < 0
+			a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
+			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(result).To(BeNumerically("<", 0))
+		})
+
+		It("returns positive KRatio for a rising curve", func() {
+			// logVAMI has a positive slope -> KRatio > 0
+			a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120})
+			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(result).To(BeNumerically(">", 0))
+		})
+	})
+
+	Describe("KellerRatio edge cases", func() {
+		It("returns zero when max drawdown is exactly 50%", func() {
+			// equity: [100, 200, 100]
+			// totalReturn = 0.0, maxDD = 0.5
+			// totalReturn == 0 -> result = 0 * anything = 0
+			a := buildAccountFromEquity([]float64{100, 200, 100})
+			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(result).To(BeNumerically("==", 0))
+		})
+
+		It("returns non-zero when max drawdown is just under 50%", func() {
+			// equity: [100, 200, 101]
+			// totalReturn = 0.01 >= 0, maxDD = 0.495 <= 0.5
+			// result = 0.01 * (1 - 0.495/0.505) > 0
+			a := buildAccountFromEquity([]float64{100, 200, 101})
+			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(result).To(BeNumerically(">", 0))
+		})
+	})
+
+	Describe("UlcerIndex edge cases", func() {
+		It("returns correct value for flat-then-drop curve", func() {
+			// equity: [100, 100, 100, 90]
+			// dd = [0, 0, 0, -0.1]
+			// sumSq = 0.01, mean = 0.0025, UI = sqrt(0.0025) = 0.05
+			a := buildAccountFromEquity([]float64{100, 100, 100, 90})
+			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(result).To(BeNumerically("~", 0.05, 1e-9))
+		})
+	})
+
+	Describe("ValueAtRisk edge cases", func() {
+		It("returns the only return for a 2-point equity curve", func() {
+			// equity: [100, 90]
+			// 1 return = -0.1
+			// idx = floor(0.05 * 1) = 0 -> sorted[0] = -0.1
+			a := buildAccountFromEquity([]float64{100, 90})
+			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(result).To(BeNumerically("~", -0.1, 1e-9))
+		})
+	})
 })

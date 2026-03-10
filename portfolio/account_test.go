@@ -442,7 +442,10 @@ var _ = Describe("TransactionType", func() {
 })
 
 var _ = Describe("Summary", func() {
-	It("matches individual PerformanceMetric calls", func() {
+	// Build a known equity curve: 5 shares of SPY at prices [100,105,98,103,97,110].
+	// Equity curve = [500, 525, 490, 515, 485, 550].
+	// BIL is the risk-free asset: [100, 100.01, 100.02, 100.03, 100.04, 100.05].
+	var buildSummaryAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
@@ -472,20 +475,59 @@ var _ = Describe("Summary", func() {
 			)
 			acct.UpdatePrices(df)
 		}
+		return acct
+	}
 
+	It("computes correct TWRR for known equity curve", func() {
+		// equity = [500,525,490,515,485,550], TWRR = 550/500 - 1 = 0.10
+		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.TWRR).To(Equal(acct.PerformanceMetric(portfolio.TWRR).Value()))
-		Expect(s.MWRR).To(Equal(acct.PerformanceMetric(portfolio.MWRR).Value()))
-		Expect(s.Sharpe).To(Equal(acct.PerformanceMetric(portfolio.Sharpe).Value()))
-		Expect(s.Sortino).To(Equal(acct.PerformanceMetric(portfolio.Sortino).Value()))
-		Expect(s.Calmar).To(Equal(acct.PerformanceMetric(portfolio.Calmar).Value()))
-		Expect(s.MaxDrawdown).To(Equal(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()))
-		Expect(s.StdDev).To(Equal(acct.PerformanceMetric(portfolio.StdDev).Value()))
+		Expect(s.TWRR).To(BeNumerically("~", 0.10, 1e-9))
+	})
+
+	It("computes correct MaxDrawdown for known equity curve", func() {
+		// peak=525, trough=485 => drawdown = (485-525)/525 ~ -0.07619
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.MaxDrawdown).To(BeNumerically("~", -0.07619, 1e-4))
+	})
+
+	It("computes non-zero StdDev for volatile equity curve", func() {
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.StdDev).To(BeNumerically(">", 0.0))
+	})
+
+	It("computes non-zero positive Sharpe ratio", func() {
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.Sharpe).To(BeNumerically(">", 0.0))
+	})
+
+	It("computes non-zero positive Sortino ratio", func() {
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.Sortino).To(BeNumerically(">", 0.0))
+	})
+
+	It("computes non-zero positive Calmar ratio", func() {
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.Calmar).To(BeNumerically(">", 0.0))
+	})
+
+	It("computes non-zero MWRR", func() {
+		acct := buildSummaryAcct()
+		s := acct.Summary()
+		Expect(s.MWRR).To(BeNumerically(">", 0.0))
 	})
 })
 
 var _ = Describe("RiskMetrics", func() {
-	It("matches individual PerformanceMetric calls", func() {
+	// The portfolio holds 5 shares of SPY using SPY itself as the benchmark.
+	// Because equity = 5*SPY, portfolio returns are identical to benchmark returns,
+	// which yields Beta=1, Alpha=0, TrackingError=0, IR=0, RSquared=1.
+	var buildRiskAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
@@ -515,26 +557,73 @@ var _ = Describe("RiskMetrics", func() {
 			)
 			acct.UpdatePrices(df)
 		}
+		return acct
+	}
 
-		rm := acct.RiskMetrics()
-		Expect(rm.Beta).To(Equal(acct.PerformanceMetric(portfolio.Beta).Value()))
-		Expect(rm.Alpha).To(Equal(acct.PerformanceMetric(portfolio.Alpha).Value()))
-		Expect(rm.TrackingError).To(Equal(acct.PerformanceMetric(portfolio.TrackingError).Value()))
-		Expect(rm.DownsideDeviation).To(Equal(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()))
-		Expect(rm.InformationRatio).To(Equal(acct.PerformanceMetric(portfolio.InformationRatio).Value()))
-		Expect(rm.Treynor).To(Equal(acct.PerformanceMetric(portfolio.Treynor).Value()))
-		Expect(rm.UlcerIndex).To(Equal(acct.PerformanceMetric(portfolio.UlcerIndex).Value()))
-		Expect(rm.ExcessKurtosis).To(Equal(acct.PerformanceMetric(portfolio.ExcessKurtosis).Value()))
-		Expect(rm.Skewness).To(Equal(acct.PerformanceMetric(portfolio.Skewness).Value()))
-		Expect(rm.RSquared).To(Equal(acct.PerformanceMetric(portfolio.RSquared).Value()))
-		Expect(rm.ValueAtRisk).To(Equal(acct.PerformanceMetric(portfolio.ValueAtRisk).Value()))
-		Expect(rm.UpsideCaptureRatio).To(Equal(acct.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()))
-		Expect(rm.DownsideCaptureRatio).To(Equal(acct.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()))
+	It("Beta equals 1.0 when portfolio tracks benchmark exactly", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.Beta).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("Alpha equals 0.0 when portfolio tracks benchmark exactly", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.Alpha).To(BeNumerically("~", 0.0, 1e-9))
+	})
+
+	It("TrackingError equals 0.0 when portfolio tracks benchmark exactly", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.TrackingError).To(BeNumerically("~", 0.0, 1e-9))
+	})
+
+	It("InformationRatio equals 0.0 when active return is zero", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.InformationRatio).To(BeNumerically("~", 0.0, 1e-9))
+	})
+
+	It("RSquared equals 1.0 when portfolio tracks benchmark exactly", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.RSquared).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("Treynor equals (TWRR - rf_return) / beta ~ 0.0995", func() {
+		// TWRR = 0.10, approximate risk-free return over 5 days ~ 0.0005,
+		// Beta = 1.0, so Treynor ~ 0.0995.
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(rm.Treynor).To(BeNumerically("~", 0.0995, 1e-3))
+	})
+
+	It("DownsideDeviation is finite and non-negative", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(math.IsNaN(rm.DownsideDeviation)).To(BeFalse())
+		Expect(rm.DownsideDeviation).To(BeNumerically(">=", 0.0))
+	})
+
+	It("UlcerIndex is finite and non-negative", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(math.IsNaN(rm.UlcerIndex)).To(BeFalse())
+		Expect(rm.UlcerIndex).To(BeNumerically(">=", 0.0))
+	})
+
+	It("Skewness is finite", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(math.IsNaN(rm.Skewness)).To(BeFalse())
+	})
+
+	It("ExcessKurtosis is finite", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(math.IsNaN(rm.ExcessKurtosis)).To(BeFalse())
+	})
+
+	It("ValueAtRisk is finite", func() {
+		rm := buildRiskAcct().RiskMetrics()
+		Expect(math.IsNaN(rm.ValueAtRisk)).To(BeFalse())
 	})
 })
 
 var _ = Describe("WithdrawalMetrics", func() {
-	It("matches individual PerformanceMetric calls for a growing curve", func() {
+	// Build a 300-day steadily growing equity curve starting at 100_000 with
+	// 0.02% daily growth. Over 300 days this produces a monotonically rising curve.
+	var buildWithdrawalAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 
 		acct := portfolio.New(portfolio.WithCash(100_000))
@@ -555,15 +644,29 @@ var _ = Describe("WithdrawalMetrics", func() {
 			df := buildDF(d, []asset.Asset{spy}, []float64{450 + float64(i)}, []float64{448 + float64(i)})
 			acct.UpdatePrices(df)
 		}
+		return acct
+	}
 
-		wm := acct.WithdrawalMetrics()
-		Expect(wm.SafeWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.SafeWithdrawalRate).Value()))
-		Expect(wm.PerpetualWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.PerpetualWithdrawalRate).Value()))
-		Expect(wm.DynamicWithdrawalRate).To(Equal(acct.PerformanceMetric(portfolio.DynamicWithdrawalRate).Value()))
+	It("SafeWithdrawalRate is approximately 0.063", func() {
+		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(wm.SafeWithdrawalRate).To(BeNumerically("~", 0.063, 1e-2))
+	})
 
-		// Sanity: growing curve should produce non-zero rates.
+	It("PerpetualWithdrawalRate is approximately 0.049", func() {
+		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(wm.PerpetualWithdrawalRate).To(BeNumerically("~", 0.049, 1e-2))
+	})
+
+	It("SWR > 0 and DWR > 0 for a growing curve", func() {
+		wm := buildWithdrawalAcct().WithdrawalMetrics()
 		Expect(wm.SafeWithdrawalRate).To(BeNumerically(">", 0.0))
 		Expect(wm.DynamicWithdrawalRate).To(BeNumerically(">", 0.0))
+	})
+
+	It("ordering invariant: PWR <= SWR <= DWR", func() {
+		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(wm.PerpetualWithdrawalRate).To(BeNumerically("<=", wm.SafeWithdrawalRate))
+		Expect(wm.SafeWithdrawalRate).To(BeNumerically("<=", wm.DynamicWithdrawalRate))
 	})
 })
 

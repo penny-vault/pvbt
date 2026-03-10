@@ -187,6 +187,31 @@ var _ = Describe("WeightedBySignal", func() {
 		Expect(plan[0].Members[aapl]).To(Equal(0.5))
 	})
 
+	It("ignores negative values and weights positive values proportionally", func() {
+		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MarketCap},
+			[]float64{
+				300, // SPY
+				-50, // AAPL (negative, should be ignored)
+				100, // BIL
+			},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+
+		// positive sum = 300 + 100 = 400
+		// SPY = 300/400 = 0.75, AAPL = 0, BIL = 100/400 = 0.25
+		Expect(plan[0].Members[spy]).To(Equal(0.75))
+		Expect(plan[0].Members[aapl]).To(Equal(0.0))
+		Expect(plan[0].Members[bil]).To(Equal(0.25))
+	})
+
 	It("computes weights independently at each timestep", func() {
 		t2 := time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
 

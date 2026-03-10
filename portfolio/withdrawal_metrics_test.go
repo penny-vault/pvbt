@@ -156,6 +156,46 @@ var _ = Describe("Withdrawal Metrics", func() {
 		})
 	})
 
+	Describe("declining equity curve", func() {
+		buildDecliningAccount := func() *portfolio.Account {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+			price := 100_000.0
+
+			for i := range 300 {
+				d := start.AddDate(0, 0, i)
+				if i > 0 {
+					loss := price * 0.0001
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.WithdrawalTransaction,
+						Amount: -loss,
+					})
+					price -= loss
+				}
+				df := buildDF(d, []asset.Asset{spy}, []float64{450 - float64(i)*0.1}, []float64{448 - float64(i)*0.1})
+				a.UpdatePrices(df)
+			}
+
+			return a
+		}
+
+		It("SafeWithdrawalRate is lower than for a growing curve", func() {
+			declining := buildDecliningAccount()
+			growing := buildModerateAccount()
+
+			declSWR := portfolio.SafeWithdrawalRate.Compute(declining, nil)
+			growSWR := portfolio.SafeWithdrawalRate.Compute(growing, nil)
+
+			Expect(declSWR).To(BeNumerically("<", growSWR))
+		})
+
+		It("PerpetualWithdrawalRate is 0 for declining curve", func() {
+			a := buildDecliningAccount()
+			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+	})
+
 	Describe("ordering invariant", func() {
 		It("PerpetualWithdrawalRate <= SafeWithdrawalRate <= DynamicWithdrawalRate", func() {
 			a := buildModerateAccount()

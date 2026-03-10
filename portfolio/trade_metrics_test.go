@@ -384,6 +384,95 @@ var _ = Describe("TradeMetrics", func() {
 		})
 	})
 
+	Describe("single winning trade", func() {
+		It("sets WinRate=1.0 and zeroes ProfitFactor/GainLossRatio", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			// Buy 10 ACME at $100, Sell at $120 (31 days) -> win $200
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  120.0,
+				Amount: 1_200.0,
+			})
+
+			tm := a.TradeMetrics()
+			Expect(tm.WinRate).To(Equal(1.0))
+			Expect(tm.AverageWin).To(Equal(200.0))
+			Expect(tm.AverageLoss).To(Equal(0.0))
+			Expect(tm.ProfitFactor).To(Equal(0.0))
+			Expect(tm.GainLossRatio).To(Equal(0.0))
+		})
+	})
+
+	Describe("single losing trade", func() {
+		It("sets WinRate=0 and zeroes ProfitFactor/GainLossRatio", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			// Buy 10 ACME at $100, Sell at $80 (31 days) -> loss -$200
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  80.0,
+				Amount: 800.0,
+			})
+
+			tm := a.TradeMetrics()
+			Expect(tm.WinRate).To(Equal(0.0))
+			Expect(tm.AverageWin).To(Equal(0.0))
+			Expect(tm.AverageLoss).To(Equal(-200.0))
+			Expect(tm.ProfitFactor).To(Equal(0.0))
+			Expect(tm.GainLossRatio).To(Equal(0.0))
+		})
+	})
+
+	Describe("NPositivePeriods with flat equity curve", func() {
+		It("returns NPositivePeriods=0 when all returns are zero", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			buildDF := func(t time.Time, price float64) *data.DataFrame {
+				df, err := data.NewDataFrame(
+					[]time.Time{t},
+					[]asset.Asset{acme},
+					[]data.Metric{data.MetricClose, data.AdjClose},
+					[]float64{price, price},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				return df
+			}
+
+			// Call UpdatePrices 5 times with flat price=100; all returns are zero
+			a.UpdatePrices(buildDF(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 100.0))
+			a.UpdatePrices(buildDF(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 100.0))
+			a.UpdatePrices(buildDF(time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), 100.0))
+			a.UpdatePrices(buildDF(time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC), 100.0))
+			a.UpdatePrices(buildDF(time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC), 100.0))
+
+			tm := a.TradeMetrics()
+			Expect(tm.NPositivePeriods).To(Equal(0.0))
+		})
+	})
+
 	Describe("FIFO matching with partial fills", func() {
 		It("splits a buy lot across multiple sells", func() {
 			a := portfolio.New(portfolio.WithCash(10_000))

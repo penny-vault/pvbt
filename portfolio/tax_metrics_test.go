@@ -457,6 +457,166 @@ var _ = Describe("TaxMetrics", func() {
 		})
 	})
 
+	Describe("edge cases", func() {
+		It("treats exactly 365 days as STCG (boundary: > 365 required for LTCG)", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy 100 shares at $100 on Jan 1, 2023
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// Sell 100 shares at $120 on Jan 1, 2024 (exactly 365 days) => STCG = 100*(120-100) = 2000
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  120.0,
+				Amount: 12_000.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(2_000.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+
+		It("treats 366 days as LTCG", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy 100 shares at $100 on Jan 1, 2023
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// Sell 100 shares at $120 on Jan 2, 2024 (366 days) => LTCG = 100*(120-100) = 2000
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  120.0,
+				Amount: 12_000.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.LTCG).To(Equal(2_000.0))
+			Expect(tm.STCG).To(Equal(0.0))
+		})
+
+		It("treats buy and sell on same date as STCG", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy 50 shares at $100 and sell same day at $105 => STCG = 50*(105-100) = 250
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  100.0,
+				Amount: -5_000.0,
+			})
+
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  105.0,
+				Amount: 5_250.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(250.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+
+		It("returns zero TaxMetrics when there are no transactions", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(0.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+			Expect(tm.QualifiedDividends).To(Equal(0.0))
+			Expect(tm.UnrealizedSTCG).To(Equal(0.0))
+			Expect(tm.UnrealizedLTCG).To(Equal(0.0))
+			Expect(tm.TaxCostRatio).To(Equal(0.0))
+		})
+
+		It("tracks FIFO per asset with interleaved buys and sells", func() {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+			// Buy 50 SPY @$100 on Jan 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  100.0,
+				Amount: -5_000.0,
+			})
+
+			// Buy 30 AAPL @$150 on Feb 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.BuyTransaction,
+				Qty:    30,
+				Price:  150.0,
+				Amount: -4_500.0,
+			})
+
+			// Sell 50 SPY @$120 on May 1 => STCG = 50*(120-100) = 1000
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  120.0,
+				Amount: 6_000.0,
+			})
+
+			// Buy 20 AAPL @$160 on Jun 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  160.0,
+				Amount: -3_200.0,
+			})
+
+			// Sell 50 AAPL @$170 on Aug 1
+			// FIFO: 30 from first lot => 30*(170-150) = 600
+			//        20 from second lot => 20*(170-160) = 200
+			// Total AAPL STCG = 800
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 8, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  aapl,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  170.0,
+				Amount: 8_500.0,
+			})
+
+			// Total STCG = 1000 + 800 = 1800
+			tm := a.TaxMetrics()
+			Expect(tm.STCG).To(Equal(1_800.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+	})
+
 	Describe("complete scenario", func() {
 		It("computes all tax metrics correctly", func() {
 			a := portfolio.New(portfolio.WithCash(50_000))
