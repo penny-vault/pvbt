@@ -19,8 +19,8 @@ var _ = Describe("Distribution Metrics", func() {
 
 	// cashAccount creates an Account with the given equity curve.
 	// Since we hold no positions, equity = cash at each UpdatePrices call.
-	// We adjust cash via dividend (positive) or fee (negative) transactions
-	// so that the cash balance matches the desired equity value.
+	// We adjust cash via deposit (positive) or withdrawal (negative)
+	// transactions so that the cash balance matches the desired equity value.
 	cashAccount := func(equityValues []float64) *portfolio.Account {
 		a := portfolio.New(portfolio.WithCash(equityValues[0]))
 		dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), len(equityValues))
@@ -31,13 +31,13 @@ var _ = Describe("Distribution Metrics", func() {
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.DividendTransaction,
+						Type:   portfolio.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.FeeTransaction,
+						Type:   portfolio.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}
