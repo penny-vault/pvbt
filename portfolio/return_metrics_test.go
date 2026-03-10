@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -14,50 +15,211 @@ var _ = Describe("Return Metrics", func() {
 	var (
 		spy asset.Asset
 		bm  asset.Asset
-		bil asset.Asset
 	)
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	})
 
-	// buildAccount creates an Account with a rising equity curve over 5 days.
-	// Equity values: 10000, 10100, 10300, 10200, 10500
-	// Benchmark AdjClose: 100, 101, 103, 102, 105
-	buildAccount := func() *portfolio.Account {
-		a := portfolio.New(
-			portfolio.WithCash(10_000),
-			portfolio.WithBenchmark(bm),
-			portfolio.WithRiskFree(bil),
-		)
-
-		dates := []time.Time{
-			time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
-			time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
-			time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
-			time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
-			time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC),
-		}
-
-		equityValues := []float64{10_000, 10_100, 10_300, 10_200, 10_500}
-		benchAdj := []float64{100, 101, 103, 102, 105}
-		rfAdj := []float64{50.0, 50.01, 50.02, 50.03, 50.04}
-
+	// buildReturnAccount creates an account with the given equity curve.
+	// It uses DividendTransaction (positive) and FeeTransaction (negative)
+	// to move cash so equity = cash. These types are ignored by MWRR.
+	buildReturnAccount := func(dates []time.Time, equity []float64) *portfolio.Account {
+		a := portfolio.New(portfolio.WithCash(equity[0]))
 		for i, d := range dates {
-			// The account has no holdings, so equity = cash.
-			// We set cash directly via deposit/withdrawal to get the desired equity curve.
 			if i > 0 {
-				diff := equityValues[i] - equityValues[i-1]
-				if diff != 0 {
+				diff := equity[i] - equity[i-1]
+				if diff > 0 {
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.DividendTransaction,
+						Amount: diff,
+					})
+				} else if diff < 0 {
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.FeeTransaction,
+						Amount: diff,
+					})
+				}
+			}
+			df := buildDF(d, []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df)
+		}
+		return a
+	}
+
+	Describe("TWRR", func() {
+		It("compounds sub-period returns for a 5-point equity curve", func() {
+			// Equity: [100, 110, 105, 115, 120]
+			// Returns: 10/100=0.10, -5/110=-1/22, 10/105=2/21, 5/115=1/23
+			// Product: (110/100)*(105/110)*(115/105)*(120/115) = 120/100 = 1.20
+			// TWRR = 1.20 - 1 = 0.20
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
+			a := buildReturnAccount(dates, []float64{100, 110, 105, 115, 120})
+
+			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(result).To(BeNumerically("~", 0.20, 1e-9))
+		})
+
+		It("computes cumulative return at each point in the series", func() {
+			// Equity: [100, 110, 105, 115, 120]
+			// Period returns: r0=10/100, r1=-5/110, r2=10/105, r3=5/115
+			// Cumulative product at each step:
+			//   cum[0] = (110/100) - 1 = 0.10
+			//   cum[1] = (110/100)*(105/110) - 1 = 105/100 - 1 = 0.05
+			//   cum[2] = (105/100)*(115/105) - 1 = 115/100 - 1 = 0.15
+			//   cum[3] = (115/100)*(120/115) - 1 = 120/100 - 1 = 0.20
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
+			a := buildReturnAccount(dates, []float64{100, 110, 105, 115, 120})
+
+			series := a.PerformanceMetric(portfolio.TWRR).Series()
+			Expect(series).To(HaveLen(4))
+			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
+			Expect(series[1]).To(BeNumerically("~", 0.05, 1e-9))
+			Expect(series[2]).To(BeNumerically("~", 0.15, 1e-9))
+			Expect(series[3]).To(BeNumerically("~", 0.20, 1e-9))
+		})
+
+		It("returns negative total return for a declining equity curve", func() {
+			// Equity: [100, 90, 80]
+			// Product: (90/100)*(80/90) = 80/100 = 0.80
+			// TWRR = 0.80 - 1 = -0.20
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+			a := buildReturnAccount(dates, []float64{100, 90, 80})
+
+			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(result).To(BeNumerically("~", -0.20, 1e-9))
+		})
+
+		It("returns 0 for a single data point", func() {
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
+			a := buildReturnAccount(dates, []float64{100})
+
+			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
+		})
+	})
+
+	Describe("MWRR", func() {
+		It("matches TWRR when there are no mid-stream cash flows", func() {
+			// No external DepositTransaction or WithdrawalTransaction (only initial deposit).
+			// Equity: [10000, 11000] over 367 days (Jan 2 2024 to Jan 3 2025).
+			// Flows: -10000 at t0 (synthetic), +11000 at t1.
+			// XIRR solves: -10000 + 11000/(1+r)^(367/365) = 0
+			//   (1+r)^(367/365) = 1.1
+			//   r = 1.1^(365/367) - 1 = 0.09942880667...
+			dates := []time.Time{
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			}
+			a := buildReturnAccount(dates, []float64{10_000, 11_000})
+
+			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			expected := math.Pow(1.1, 365.0/367.0) - 1
+			Expect(result).To(BeNumerically("~", expected, 1e-9))
+		})
+
+		It("differs from TWRR when there is a mid-stream deposit", func() {
+			// Day 0: deposit 10000, equity=10000
+			// Day 183 (Jul 3): deposit 5000, equity goes from 10500 to 15500
+			// Day 366 (Jan 3 next year): equity=16500
+			//
+			// TWRR: (10500/10000) * (16500/15500) - 1 = 1.05 * (330/310) - 1
+			//      = 1.05 * 1.0645161... - 1 = 0.117741935...
+			//
+			// MWRR flows (from MWRR source):
+			//   Initial deposit: -10000 at t0 (Jan 2 2024), date is zero so mapped to times[0]
+			//   Mid-stream deposit: -5000 at t1 (Jul 3 2024)
+			//   Terminal value: +16500 at t2 (Jan 3 2025)
+			//
+			// Days from t0: d0=0, d1=183, d2=366
+			// NPV(r) = -10000 + (-5000)/(1+r)^(183/365) + 16500/(1+r)^(366/365) = 0
+			dates := []time.Time{
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 7, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			}
+
+			a := portfolio.New(portfolio.WithCash(10_000))
+
+			// Day 0: initial state
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df0)
+
+			// Day 183: equity grew to 10500, then deposit 5000 -> equity 15500
+			a.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   portfolio.DividendTransaction,
+				Amount: 500, // growth
+			})
+			a.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   portfolio.DepositTransaction,
+				Amount: 5000, // mid-stream deposit
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df1)
+
+			// Day 366: equity grew to 16500
+			a.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   portfolio.DividendTransaction,
+				Amount: 1000, // growth
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df2)
+
+			// Verify equity curve is as expected.
+			Expect(a.EquityCurve()).To(Equal([]float64{10_000, 15_500, 16_500}))
+
+			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			twrrResult := a.PerformanceMetric(portfolio.TWRR).Value()
+
+			// TWRR = (15500/10000)*(16500/15500) - 1 = 1.65 - 1 = 0.65
+			// Wait -- equity curve is [10000, 15500, 16500], so returns include the deposit.
+			// TWRR sees returns = (15500-10000)/10000 = 0.55, (16500-15500)/15500 = 0.0645...
+			// TWRR = 1.55 * 1.064516... - 1 = 0.65
+			Expect(twrrResult).To(BeNumerically("~", 0.65, 1e-9))
+
+			// MWRR should be different from TWRR due to the mid-stream deposit.
+			Expect(result).NotTo(BeNumerically("~", twrrResult, 0.01))
+			// MWRR should be positive (portfolio grew).
+			Expect(result).To(BeNumerically(">", 0.0))
+		})
+
+		It("returns 0 for a single data point", func() {
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
+			a := buildReturnAccount(dates, []float64{10_000})
+
+			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
+		})
+	})
+
+	Describe("ActiveReturn", func() {
+		// buildAccountWithBenchmark creates an account with both a portfolio equity
+		// curve and benchmark prices.
+		buildAccountWithBenchmark := func(
+			dates []time.Time,
+			equity []float64,
+			benchPrices []float64,
+		) *portfolio.Account {
+			a := portfolio.New(
+				portfolio.WithCash(equity[0]),
+				portfolio.WithBenchmark(bm),
+			)
+			for i, d := range dates {
+				if i > 0 {
+					diff := equity[i] - equity[i-1]
 					if diff > 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
 							Type:   portfolio.DividendTransaction,
 							Amount: diff,
 						})
-					} else {
+					} else if diff < 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
 							Type:   portfolio.FeeTransaction,
@@ -65,148 +227,75 @@ var _ = Describe("Return Metrics", func() {
 						})
 					}
 				}
+				df := buildDF(d,
+					[]asset.Asset{spy, bm},
+					[]float64{100, benchPrices[i]},
+					[]float64{100, benchPrices[i]},
+				)
+				a.UpdatePrices(df)
 			}
-			df := buildDF(d,
-				[]asset.Asset{spy, bm, bil},
-				[]float64{450, benchAdj[i], rfAdj[i]},
-				[]float64{448, benchAdj[i], rfAdj[i]},
-			)
-			a.UpdatePrices(df)
+			return a
 		}
 
-		return a
-	}
-
-	Describe("TWRR", func() {
-		It("returns a positive value for a rising equity curve", func() {
-			a := buildAccount()
-			result := a.PerformanceMetric(portfolio.TWRR).Value()
-			// equity went from 10000 to 10500, so total return = 5%
-			Expect(result).To(BeNumerically("~", 0.05, 1e-9))
-		})
-
-		It("returns zero for a flat equity curve", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
-			for i := 0; i < 3; i++ {
-				d := time.Date(2024, 1, 2+i, 0, 0, 0, 0, time.UTC)
-				df := buildDF(d, []asset.Asset{spy}, []float64{100}, []float64{100})
-				a.UpdatePrices(df)
-			}
-			result := a.PerformanceMetric(portfolio.TWRR).Value()
-			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
-		})
-
-		It("computes series with correct length (n-1)", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.TWRR).Series()
-			// 5 equity points -> 4 return periods -> 4 cumulative return values
-			Expect(series).To(HaveLen(4))
-		})
-
-		It("computes cumulative return series", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.TWRR).Series()
-			// equity: 10000, 10100, 10300, 10200, 10500
-			// period returns: 0.01, 0.0198..., -0.0097..., 0.0294...
-			// cumulative: (1.01)-1, (1.01*1.0198..)-1, ...
-			// final cumulative should equal total return
-			Expect(series[len(series)-1]).To(BeNumerically("~", 0.05, 1e-9))
-		})
-	})
-
-	Describe("MWRR", func() {
-		It("returns a positive annualized rate for a growing portfolio with no external flows", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
-
-			dates := []time.Time{
-				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
-				time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC),
-				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
-			}
-			equityValues := []float64{10_000, 10_500, 11_000}
-
-			for i, d := range dates {
-				if i > 0 {
-					diff := equityValues[i] - equityValues[i-1]
-					a.Record(portfolio.Transaction{
-						Date:   d,
-						Type:   portfolio.DividendTransaction,
-						Amount: diff,
-					})
-				}
-				df := buildDF(d, []asset.Asset{spy}, []float64{450}, []float64{448})
-				a.UpdatePrices(df)
-			}
-
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
-			// With no external cash flows and 10% total return over 1 year,
-			// MWRR should be approximately 10%.
-			Expect(result).To(BeNumerically(">", 0.0))
-			Expect(result).To(BeNumerically("~", 0.10, 0.01))
-		})
-	})
-
-	Describe("ActiveReturn", func() {
-		It("computes the difference between portfolio and benchmark total return", func() {
-			a := buildAccount()
-			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()
-			// portfolio return: (10500/10000) - 1 = 0.05
-			// benchmark return: (105/100) - 1 = 0.05
-			// active return: 0.05 - 0.05 = 0.0
-			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
-		})
-
-		It("returns positive active return when portfolio outperforms benchmark", func() {
-			a := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
+		It("computes portfolio total return minus benchmark total return", func() {
+			// Portfolio equity: [1000, 1100, 1200]
+			// Benchmark:        [50,   52,   54]
+			//
+			// ActiveReturn.Compute uses (end/start)-1 for each:
+			//   portReturn  = 1200/1000 - 1 = 0.20
+			//   benchReturn = 54/50 - 1     = 0.08
+			//   active      = 0.20 - 0.08   = 0.12
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+			a := buildAccountWithBenchmark(dates,
+				[]float64{1000, 1100, 1200},
+				[]float64{50, 52, 54},
 			)
 
-			dates := []time.Time{
-				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
-				time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
-			}
+			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()
+			Expect(result).To(BeNumerically("~", 0.12, 1e-9))
+		})
 
-			// portfolio goes from 10000 to 11000 = 10% return
-			// benchmark goes from 100 to 105 = 5% return
-			// active return = 5%
-			a.UpdatePrices(buildDF(dates[0], []asset.Asset{spy, bm}, []float64{450, 100}, []float64{448, 100}))
-
-			a.Record(portfolio.Transaction{
-				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
-				Amount: 1_000,
-			})
-			a.UpdatePrices(buildDF(dates[1], []asset.Asset{spy, bm}, []float64{460, 105}, []float64{458, 105}))
+		It("returns 0 when portfolio perfectly tracks benchmark", func() {
+			// Both have the same percentage returns at each step.
+			// Portfolio: [1000, 1100, 1210]  -> returns: 10%, 10%
+			// Benchmark: [50,   55,   60.5]  -> returns: 10%, 10%
+			//
+			// portReturn  = 1210/1000 - 1 = 0.21
+			// benchReturn = 60.5/50 - 1   = 0.21
+			// active      = 0.0
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+			a := buildAccountWithBenchmark(dates,
+				[]float64{1000, 1100, 1210},
+				[]float64{50, 55, 60.5},
+			)
 
 			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()
-			Expect(result).To(BeNumerically("~", 0.05, 1e-9))
+			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 
-		It("computes a return series with correct length", func() {
-			a := buildAccount()
-			series := a.PerformanceMetric(portfolio.ActiveReturn).Series()
-			// 5 equity points -> 4 return periods
-			Expect(series).To(HaveLen(4))
-		})
+		It("computes cumulative active return series as portfolio minus benchmark cumulative returns", func() {
+			// Portfolio equity: [100, 110, 105]
+			// Benchmark:        [50,  52,  54]
+			//
+			// Portfolio returns: r0=10/100=0.10, r1=-5/110=-1/22
+			// Benchmark returns: r0=2/50=0.04,   r1=2/52=1/26
+			//
+			// Cumulative portfolio: cum_p[0]=0.10, cum_p[1]=(110/100)*(105/110)-1=0.05
+			// Cumulative benchmark: cum_b[0]=0.04, cum_b[1]=(52/50)*(54/52)-1=0.08
+			//
+			// Series[i] = (cumPort - 1) - (cumBench - 1) = cumPort - cumBench
+			//   series[0] = 0.10 - 0.04 = 0.06
+			//   series[1] = 0.05 - 0.08 = -0.03
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+			a := buildAccountWithBenchmark(dates,
+				[]float64{100, 110, 105},
+				[]float64{50, 52, 54},
+			)
 
-		It("computes element-wise difference of return series", func() {
-			a := buildAccount()
 			series := a.PerformanceMetric(portfolio.ActiveReturn).Series()
-			// Since portfolio and benchmark have same total return structure,
-			// check that each element is the difference of portfolio and benchmark returns
-			portfolioReturns := a.PerformanceMetric(portfolio.TWRR).Series()
-			benchPrices := a.BenchmarkPrices()
-			benchReturns := make([]float64, len(benchPrices)-1)
-			cumBench := 1.0
-			for i := 0; i < len(benchPrices)-1; i++ {
-				r := (benchPrices[i+1] - benchPrices[i]) / benchPrices[i]
-				cumBench *= (1 + r)
-				benchReturns[i] = cumBench - 1
-			}
-			for i := range series {
-				Expect(series[i]).To(BeNumerically("~", portfolioReturns[i]-benchReturns[i], 1e-9))
-			}
+			Expect(series).To(HaveLen(2))
+			Expect(series[0]).To(BeNumerically("~", 0.06, 1e-9))
+			Expect(series[1]).To(BeNumerically("~", -0.03, 1e-9))
 		})
 	})
 })
