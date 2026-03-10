@@ -16,6 +16,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -186,5 +187,137 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(mb.submitted[0].Asset).To(Equal(spy))
 		Expect(mb.submitted[1].Side).To(Equal(broker.Buy))
 		Expect(mb.submitted[1].Asset).To(Equal(goog))
+	})
+
+	It("skips assets with NaN price and rebalances the rest", func() {
+		// SPY has NaN price, AAPL has a valid price.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{math.NaN(), 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		acct.RebalanceTo(portfolio.Allocation{
+			Date: t1,
+			Members: map[asset.Asset]float64{
+				spy:  0.50,
+				aapl: 0.50,
+			},
+		})
+
+		// SPY should be skipped (NaN price), only AAPL should be bought.
+		Expect(acct.Position(spy)).To(Equal(0.0))
+		Expect(acct.Position(aapl)).To(Equal(250.0))
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].Asset).To(Equal(aapl))
+	})
+
+	It("skips assets with zero price and rebalances the rest", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{0, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		acct.RebalanceTo(portfolio.Allocation{
+			Date: t1,
+			Members: map[asset.Asset]float64{
+				spy:  0.50,
+				aapl: 0.50,
+			},
+		})
+
+		Expect(acct.Position(spy)).To(Equal(0.0))
+		Expect(acct.Position(aapl)).To(Equal(250.0))
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].Asset).To(Equal(aapl))
+	})
+
+	It("is a no-op when allocation has empty Members and no holdings", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		acct.RebalanceTo(portfolio.Allocation{
+			Date:    t1,
+			Members: map[asset.Asset]float64{},
+		})
+
+		Expect(mb.submitted).To(BeEmpty())
+		Expect(acct.Cash()).To(Equal(100_000.0))
+	})
+
+	It("processes multiple variadic allocations", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{500, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy:  {{Price: 500.0, Qty: 120, FilledAt: fill}},
+			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		// Pass two allocations with separate assets.
+		// First allocation buys SPY, second sells SPY (not in members)
+		// and buys AAPL. So we expect 3 orders total: buy SPY, sell SPY, buy AAPL.
+		acct.RebalanceTo(
+			portfolio.Allocation{
+				Date: t1,
+				Members: map[asset.Asset]float64{
+					spy: 0.60,
+				},
+			},
+			portfolio.Allocation{
+				Date: t1,
+				Members: map[asset.Asset]float64{
+					aapl: 0.40,
+				},
+			},
+		)
+
+		// Both allocations were processed: buy SPY, sell SPY, buy AAPL.
+		Expect(mb.submitted).To(HaveLen(3))
+		Expect(mb.submitted[0].Side).To(Equal(broker.Buy))
+		Expect(mb.submitted[0].Asset).To(Equal(spy))
+		Expect(mb.submitted[1].Side).To(Equal(broker.Sell))
+		Expect(mb.submitted[1].Asset).To(Equal(spy))
+		Expect(mb.submitted[2].Side).To(Equal(broker.Buy))
+		Expect(mb.submitted[2].Asset).To(Equal(aapl))
 	})
 })

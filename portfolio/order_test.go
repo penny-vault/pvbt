@@ -34,6 +34,7 @@ type mockBroker struct {
 	fills        [][]broker.Fill              // one []Fill per Submit call, consumed in order
 	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
 	defaultFill  *broker.Fill                 // when set, return a fill at this price/time with order qty
+	submitErr    error                        // when set, Submit returns this error immediately
 	callIdx      int
 }
 
@@ -47,6 +48,9 @@ func (m *mockBroker) Balance() (broker.Balance, error)                    { retu
 
 func (m *mockBroker) Submit(order broker.Order) ([]broker.Fill, error) {
 	m.submitted = append(m.submitted, order)
+	if m.submitErr != nil {
+		return nil, m.submitErr
+	}
 	if fills, ok := m.fillsByAsset[order.Asset]; ok {
 		return fills, nil
 	}
@@ -176,6 +180,20 @@ var _ = Describe("Order", func() {
 			}
 		}
 		Expect(buyCount).To(Equal(2))
+	})
+
+	It("leaves cash and position unchanged when broker returns an error", func() {
+		mb.submitErr = fmt.Errorf("connection refused")
+		acct.Order(testAsset, portfolio.Buy, 10)
+
+		Expect(acct.Cash()).To(Equal(10_000.0))
+		Expect(acct.Position(testAsset)).To(Equal(0.0))
+		// The order was still submitted to the broker.
+		Expect(mb.submitted).To(HaveLen(1))
+		// Only the initial deposit transaction should exist.
+		txns := acct.Transactions()
+		Expect(txns).To(HaveLen(1))
+		Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
 	})
 
 	DescribeTable("time-in-force modifiers",
