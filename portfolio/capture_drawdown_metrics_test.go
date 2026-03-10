@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -15,164 +16,380 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		spy asset.Asset
 		bm  asset.Asset
 		bil asset.Asset
-		a   *portfolio.Account
 	)
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+	})
 
-		// Build account with 25 data points.
-		// Benchmark has ups and downs. Portfolio amplifies moves (higher beta).
-		// Benchmark prices: oscillates with an overall upward trend.
-		benchPrices := []float64{
-			100, 103, 101, 105, 102, 107, 104, 109, 103, 111,
-			108, 113, 106, 115, 110, 118, 112, 120, 114, 122,
-			116, 124, 118, 126, 120,
-		}
-		// Portfolio equity scaling: amplified moves relative to benchmark.
-		eqPrices := []float64{
-			100, 105, 100, 108, 99, 112, 102, 114, 97, 118,
-			106, 120, 101, 123, 108, 128, 110, 130, 111, 133,
-			115, 136, 117, 140, 118,
-		}
-		rfPrices := make([]float64, 25)
-		for i := range rfPrices {
-			rfPrices[i] = 100 + float64(i)*0.01
-		}
+	// cashAccount builds a cash-only account whose equity curve matches the
+	// given equityVals by injecting dividend/fee transactions between each
+	// UpdatePrices call. benchVals are the benchmark AdjClose prices.
+	cashAccount := func(equityVals, benchVals []float64) *portfolio.Account {
+		Expect(len(equityVals)).To(Equal(len(benchVals)))
+		dates := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), len(equityVals))
 
-		a = portfolio.New(
-			portfolio.WithCash(10_000),
+		a := portfolio.New(
+			portfolio.WithCash(equityVals[0]),
 			portfolio.WithBenchmark(bm),
 			portfolio.WithRiskFree(bil),
 		)
 
-		baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-
-		for i := 0; i < 25; i++ {
-			t := baseDate.AddDate(0, 0, i)
-			eqVal := 10_000.0 * eqPrices[i] / eqPrices[0]
+		for i := range equityVals {
 			if i > 0 {
-				prevEq := 10_000.0 * eqPrices[i-1] / eqPrices[0]
-				diff := eqVal - prevEq
+				diff := equityVals[i] - equityVals[i-1]
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
-						Date:   t,
+						Date:   dates[i],
 						Type:   portfolio.DividendTransaction,
 						Amount: diff,
 					})
-				} else {
+				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
-						Date:   t,
+						Date:   dates[i],
 						Type:   portfolio.FeeTransaction,
 						Amount: diff,
 					})
 				}
 			}
 
-			df := buildDF(t,
+			df := buildDF(dates[i],
 				[]asset.Asset{spy, bm, bil},
-				[]float64{eqPrices[i], benchPrices[i], rfPrices[i]},
-				[]float64{eqPrices[i], benchPrices[i], rfPrices[i]},
+				[]float64{100, benchVals[i], 100},
+				[]float64{100, benchVals[i], 100},
 			)
 			a.UpdatePrices(df)
 		}
-	})
+
+		return a
+	}
 
 	Describe("UpsideCaptureRatio", func() {
-		It("returns a positive value for a portfolio that participates in up markets", func() {
+		It("computes the ratio of geometric means in up-benchmark periods", func() {
+			// Equity:    [10000, 12000, 10800, 12960]
+			// Benchmark: [100,   110,   99,    108.9]
+			//
+			// Portfolio returns:  [0.2,   -1/10,  0.2  ]
+			// Benchmark returns:  [0.1,   -0.1,   0.1  ]  (99->108.9 = 9.9/99 = 0.1)
+			//
+			// Up periods (bRet > 0): i=0 (pRet=0.2, bRet=0.1), i=2 (pRet=0.2, bRet=0.1)
+			//
+			// geoP = ((1.2)(1.2))^(1/2) - 1 = 1.44^0.5 - 1 = 1.2 - 1 = 0.2
+			// geoB = ((1.1)(1.1))^(1/2) - 1 = 1.21^0.5 - 1 = 1.1 - 1 = 0.1
+			// ratio = (0.2 / 0.1) * 100 = 200.0
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+
 			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
+
+			// geoP = math.Pow(1.2*1.2, 0.5) - 1 = 0.2
+			// geoB = math.Pow(1.1*1.1, 0.5) - 1 = 0.1
+			// exact floating-point: 200.0
+			Expect(v).To(BeNumerically("~", 200.0, 1e-9))
 		})
 
-		It("returns 0 when there are no up periods in benchmark", func() {
-			// Create account with monotonically declining benchmark.
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
+		It("returns 0 when benchmark never rises", func() {
+			// Benchmark: [100, 95, 90, 85] -- all returns negative
+			// No up periods => returns 0.
+			a := cashAccount(
+				[]float64{10000, 10500, 10200, 10800},
+				[]float64{100, 95, 90, 85},
 			)
-			benchDown := []float64{100, 99, 98, 97, 96}
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, benchDown[i], 100},
-					[]float64{100, benchDown[i], 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			v := acct.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
 			Expect(v).To(Equal(0.0))
+		})
+
+		It("returns 0 with a single data point (no returns)", func() {
+			a := cashAccount(
+				[]float64{10000},
+				[]float64{100},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("handles asymmetric capture where portfolio gains less than benchmark", func() {
+			// Equity:    [10000, 10500, 10000, 10500]
+			// Benchmark: [100,   110,   100,   110  ]
+			//
+			// Portfolio returns:  [0.05,  -500/10500,  0.05 ]
+			// Benchmark returns:  [0.1,   -1/11,       0.1  ]
+			//
+			// Up periods: i=0 (pRet=0.05, bRet=0.1), i=2 (pRet=0.05, bRet=0.1)
+			// geoP = ((1.05)(1.05))^(1/2) - 1 = 1.05 - 1 = 0.05
+			// geoB = ((1.1)(1.1))^(1/2) - 1 = 1.1 - 1 = 0.1
+			// ratio = (0.05 / 0.1) * 100 = 50.0
+			a := cashAccount(
+				[]float64{10000, 10500, 10000, 10500},
+				[]float64{100, 110, 100, 110},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("~", 50.0, 1e-9))
 		})
 	})
 
 	Describe("DownsideCaptureRatio", func() {
-		It("returns a positive value for a portfolio that participates in down markets", func() {
+		It("computes the ratio of geometric means in down-benchmark periods", func() {
+			// Equity:    [10000, 12000, 10800, 12960]
+			// Benchmark: [100,   110,   99,    108.9]
+			//
+			// Portfolio returns:  [0.2,   -0.1,   0.2 ]
+			// Benchmark returns:  [0.1,   -0.1,   0.1 ]  (110->99 = -11/110 = -0.1)
+			//
+			// Down periods (bRet < 0): i=1 (pRet=-0.1, bRet=-0.1)
+			//
+			// geoP = (1 + (-0.1))^(1/1) - 1 = 0.9 - 1 = -0.1
+			// geoB = (1 + (-0.1))^(1/1) - 1 = 0.9 - 1 = -0.1
+			// ratio = (-0.1 / -0.1) * 100 = 100.0
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+
 			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
+
+			// (110 -> 99): bRet = (99-110)/110 = -11/110 = -0.1 exactly
+			// pRet = (10800-12000)/12000 = -1200/12000 = -0.1 exactly
+			Expect(v).To(BeNumerically("~", 100.0, 1e-9))
 		})
 
-		It("returns 0 when there are no down periods in benchmark", func() {
-			// Create account with monotonically rising benchmark.
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
+		It("portfolio loses less than benchmark in down markets", func() {
+			// Equity:    [10000, 11000, 10725, 11797.5]
+			// Benchmark: [100,   110,   99,    108.9  ]
+			//
+			// Portfolio returns:  [0.1,   -0.025,  0.1   ]
+			// Benchmark returns:  [0.1,   -0.1,    0.1   ]
+			//
+			// Down periods: i=1 (pRet=-0.025, bRet=-0.1)
+			// geoP = (0.975)^1 - 1 = -0.025
+			// geoB = (0.9)^1 - 1 = -0.1
+			// ratio = (-0.025 / -0.1) * 100 = 25.0
+			a := cashAccount(
+				[]float64{10000, 11000, 10725, 11797.5},
+				[]float64{100, 110, 99, 108.9},
 			)
-			benchUp := []float64{100, 101, 102, 103, 104}
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, benchUp[i], 100},
-					[]float64{100, benchUp[i], 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			v := acct.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("~", 25.0, 1e-9))
+		})
+
+		It("returns 0 when benchmark never falls", func() {
+			// Benchmark: [100, 105, 110, 115] -- all returns positive
+			a := cashAccount(
+				[]float64{10000, 10200, 10100, 10300},
+				[]float64{100, 105, 110, 115},
+			)
+
+			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
 			Expect(v).To(Equal(0.0))
+		})
+
+		It("portfolio doesn't participate in down markets", func() {
+			// Equity:    [10000, 11000, 11000, 12100]
+			// Benchmark: [100,   110,   99,    108.9]
+			//
+			// Portfolio returns:  [0.1, 0.0, 0.1]
+			// Benchmark returns:  [0.1, -0.1, 0.1]
+			//
+			// Down periods: i=1 (pRet=0.0, bRet=-0.1)
+			// geoP = (1.0)^1 - 1 = 0.0
+			// geoB = (0.9)^1 - 1 = -0.1
+			// ratio = (0.0 / -0.1) * 100 = 0.0
+			a := cashAccount(
+				[]float64{10000, 11000, 11000, 12100},
+				[]float64{100, 110, 99, 108.9},
+			)
+
+			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("~", 0.0, 1e-9))
 		})
 	})
 
 	Describe("AvgDrawdown", func() {
-		It("returns a negative value for an equity curve with dips", func() {
+		It("computes mean of trough values across drawdown episodes", func() {
+			// Equity: [10000, 12000, 10800, 12960]
+			//
+			// drawdownSeries:
+			//   i=0: peak=10000, dd=(10000-10000)/10000 = 0
+			//   i=1: peak=12000, dd=(12000-12000)/12000 = 0
+			//   i=2: peak=12000, dd=(10800-12000)/12000 = -1200/12000 = -0.1
+			//   i=3: peak=12960, dd=(12960-12960)/12960 = 0
+			//
+			// Episodes: one episode at i=2, trough = -0.1
+			// mean([-0.1]) = -0.1
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("<", 0.0))
+			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
 		})
 
-		It("returns 0 when equity curve never dips", func() {
-			// Create account with monotonically rising equity.
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
+		It("averages multiple drawdown episodes", func() {
+			// Equity: [10000, 12000, 10800, 13000, 11700]
+			//
+			// drawdownSeries:
+			//   i=0: peak=10000, dd=0
+			//   i=1: peak=12000, dd=0
+			//   i=2: peak=12000, dd=(10800-12000)/12000 = -0.1
+			//   i=3: peak=13000, dd=0
+			//   i=4: peak=13000, dd=(11700-13000)/13000 = -1300/13000 = -0.1
+			//
+			// Episodes: episode1 at i=2 trough=-0.1, episode2 at i=4 trough=-0.1
+			// mean([-0.1, -0.1]) = -0.1
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 13000, 11700},
+				[]float64{100, 105, 100, 105, 100},
 			)
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				if i > 0 {
-					acct.Record(portfolio.Transaction{
-						Date:   t,
-						Type:   portfolio.DividendTransaction,
-						Amount: 100.0,
-					})
-				}
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, 100, 100},
-					[]float64{100, 100, 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			v := acct.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
+		})
+
+		It("averages episodes with different trough depths", func() {
+			// Equity: [10000, 20000, 18000, 20000, 16000]
+			//
+			// drawdownSeries:
+			//   i=0: peak=10000, dd=0
+			//   i=1: peak=20000, dd=0
+			//   i=2: peak=20000, dd=(18000-20000)/20000 = -0.1
+			//   i=3: peak=20000, dd=0
+			//   i=4: peak=20000, dd=(16000-20000)/20000 = -0.2
+			//
+			// Episodes: episode1 trough=-0.1, episode2 trough=-0.2
+			// mean([-0.1, -0.2]) = -0.15
+			a := cashAccount(
+				[]float64{10000, 20000, 18000, 20000, 16000},
+				[]float64{100, 110, 100, 110, 100},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(BeNumerically("~", -0.15, 1e-9))
+		})
+
+		It("returns 0 for monotonically rising equity (no drawdowns)", func() {
+			// Equity: [10000, 10500, 11000, 11500]
+			// drawdownSeries: [0, 0, 0, 0] -- no episodes
+			a := cashAccount(
+				[]float64{10000, 10500, 11000, 11500},
+				[]float64{100, 105, 110, 115},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
 			Expect(v).To(Equal(0.0))
+		})
+
+		It("returns 0 for a single data point", func() {
+			a := cashAccount(
+				[]float64{10000},
+				[]float64{100},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("handles a multi-period drawdown episode taking the trough", func() {
+			// Equity: [10000, 20000, 18000, 16000, 20000]
+			//
+			// drawdownSeries:
+			//   i=0: peak=10000, dd=0
+			//   i=1: peak=20000, dd=0
+			//   i=2: peak=20000, dd=(18000-20000)/20000 = -0.1
+			//   i=3: peak=20000, dd=(16000-20000)/20000 = -0.2
+			//   i=4: peak=20000, dd=0
+			//
+			// One episode spanning i=2..3, trough = -0.2
+			// mean([-0.2]) = -0.2
+			a := cashAccount(
+				[]float64{10000, 20000, 18000, 16000, 20000},
+				[]float64{100, 110, 105, 100, 110},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(BeNumerically("~", -0.2, 1e-9))
+		})
+
+		It("handles flat benchmark correctly", func() {
+			// Flat benchmark should not affect AvgDrawdown (it only uses equity).
+			// Equity: [10000, 12000, 10800, 12960]
+			// Benchmark: [100, 100, 100, 100]
+			//
+			// Same drawdown calculation as before: one episode, trough=-0.1
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 100, 100, 100},
+			)
+
+			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
+		})
+	})
+
+	// Cross-check: verify geometric mean helper indirectly by checking
+	// a scenario where up-capture uses more than 2 up periods.
+	Describe("UpsideCaptureRatio with 3 up periods", func() {
+		It("uses all up-benchmark periods in the geometric mean", func() {
+			// Equity:    [10000, 12000, 11400, 13680, 13680, 16416]
+			// Benchmark: [100,   110,   104.5, 115.5, 109.725, 120.6975]
+			//   -- benchmark returns: [0.1, -0.05, ~0.1053, -0.05, 0.1]
+			//   -- but let's keep it simpler.
+			//
+			// Use: equity  = [10000, 12000, 10800, 12960, 15552]
+			//      bench   = [100,   110,   99,    108.9, 119.79]
+			//
+			// Portfolio returns:  [0.2, -0.1, 0.2, 0.2]
+			// Benchmark returns:  [0.1, -0.1, 0.1, 0.1]
+			//    (108.9 -> 119.79: 10.89/108.9 = 0.1)
+			//
+			// Up periods: i=0,2,3 (pRet=[0.2,0.2,0.2], bRet=[0.1,0.1,0.1])
+			// geoP = (1.2^3)^(1/3) - 1 = 1.2 - 1 = 0.2
+			// geoB = (1.1^3)^(1/3) - 1 = 1.1 - 1 = 0.1
+			// ratio = (0.2/0.1)*100 = 200.0
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960, 15552},
+				[]float64{100, 110, 99, 108.9, 119.79},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("~", 200.0, 1e-6))
+		})
+	})
+
+	// Verify capture ratios with mixed magnitudes.
+	Describe("Capture ratios with non-uniform returns", func() {
+		It("computes upside capture with different up-period magnitudes", func() {
+			// Equity:    [10000, 11000, 10450, 12540]
+			// Benchmark: [100,   105,   99.75, 109.725]
+			//
+			// Portfolio returns: [0.1, -0.05, 0.2]
+			// Benchmark returns: [0.05, -0.05, 0.1]
+			//   (105 -> 99.75 = -5.25/105 = -0.05)
+			//   (99.75 -> 109.725 = 9.975/99.75 = 0.1)
+			//
+			// Up periods: i=0 (p=0.1, b=0.05), i=2 (p=0.2, b=0.1)
+			// geoP = ((1.1)(1.2))^(1/2) - 1 = (1.32)^0.5 - 1
+			// geoB = ((1.05)(1.1))^(1/2) - 1 = (1.155)^0.5 - 1
+			// ratio = geoP/geoB * 100
+			geoP := math.Pow(1.1*1.2, 0.5) - 1
+			geoB := math.Pow(1.05*1.1, 0.5) - 1
+			expected := (geoP / geoB) * 100
+
+			a := cashAccount(
+				[]float64{10000, 11000, 10450, 12540},
+				[]float64{100, 105, 99.75, 109.725},
+			)
+
+			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(v).To(BeNumerically("~", expected, 1e-6))
 		})
 	})
 })
