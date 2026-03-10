@@ -1,7 +1,6 @@
 package portfolio_test
 
 import (
-	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -11,289 +10,329 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-var _ = Describe("Benchmark Metrics", func() {
-	var (
-		spy asset.Asset
-		bm  asset.Asset
-		bil asset.Asset
-		a   *portfolio.Account
+// benchAcct builds an Account whose equity curve equals eqCurve, with
+// benchmark and risk-free prices fed in via UpdatePrices over daily
+// timestamps produced by daySeq.
+func benchAcct(eqCurve, bmPrices, rfPrices []float64) *portfolio.Account {
+	bm := asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
+	bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+
+	a := portfolio.New(
+		portfolio.WithCash(eqCurve[0]),
+		portfolio.WithBenchmark(bm),
+		portfolio.WithRiskFree(bil),
 	)
 
-	BeforeEach(func() {
-		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+	dates := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), len(eqCurve))
 
-		// Build an account where equity tracks the benchmark closely.
-		// Equity = benchmark * 1.0 (identical returns), risk-free grows slowly.
-		a = portfolio.New(
-			portfolio.WithCash(10_000),
-			portfolio.WithBenchmark(bm),
-			portfolio.WithRiskFree(bil),
-		)
-
-		// 12 daily data points -- equity tracks benchmark exactly (same returns).
-		benchPrices := []float64{100, 102, 101, 104, 103, 106, 105, 108, 107, 110, 109, 112}
-		rfPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05, 100.06, 100.07, 100.08, 100.09, 100.10, 100.11}
-
-		baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-
-		for i := 0; i < 12; i++ {
-			t := baseDate.AddDate(0, 0, i)
-			// equity = 10000 * (benchPrices[i] / benchPrices[0])
-			eqVal := 10_000.0 * benchPrices[i] / benchPrices[0]
-			// Set cash to the equity value (no holdings, just cash = total value).
-			// We manipulate cash directly through transactions to get the right equity curve.
-			if i == 0 {
-				// Initial deposit already set via WithCash.
+	for i := range eqCurve {
+		if i > 0 {
+			diff := eqCurve[i] - eqCurve[i-1]
+			if diff > 0 {
+				a.Record(portfolio.Transaction{
+					Date:   dates[i],
+					Type:   portfolio.DividendTransaction,
+					Amount: diff,
+				})
 			} else {
-				// Adjust cash to match desired equity value.
-				prevEq := 10_000.0 * benchPrices[i-1] / benchPrices[0]
-				diff := eqVal - prevEq
-				if diff > 0 {
-					a.Record(portfolio.Transaction{
-						Date:   t,
-						Type:   portfolio.DividendTransaction,
-						Amount: diff,
-					})
-				} else {
-					a.Record(portfolio.Transaction{
-						Date:   t,
-						Type:   portfolio.FeeTransaction,
-						Amount: diff,
-					})
-				}
+				a.Record(portfolio.Transaction{
+					Date:   dates[i],
+					Type:   portfolio.FeeTransaction,
+					Amount: diff,
+				})
 			}
-
-			df := buildDF(t,
-				[]asset.Asset{spy, bm, bil},
-				[]float64{benchPrices[i], benchPrices[i], rfPrices[i]},
-				[]float64{benchPrices[i], benchPrices[i], rfPrices[i]},
-			)
-			a.UpdatePrices(df)
 		}
-	})
 
-	Describe("Beta", func() {
-		It("returns beta close to 1.0 when portfolio tracks benchmark", func() {
-			b := a.PerformanceMetric(portfolio.Beta).Value()
-			Expect(b).To(BeNumerically("~", 1.0, 1e-10))
+		df := buildDF(dates[i],
+			[]asset.Asset{bm, bil},
+			[]float64{bmPrices[i], rfPrices[i]},
+			[]float64{bmPrices[i], rfPrices[i]},
+		)
+		a.UpdatePrices(df)
+	}
+
+	return a
+}
+
+var _ = Describe("Benchmark Metrics", func() {
+
+	// ---------------------------------------------------------------
+	// Main test: divergent portfolio and benchmark with hand-calculated
+	// expected values.
+	//
+	// Equity curve:      [1000, 1050, 1020, 1080, 1060, 1100]
+	// Benchmark prices:  [ 100,  104,  101,  107,  105,  109]
+	// Risk-free prices:  [ 100, 100.01, 100.02, 100.03, 100.04, 100.05]
+	//
+	// Portfolio returns:
+	//   r0 = (1050-1000)/1000 =  0.05
+	//   r1 = (1020-1050)/1050 = -0.028571428571429
+	//   r2 = (1080-1020)/1020 =  0.058823529411765
+	//   r3 = (1060-1080)/1080 = -0.018518518518519
+	//   r4 = (1100-1060)/1060 =  0.037735849056604
+	//
+	// Benchmark returns:
+	//   r0 = (104-100)/100 =  0.04
+	//   r1 = (101-104)/104 = -0.028846153846154
+	//   r2 = (107-101)/101 =  0.059405940594059
+	//   r3 = (105-107)/107 = -0.018691588785047
+	//   r4 = (109-105)/105 =  0.038095238095238
+	//
+	// Active returns (portfolio - benchmark):
+	//   a0 =  0.010000000000000
+	//   a1 =  0.000274725274725
+	//   a2 = -0.000582411182295
+	//   a3 =  0.000173070266528
+	//   a4 = -0.000359389038634
+	//
+	// Total returns:
+	//   portfolioReturn = 1100/1000 - 1 = 0.10
+	//   benchmarkReturn = 109/100  - 1 = 0.09
+	//   riskFreeReturn  = 100.05/100 - 1 = 0.0005
+	//
+	// annualizationFactor = 252 (daily data, avg gap ~1.4 days)
+	// ---------------------------------------------------------------
+
+	Describe("divergent portfolio", func() {
+		var a *portfolio.Account
+
+		BeforeEach(func() {
+			a = benchAcct(
+				[]float64{1000, 1050, 1020, 1080, 1060, 1100},
+				[]float64{100, 104, 101, 107, 105, 109},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
 		})
-	})
 
-	Describe("Alpha", func() {
-		It("returns alpha close to 0 when portfolio tracks benchmark", func() {
+		It("Beta = cov(pR,bR)/var(bR)", func() {
+			// cov(pR,bR) = 0.001578154309907
+			// var(bR)    = 0.001535776265237
+			// Beta       = 1.027593892176544
+			v := a.PerformanceMetric(portfolio.Beta).Value()
+			Expect(v).To(BeNumerically("~", 1.027593892176544, 1e-10))
+		})
+
+		It("Alpha = portfolioReturn - (rfReturn + beta*(bmReturn - rfReturn))", func() {
+			// alpha = 0.10 - (0.0005 + 1.027594*(0.09 - 0.0005))
+			//       = 0.007530346650199
 			v := a.PerformanceMetric(portfolio.Alpha).Value()
-			Expect(v).To(BeNumerically("~", 0.0, 1e-6))
+			Expect(v).To(BeNumerically("~", 0.007530346650199, 1e-10))
+		})
+
+		It("TrackingError = stddev(activeReturns) * sqrt(252)", func() {
+			// stddev(activeR) = 0.004541503086922
+			// TE = 0.004541503... * sqrt(252) = 0.072094126478561
+			v := a.PerformanceMetric(portfolio.TrackingError).Value()
+			Expect(v).To(BeNumerically("~", 0.072094126478561, 1e-10))
+		})
+
+		It("InformationRatio = mean(activeR)/stddev(activeR) * sqrt(252)", func() {
+			// mean(activeR)   = 0.001901199064065
+			// stddev(activeR) = 0.004541503086922
+			// IR = (0.001901.../0.004541...) * sqrt(252) = 6.645508969261543
+			v := a.PerformanceMetric(portfolio.InformationRatio).Value()
+			Expect(v).To(BeNumerically("~", 6.645508969261543, 1e-8))
+		})
+
+		It("Treynor = (portfolioReturn - rfReturn) / beta", func() {
+			// treynor = (0.10 - 0.0005) / 1.027594 = 0.096828134886292
+			v := a.PerformanceMetric(portfolio.Treynor).Value()
+			Expect(v).To(BeNumerically("~", 0.096828134886292, 1e-10))
+		})
+
+		It("RSquared = corr(pR,bR)^2", func() {
+			// corr = cov(pR,bR)/(stddev(pR)*stddev(bR)) = 0.994054842268791
+			// R^2  = 0.988145029438031
+			v := a.PerformanceMetric(portfolio.RSquared).Value()
+			Expect(v).To(BeNumerically("~", 0.988145029438031, 1e-10))
 		})
 	})
 
-	Describe("TrackingError", func() {
-		It("returns tracking error close to 0 when portfolio tracks benchmark", func() {
+	// ---------------------------------------------------------------
+	// Perfect tracking: portfolio equity = 10 * benchmark.
+	// Returns are identical, so active returns are all zero.
+	//
+	// Beta = 1.0   (cov/var = var/var)
+	// Alpha = 0.0  (portfolioReturn == benchmarkReturn when beta=1)
+	//   portfolioReturn = 1090/1000 - 1 = 0.09
+	//   alpha = 0.09 - (0.0005 + 1.0*(0.09-0.0005)) = 0
+	// TrackingError = 0   (stddev of zeros)
+	// InformationRatio = 0 (te=0 guard)
+	// Treynor = (0.09 - 0.0005)/1.0 = 0.0895
+	// RSquared = 1.0  (perfect correlation)
+	// ---------------------------------------------------------------
+
+	Describe("perfect tracking", func() {
+		var a *portfolio.Account
+
+		BeforeEach(func() {
+			bm := []float64{100, 104, 101, 107, 105, 109}
+			eq := make([]float64, len(bm))
+			for i := range bm {
+				eq[i] = bm[i] * 10 // portfolio = 10x benchmark
+			}
+			a = benchAcct(
+				eq,
+				bm,
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+		})
+
+		It("Beta = 1.0", func() {
+			v := a.PerformanceMetric(portfolio.Beta).Value()
+			Expect(v).To(BeNumerically("~", 1.0, 1e-10))
+		})
+
+		It("Alpha = 0.0", func() {
+			v := a.PerformanceMetric(portfolio.Alpha).Value()
+			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
+		})
+
+		It("TrackingError = 0.0", func() {
 			v := a.PerformanceMetric(portfolio.TrackingError).Value()
 			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
 		})
-	})
 
-	Describe("InformationRatio", func() {
-		It("returns 0 when tracking error is 0", func() {
+		It("InformationRatio = 0.0 (te=0 guard)", func() {
 			v := a.PerformanceMetric(portfolio.InformationRatio).Value()
 			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
 		})
-	})
 
-	Describe("Treynor", func() {
-		It("computes treynor ratio", func() {
+		It("Treynor = (0.09 - 0.0005) / 1.0", func() {
+			// portfolioReturn = 1090/1000 - 1 = 0.09
+			// riskFreeReturn  = 100.05/100 - 1 = 0.0005
+			// beta = 1.0
 			v := a.PerformanceMetric(portfolio.Treynor).Value()
-			// portfolioReturn = (equity_end / equity_start) - 1
-			// riskFreeReturn = (rf_end / rf_start) - 1
-			// beta ~ 1.0
-			// treynor = (portfolioReturn - riskFreeReturn) / beta
-			eqEnd := 10_000.0 * 112.0 / 100.0
-			eqStart := 10_000.0
-			pReturn := (eqEnd / eqStart) - 1.0
-			rfReturn := (100.11 / 100.0) - 1.0
-			expected := (pReturn - rfReturn) / 1.0
-			Expect(v).To(BeNumerically("~", expected, 1e-6))
+			Expect(v).To(BeNumerically("~", 0.0895, 1e-10))
 		})
-	})
 
-	Describe("RSquared", func() {
-		It("returns R-squared close to 1.0 when portfolio tracks benchmark", func() {
+		It("RSquared = 1.0", func() {
 			v := a.PerformanceMetric(portfolio.RSquared).Value()
 			Expect(v).To(BeNumerically("~", 1.0, 1e-10))
 		})
 	})
 
-	// Test with divergent portfolio to get non-trivial values.
-	Describe("with divergent portfolio", func() {
-		var divergent *portfolio.Account
+	// ---------------------------------------------------------------
+	// Edge: zero benchmark variance (flat benchmark at 100).
+	// Portfolio grows via dividends: equity = [1000, 1100, 1200, 1300, 1400].
+	// Benchmark returns all zero -> variance=0 -> Beta=0.
+	// Beta=0 -> Treynor=0.
+	// Portfolio stddev > 0, benchmark stddev = 0 -> RSquared=0 (sb==0 guard).
+	// ---------------------------------------------------------------
+
+	Describe("zero benchmark variance", func() {
+		var a *portfolio.Account
 
 		BeforeEach(func() {
-			divergent = portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
+			a = benchAcct(
+				[]float64{1000, 1100, 1200, 1300, 1400},
+				[]float64{100, 100, 100, 100, 100},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04},
 			)
-
-			// Portfolio grows faster than benchmark.
-			benchPrices := []float64{100, 102, 101, 104, 103, 106, 105, 108, 107, 110, 109, 112}
-			eqPrices := []float64{100, 105, 103, 110, 108, 115, 112, 120, 117, 125, 122, 130}
-			rfPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05, 100.06, 100.07, 100.08, 100.09, 100.10, 100.11}
-
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-
-			for i := 0; i < 12; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				eqVal := 10_000.0 * eqPrices[i] / eqPrices[0]
-				if i > 0 {
-					prevEq := 10_000.0 * eqPrices[i-1] / eqPrices[0]
-					diff := eqVal - prevEq
-					if diff > 0 {
-						divergent.Record(portfolio.Transaction{
-							Date:   t,
-							Type:   portfolio.DividendTransaction,
-							Amount: diff,
-						})
-					} else {
-						divergent.Record(portfolio.Transaction{
-							Date:   t,
-							Type:   portfolio.FeeTransaction,
-							Amount: diff,
-						})
-					}
-				}
-
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{benchPrices[i], benchPrices[i], rfPrices[i]},
-					[]float64{benchPrices[i], benchPrices[i], rfPrices[i]},
-				)
-				divergent.UpdatePrices(df)
-			}
 		})
 
-		It("Beta is positive and greater than 1", func() {
-			b := divergent.PerformanceMetric(portfolio.Beta).Value()
-			Expect(b).To(BeNumerically(">", 1.0))
-		})
-
-		It("Alpha is positive when portfolio outperforms", func() {
-			v := divergent.PerformanceMetric(portfolio.Alpha).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
-		})
-
-		It("TrackingError is positive when returns diverge", func() {
-			v := divergent.PerformanceMetric(portfolio.TrackingError).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
-		})
-
-		It("InformationRatio is positive when outperforming with tracking error", func() {
-			v := divergent.PerformanceMetric(portfolio.InformationRatio).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
-		})
-
-		It("RSquared is between 0 and 1", func() {
-			v := divergent.PerformanceMetric(portfolio.RSquared).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
-			Expect(v).To(BeNumerically("<=", 1.0))
-		})
-
-		It("Treynor is positive when portfolio outperforms risk-free", func() {
-			v := divergent.PerformanceMetric(portfolio.Treynor).Value()
-			Expect(v).To(BeNumerically(">", 0.0))
-		})
-	})
-
-	// Edge cases.
-	Describe("edge cases", func() {
-		It("Beta returns 0 when benchmark variance is 0", func() {
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
-			)
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-			// Flat benchmark.
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				if i > 0 {
-					acct.Record(portfolio.Transaction{
-						Date:   t,
-						Type:   portfolio.DividendTransaction,
-						Amount: 100.0,
-					})
-				}
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, 100, 100},
-					[]float64{100, 100, 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			b := acct.PerformanceMetric(portfolio.Beta).Value()
-			Expect(b).To(Equal(0.0))
-		})
-
-		It("Treynor returns 0 when beta is 0", func() {
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
-			)
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-			// Flat benchmark, growing portfolio.
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				if i > 0 {
-					acct.Record(portfolio.Transaction{
-						Date:   t,
-						Type:   portfolio.DividendTransaction,
-						Amount: 100.0,
-					})
-				}
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, 100, 100},
-					[]float64{100, 100, 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			v := acct.PerformanceMetric(portfolio.Treynor).Value()
+		It("Beta = 0", func() {
+			v := a.PerformanceMetric(portfolio.Beta).Value()
 			Expect(v).To(Equal(0.0))
 		})
 
-		It("RSquared returns 0 when portfolio stddev is 0", func() {
-			acct := portfolio.New(
-				portfolio.WithCash(10_000),
-				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(bil),
-			)
-			baseDate := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-			// Flat portfolio, varying benchmark.
-			benchPrices := []float64{100, 102, 101, 104, 103}
-			for i := 0; i < 5; i++ {
-				t := baseDate.AddDate(0, 0, i)
-				df := buildDF(t,
-					[]asset.Asset{spy, bm, bil},
-					[]float64{100, benchPrices[i], 100},
-					[]float64{100, benchPrices[i], 100},
-				)
-				acct.UpdatePrices(df)
-			}
-			v := acct.PerformanceMetric(portfolio.RSquared).Value()
+		It("Treynor = 0 (beta=0 guard)", func() {
+			v := a.PerformanceMetric(portfolio.Treynor).Value()
 			Expect(v).To(Equal(0.0))
+		})
+
+		It("RSquared = 0 (benchmark stddev=0 guard)", func() {
+			v := a.PerformanceMetric(portfolio.RSquared).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("Alpha = portfolioReturn - rfReturn when beta=0", func() {
+			// portfolioReturn = 1400/1000 - 1 = 0.4
+			// rfReturn = 100.04/100 - 1 = 0.0004
+			// beta = 0 -> alpha = 0.4 - (0.0004 + 0*(0 - 0.0004)) = 0.3996
+			v := a.PerformanceMetric(portfolio.Alpha).Value()
+			Expect(v).To(BeNumerically("~", 0.3996, 1e-10))
 		})
 	})
 
-	// Verify annualization factor selection.
-	Describe("annualization factor", func() {
-		It("uses daily factor (252) for daily data", func() {
-			// The tracking error for our daily identical-tracking portfolio is 0.
-			// We just verify the metric doesn't panic.
+	// ---------------------------------------------------------------
+	// Edge: 2-point equity curve (minimum data producing 1 return).
+	// With only 1 return, variance denominator n-1=0, so variance=0.
+	// Beta=0, Treynor=0, RSquared=0, TrackingError=0, IR=0.
+	// Alpha uses total returns: portfolioReturn=0.1, rfReturn=0.0005,
+	//   beta=0 -> alpha = 0.1 - 0.0005 = 0.0995.
+	// ---------------------------------------------------------------
+
+	Describe("2-point equity curve", func() {
+		var a *portfolio.Account
+
+		BeforeEach(func() {
+			a = benchAcct(
+				[]float64{1000, 1100},
+				[]float64{100, 109},
+				[]float64{100, 100.05},
+			)
+		})
+
+		It("Beta = 0 (single return, variance=0)", func() {
+			v := a.PerformanceMetric(portfolio.Beta).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("Alpha = portfolioReturn - rfReturn", func() {
+			// alpha = 0.1 - (0.0005 + 0*(0.09-0.0005)) = 0.0995
+			v := a.PerformanceMetric(portfolio.Alpha).Value()
+			Expect(v).To(BeNumerically("~", 0.0995, 1e-10))
+		})
+
+		It("TrackingError = 0 (single return, stddev=0)", func() {
 			v := a.PerformanceMetric(portfolio.TrackingError).Value()
-			Expect(math.IsNaN(v)).To(BeFalse())
-			Expect(math.IsInf(v, 0)).To(BeFalse())
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("InformationRatio = 0 (te=0 guard)", func() {
+			v := a.PerformanceMetric(portfolio.InformationRatio).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("Treynor = 0 (beta=0 guard)", func() {
+			v := a.PerformanceMetric(portfolio.Treynor).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("RSquared = 0 (single return, stddev=0)", func() {
+			v := a.PerformanceMetric(portfolio.RSquared).Value()
+			Expect(v).To(Equal(0.0))
+		})
+	})
+
+	// ---------------------------------------------------------------
+	// Edge: zero portfolio stddev (flat equity, varying benchmark).
+	// RSquared guard: sp==0 -> returns 0.
+	// Beta: cov=0 (flat returns have zero covariance) -> beta=0.
+	// ---------------------------------------------------------------
+
+	Describe("zero portfolio variance", func() {
+		var a *portfolio.Account
+
+		BeforeEach(func() {
+			a = benchAcct(
+				[]float64{1000, 1000, 1000, 1000, 1000},
+				[]float64{100, 102, 101, 104, 103},
+				[]float64{100, 100, 100, 100, 100},
+			)
+		})
+
+		It("RSquared = 0 (portfolio stddev=0 guard)", func() {
+			v := a.PerformanceMetric(portfolio.RSquared).Value()
+			Expect(v).To(Equal(0.0))
+		})
+
+		It("Beta = 0 (portfolio returns all zero, cov=0, but var(bR)>0)", func() {
+			// Portfolio returns = [0,0,0,0]. cov(0s, bR) = 0. var(bR) > 0.
+			// beta = 0/var(bR) = 0
+			v := a.PerformanceMetric(portfolio.Beta).Value()
+			Expect(v).To(Equal(0.0))
 		})
 	})
 })
