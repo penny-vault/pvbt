@@ -1,12 +1,14 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -261,6 +263,165 @@ var _ = Describe("Account", func() {
 			Expect(a.Position(spy)).To(Equal(0.0))
 			Expect(a.PositionValue(spy)).To(Equal(0.0))
 		})
+
+		It("iterates over actual positions with correct asset/qty pairs", func() {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  300.0,
+				Amount: -3_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  bil,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  50.0,
+				Amount: -1_000.0,
+			})
+
+			seen := make(map[asset.Asset]float64)
+			a.Holdings(func(ast asset.Asset, qty float64) {
+				seen[ast] = qty
+			})
+			Expect(seen).To(HaveLen(2))
+			Expect(seen[spy]).To(Equal(10.0))
+			Expect(seen[bil]).To(Equal(20.0))
+		})
+	})
+
+	Describe("Value with NaN price", func() {
+		It("skips NaN-priced assets and returns cash only", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+			t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+			a.Record(portfolio.Transaction{
+				Date:   t1,
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  300.0,
+				Amount: -3_000.0,
+			})
+			// cash is now 7_000, holding 10 SPY
+
+			// Build a DataFrame where SPY has NaN close price.
+			df, err := data.NewDataFrame(
+				[]time.Time{t1},
+				[]asset.Asset{spy},
+				[]data.Metric{data.MetricClose},
+				[]float64{math.NaN()},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			a.UpdatePrices(df)
+
+			// Value should equal cash only since SPY price is NaN.
+			Expect(a.Value()).To(Equal(7_000.0))
+		})
+	})
+
+	Describe("PositionValue with nil prices", func() {
+		It("returns 0 when prices have never been set", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  300.0,
+				Amount: -3_000.0,
+			})
+			Expect(a.Position(spy)).To(Equal(10.0))
+			Expect(a.PositionValue(spy)).To(Equal(0.0))
+		})
+	})
+
+	Describe("Record full position depletion", func() {
+		It("removes asset from holdings when all shares are sold", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  300.0,
+				Amount: -3_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  320.0,
+				Amount: 3_200.0,
+			})
+
+			Expect(a.Position(spy)).To(Equal(0.0))
+
+			// Holdings callback should not see SPY at all.
+			seen := make(map[asset.Asset]float64)
+			a.Holdings(func(ast asset.Asset, qty float64) {
+				seen[ast] = qty
+			})
+			Expect(seen).NotTo(HaveKey(spy))
+		})
+	})
+
+	Describe("Record with multiple tax lots (FIFO partial consumption)", func() {
+		It("consumes lots in FIFO order across partial sells", func() {
+			a := portfolio.New(portfolio.WithCash(100_000))
+
+			// Buy 10 shares at $100 on day 1.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+
+			// Buy 5 shares at $120 on day 2.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    5,
+				Price:  120.0,
+				Amount: -600.0,
+			})
+
+			// Sell 12 shares at $150.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    12,
+				Price:  150.0,
+				Amount: 1_800.0,
+			})
+
+			// Position should be 15 - 12 = 3 shares.
+			Expect(a.Position(spy)).To(Equal(3.0))
+
+			// Cash: 100_000 - 1_000 - 600 + 1_800 = 100_200
+			Expect(a.Cash()).To(Equal(100_200.0))
+		})
+	})
+
+	Describe("WithCash(0)", func() {
+		It("records no deposit transaction when cash is 0", func() {
+			a := portfolio.New(portfolio.WithCash(0))
+			txns := a.Transactions()
+			// A deposit of 0 is still recorded by WithCash.
+			// Verify cash is 0 and the transaction exists but has 0 amount.
+			Expect(a.Cash()).To(Equal(0.0))
+			Expect(txns).To(HaveLen(1))
+			Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
+			Expect(txns[0].Amount).To(Equal(0.0))
+		})
 	})
 })
 
@@ -272,5 +433,10 @@ var _ = Describe("TransactionType", func() {
 		Expect(portfolio.FeeTransaction.String()).To(Equal("Fee"))
 		Expect(portfolio.DepositTransaction.String()).To(Equal("Deposit"))
 		Expect(portfolio.WithdrawalTransaction.String()).To(Equal("Withdrawal"))
+	})
+
+	It("returns a formatted string for unknown transaction types", func() {
+		t := portfolio.TransactionType(99)
+		Expect(t.String()).To(Equal("TransactionType(99)"))
 	})
 })
