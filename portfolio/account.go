@@ -135,6 +135,9 @@ func (a *Account) RebalanceTo(allocs ...Allocation) {
 
 		// Diff each target asset against current holdings.
 		for ast, weight := range alloc.Members {
+			if a.prices == nil {
+				continue
+			}
 			price := a.prices.Value(ast, data.MetricClose)
 			if math.IsNaN(price) || price == 0 {
 				continue
@@ -476,3 +479,9 @@ func (a *Account) TaxLots() map[asset.Asset][]taxLot { return a.taxLots }
 func (a *Account) Prices() *data.DataFrame { return a.prices }
 
 func (a *Account) SetBroker(b broker.Broker) { a.broker = b }
+
+// SetBenchmark sets the benchmark asset after construction.
+func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
+
+// SetRiskFree sets the risk-free asset after construction.
+func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
