@@ -480,6 +480,9 @@ func (a *Account) Prices() *data.DataFrame { return a.prices }
 
 func (a *Account) SetBroker(b broker.Broker) { a.broker = b }
 
+// HasBroker returns true if a broker has been set on the account.
+func (a *Account) HasBroker() bool { return a.broker != nil }
+
 // SetBenchmark sets the benchmark asset after construction.
 func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
