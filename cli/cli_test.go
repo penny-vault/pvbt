@@ -34,9 +34,9 @@ type testStrategy struct {
 	Threshold float64 `pvbt:"threshold" desc:"signal threshold" default:"0.5"`
 }
 
-func (s *testStrategy) Name() string                                      { return "test" }
-func (s *testStrategy) Setup(e *engine.Engine, config engine.Config)       {}
-func (s *testStrategy) Compute(ctx context.Context, p portfolio.Portfolio) {}
+func (s *testStrategy) Name() string                                                       { return "test" }
+func (s *testStrategy) Setup(e *engine.Engine)                                              {}
+func (s *testStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {}
 
 var _ = Describe("runID", func() {
 	It("returns a full UUID and a 5-char prefix", func() {

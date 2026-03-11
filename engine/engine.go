@@ -17,6 +17,7 @@ package engine
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -29,20 +30,35 @@ import (
 // Engine orchestrates data access, computation scheduling, and portfolio
 // management for both backtesting and live trading.
 type Engine struct {
-	strategy  Strategy
-	providers []data.DataProvider
-	schedule  *tradecron.TradeCron
-	universes []universe.Universe
-	riskFree  asset.Asset
+	strategy      Strategy
+	providers     []data.DataProvider
+	assetProvider data.AssetProvider
+	schedule      *tradecron.TradeCron
+	riskFree      asset.Asset
+	benchmark     asset.Asset
+
+	// configuration (set via options, used during init)
+	cacheMaxBytes  int64
+	cacheChunkSize time.Duration
+
+	// populated during initialization
+	assets         map[string]asset.Asset
+	cache          *dataCache
+	currentDate    time.Time
+	start          time.Time
+	end            time.Time
+	metricProvider map[data.Metric]data.BatchProvider
 }
 
 // New creates a new engine for the given strategy.
 func New(strategy Strategy, opts ...Option) *Engine {
-	e := &Engine{strategy: strategy}
+	e := &Engine{
+		strategy: strategy,
+		assets:   make(map[string]asset.Asset),
+	}
 	for _, opt := range opts {
 		opt(e)
 	}
-
 	return e
 }
 
@@ -52,98 +68,54 @@ func (e *Engine) Schedule(s *tradecron.TradeCron) {
 	e.schedule = s
 }
 
-// Register adds a universe to the engine. Called by the strategy during
-// Setup so the engine can prefetch data and resolve membership.
-func (e *Engine) Register(u universe.Universe) {
-	e.universes = append(e.universes, u)
+// SetBenchmark sets the benchmark asset. Called by the strategy during Setup.
+func (e *Engine) SetBenchmark(a asset.Asset) {
+	e.benchmark = a
 }
 
-// Asset looks up an asset by ticker. Used during Setup to reference
-// assets that aren't part of a universe, such as a risk-free rate
-// instrument for risk adjustment.
-func (e *Engine) Asset(ticker string) asset.Asset {
-	// Resolve the ticker to an Asset. The engine may look this up
-	// from the data providers or from a known asset registry.
-	return asset.Asset{Ticker: ticker}
-}
-
-// RiskFreeAsset sets the risk-free asset for this strategy. When set,
-// the engine fetches the risk-free asset's data alongside the
-// universe's members, and signals that compute returns can
-// automatically adjust for the risk-free rate. Called by the strategy
-// during Setup.
+// RiskFreeAsset sets the risk-free asset. Called by the strategy during Setup.
 func (e *Engine) RiskFreeAsset(a asset.Asset) {
 	e.riskFree = a
 }
 
-// DataFrame returns a DataFrame for the given universe and metrics.
-// The engine checks its cache first and fetches from providers if
-// needed. Called by the strategy during Compute.
-func (e *Engine) DataFrame(u universe.Universe, metrics ...data.Metric) *data.DataFrame {
-	// Resolve universe membership for the current simulation date,
-	// build a DataRequest for the requested metrics, check the
-	// DataFrame cache, and fetch from the appropriate provider if
-	// not cached. Return the populated DataFrame.
-	return nil
+// Asset looks up an asset by ticker from the pre-loaded registry.
+// Panics if the ticker cannot be resolved.
+func (e *Engine) Asset(ticker string) asset.Asset {
+	if a, ok := e.assets[ticker]; ok {
+		return a
+	}
+
+	if e.assetProvider != nil {
+		a, err := e.assetProvider.LookupAsset(context.Background(), ticker)
+		if err == nil {
+			e.assets[ticker] = a
+			return a
+		}
+	}
+
+	panic(fmt.Sprintf("engine: unknown asset ticker %q", ticker))
 }
 
-// Run executes a backtest over the given time range. The account holds
-// the initial cash balance and optional broker configuration. Returns
-// the account with its full history after the backtest completes.
-func (e *Engine) Run(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
-	// 1. Parse the strategy TOML and build a Config.
-	// 2. Use reflection to populate the strategy struct's fields from
-	//    TOML arguments. Match fields by pvbt struct tag or by name.
-	//    Validate that each field's Go type is compatible with the
-	//    TOML argument's typecode. Panic on mismatch.
-	//    Supported mappings:
-	//      float64           <-> TypeNumber
-	//      string            <-> TypeString, TypeChoice
-	//      bool              <-> TypeBool
-	//      time.Duration     <-> TypeDuration
-	//      asset.Asset       <-> TypeStock
-	//      universe.Universe <-> TypeStockList (builds StaticUniverse)
-	//    For universe.Universe fields, automatically register the
-	//    universe with the engine after populating it.
-	// 3. Call Strategy.Setup(e, config).
-	// 4. Prefetch all registered universes for [start, end].
-	// 5. Enumerate schedule dates in [start, end] using tradecron.
-	// 6. For each scheduled date:
-	//    a. Attach a zerolog logger to the context with step metadata
-	//       (strategy name, date, step number).
-	//    b. Resolve universe membership at this date.
-	//    c. Populate/update cached DataFrames.
-	//    d. Record dividends for held assets via acct.Record().
-	//    e. Call Strategy.Compute(ctx, acct) (acct passed as Portfolio).
-	//    f. Process any resulting trades (commission, slippage).
-	//    g. Call acct.UpdatePrices() with current market prices.
-	// 7. Return the account with its full history.
-	return acct, nil
+// Universe creates a static universe wired to this engine for data fetching.
+func (e *Engine) Universe(assets ...asset.Asset) universe.Universe {
+	return universe.NewStaticWithSource(assets, e)
 }
 
-// RunLive starts continuous execution. The account holds the initial
-// cash balance and broker configuration. The engine waits for each
-// scheduled time, calls Compute, and sends the account on the returned
-// channel after each step. The channel is closed when the context is
-// cancelled.
-func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *portfolio.Account, error) {
-	// 1. Parse the strategy TOML and build a Config.
-	// 2. Populate strategy struct fields via reflection (same as Run).
-	//    Auto-register any universe.Universe fields.
-	// 3. Call Strategy.Setup(e, config).
-	// 4. Start a goroutine that:
-	//    a. Computes the next scheduled time from tradecron.
-	//    b. Sleeps until that time (or ctx is cancelled).
-	//    c. Attaches a zerolog logger to the context with step metadata.
-	//    d. Resolves universe membership at the current time.
-	//    e. Fetches fresh data from stream or batch providers.
-	//    f. Records dividends for held assets via acct.Record().
-	//    g. Calls Strategy.Compute(ctx, acct) (acct passed as Portfolio).
-	//    h. Calls acct.UpdatePrices() with current market prices.
-	//    i. Sends the account on the channel.
-	//    i. Repeats from (a).
-	// 5. Return the channel immediately.
-	return nil, nil
+// CurrentDate returns the current simulation date.
+func (e *Engine) CurrentDate() time.Time {
+	return e.currentDate
+}
+
+// Fetch implements universe.DataSource.
+func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
+	// Stub -- will be implemented in Task 8.
+	return nil, fmt.Errorf("engine: Fetch not yet implemented")
+}
+
+// FetchAt implements universe.DataSource.
+func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
+	// Stub -- will be implemented in Task 8.
+	return nil, fmt.Errorf("engine: FetchAt not yet implemented")
 }
 
 // Close releases all resources held by the engine, including closing
@@ -157,3 +129,28 @@ func (e *Engine) Close() error {
 	}
 	return firstErr
 }
+
+// Backtest executes a backtest over the given time range.
+// Stub -- will be implemented in Task 10.
+func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
+	return acct, fmt.Errorf("engine: Backtest not yet implemented")
+}
+
+// Run is a deprecated alias for Backtest. It maintains compilation of existing
+// callers (e.g., cli/backtest.go) until they are updated in Task 12.
+// Deprecated: Use Backtest instead.
+func (e *Engine) Run(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
+	return e.Backtest(ctx, acct, start, end)
+}
+
+// RunLive starts continuous execution.
+// Stub -- will be implemented in Task 11.
+func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *portfolio.Account, error) {
+	return nil, fmt.Errorf("engine: RunLive not yet implemented")
+}
+
+// Compile-time check that Engine implements universe.DataSource.
+var _ universe.DataSource = (*Engine)(nil)
+
+// dataCache is a placeholder for the sliding-window cache (implemented in Task 7).
+type dataCache struct{}
