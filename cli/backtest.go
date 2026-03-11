@@ -116,11 +116,14 @@ func runBacktest(strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
-	eng := engine.New(strategy, engine.WithDataProvider(provider))
+	eng := engine.New(strategy,
+		engine.WithDataProvider(provider),
+		engine.WithAssetProvider(provider),
+	)
 	defer eng.Close()
 
 	acct := portfolio.New(portfolio.WithCash(cash))
-	acct, err = eng.Run(ctx, acct, start, end)
+	acct, err = eng.Backtest(ctx, acct, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
