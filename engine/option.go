@@ -15,7 +15,11 @@
 
 package engine
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"time"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 // Option configures the engine.
 type Option func(*Engine)
@@ -24,5 +28,28 @@ type Option func(*Engine)
 func WithDataProvider(providers ...data.DataProvider) Option {
 	return func(e *Engine) {
 		e.providers = append(e.providers, providers...)
+	}
+}
+
+// WithAssetProvider sets the asset provider for ticker resolution.
+func WithAssetProvider(p data.AssetProvider) Option {
+	return func(e *Engine) {
+		e.assetProvider = p
+	}
+}
+
+// WithCacheMaxBytes sets the maximum memory for the data cache.
+// Default is 512MB.
+func WithCacheMaxBytes(n int64) Option {
+	return func(e *Engine) {
+		e.cacheMaxBytes = n
+	}
+}
+
+// WithChunkSize sets the time duration of each data cache chunk.
+// Default is 1 year.
+func WithChunkSize(d time.Duration) Option {
+	return func(e *Engine) {
+		e.cacheChunkSize = d
 	}
 }
