@@ -253,12 +253,5 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
-// Run is a deprecated alias for Backtest. It maintains compilation of existing
-// callers (e.g., cli/backtest.go) until they are updated in Task 12.
-// Deprecated: Use Backtest instead.
-func (e *Engine) Run(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
-	return e.Backtest(ctx, acct, start, end)
-}
-
 // Compile-time check that Engine implements universe.DataSource.
 var _ universe.DataSource = (*Engine)(nil)
