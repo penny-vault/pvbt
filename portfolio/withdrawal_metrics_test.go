@@ -196,6 +196,153 @@ var _ = Describe("Withdrawal Metrics", func() {
 		})
 	})
 
+	Describe("equity curve just above minimum length", func() {
+		// Build an account with exactly 12 equity points. This passes the
+		// len(equity) < 12 gate in each Compute method, but
+		// monthlyReturnsFromEquity requires 22+ points to produce any
+		// monthly return, so the second guard (len(monthly) == 0) triggers.
+		buildMinLengthAccount := func() *portfolio.Account {
+			a := portfolio.New(portfolio.WithCash(10_000))
+			start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+
+			for i := range 12 {
+				d := start.AddDate(0, 0, i)
+				if i > 0 {
+					growth := 10_000.0 * 0.001
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.DepositTransaction,
+						Amount: growth,
+					})
+				}
+				df := buildDF(d, []asset.Asset{spy}, []float64{450 + float64(i)}, []float64{448 + float64(i)})
+				a.UpdatePrices(df)
+			}
+
+			return a
+		}
+
+		It("SafeWithdrawalRate returns 0 for exactly 12 equity points", func() {
+			a := buildMinLengthAccount()
+			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+
+		It("PerpetualWithdrawalRate returns 0 for exactly 12 equity points", func() {
+			a := buildMinLengthAccount()
+			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+
+		It("DynamicWithdrawalRate returns 0 for exactly 12 equity points", func() {
+			a := buildMinLengthAccount()
+			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+	})
+
+	Describe("steeply declining curve", func() {
+		// Build an account with 300 daily data points losing ~0.5% per day.
+		// The monthly returns are deeply negative, so no withdrawal rate
+		// should be sustainable for either SWR or PWR.
+		buildSteepDeclineAccount := func() *portfolio.Account {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+			price := 100_000.0
+
+			for i := range 300 {
+				d := start.AddDate(0, 0, i)
+				if i > 0 {
+					loss := price * 0.005
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.WithdrawalTransaction,
+						Amount: -loss,
+					})
+					price -= loss
+				}
+				df := buildDF(d, []asset.Asset{spy}, []float64{450 - float64(i)*0.5}, []float64{448 - float64(i)*0.5})
+				a.UpdatePrices(df)
+			}
+
+			return a
+		}
+
+		It("SafeWithdrawalRate is 0 for a steeply declining curve", func() {
+			a := buildSteepDeclineAccount()
+			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+
+		It("PerpetualWithdrawalRate is 0 for a steeply declining curve", func() {
+			a := buildSteepDeclineAccount()
+			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+		})
+
+		It("DynamicWithdrawalRate hits ceiling for a steeply declining curve", func() {
+			// Dynamic withdrawal adapts downward as the portfolio drops,
+			// so the portfolio never fully depletes even with negative
+			// returns. This allows the maximum 20% rate to pass.
+			a := buildSteepDeclineAccount()
+			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(
+				BeNumerically("~", 0.200, 0.001))
+		})
+	})
+
+	Describe("very high growth curve", func() {
+		// Build an account with 300 daily data points at 0.2% daily growth
+		// (10x the moderate account). This should produce higher withdrawal
+		// rates than the moderate-growth account.
+		buildHighGrowthAccount := func() *portfolio.Account {
+			a := portfolio.New(portfolio.WithCash(100_000))
+			price := 100_000.0
+			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
+
+			for i := range 300 {
+				d := start.AddDate(0, 0, i)
+				if i > 0 {
+					growth := price * 0.002
+					a.Record(portfolio.Transaction{
+						Date:   d,
+						Type:   portfolio.DepositTransaction,
+						Amount: growth,
+					})
+					price += growth
+				}
+				df := buildDF(d, []asset.Asset{spy}, []float64{450 + float64(i)*2}, []float64{448 + float64(i)*2})
+				a.UpdatePrices(df)
+			}
+
+			return a
+		}
+
+		It("SafeWithdrawalRate exceeds the moderate-growth rate", func() {
+			high := buildHighGrowthAccount()
+			moderate := buildModerateAccount()
+
+			highSWR := portfolio.SafeWithdrawalRate.Compute(high, nil)
+			modSWR := portfolio.SafeWithdrawalRate.Compute(moderate, nil)
+
+			Expect(highSWR).To(BeNumerically(">", modSWR))
+		})
+
+		It("PerpetualWithdrawalRate exceeds the moderate-growth rate", func() {
+			high := buildHighGrowthAccount()
+			moderate := buildModerateAccount()
+
+			highPWR := portfolio.PerpetualWithdrawalRate.Compute(high, nil)
+			modPWR := portfolio.PerpetualWithdrawalRate.Compute(moderate, nil)
+
+			Expect(highPWR).To(BeNumerically(">", modPWR))
+		})
+
+		It("ordering invariant holds: PWR <= SWR <= DWR", func() {
+			a := buildHighGrowthAccount()
+			pwr := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			swr := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			dwr := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+
+			Expect(pwr).To(BeNumerically("<=", swr))
+			Expect(swr).To(BeNumerically("<=", dwr))
+		})
+	})
+
 	Describe("ordering invariant", func() {
 		It("PerpetualWithdrawalRate <= SafeWithdrawalRate <= DynamicWithdrawalRate", func() {
 			a := buildModerateAccount()

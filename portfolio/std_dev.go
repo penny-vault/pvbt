@@ -21,6 +21,10 @@ type stdDev struct{}
 
 func (stdDev) Name() string { return "StdDev" }
 
+func (stdDev) Description() string {
+	return "Annualized standard deviation of portfolio returns. Measures total volatility of the portfolio. Higher values mean more volatile returns. Used as the risk measure in the Sharpe ratio."
+}
+
 func (stdDev) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)

@@ -85,3 +85,70 @@ func monthSeq(start time.Time, n int) []time.Time {
 	}
 	return out
 }
+
+// buildAccountFromEquity creates an Account whose equity curve matches the
+// given values exactly using deposit/withdrawal transactions.
+func buildAccountFromEquity(equityValues []float64) *portfolio.Account {
+	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+	a := portfolio.New(portfolio.WithCash(equityValues[0]))
+	start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+	dates := daySeq(start, len(equityValues))
+
+	for i, v := range equityValues {
+		if i > 0 {
+			diff := v - equityValues[i-1]
+			if diff > 0 {
+				a.Record(portfolio.Transaction{
+					Date:   dates[i],
+					Type:   portfolio.DepositTransaction,
+					Amount: diff,
+				})
+			} else if diff < 0 {
+				a.Record(portfolio.Transaction{
+					Date:   dates[i],
+					Type:   portfolio.WithdrawalTransaction,
+					Amount: diff,
+				})
+			}
+		}
+		df := buildDF(dates[i], []asset.Asset{spy}, []float64{450}, []float64{448})
+		a.UpdatePrices(df)
+	}
+
+	return a
+}
+
+// buildAccountWithRF creates an Account with both equity curve and
+// risk-free (BIL) prices, needed for metrics that use excess returns.
+func buildAccountWithRF(spyPrices, bilPrices []float64) *portfolio.Account {
+	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+	bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+	n := len(spyPrices)
+	times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
+
+	acct := portfolio.New(
+		portfolio.WithCash(5*spyPrices[0]),
+		portfolio.WithBenchmark(spy),
+		portfolio.WithRiskFree(bil),
+	)
+
+	acct.Record(portfolio.Transaction{
+		Date:   times[0],
+		Asset:  spy,
+		Type:   portfolio.BuyTransaction,
+		Qty:    5,
+		Price:  spyPrices[0],
+		Amount: -5 * spyPrices[0],
+	})
+
+	for i := range n {
+		df := buildDF(times[i],
+			[]asset.Asset{spy, bil},
+			[]float64{spyPrices[i], bilPrices[i]},
+			[]float64{spyPrices[i], bilPrices[i]},
+		)
+		acct.UpdatePrices(df)
+	}
+
+	return acct
+}

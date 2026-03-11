@@ -19,6 +19,10 @@ type excessKurtosis struct{}
 
 func (excessKurtosis) Name() string { return "ExcessKurtosis" }
 
+func (excessKurtosis) Description() string {
+	return "Measures the heaviness of return distribution tails relative to a normal distribution. Positive values indicate fat tails (more extreme returns than expected). Negative values indicate thin tails."
+}
+
 func (excessKurtosis) Compute(a *Account, window *Period) float64 {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)

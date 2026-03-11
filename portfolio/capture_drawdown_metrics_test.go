@@ -66,6 +66,36 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		return a
 	}
 
+	// ---------------------------------------------------------------
+	// ComputeSeries tests: capture and drawdown metrics return nil.
+	// ---------------------------------------------------------------
+
+	Describe("ComputeSeries returns nil", func() {
+		It("UpsideCaptureRatio returns nil from ComputeSeries", func() {
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+			Expect(portfolio.UpsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("DownsideCaptureRatio returns nil from ComputeSeries", func() {
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+			Expect(portfolio.DownsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("AvgDrawdown returns nil from ComputeSeries", func() {
+			a := cashAccount(
+				[]float64{10000, 12000, 10800, 12960},
+				[]float64{100, 110, 99, 108.9},
+			)
+			Expect(portfolio.AvgDrawdown.ComputeSeries(a, nil)).To(BeNil())
+		})
+	})
+
 	Describe("UpsideCaptureRatio", func() {
 		It("computes the ratio of geometric means in up-benchmark periods", func() {
 			// Equity:    [10000, 12000, 10800, 12960]
@@ -78,7 +108,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//
 			// geoP = ((1.2)(1.2))^(1/2) - 1 = 1.44^0.5 - 1 = 1.2 - 1 = 0.2
 			// geoB = ((1.1)(1.1))^(1/2) - 1 = 1.21^0.5 - 1 = 1.1 - 1 = 0.1
-			// ratio = (0.2 / 0.1) * 100 = 200.0
+			// ratio = 0.2 / 0.1 = 2.0
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
@@ -88,8 +118,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 
 			// geoP = math.Pow(1.2*1.2, 0.5) - 1 = 0.2
 			// geoB = math.Pow(1.1*1.1, 0.5) - 1 = 0.1
-			// exact floating-point: 200.0
-			Expect(v).To(BeNumerically("~", 200.0, 1e-9))
+			// exact floating-point: 2.0
+			Expect(v).To(BeNumerically("~", 2.0, 1e-9))
 		})
 
 		It("returns 0 when benchmark never rises", func() {
@@ -124,14 +154,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			// Up periods: i=0 (pRet=0.05, bRet=0.1), i=2 (pRet=0.05, bRet=0.1)
 			// geoP = ((1.05)(1.05))^(1/2) - 1 = 1.05 - 1 = 0.05
 			// geoB = ((1.1)(1.1))^(1/2) - 1 = 1.1 - 1 = 0.1
-			// ratio = (0.05 / 0.1) * 100 = 50.0
+			// ratio = 0.05 / 0.1 = 0.5
 			a := cashAccount(
 				[]float64{10000, 10500, 10000, 10500},
 				[]float64{100, 110, 100, 110},
 			)
 
 			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
-			Expect(v).To(BeNumerically("~", 50.0, 1e-9))
+			Expect(v).To(BeNumerically("~", 0.5, 1e-9))
 		})
 	})
 
@@ -147,7 +177,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//
 			// geoP = (1 + (-0.1))^(1/1) - 1 = 0.9 - 1 = -0.1
 			// geoB = (1 + (-0.1))^(1/1) - 1 = 0.9 - 1 = -0.1
-			// ratio = (-0.1 / -0.1) * 100 = 100.0
+			// ratio = -0.1 / -0.1 = 1.0
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
@@ -157,7 +187,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 
 			// (110 -> 99): bRet = (99-110)/110 = -11/110 = -0.1 exactly
 			// pRet = (10800-12000)/12000 = -1200/12000 = -0.1 exactly
-			Expect(v).To(BeNumerically("~", 100.0, 1e-9))
+			Expect(v).To(BeNumerically("~", 1.0, 1e-9))
 		})
 
 		It("portfolio loses less than benchmark in down markets", func() {
@@ -170,14 +200,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			// Down periods: i=1 (pRet=-0.025, bRet=-0.1)
 			// geoP = (0.975)^1 - 1 = -0.025
 			// geoB = (0.9)^1 - 1 = -0.1
-			// ratio = (-0.025 / -0.1) * 100 = 25.0
+			// ratio = -0.025 / -0.1 = 0.25
 			a := cashAccount(
 				[]float64{10000, 11000, 10725, 11797.5},
 				[]float64{100, 110, 99, 108.9},
 			)
 
 			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
-			Expect(v).To(BeNumerically("~", 25.0, 1e-9))
+			Expect(v).To(BeNumerically("~", 0.25, 1e-9))
 		})
 
 		It("returns 0 when benchmark never falls", func() {
@@ -213,7 +243,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	})
 
 	Describe("AvgDrawdown", func() {
-		It("computes mean of trough values across drawdown episodes", func() {
+		It("computes mean of all drawdown values", func() {
 			// Equity: [10000, 12000, 10800, 12960]
 			//
 			// drawdownSeries:
@@ -222,18 +252,17 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//   i=2: peak=12000, dd=(10800-12000)/12000 = -1200/12000 = -0.1
 			//   i=3: peak=12960, dd=(12960-12960)/12960 = 0
 			//
-			// Episodes: one episode at i=2, trough = -0.1
-			// mean([-0.1]) = -0.1
+			// mean([0, 0, -0.1, 0]) = -0.025
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.025, 1e-9))
 		})
 
-		It("averages multiple drawdown episodes", func() {
+		It("averages all drawdown values across multiple episodes", func() {
 			// Equity: [10000, 12000, 10800, 13000, 11700]
 			//
 			// drawdownSeries:
@@ -243,18 +272,17 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//   i=3: peak=13000, dd=0
 			//   i=4: peak=13000, dd=(11700-13000)/13000 = -1300/13000 = -0.1
 			//
-			// Episodes: episode1 at i=2 trough=-0.1, episode2 at i=4 trough=-0.1
-			// mean([-0.1, -0.1]) = -0.1
+			// mean([0, 0, -0.1, 0, -0.1]) = -0.04
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 13000, 11700},
 				[]float64{100, 105, 100, 105, 100},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.04, 1e-9))
 		})
 
-		It("averages episodes with different trough depths", func() {
+		It("averages all drawdown values with different depths", func() {
 			// Equity: [10000, 20000, 18000, 20000, 16000]
 			//
 			// drawdownSeries:
@@ -264,15 +292,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//   i=3: peak=20000, dd=0
 			//   i=4: peak=20000, dd=(16000-20000)/20000 = -0.2
 			//
-			// Episodes: episode1 trough=-0.1, episode2 trough=-0.2
-			// mean([-0.1, -0.2]) = -0.15
+			// mean([0, 0, -0.1, 0, -0.2]) = -0.06
 			a := cashAccount(
 				[]float64{10000, 20000, 18000, 20000, 16000},
 				[]float64{100, 110, 100, 110, 100},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.15, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.06, 1e-9))
 		})
 
 		It("returns 0 for monotonically rising equity (no drawdowns)", func() {
@@ -297,7 +324,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			Expect(v).To(Equal(0.0))
 		})
 
-		It("handles a multi-period drawdown episode taking the trough", func() {
+		It("handles a multi-period drawdown episode", func() {
 			// Equity: [10000, 20000, 18000, 16000, 20000]
 			//
 			// drawdownSeries:
@@ -307,15 +334,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//   i=3: peak=20000, dd=(16000-20000)/20000 = -0.2
 			//   i=4: peak=20000, dd=0
 			//
-			// One episode spanning i=2..3, trough = -0.2
-			// mean([-0.2]) = -0.2
+			// mean([0, 0, -0.1, -0.2, 0]) = -0.06
 			a := cashAccount(
 				[]float64{10000, 20000, 18000, 16000, 20000},
 				[]float64{100, 110, 105, 100, 110},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.2, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.06, 1e-9))
 		})
 
 		It("handles flat benchmark correctly", func() {
@@ -323,14 +349,15 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			// Equity: [10000, 12000, 10800, 12960]
 			// Benchmark: [100, 100, 100, 100]
 			//
-			// Same drawdown calculation as before: one episode, trough=-0.1
+			// drawdownSeries: [0, 0, -0.1, 0]
+			// mean([0, 0, -0.1, 0]) = -0.025
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 100, 100, 100},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.1, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.025, 1e-9))
 		})
 	})
 
@@ -353,14 +380,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			// Up periods: i=0,2,3 (pRet=[0.2,0.2,0.2], bRet=[0.1,0.1,0.1])
 			// geoP = (1.2^3)^(1/3) - 1 = 1.2 - 1 = 0.2
 			// geoB = (1.1^3)^(1/3) - 1 = 1.1 - 1 = 0.1
-			// ratio = (0.2/0.1)*100 = 200.0
+			// ratio = 0.2/0.1 = 2.0
 			a := cashAccount(
 				[]float64{10000, 12000, 10800, 12960, 15552},
 				[]float64{100, 110, 99, 108.9, 119.79},
 			)
 
 			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
-			Expect(v).To(BeNumerically("~", 200.0, 1e-6))
+			Expect(v).To(BeNumerically("~", 2.0, 1e-6))
 		})
 	})
 
@@ -423,15 +450,14 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			//   i=2: peak=10000, dd=(8000-10000)/10000 = -0.2
 			//   i=3: peak=10000, dd=(7000-10000)/10000 = -0.3
 			//
-			// One episode spanning i=1..3, trough = -0.3
-			// mean([-0.3]) = -0.3
+			// mean([0, -0.1, -0.2, -0.3]) = -0.15
 			a := cashAccount(
 				[]float64{10000, 9000, 8000, 7000},
 				[]float64{100, 95, 90, 85},
 			)
 
 			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
-			Expect(v).To(BeNumerically("~", -0.3, 1e-9))
+			Expect(v).To(BeNumerically("~", -0.15, 1e-9))
 		})
 	})
 
@@ -449,10 +475,10 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 			// Up periods: i=0 (p=0.1, b=0.05), i=2 (p=0.2, b=0.1)
 			// geoP = ((1.1)(1.2))^(1/2) - 1 = (1.32)^0.5 - 1
 			// geoB = ((1.05)(1.1))^(1/2) - 1 = (1.155)^0.5 - 1
-			// ratio = geoP/geoB * 100
+			// ratio = geoP/geoB
 			geoP := math.Pow(1.1*1.2, 0.5) - 1
 			geoB := math.Pow(1.05*1.1, 0.5) - 1
-			expected := (geoP / geoB) * 100
+			expected := geoP / geoB
 
 			a := cashAccount(
 				[]float64{10000, 11000, 10450, 12540},

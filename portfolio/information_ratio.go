@@ -21,6 +21,10 @@ type informationRatio struct{}
 
 func (informationRatio) Name() string { return "InformationRatio" }
 
+func (informationRatio) Description() string {
+	return "Active return divided by tracking error. Measures how consistently the portfolio outperforms its benchmark per unit of active risk taken. Higher values indicate more consistent outperformance."
+}
+
 func (informationRatio) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)

@@ -62,25 +62,72 @@ var _ = Describe("Specialized Metrics", func() {
 	//   dd:     [0,   0,  -0.04545,  0,  -0.06087,  0,  0]
 	// -----------------------------------------------------------------------
 
-	Describe("UlcerIndex", func() {
-		It("computes correctly for a curve with drawdowns", func() {
-			// UlcerIndex = sqrt(mean(dd^2))
-			// sumSq = 0.04545^2 + 0.06087^2 = 0.002066 + 0.003705 = 0.005771
-			// mean  = 0.005771 / 7 = 0.000824
-			// UI    = sqrt(0.000824) = 0.028713
+	// ---------------------------------------------------------------
+	// ComputeSeries tests: all specialized metrics return nil.
+	// ---------------------------------------------------------------
+
+	Describe("ComputeSeries returns nil", func() {
+		It("UlcerIndex returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
-			Expect(result).To(BeNumerically("~", 0.028713410685187, 1e-9))
+			Expect(portfolio.UlcerIndex.ComputeSeries(a, nil)).To(BeNil())
 		})
 
-		It("returns zero when equity rises monotonically (no drawdowns)", func() {
-			a := buildAccountFromEquity([]float64{100, 110, 120, 130, 140})
+		It("ValueAtRisk returns nil from ComputeSeries", func() {
+			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
+			Expect(portfolio.ValueAtRisk.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("KRatio returns nil from ComputeSeries", func() {
+			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
+			Expect(portfolio.KRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("KellerRatio returns nil from ComputeSeries", func() {
+			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
+			Expect(portfolio.KellerRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+	})
+
+	Describe("UlcerIndex", func() {
+		It("computes correctly for a 14-point curve with drawdowns", func() {
+			// 14-point equity curve with two drawdown episodes.
+			// Equity: [100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125]
+			//
+			// Rolling peak and percentage drawdown within the 14-period window:
+			//   i=0:  peak=100, dd=0
+			//   i=1:  peak=105, dd=0
+			//   i=2:  peak=110, dd=0
+			//   i=3:  peak=110, dd=(108-110)/110*100 = -1.81818
+			//   i=4:  peak=112, dd=0
+			//   i=5:  peak=115, dd=0
+			//   i=6:  peak=115, dd=(113-115)/115*100 = -1.73913
+			//   i=7:  peak=118, dd=0
+			//   i=8:  peak=120, dd=0
+			//   i=9:  peak=120, dd=(116-120)/120*100 = -3.33333
+			//   i=10: peak=120, dd=(119-120)/120*100 = -0.83333
+			//   i=11: peak=122, dd=0
+			//   i=12: peak=122, dd=(121-122)/122*100 = -0.81967
+			//   i=13: peak=125, dd=0
+			//
+			// sumSq = 1.81818^2 + 1.73913^2 + 3.33333^2 + 0.83333^2 + 0.81967^2
+			//       = 3.30579 + 3.02456 + 11.11111 + 0.69444 + 0.67186
+			//       = 18.80776
+			// UI = sqrt(18.80776 / 14) = sqrt(1.34341) = 1.15907
+			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
+			a := buildAccountFromEquity(equity)
+			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(result).To(BeNumerically("~", 1.15907, 1e-3))
+		})
+
+		It("returns zero when equity rises monotonically over 14 periods", func() {
+			equity := []float64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113}
+			a := buildAccountFromEquity(equity)
 			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
 			Expect(result).To(BeNumerically("~", 0, 1e-12))
 		})
 
-		It("returns zero for a single data point", func() {
-			a := buildAccountFromEquity([]float64{100})
+		It("returns zero when fewer than 14 data points", func() {
+			a := buildAccountFromEquity([]float64{100, 90, 80})
 			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
 			Expect(result).To(BeNumerically("==", 0))
 		})
@@ -120,10 +167,10 @@ var _ = Describe("Specialized Metrics", func() {
 			// logVAMI = ln(1000 * cumProd(1+r_i)) for i in [0..5]
 			// OLS regression of logVAMI on x=[0,1,2,3,4,5]
 			// slope = 0.027913, stderr = 0.010989
-			// KRatio = slope / (n * stderr) = 0.027913 / (6 * 0.010989) = 0.42333
+			// KRatio = slope / stderr = 0.027913 / 0.010989 = 2.53999 (2003 Kestner revision)
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
 			result := a.PerformanceMetric(portfolio.KRatio).Value()
-			Expect(result).To(BeNumerically("~", 0.423332400862063, 1e-9))
+			Expect(result).To(BeNumerically("~", 2.5399944051723757, 1e-9))
 		})
 
 		It("returns zero with fewer than 3 returns (3 equity points)", func() {
@@ -215,12 +262,15 @@ var _ = Describe("Specialized Metrics", func() {
 
 	Describe("UlcerIndex edge cases", func() {
 		It("returns correct value for flat-then-drop curve", func() {
-			// equity: [100, 100, 100, 90]
-			// dd = [0, 0, 0, -0.1]
-			// sumSq = 0.01, mean = 0.0025, UI = sqrt(0.0025) = 0.05
-			a := buildAccountFromEquity([]float64{100, 100, 100, 90})
+			// 14-point curve: 13 flat values then a 10% drop.
+			// equity: [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 90]
+			// All dd=0 except last: (90-100)/100*100 = -10.0
+			// sumSq = 10^2 = 100
+			// UI = sqrt(100 / 14) = sqrt(7.14286) = 2.67261
+			equity := []float64{100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 90}
+			a := buildAccountFromEquity(equity)
 			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
-			Expect(result).To(BeNumerically("~", 0.05, 1e-9))
+			Expect(result).To(BeNumerically("~", 2.67261, 1e-3))
 		})
 	})
 
@@ -232,6 +282,159 @@ var _ = Describe("Specialized Metrics", func() {
 			a := buildAccountFromEquity([]float64{100, 90})
 			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
 			Expect(result).To(BeNumerically("~", -0.1, 1e-9))
+		})
+	})
+
+	// ---------------------------------------------------------------
+	// High-stress / extreme scenario tests
+	// ---------------------------------------------------------------
+
+	Describe("high-stress scenarios", func() {
+		Describe("UlcerIndex", func() {
+			It("produces a high value for a deep sustained drawdown", func() {
+				// 14-point curve that drops steeply from 100 to 30.
+				// equity: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30]
+				// peak stays at 100 throughout (never recovered).
+				// dd (pct): [0, -5, -10, -15, -20, -25, -30, -35, -40, -45, -50, -55, -60, -70]
+				// sumSq = 5^2+10^2+15^2+20^2+25^2+30^2+35^2+40^2+45^2+50^2+55^2+60^2+70^2
+				//       = 25+100+225+400+625+900+1225+1600+2025+2500+3025+3600+4900
+				//       = 21150
+				// UI = sqrt(21150 / 14) = sqrt(1510.714) = 38.8678
+				equity := []float64{100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30}
+				a := buildAccountFromEquity(equity)
+				result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+				Expect(result).To(BeNumerically("~", 38.8678, 1e-2))
+				// Much larger than the mild-drawdown UI of ~1.16
+				Expect(result).To(BeNumerically(">", 30.0))
+			})
+
+			It("captures lingering drawdown during crash-and-recovery", func() {
+				// 14-point curve: crash to 30 then partial recovery to 80.
+				// equity: [100, 80, 60, 40, 30, 35, 40, 50, 55, 60, 65, 70, 75, 80]
+				// peak stays at 100 (never recovered).
+				// dd (pct): [0, -20, -40, -60, -70, -65, -60, -50, -45, -40, -35, -30, -25, -20]
+				// sumSq = 20^2+40^2+60^2+70^2+65^2+60^2+50^2+45^2+40^2+35^2+30^2+25^2+20^2
+				//       = 400+1600+3600+4900+4225+3600+2500+2025+1600+1225+900+625+400
+				//       = 27600
+				// UI = sqrt(27600 / 14) = sqrt(1971.429) = 44.4010
+				equity := []float64{100, 80, 60, 40, 30, 35, 40, 50, 55, 60, 65, 70, 75, 80}
+				a := buildAccountFromEquity(equity)
+				result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+				Expect(result).To(BeNumerically("~", 44.4010, 1e-2))
+				// Even though equity recovers to 80, the drawdown lingers because
+				// the peak of 100 is never restored.
+				Expect(result).To(BeNumerically(">", 40.0))
+			})
+		})
+
+		Describe("ValueAtRisk", func() {
+			It("picks up a single catastrophic drop in a heavy-tail distribution", func() {
+				// equity: [100, 102, 104, 106, 108, 40, 110, 112, 114, 116, 118]
+				// 10 returns:
+				//   r0=0.02, r1=0.01961, r2=0.01923, r3=0.01887,
+				//   r4=(40-108)/108=-0.62963,  (catastrophic drop)
+				//   r5=(110-40)/40=1.75,        (recovery)
+				//   r6=0.01818, r7=0.01786, r8=0.01754, r9=0.01724
+				// sorted: [-0.62963, 0.01724, 0.01754, ..., 1.75]
+				// idx = floor(0.05 * 10) = 0 -> sorted[0] = -0.62963
+				a := buildAccountFromEquity([]float64{
+					100, 102, 104, 106, 108, 40, 110, 112, 114, 116, 118,
+				})
+				result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+				Expect(result).To(BeNumerically("~", -0.629629629629630, 1e-9))
+			})
+
+			It("returns the worst return when all returns are negative", func() {
+				// equity: [100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50]
+				// 10 returns, all negative. Each is (next-prev)/prev:
+				//   r0=-5/100=-0.05,  r1=-5/95=-0.05263,  r2=-5/90=-0.05556,
+				//   r3=-5/85=-0.05882, r4=-5/80=-0.06250, r5=-5/75=-0.06667,
+				//   r6=-5/70=-0.07143, r7=-5/65=-0.07692, r8=-5/60=-0.08333,
+				//   r9=-5/55=-0.09091
+				// sorted ascending: [-0.09091, -0.08333, ..., -0.05]
+				// idx = floor(0.05 * 10) = 0 -> sorted[0] = -5/55 = -0.09091
+				a := buildAccountFromEquity([]float64{
+					100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50,
+				})
+				result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+				Expect(result).To(BeNumerically("~", -5.0/55.0, 1e-9))
+			})
+		})
+
+		Describe("KRatio", func() {
+			It("is positive but small for a highly volatile upward trend", func() {
+				// equity: [100, 130, 95, 140, 90, 145, 100, 150]
+				// 7 returns with large swings but net upward:
+				//   r0=+0.30, r1=-0.26923, r2=+0.47368, r3=-0.35714,
+				//   r4=+0.61111, r5=-0.31034, r6=+0.50
+				// logVAMI oscillates heavily around the trend line, producing
+				// a large standard error that reduces the K-Ratio.
+				// OLS on logVAMI: slope=0.04918, stderr=0.08882
+				// KRatio = slope / stderr = 0.04918 / 0.08882 = 0.45738 (2003 Kestner revision)
+				a := buildAccountFromEquity([]float64{100, 130, 95, 140, 90, 145, 100, 150})
+				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				Expect(result).To(BeNumerically("~", 0.45737915846086635, 1e-9))
+				// Positive but much smaller than the steady-growth case
+				Expect(result).To(BeNumerically(">", 0))
+				Expect(result).To(BeNumerically("<", 1.0))
+			})
+
+			It("is very large for steady consistent growth", func() {
+				// equity: [100, 105, 110, 115, 120, 125, 130]
+				// 6 returns that decrease slightly (5/100, 5/105, 5/110, ...),
+				// producing near-linear logVAMI with tiny residuals.
+				// slope = 0.042684, stderr = 0.000666
+				// KRatio = 0.042684 / 0.000666 = 64.113 (2003 Kestner revision)
+				a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120, 125, 130})
+				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				Expect(result).To(BeNumerically("~", 64.11253704211674, 1e-6))
+				// Orders of magnitude larger than the volatile case
+				Expect(result).To(BeNumerically(">", 10))
+			})
+
+			It("is strongly negative for a severe crash", func() {
+				// equity: [100, 80, 55, 35, 20, 10]
+				// 5 returns, all negative and accelerating:
+				//   r0=-0.20, r1=-0.3125, r2=-0.36364, r3=-0.42857, r4=-0.50
+				// logVAMI has a steep negative slope.
+				// slope = -0.14936, stderr = 0.01053
+				// KRatio = -0.14936 / 0.01053 = -14.176 (2003 Kestner revision)
+				a := buildAccountFromEquity([]float64{100, 80, 55, 35, 20, 10})
+				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				Expect(result).To(BeNumerically("~", -14.175542222575912, 1e-6))
+				Expect(result).To(BeNumerically("<", -2))
+			})
+		})
+
+		Describe("KellerRatio", func() {
+			It("produces a meaningfully positive value for high return with moderate drawdown", func() {
+				// equity: [100, 160, 115, 200]
+				// totalReturn = (200/100) - 1 = 1.0 (100% return)
+				// peaks:  100, 160, 160, 200
+				// dd:    [0, 0, (115-160)/160, 0] = [0, 0, -0.28125, 0]
+				// maxDD = 0.28125 (well under 50%)
+				// K = 1.0 * (1 - 0.28125 / (1 - 0.28125))
+				//   = 1.0 * (1 - 0.28125 / 0.71875)
+				//   = 1.0 * (1 - 0.391304348)
+				//   = 0.608695652173913
+				a := buildAccountFromEquity([]float64{100, 160, 115, 200})
+				result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+				Expect(result).To(BeNumerically("~", 0.608695652173913, 1e-9))
+				// A strong positive value reflecting good risk-adjusted return
+				Expect(result).To(BeNumerically(">", 0.5))
+			})
+
+			It("returns zero when drawdown exceeds 50% despite high total return", func() {
+				// equity: [100, 200, 99.8, 300]
+				// totalReturn = (300/100) - 1 = 2.0 (200% return)
+				// peaks:  100, 200, 200, 300
+				// dd:    [0, 0, (99.8-200)/200, 0] = [0, 0, -0.501, 0]
+				// maxDD = 0.501 (just over 50% threshold)
+				// Since maxDD > 0.5, Keller returns 0 regardless of total return.
+				a := buildAccountFromEquity([]float64{100, 200, 99.8, 300})
+				result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+				Expect(result).To(BeNumerically("==", 0))
+			})
 		})
 	})
 })

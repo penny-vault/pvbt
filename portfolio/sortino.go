@@ -21,31 +21,38 @@ type sortino struct{}
 
 func (sortino) Name() string { return "Sortino" }
 
+func (sortino) Description() string {
+	return "Like Sharpe but penalizes only downside volatility. Uses downside deviation instead of standard deviation, making it more appropriate for strategies with asymmetric return distributions. Higher is better."
+}
+
 func (sortino) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
 	er := excessReturns(r, rf)
 
-	// Downside deviation: stddev of only negative excess returns, annualized.
-	var neg []float64
-	for _, v := range er {
-		if v < 0 {
-			neg = append(neg, v)
-		}
-	}
-
-	if len(neg) == 0 {
+	// Downside deviation: sqrt(mean(min(r_i, 0)^2)) using all N observations.
+	// This differs from stddev of only negative returns -- it includes zeros
+	// for positive returns in the denominator, matching the standard definition.
+	n := len(er)
+	if n == 0 {
 		return 0
 	}
 
-	sd := stddev(neg)
-	if sd == 0 {
+	sumSq := 0.0
+	for _, v := range er {
+		if v < 0 {
+			sumSq += v * v
+		}
+	}
+
+	dd := math.Sqrt(sumSq / float64(n))
+	if dd == 0 {
 		return 0
 	}
 
 	af := annualizationFactor(a.EquityTimes())
-	return mean(er) / sd * math.Sqrt(af)
+	return mean(er) / dd * math.Sqrt(af)
 }
 
 func (sortino) ComputeSeries(a *Account, window *Period) []float64 { return nil }

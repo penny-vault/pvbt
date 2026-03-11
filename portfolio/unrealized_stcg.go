@@ -1,0 +1,63 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package portfolio
+
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
+type unrealizedSTCG struct{}
+
+func (unrealizedSTCG) Name() string { return "UnrealizedSTCG" }
+
+func (unrealizedSTCG) Description() string {
+	return "Unrealized short-term capital gains from open positions held 365 days or fewer. Computed by comparing current market prices to cost basis of existing tax lots. If held past 365 days, these would convert to long-term gains."
+}
+
+func (unrealizedSTCG) Compute(a *Account, _ *Period) float64 {
+	prices := a.Prices()
+	times := a.EquityTimes()
+
+	if prices == nil || len(times) == 0 {
+		return 0
+	}
+
+	now := times[len(times)-1]
+	var total float64
+
+	for ast, lots := range a.TaxLots() {
+		currentPrice := prices.Value(ast, data.MetricClose)
+		if math.IsNaN(currentPrice) {
+			continue
+		}
+		for _, lot := range lots {
+			holdingDays := now.Sub(lot.Date).Hours() / 24
+			if holdingDays <= 365 {
+				total += (currentPrice - lot.Price) * lot.Qty
+			}
+		}
+	}
+
+	return total
+}
+
+func (unrealizedSTCG) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+
+// UnrealizedSTCGMetric is unrealized short-term capital gains from positions
+// held 365 days or fewer.
+var UnrealizedSTCGMetric PerformanceMetric = unrealizedSTCG{}

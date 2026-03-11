@@ -196,6 +196,56 @@ var _ = Describe("Order", func() {
 		Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
 	})
 
+	Context("edge cases", func() {
+		It("submits an order with zero quantity", func() {
+			acct.Order(testAsset, portfolio.Buy, 0)
+
+			// The order is forwarded to the broker with qty=0.
+			Expect(mb.submitted).To(HaveLen(1))
+			Expect(mb.submitted[0].Qty).To(Equal(0.0))
+
+			// A fill with qty=0 produces a transaction with zero amount,
+			// so cash and position are unchanged.
+			Expect(acct.Cash()).To(Equal(10_000.0))
+			Expect(acct.Position(testAsset)).To(Equal(0.0))
+		})
+
+		It("submits an order with negative quantity", func() {
+			acct.Order(testAsset, portfolio.Buy, -5)
+
+			// The broker receives the negative qty as-is.
+			Expect(mb.submitted).To(HaveLen(1))
+			Expect(mb.submitted[0].Qty).To(Equal(-5.0))
+
+			// The mock returns a fill with qty = order.Qty = -5.
+			// amount = -(price * qty) = -(100 * -5) = +500, so cash increases.
+			// holdings += -5, giving a negative position.
+			Expect(acct.Cash()).To(Equal(10_500.0))
+			Expect(acct.Position(testAsset)).To(Equal(-5.0))
+		})
+
+		It("sells more shares than currently held", func() {
+			fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+			mb.fills = [][]broker.Fill{
+				{{Price: 100.0, Qty: 5, FilledAt: fillTime}},
+				{{Price: 110.0, Qty: 10, FilledAt: fillTime}},
+			}
+
+			// Buy 5 shares, then sell 10 (more than held).
+			acct.Order(testAsset, portfolio.Buy, 5)
+			acct.Order(testAsset, portfolio.Sell, 10)
+
+			Expect(mb.submitted).To(HaveLen(2))
+
+			// After buy: cash = 10000 - 500 = 9500, position = 5
+			// After sell: cash = 9500 + 1100 = 10600, position = 5 - 10 = -5
+			// The account does not prevent overselling; it results in a
+			// negative (short) position.
+			Expect(acct.Cash()).To(Equal(10_600.0))
+			Expect(acct.Position(testAsset)).To(Equal(-5.0))
+		})
+	})
+
 	DescribeTable("time-in-force modifiers",
 		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
 			acct.Order(testAsset, portfolio.Buy, 1, mod)

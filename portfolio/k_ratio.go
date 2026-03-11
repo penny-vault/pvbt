@@ -21,6 +21,10 @@ type kRatio struct{}
 
 func (kRatio) Name() string { return "KRatio" }
 
+func (kRatio) Description() string {
+	return "Measures the consistency of equity curve growth by fitting a linear regression to the log equity curve and dividing the slope by the standard error. Higher values indicate smoother, more consistent growth. Negative values indicate a declining equity curve."
+}
+
 func (kRatio) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
@@ -70,12 +74,12 @@ func (kRatio) Compute(a *Account, window *Period) float64 {
 		return 0
 	}
 
-	return slope / (nf * stderr)
+	return slope / stderr
 }
 
 func (kRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
 
 // KRatio measures the consistency of returns over time: the slope of
-// the log-VAMI regression line divided by N times the standard error
-// of the slope. Higher values indicate more consistent growth.
+// the log-VAMI regression line divided by the standard error of the
+// slope (2003 Kestner revision). Higher values indicate more consistent growth.
 var KRatio PerformanceMetric = kRatio{}

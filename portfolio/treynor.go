@@ -19,6 +19,10 @@ type treynor struct{}
 
 func (treynor) Name() string { return "Treynor" }
 
+func (treynor) Description() string {
+	return "Excess return per unit of systematic risk (beta). Similar to Sharpe but uses beta instead of standard deviation. Appropriate for well-diversified portfolios where unsystematic risk has been eliminated."
+}
+
 func (treynor) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	rf := windowSlice(a.RiskFreePrices(), a.EquityTimes(), window)

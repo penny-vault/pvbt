@@ -19,6 +19,10 @@ type skewness struct{}
 
 func (skewness) Name() string { return "Skewness" }
 
+func (skewness) Description() string {
+	return "Measures the asymmetry of the return distribution. Positive skew means more extreme positive returns. Negative skew means more extreme negative returns (the common case for equities). Zero indicates a symmetric distribution."
+}
+
 func (skewness) Compute(a *Account, window *Period) float64 {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)

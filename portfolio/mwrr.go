@@ -24,6 +24,10 @@ type mwrr struct{}
 
 func (mwrr) Name() string { return "MWRR" }
 
+func (mwrr) Description() string {
+	return "Money-weighted rate of return (internal rate of return). Measures the actual return experienced by the investor, accounting for the timing and size of cash flows. Sensitive to when deposits and withdrawals occur."
+}
+
 // Compute returns the money-weighted (XIRR) annual rate of return.
 // Cash flows: deposits are negative (investor pays in), withdrawals are
 // positive (investor receives). The final portfolio value is added as a

@@ -213,6 +213,46 @@ var _ = Describe("Benchmark Metrics", func() {
 	})
 
 	// ---------------------------------------------------------------
+	// ComputeSeries tests: all benchmark metrics return nil.
+	// ---------------------------------------------------------------
+
+	Describe("ComputeSeries returns nil", func() {
+		var a *portfolio.Account
+
+		BeforeEach(func() {
+			a = benchAcct(
+				[]float64{1000, 1050, 1020, 1080, 1060, 1100},
+				[]float64{100, 104, 101, 107, 105, 109},
+				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
+			)
+		})
+
+		It("Beta returns nil from ComputeSeries", func() {
+			Expect(portfolio.Beta.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("Alpha returns nil from ComputeSeries", func() {
+			Expect(portfolio.Alpha.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("TrackingError returns nil from ComputeSeries", func() {
+			Expect(portfolio.TrackingError.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("InformationRatio returns nil from ComputeSeries", func() {
+			Expect(portfolio.InformationRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("Treynor returns nil from ComputeSeries", func() {
+			Expect(portfolio.Treynor.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("RSquared returns nil from ComputeSeries", func() {
+			Expect(portfolio.RSquared.ComputeSeries(a, nil)).To(BeNil())
+		})
+	})
+
+	// ---------------------------------------------------------------
 	// Edge: zero benchmark variance (flat benchmark at 100).
 	// Portfolio grows via dividends: equity = [1000, 1100, 1200, 1300, 1400].
 	// Benchmark returns all zero -> variance=0 -> Beta=0.

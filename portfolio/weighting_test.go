@@ -241,4 +241,81 @@ var _ = Describe("WeightedBySignal", func() {
 		Expect(plan[1].Members[spy]).To(Equal(0.25))
 		Expect(plan[1].Members[aapl]).To(Equal(0.75))
 	})
+
+	It("falls back to equal weight when all signal values are NaN at a timestep", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{math.NaN(), math.NaN()},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+
+		// All NaN => sum is 0 => falls back to equal weight.
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("correctly weights a single timestep", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{200, 800},
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Date).To(Equal(t1))
+
+		// SPY = 200/1000 = 0.2, AAPL = 800/1000 = 0.8
+		Expect(plan[0].Members[spy]).To(Equal(0.2))
+		Expect(plan[0].Members[aapl]).To(Equal(0.8))
+
+		sum := 0.0
+		for _, w := range plan[0].Members {
+			sum += w
+		}
+		Expect(sum).To(BeNumerically("~", 1.0, 1e-9))
+	})
+})
+
+var _ = Describe("EqualWeight edge cases", func() {
+	It("returns empty plan for a DataFrame with zero timestamps", func() {
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		// Zero timestamps, one asset, one metric -- data length is 0.
+		df, err := data.NewDataFrame(
+			nil,
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			nil,
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.EqualWeight(df)
+		Expect(plan).To(HaveLen(0))
+	})
+
+	It("returns allocations with empty members for a DataFrame with zero assets", func() {
+		t1 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+
+		// One timestamp, zero assets, one metric -- data length is 0.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			nil,
+			[]data.Metric{data.MetricClose},
+			nil,
+		)
+		Expect(err).ToNot(HaveOccurred())
+
+		plan := portfolio.EqualWeight(df)
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Date).To(Equal(t1))
+		Expect(plan[0].Members).To(HaveLen(0))
+	})
 })

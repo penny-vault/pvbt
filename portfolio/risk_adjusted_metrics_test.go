@@ -205,11 +205,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 			)
 
-			// mean(er) ~ 0.02440
-			// stddev(neg_er) ~ 0.005951  (2 negative excess returns)
-			// Sortino = mean(er)/stddev(neg_er) * sqrt(252) ~ 58.496
+			// mean(er) ~ 0.02193
+			// downside_deviation = sqrt(sum(min(er_i,0)^2) / N) ~ 0.03965
+			// Sortino = mean(er)/dd * sqrt(252) ~ 8.778
 			val := acct.PerformanceMetric(portfolio.Sortino).Value()
-			Expect(val).To(BeNumerically("~", 58.496, 0.1))
+			Expect(val).To(BeNumerically("~", 8.778, 0.01))
 		})
 	})
 

@@ -21,6 +21,10 @@ type sharpe struct{}
 
 func (sharpe) Name() string { return "Sharpe" }
 
+func (sharpe) Description() string {
+	return "Risk-adjusted return relative to a risk-free rate. Computed as the mean excess return divided by its standard deviation, annualized. Higher values indicate better risk-adjusted performance. A Sharpe above 1.0 is generally considered good, above 2.0 is very good."
+}
+
 func (sharpe) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)

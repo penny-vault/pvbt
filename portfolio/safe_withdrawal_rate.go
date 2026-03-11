@@ -139,6 +139,10 @@ type safeWithdrawalRate struct{}
 
 func (safeWithdrawalRate) Name() string { return "SafeWithdrawalRate" }
 
+func (safeWithdrawalRate) Description() string {
+	return "The maximum percentage of the initial portfolio that can be withdrawn annually without depleting the portfolio over the observed period. Based on the classic \"4% rule\" research methodology."
+}
+
 func (safeWithdrawalRate) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {

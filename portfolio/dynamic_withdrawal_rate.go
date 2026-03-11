@@ -19,6 +19,10 @@ type dynamicWithdrawalRate struct{}
 
 func (dynamicWithdrawalRate) Name() string { return "DynamicWithdrawalRate" }
 
+func (dynamicWithdrawalRate) Description() string {
+	return "A withdrawal rate that adjusts based on current portfolio value rather than initial value. Increases withdrawals when the portfolio grows and decreases them during drawdowns, providing a balance between income and capital preservation."
+}
+
 func (dynamicWithdrawalRate) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {

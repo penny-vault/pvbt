@@ -67,6 +67,32 @@ var _ = Describe("Distribution Metrics", func() {
 	// Positive returns: r0, r2, r4, r5  (4 of 6)
 	// Negative returns: r1, r3           (2 of 6)
 
+	// ---------------------------------------------------------------
+	// ComputeSeries tests: all distribution metrics return nil.
+	// ---------------------------------------------------------------
+
+	Describe("ComputeSeries returns nil", func() {
+		It("ExcessKurtosis returns nil from ComputeSeries", func() {
+			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
+			Expect(portfolio.ExcessKurtosis.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("Skewness returns nil from ComputeSeries", func() {
+			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
+			Expect(portfolio.Skewness.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("NPositivePeriods returns nil from ComputeSeries", func() {
+			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
+			Expect(portfolio.NPositivePeriods.ComputeSeries(a, nil)).To(BeNil())
+		})
+
+		It("GainLossRatio returns nil from ComputeSeries", func() {
+			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
+			Expect(portfolio.GainLossRatio.ComputeSeries(a, nil)).To(BeNil())
+		})
+	})
+
 	Describe("ExcessKurtosis", func() {
 		// Kurtosis formula: sum((r_i - mean)^4) / n / sd^4 - 3
 		// where sd = sample stddev (N-1 denominator).

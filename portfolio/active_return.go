@@ -19,6 +19,10 @@ type activeReturn struct{}
 
 func (activeReturn) Name() string { return "ActiveReturn" }
 
+func (activeReturn) Description() string {
+	return "The difference between portfolio return and benchmark return over the full period. Positive values indicate the portfolio outperformed the benchmark. Unlike Alpha, this is a raw return difference without adjusting for risk."
+}
+
 // Compute returns the portfolio total return minus the benchmark total
 // return. Total return is (end/start) - 1.
 func (activeReturn) Compute(a *Account, window *Period) float64 {
