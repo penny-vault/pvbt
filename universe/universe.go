@@ -21,9 +21,12 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// Universe provides time-varying membership of tradeable instruments.
+// Universe provides time-varying membership of tradeable instruments
+// and data access for strategies.
 type Universe interface {
 	// Assets returns the members of the universe at time t.
 	Assets(t time.Time) []asset.Asset
@@ -31,4 +34,11 @@ type Universe interface {
 	// Prefetch tells the universe what time range the engine will
 	// operate over so it can load membership data in bulk.
 	Prefetch(ctx context.Context, start, end time.Time) error
+
+	// Window returns a DataFrame covering [currentDate - lookback, currentDate]
+	// for the requested metrics, using the universe's current membership.
+	Window(lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
+
+	// At returns a single-row DataFrame at time t for the requested metrics.
+	At(t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
 }
