@@ -151,6 +151,3 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 
 // Compile-time check that Engine implements universe.DataSource.
 var _ universe.DataSource = (*Engine)(nil)
-
-// dataCache is a placeholder for the sliding-window cache (implemented in Task 7).
-type dataCache struct{}
