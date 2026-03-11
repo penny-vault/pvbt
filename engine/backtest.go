@@ -97,7 +97,7 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 	for i, date := range dates {
 		// 10. Check context cancellation.
 		if err := ctx.Err(); err != nil {
-			return acct, nil
+			return acct, err
 		}
 
 		// 11. Set current date.
@@ -129,9 +129,10 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 
 		var housekeepDF *data.DataFrame
 		if len(housekeepAssets) > 0 {
-			housekeepDF, err = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
-			if err != nil {
-				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, err)
+			var fetchErr error
+			housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
+			if fetchErr != nil {
+				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
 			}
 		}
 
@@ -179,13 +180,12 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 			return v, true
 		}, date)
 
-		// Pre-compute step: update prices so the account has valid prices
-		// (needed by RebalanceTo/Value) before Compute is called. If housekeepDF
-		// covers the assets, use it directly. When there are no held assets (first
-		// step, all-cash portfolio), do a targeted FetchAt so a.prices is non-nil
-		// and broker prices are available for target-share calculation.
+		// Pre-compute step: set prices so the account has valid prices
+		// (needed by RebalanceTo/Value) before Compute is called.
+		// Use SetPriceData (not UpdatePrices) to avoid appending to the
+		// equity curve -- that happens once after Compute in step 18.
 		if housekeepDF != nil {
-			acct.UpdatePrices(housekeepDF.Between(date, date))
+			acct.SetPriceData(housekeepDF.Between(date, date))
 		}
 
 		// 16. Call strategy.Compute.
