@@ -31,8 +31,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Compile-time interface check.
+// Compile-time interface checks.
 var _ BatchProvider = (*PVDataProvider)(nil)
+var _ AssetProvider = (*PVDataProvider)(nil)
 
 // pvdataConfig is the subset of ~/.pvdata.toml we care about.
 type pvdataConfig struct {
@@ -144,6 +145,26 @@ func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.
 	}
 
 	return a, nil
+}
+
+// Assets returns all known assets from the database.
+func (p *PVDataProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
+	rows, err := p.pool.Query(ctx,
+		`SELECT composite_figi, ticker FROM assets ORDER BY ticker`)
+	if err != nil {
+		return nil, fmt.Errorf("query assets: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []asset.Asset
+	for rows.Next() {
+		var a asset.Asset
+		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
+			return nil, fmt.Errorf("scan asset: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
 }
 
 // Fetch retrieves data for the requested assets, metrics, and time range.
