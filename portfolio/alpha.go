@@ -19,6 +19,10 @@ type alpha struct{}
 
 func (alpha) Name() string { return "Alpha" }
 
+func (alpha) Description() string {
+	return "Annualized excess return above what the CAPM predicts given the portfolio's beta. Positive alpha indicates the portfolio outperformed its risk-adjusted expectation. The \"skill\" component of returns."
+}
+
 func (alpha) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)

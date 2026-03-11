@@ -19,6 +19,10 @@ type rSquared struct{}
 
 func (rSquared) Name() string { return "RSquared" }
 
+func (rSquared) Description() string {
+	return "Proportion of portfolio return variance explained by benchmark returns. Ranges from 0 to 1. Values near 1.0 mean the portfolio closely tracks the benchmark. Low R-squared makes beta and alpha less meaningful."
+}
+
 func (rSquared) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)

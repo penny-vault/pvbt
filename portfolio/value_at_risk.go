@@ -24,6 +24,10 @@ type valueAtRisk struct{}
 
 func (valueAtRisk) Name() string { return "ValueAtRisk" }
 
+func (valueAtRisk) Description() string {
+	return "The 5th percentile of historical returns, representing the worst-case loss expected 95% of the time. A value of -0.02 means there is a 5% chance of losing more than 2% in a single period. More negative values indicate higher risk."
+}
+
 func (valueAtRisk) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)

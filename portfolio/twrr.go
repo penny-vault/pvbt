@@ -19,6 +19,10 @@ type twrr struct{}
 
 func (twrr) Name() string { return "TWRR" }
 
+func (twrr) Description() string {
+	return "Time-weighted rate of return. Measures portfolio performance independent of the timing and size of cash flows. Computed by geometrically linking sub-period returns. The standard measure for comparing investment manager performance."
+}
+
 // Compute returns the total time-weighted return over the window (or full
 // history when window is nil). It compounds sub-period returns derived
 // from the equity curve: product(1 + r_i) - 1.

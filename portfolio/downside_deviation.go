@@ -21,6 +21,10 @@ type downsideDeviation struct{}
 
 func (downsideDeviation) Name() string { return "DownsideDeviation" }
 
+func (downsideDeviation) Description() string {
+	return "Standard deviation of negative returns only. Unlike standard deviation which treats upside and downside volatility equally, this focuses solely on harmful volatility. Used in the Sortino ratio denominator."
+}
+
 func (downsideDeviation) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)

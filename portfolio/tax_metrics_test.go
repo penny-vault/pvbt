@@ -142,7 +142,67 @@ var _ = Describe("TaxMetrics", func() {
 	})
 
 	Describe("dividends", func() {
-		It("sums qualified dividends", func() {
+		It("classifies dividends as qualified when held > 60 days", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy on Jan 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// Dividend on Apr 1 (held 91 days > 60) => qualified
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.DividendTransaction,
+				Amount: 200.0,
+			})
+
+			// Dividend on Jul 1 (held 182 days > 60) => qualified
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.DividendTransaction,
+				Amount: 150.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.QualifiedDividends).To(Equal(350.0))
+			Expect(tm.NonQualifiedIncome).To(Equal(0.0))
+		})
+
+		It("classifies dividends as non-qualified when held <= 60 days", func() {
+			a := portfolio.New(portfolio.WithCash(50_000))
+
+			// Buy on Jan 1
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// Dividend on Feb 1 (held 31 days <= 60) => non-qualified
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.DividendTransaction,
+				Amount: 200.0,
+			})
+
+			tm := a.TaxMetrics()
+			Expect(tm.QualifiedDividends).To(Equal(0.0))
+			Expect(tm.NonQualifiedIncome).To(Equal(200.0))
+		})
+
+		It("classifies dividends as non-qualified when no position exists", func() {
 			a := portfolio.New(portfolio.WithCash(50_000))
 
 			a.Record(portfolio.Transaction{
@@ -152,15 +212,9 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 200.0,
 			})
 
-			a.Record(portfolio.Transaction{
-				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
-				Asset:  spy,
-				Type:   portfolio.DividendTransaction,
-				Amount: 150.0,
-			})
-
 			tm := a.TaxMetrics()
-			Expect(tm.QualifiedDividends).To(Equal(350.0))
+			Expect(tm.QualifiedDividends).To(Equal(0.0))
+			Expect(tm.NonQualifiedIncome).To(Equal(200.0))
 		})
 	})
 
@@ -243,6 +297,14 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_000.0,
 			})
 
+			// Dividend of $200 on Apr 1 (held > 60 days => qualified)
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 4, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.DividendTransaction,
+				Amount: 200.0,
+			})
+
 			// Sell remaining 50 at $130 after > 1 year (LTCG = 1500)
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
@@ -253,17 +315,9 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_500.0,
 			})
 
-			// Dividend of $200
-			a.Record(portfolio.Transaction{
-				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
-				Asset:  spy,
-				Type:   portfolio.DividendTransaction,
-				Amount: 200.0,
-			})
-
 			// Update prices to establish final equity (no holdings left)
 			df2 := buildDF(
-				time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				[]asset.Asset{spy}, []float64{130.0}, []float64{130.0},
 			)
 			a.UpdatePrices(df2)
@@ -631,6 +685,14 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: -10_000.0,
 			})
 
+			// Dividend of $200 on Apr 1, 2023 (held > 60 days => qualified)
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 4, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.DividendTransaction,
+				Amount: 200.0,
+			})
+
 			// Sell 50 at $120 on Jun 1, 2023 (STCG = 1000)
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
@@ -649,14 +711,6 @@ var _ = Describe("TaxMetrics", func() {
 				Qty:    50,
 				Price:  130.0,
 				Amount: 6_500.0,
-			})
-
-			// Dividend of $200 on Mar 1, 2024
-			a.Record(portfolio.Transaction{
-				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
-				Asset:  spy,
-				Type:   portfolio.DividendTransaction,
-				Amount: 200.0,
 			})
 
 			tm := a.TaxMetrics()

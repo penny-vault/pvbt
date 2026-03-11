@@ -334,211 +334,28 @@ func (a *Account) RiskMetrics() RiskMetrics {
 }
 
 func (a *Account) TaxMetrics() TaxMetrics {
-	var tm TaxMetrics
-
-	// Shadow FIFO lot tracker to replay buy/sell history for realized gains.
-	shadowLots := make(map[asset.Asset][]taxLot)
-
-	for _, tx := range a.transactions {
-		switch tx.Type {
-		case BuyTransaction:
-			shadowLots[tx.Asset] = append(shadowLots[tx.Asset], taxLot{
-				Date:  tx.Date,
-				Qty:   tx.Qty,
-				Price: tx.Price,
-			})
-
-		case SellTransaction:
-			remaining := tx.Qty
-			lots := shadowLots[tx.Asset]
-			i := 0
-			for i < len(lots) && remaining > 0 {
-				matched := lots[i].Qty
-				if matched > remaining {
-					matched = remaining
-				}
-
-				gain := (tx.Price - lots[i].Price) * matched
-				holdingDays := tx.Date.Sub(lots[i].Date).Hours() / 24
-				if holdingDays > 365 {
-					tm.LTCG += gain
-				} else {
-					tm.STCG += gain
-				}
-
-				if lots[i].Qty <= remaining {
-					remaining -= lots[i].Qty
-					i++
-				} else {
-					lots[i].Qty -= remaining
-					remaining = 0
-				}
-			}
-			shadowLots[tx.Asset] = lots[i:]
-			if len(shadowLots[tx.Asset]) == 0 {
-				delete(shadowLots, tx.Asset)
-			}
-
-		case DividendTransaction:
-			tm.QualifiedDividends += tx.Amount
-		}
+	return TaxMetrics{
+		LTCG:               a.PerformanceMetric(LTCGMetric).Value(),
+		STCG:               a.PerformanceMetric(STCGMetric).Value(),
+		UnrealizedLTCG:     a.PerformanceMetric(UnrealizedLTCGMetric).Value(),
+		UnrealizedSTCG:     a.PerformanceMetric(UnrealizedSTCGMetric).Value(),
+		QualifiedDividends: a.PerformanceMetric(QualifiedDividendsMetric).Value(),
+		NonQualifiedIncome: a.PerformanceMetric(NonQualifiedIncomeMetric).Value(),
+		TaxCostRatio:       a.PerformanceMetric(TaxCostRatioMetric).Value(),
 	}
-
-	// Unrealized gains: compare current tax lots to current prices.
-	if a.prices != nil && len(a.equityTimes) > 0 {
-		now := a.equityTimes[len(a.equityTimes)-1]
-		for ast, lots := range a.taxLots {
-			currentPrice := a.prices.Value(ast, data.MetricClose)
-			if math.IsNaN(currentPrice) {
-				continue
-			}
-			for _, lot := range lots {
-				gain := (currentPrice - lot.Price) * lot.Qty
-				holdingDays := now.Sub(lot.Date).Hours() / 24
-				if holdingDays > 365 {
-					tm.UnrealizedLTCG += gain
-				} else {
-					tm.UnrealizedSTCG += gain
-				}
-			}
-		}
-	}
-
-	// TaxCostRatio: estimated taxes / total portfolio gain.
-	if len(a.equityCurve) >= 2 {
-		initialEquity := a.equityCurve[0]
-		finalEquity := a.equityCurve[len(a.equityCurve)-1]
-		totalGain := finalEquity - initialEquity
-		if totalGain > 0 {
-			estimatedTax := 0.0
-			if tm.STCG > 0 {
-				estimatedTax += 0.25 * tm.STCG
-			}
-			if tm.LTCG > 0 {
-				estimatedTax += 0.15 * tm.LTCG
-			}
-			estimatedTax += 0.15 * tm.QualifiedDividends
-			tm.TaxCostRatio = estimatedTax / totalGain
-		}
-	}
-
-	return tm
 }
 
 func (a *Account) TradeMetrics() TradeMetrics {
-	// roundTrip represents a completed buy-sell pair.
-	type roundTrip struct {
-		pnl      float64
-		holdDays float64
+	return TradeMetrics{
+		WinRate:              a.PerformanceMetric(WinRate).Value(),
+		AverageWin:           a.PerformanceMetric(AverageWin).Value(),
+		AverageLoss:          a.PerformanceMetric(AverageLoss).Value(),
+		ProfitFactor:         a.PerformanceMetric(ProfitFactor).Value(),
+		AverageHoldingPeriod: a.PerformanceMetric(AverageHoldingPeriod).Value(),
+		Turnover:             a.PerformanceMetric(Turnover).Value(),
+		NPositivePeriods:     a.PerformanceMetric(NPositivePeriods).Value(),
+		GainLossRatio:        a.PerformanceMetric(TradeGainLossRatio).Value(),
 	}
-
-	// Build round-trip trades using FIFO matching per asset.
-	// Each buy creates a lot; each sell consumes lots in order.
-	type openLot struct {
-		date  time.Time
-		qty   float64
-		price float64
-	}
-
-	openLots := make(map[asset.Asset][]openLot)
-	var trips []roundTrip
-	var totalSellValue float64
-
-	for _, tx := range a.transactions {
-		switch tx.Type {
-		case BuyTransaction:
-			openLots[tx.Asset] = append(openLots[tx.Asset], openLot{
-				date:  tx.Date,
-				qty:   tx.Qty,
-				price: tx.Price,
-			})
-		case SellTransaction:
-			totalSellValue += tx.Price * tx.Qty
-			remaining := tx.Qty
-			lots := openLots[tx.Asset]
-			for len(lots) > 0 && remaining > 0 {
-				matched := lots[0].qty
-				if matched > remaining {
-					matched = remaining
-				}
-				pnl := (tx.Price - lots[0].price) * matched
-				days := tx.Date.Sub(lots[0].date).Hours() / 24.0
-				trips = append(trips, roundTrip{pnl: pnl, holdDays: days})
-
-				lots[0].qty -= matched
-				remaining -= matched
-				if lots[0].qty == 0 {
-					lots = lots[1:]
-				}
-			}
-			openLots[tx.Asset] = lots
-		}
-	}
-
-	var tm TradeMetrics
-
-	// Round-trip metrics
-	if len(trips) > 0 {
-		var wins, losses int
-		var sumWin, sumLoss, sumHold float64
-
-		for _, rt := range trips {
-			sumHold += rt.holdDays
-			if rt.pnl > 0 {
-				wins++
-				sumWin += rt.pnl
-			} else {
-				losses++
-				sumLoss += rt.pnl // negative
-			}
-		}
-
-		tm.WinRate = float64(wins) / float64(len(trips))
-		tm.AverageHoldingPeriod = sumHold / float64(len(trips))
-
-		if wins > 0 {
-			tm.AverageWin = sumWin / float64(wins)
-		}
-		if losses > 0 {
-			tm.AverageLoss = sumLoss / float64(losses)
-		}
-		if sumLoss != 0 {
-			tm.ProfitFactor = sumWin / math.Abs(sumLoss)
-		}
-		if tm.AverageLoss != 0 {
-			tm.GainLossRatio = tm.AverageWin / math.Abs(tm.AverageLoss)
-		}
-	}
-
-	// NPositivePeriods: fraction of equity curve periods with positive returns.
-	ec := a.equityCurve
-	if len(ec) > 1 {
-		var positive int
-		for i := 1; i < len(ec); i++ {
-			if ec[i] > ec[i-1] {
-				positive++
-			}
-		}
-		tm.NPositivePeriods = float64(positive) / float64(len(ec)-1)
-	}
-
-	// Turnover: annualized total sell value / mean portfolio value.
-	if len(ec) > 1 && totalSellValue > 0 {
-		var sum float64
-		for _, v := range ec {
-			sum += v
-		}
-		meanValue := sum / float64(len(ec))
-		if meanValue > 0 {
-			et := a.equityTimes
-			periodDays := et[len(et)-1].Sub(et[0]).Hours() / 24.0
-			if periodDays > 0 {
-				tm.Turnover = (totalSellValue / meanValue) * (365.25 / periodDays)
-			}
-		}
-	}
-
-	return tm
 }
 
 func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
@@ -554,6 +371,10 @@ func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
 // Record appends a transaction to the log and updates cash, holdings,
 // and tax lots accordingly.
 func (a *Account) Record(tx Transaction) {
+	if tx.Type == DividendTransaction {
+		tx.Qualified = a.isDividendQualified(tx.Asset, tx.Date)
+	}
+
 	a.transactions = append(a.transactions, tx)
 	a.cash += tx.Amount
 
@@ -586,6 +407,20 @@ func (a *Account) Record(tx Transaction) {
 		}
 	}
 }
+// isDividendQualified checks whether the earliest FIFO tax lot for the
+// asset was held for more than 60 days before the dividend date. This
+// is a simplified version of the IRS 121-day window rule, appropriate
+// for backtesting purposes.
+func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
+	lots := a.taxLots[ast]
+	if len(lots) == 0 {
+		return false
+	}
+
+	holdingDays := divDate.Sub(lots[0].Date).Hours() / 24
+	return holdingDays > 60
+}
+
 // UpdatePrices stores the latest price DataFrame, computes the total
 // portfolio value, and appends it to the equity curve. It also tracks
 // benchmark and risk-free price series when those assets are configured.
@@ -632,4 +467,12 @@ func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
 
 // RiskFreePrices returns the risk-free prices slice.
 func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
-func (a *Account) SetBroker(b broker.Broker)      { a.broker = b }
+
+// TaxLots returns the current tax lot positions keyed by asset.
+func (a *Account) TaxLots() map[asset.Asset][]taxLot { return a.taxLots }
+
+// Prices returns the most recent price DataFrame, or nil if no prices
+// have been recorded yet.
+func (a *Account) Prices() *data.DataFrame { return a.prices }
+
+func (a *Account) SetBroker(b broker.Broker) { a.broker = b }

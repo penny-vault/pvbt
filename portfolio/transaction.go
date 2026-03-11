@@ -92,4 +92,11 @@ type Transaction struct {
 	// cash inflows (sells, dividends, deposits), negative for cash
 	// outflows (buys, fees, withdrawals).
 	Amount float64
+
+	// Qualified indicates whether a dividend meets the IRS holding
+	// period requirement for preferential tax rates. Only meaningful
+	// for DividendTransaction. Set automatically by Record() based
+	// on whether the position was held for more than 60 days before
+	// the dividend date.
+	Qualified bool
 }

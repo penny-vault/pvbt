@@ -21,6 +21,10 @@ type upsideCaptureRatio struct{}
 
 func (upsideCaptureRatio) Name() string { return "UpsideCaptureRatio" }
 
+func (upsideCaptureRatio) Description() string {
+	return "Measures how much of the benchmark's upside the portfolio captures. A value of 1.1 means the portfolio gains 110% of the benchmark's return during up periods. Higher is better."
+}
+
 func (upsideCaptureRatio) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
@@ -53,7 +57,7 @@ func (upsideCaptureRatio) Compute(a *Account, window *Period) float64 {
 		return 0
 	}
 
-	return (geoP / geoB) * 100
+	return geoP / geoB
 }
 
 func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
@@ -74,7 +78,7 @@ func geometricMean(r []float64) float64 {
 }
 
 // UpsideCaptureRatio measures how much of the benchmark's positive
-// returns the portfolio captures. Computed as portfolio return /
-// benchmark return during periods when the benchmark is up. A ratio
-// above 100% means the portfolio outperforms in rising markets.
+// returns the portfolio captures. Computed as portfolio geometric mean
+// return / benchmark geometric mean return during up periods. A ratio
+// above 1.0 means the portfolio outperforms in rising markets.
 var UpsideCaptureRatio PerformanceMetric = upsideCaptureRatio{}

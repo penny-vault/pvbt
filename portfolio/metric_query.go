@@ -26,6 +26,10 @@ type PerformanceMetric interface {
 	// Name returns a human-readable name for the metric (e.g. "Sharpe").
 	Name() string
 
+	// Description returns a short explanation of what the metric
+	// measures and how to interpret its values.
+	Description() string
+
 	// Compute calculates a single scalar value for the metric. The
 	// Account provides access to transaction history, equity curve,
 	// benchmark data, and risk-free data. If window is nil, the full

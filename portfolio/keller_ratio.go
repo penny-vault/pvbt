@@ -21,6 +21,10 @@ type kellerRatio struct{}
 
 func (kellerRatio) Name() string { return "KellerRatio" }
 
+func (kellerRatio) Description() string {
+	return "Combines return and risk into a single measure using the formula (CAGR * (1 + CAGR)) / max_drawdown. Rewards high compound growth while penalizing drawdowns. Higher values indicate better risk-adjusted compound returns."
+}
+
 func (kellerRatio) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 2 {

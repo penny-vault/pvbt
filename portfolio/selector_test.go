@@ -226,4 +226,43 @@ var _ = Describe("MaxAboveZero", func() {
 		Expect(result.AssetList()).To(HaveLen(1))
 		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
 	})
+
+	It("selects the positive asset when mixed with NaN at the same timestep", func() {
+		// SPY is positive, AAPL is NaN -- SPY should win.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				10,           // SPY (positive)
+				math.NaN(),   // AAPL (NaN, skipped)
+				math.NaN(),   // BIL (NaN, skipped)
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		result := sel.Select(df)
+
+		Expect(result.AssetList()).To(HaveLen(1))
+		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+	})
+
+	It("returns empty result for an empty DataFrame with zero timestamps", func() {
+		// Zero timestamps, one asset, one metric -- data length is 0*1*1 = 0.
+		df, err := data.NewDataFrame(
+			nil,
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			nil,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		result := sel.Select(df)
+
+		// No timesteps to iterate, so no assets are selected.
+		Expect(result.AssetList()).To(HaveLen(0))
+		Expect(result.Times()).To(HaveLen(0))
+	})
 })

@@ -21,6 +21,10 @@ type gainLossRatio struct{}
 
 func (gainLossRatio) Name() string { return "GainLossRatio" }
 
+func (gainLossRatio) Description() string {
+	return "Average gain on winning periods divided by average loss on losing periods, computed from equity curve period returns. A ratio above 1.0 means gains are larger than losses on average. Reflects overall portfolio behavior including cash drag, dividends, and unrealized P&L. Compare with TradeGainLossRatio which uses round-trip trade PnL instead."
+}
+
 func (gainLossRatio) Compute(a *Account, window *Period) float64 {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)

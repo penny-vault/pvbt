@@ -21,6 +21,10 @@ type calmar struct{}
 
 func (calmar) Name() string { return "Calmar" }
 
+func (calmar) Description() string {
+	return "Annualized return divided by maximum drawdown. Measures return per unit of drawdown risk. Higher values indicate the strategy earns more return for each unit of peak-to-trough decline endured."
+}
+
 func (calmar) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	eqTimes := windowSliceTimes(a.EquityTimes(), window)

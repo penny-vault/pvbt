@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -52,6 +53,37 @@ var _ = Describe("Account", func() {
 			)
 			Expect(a.Benchmark()).To(Equal(spy))
 			Expect(a.RiskFree()).To(Equal(bil))
+		})
+	})
+
+	Describe("SetBroker", func() {
+		It("replaces the broker on the account", func() {
+			// The mockBroker type is defined in order_test.go and is
+			// available in the portfolio_test package.
+			mb1 := &mockBroker{}
+			mb2 := &mockBroker{}
+
+			a := portfolio.New(
+				portfolio.WithCash(10_000),
+				portfolio.WithBroker(mb1),
+			)
+
+			// Give the account a price so Order can work.
+			t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+			df := buildDF(t1, []asset.Asset{spy}, []float64{100.0}, []float64{100.0})
+			a.UpdatePrices(df)
+
+			// Submit via the first broker.
+			mb1.defaultFill = &broker.Fill{Price: 100.0, FilledAt: t1}
+			a.Order(spy, portfolio.Buy, 1)
+			Expect(mb1.submitted).To(HaveLen(1))
+			Expect(mb2.submitted).To(HaveLen(0))
+
+			// Replace the broker.
+			a.SetBroker(mb2)
+			mb2.defaultFill = &broker.Fill{Price: 100.0, FilledAt: t1}
+			a.Order(spy, portfolio.Buy, 1)
+			Expect(mb2.submitted).To(HaveLen(1))
 		})
 	})
 
@@ -239,14 +271,131 @@ var _ = Describe("Account", func() {
 
 			df1 := buildDF(t1, []asset.Asset{spy}, []float64{400.0}, []float64{399.0})
 			a.UpdatePrices(df1)
-			Expect(a.Value()).To(Equal(10_000.0))       // 8000 + 5*400
+			Expect(a.Value()).To(Equal(10_000.0))           // 8000 + 5*400
 			Expect(a.PositionValue(spy)).To(Equal(2_000.0)) // 5*400
 
 			df2 := buildDF(t2, []asset.Asset{spy}, []float64{420.0}, []float64{418.0})
 			a.UpdatePrices(df2)
-			Expect(a.Value()).To(Equal(10_100.0))       // 8000 + 5*420
+			Expect(a.Value()).To(Equal(10_100.0))           // 8000 + 5*420
 			Expect(a.PositionValue(spy)).To(Equal(2_100.0)) // 5*420
 			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_100.0}))
+		})
+
+		It("skips NaN benchmark price without appending to benchmark series", func() {
+			a := portfolio.New(
+				portfolio.WithCash(10_000),
+				portfolio.WithBenchmark(bm),
+				portfolio.WithRiskFree(rf),
+			)
+
+			// Day 1: normal prices
+			df1 := buildDF(t1,
+				[]asset.Asset{spy, bm, rf},
+				[]float64{450.0, 100.0, 50.0},
+				[]float64{448.0, 99.0, 49.5},
+			)
+			a.UpdatePrices(df1)
+			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
+			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
+
+			// Day 2: benchmark has NaN AdjClose
+			df2, err := data.NewDataFrame(
+				[]time.Time{t2},
+				[]asset.Asset{spy, bm, rf},
+				[]data.Metric{data.MetricClose, data.AdjClose},
+				[]float64{
+					455.0, 453.0, // spy: close, adjclose
+					math.NaN(), math.NaN(), // bm: close, adjclose (NaN)
+					50.5, 50.0, // rf: close, adjclose
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			a.UpdatePrices(df2)
+
+			// Benchmark NaN should be skipped; risk-free should still append.
+			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
+			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5, 50.0}))
+			Expect(a.EquityCurve()).To(HaveLen(2))
+		})
+
+		It("skips NaN risk-free price without appending to risk-free series", func() {
+			a := portfolio.New(
+				portfolio.WithCash(10_000),
+				portfolio.WithBenchmark(bm),
+				portfolio.WithRiskFree(rf),
+			)
+
+			// Day 1: normal prices
+			df1 := buildDF(t1,
+				[]asset.Asset{spy, bm, rf},
+				[]float64{450.0, 100.0, 50.0},
+				[]float64{448.0, 99.0, 49.5},
+			)
+			a.UpdatePrices(df1)
+
+			// Day 2: risk-free has NaN AdjClose
+			df2, err := data.NewDataFrame(
+				[]time.Time{t2},
+				[]asset.Asset{spy, bm, rf},
+				[]data.Metric{data.MetricClose, data.AdjClose},
+				[]float64{
+					455.0, 453.0, // spy
+					102.0, 101.0, // bm
+					math.NaN(), math.NaN(), // rf: NaN
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			a.UpdatePrices(df2)
+
+			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0, 101.0}))
+			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
+			Expect(a.EquityCurve()).To(HaveLen(2))
+		})
+	})
+
+	Describe("EquityCurve, EquityTimes, BenchmarkPrices, RiskFreePrices accessors", func() {
+		It("returns empty slices before any UpdatePrices calls", func() {
+			a := portfolio.New(portfolio.WithCash(10_000))
+			Expect(a.EquityCurve()).To(BeEmpty())
+			Expect(a.EquityTimes()).To(BeEmpty())
+			Expect(a.BenchmarkPrices()).To(BeEmpty())
+			Expect(a.RiskFreePrices()).To(BeEmpty())
+		})
+
+		It("returns correct accumulated slices after multiple UpdatePrices calls", func() {
+			bm := asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
+			rf := asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
+
+			a := portfolio.New(
+				portfolio.WithCash(10_000),
+				portfolio.WithBenchmark(bm),
+				portfolio.WithRiskFree(rf),
+			)
+
+			t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+			t2 := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
+			t3 := time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC)
+
+			a.UpdatePrices(buildDF(t1,
+				[]asset.Asset{spy, bm, rf},
+				[]float64{100.0, 200.0, 50.0},
+				[]float64{99.0, 198.0, 49.0},
+			))
+			a.UpdatePrices(buildDF(t2,
+				[]asset.Asset{spy, bm, rf},
+				[]float64{102.0, 204.0, 50.5},
+				[]float64{101.0, 202.0, 49.5},
+			))
+			a.UpdatePrices(buildDF(t3,
+				[]asset.Asset{spy, bm, rf},
+				[]float64{104.0, 208.0, 51.0},
+				[]float64{103.0, 206.0, 50.0},
+			))
+
+			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_000.0, 10_000.0}))
+			Expect(a.EquityTimes()).To(Equal([]time.Time{t1, t2, t3}))
+			Expect(a.BenchmarkPrices()).To(Equal([]float64{198.0, 202.0, 206.0}))
+			Expect(a.RiskFreePrices()).To(Equal([]float64{49.0, 49.5, 50.0}))
 		})
 	})
 
@@ -441,6 +590,71 @@ var _ = Describe("TransactionType", func() {
 	})
 })
 
+// computeExpectedSummary derives all expected Summary values from first
+// principles using the same math as the production code, but expressed
+// independently so the test is not just calling the same function.
+//
+// Fixture:
+//
+//	SPY prices: [100, 105, 98, 103, 97, 110]
+//	Equity curve (5 shares, 0 cash): [500, 525, 490, 515, 485, 550]
+//	BIL prices: [100, 100.01, 100.02, 100.03, 100.04, 100.05]
+//	Times: daySeq(2025-01-02, 6) -- 6 weekdays starting Thursday Jan 2
+//
+// The helper functions below mirror the production helpers in
+// metric_helpers.go to cross-check the math.
+func helperReturns(p []float64) []float64 {
+	r := make([]float64, len(p)-1)
+	for i := range r {
+		r[i] = (p[i+1] - p[i]) / p[i]
+	}
+	return r
+}
+
+func helperMean(x []float64) float64 {
+	s := 0.0
+	for _, v := range x {
+		s += v
+	}
+	return s / float64(len(x))
+}
+
+func helperVariance(x []float64) float64 {
+	m := helperMean(x)
+	s := 0.0
+	for _, v := range x {
+		d := v - m
+		s += d * d
+	}
+	return s / float64(len(x)-1)
+}
+
+func helperStddev(x []float64) float64 { return math.Sqrt(helperVariance(x)) }
+
+func helperExcessReturns(r, rf []float64) []float64 {
+	n := len(r)
+	if len(rf) < n {
+		n = len(rf)
+	}
+	er := make([]float64, n)
+	for i := range n {
+		er[i] = r[i] - rf[i]
+	}
+	return er
+}
+
+func helperDrawdownSeries(equity []float64) []float64 {
+	dd := make([]float64, len(equity))
+	peak := math.Inf(-1)
+	for i, v := range equity {
+		if v > peak {
+			peak = v
+		}
+		dd[i] = (v - peak) / peak
+	}
+	return dd
+}
+
 var _ = Describe("Summary", func() {
 	// Build a known equity curve: 5 shares of SPY at prices [100,105,98,103,97,110].
 	// Equity curve = [500, 525, 490, 515, 485, 550].
@@ -478,48 +692,88 @@ var _ = Describe("Summary", func() {
 		return acct
 	}
 
+	// Pre-compute all expected values from the fixture data.
+	equity := []float64{500, 525, 490, 515, 485, 550}
+	bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
+	eqRet := helperReturns(equity)
+	rfRet := helperReturns(bilPrices)
+	er := helperExcessReturns(eqRet, rfRet)
+	af := 252.0 // annualization factor: daily data
+
 	It("computes correct TWRR for known equity curve", func() {
-		// equity = [500,525,490,515,485,550], TWRR = 550/500 - 1 = 0.10
+		// TWRR = 550/500 - 1 = 0.10
 		acct := buildSummaryAcct()
 		s := acct.Summary()
 		Expect(s.TWRR).To(BeNumerically("~", 0.10, 1e-9))
 	})
 
 	It("computes correct MaxDrawdown for known equity curve", func() {
-		// peak=525, trough=485 => drawdown = (485-525)/525 ~ -0.07619
+		// peak=525, trough=485 => drawdown = (485-525)/525 = -40/525
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.MaxDrawdown).To(BeNumerically("~", -0.07619, 1e-4))
+		expectedMaxDD := -40.0 / 525.0
+		Expect(s.MaxDrawdown).To(BeNumerically("~", expectedMaxDD, 1e-10))
 	})
 
-	It("computes non-zero StdDev for volatile equity curve", func() {
+	It("computes correct StdDev for known equity curve", func() {
+		// Annualized StdDev = stddev(equity returns) * sqrt(252)
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.StdDev).To(BeNumerically(">", 0.0))
+		expectedStdDev := helperStddev(eqRet) * math.Sqrt(af)
+		Expect(s.StdDev).To(BeNumerically("~", expectedStdDev, 1e-10))
 	})
 
-	It("computes non-zero positive Sharpe ratio", func() {
+	It("computes correct Sharpe ratio for known equity curve", func() {
+		// Sharpe = mean(excess returns) / stddev(excess returns) * sqrt(252)
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.Sharpe).To(BeNumerically(">", 0.0))
+		expectedSharpe := helperMean(er) / helperStddev(er) * math.Sqrt(af)
+		Expect(s.Sharpe).To(BeNumerically("~", expectedSharpe, 1e-10))
 	})
 
-	It("computes non-zero positive Sortino ratio", func() {
+	It("computes correct Sortino ratio for known equity curve", func() {
+		// Sortino = mean(excess returns) / downside_deviation * sqrt(252)
+		// where downside_deviation = sqrt(sum(min(er_i, 0)^2) / N)
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.Sortino).To(BeNumerically(">", 0.0))
+		sumSq := 0.0
+		for _, v := range er {
+			if v < 0 {
+				sumSq += v * v
+			}
+		}
+		dd := math.Sqrt(sumSq / float64(len(er)))
+		expectedSortino := helperMean(er) / dd * math.Sqrt(af)
+		Expect(s.Sortino).To(BeNumerically("~", expectedSortino, 1e-10))
 	})
 
-	It("computes non-zero positive Calmar ratio", func() {
+	It("computes correct Calmar ratio for known equity curve", func() {
+		// Calmar = CAGR / |MaxDrawdown|
+		// times span: Jan 2 to Jan 9 = 7 calendar days
+		// years = 7 / 365.25
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.Calmar).To(BeNumerically(">", 0.0))
+		years := 7.0 / 365.25
+		annReturn := math.Pow(550.0/500.0, 1.0/years) - 1
+		dd := helperDrawdownSeries(equity)
+		minDD := 0.0
+		for _, v := range dd {
+			if v < minDD {
+				minDD = v
+			}
+		}
+		expectedCalmar := annReturn / math.Abs(minDD)
+		Expect(s.Calmar).To(BeNumerically("~", expectedCalmar, 1e-6))
 	})
 
-	It("computes non-zero MWRR", func() {
+	It("computes correct MWRR for known equity curve", func() {
+		// Single deposit of 500 at time 0, terminal value 550 at time end.
+		// XIRR: -500 + 550/(1+r)^(7/365) = 0
+		// r = (550/500)^(365/7) - 1
 		acct := buildSummaryAcct()
 		s := acct.Summary()
-		Expect(s.MWRR).To(BeNumerically(">", 0.0))
+		expectedMWRR := math.Pow(550.0/500.0, 365.0/7.0) - 1
+		Expect(s.MWRR).To(BeNumerically("~", expectedMWRR, 1e-4))
 	})
 })
 
@@ -560,6 +814,14 @@ var _ = Describe("RiskMetrics", func() {
 		return acct
 	}
 
+	// Pre-compute expected values for risk metrics.
+	equity := []float64{500, 525, 490, 515, 485, 550}
+	bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
+	eqRet := helperReturns(equity)
+	rfRet := helperReturns(bilPrices)
+	er := helperExcessReturns(eqRet, rfRet)
+	af := 252.0
+
 	It("Beta equals 1.0 when portfolio tracks benchmark exactly", func() {
 		rm := buildRiskAcct().RiskMetrics()
 		Expect(rm.Beta).To(BeNumerically("~", 1.0, 1e-9))
@@ -592,31 +854,66 @@ var _ = Describe("RiskMetrics", func() {
 		Expect(rm.Treynor).To(BeNumerically("~", 0.0995, 1e-3))
 	})
 
-	It("DownsideDeviation is finite and non-negative", func() {
+	It("computes correct DownsideDeviation for known equity curve", func() {
+		// DownsideDeviation = stddev(negative excess returns) * sqrt(252)
 		rm := buildRiskAcct().RiskMetrics()
-		Expect(math.IsNaN(rm.DownsideDeviation)).To(BeFalse())
-		Expect(rm.DownsideDeviation).To(BeNumerically(">=", 0.0))
+		var neg []float64
+		for _, v := range er {
+			if v < 0 {
+				neg = append(neg, v)
+			}
+		}
+		expectedDD := helperStddev(neg) * math.Sqrt(af)
+		Expect(rm.DownsideDeviation).To(BeNumerically("~", expectedDD, 1e-10))
 	})
 
-	It("UlcerIndex is finite and non-negative", func() {
+	It("returns zero UlcerIndex when equity curve has fewer than 14 points", func() {
+		// The risk account has only 6 equity points, which is below the
+		// 14-period lookback required by UlcerIndex.
 		rm := buildRiskAcct().RiskMetrics()
-		Expect(math.IsNaN(rm.UlcerIndex)).To(BeFalse())
-		Expect(rm.UlcerIndex).To(BeNumerically(">=", 0.0))
+		Expect(rm.UlcerIndex).To(BeNumerically("==", 0))
 	})
 
-	It("Skewness is finite", func() {
+	It("computes correct Skewness for known equity curve", func() {
+		// Skewness = (1/n) * sum((r-mean)^3) / stddev^3
 		rm := buildRiskAcct().RiskMetrics()
-		Expect(math.IsNaN(rm.Skewness)).To(BeFalse())
+		n := float64(len(eqRet))
+		m := helperMean(eqRet)
+		s := helperStddev(eqRet)
+		sum3 := 0.0
+		for _, v := range eqRet {
+			d := v - m
+			sum3 += d * d * d
+		}
+		expectedSkew := sum3 / n / (s * s * s)
+		Expect(rm.Skewness).To(BeNumerically("~", expectedSkew, 1e-10))
 	})
 
-	It("ExcessKurtosis is finite", func() {
+	It("computes correct ExcessKurtosis for known equity curve", func() {
+		// ExcessKurtosis = (1/n) * sum((r-mean)^4) / stddev^4 - 3
 		rm := buildRiskAcct().RiskMetrics()
-		Expect(math.IsNaN(rm.ExcessKurtosis)).To(BeFalse())
+		n := float64(len(eqRet))
+		m := helperMean(eqRet)
+		s := helperStddev(eqRet)
+		sum4 := 0.0
+		for _, v := range eqRet {
+			d := v - m
+			sum4 += d * d * d * d
+		}
+		expectedKurt := sum4/n/(s*s*s*s) - 3
+		Expect(rm.ExcessKurtosis).To(BeNumerically("~", expectedKurt, 1e-10))
 	})
 
-	It("ValueAtRisk is finite", func() {
+	It("computes correct ValueAtRisk for known equity curve", func() {
+		// VaR = sorted returns at index floor(0.05 * n)
+		// With 5 returns, floor(0.05*5) = floor(0.25) = 0, so VaR = min return.
 		rm := buildRiskAcct().RiskMetrics()
-		Expect(math.IsNaN(rm.ValueAtRisk)).To(BeFalse())
+		// Sorted returns: find the minimum return.
+		// eqRet = [0.05, -35/525, 25/490, -30/515, 65/485]
+		// Sorted ascending: -35/525, -30/515, 25/490, 0.05, 65/485
+		// idx = floor(0.05 * 5) = 0 => sorted[0] = -35/525
+		expectedVaR := -35.0 / 525.0
+		Expect(rm.ValueAtRisk).To(BeNumerically("~", expectedVaR, 1e-10))
 	})
 })
 
@@ -693,7 +990,8 @@ var _ = Describe("Period constructors", func() {
 var _ = Describe("Window", func() {
 	// buildLongAccount creates an account with 40 daily data points showing
 	// steady growth, suitable for testing windowed metric computations.
-	buildLongAccount := func() *portfolio.Account {
+	// Returns the account and the raw SPY/BIL price arrays for manual verification.
+	buildLongAccountWithPrices := func() (*portfolio.Account, []float64, []float64, []time.Time) {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
@@ -736,33 +1034,92 @@ var _ = Describe("Window", func() {
 			)
 			acct.UpdatePrices(df)
 		}
-		return acct
+
+		// Equity curve = 5 * spyPrices
+		equityCurve := make([]float64, n)
+		for i := range n {
+			equityCurve[i] = 5 * spyPrices[i]
+		}
+
+		return acct, equityCurve, bilPrices, times
 	}
 
-	It("Window(Days(10)) produces a different TWRR than full history", func() {
-		acct := buildLongAccount()
+	It("Window(Days(10)) produces correct TWRR for the windowed slice", func() {
+		acct, equityCurve, _, times := buildLongAccountWithPrices()
 
+		// Full TWRR from the full equity curve.
 		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
+		n := len(equityCurve)
+		expectedFullTWRR := equityCurve[n-1]/equityCurve[0] - 1
+		Expect(fullTWRR).To(BeNumerically("~", expectedFullTWRR, 1e-10))
+
+		// Days(10) window: cutoff = last - 10 days.
+		// Find first time >= cutoff.
+		last := times[len(times)-1]
+		cutoff := last.AddDate(0, 0, -10)
+		startIdx := 0
+		for i, t := range times {
+			if !t.Before(cutoff) {
+				startIdx = i
+				break
+			}
+		}
+		windowedEq := equityCurve[startIdx:]
+		expectedWindowedTWRR := windowedEq[len(windowedEq)-1]/windowedEq[0] - 1
+
 		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Days(10)).Value()
-
-		Expect(fullTWRR).NotTo(Equal(windowedTWRR))
+		Expect(windowedTWRR).To(BeNumerically("~", expectedWindowedTWRR, 1e-10))
+		Expect(fullTWRR).NotTo(BeNumerically("~", windowedTWRR, 1e-10))
 	})
 
-	It("Window(Months(1)) produces a different TWRR than full history", func() {
-		acct := buildLongAccount()
+	It("Window(Months(1)) produces correct TWRR for the windowed slice", func() {
+		acct, equityCurve, _, times := buildLongAccountWithPrices()
+
+		// Months(1) window: cutoff = last - 1 month.
+		last := times[len(times)-1]
+		cutoff := last.AddDate(0, -1, 0)
+		startIdx := 0
+		for i, t := range times {
+			if !t.Before(cutoff) {
+				startIdx = i
+				break
+			}
+		}
+		windowedEq := equityCurve[startIdx:]
+		expectedWindowedTWRR := windowedEq[len(windowedEq)-1]/windowedEq[0] - 1
+
+		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(1)).Value()
+		Expect(windowedTWRR).To(BeNumerically("~", expectedWindowedTWRR, 1e-10))
 
 		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
-		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(1)).Value()
-
-		Expect(fullTWRR).NotTo(Equal(windowedTWRR))
+		Expect(fullTWRR).NotTo(BeNumerically("~", windowedTWRR, 1e-10))
 	})
 
-	It("Window(Days(10)) produces a different Sharpe than full history", func() {
-		acct := buildLongAccount()
+	It("Window(Days(10)) produces correct Sharpe for the windowed slice", func() {
+		acct, equityCurve, bilPrices, times := buildLongAccountWithPrices()
+
+		// Compute window boundaries.
+		last := times[len(times)-1]
+		cutoff := last.AddDate(0, 0, -10)
+		startIdx := 0
+		for i, t := range times {
+			if !t.Before(cutoff) {
+				startIdx = i
+				break
+			}
+		}
+		windowedEq := equityCurve[startIdx:]
+		windowedRf := bilPrices[startIdx:]
+
+		wRet := helperReturns(windowedEq)
+		wRfRet := helperReturns(windowedRf)
+		wER := helperExcessReturns(wRet, wRfRet)
+		expectedSharpe := helperMean(wER) / helperStddev(wER) * math.Sqrt(252)
+
+		windowedSharpe := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
+		Expect(windowedSharpe).To(BeNumerically("~", expectedSharpe, 1e-10))
 
 		fullSharpe := acct.PerformanceMetric(portfolio.Sharpe).Value()
-		windowedSharpe := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
-
-		Expect(fullSharpe).NotTo(Equal(windowedSharpe))
+		Expect(fullSharpe).NotTo(BeNumerically("~", windowedSharpe, 1e-10))
 	})
 })

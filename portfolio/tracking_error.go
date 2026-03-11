@@ -21,6 +21,10 @@ type trackingError struct{}
 
 func (trackingError) Name() string { return "TrackingError" }
 
+func (trackingError) Description() string {
+	return "Annualized standard deviation of the difference between portfolio and benchmark returns. Measures how closely the portfolio follows its benchmark. Lower values indicate tighter tracking."
+}
+
 func (trackingError) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)

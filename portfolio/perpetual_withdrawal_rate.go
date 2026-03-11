@@ -19,6 +19,10 @@ type perpetualWithdrawalRate struct{}
 
 func (perpetualWithdrawalRate) Name() string { return "PerpetualWithdrawalRate" }
 
+func (perpetualWithdrawalRate) Description() string {
+	return "The withdrawal rate that preserves the real (inflation-adjusted) value of the portfolio indefinitely. More conservative than SafeWithdrawalRate as it aims to maintain purchasing power."
+}
+
 func (perpetualWithdrawalRate) Compute(a *Account, window *Period) float64 {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {

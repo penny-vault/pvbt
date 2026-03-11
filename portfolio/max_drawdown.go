@@ -19,6 +19,10 @@ type maxDrawdown struct{}
 
 func (maxDrawdown) Name() string { return "MaxDrawdown" }
 
+func (maxDrawdown) Description() string {
+	return "Largest peak-to-trough decline in the equity curve as a decimal fraction. A value of -0.20 means the portfolio fell 20% from its peak. More negative values indicate larger drawdowns."
+}
+
 func (maxDrawdown) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(eq) == 0 {

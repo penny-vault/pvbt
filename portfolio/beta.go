@@ -19,6 +19,10 @@ type beta struct{}
 
 func (beta) Name() string { return "Beta" }
 
+func (beta) Description() string {
+	return "Sensitivity of portfolio returns to benchmark returns. A beta of 1.0 moves in lockstep with the benchmark. Above 1.0 amplifies benchmark moves, below 1.0 dampens them. Negative beta moves opposite to the benchmark."
+}
+
 func (beta) Compute(a *Account, window *Period) float64 {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
