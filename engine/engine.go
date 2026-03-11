@@ -260,11 +260,5 @@ func (e *Engine) Run(ctx context.Context, acct *portfolio.Account, start, end ti
 	return e.Backtest(ctx, acct, start, end)
 }
 
-// RunLive starts continuous execution.
-// Stub -- will be implemented in Task 11.
-func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *portfolio.Account, error) {
-	return nil, fmt.Errorf("engine: RunLive not yet implemented")
-}
-
 // Compile-time check that Engine implements universe.DataSource.
 var _ universe.DataSource = (*Engine)(nil)
