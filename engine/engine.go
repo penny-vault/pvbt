@@ -253,12 +253,6 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
-// Backtest executes a backtest over the given time range.
-// Stub -- will be implemented in Task 10.
-func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
-	return acct, fmt.Errorf("engine: Backtest not yet implemented")
-}
-
 // Run is a deprecated alias for Backtest. It maintains compilation of existing
 // callers (e.g., cli/backtest.go) until they are updated in Task 12.
 // Deprecated: Use Backtest instead.

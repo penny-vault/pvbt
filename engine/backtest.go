@@ -1,0 +1,223 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package engine
+
+import (
+	"context"
+	"fmt"
+	"math"
+	"time"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/rs/zerolog"
+)
+
+// Backtest executes a full backtest over [start, end] using the engine's
+// configured strategy and data providers. It returns the populated account
+// after running every scheduled trading date.
+func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
+	// PHASE 1: INITIALIZATION
+
+	// 1. Load asset registry from assetProvider.
+	if e.assetProvider == nil {
+		return nil, fmt.Errorf("engine: assetProvider is required for Backtest")
+	}
+	allAssets, err := e.assetProvider.Assets(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("engine: loading asset registry: %w", err)
+	}
+	for _, a := range allAssets {
+		e.assets[a.Ticker] = a
+	}
+
+	// 2. Hydrate strategy fields from default tags.
+	hydrateFields(e, e.strategy)
+
+	// 3. Build provider routing table.
+	if err := e.buildProviderRouting(); err != nil {
+		return nil, fmt.Errorf("engine: building provider routing: %w", err)
+	}
+
+	// 4. Call strategy.Setup.
+	e.strategy.Setup(e)
+
+	// 5. Validate: error if schedule is nil.
+	if e.schedule == nil {
+		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
+	}
+
+	// 6. Configure account.
+	simBroker := NewSimulatedBroker()
+	acct.SetBroker(simBroker)
+	if e.benchmark != (asset.Asset{}) {
+		acct.SetBenchmark(e.benchmark)
+	}
+	if e.riskFree != (asset.Asset{}) {
+		acct.SetRiskFree(e.riskFree)
+	}
+
+	// 7. Initialize data cache.
+	e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
+
+	// 8. Store start/end on engine.
+	e.start = start
+	e.end = end
+
+	// PHASE 2: DATE ENUMERATION
+
+	// 9. Walk tradecron.Next() from start until past end.
+	// Subtract one nanosecond so that a date exactly equal to start is included.
+	var dates []time.Time
+	cur := e.schedule.Next(start.Add(-1))
+	for !cur.After(end) {
+		dates = append(dates, cur)
+		cur = e.schedule.Next(cur)
+	}
+
+	// PHASE 3: STEP LOOP
+
+	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
+
+	for i, date := range dates {
+		// 10. Check context cancellation.
+		if err := ctx.Err(); err != nil {
+			return acct, nil
+		}
+
+		// 11. Set current date.
+		e.currentDate = date
+
+		// 12. Build step context with zerolog.
+		stepLogger := zerolog.Ctx(ctx).With().
+			Str("strategy", e.strategy.Name()).
+			Time("date", date).
+			Int("step", i+1).
+			Int("total", len(dates)).
+			Logger()
+		stepCtx := stepLogger.WithContext(ctx)
+
+		// 13. Fetch housekeeping data for held assets.
+		var heldAssets []asset.Asset
+		acct.Holdings(func(a asset.Asset, _ float64) {
+			heldAssets = append(heldAssets, a)
+		})
+
+		var housekeepAssets []asset.Asset
+		housekeepAssets = append(housekeepAssets, heldAssets...)
+		if e.benchmark != (asset.Asset{}) {
+			housekeepAssets = append(housekeepAssets, e.benchmark)
+		}
+		if e.riskFree != (asset.Asset{}) {
+			housekeepAssets = append(housekeepAssets, e.riskFree)
+		}
+
+		var housekeepDF *data.DataFrame
+		if len(housekeepAssets) > 0 {
+			housekeepDF, err = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
+			if err != nil {
+				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, err)
+			}
+		}
+
+		// 14. Record dividends for held assets.
+		if housekeepDF != nil {
+			for _, a := range heldAssets {
+				qty := acct.Position(a)
+				if qty <= 0 {
+					continue
+				}
+				divPerShare := housekeepDF.ValueAt(a, data.Dividend, date)
+				if !math.IsNaN(divPerShare) && divPerShare > 0 {
+					acct.Record(portfolio.Transaction{
+						Date:   date,
+						Asset:  a,
+						Type:   portfolio.DividendTransaction,
+						Amount: divPerShare * qty,
+						Qty:    qty,
+						Price:  divPerShare,
+					})
+				}
+			}
+		}
+
+		// 15. Update simulated broker with current prices.
+		// The price function first checks the housekeeping DataFrame (for already-held
+		// assets), then falls back to a live FetchAt so newly targeted assets (first
+		// step, or newly added positions) can also be priced and filled correctly.
+		simBroker.SetPrices(func(a asset.Asset) (float64, bool) {
+			if housekeepDF != nil {
+				v := housekeepDF.ValueAt(a, data.MetricClose, e.currentDate)
+				if !math.IsNaN(v) {
+					return v, true
+				}
+			}
+			// Fallback: fetch the price directly for this asset.
+			df, fetchErr := e.FetchAt(stepCtx, []asset.Asset{a}, e.currentDate, []data.Metric{data.MetricClose})
+			if fetchErr != nil || df == nil {
+				return 0, false
+			}
+			v := df.ValueAt(a, data.MetricClose, e.currentDate)
+			if math.IsNaN(v) {
+				return 0, false
+			}
+			return v, true
+		}, date)
+
+		// Pre-compute step: update prices so the account has valid prices
+		// (needed by RebalanceTo/Value) before Compute is called. If housekeepDF
+		// covers the assets, use it directly. When there are no held assets (first
+		// step, all-cash portfolio), do a targeted FetchAt so a.prices is non-nil
+		// and broker prices are available for target-share calculation.
+		if housekeepDF != nil {
+			acct.UpdatePrices(housekeepDF.Between(date, date))
+		}
+
+		// 16. Call strategy.Compute.
+		e.strategy.Compute(stepCtx, e, acct)
+
+		// 17. Build price DataFrame for all assets seen this step (including any
+		// newly acquired positions from Compute).
+		var priceAssets []asset.Asset
+		acct.Holdings(func(a asset.Asset, _ float64) {
+			priceAssets = append(priceAssets, a)
+		})
+		if e.benchmark != (asset.Asset{}) {
+			priceAssets = append(priceAssets, e.benchmark)
+		}
+		if e.riskFree != (asset.Asset{}) {
+			priceAssets = append(priceAssets, e.riskFree)
+		}
+
+		if len(priceAssets) > 0 {
+			priceDF, err := e.FetchAt(stepCtx, priceAssets, date, priceMetrics)
+			if err != nil {
+				return nil, fmt.Errorf("engine: price fetch on %v: %w", date, err)
+			}
+
+			// 18. Call acct.UpdatePrices.
+			acct.UpdatePrices(priceDF)
+		}
+
+		// 19. Evict old cache data.
+		e.cache.evictBefore(date)
+	}
+
+	// PHASE 4: RETURN
+	return acct, nil
+}
