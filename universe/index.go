@@ -17,12 +17,14 @@ package universe
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // indexUniverse resolves index membership from an IndexProvider and caches
@@ -99,6 +101,14 @@ func (u *indexUniverse) Prefetch(ctx context.Context, start, end time.Time) erro
 	u.cachedTo = end
 
 	return nil
+}
+
+func (u *indexUniverse) Window(_ portfolio.Period, _ ...data.Metric) (*data.DataFrame, error) {
+	return nil, fmt.Errorf("indexUniverse has no data source; was it created via engine.Universe()?")
+}
+
+func (u *indexUniverse) At(_ time.Time, _ ...data.Metric) (*data.DataFrame, error) {
+	return nil, fmt.Errorf("indexUniverse has no data source; was it created via engine.Universe()?")
 }
 
 // SP500 creates a universe tracking S&P 500 membership historically.

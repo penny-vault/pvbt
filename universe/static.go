@@ -17,25 +17,49 @@ package universe
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // StaticUniverse is a fixed set of assets that does not change over time.
 type StaticUniverse struct {
 	members []asset.Asset
+	ds      DataSource
 }
 
 func (u *StaticUniverse) Assets(_ time.Time) []asset.Asset { return u.members }
 
 func (u *StaticUniverse) Prefetch(_ context.Context, _, _ time.Time) error { return nil }
 
+func (u *StaticUniverse) Window(lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error) {
+	if u.ds == nil {
+		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
+	}
+	return u.ds.Fetch(context.TODO(), u.members, lookback, metrics)
+}
+
+func (u *StaticUniverse) At(t time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
+	if u.ds == nil {
+		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
+	}
+	return u.ds.FetchAt(context.TODO(), u.members, t, metrics)
+}
+
 // NewStatic creates a static universe from explicit ticker symbols.
+// The universe has no data source until it is created via engine.Universe().
 func NewStatic(tickers ...string) *StaticUniverse {
 	members := make([]asset.Asset, len(tickers))
 	for i, t := range tickers {
 		members[i] = asset.Asset{Ticker: t}
 	}
 	return &StaticUniverse{members: members}
+}
+
+// NewStaticWithSource creates a static universe wired to a data source.
+func NewStaticWithSource(assets []asset.Asset, ds DataSource) *StaticUniverse {
+	return &StaticUniverse{members: assets, ds: ds}
 }
