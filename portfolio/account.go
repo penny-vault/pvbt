@@ -485,3 +485,8 @@ func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
 // SetRiskFree sets the risk-free asset after construction.
 func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
+
+// SetPriceData sets the current price DataFrame without updating the
+// equity curve. Used by the engine to provide prices before Compute
+// so that RebalanceTo and Value can calculate position values.
+func (a *Account) SetPriceData(df *data.DataFrame) { a.prices = df }
