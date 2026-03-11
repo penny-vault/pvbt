@@ -106,16 +106,139 @@ func (e *Engine) CurrentDate() time.Time {
 	return e.currentDate
 }
 
+// periodToTime returns base minus the given period.
+func periodToTime(base time.Time, p portfolio.Period) time.Time {
+	switch p.Unit {
+	case portfolio.UnitDay:
+		return base.AddDate(0, 0, -p.N)
+	case portfolio.UnitMonth:
+		return base.AddDate(0, -p.N, 0)
+	case portfolio.UnitYear:
+		return base.AddDate(-p.N, 0, 0)
+	default:
+		return base
+	}
+}
+
+// buildProviderRouting populates e.metricProvider by iterating e.providers
+// and mapping each metric to the BatchProvider that serves it.
+// Returns an error if a provider does not implement BatchProvider.
+func (e *Engine) buildProviderRouting() error {
+	e.metricProvider = make(map[data.Metric]data.BatchProvider)
+	for _, p := range e.providers {
+		bp, ok := p.(data.BatchProvider)
+		if !ok {
+			return fmt.Errorf("engine: provider %T does not implement BatchProvider", p)
+		}
+		for _, m := range p.Provides() {
+			e.metricProvider[m] = bp
+		}
+	}
+	return nil
+}
+
+// fetchFromProviders groups metrics by their provider, issues one Fetch call
+// per provider, and merges the results with MergeColumns.
+func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, metrics []data.Metric, start, end time.Time) (*data.DataFrame, error) {
+	if e.metricProvider == nil {
+		return nil, fmt.Errorf("engine: provider routing not initialized; call buildProviderRouting first")
+	}
+
+	// Group metrics by provider.
+	providerMetrics := make(map[data.BatchProvider][]data.Metric)
+	for _, m := range metrics {
+		bp, ok := e.metricProvider[m]
+		if !ok {
+			return nil, fmt.Errorf("engine: no provider registered for metric %q", m)
+		}
+		providerMetrics[bp] = append(providerMetrics[bp], m)
+	}
+
+	var frames []*data.DataFrame
+	for bp, provMetrics := range providerMetrics {
+		req := data.DataRequest{
+			Assets:    assets,
+			Metrics:   provMetrics,
+			Start:     start,
+			End:       end,
+			Frequency: data.Daily,
+		}
+		df, err := bp.Fetch(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("engine: provider fetch: %w", err)
+		}
+		frames = append(frames, df)
+	}
+
+	if len(frames) == 0 {
+		return data.NewDataFrame(nil, nil, nil, nil)
+	}
+	if len(frames) == 1 {
+		return frames[0], nil
+	}
+	return data.MergeColumns(frames...)
+}
+
 // Fetch implements universe.DataSource.
 func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
-	// Stub -- will be implemented in Task 8.
-	return nil, fmt.Errorf("engine: Fetch not yet implemented")
+	if e.cache == nil {
+		e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
+	}
+
+	rangeStart := periodToTime(e.currentDate, lookback)
+	rangeEnd := e.currentDate
+
+	assetsHash := hashAssets(assets)
+	metricsHash := hashMetrics(metrics)
+
+	boundaries := e.cache.chunkBoundaries(rangeStart, rangeEnd)
+	var chunks []*data.DataFrame
+
+	for _, chunkStart := range boundaries {
+		key := dataCacheKey{
+			assetsHash:  assetsHash,
+			metricsHash: metricsHash,
+			chunkStart:  chunkStart,
+		}
+		if df, ok := e.cache.get(key); ok {
+			chunks = append(chunks, df)
+			continue
+		}
+
+		chunkEnd := chunkStart.Add(e.cache.chunkSize)
+		if chunkEnd.After(rangeEnd) {
+			chunkEnd = rangeEnd
+		}
+
+		df, err := e.fetchFromProviders(ctx, assets, metrics, chunkStart, chunkEnd)
+		if err != nil {
+			return nil, err
+		}
+		e.cache.put(key, df)
+		chunks = append(chunks, df)
+	}
+
+	if len(chunks) == 0 {
+		return data.NewDataFrame(nil, nil, nil, nil)
+	}
+
+	var merged *data.DataFrame
+	if len(chunks) == 1 {
+		merged = chunks[0]
+	} else {
+		var err error
+		merged, err = data.MergeTimes(chunks...)
+		if err != nil {
+			return nil, fmt.Errorf("engine: merge chunks: %w", err)
+		}
+	}
+
+	return merged.Between(rangeStart, rangeEnd), nil
 }
 
 // FetchAt implements universe.DataSource.
 func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
-	// Stub -- will be implemented in Task 8.
-	return nil, fmt.Errorf("engine: FetchAt not yet implemented")
+	return e.fetchFromProviders(ctx, assets, metrics, t, t)
 }
 
 // Close releases all resources held by the engine, including closing
