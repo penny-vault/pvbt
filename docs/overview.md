@@ -48,9 +48,9 @@ func (s *ADM) Setup(e *engine.Engine) {
 }
 
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(df, 1)
-    mom3 := signal.Momentum(df, 3)
-    mom6 := signal.Momentum(df, 6)
+    mom1 := signal.Momentum(s.RiskOn, Months(1))
+    mom3 := signal.Momentum(s.RiskOn, Months(3))
+    mom6 := signal.Momentum(s.RiskOn, Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     symbols := momentum.Select(portfolio.MaxAboveZero(s.RiskOff))
@@ -117,9 +117,9 @@ Setup is also where a strategy would register universes it creates itself (e.g.,
 
 ```go
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(df, 1)
-    mom3 := signal.Momentum(df, 3)
-    mom6 := signal.Momentum(df, 6)
+    mom1 := signal.Momentum(s.RiskOn, Months(1))
+    mom3 := signal.Momentum(s.RiskOn, Months(3))
+    mom6 := signal.Momentum(s.RiskOn, Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     symbols := momentum.Select(portfolio.MaxAboveZero(s.RiskOff))
@@ -130,7 +130,7 @@ func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfol
 
 Compute runs at each scheduled step -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for data fetching via `e.Fetch` and `e.FetchAt`), and the **portfolio** (the strategy's holdings, exposed as the `Portfolio` interface).
 
-The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes a DataFrame and a period count, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
+The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period count, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
 
 `momentum.Select(portfolio.MaxAboveZero(s.riskOff))` is the selection step. It filters the DataFrame to the asset with the highest momentum, but only if that score is above zero. If no risk-on asset has positive momentum, the selection falls back to the risk-off universe. The result is a filtered DataFrame.
 

@@ -200,14 +200,17 @@ Trades produce transactions automatically via `RebalanceTo` and `Order`. Externa
 
 ```go
 type Transaction struct {
-    Date   time.Time
-    Asset  asset.Asset
-    Type   TransactionType
-    Qty    float64
-    Price  float64
-    Amount float64
+    Date      time.Time
+    Asset     asset.Asset
+    Type      TransactionType
+    Qty       float64
+    Price     float64
+    Amount    float64
+    Qualified bool // only meaningful for DividendTransaction
 }
 ```
+
+`Qualified` is set automatically when a dividend is recorded: the portfolio checks whether the underlying asset was held for more than 60 days (the IRS holding period requirement) using FIFO tax lot dates. This classification feeds the `QualifiedDividends` and `NonQualifiedIncome` metrics.
 
 `Amount` is the total cash impact: positive for inflows (sells, dividends, deposits), negative for outflows (buys, fees, withdrawals).
 
@@ -275,6 +278,7 @@ Every metric below is a package-level variable implementing `PerformanceMetric`.
 |------|-------------|
 | `TWRR` | Time-weighted rate of return. Eliminates the effect of cash flows by compounding sub-period returns, showing pure investment performance independent of deposit/withdrawal timing. |
 | `MWRR` | Money-weighted rate of return. Accounts for the timing and size of cash flows using XIRR. Unlike TWRR, this reflects the investor's actual dollar-weighted experience. |
+| `CAGR` | Compound Annual Growth Rate. The annualized return that accounts for compounding. The standard way to compare returns across different time horizons. |
 | `ActiveReturn` | Difference between portfolio return and benchmark return (strategy - benchmark). Measures the value added by active management. Highly dependent on appropriate benchmark selection. |
 
 **Risk-adjusted ratios:**
@@ -283,10 +287,16 @@ Every metric below is a package-level variable implementing `PerformanceMetric`.
 |------|-------------|
 | `Sharpe` | Risk-adjusted return: excess return over the risk-free rate divided by annualized standard deviation of returns. Higher is better. Uses monthly returns annualized to match Morningstar convention. |
 | `Sortino` | Like Sharpe but uses downside deviation instead of total standard deviation. Only penalizes volatility from negative excess returns, treating upside volatility as desirable. |
+| `SmartSharpe` | Sharpe ratio penalized for autocorrelation in returns using Lo (2002). When returns are serially correlated, the standard Sharpe overstates performance. Lower than Sharpe when returns exhibit positive autocorrelation. |
+| `SmartSortino` | Sortino ratio penalized for autocorrelation using the same Lo (2002) correction as SmartSharpe. |
+| `ProbabilisticSharpe` | Probability that the true Sharpe ratio exceeds zero, accounting for skewness and kurtosis. Based on Bailey and Lopez de Prado (2012). Values near 1.0 indicate high statistical confidence. |
 | `Calmar` | Annualized return (CAGR) divided by maximum drawdown. Measures how much return compensates for the worst peak-to-trough decline. Typically computed over 36 months. |
 | `Treynor` | Excess return per unit of systematic risk (beta). Similar to Sharpe but uses beta instead of standard deviation, isolating the reward for market risk rather than total risk. |
 | `InformationRatio` | Mean active return divided by tracking error, annualized. Measures how consistently the portfolio outperforms the benchmark per unit of divergence from it. |
-| `KRatio` | Consistency of returns over time. Computed as the slope of the log-VAMI regression line divided by N times the standard error of the slope. Higher values indicate steadier, more linear growth. |
+| `OmegaRatio` | Probability-weighted ratio of gains over losses. Captures the entire return distribution including higher moments, unlike Sharpe which uses only mean and variance. Above 1.0 means gains outweigh losses. |
+| `RecoveryFactor` | Total compounded return divided by maximum drawdown. Measures how many times over the strategy recovered from its worst decline. A value of 3.0 means the strategy earned 3x its worst drawdown. |
+| `GainToPainRatio` | Jack Schwager's metric: sum of all returns divided by absolute sum of negative returns. Intuitive measure of total profit relative to total pain. Values above 1.0 are good; above 2.0 is excellent. |
+| `KRatio` | Consistency of returns over time. Computed as the slope of the log-VAMI regression line divided by the standard error of the slope. Higher values indicate steadier, more linear growth. |
 | `KellerRatio` | Drawdown-adjusted return: K = R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0. Small drawdowns have limited impact on the adjustment; large drawdowns amplify the penalty dramatically. |
 
 **Risk and volatility:**
@@ -300,13 +310,16 @@ Every metric below is a package-level variable implementing `PerformanceMetric`.
 | `TrackingError` | Standard deviation of the difference between portfolio and benchmark returns (active returns). Measures how much the portfolio's returns deviate from the benchmark day-to-day. |
 | `UlcerIndex` | Downside risk measure using both depth and duration of drawdowns. Computed as sqrt(mean of squared percentage drawdowns) over a 14-day lookback. Higher values mean more painful, prolonged drawdowns. |
 | `ValueAtRisk` | Maximum expected loss over a given time horizon at a specified confidence level (e.g., 95%). Answers: "What is the worst I can expect to lose with 95% confidence?" |
+| `CVaR` | Conditional Value at Risk (Expected Shortfall) at 95% confidence. The average loss in the worst 5% of periods. Superior to VaR because it captures the magnitude of extreme losses, not just their threshold. |
+| `TailRatio` | Ratio of the 95th percentile return to the absolute 5th percentile return. Measures asymmetry between upside and downside tails. Above 1.0 means the upside tail is fatter. |
 
 **Drawdown:**
 
 | Name | Description |
 |------|-------------|
 | `MaxDrawdown` | Largest peak-to-trough decline in portfolio value. A max drawdown of 20% means the portfolio fell 20% from its high before recovering. The single most important risk metric for many investors. |
-| `AvgDrawdown` | Mean loss percentage across all drawdown periods. A drawdown is the decline from a peak to a subsequent trough. Lower average drawdowns indicate the portfolio tends to recover quickly from losses. |
+| `AvgDrawdown` | Mean drawdown across all points in the equity curve. Lower values indicate the portfolio spends less time in decline. |
+| `AvgDrawdownDays` | Mean duration of drawdown episodes in trading days. Measures how long the strategy typically spends recovering from a decline before reaching a new peak. Complements AvgDrawdown (magnitude). |
 
 **Distribution shape:**
 
@@ -329,6 +342,10 @@ Every metric below is a package-level variable implementing `PerformanceMetric`.
 |------|-------------|
 | `NPositivePeriods` | Percentage of periods with positive returns. Higher values mean the portfolio gains more often, though this says nothing about the magnitude of gains vs losses. |
 | `GainLossRatio` | Average gain on winning periods divided by average loss on losing periods. Above 1.0 means wins are larger than losses on average. Combined with NPositivePeriods, gives a complete win/loss picture. |
+| `KellyCriterion` | Optimal fraction of capital to risk per period based on historical win rate and payoff ratio. Computed as W - (1-W)/R where W is win rate and R is avg win / avg loss. Positive values suggest edge. |
+| `ConsecutiveWins` | Longest streak of consecutive periods with positive returns. Useful for understanding momentum characteristics. |
+| `ConsecutiveLosses` | Longest streak of consecutive periods with negative returns. Important for assessing the psychological difficulty of running a strategy. |
+| `Exposure` | Fraction of periods with non-zero returns, indicating time invested in the market. A value of 1.0 means always invested. Essential for strategies that hold cash between signals. |
 
 **Withdrawal rates:**
 
@@ -412,6 +429,7 @@ Anyone can define a custom performance metric by implementing the `PerformanceMe
 ```go
 type PerformanceMetric interface {
     Name() string
+    Description() string
     Compute(a *Account, window *Period) float64
     ComputeSeries(a *Account, window *Period) []float64
 }
@@ -424,6 +442,7 @@ Each built-in metric is an unexported struct with an exported package-level vari
 ```go
 type myMetric struct{}
 func (myMetric) Name() string { return "MyMetric" }
+func (myMetric) Description() string { return "What this metric measures." }
 func (myMetric) Compute(a *Account, window *Period) float64 { ... }
 func (myMetric) ComputeSeries(a *Account, window *Period) []float64 { ... }
 
@@ -452,6 +471,123 @@ func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
 ```
 
 This is less common but occasionally useful for strategies that adapt to their own performance.
+
+## Factor analysis
+
+Factor analysis decomposes a portfolio's returns into exposures to known market drivers. Instead of asking "did my strategy beat the market?" it asks "where did the returns actually come from?" A strategy that appears to generate alpha might just be loading on well-known risk factors like value or momentum -- and factor analysis reveals that.
+
+### How it works
+
+The portfolio's excess returns (returns minus the risk-free rate) are regressed against one or more factor return series. The output is a `FactorRegression` containing:
+
+- **Alpha** -- the portion of returns not explained by any factor. This is the "true" skill-based return, after accounting for known risk exposures.
+- **Betas** -- the loading on each factor. A beta of 0.3 on the value factor means the portfolio behaves 30% like a value strategy.
+- **R-squared** -- how much of the portfolio's return variation the factors explain. An R-squared of 0.85 means 85% of the portfolio's ups and downs are attributable to the included factors.
+- **AIC** -- Akaike Information Criterion. Used by stepwise selection to find the simplest model that explains the returns well, penalizing unnecessary complexity.
+
+```go
+// Run your strategy
+p, err := e.Run(ctx, account, start, end)
+
+// Regress against factor return series
+result := p.FactorAnalysis(smb, hml, mktrf)
+fmt.Printf("Alpha: %.4f\n", result.Alpha)
+fmt.Printf("Market beta: %.2f\n", result.Betas["MktRF"])
+fmt.Printf("R-squared: %.2f\n", result.RSquared)
+
+// Or let stepwise selection find the best subset
+best, steps := p.StepwiseFactorAnalysis(smb, hml, mktrf, umd, rmw, cma)
+```
+
+### Stepwise selection
+
+When you have many candidate factors, stepwise selection finds the best subset automatically. It follows the approach described by [Quantpedia](https://quantpedia.com/a-robust-approach-to-multi-factor-analysis/):
+
+1. Try each factor individually, pick the one with the lowest AIC
+2. Try adding each remaining factor, keep it if AIC improves
+3. Stop when no additional factor improves the model
+
+This avoids overfitting. Adding a factor that contributes little explanatory power will increase AIC (because the complexity penalty outweighs the small improvement in fit), so it gets rejected.
+
+### Standard factors
+
+These are the most widely used factors in academic finance. They represent systematic sources of return that have persisted across decades and markets.
+
+The system ships with built-in factor return series sourced from the Kenneth French Data Library. These are pre-computed long-short portfolio returns published by academic researchers and updated regularly.
+
+**Market:**
+
+| Factor | What it captures |
+|--------|-----------------|
+| MktRF | The excess return of the broad stock market over the risk-free rate. This is the most basic factor -- it measures how much of your portfolio's return comes from simply being in the market. A beta of 1.0 means you move with the market; 0.5 means half as much. |
+
+**Fama-French 3-Factor Model** (MktRF + the following):
+
+| Factor | What it captures |
+|--------|-----------------|
+| SMB | "Small Minus Big." The return difference between small-cap and large-cap stocks. A positive loading means the portfolio tilts toward smaller companies, which historically have earned higher returns (with higher risk). |
+| HML | "High Minus Low." The return difference between cheap stocks (high book-to-market ratio) and expensive stocks (low book-to-market ratio). A positive loading means the portfolio tilts toward value stocks. |
+
+**Carhart 4-Factor Model** (Fama-French 3 + the following):
+
+| Factor | What it captures |
+|--------|-----------------|
+| UMD | "Up Minus Down." The return difference between stocks that have been going up and stocks that have been going down over the trailing 12 months. A positive loading means the portfolio favors recent winners. |
+
+**Fama-French 5-Factor Model** (Fama-French 3 + the following):
+
+| Factor | What it captures |
+|--------|-----------------|
+| RMW | "Robust Minus Weak." The return difference between highly profitable companies and weakly profitable companies. A positive loading means the portfolio favors companies with strong operating profitability. |
+| CMA | "Conservative Minus Aggressive." The return difference between companies that invest conservatively and companies that invest aggressively. A positive loading means the portfolio favors companies that grow assets slowly (which historically earn higher returns). |
+
+**Example interpretation:** A factor regression shows Alpha = 0.02, MktRF beta = 0.8, SMB beta = 0.4, HML beta = -0.1. This means the strategy has genuine alpha of 2% annually, takes less market risk than a passive index (beta 0.8), tilts strongly toward small caps, and slightly favors growth over value stocks.
+
+Convenience functions load standard models:
+
+```go
+// Load Fama-French 3-factor returns for a date range
+factors := factor.FF3(start, end)   // []Factor{MktRF, SMB, HML}
+factors := factor.FF5(start, end)   // []Factor{MktRF, SMB, HML, RMW, CMA}
+factors := factor.Carhart(start, end) // []Factor{MktRF, SMB, HML, UMD}
+
+result := p.FactorAnalysis(factors...)
+```
+
+### Custom factors as strategies
+
+A factor is a long-short strategy: sort a universe by some characteristic, go long one group, short the other. Since a factor is just a strategy, you can build custom factors using the same tools you use to build any strategy -- signals, selectors, and weighting.
+
+Run the factor strategy through the engine to get its equity curve, then convert that to a `Factor` for regression:
+
+```go
+// Define a low-volatility factor as a strategy
+type LowVolFactor struct{}
+
+func (s *LowVolFactor) Compute(ctx context.Context, p portfolio.Portfolio) {
+    vol := signal.Volatility(prices, 60)
+
+    // Long the least volatile stocks
+    lowVol := vol.Sort(Ascending).Top(30)
+    longPlan := portfolio.EqualWeight(lowVol)
+
+    // Short the most volatile stocks
+    highVol := vol.Sort(Descending).Top(30)
+    shortPlan := portfolio.EqualWeight(highVol)  // shorted
+
+    p.RebalanceTo(longPlan...)
+    p.RebalanceTo(shortPlan...)  // short side
+}
+
+// Run the factor strategy
+factorAccount, _ := factorEngine.Run(ctx, factorAcct, start, end)
+
+// Use its returns as a factor
+lowVol := portfolio.FactorFromAccount("LowVol", factorAccount)
+result := p.FactorAnalysis(lowVol, mktrf, smb, hml)
+```
+
+This approach means any signal in the system can become a factor -- momentum, volatility, earnings yield, dividend yield, or anything you can compute from a DataFrame.
 
 ## Broker integration
 
