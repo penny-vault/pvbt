@@ -23,7 +23,11 @@ func (rSquared) Description() string {
 	return "Proportion of portfolio return variance explained by benchmark returns. Ranges from 0 to 1. Values near 1.0 mean the portfolio closely tracks the benchmark. Low R-squared makes beta and alpha less meaningful."
 }
 
-func (rSquared) Compute(a *Account, window *Period) float64 {
+func (rSquared) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -31,22 +35,22 @@ func (rSquared) Compute(a *Account, window *Period) float64 {
 	bReturns := returns(bm)
 
 	if len(pReturns) == 0 || len(bReturns) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	sp := stddev(pReturns)
 	sb := stddev(bReturns)
 
 	if sp == 0 || sb == 0 {
-		return 0
+		return 0, nil
 	}
 
 	corr := covariance(pReturns, bReturns) / (sp * sb)
 
-	return corr * corr
+	return corr * corr, nil
 }
 
-func (rSquared) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (rSquared) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // RSquared measures how well portfolio returns are explained by
 // benchmark returns (coefficient of determination). Ranges from 0

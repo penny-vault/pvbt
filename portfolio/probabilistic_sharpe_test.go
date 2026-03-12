@@ -28,7 +28,9 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 105, 98, 103, 97, 110},
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
-		Expect(portfolio.ProbabilisticSharpe.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.ProbabilisticSharpe.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("returns probability between 0 and 1 for mixed returns", func() {
@@ -37,7 +39,8 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
 
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically(">", 0.0))
 		Expect(v).To(BeNumerically("<=", 1.0))
 	})
@@ -51,7 +54,8 @@ var _ = Describe("ProbabilisticSharpe", func() {
 				100.14, 100.15, 100.16, 100.17, 100.18, 100.19, 100.20},
 		)
 
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically(">", 0.5))
 		Expect(v).To(BeNumerically("<=", 1.0))
 	})
@@ -61,13 +65,15 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 105, 98, 103},
 			[]float64{100, 100.01, 100.02, 100.03},
 		)
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountWithRF([]float64{100}, []float64{100})
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -76,7 +82,8 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 100, 100, 100, 100, 100},
 			[]float64{100, 100, 100, 100, 100, 100},
 		)
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -85,7 +92,8 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 95, 90, 85, 80, 75},
 			[]float64{100, 101, 102, 103, 104, 105},
 		)
-		v := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.ProbabilisticSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("<", 0.5))
 	})
 })

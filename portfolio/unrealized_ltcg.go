@@ -29,12 +29,12 @@ func (unrealizedLTCG) Description() string {
 	return "Unrealized long-term capital gains from open positions held longer than 365 days. Computed by comparing current market prices to cost basis of existing tax lots. These gains become realized (and taxable) when positions are sold."
 }
 
-func (unrealizedLTCG) Compute(a *Account, _ *Period) float64 {
+func (unrealizedLTCG) Compute(a *Account, _ *Period) (float64, error) {
 	prices := a.Prices()
 	times := a.EquityTimes()
 
 	if prices == nil || len(times) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	now := times[len(times)-1]
@@ -43,7 +43,7 @@ func (unrealizedLTCG) Compute(a *Account, _ *Period) float64 {
 	for ast, lots := range a.TaxLots() {
 		currentPrice := prices.Value(ast, data.MetricClose)
 		if math.IsNaN(currentPrice) {
-			continue
+			return math.NaN(), nil
 		}
 		for _, lot := range lots {
 			holdingDays := now.Sub(lot.Date).Hours() / 24
@@ -53,10 +53,10 @@ func (unrealizedLTCG) Compute(a *Account, _ *Period) float64 {
 		}
 	}
 
-	return total
+	return total, nil
 }
 
-func (unrealizedLTCG) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (unrealizedLTCG) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // UnrealizedLTCGMetric is unrealized long-term capital gains from positions
 // held longer than 365 days.

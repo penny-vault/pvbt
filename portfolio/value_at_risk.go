@@ -28,11 +28,11 @@ func (valueAtRisk) Description() string {
 	return "The 5th percentile of historical returns, representing the worst-case loss expected 95% of the time. A value of -0.02 means there is a 5% chance of losing more than 2% in a single period. More negative values indicate higher risk."
 }
 
-func (valueAtRisk) Compute(a *Account, window *Period) float64 {
+func (valueAtRisk) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	sorted := make([]float64, len(r))
@@ -40,10 +40,10 @@ func (valueAtRisk) Compute(a *Account, window *Period) float64 {
 	sort.Float64s(sorted)
 
 	idx := int(math.Floor(0.05 * float64(len(sorted))))
-	return sorted[idx]
+	return sorted[idx], nil
 }
 
-func (valueAtRisk) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (valueAtRisk) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // ValueAtRisk estimates the maximum expected loss over a given time
 // horizon at a specified confidence level (e.g., 95%). A VaR of 5%

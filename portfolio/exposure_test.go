@@ -25,36 +25,43 @@ import (
 var _ = Describe("Exposure", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105})
-		Expect(portfolio.Exposure.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.Exposure.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("returns 1.0 when all returns are non-zero", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115})
-		v := a.PerformanceMetric(portfolio.Exposure).Value()
+		v, err := a.PerformanceMetric(portfolio.Exposure).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
 	It("returns 0 for empty returns", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.Exposure).Value()
+		v, err := a.PerformanceMetric(portfolio.Exposure).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (all returns zero)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.Exposure).Value()
+		v, err := a.PerformanceMetric(portfolio.Exposure).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("computes fraction correctly with mix of zero and non-zero returns", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 110, 120, 120})
-		v := a.PerformanceMetric(portfolio.Exposure).Value()
+		v, err := a.PerformanceMetric(portfolio.Exposure).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 0.5, 1e-9))
 	})
 
 	It("counts negative returns as active", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 90, 80})
-		v := a.PerformanceMetric(portfolio.Exposure).Value()
+		v, err := a.PerformanceMetric(portfolio.Exposure).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 2.0/3.0, 1e-9))
 	})
 })

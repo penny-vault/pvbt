@@ -25,36 +25,43 @@ import (
 var _ = Describe("RecoveryFactor", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 120})
-		Expect(portfolio.RecoveryFactor.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.RecoveryFactor.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes total return / abs(max drawdown)", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		v, err := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 4.107, 1e-2))
 	})
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		v, err := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (no drawdown)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		v, err := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for monotonically rising equity (no drawdown)", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		v, err := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns negative value for net loss with drawdown", func() {
 		a := buildAccountFromEquity([]float64{100, 120, 80, 90})
-		v := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		v, err := a.PerformanceMetric(portfolio.RecoveryFactor).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -0.3, 1e-1))
 	})
 })

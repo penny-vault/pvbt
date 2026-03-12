@@ -23,17 +23,17 @@ func (qualifiedDividends) Description() string {
 	return "Total qualified dividend income received. Qualified dividends are taxed at preferential capital gains rates rather than ordinary income rates."
 }
 
-func (qualifiedDividends) Compute(a *Account, _ *Period) float64 {
+func (qualifiedDividends) Compute(a *Account, _ *Period) (float64, error) {
 	var total float64
 	for _, tx := range a.Transactions() {
 		if tx.Type == DividendTransaction && tx.Qualified {
 			total += tx.Amount
 		}
 	}
-	return total
+	return total, nil
 }
 
-func (qualifiedDividends) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (qualifiedDividends) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // QualifiedDividendsMetric is the total qualified dividend income received.
 var QualifiedDividendsMetric PerformanceMetric = qualifiedDividends{}

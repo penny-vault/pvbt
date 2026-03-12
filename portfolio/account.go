@@ -16,22 +16,16 @@
 package portfolio
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"math"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/rs/zerolog/log"
 )
-
-// taxLot tracks the purchase date, quantity, and price of a position for
-// tax gain/loss calculations.
-type taxLot struct {
-	Date  time.Time
-	Qty   float64
-	Price float64
-}
 
 // Option configures an Account during construction.
 type Option func(*Account)
@@ -53,14 +47,14 @@ type Account struct {
 	riskFreePrices  []float64
 	benchmark       asset.Asset
 	riskFree        asset.Asset
-	taxLots         map[asset.Asset][]taxLot
+	taxLots         map[asset.Asset][]TaxLot
 }
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
 	a := &Account{
 		holdings: make(map[asset.Asset]float64),
-		taxLots:  make(map[asset.Asset][]taxLot),
+		taxLots:  make(map[asset.Asset][]TaxLot),
 	}
 	for _, opt := range opts {
 		opt(a)
@@ -114,56 +108,69 @@ func (a *Account) RiskFree() asset.Asset {
 
 // --- Portfolio interface ---
 
-func (a *Account) RebalanceTo(allocs ...Allocation) {
+func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 	for _, alloc := range allocs {
 		totalValue := a.Value()
 
 		type pendingOrder struct {
-			asset asset.Asset
-			side  Side
-			qty   float64
+			asset  asset.Asset
+			side   Side
+			amount float64 // dollar amount
+			qty    float64 // share count (for full liquidations)
 		}
 
 		var sells, buys []pendingOrder
 
-		// Sell assets not in the target allocation.
+		// Sell all holdings not in the target allocation.
 		for ast, qty := range a.holdings {
 			if _, ok := alloc.Members[ast]; !ok && qty > 0 {
 				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
 			}
 		}
 
-		// Diff each target asset against current holdings.
+		// Compute target dollar amounts and diff against current positions.
 		for ast, weight := range alloc.Members {
-			if a.prices == nil {
-				continue
-			}
-			price := a.prices.Value(ast, data.MetricClose)
-			if math.IsNaN(price) || price == 0 {
-				continue
-			}
-
-			targetShares := math.Floor(weight * totalValue / price)
-			currentShares := a.holdings[ast]
-			diff := targetShares - currentShares
+			targetDollars := weight * totalValue
+			currentDollars := a.PositionValue(ast)
+			diff := targetDollars - currentDollars
 
 			if diff > 0 {
-				buys = append(buys, pendingOrder{asset: ast, side: Buy, qty: diff})
+				buys = append(buys, pendingOrder{asset: ast, side: Buy, amount: diff})
 			} else if diff < 0 {
-				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: -diff})
+				sells = append(sells, pendingOrder{asset: ast, side: Sell, amount: -diff})
 			}
 		}
 
 		// Process sells first to free up cash, then buys.
 		for _, o := range sells {
-			a.Order(o.asset, o.side, o.qty)
+			order := broker.Order{
+				Asset:       o.asset,
+				Side:        broker.Sell,
+				Qty:         o.qty,
+				Amount:      o.amount,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			}
+			if err := a.submitAndRecord(ctx, o.asset, Sell, order); err != nil {
+				return fmt.Errorf("RebalanceTo: sell %s: %w", o.asset.Ticker, err)
+			}
 		}
 		for _, o := range buys {
-			a.Order(o.asset, o.side, o.qty)
+			order := broker.Order{
+				Asset:       o.asset,
+				Side:        broker.Buy,
+				Amount:      o.amount,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			}
+			if err := a.submitAndRecord(ctx, o.asset, Buy, order); err != nil {
+				return fmt.Errorf("RebalanceTo: buy %s: %w", o.asset.Ticker, err)
+			}
 		}
 	}
+	return nil
 }
-func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderModifier) {
+func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty float64, mods ...OrderModifier) error {
 	order := broker.Order{
 		Asset:       ast,
 		Qty:         qty,
@@ -216,17 +223,17 @@ func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderMo
 		order.OrderType = broker.Stop
 	}
 
-	// Submit to broker.
-	fills, err := a.broker.Submit(order)
+	return a.submitAndRecord(ctx, ast, side, order)
+}
+
+// submitAndRecord sends an order to the broker and records each fill
+// as a transaction. Used by both Order and RebalanceTo.
+func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Side, order broker.Order) error {
+	fills, err := a.broker.Submit(ctx, order)
 	if err != nil {
-		log.Error().Err(err).
-			Str("asset", ast.Ticker).
-			Float64("qty", qty).
-			Msg("order submission failed")
-		return
+		return fmt.Errorf("order %s (qty=%.2f, amount=%.2f): %w", ast.Ticker, order.Qty, order.Amount, err)
 	}
 
-	// Record each fill as a transaction.
 	for _, fill := range fills {
 		var txType TransactionType
 		var amount float64
@@ -248,6 +255,7 @@ func (a *Account) Order(ast asset.Asset, side Side, qty float64, mods ...OrderMo
 			Amount: amount,
 		})
 	}
+	return nil
 }
 
 // Cash returns the current cash balance.
@@ -306,67 +314,234 @@ func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery 
 	return PerformanceMetricQuery{account: a, metric: m}
 }
 
-func (a *Account) Summary() Summary {
-	return Summary{
-		TWRR:        a.PerformanceMetric(TWRR).Value(),
-		MWRR:        a.PerformanceMetric(MWRR).Value(),
-		Sharpe:      a.PerformanceMetric(Sharpe).Value(),
-		Sortino:     a.PerformanceMetric(Sortino).Value(),
-		Calmar:      a.PerformanceMetric(Calmar).Value(),
-		MaxDrawdown: a.PerformanceMetric(MaxDrawdown).Value(),
-		StdDev:      a.PerformanceMetric(StdDev).Value(),
+func (a *Account) Summary() (Summary, error) {
+	var errs []error
+	s := Summary{}
+	var err error
+
+	s.TWRR, err = a.PerformanceMetric(TWRR).Value()
+	if err != nil {
+		errs = append(errs, err)
 	}
+
+	s.MWRR, err = a.PerformanceMetric(MWRR).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	s.Sharpe, err = a.PerformanceMetric(Sharpe).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	s.Sortino, err = a.PerformanceMetric(Sortino).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	s.Calmar, err = a.PerformanceMetric(Calmar).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	s.MaxDrawdown, err = a.PerformanceMetric(MaxDrawdown).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	s.StdDev, err = a.PerformanceMetric(StdDev).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return s, errors.Join(errs...)
 }
 
-func (a *Account) RiskMetrics() RiskMetrics {
-	return RiskMetrics{
-		Beta:                 a.PerformanceMetric(Beta).Value(),
-		Alpha:                a.PerformanceMetric(Alpha).Value(),
-		TrackingError:        a.PerformanceMetric(TrackingError).Value(),
-		DownsideDeviation:    a.PerformanceMetric(DownsideDeviation).Value(),
-		InformationRatio:     a.PerformanceMetric(InformationRatio).Value(),
-		Treynor:              a.PerformanceMetric(Treynor).Value(),
-		UlcerIndex:           a.PerformanceMetric(UlcerIndex).Value(),
-		ExcessKurtosis:       a.PerformanceMetric(ExcessKurtosis).Value(),
-		Skewness:             a.PerformanceMetric(Skewness).Value(),
-		RSquared:             a.PerformanceMetric(RSquared).Value(),
-		ValueAtRisk:          a.PerformanceMetric(ValueAtRisk).Value(),
-		UpsideCaptureRatio:   a.PerformanceMetric(UpsideCaptureRatio).Value(),
-		DownsideCaptureRatio: a.PerformanceMetric(DownsideCaptureRatio).Value(),
+func (a *Account) RiskMetrics() (RiskMetrics, error) {
+	var errs []error
+	r := RiskMetrics{}
+	var err error
+
+	r.Beta, err = a.PerformanceMetric(Beta).Value()
+	if err != nil {
+		errs = append(errs, err)
 	}
+
+	r.Alpha, err = a.PerformanceMetric(Alpha).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.TrackingError, err = a.PerformanceMetric(TrackingError).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.DownsideDeviation, err = a.PerformanceMetric(DownsideDeviation).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.InformationRatio, err = a.PerformanceMetric(InformationRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.Treynor, err = a.PerformanceMetric(Treynor).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.UlcerIndex, err = a.PerformanceMetric(UlcerIndex).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.ExcessKurtosis, err = a.PerformanceMetric(ExcessKurtosis).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.Skewness, err = a.PerformanceMetric(Skewness).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.RSquared, err = a.PerformanceMetric(RSquared).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.ValueAtRisk, err = a.PerformanceMetric(ValueAtRisk).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.UpsideCaptureRatio, err = a.PerformanceMetric(UpsideCaptureRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	r.DownsideCaptureRatio, err = a.PerformanceMetric(DownsideCaptureRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return r, errors.Join(errs...)
 }
 
-func (a *Account) TaxMetrics() TaxMetrics {
-	return TaxMetrics{
-		LTCG:               a.PerformanceMetric(LTCGMetric).Value(),
-		STCG:               a.PerformanceMetric(STCGMetric).Value(),
-		UnrealizedLTCG:     a.PerformanceMetric(UnrealizedLTCGMetric).Value(),
-		UnrealizedSTCG:     a.PerformanceMetric(UnrealizedSTCGMetric).Value(),
-		QualifiedDividends: a.PerformanceMetric(QualifiedDividendsMetric).Value(),
-		NonQualifiedIncome: a.PerformanceMetric(NonQualifiedIncomeMetric).Value(),
-		TaxCostRatio:       a.PerformanceMetric(TaxCostRatioMetric).Value(),
+func (a *Account) TaxMetrics() (TaxMetrics, error) {
+	var errs []error
+	t := TaxMetrics{}
+	var err error
+
+	t.LTCG, err = a.PerformanceMetric(LTCGMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
 	}
+
+	t.STCG, err = a.PerformanceMetric(STCGMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.UnrealizedLTCG, err = a.PerformanceMetric(UnrealizedLTCGMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.UnrealizedSTCG, err = a.PerformanceMetric(UnrealizedSTCGMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.QualifiedDividends, err = a.PerformanceMetric(QualifiedDividendsMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.NonQualifiedIncome, err = a.PerformanceMetric(NonQualifiedIncomeMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.TaxCostRatio, err = a.PerformanceMetric(TaxCostRatioMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return t, errors.Join(errs...)
 }
 
-func (a *Account) TradeMetrics() TradeMetrics {
-	return TradeMetrics{
-		WinRate:              a.PerformanceMetric(WinRate).Value(),
-		AverageWin:           a.PerformanceMetric(AverageWin).Value(),
-		AverageLoss:          a.PerformanceMetric(AverageLoss).Value(),
-		ProfitFactor:         a.PerformanceMetric(ProfitFactor).Value(),
-		AverageHoldingPeriod: a.PerformanceMetric(AverageHoldingPeriod).Value(),
-		Turnover:             a.PerformanceMetric(Turnover).Value(),
-		NPositivePeriods:     a.PerformanceMetric(NPositivePeriods).Value(),
-		GainLossRatio:        a.PerformanceMetric(TradeGainLossRatio).Value(),
+func (a *Account) TradeMetrics() (TradeMetrics, error) {
+	var errs []error
+	t := TradeMetrics{}
+	var err error
+
+	t.WinRate, err = a.PerformanceMetric(WinRate).Value()
+	if err != nil {
+		errs = append(errs, err)
 	}
+
+	t.AverageWin, err = a.PerformanceMetric(AverageWin).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.AverageLoss, err = a.PerformanceMetric(AverageLoss).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.ProfitFactor, err = a.PerformanceMetric(ProfitFactor).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.AverageHoldingPeriod, err = a.PerformanceMetric(AverageHoldingPeriod).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.Turnover, err = a.PerformanceMetric(Turnover).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.NPositivePeriods, err = a.PerformanceMetric(NPositivePeriods).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	t.GainLossRatio, err = a.PerformanceMetric(TradeGainLossRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return t, errors.Join(errs...)
 }
 
-func (a *Account) WithdrawalMetrics() WithdrawalMetrics {
-	return WithdrawalMetrics{
-		SafeWithdrawalRate:      a.PerformanceMetric(SafeWithdrawalRate).Value(),
-		PerpetualWithdrawalRate: a.PerformanceMetric(PerpetualWithdrawalRate).Value(),
-		DynamicWithdrawalRate:   a.PerformanceMetric(DynamicWithdrawalRate).Value(),
+func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
+	var errs []error
+	w := WithdrawalMetrics{}
+	var err error
+
+	w.SafeWithdrawalRate, err = a.PerformanceMetric(SafeWithdrawalRate).Value()
+	if err != nil {
+		errs = append(errs, err)
 	}
+
+	w.PerpetualWithdrawalRate, err = a.PerformanceMetric(PerpetualWithdrawalRate).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	w.DynamicWithdrawalRate, err = a.PerformanceMetric(DynamicWithdrawalRate).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	return w, errors.Join(errs...)
 }
 
 // --- PortfolioManager interface ---
@@ -384,7 +559,7 @@ func (a *Account) Record(tx Transaction) {
 	switch tx.Type {
 	case BuyTransaction:
 		a.holdings[tx.Asset] += tx.Qty
-		a.taxLots[tx.Asset] = append(a.taxLots[tx.Asset], taxLot{
+		a.taxLots[tx.Asset] = append(a.taxLots[tx.Asset], TaxLot{
 			Date:  tx.Date,
 			Qty:   tx.Qty,
 			Price: tx.Price,
@@ -472,7 +647,7 @@ func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
 func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
 
 // TaxLots returns the current tax lot positions keyed by asset.
-func (a *Account) TaxLots() map[asset.Asset][]taxLot { return a.taxLots }
+func (a *Account) TaxLots() map[asset.Asset][]TaxLot { return a.taxLots }
 
 // Prices returns the most recent price DataFrame, or nil if no prices
 // have been recorded yet.
@@ -488,8 +663,3 @@ func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
 // SetRiskFree sets the risk-free asset after construction.
 func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
-
-// SetPriceData sets the current price DataFrame without updating the
-// equity curve. Used by the engine to provide prices before Compute
-// so that RebalanceTo and Value can calculate position values.
-func (a *Account) SetPriceData(df *data.DataFrame) { a.prices = df }

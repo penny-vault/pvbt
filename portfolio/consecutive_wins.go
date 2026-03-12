@@ -23,7 +23,7 @@ func (consecutiveWins) Description() string {
 	return "Longest streak of consecutive periods with positive returns. Useful for behavioral analysis -- longer winning streaks suggest momentum or trending conditions. The value is a count of periods."
 }
 
-func (consecutiveWins) Compute(a *Account, window *Period) float64 {
+func (consecutiveWins) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 
@@ -40,10 +40,10 @@ func (consecutiveWins) Compute(a *Account, window *Period) float64 {
 		}
 	}
 
-	return float64(maxStreak)
+	return float64(maxStreak), nil
 }
 
-func (consecutiveWins) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (consecutiveWins) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // ConsecutiveWins is the longest streak of consecutive positive-return
 // periods. Useful for understanding momentum characteristics and the

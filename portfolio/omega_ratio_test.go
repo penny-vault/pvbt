@@ -25,42 +25,50 @@ import (
 var _ = Describe("OmegaRatio", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		Expect(portfolio.OmegaRatio.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.OmegaRatio.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes gains/losses ratio for mixed returns", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 3.27298, 1e-3))
 	})
 
 	It("returns 0 for empty equity curve", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (no gains, no losses)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are positive (no losses)", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are negative (no gains)", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns correct ratio for balanced gains and losses", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 100, 110, 100})
-		v := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.OmegaRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 1.1, 1e-1))
 	})
 })

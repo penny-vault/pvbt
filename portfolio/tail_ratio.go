@@ -28,11 +28,11 @@ func (tailRatio) Description() string {
 	return "Ratio of the 95th percentile return to the absolute 5th percentile return. Measures the asymmetry between upside and downside tails. Values above 1.0 indicate the upside tail is fatter than the downside. Higher is better."
 }
 
-func (tailRatio) Compute(a *Account, window *Period) float64 {
+func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	sorted := make([]float64, len(r))
@@ -44,13 +44,13 @@ func (tailRatio) Compute(a *Account, window *Period) float64 {
 	p95 := sorted[int(math.Floor(0.95*float64(n)))]
 
 	if p5 == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return p95 / math.Abs(p5)
+	return p95 / math.Abs(p5), nil
 }
 
-func (tailRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (tailRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // TailRatio is the 95th percentile return divided by the absolute 5th
 // percentile return. It measures the asymmetry between extreme gains

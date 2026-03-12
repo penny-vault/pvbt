@@ -26,10 +26,10 @@ func (winRate) Description() string {
 		"can still be profitable."
 }
 
-func (winRate) Compute(a *Account, _ *Period) float64 {
+func (winRate) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 	if len(trips) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	wins := 0
@@ -39,10 +39,10 @@ func (winRate) Compute(a *Account, _ *Period) float64 {
 		}
 	}
 
-	return float64(wins) / float64(len(trips))
+	return float64(wins) / float64(len(trips)), nil
 }
 
-func (winRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (winRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // WinRate is the percentage of round-trip trades that were profitable.
 var WinRate PerformanceMetric = winRate{}

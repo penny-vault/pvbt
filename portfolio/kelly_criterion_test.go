@@ -25,42 +25,50 @@ import (
 var _ = Describe("KellyCriterion", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105})
-		Expect(portfolio.KellyCriterion.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.KellyCriterion.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes Kelly fraction for mixed returns", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 0.463, 1e-2))
 	})
 
 	It("returns 0 for empty returns", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (no wins, no losses)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are positive (no losses)", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are negative (no wins)", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns negative value when expected edge is negative", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80, 80.8})
-		v := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		v, err := a.PerformanceMetric(portfolio.KellyCriterion).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("<", 0.0))
 	})
 })

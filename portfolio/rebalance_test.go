@@ -16,7 +16,8 @@
 package portfolio_test
 
 import (
-	"math"
+	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -66,13 +67,14 @@ var _ = Describe("RebalanceTo", func() {
 		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
 		acct.UpdatePrices(df)
 
-		acct.RebalanceTo(portfolio.Allocation{
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date: t1,
 			Members: map[asset.Asset]float64{
 				spy:  0.60,
 				aapl: 0.40,
 			},
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		// Target shares: SPY = floor(0.60 * 100000 / 500) = 120
 		//                AAPL = floor(0.40 * 100000 / 200) = 200
@@ -106,7 +108,7 @@ var _ = Describe("RebalanceTo", func() {
 			},
 		}
 		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mbSetup))
-		acct.Order(spy, portfolio.Buy, 200)
+		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 200)).To(Succeed())
 		// Now: 0 cash, 200 SPY worth $100k
 
 		acct.UpdatePrices(df)
@@ -123,13 +125,14 @@ var _ = Describe("RebalanceTo", func() {
 		}
 		acct.SetBroker(mb)
 
-		acct.RebalanceTo(portfolio.Allocation{
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date: t1,
 			Members: map[asset.Asset]float64{
 				spy:  0.50,
 				aapl: 0.50,
 			},
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(acct.Position(spy)).To(Equal(100.0))
 		Expect(acct.Position(aapl)).To(Equal(250.0))
@@ -156,7 +159,7 @@ var _ = Describe("RebalanceTo", func() {
 			},
 		}
 		acct := portfolio.New(portfolio.WithCash(50_000), portfolio.WithBroker(mbSetup))
-		acct.Order(spy, portfolio.Buy, 100)
+		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 100)).To(Succeed())
 		// Now: 0 cash, 100 SPY worth $50k
 
 		acct.UpdatePrices(df)
@@ -171,12 +174,13 @@ var _ = Describe("RebalanceTo", func() {
 		}
 		acct.SetBroker(mb)
 
-		acct.RebalanceTo(portfolio.Allocation{
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date: t1,
 			Members: map[asset.Asset]float64{
 				goog: 1.0,
 			},
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(acct.Position(spy)).To(Equal(0.0))
 		Expect(acct.Position(goog)).To(Equal(50.0))
@@ -189,25 +193,13 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(mb.submitted[1].Asset).To(Equal(goog))
 	})
 
-	It("skips assets with NaN price and rebalances the rest", func() {
-		// SPY has NaN price, AAPL has a valid price.
-		df, err := data.NewDataFrame(
-			[]time.Time{t1},
-			[]asset.Asset{spy, aapl},
-			[]data.Metric{data.MetricClose},
-			[]float64{math.NaN(), 200},
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		mb := &mockBroker{}
-		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
-			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
+	It("returns an error when broker rejects an order", func() {
+		mb := &mockBroker{
+			submitErr: fmt.Errorf("no price for SPY"),
 		}
-
 		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
-		acct.UpdatePrices(df)
 
-		acct.RebalanceTo(portfolio.Allocation{
+		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date: t1,
 			Members: map[asset.Asset]float64{
 				spy:  0.50,
@@ -215,61 +207,19 @@ var _ = Describe("RebalanceTo", func() {
 			},
 		})
 
-		// SPY should be skipped (NaN price), only AAPL should be bought.
-		Expect(acct.Position(spy)).To(Equal(0.0))
-		Expect(acct.Position(aapl)).To(Equal(250.0))
-		Expect(mb.submitted).To(HaveLen(1))
-		Expect(mb.submitted[0].Asset).To(Equal(aapl))
-	})
-
-	It("skips assets with zero price and rebalances the rest", func() {
-		df, err := data.NewDataFrame(
-			[]time.Time{t1},
-			[]asset.Asset{spy, aapl},
-			[]data.Metric{data.MetricClose},
-			[]float64{0, 200},
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		mb := &mockBroker{}
-		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
-			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
-		}
-
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
-		acct.UpdatePrices(df)
-
-		acct.RebalanceTo(portfolio.Allocation{
-			Date: t1,
-			Members: map[asset.Asset]float64{
-				spy:  0.50,
-				aapl: 0.50,
-			},
-		})
-
-		Expect(acct.Position(spy)).To(Equal(0.0))
-		Expect(acct.Position(aapl)).To(Equal(250.0))
-		Expect(mb.submitted).To(HaveLen(1))
-		Expect(mb.submitted[0].Asset).To(Equal(aapl))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("no price"))
 	})
 
 	It("is a no-op when allocation has empty Members and no holdings", func() {
-		df, err := data.NewDataFrame(
-			[]time.Time{t1},
-			[]asset.Asset{spy},
-			[]data.Metric{data.MetricClose},
-			[]float64{500},
-		)
-		Expect(err).NotTo(HaveOccurred())
-
 		mb := &mockBroker{}
 		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
-		acct.UpdatePrices(df)
 
-		acct.RebalanceTo(portfolio.Allocation{
+		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date:    t1,
 			Members: map[asset.Asset]float64{},
 		})
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(mb.submitted).To(BeEmpty())
 		Expect(acct.Cash()).To(Equal(100_000.0))
@@ -296,7 +246,7 @@ var _ = Describe("RebalanceTo", func() {
 		// Pass two allocations with separate assets.
 		// First allocation buys SPY, second sells SPY (not in members)
 		// and buys AAPL. So we expect 3 orders total: buy SPY, sell SPY, buy AAPL.
-		acct.RebalanceTo(
+		acct.RebalanceTo(context.Background(),
 			portfolio.Allocation{
 				Date: t1,
 				Members: map[asset.Asset]float64{

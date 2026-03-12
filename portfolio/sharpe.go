@@ -25,7 +25,11 @@ func (sharpe) Description() string {
 	return "Risk-adjusted return relative to a risk-free rate. Computed as the mean excess return divided by its standard deviation, annualized. Higher values indicate better risk-adjusted performance. A Sharpe above 1.0 is generally considered good, above 2.0 is very good."
 }
 
-func (sharpe) Compute(a *Account, window *Period) float64 {
+func (sharpe) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.RiskFreePrices()) == 0 {
+		return 0, ErrNoRiskFreeRate
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
@@ -33,14 +37,14 @@ func (sharpe) Compute(a *Account, window *Period) float64 {
 
 	sd := stddev(er)
 	if sd == 0 {
-		return 0
+		return 0, nil
 	}
 
 	af := annualizationFactor(a.EquityTimes())
-	return mean(er) / sd * math.Sqrt(af)
+	return mean(er) / sd * math.Sqrt(af), nil
 }
 
-func (sharpe) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (sharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Sharpe is the Sharpe ratio: risk-adjusted return relative to a
 // risk-free rate, using standard deviation of returns as the risk measure.

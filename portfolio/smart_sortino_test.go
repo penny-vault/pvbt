@@ -30,7 +30,9 @@ var _ = Describe("SmartSortino", func() {
 			[]float64{100, 105, 98, 103, 97, 110},
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
-		Expect(portfolio.SmartSortino.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.SmartSortino.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("returns Sortino divided by autocorrelation penalty", func() {
@@ -39,7 +41,8 @@ var _ = Describe("SmartSortino", func() {
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
 
-		smartVal := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		smartVal, err := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(smartVal).NotTo(Equal(0.0))
 		Expect(math.IsInf(smartVal, 0)).To(BeFalse())
@@ -48,7 +51,8 @@ var _ = Describe("SmartSortino", func() {
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountWithRF([]float64{100}, []float64{100})
-		v := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -57,7 +61,8 @@ var _ = Describe("SmartSortino", func() {
 			[]float64{100, 100, 100, 100, 100},
 			[]float64{100, 100, 100, 100, 100},
 		)
-		v := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -66,7 +71,8 @@ var _ = Describe("SmartSortino", func() {
 			[]float64{100, 110, 121, 133, 146},
 			[]float64{100, 100.01, 100.02, 100.03, 100.04},
 		)
-		v := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSortino).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 })

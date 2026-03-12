@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -75,14 +76,14 @@ var _ = Describe("Account", func() {
 
 			// Submit via the first broker.
 			mb1.defaultFill = &broker.Fill{Price: 100.0, FilledAt: t1}
-			a.Order(spy, portfolio.Buy, 1)
+			a.Order(context.Background(), spy, portfolio.Buy, 1)
 			Expect(mb1.submitted).To(HaveLen(1))
 			Expect(mb2.submitted).To(HaveLen(0))
 
 			// Replace the broker.
 			a.SetBroker(mb2)
 			mb2.defaultFill = &broker.Fill{Price: 100.0, FilledAt: t1}
-			a.Order(spy, portfolio.Buy, 1)
+			a.Order(context.Background(), spy, portfolio.Buy, 1)
 			Expect(mb2.submitted).To(HaveLen(1))
 		})
 	})
@@ -703,14 +704,16 @@ var _ = Describe("Summary", func() {
 	It("computes correct TWRR for known equity curve", func() {
 		// TWRR = 550/500 - 1 = 0.10
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(s.TWRR).To(BeNumerically("~", 0.10, 1e-9))
 	})
 
 	It("computes correct MaxDrawdown for known equity curve", func() {
 		// peak=525, trough=485 => drawdown = (485-525)/525 = -40/525
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		expectedMaxDD := -40.0 / 525.0
 		Expect(s.MaxDrawdown).To(BeNumerically("~", expectedMaxDD, 1e-10))
 	})
@@ -718,7 +721,8 @@ var _ = Describe("Summary", func() {
 	It("computes correct StdDev for known equity curve", func() {
 		// Annualized StdDev = stddev(equity returns) * sqrt(252)
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		expectedStdDev := helperStddev(eqRet) * math.Sqrt(af)
 		Expect(s.StdDev).To(BeNumerically("~", expectedStdDev, 1e-10))
 	})
@@ -726,7 +730,8 @@ var _ = Describe("Summary", func() {
 	It("computes correct Sharpe ratio for known equity curve", func() {
 		// Sharpe = mean(excess returns) / stddev(excess returns) * sqrt(252)
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		expectedSharpe := helperMean(er) / helperStddev(er) * math.Sqrt(af)
 		Expect(s.Sharpe).To(BeNumerically("~", expectedSharpe, 1e-10))
 	})
@@ -735,7 +740,8 @@ var _ = Describe("Summary", func() {
 		// Sortino = mean(excess returns) / downside_deviation * sqrt(252)
 		// where downside_deviation = sqrt(sum(min(er_i, 0)^2) / N)
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		sumSq := 0.0
 		for _, v := range er {
 			if v < 0 {
@@ -752,7 +758,8 @@ var _ = Describe("Summary", func() {
 		// times span: Jan 2 to Jan 9 = 7 calendar days
 		// years = 7 / 365.25
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		years := 7.0 / 365.25
 		annReturn := math.Pow(550.0/500.0, 1.0/years) - 1
 		dd := helperDrawdownSeries(equity)
@@ -771,7 +778,8 @@ var _ = Describe("Summary", func() {
 		// XIRR: -500 + 550/(1+r)^(7/365) = 0
 		// r = (550/500)^(365/7) - 1
 		acct := buildSummaryAcct()
-		s := acct.Summary()
+		s, err := acct.Summary()
+		Expect(err).NotTo(HaveOccurred())
 		expectedMWRR := math.Pow(550.0/500.0, 365.0/7.0) - 1
 		Expect(s.MWRR).To(BeNumerically("~", expectedMWRR, 1e-4))
 	})
@@ -823,40 +831,47 @@ var _ = Describe("RiskMetrics", func() {
 	af := 252.0
 
 	It("Beta equals 1.0 when portfolio tracks benchmark exactly", func() {
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.Beta).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
 	It("Alpha equals 0.0 when portfolio tracks benchmark exactly", func() {
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.Alpha).To(BeNumerically("~", 0.0, 1e-9))
 	})
 
 	It("TrackingError equals 0.0 when portfolio tracks benchmark exactly", func() {
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.TrackingError).To(BeNumerically("~", 0.0, 1e-9))
 	})
 
 	It("InformationRatio equals 0.0 when active return is zero", func() {
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.InformationRatio).To(BeNumerically("~", 0.0, 1e-9))
 	})
 
 	It("RSquared equals 1.0 when portfolio tracks benchmark exactly", func() {
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.RSquared).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
 	It("Treynor equals (TWRR - rf_return) / beta ~ 0.0995", func() {
 		// TWRR = 0.10, approximate risk-free return over 5 days ~ 0.0005,
 		// Beta = 1.0, so Treynor ~ 0.0995.
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.Treynor).To(BeNumerically("~", 0.0995, 1e-3))
 	})
 
 	It("computes correct DownsideDeviation for known equity curve", func() {
 		// DownsideDeviation = stddev(negative excess returns) * sqrt(252)
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		var neg []float64
 		for _, v := range er {
 			if v < 0 {
@@ -870,13 +885,15 @@ var _ = Describe("RiskMetrics", func() {
 	It("returns zero UlcerIndex when equity curve has fewer than 14 points", func() {
 		// The risk account has only 6 equity points, which is below the
 		// 14-period lookback required by UlcerIndex.
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(rm.UlcerIndex).To(BeNumerically("==", 0))
 	})
 
 	It("computes correct Skewness for known equity curve", func() {
 		// Skewness = (1/n) * sum((r-mean)^3) / stddev^3
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		n := float64(len(eqRet))
 		m := helperMean(eqRet)
 		s := helperStddev(eqRet)
@@ -891,7 +908,8 @@ var _ = Describe("RiskMetrics", func() {
 
 	It("computes correct ExcessKurtosis for known equity curve", func() {
 		// ExcessKurtosis = (1/n) * sum((r-mean)^4) / stddev^4 - 3
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		n := float64(len(eqRet))
 		m := helperMean(eqRet)
 		s := helperStddev(eqRet)
@@ -907,7 +925,8 @@ var _ = Describe("RiskMetrics", func() {
 	It("computes correct ValueAtRisk for known equity curve", func() {
 		// VaR = sorted returns at index floor(0.05 * n)
 		// With 5 returns, floor(0.05*5) = floor(0.25) = 0, so VaR = min return.
-		rm := buildRiskAcct().RiskMetrics()
+		rm, err := buildRiskAcct().RiskMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		// Sorted returns: find the minimum return.
 		// eqRet = [0.05, -35/525, 25/490, -30/515, 65/485]
 		// Sorted ascending: -35/525, -30/515, 25/490, 0.05, 65/485
@@ -945,23 +964,27 @@ var _ = Describe("WithdrawalMetrics", func() {
 	}
 
 	It("SafeWithdrawalRate is approximately 0.063", func() {
-		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(wm.SafeWithdrawalRate).To(BeNumerically("~", 0.063, 1e-2))
 	})
 
 	It("PerpetualWithdrawalRate is approximately 0.049", func() {
-		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(wm.PerpetualWithdrawalRate).To(BeNumerically("~", 0.049, 1e-2))
 	})
 
 	It("SWR > 0 and DWR > 0 for a growing curve", func() {
-		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(wm.SafeWithdrawalRate).To(BeNumerically(">", 0.0))
 		Expect(wm.DynamicWithdrawalRate).To(BeNumerically(">", 0.0))
 	})
 
 	It("ordering invariant: PWR <= SWR <= DWR", func() {
-		wm := buildWithdrawalAcct().WithdrawalMetrics()
+		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(wm.PerpetualWithdrawalRate).To(BeNumerically("<=", wm.SafeWithdrawalRate))
 		Expect(wm.SafeWithdrawalRate).To(BeNumerically("<=", wm.DynamicWithdrawalRate))
 	})
@@ -1048,7 +1071,8 @@ var _ = Describe("Window", func() {
 		acct, equityCurve, _, times := buildLongAccountWithPrices()
 
 		// Full TWRR from the full equity curve.
-		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
+		fullTWRR, err := acct.PerformanceMetric(portfolio.TWRR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		n := len(equityCurve)
 		expectedFullTWRR := equityCurve[n-1]/equityCurve[0] - 1
 		Expect(fullTWRR).To(BeNumerically("~", expectedFullTWRR, 1e-10))
@@ -1067,7 +1091,8 @@ var _ = Describe("Window", func() {
 		windowedEq := equityCurve[startIdx:]
 		expectedWindowedTWRR := windowedEq[len(windowedEq)-1]/windowedEq[0] - 1
 
-		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Days(10)).Value()
+		windowedTWRR, err := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Days(10)).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(windowedTWRR).To(BeNumerically("~", expectedWindowedTWRR, 1e-10))
 		Expect(fullTWRR).NotTo(BeNumerically("~", windowedTWRR, 1e-10))
 	})
@@ -1088,10 +1113,12 @@ var _ = Describe("Window", func() {
 		windowedEq := equityCurve[startIdx:]
 		expectedWindowedTWRR := windowedEq[len(windowedEq)-1]/windowedEq[0] - 1
 
-		windowedTWRR := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(1)).Value()
+		windowedTWRR, err := acct.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(1)).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(windowedTWRR).To(BeNumerically("~", expectedWindowedTWRR, 1e-10))
 
-		fullTWRR := acct.PerformanceMetric(portfolio.TWRR).Value()
+		fullTWRR, err := acct.PerformanceMetric(portfolio.TWRR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(fullTWRR).NotTo(BeNumerically("~", windowedTWRR, 1e-10))
 	})
 
@@ -1116,10 +1143,12 @@ var _ = Describe("Window", func() {
 		wER := helperExcessReturns(wRet, wRfRet)
 		expectedSharpe := helperMean(wER) / helperStddev(wER) * math.Sqrt(252)
 
-		windowedSharpe := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
+		windowedSharpe, err := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(windowedSharpe).To(BeNumerically("~", expectedSharpe, 1e-10))
 
-		fullSharpe := acct.PerformanceMetric(portfolio.Sharpe).Value()
+		fullSharpe, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(fullSharpe).NotTo(BeNumerically("~", windowedSharpe, 1e-10))
 	})
 })

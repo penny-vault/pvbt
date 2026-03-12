@@ -25,11 +25,11 @@ func (gainToPain) Description() string {
 	return "Jack Schwager's Gain-to-Pain Ratio: sum of all returns divided by the absolute sum of negative returns. Measures total gains per unit of total pain endured. Values above 1.0 are good; above 2.0 is excellent. Unlike GainLossRatio (average win/loss), this uses total sums."
 }
 
-func (gainToPain) Compute(a *Account, window *Period) float64 {
+func (gainToPain) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	var totalReturn, negativeSum float64
@@ -41,13 +41,13 @@ func (gainToPain) Compute(a *Account, window *Period) float64 {
 	}
 
 	if negativeSum == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return totalReturn / negativeSum
+	return totalReturn / negativeSum, nil
 }
 
-func (gainToPain) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (gainToPain) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // GainToPainRatio is Jack Schwager's metric: the sum of all returns
 // divided by the absolute sum of negative returns. It captures total

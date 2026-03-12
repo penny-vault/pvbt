@@ -82,7 +82,9 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 1_050.0,
 			})
 
-			tm = a.TradeMetrics()
+			var err error
+			tm, err = a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("computes WinRate correctly", func() {
@@ -114,7 +116,8 @@ var _ = Describe("TradeMetrics", func() {
 	Describe("with no trades", func() {
 		It("returns zero values", func() {
 			a := portfolio.New(portfolio.WithCash(10_000))
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
@@ -145,7 +148,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 1_200.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(Equal(1.0))
 			Expect(tm.AverageWin).To(Equal(200.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
@@ -191,7 +195,8 @@ var _ = Describe("TradeMetrics", func() {
 			a.UpdatePrices(buildDF(time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC), 120.0))
 			a.UpdatePrices(buildDF(time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC), 115.0))
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.NPositivePeriods).To(BeNumerically("~", 0.5, 1e-4))
 		})
 	})
@@ -236,7 +241,8 @@ var _ = Describe("TradeMetrics", func() {
 			})
 			a.UpdatePrices(buildDF(time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC), 100.0))
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Total sell value = 1000
 			// Equity curve: [10000, 10000, 10000], mean = 10000
@@ -286,7 +292,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 800.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.ProfitFactor).To(Equal(0.0))
@@ -317,7 +324,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 1_000.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			// PnL=0 is not > 0, so it is counted as a loss
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
@@ -373,7 +381,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 2_800.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(BeNumerically("~", 0.5, 1e-4))
 			Expect(tm.AverageWin).To(Equal(200.0))
 			Expect(tm.AverageLoss).To(Equal(-200.0))
@@ -406,7 +415,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 1_200.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(Equal(1.0))
 			Expect(tm.AverageWin).To(Equal(200.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
@@ -437,7 +447,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 800.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.AverageLoss).To(Equal(-200.0))
@@ -468,7 +479,8 @@ var _ = Describe("TradeMetrics", func() {
 			a.UpdatePrices(buildDF(time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC), 100.0))
 			a.UpdatePrices(buildDF(time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC), 100.0))
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.NPositivePeriods).To(Equal(0.0))
 		})
 	})
@@ -507,7 +519,8 @@ var _ = Describe("TradeMetrics", func() {
 				Amount: 900.0,
 			})
 
-			tm := a.TradeMetrics()
+			tm, err := a.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.WinRate).To(BeNumerically("~", 0.5, 1e-4))
 			Expect(tm.AverageWin).To(BeNumerically("~", 100.0, 1e-4))
 			Expect(tm.AverageLoss).To(BeNumerically("~", -100.0, 1e-4))

@@ -25,7 +25,11 @@ func (informationRatio) Description() string {
 	return "Active return divided by tracking error. Measures how consistently the portfolio outperforms its benchmark per unit of active risk taken. Higher values indicate more consistent outperformance."
 }
 
-func (informationRatio) Compute(a *Account, window *Period) float64 {
+func (informationRatio) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -34,21 +38,23 @@ func (informationRatio) Compute(a *Account, window *Period) float64 {
 
 	activeReturns := excessReturns(pReturns, bReturns)
 	if len(activeReturns) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	te := stddev(activeReturns)
 	if te == 0 {
-		return 0
+		return 0, nil
 	}
 
 	times := a.EquityTimes()
 	af := annualizationFactor(times)
 
-	return mean(activeReturns) / te * math.Sqrt(af)
+	return mean(activeReturns) / te * math.Sqrt(af), nil
 }
 
-func (informationRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (informationRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // InformationRatio measures the portfolio's active return per unit of
 // tracking error relative to the benchmark.

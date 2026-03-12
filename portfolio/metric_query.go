@@ -15,6 +15,13 @@
 
 package portfolio
 
+import "errors"
+
+var (
+	ErrNoRiskFreeRate = errors.New("risk-free rate not configured")
+	ErrNoBenchmark    = errors.New("benchmark not configured")
+)
+
 // PerformanceMetric is implemented by each metric type (Sharpe, Beta,
 // etc.). Each implementation lives in its own file with an unexported
 // struct and an exported package-level var. The Account is passed to
@@ -34,11 +41,11 @@ type PerformanceMetric interface {
 	// Account provides access to transaction history, equity curve,
 	// benchmark data, and risk-free data. If window is nil, the full
 	// history is used.
-	Compute(a *Account, window *Period) float64
+	Compute(a *Account, window *Period) (float64, error)
 
 	// ComputeSeries calculates a rolling time series of the metric.
 	// If window is nil, the full history is used.
-	ComputeSeries(a *Account, window *Period) []float64
+	ComputeSeries(a *Account, window *Period) ([]float64, error)
 }
 
 // PerformanceMetricQuery is the builder returned by
@@ -58,11 +65,11 @@ func (q PerformanceMetricQuery) Window(p Period) PerformanceMetricQuery {
 }
 
 // Value computes and returns a single scalar value for the metric.
-func (q PerformanceMetricQuery) Value() float64 {
+func (q PerformanceMetricQuery) Value() (float64, error) {
 	return q.metric.Compute(q.account, q.window)
 }
 
 // Series computes and returns a rolling time series for the metric.
-func (q PerformanceMetricQuery) Series() []float64 {
+func (q PerformanceMetricQuery) Series() ([]float64, error) {
 	return q.metric.ComputeSeries(q.account, q.window)
 }

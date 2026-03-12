@@ -16,6 +16,9 @@
 package portfolio
 
 import (
+	"context"
+	"time"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
@@ -34,7 +37,7 @@ type Portfolio interface {
 	// the necessary buy/sell orders. Each resulting trade appends a
 	// BuyTransaction or SellTransaction to the transaction log. Any
 	// commissions produce a FeeTransaction.
-	RebalanceTo(alloc ...Allocation)
+	RebalanceTo(ctx context.Context, alloc ...Allocation) error
 
 	// Order places an individual order for a specific asset. This is
 	// the imperative counterpart to RebalanceTo, used when a strategy
@@ -43,7 +46,7 @@ type Portfolio interface {
 	// order behavior. Each fill appends a BuyTransaction or
 	// SellTransaction to the transaction log. Any commissions produce
 	// a FeeTransaction.
-	Order(a asset.Asset, side Side, qty float64, mods ...OrderModifier)
+	Order(ctx context.Context, a asset.Asset, side Side, qty float64, mods ...OrderModifier) error
 
 	// Cash returns the current cash balance available in the portfolio.
 	Cash() float64
@@ -68,6 +71,12 @@ type Portfolio interface {
 	// trades, dividends, fees, deposits, and withdrawals.
 	Transactions() []Transaction
 
+	// EquityCurve returns the portfolio value at each step, in chronological order.
+	EquityCurve() []float64
+
+	// EquityTimes returns the timestamp for each equity curve entry.
+	EquityTimes() []time.Time
+
 	// PerformanceMetric returns a PerformanceMetricQuery builder for the given
 	// metric. Use .Value() to get a single number over the full
 	// history, .Window() to set a lookback period, or .Series() to
@@ -80,28 +89,28 @@ type Portfolio interface {
 	// Summary returns the headline performance numbers (TWRR, Sharpe,
 	// Sortino, Calmar, MaxDrawdown, StdDev) computed over the full
 	// history.
-	Summary() Summary
+	Summary() (Summary, error)
 
 	// RiskMetrics returns risk-related measurements (Beta, Alpha,
 	// TrackingError, DownsideDeviation, InformationRatio, Treynor)
 	// computed over the full history.
-	RiskMetrics() RiskMetrics
+	RiskMetrics() (RiskMetrics, error)
 
 	// TaxMetrics returns tax-related measurements (LTCG, STCG,
 	// unrealized gains, dividends, TaxCostRatio) derived from the
 	// transaction log and tax lot tracking.
-	TaxMetrics() TaxMetrics
+	TaxMetrics() (TaxMetrics, error)
 
 	// TradeMetrics returns trade analysis measurements (WinRate,
 	// ProfitFactor, AverageHoldingPeriod, Turnover, etc.) derived
 	// from the transaction log.
-	TradeMetrics() TradeMetrics
+	TradeMetrics() (TradeMetrics, error)
 
 	// WithdrawalMetrics returns sustainable spending rates
 	// (SafeWithdrawalRate, PerpetualWithdrawalRate,
 	// DynamicWithdrawalRate) derived from Monte Carlo simulation
 	// of historical returns.
-	WithdrawalMetrics() WithdrawalMetrics
+	WithdrawalMetrics() (WithdrawalMetrics, error)
 }
 
 // PortfolioManager is the interface the engine uses to manage the

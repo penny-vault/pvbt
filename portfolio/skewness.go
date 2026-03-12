@@ -23,18 +23,18 @@ func (skewness) Description() string {
 	return "Measures the asymmetry of the return distribution. Positive skew means more extreme positive returns. Negative skew means more extreme negative returns (the common case for equities). Zero indicates a symmetric distribution."
 }
 
-func (skewness) Compute(a *Account, window *Period) float64 {
+func (skewness) Compute(a *Account, window *Period) (float64, error) {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)
 
 	n := len(r)
 	if n < 3 {
-		return 0
+		return 0, nil
 	}
 
 	s := stddev(r)
 	if s == 0 {
-		return 0
+		return 0, nil
 	}
 
 	m := mean(r)
@@ -44,10 +44,10 @@ func (skewness) Compute(a *Account, window *Period) float64 {
 		sum += d * d * d
 	}
 
-	return sum / float64(n) / (s * s * s)
+	return sum / float64(n) / (s * s * s), nil
 }
 
-func (skewness) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (skewness) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Skewness measures the asymmetry of the return distribution.
 // Negative skew means the left tail is longer (more large losses

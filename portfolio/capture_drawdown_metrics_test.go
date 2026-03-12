@@ -76,7 +76,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			Expect(portfolio.UpsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.UpsideCaptureRatio.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("DownsideCaptureRatio returns nil from ComputeSeries", func() {
@@ -84,7 +86,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			Expect(portfolio.DownsideCaptureRatio.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.DownsideCaptureRatio.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("AvgDrawdown returns nil from ComputeSeries", func() {
@@ -92,7 +96,9 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			Expect(portfolio.AvgDrawdown.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.AvgDrawdown.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
@@ -114,7 +120,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// geoP = math.Pow(1.2*1.2, 0.5) - 1 = 0.2
 			// geoB = math.Pow(1.1*1.1, 0.5) - 1 = 0.1
@@ -130,7 +137,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 95, 90, 85},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -140,7 +148,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -160,7 +169,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 100, 110},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", 0.5, 1e-9))
 		})
 	})
@@ -183,7 +193,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9},
 			)
 
-			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// (110 -> 99): bRet = (99-110)/110 = -11/110 = -0.1 exactly
 			// pRet = (10800-12000)/12000 = -1200/12000 = -0.1 exactly
@@ -206,7 +217,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9},
 			)
 
-			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", 0.25, 1e-9))
 		})
 
@@ -217,7 +229,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 105, 110, 115},
 			)
 
-			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -237,7 +250,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9},
 			)
 
-			v := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.DownsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", 0.0, 1e-9))
 		})
 	})
@@ -258,7 +272,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.025, 1e-9))
 		})
 
@@ -278,7 +293,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 105, 100, 105, 100},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.04, 1e-9))
 		})
 
@@ -298,7 +314,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 100, 110, 100},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.06, 1e-9))
 		})
 
@@ -310,7 +327,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 105, 110, 115},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -320,7 +338,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -340,7 +359,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 105, 100, 110},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.06, 1e-9))
 		})
 
@@ -356,7 +376,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 100, 100, 100},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.025, 1e-9))
 		})
 	})
@@ -386,7 +407,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 99, 108.9, 119.79},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", 2.0, 1e-6))
 		})
 	})
@@ -406,7 +428,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 110, 95, 105},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("<", 0.0))
 		})
 
@@ -420,7 +443,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 95},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 	})
@@ -436,7 +460,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 105, 110, 115},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(Equal(0.0))
 		})
 
@@ -456,7 +481,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 95, 90, 85},
 			)
 
-			v := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			v, err := a.PerformanceMetric(portfolio.AvgDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", -0.15, 1e-9))
 		})
 	})
@@ -485,7 +511,8 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{100, 105, 99.75, 109.725},
 			)
 
-			v := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			v, err := a.PerformanceMetric(portfolio.UpsideCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(v).To(BeNumerically("~", expected, 1e-6))
 		})
 	})

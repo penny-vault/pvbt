@@ -23,15 +23,15 @@ func (taxCostRatio) Description() string {
 	return "Estimated percentage of portfolio gain lost to taxes. Computed as estimated tax liability (using 25% for short-term gains, 15% for long-term gains and qualified dividends) divided by total portfolio gain. Lower values indicate more tax-efficient strategies."
 }
 
-func (taxCostRatio) Compute(a *Account, _ *Period) float64 {
+func (taxCostRatio) Compute(a *Account, _ *Period) (float64, error) {
 	ec := a.EquityCurve()
 	if len(ec) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	totalGain := ec[len(ec)-1] - ec[0]
 	if totalGain <= 0 {
-		return 0
+		return 0, nil
 	}
 
 	ltcg, stcg, qualDiv, nonQualDiv := realizedGains(a.Transactions())
@@ -46,10 +46,10 @@ func (taxCostRatio) Compute(a *Account, _ *Period) float64 {
 	estimatedTax += 0.15 * qualDiv
 	estimatedTax += 0.25 * nonQualDiv
 
-	return estimatedTax / totalGain
+	return estimatedTax / totalGain, nil
 }
 
-func (taxCostRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (taxCostRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // TaxCostRatioMetric is the estimated percentage of portfolio gain lost to taxes.
 var TaxCostRatioMetric PerformanceMetric = taxCostRatio{}

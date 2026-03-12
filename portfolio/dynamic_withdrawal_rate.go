@@ -23,15 +23,15 @@ func (dynamicWithdrawalRate) Description() string {
 	return "A withdrawal rate that adjusts based on current portfolio value rather than initial value. Increases withdrawals when the portfolio grows and decreases them during drawdowns, providing a balance between income and capital preservation."
 }
 
-func (dynamicWithdrawalRate) Compute(a *Account, window *Period) float64 {
+func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {
-		return 0
+		return 0, nil
 	}
 
 	monthly := monthlyReturnsFromEquity(equity)
 	if len(monthly) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	// Dynamic withdrawal: balance must never reach zero, but withdrawal
@@ -40,10 +40,10 @@ func (dynamicWithdrawalRate) Compute(a *Account, window *Period) float64 {
 		return true // survival is checked in-loop
 	}
 
-	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, true)
+	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, true), nil
 }
 
-func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // DynamicWithdrawalRate is the maximum annual withdrawal rate using
 // dynamic adjustments: each year's withdrawal is the lesser of the

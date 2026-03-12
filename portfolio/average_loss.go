@@ -26,7 +26,7 @@ func (averageLoss) Description() string {
 		"same portfolio rather than across different ones."
 }
 
-func (averageLoss) Compute(a *Account, _ *Period) float64 {
+func (averageLoss) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
 	var losses int
@@ -40,13 +40,13 @@ func (averageLoss) Compute(a *Account, _ *Period) float64 {
 	}
 
 	if losses == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return sumLoss / float64(losses)
+	return sumLoss / float64(losses), nil
 }
 
-func (averageLoss) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (averageLoss) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // AverageLoss is the average loss on losing round-trip trades (negative value).
 var AverageLoss PerformanceMetric = averageLoss{}

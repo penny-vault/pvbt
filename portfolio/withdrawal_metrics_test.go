@@ -77,7 +77,9 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("SafeWithdrawalRate", func() {
 		It("returns 0 when equity curve is too short for monthly returns", func() {
 			a := buildShortAccount()
-			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("returns 0.033 for a flat equity curve (seed=42)", func() {
@@ -86,26 +88,32 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// just replays 0% returns, so the portfolio only shrinks by
 			// the withdrawal amount. 3.3% over 30 years barely survives.
 			a := buildFlatAccount()
-			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.033, 0.001))
+			v, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.033, 0.001))
 		})
 
 		It("returns 0.063 for a moderate-growth equity curve (seed=42)", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.063, 0.001))
+			v, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.063, 0.001))
 		})
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.SafeWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.SafeWithdrawalRate.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
 	Describe("PerpetualWithdrawalRate", func() {
 		It("returns 0 when equity curve is too short for monthly returns", func() {
 			a := buildShortAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("returns 0 for a flat equity curve (seed=42)", func() {
@@ -113,25 +121,32 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// balance will be less than the starting balance, so no
 			// perpetual rate is sustainable.
 			a := buildFlatAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("returns 0.049 for a moderate-growth equity curve (seed=42)", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.049, 0.001))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.049, 0.001))
 		})
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.PerpetualWithdrawalRate.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
 	Describe("DynamicWithdrawalRate", func() {
 		It("returns 0 when equity curve is too short for monthly returns", func() {
 			a := buildShortAccount()
-			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("returns 0.200 for a flat equity curve (seed=42)", func() {
@@ -140,19 +155,23 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// (withdrawal shrinks proportionally), allowing the maximum
 			// rate to pass.
 			a := buildFlatAccount()
-			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.200, 0.001))
+			v, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.200, 0.001))
 		})
 
 		It("returns 0.200 for a moderate-growth equity curve (seed=42)", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.200, 0.001))
+			v, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.200, 0.001))
 		})
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			Expect(portfolio.DynamicWithdrawalRate.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.DynamicWithdrawalRate.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
@@ -184,15 +203,19 @@ var _ = Describe("Withdrawal Metrics", func() {
 			declining := buildDecliningAccount()
 			growing := buildModerateAccount()
 
-			declSWR := portfolio.SafeWithdrawalRate.Compute(declining, nil)
-			growSWR := portfolio.SafeWithdrawalRate.Compute(growing, nil)
+			declSWR, err := portfolio.SafeWithdrawalRate.Compute(declining, nil)
+			Expect(err).NotTo(HaveOccurred())
+			growSWR, err := portfolio.SafeWithdrawalRate.Compute(growing, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(declSWR).To(BeNumerically("<", growSWR))
 		})
 
 		It("PerpetualWithdrawalRate is 0 for declining curve", func() {
 			a := buildDecliningAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 	})
 
@@ -224,17 +247,23 @@ var _ = Describe("Withdrawal Metrics", func() {
 
 		It("SafeWithdrawalRate returns 0 for exactly 12 equity points", func() {
 			a := buildMinLengthAccount()
-			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("PerpetualWithdrawalRate returns 0 for exactly 12 equity points", func() {
 			a := buildMinLengthAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("DynamicWithdrawalRate returns 0 for exactly 12 equity points", func() {
 			a := buildMinLengthAccount()
-			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 	})
 
@@ -267,12 +296,16 @@ var _ = Describe("Withdrawal Metrics", func() {
 
 		It("SafeWithdrawalRate is 0 for a steeply declining curve", func() {
 			a := buildSteepDeclineAccount()
-			Expect(portfolio.SafeWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("PerpetualWithdrawalRate is 0 for a steeply declining curve", func() {
 			a := buildSteepDeclineAccount()
-			Expect(portfolio.PerpetualWithdrawalRate.Compute(a, nil)).To(Equal(0.0))
+			v, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("DynamicWithdrawalRate hits ceiling for a steeply declining curve", func() {
@@ -280,8 +313,9 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// so the portfolio never fully depletes even with negative
 			// returns. This allows the maximum 20% rate to pass.
 			a := buildSteepDeclineAccount()
-			Expect(portfolio.DynamicWithdrawalRate.Compute(a, nil)).To(
-				BeNumerically("~", 0.200, 0.001))
+			v, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(v).To(BeNumerically("~", 0.200, 0.001))
 		})
 	})
 
@@ -316,8 +350,10 @@ var _ = Describe("Withdrawal Metrics", func() {
 			high := buildHighGrowthAccount()
 			moderate := buildModerateAccount()
 
-			highSWR := portfolio.SafeWithdrawalRate.Compute(high, nil)
-			modSWR := portfolio.SafeWithdrawalRate.Compute(moderate, nil)
+			highSWR, err := portfolio.SafeWithdrawalRate.Compute(high, nil)
+			Expect(err).NotTo(HaveOccurred())
+			modSWR, err := portfolio.SafeWithdrawalRate.Compute(moderate, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(highSWR).To(BeNumerically(">", modSWR))
 		})
@@ -326,17 +362,22 @@ var _ = Describe("Withdrawal Metrics", func() {
 			high := buildHighGrowthAccount()
 			moderate := buildModerateAccount()
 
-			highPWR := portfolio.PerpetualWithdrawalRate.Compute(high, nil)
-			modPWR := portfolio.PerpetualWithdrawalRate.Compute(moderate, nil)
+			highPWR, err := portfolio.PerpetualWithdrawalRate.Compute(high, nil)
+			Expect(err).NotTo(HaveOccurred())
+			modPWR, err := portfolio.PerpetualWithdrawalRate.Compute(moderate, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(highPWR).To(BeNumerically(">", modPWR))
 		})
 
 		It("ordering invariant holds: PWR <= SWR <= DWR", func() {
 			a := buildHighGrowthAccount()
-			pwr := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
-			swr := portfolio.SafeWithdrawalRate.Compute(a, nil)
-			dwr := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			pwr, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			swr, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			dwr, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pwr).To(BeNumerically("<=", swr))
 			Expect(swr).To(BeNumerically("<=", dwr))
@@ -346,9 +387,12 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("ordering invariant", func() {
 		It("PerpetualWithdrawalRate <= SafeWithdrawalRate <= DynamicWithdrawalRate", func() {
 			a := buildModerateAccount()
-			pwr := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
-			swr := portfolio.SafeWithdrawalRate.Compute(a, nil)
-			dwr := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			pwr, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			swr, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			dwr, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pwr).To(BeNumerically("<=", swr))
 			Expect(swr).To(BeNumerically("<=", dwr))

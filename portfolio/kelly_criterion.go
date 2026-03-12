@@ -25,11 +25,11 @@ func (kellyCriterion) Description() string {
 	return "Optimal fraction of capital to risk per period based on historical win rate and payoff ratio. Computed as W - (1-W)/R where W is win rate and R is average win / average loss. Values above 0 suggest positive edge; values near 0 or negative suggest the strategy should not be traded."
 }
 
-func (kellyCriterion) Compute(a *Account, window *Period) float64 {
+func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	var wins, losses int
@@ -45,7 +45,7 @@ func (kellyCriterion) Compute(a *Account, window *Period) float64 {
 	}
 
 	if wins == 0 || losses == 0 {
-		return 0
+		return 0, nil
 	}
 
 	avgWin /= float64(wins)
@@ -53,10 +53,10 @@ func (kellyCriterion) Compute(a *Account, window *Period) float64 {
 
 	w := float64(wins) / float64(len(r))
 	// Kelly = W - (1 - W) / R, where R = avgWin / avgLoss
-	return w - (1-w)/(avgWin/avgLoss)
+	return w - (1-w)/(avgWin/avgLoss), nil
 }
 
-func (kellyCriterion) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (kellyCriterion) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // KellyCriterion computes the optimal capital allocation fraction using
 // the Kelly formula: W - (1-W)/R where W is win rate and R is the ratio

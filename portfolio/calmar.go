@@ -25,17 +25,17 @@ func (calmar) Description() string {
 	return "Annualized return divided by maximum drawdown. Measures return per unit of drawdown risk. Higher values indicate the strategy earns more return for each unit of peak-to-trough decline endured."
 }
 
-func (calmar) Compute(a *Account, window *Period) float64 {
+func (calmar) Compute(a *Account, window *Period) (float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	eqTimes := windowSliceTimes(a.EquityTimes(), window)
 
 	if len(eq) < 2 || len(eqTimes) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	years := eqTimes[len(eqTimes)-1].Sub(eqTimes[0]).Hours() / 24 / 365.25
 	if years <= 0 {
-		return 0
+		return 0, nil
 	}
 
 	annualizedReturn := cagr(eq[0], eq[len(eq)-1], years)
@@ -49,13 +49,13 @@ func (calmar) Compute(a *Account, window *Period) float64 {
 	}
 
 	if minDD == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return annualizedReturn / math.Abs(minDD)
+	return annualizedReturn / math.Abs(minDD), nil
 }
 
-func (calmar) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (calmar) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
 var Calmar PerformanceMetric = calmar{}

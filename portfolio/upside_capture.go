@@ -25,7 +25,11 @@ func (upsideCaptureRatio) Description() string {
 	return "Measures how much of the benchmark's upside the portfolio captures. A value of 1.1 means the portfolio gains 110% of the benchmark's return during up periods. Higher is better."
 }
 
-func (upsideCaptureRatio) Compute(a *Account, window *Period) float64 {
+func (upsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -47,20 +51,22 @@ func (upsideCaptureRatio) Compute(a *Account, window *Period) float64 {
 	}
 
 	if len(upP) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	geoP := geometricMean(upP)
 	geoB := geometricMean(upB)
 
 	if geoB == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return geoP / geoB
+	return geoP / geoB, nil
 }
 
-func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // geometricMean computes the geometric mean of returns:
 // (product(1 + r_i))^(1/n) - 1

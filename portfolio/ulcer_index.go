@@ -25,13 +25,13 @@ func (ulcerIndex) Description() string {
 	return "Measures downside risk using both the depth and duration of drawdowns over a 14-period lookback window. Computed as the square root of the mean of squared percentage drawdowns. Values are on a 0-100 percentage scale. Higher values indicate more painful drawdown experiences. Returns 0 when fewer than 14 data points are available."
 }
 
-func (ulcerIndex) Compute(a *Account, window *Period) float64 {
+func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 
 	const lookback = 14
 
 	if len(equity) < lookback {
-		return 0
+		return 0, nil
 	}
 
 	// Use the last 14 periods. Within that window, track the rolling
@@ -49,10 +49,10 @@ func (ulcerIndex) Compute(a *Account, window *Period) float64 {
 		sumSq += dd * dd
 	}
 
-	return math.Sqrt(sumSq / float64(lookback))
+	return math.Sqrt(sumSq / float64(lookback)), nil
 }
 
-func (ulcerIndex) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (ulcerIndex) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // UlcerIndex measures downside risk using both the depth and duration
 // of drawdowns. Computed as the square root of the mean of squared

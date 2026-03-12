@@ -25,12 +25,15 @@ import (
 var _ = Describe("CVaR", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		Expect(portfolio.CVaR.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.CVaR.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes the average of the worst 5% of returns", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -0.060869565217391, 1e-9))
 	})
 
@@ -40,31 +43,36 @@ var _ = Describe("CVaR", func() {
 			103, 109, 107, 111, 106, 112, 110, 114, 109, 115, 113,
 		}
 		a := buildAccountFromEquity(equity)
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -0.04762, 1e-4))
 	})
 
 	It("returns 0 for empty equity curve (single data point)", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns the single return for a two-point curve", func() {
 		a := buildAccountFromEquity([]float64{100, 90})
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -0.1, 1e-9))
 	})
 
 	It("returns 0 for constant prices", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns a negative value for all-negative returns", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
-		v := a.PerformanceMetric(portfolio.CVaR).Value()
+		v, err := a.PerformanceMetric(portfolio.CVaR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("<", 0.0))
 	})
 })

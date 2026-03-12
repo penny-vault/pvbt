@@ -43,7 +43,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_000.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_000.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -71,7 +72,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_500.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.LTCG).To(Equal(1_500.0))
 			Expect(tm.STCG).To(Equal(0.0))
 		})
@@ -109,7 +111,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_500.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_000.0))
 			Expect(tm.LTCG).To(Equal(1_500.0))
 		})
@@ -136,7 +139,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 8_000.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(-2_000.0))
 		})
 	})
@@ -171,7 +175,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 150.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.QualifiedDividends).To(Equal(350.0))
 			Expect(tm.NonQualifiedIncome).To(Equal(0.0))
 		})
@@ -197,7 +202,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 200.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.QualifiedDividends).To(Equal(0.0))
 			Expect(tm.NonQualifiedIncome).To(Equal(200.0))
 		})
@@ -212,7 +218,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 200.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.QualifiedDividends).To(Equal(0.0))
 			Expect(tm.NonQualifiedIncome).To(Equal(200.0))
 		})
@@ -237,7 +244,8 @@ var _ = Describe("TaxMetrics", func() {
 			df := buildDF(now, []asset.Asset{spy}, []float64{110.0}, []float64{110.0})
 			a.UpdatePrices(df)
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.UnrealizedSTCG).To(Equal(1_000.0))
 			Expect(tm.UnrealizedLTCG).To(Equal(0.0))
 		})
@@ -260,7 +268,8 @@ var _ = Describe("TaxMetrics", func() {
 			df := buildDF(now, []asset.Asset{spy}, []float64{130.0}, []float64{130.0})
 			a.UpdatePrices(df)
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.UnrealizedLTCG).To(Equal(3_000.0))
 			Expect(tm.UnrealizedSTCG).To(Equal(0.0))
 		})
@@ -322,7 +331,8 @@ var _ = Describe("TaxMetrics", func() {
 			)
 			a.UpdatePrices(df2)
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_000.0))
 			Expect(tm.LTCG).To(Equal(1_500.0))
 			Expect(tm.QualifiedDividends).To(Equal(200.0))
@@ -367,7 +377,8 @@ var _ = Describe("TaxMetrics", func() {
 			)
 			a.UpdatePrices(df2)
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.TaxCostRatio).To(Equal(0.0))
 		})
 	})
@@ -418,7 +429,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 5_100.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_600.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -461,7 +473,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 1_800.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(560.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -504,7 +517,8 @@ var _ = Describe("TaxMetrics", func() {
 			)
 			a.UpdatePrices(df2)
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(-2_000.0))
 			// totalGain is negative (48000 - 50000 = -2000), so TaxCostRatio stays 0.
 			Expect(tm.TaxCostRatio).To(Equal(0.0))
@@ -535,7 +549,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 12_000.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(2_000.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -563,7 +578,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 12_000.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.LTCG).To(Equal(2_000.0))
 			Expect(tm.STCG).To(Equal(0.0))
 		})
@@ -590,7 +606,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 5_250.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(250.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -598,7 +615,8 @@ var _ = Describe("TaxMetrics", func() {
 		It("returns zero TaxMetrics when there are no transactions", func() {
 			a := portfolio.New(portfolio.WithCash(50_000))
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(0.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 			Expect(tm.QualifiedDividends).To(Equal(0.0))
@@ -665,7 +683,8 @@ var _ = Describe("TaxMetrics", func() {
 			})
 
 			// Total STCG = 1000 + 800 = 1800
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_800.0))
 			Expect(tm.LTCG).To(Equal(0.0))
 		})
@@ -713,7 +732,8 @@ var _ = Describe("TaxMetrics", func() {
 				Amount: 6_500.0,
 			})
 
-			tm := a.TaxMetrics()
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(1_000.0))
 			Expect(tm.LTCG).To(Equal(1_500.0))
 			Expect(tm.QualifiedDividends).To(Equal(200.0))

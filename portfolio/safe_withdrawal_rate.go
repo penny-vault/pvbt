@@ -143,15 +143,15 @@ func (safeWithdrawalRate) Description() string {
 	return "The maximum percentage of the initial portfolio that can be withdrawn annually without depleting the portfolio over the observed period. Based on the classic \"4% rule\" research methodology."
 }
 
-func (safeWithdrawalRate) Compute(a *Account, window *Period) float64 {
+func (safeWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {
-		return 0
+		return 0, nil
 	}
 
 	monthly := monthlyReturnsFromEquity(equity)
 	if len(monthly) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	// Safe withdrawal: balance must never reach zero.
@@ -161,10 +161,10 @@ func (safeWithdrawalRate) Compute(a *Account, window *Period) float64 {
 		return true // survival is checked in-loop
 	}
 
-	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false)
+	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false), nil
 }
 
-func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // SafeWithdrawalRate is the maximum constant annual withdrawal rate
 // (as a percentage of initial balance) where the portfolio balance

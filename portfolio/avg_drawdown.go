@@ -23,13 +23,13 @@ func (avgDrawdown) Description() string {
 	return "Average of all drawdown values in the equity curve. Gives a sense of typical drawdown depth over the full history, unlike MaxDrawdown which only captures the worst case."
 }
 
-func (avgDrawdown) Compute(a *Account, window *Period) float64 {
+func (avgDrawdown) Compute(a *Account, window *Period) (float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	dd := drawdownSeries(eq)
-	return mean(dd)
+	return mean(dd), nil
 }
 
-func (avgDrawdown) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (avgDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // AvgDrawdown is the mean loss percentage across all drawdown periods.
 // A drawdown is the decline from a peak to a subsequent trough.

@@ -33,11 +33,11 @@ func (mwrr) Description() string {
 // positive (investor receives). The final portfolio value is added as a
 // positive terminal cash flow. Newton-Raphson is used to find the rate r
 // such that sum(cf_i / (1+r)^(t_i/365)) = 0.
-func (mwrr) Compute(a *Account, window *Period) float64 {
+func (mwrr) Compute(a *Account, window *Period) (float64, error) {
 	equity := a.EquityCurve()
 	times := a.EquityTimes()
 	if len(equity) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	// Build cash flow list from transactions.
@@ -123,14 +123,14 @@ func (mwrr) Compute(a *Account, window *Period) float64 {
 	}
 
 	if math.IsNaN(r) || math.IsInf(r, 0) {
-		return 0
+		return 0, nil
 	}
 
-	return r
+	return r, nil
 }
 
 // ComputeSeries returns nil; MWRR is a single scalar metric.
-func (mwrr) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (mwrr) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // MWRR is the money-weighted rate of return: accounts for the timing
 // and size of cash flows (deposits/withdrawals) using XIRR. Unlike

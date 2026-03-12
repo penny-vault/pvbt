@@ -23,11 +23,11 @@ func (exposure) Description() string {
 	return "Fraction of periods where the portfolio had non-zero returns, indicating time invested in the market. A value of 1.0 means always invested; 0.5 means invested half the time. Essential for strategies that hold cash or go flat between signals."
 }
 
-func (exposure) Compute(a *Account, window *Period) float64 {
+func (exposure) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	active := 0
@@ -37,10 +37,10 @@ func (exposure) Compute(a *Account, window *Period) float64 {
 		}
 	}
 
-	return float64(active) / float64(len(r))
+	return float64(active) / float64(len(r)), nil
 }
 
-func (exposure) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (exposure) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Exposure measures the fraction of periods where the portfolio had
 // non-zero returns. For strategies that go to cash between signals,

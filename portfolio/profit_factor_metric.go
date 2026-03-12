@@ -28,7 +28,7 @@ func (profitFactor) Description() string {
 		"on losers."
 }
 
-func (profitFactor) Compute(a *Account, _ *Period) float64 {
+func (profitFactor) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
 	var sumWin, sumLoss float64
@@ -42,13 +42,13 @@ func (profitFactor) Compute(a *Account, _ *Period) float64 {
 	}
 
 	if sumLoss == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return sumWin / math.Abs(sumLoss)
+	return sumWin / math.Abs(sumLoss), nil
 }
 
-func (profitFactor) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (profitFactor) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // ProfitFactor is the ratio of gross profit to gross loss from round-trip trades.
 var ProfitFactor PerformanceMetric = profitFactor{}

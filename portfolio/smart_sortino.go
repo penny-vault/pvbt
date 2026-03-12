@@ -25,7 +25,11 @@ func (smartSortino) Description() string {
 	return "Sortino ratio penalized for autocorrelation in returns. Applies the same Lo (2002) correction as SmartSharpe but to the Sortino ratio. Lower than Sortino when returns exhibit positive autocorrelation."
 }
 
-func (smartSortino) Compute(a *Account, window *Period) float64 {
+func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.RiskFreePrices()) == 0 {
+		return 0, ErrNoRiskFreeRate
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
@@ -33,7 +37,7 @@ func (smartSortino) Compute(a *Account, window *Period) float64 {
 
 	n := len(er)
 	if n == 0 {
-		return 0
+		return 0, nil
 	}
 
 	sumSq := 0.0
@@ -45,7 +49,7 @@ func (smartSortino) Compute(a *Account, window *Period) float64 {
 
 	dd := math.Sqrt(sumSq / float64(n))
 	if dd == 0 {
-		return 0
+		return 0, nil
 	}
 
 	af := annualizationFactor(a.EquityTimes())
@@ -53,13 +57,13 @@ func (smartSortino) Compute(a *Account, window *Period) float64 {
 
 	penalty := autocorrelationPenalty(er)
 	if penalty == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return rawSortino / penalty
+	return rawSortino / penalty, nil
 }
 
-func (smartSortino) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (smartSortino) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // SmartSortino is the Sortino ratio corrected for autocorrelation in
 // returns using the Lo (2002) method. It divides the standard Sortino

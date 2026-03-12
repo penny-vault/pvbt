@@ -25,19 +25,19 @@ func (stdDev) Description() string {
 	return "Annualized standard deviation of portfolio returns. Measures total volatility of the portfolio. Higher values mean more volatile returns. Used as the risk measure in the Sharpe ratio."
 }
 
-func (stdDev) Compute(a *Account, window *Period) float64 {
+func (stdDev) Compute(a *Account, window *Period) (float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 	af := annualizationFactor(a.EquityTimes())
-	return stddev(r) * math.Sqrt(af)
+	return stddev(r) * math.Sqrt(af), nil
 }
 
-func (stdDev) ComputeSeries(a *Account, window *Period) []float64 {
+func (stdDev) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	return returns(eq)
+	return returns(eq), nil
 }
 
 // StdDev is the annualized standard deviation of portfolio returns.

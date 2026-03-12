@@ -23,12 +23,12 @@ func (nPositivePeriods) Description() string {
 	return "Fraction of periods with positive equity curve returns. A value of 0.55 means 55% of periods had positive returns. Combined with GainLossRatio, gives a complete picture of the return distribution's win/loss profile."
 }
 
-func (nPositivePeriods) Compute(a *Account, window *Period) float64 {
+func (nPositivePeriods) Compute(a *Account, window *Period) (float64, error) {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)
 
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	count := 0
@@ -38,10 +38,10 @@ func (nPositivePeriods) Compute(a *Account, window *Period) float64 {
 		}
 	}
 
-	return float64(count) / float64(len(r))
+	return float64(count) / float64(len(r)), nil
 }
 
-func (nPositivePeriods) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (nPositivePeriods) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // NPositivePeriods is the percentage of periods with positive returns.
 // A higher value indicates the portfolio gains more often than it
