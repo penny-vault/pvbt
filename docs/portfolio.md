@@ -5,16 +5,19 @@ The portfolio is where strategy decisions become trades. It has two responsibili
 Strategy code interacts with the portfolio through the `Portfolio` interface -- it calls `RebalanceTo`, `Order`, reads state, and inspects the transaction log. The engine uses a separate `PortfolioManager` interface to inject external events like dividends and fees. Both interfaces are implemented by the concrete `Account` type.
 
 ```go
-// create a portfolio with $10K and a broker
-p := portfolio.New(
-    portfolio.WithCash(10_000),
-    portfolio.WithBroker(b),
+// create a portfolio with $10K
+acct := portfolio.New(portfolio.WithCash(10_000))
+
+eng := engine.New(&MyStrategy{},
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
 )
-e := engine.New(&MyStrategy{})
-p, err := e.Run(ctx, p, start, end)
+defer eng.Close()
+
+acct, err := eng.Backtest(ctx, acct, start, end)
 ```
 
-A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
+For backtesting, the engine automatically attaches a simulated broker to the account. For live trading, attach a real broker via `portfolio.WithBroker(b)`. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ## Allocation and PortfolioPlan
 
@@ -152,7 +155,7 @@ p.Order(asset, Buy, 200, OnTheOpen)
 A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments:
 
 ```go
-func (s *MyStrategy) Compute(ctx context.Context, p Portfolio) {
+func (s *MyStrategy) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
     // Core allocation
     cheapest := pe.Sort(Ascending).Top(50)
     plan := portfolio.EqualWeight(cheapest)
@@ -435,7 +438,7 @@ val := p.PerformanceMetric(MyMetric).Window(Years(3)).Value()
 While performance metrics are most commonly examined after a backtest completes, they are available during computation. A strategy might use them to adjust its behavior:
 
 ```go
-func (s *Adaptive) Compute(ctx context.Context, p Portfolio) {
+func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
     dd := p.PerformanceMetric(MaxDrawdown).Value()
     if dd > 0.15 {
         // drawdown exceeds 15%, reduce exposure
@@ -452,16 +455,16 @@ This is less common but occasionally useful for strategies that adapt to their o
 
 ## Broker integration
 
-A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
+For backtesting, the engine automatically attaches a `SimulatedBroker` that fills all orders at the close price. For live trading, attach a real broker at construction:
 
 ```go
-// at construction
-p := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(b))
+// backtesting -- engine sets the broker automatically
+acct := portfolio.New(portfolio.WithCash(10_000))
 
-// swap brokers at runtime
-p.SetBroker(liveBroker)
+// live trading -- attach a broker explicitly
+acct := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(liveBroker))
 ```
 
-This is the mechanism behind the "same code for backtest and production" guarantee. Strategy code never knows or cares which broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
+Strategy code never knows or cares which broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
 
 See [Broker](broker.md) for the full broker interface and supported order types.

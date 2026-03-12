@@ -20,10 +20,14 @@ The `data` package defines well-known metrics:
 
 | Metric | Description |
 |--------|-------------|
-| `Price` | Trade price |
+| `MetricOpen` | Opening price |
+| `MetricHigh` | High price |
+| `MetricLow` | Low price |
+| `MetricClose` | Closing price |
+| `AdjClose` | Split/dividend-adjusted close |
 | `Volume` | Trade volume |
-| `Bid` | Best bid price |
-| `Ask` | Best ask price |
+| `Dividend` | Dividend per share |
+| `SplitFactor` | Split adjustment factor |
 | `Revenue` | Total revenue |
 | `NetIncome` | Net income |
 | `EarningsPerShare` | Diluted EPS |
@@ -32,7 +36,6 @@ The `data` package defines well-known metrics:
 | `FreeCashFlow` | Free cash flow |
 | `BookValue` | Book value per share |
 | `MarketCap` | Market capitalization |
-| `Unemployment` | Unemployment rate |
 
 Custom metrics can be defined anywhere:
 
@@ -98,6 +101,41 @@ e := engine.New(&ADM{},
 The caller handles construction and authentication. The engine calls `Provides()` to discover what each provider can supply, routes data requests to the right provider, and calls `Close()` when finished.
 
 A provider can implement both `BatchProvider` and `StreamProvider` if it supports both access patterns.
+
+### Asset providers
+
+An `AssetProvider` resolves ticker symbols to full `asset.Asset` values (including CompositeFigi identifiers). The engine requires an asset provider to build its internal asset registry:
+
+```go
+type AssetProvider interface {
+    Assets(ctx context.Context) ([]asset.Asset, error)
+    LookupAsset(ctx context.Context, ticker string) (asset.Asset, error)
+}
+```
+
+`Assets` returns all known assets (used during initialization to build the registry). `LookupAsset` resolves a single ticker on demand (used by `e.Asset()`). A database provider typically implements `AssetProvider` alongside `BatchProvider`:
+
+```go
+eng := engine.New(&ADM{},
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+### DataSource interface
+
+The `universe.DataSource` interface decouples data fetching from the engine, preventing circular dependencies between the engine and universe packages:
+
+```go
+type DataSource interface {
+    Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period,
+        metrics []data.Metric) (*data.DataFrame, error)
+    FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
+        metrics []data.Metric) (*data.DataFrame, error)
+}
+```
+
+The engine implements `DataSource`. Universes hold a `DataSource` reference rather than a direct engine reference, so they can fetch data without knowing about the engine type.
 
 ### Index providers
 

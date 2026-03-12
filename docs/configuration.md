@@ -1,143 +1,115 @@
 # Configuration
 
-A strategy is more than its Go code. It's a package: metadata that describes it, parameters that make it configurable, and suggested configurations that make it easy to use. This information lives in a TOML file alongside the Go source, and the engine reads it before calling Setup.
+Strategy parameters are defined as exported struct fields with struct tags. The engine populates them via reflection before calling Setup. No external configuration files are needed.
 
-## Strategy package structure
+## Struct tags
 
-```
-strategies/adm/
-    strategy.toml
-    README.md
-    adm.go
-```
+Four tags control how a field is exposed:
 
-The Go file contains the strategy logic. The README provides long-form documentation and is automatically included when the strategy is published or displayed in a catalog. The TOML file is the focus of this section.
+| Tag | Purpose | Example |
+|-----|---------|---------|
+| `pvbt` | CLI flag name (defaults to lowercase field name) | `pvbt:"riskOn"` |
+| `desc` | Description for help text | `desc:"ETFs to invest in"` |
+| `default` | Default value (parsed from string) | `default:"VOO,SCZ"` |
+| `suggest` | Named presets (pipe-delimited `name=value`) | `suggest:"Classic=VFINX,PRIDX"` |
 
-## TOML structure
+## Supported field types
 
-A complete TOML file for Accelerating Dual Momentum:
+| Go type | Default format | Example |
+|---------|---------------|---------|
+| `float64` | Decimal number | `default:"0.05"` |
+| `int` | Integer | `default:"12"` |
+| `string` | Plain text | `default:"momentum"` |
+| `bool` | `true` or `false` | `default:"true"` |
+| `time.Duration` | Go duration string | `default:"720h"` |
+| `asset.Asset` | Ticker symbol | `default:"SPY"` |
+| `universe.Universe` | Comma-separated tickers | `default:"VOO,SCZ,EFA"` |
 
-```toml
-name = "Accelerating Dual Momentum"
-shortcode = "adm"
-description = "A market timing strategy that uses a 1-, 3-, and 6-month momentum score to select assets."
-source = "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/"
-version = "1.1.0"
-schedule = "@monthend"
-benchmark = "VFINX"
-
-[arguments.riskOn]
-name = "Tickers"
-description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
-typecode = "[]stock"
-default = ["VFINX", "PRIDX"]
-
-[arguments.riskOff]
-name = "Out-of-Market Tickers"
-description = "Ticker to use when model scores are all below 0"
-typecode = "stock"
-default = "VUSTX"
-
-[suggested."Engineered Portfolio"]
-riskOn = ["VFINX", "PRIDX"]
-riskOff = ["VUSTX"]
-
-[suggested."All ETF"]
-riskOn = ["SPY", "SCZ"]
-riskOff = ["TLT"]
-```
-
-### Top-level fields
-
-The top-level fields identify the strategy:
-
-- **name**: Human-readable name displayed in catalogs and reports.
-- **shortcode**: Short unique identifier used in file paths, logs, and the `strategy:` prefix for composition.
-- **description**: One-line summary of what the strategy does.
-- **source**: URL to the original research or paper the strategy is based on. Optional but encouraged.
-- **version**: Semantic version. Increment when the strategy logic changes.
-- **schedule**: Default tradecron expression. The strategy can override this in Setup if needed.
-
-### Benchmark
-
-The benchmark defines what the strategy is compared against in performance reports. It's specified as a ticker symbol:
-
-```toml
-benchmark = "VFINX"
-```
-
-### Arguments
-
-Arguments are the strategy's configurable parameters. Each argument has a name, description, type, and default value. When someone runs the strategy, they can override any argument.
-
-```toml
-[arguments.riskOn]
-name = "Tickers"
-description = "List of ETF, Mutual Fund, or Stock tickers to invest in"
-typecode = "[]stock"
-default = '[...]'
-```
-
-The key (`riskOn`) matches the strategy struct's field name (or `pvbt` struct tag). The engine populates the field automatically via reflection before calling Setup.
-
-The `typecode` field tells the engine how to parse and validate the value. Supported types include:
-
-| Typecode | Description | Go type |
-|----------|-------------|---------|
-| `stock` | A single instrument | `asset.Asset` |
-| `[]stock` | A list of instruments | `universe.Universe` |
-| `float` | A number | `float64` |
-| `int` | An integer | `int` |
-| `string` | Text | `string` |
-| `bool` | True or false | `bool` |
-| `duration` | Time duration | `time.Duration` |
-
-For `stock` types, the default value is a ticker string. For `[]stock` types, it's an array of ticker strings. A `[]stock` argument matched to a `universe.Universe` field builds a `StaticUniverse` from the tickers and automatically registers it with the engine.
-
-### Suggested configurations
-
-Suggested configurations are named presets — known-good parameter combinations that users can select instead of configuring arguments individually.
-
-```toml
-[suggested."All ETF"]
-riskOn = '[...]'
-riskOff = '[...]'
-```
-
-Each suggested configuration overrides some or all of the strategy's arguments. Arguments not specified in a suggested configuration use their defaults.
-
-Suggested configurations serve two purposes. For end users, they provide a curated starting point — "run the strategy the way the author intended." For the strategy author, they document the configurations they've tested and validated.
-
-## Accessing configuration in Go
-
-The engine populates strategy struct fields from TOML arguments automatically via reflection. Fields are matched to arguments by name, or by `pvbt` struct tag if the names differ.
-
-### Field matching
+## Example
 
 ```go
 type ADM struct {
-    riskOn       universe.Universe  // matches [arguments.riskOn] by name
-    riskOff      universe.Universe  // matches [arguments.riskOff] by name
-    lookback     float64            `pvbt:"lookbackMonths"` // matches by tag
+    RiskOn    universe.Universe `pvbt:"riskOn"    desc:"ETFs to invest in"        default:"VOO,SCZ" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
+    RiskOff   universe.Universe `pvbt:"riskOff"   desc:"Out-of-market asset"      default:"TLT"     suggest:"Classic=VUSTX|Modern=TLT"`
+    Lookback  int               `pvbt:"lookback"  desc:"Momentum lookback months"  default:"6"`
 }
 ```
 
-### Type validation
+This defines three CLI flags: `--riskOn`, `--riskOff`, and `--lookback`. Each has a description and default value. The `suggest` tags define two named presets ("Classic" and "Modern") that users can select as starting points.
 
-The engine validates that each field's Go type is compatible with the argument's typecode (see the typecode table above). If a field's type doesn't match its argument's typecode, the engine panics at startup with a clear error message.
+## How hydration works
 
-### Config metadata
+Before calling `Setup`, the engine reflects over the strategy struct and processes each exported field with a `default` tag:
 
-The `Config` struct passed to Setup contains the strategy's metadata from the TOML (name, shortcode, description, version, schedule, benchmark). Strategy arguments are not accessed through Config -- they are already on the struct.
+1. If the field is already non-zero (set by the caller or CLI flags), it is not overwritten.
+2. Otherwise, the `default` tag value is parsed into the field's type.
+3. For `asset.Asset` fields, the ticker is resolved via `e.Asset()`.
+4. For `universe.Universe` fields, the comma-separated tickers are resolved and wrapped in a `StaticUniverse` via `e.Universe()`.
 
-## The README
+## CLI integration
 
-The README.md file is free-form Markdown. It's included automatically when the strategy is displayed in a catalog, documentation site, or report. Use it for:
+The CLI uses the `pvbt` and `desc` tags to register cobra flags automatically. When a user passes `--riskOn "SPY,QQQ"`, the field is populated before hydration runs, so the `default` tag is skipped.
 
-- Detailed explanation of the strategy's logic and rationale
-- Academic references or links to research papers
-- Historical performance discussion
-- Known limitations or market conditions where the strategy underperforms
-- Changelog for version history
+## Metadata
 
-The README is for humans. The TOML is for the engine. Keep them complementary — the TOML describes the structure, the README tells the story.
+Strategy metadata like name, description, and schedule are part of the Go code rather than configuration:
+
+```go
+func (s *ADM) Name() string { return "adm" }
+
+func (s *ADM) Setup(e *engine.Engine) {
+    e.Schedule(tradecron.New("@monthend"))
+    e.SetBenchmark(e.Asset("VFINX"))
+    e.RiskFreeAsset(e.Asset("DGS3MO"))
+}
+```
+
+The schedule, benchmark, and risk-free asset are set in `Setup`. The strategy name comes from the `Name()` method.
+
+Strategies can optionally implement the `Descriptor` interface to provide additional metadata (shortcode, description, source URL, version):
+
+```go
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        ShortCode:   "adm",
+        Description: "A market timing strategy using momentum scores.",
+        Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
+        Version:     "1.1.0",
+    }
+}
+```
+
+## Serialization
+
+`engine.DescribeStrategy` produces a `StrategyInfo` struct that serializes to JSON. It collects everything: name and description from the strategy, schedule/benchmark/risk-free from the engine, parameters from struct tags, and suggestions grouped by preset name.
+
+```go
+info := engine.DescribeStrategy(eng)
+data, _ := json.MarshalIndent(info, "", "  ")
+```
+
+This produces:
+
+```json
+{
+  "name": "adm",
+  "shortcode": "adm",
+  "description": "A market timing strategy using momentum scores.",
+  "source": "https://engineeredportfolio.com/...",
+  "version": "1.1.0",
+  "schedule": "@monthend",
+  "benchmark": "VFINX",
+  "riskFree": "DGS3MO",
+  "parameters": [
+    {"name": "riskOn", "description": "ETFs to invest in", "type": "universe.Universe", "default": "VOO,SCZ"},
+    {"name": "riskOff", "description": "Out-of-market asset", "type": "universe.Universe", "default": "TLT"},
+    {"name": "lookback", "description": "Momentum lookback months", "type": "int", "default": "6"}
+  ],
+  "suggestions": {
+    "Classic": {"riskOn": "VFINX,PRIDX", "riskOff": "VUSTX"},
+    "Modern": {"riskOn": "SPY,QQQ", "riskOff": "TLT"}
+  }
+}
+```
+
+Call `DescribeStrategy` after the engine has run `Setup` (i.e., after `Backtest` or `RunLive` initialization). Before Setup, schedule/benchmark/risk-free fields will be empty.
