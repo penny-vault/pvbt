@@ -172,3 +172,10 @@ const (
 const (
 	Unemployment Metric = "Unemployment"
 )
+
+// Portfolio performance tracking metrics.
+const (
+	PortfolioEquity    Metric = "PortfolioEquity"
+	PortfolioBenchmark Metric = "PortfolioBenchmark"
+	PortfolioRiskFree  Metric = "PortfolioRiskFree"
+)
