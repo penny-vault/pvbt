@@ -29,7 +29,7 @@ func (tradeGainLossRatio) Description() string {
 		"which uses equity curve period returns instead."
 }
 
-func (tradeGainLossRatio) Compute(a *Account, _ *Period) float64 {
+func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
 	var wins, losses int
@@ -46,16 +46,16 @@ func (tradeGainLossRatio) Compute(a *Account, _ *Period) float64 {
 	}
 
 	if wins == 0 || losses == 0 {
-		return 0
+		return 0, nil
 	}
 
 	avgWin := sumWin / float64(wins)
 	avgLoss := sumLoss / float64(losses)
 
-	return avgWin / math.Abs(avgLoss)
+	return avgWin / math.Abs(avgLoss), nil
 }
 
-func (tradeGainLossRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (tradeGainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // TradeGainLossRatio is the average winning trade PnL divided by the average
 // losing trade PnL, computed from FIFO-matched round-trip trades.

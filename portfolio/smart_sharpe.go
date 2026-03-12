@@ -25,7 +25,11 @@ func (smartSharpe) Description() string {
 	return "Sharpe ratio penalized for autocorrelation in returns. When returns are serially correlated, the standard Sharpe overstates risk-adjusted performance. The penalty factor is 1 + 2*sum(autocorrelations), following Lo (2002). Lower than Sharpe when returns exhibit positive autocorrelation."
 }
 
-func (smartSharpe) Compute(a *Account, window *Period) float64 {
+func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.RiskFreePrices()) == 0 {
+		return 0, ErrNoRiskFreeRate
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
@@ -33,7 +37,7 @@ func (smartSharpe) Compute(a *Account, window *Period) float64 {
 
 	sd := stddev(er)
 	if sd == 0 {
-		return 0
+		return 0, nil
 	}
 
 	af := annualizationFactor(a.EquityTimes())
@@ -41,13 +45,13 @@ func (smartSharpe) Compute(a *Account, window *Period) float64 {
 
 	penalty := autocorrelationPenalty(er)
 	if penalty == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return rawSharpe / penalty
+	return rawSharpe / penalty, nil
 }
 
-func (smartSharpe) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (smartSharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // autocorrelationPenalty computes the Lo (2002) correction factor:
 // sqrt(1 + 2*sum(rho_k)) where rho_k is the autocorrelation at lag k.

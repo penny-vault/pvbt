@@ -26,11 +26,11 @@ func (twrr) Description() string {
 // Compute returns the total time-weighted return over the window (or full
 // history when window is nil). It compounds sub-period returns derived
 // from the equity curve: product(1 + r_i) - 1.
-func (twrr) Compute(a *Account, window *Period) float64 {
+func (twrr) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	product := 1.0
@@ -38,16 +38,16 @@ func (twrr) Compute(a *Account, window *Period) float64 {
 		product *= (1 + ri)
 	}
 
-	return product - 1
+	return product - 1, nil
 }
 
 // ComputeSeries returns the cumulative return at each point: the running
 // product of (1 + r_i) minus 1. The result has length len(equity)-1.
-func (twrr) ComputeSeries(a *Account, window *Period) []float64 {
+func (twrr) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	cum := make([]float64, len(r))
@@ -57,7 +57,7 @@ func (twrr) ComputeSeries(a *Account, window *Period) []float64 {
 		cum[i] = product - 1
 	}
 
-	return cum
+	return cum, nil
 }
 
 // TWRR is the time-weighted rate of return, which eliminates the effect

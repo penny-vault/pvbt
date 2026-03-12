@@ -26,17 +26,17 @@ func (nonQualifiedIncome) Description() string {
 		"interest distributions."
 }
 
-func (nonQualifiedIncome) Compute(a *Account, _ *Period) float64 {
+func (nonQualifiedIncome) Compute(a *Account, _ *Period) (float64, error) {
 	var total float64
 	for _, tx := range a.Transactions() {
 		if tx.Type == DividendTransaction && !tx.Qualified {
 			total += tx.Amount
 		}
 	}
-	return total
+	return total, nil
 }
 
-func (nonQualifiedIncome) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (nonQualifiedIncome) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // NonQualifiedIncomeMetric is non-qualified dividend and interest income.
 // Currently always returns 0 as no transaction type populates this.

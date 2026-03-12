@@ -69,22 +69,30 @@ var _ = Describe("Specialized Metrics", func() {
 	Describe("ComputeSeries returns nil", func() {
 		It("UlcerIndex returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			Expect(portfolio.UlcerIndex.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.UlcerIndex.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("ValueAtRisk returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			Expect(portfolio.ValueAtRisk.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.ValueAtRisk.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("KRatio returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			Expect(portfolio.KRatio.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.KRatio.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("KellerRatio returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			Expect(portfolio.KellerRatio.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.KellerRatio.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
@@ -115,20 +123,23 @@ var _ = Describe("Specialized Metrics", func() {
 			// UI = sqrt(18.80776 / 14) = sqrt(1.34341) = 1.15907
 			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
 			a := buildAccountFromEquity(equity)
-			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 1.15907, 1e-3))
 		})
 
 		It("returns zero when equity rises monotonically over 14 periods", func() {
 			equity := []float64{100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113}
 			a := buildAccountFromEquity(equity)
-			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0, 1e-12))
 		})
 
 		It("returns zero when fewer than 14 data points", func() {
 			a := buildAccountFromEquity([]float64{100, 90, 80})
-			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 	})
@@ -138,13 +149,15 @@ var _ = Describe("Specialized Metrics", func() {
 			// 6 returns sorted: [-0.06087, -0.04545, 0.04167, 0.09524, 0.10, 0.11111]
 			// idx = floor(0.05 * 6) = 0 -> sorted[0] = -0.06087
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -0.060869565217391, 1e-9))
 		})
 
 		It("returns zero when returns slice is empty (single equity point)", func() {
 			a := buildAccountFromEquity([]float64{100})
-			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 
@@ -157,7 +170,8 @@ var _ = Describe("Specialized Metrics", func() {
 				103, 109, 107, 111, 106, 112, 110, 114, 109, 115, 113,
 			}
 			a := buildAccountFromEquity(equity)
-			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -0.046296296296296, 1e-9))
 		})
 	})
@@ -169,20 +183,23 @@ var _ = Describe("Specialized Metrics", func() {
 			// slope = 0.027913, stderr = 0.010989
 			// KRatio = slope / stderr = 0.027913 / 0.010989 = 2.53999 (2003 Kestner revision)
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 2.5399944051723757, 1e-9))
 		})
 
 		It("returns zero with fewer than 3 returns (3 equity points)", func() {
 			// 3 equity points -> 2 returns -> n < 3 guard
 			a := buildAccountFromEquity([]float64{100, 110, 120})
-			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 
 		It("returns zero for a single data point", func() {
 			a := buildAccountFromEquity([]float64{100})
-			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 	})
@@ -196,7 +213,8 @@ var _ = Describe("Specialized Metrics", func() {
 			//   = 0.25 * (1 - 0.06482)
 			//   = 0.25 * 0.93518 = 0.23380
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.233796296296296, 1e-9))
 		})
 
@@ -205,7 +223,8 @@ var _ = Describe("Specialized Metrics", func() {
 			// totalReturn = -0.5, maxDD = 0.6667 (> 0.5)
 			// Also totalReturn < 0, so result = 0.
 			a := buildAccountFromEquity([]float64{100, 120, 40, 50})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 
@@ -213,13 +232,15 @@ var _ = Describe("Specialized Metrics", func() {
 			// equity: [100, 95, 90, 85]
 			// totalReturn = -0.15 -> guard returns 0
 			a := buildAccountFromEquity([]float64{100, 95, 90, 85})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 
 		It("returns zero for a single data point", func() {
 			a := buildAccountFromEquity([]float64{100})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 	})
@@ -228,14 +249,16 @@ var _ = Describe("Specialized Metrics", func() {
 		It("returns negative KRatio for a declining curve", func() {
 			// logVAMI has a negative slope -> KRatio < 0
 			a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
-			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("<", 0))
 		})
 
 		It("returns positive KRatio for a rising curve", func() {
 			// logVAMI has a positive slope -> KRatio > 0
 			a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120})
-			result := a.PerformanceMetric(portfolio.KRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically(">", 0))
 		})
 	})
@@ -246,7 +269,8 @@ var _ = Describe("Specialized Metrics", func() {
 			// totalReturn = 0.0, maxDD = 0.5
 			// totalReturn == 0 -> result = 0 * anything = 0
 			a := buildAccountFromEquity([]float64{100, 200, 100})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("==", 0))
 		})
 
@@ -255,7 +279,8 @@ var _ = Describe("Specialized Metrics", func() {
 			// totalReturn = 0.01 >= 0, maxDD = 0.495 <= 0.5
 			// result = 0.01 * (1 - 0.495/0.505) > 0
 			a := buildAccountFromEquity([]float64{100, 200, 101})
-			result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically(">", 0))
 		})
 	})
@@ -269,7 +294,8 @@ var _ = Describe("Specialized Metrics", func() {
 			// UI = sqrt(100 / 14) = sqrt(7.14286) = 2.67261
 			equity := []float64{100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 90}
 			a := buildAccountFromEquity(equity)
-			result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 2.67261, 1e-3))
 		})
 	})
@@ -280,7 +306,8 @@ var _ = Describe("Specialized Metrics", func() {
 			// 1 return = -0.1
 			// idx = floor(0.05 * 1) = 0 -> sorted[0] = -0.1
 			a := buildAccountFromEquity([]float64{100, 90})
-			result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -0.1, 1e-9))
 		})
 	})
@@ -302,7 +329,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// UI = sqrt(21150 / 14) = sqrt(1510.714) = 38.8678
 				equity := []float64{100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30}
 				a := buildAccountFromEquity(equity)
-				result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+				result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 38.8678, 1e-2))
 				// Much larger than the mild-drawdown UI of ~1.16
 				Expect(result).To(BeNumerically(">", 30.0))
@@ -319,7 +347,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// UI = sqrt(27600 / 14) = sqrt(1971.429) = 44.4010
 				equity := []float64{100, 80, 60, 40, 30, 35, 40, 50, 55, 60, 65, 70, 75, 80}
 				a := buildAccountFromEquity(equity)
-				result := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+				result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 44.4010, 1e-2))
 				// Even though equity recovers to 80, the drawdown lingers because
 				// the peak of 100 is never restored.
@@ -340,7 +369,8 @@ var _ = Describe("Specialized Metrics", func() {
 				a := buildAccountFromEquity([]float64{
 					100, 102, 104, 106, 108, 40, 110, 112, 114, 116, 118,
 				})
-				result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+				result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -0.629629629629630, 1e-9))
 			})
 
@@ -356,7 +386,8 @@ var _ = Describe("Specialized Metrics", func() {
 				a := buildAccountFromEquity([]float64{
 					100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50,
 				})
-				result := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+				result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -5.0/55.0, 1e-9))
 			})
 		})
@@ -372,7 +403,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// OLS on logVAMI: slope=0.04918, stderr=0.08882
 				// KRatio = slope / stderr = 0.04918 / 0.08882 = 0.45738 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 130, 95, 140, 90, 145, 100, 150})
-				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 0.45737915846086635, 1e-9))
 				// Positive but much smaller than the steady-growth case
 				Expect(result).To(BeNumerically(">", 0))
@@ -386,7 +418,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// slope = 0.042684, stderr = 0.000666
 				// KRatio = 0.042684 / 0.000666 = 64.113 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120, 125, 130})
-				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 64.11253704211674, 1e-6))
 				// Orders of magnitude larger than the volatile case
 				Expect(result).To(BeNumerically(">", 10))
@@ -400,7 +433,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// slope = -0.14936, stderr = 0.01053
 				// KRatio = -0.14936 / 0.01053 = -14.176 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 80, 55, 35, 20, 10})
-				result := a.PerformanceMetric(portfolio.KRatio).Value()
+				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -14.175542222575912, 1e-6))
 				Expect(result).To(BeNumerically("<", -2))
 			})
@@ -418,7 +452,8 @@ var _ = Describe("Specialized Metrics", func() {
 				//   = 1.0 * (1 - 0.391304348)
 				//   = 0.608695652173913
 				a := buildAccountFromEquity([]float64{100, 160, 115, 200})
-				result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+				result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 0.608695652173913, 1e-9))
 				// A strong positive value reflecting good risk-adjusted return
 				Expect(result).To(BeNumerically(">", 0.5))
@@ -432,7 +467,8 @@ var _ = Describe("Specialized Metrics", func() {
 				// maxDD = 0.501 (just over 50% threshold)
 				// Since maxDD > 0.5, Keller returns 0 regardless of total return.
 				a := buildAccountFromEquity([]float64{100, 200, 99.8, 300})
-				result := a.PerformanceMetric(portfolio.KellerRatio).Value()
+				result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("==", 0))
 			})
 		})

@@ -25,11 +25,11 @@ func (cvarMetric) Description() string {
 	return "Conditional Value at Risk (Expected Shortfall) at 95% confidence. The average loss in the worst 5% of periods. More negative values indicate higher tail risk. Superior to VaR because it captures the magnitude of extreme losses, not just their threshold."
 }
 
-func (cvarMetric) Compute(a *Account, window *Period) float64 {
+func (cvarMetric) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	sorted := make([]float64, len(r))
@@ -47,10 +47,10 @@ func (cvarMetric) Compute(a *Account, window *Period) float64 {
 		sum += sorted[i]
 	}
 
-	return sum / float64(cutoff)
+	return sum / float64(cutoff), nil
 }
 
-func (cvarMetric) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (cvarMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // CVaR is Conditional Value at Risk (Expected Shortfall) at 95%
 // confidence. It measures the average loss in the worst 5% of periods,

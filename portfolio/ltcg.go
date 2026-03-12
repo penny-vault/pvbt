@@ -23,12 +23,12 @@ func (ltcgMetric) Description() string {
 	return "Total realized long-term capital gains from positions held longer than 365 days. Computed by replaying the transaction log with FIFO lot matching. Taxed at preferential rates (typically 15-20%)."
 }
 
-func (ltcgMetric) Compute(a *Account, _ *Period) float64 {
+func (ltcgMetric) Compute(a *Account, _ *Period) (float64, error) {
 	ltcg, _, _, _ := realizedGains(a.Transactions())
-	return ltcg
+	return ltcg, nil
 }
 
-func (ltcgMetric) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (ltcgMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // LTCG is realized long-term capital gains (holding period > 365 days).
 var LTCGMetric PerformanceMetric = ltcgMetric{}

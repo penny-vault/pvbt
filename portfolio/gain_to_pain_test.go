@@ -25,42 +25,50 @@ import (
 var _ = Describe("GainToPainRatio", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105})
-		Expect(portfolio.GainToPainRatio.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.GainToPainRatio.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes sum(returns) / abs(sum(negative returns))", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 2.273, 1e-2))
 	})
 
 	It("returns 0 for empty returns", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are positive (no pain)", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns negative value when net return is negative", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 100, 90})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("<", 0.0))
 	})
 
 	It("returns -1 for all negative returns", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
-		v := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.GainToPainRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -1.0, 1e-9))
 	})
 })

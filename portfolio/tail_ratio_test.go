@@ -25,36 +25,43 @@ import (
 var _ = Describe("TailRatio", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105})
-		Expect(portfolio.TailRatio.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.TailRatio.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes 95th percentile / abs(5th percentile) ratio", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.TailRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.TailRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 1.8254, 1e-3))
 	})
 
 	It("returns 0 for empty returns", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.TailRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.TailRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (p5 = 0)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.TailRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.TailRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("handles all positive returns", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133, 146})
-		v := a.PerformanceMetric(portfolio.TailRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.TailRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically(">", 0.0))
 	})
 
 	It("handles single return", func() {
 		a := buildAccountFromEquity([]float64{100, 90})
-		v := a.PerformanceMetric(portfolio.TailRatio).Value()
+		v, err := a.PerformanceMetric(portfolio.TailRatio).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", -1.0, 1e-9))
 	})
 })

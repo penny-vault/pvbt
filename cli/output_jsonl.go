@@ -10,7 +10,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cash float64, params map[string]any, acct *portfolio.Account) error {
+func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cash float64, params map[string]any, acct portfolio.Portfolio) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create portfolio file: %w", err)
@@ -33,24 +33,35 @@ func writePortfolioJSONL(path, runID, strategy string, start, end time.Time, cas
 		return fmt.Errorf("write portfolio metadata: %w", err)
 	}
 
-	// TODO: iterate per-step portfolio snapshots when Account supports time-series history
-	// For now, write a single summary line with current values
-	snapshot := map[string]any{
-		"date":              end.Format("2006-01-02"),
-		"value":             acct.Value(),
-		"cash":              acct.Cash(),
-		"invested":          acct.Value() - acct.Cash(),
-		"daily_return":      0.0,
-		"cumulative_return": 0.0,
-	}
-	if err := enc.Encode(snapshot); err != nil {
-		return fmt.Errorf("write portfolio snapshot: %w", err)
+	// Write one line per equity curve entry.
+	curve := acct.EquityCurve()
+	times := acct.EquityTimes()
+	for i, value := range curve {
+		var dailyReturn float64
+		if i > 0 && curve[i-1] != 0 {
+			dailyReturn = (value - curve[i-1]) / curve[i-1]
+		}
+
+		var cumulativeReturn float64
+		if len(curve) > 0 && curve[0] != 0 {
+			cumulativeReturn = (value - curve[0]) / curve[0]
+		}
+
+		snapshot := map[string]any{
+			"date":              times[i].Format("2006-01-02"),
+			"value":             value,
+			"daily_return":      dailyReturn,
+			"cumulative_return": cumulativeReturn,
+		}
+		if err := enc.Encode(snapshot); err != nil {
+			return fmt.Errorf("write portfolio snapshot: %w", err)
+		}
 	}
 
 	return nil
 }
 
-func writeTransactionsJSONL(path string, acct *portfolio.Account) error {
+func writeTransactionsJSONL(path string, acct portfolio.Portfolio) error {
 	txns := acct.Transactions()
 	if len(txns) == 0 {
 		return nil
@@ -98,7 +109,7 @@ func writeTransactionsJSONL(path string, acct *portfolio.Account) error {
 	return nil
 }
 
-func writeHoldingsJSONL(path string, acct *portfolio.Account) error {
+func writeHoldingsJSONL(path string, acct portfolio.Portfolio) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create holdings file: %w", err)
@@ -136,7 +147,7 @@ func writeHoldingsJSONL(path string, acct *portfolio.Account) error {
 	return nil
 }
 
-func writeMetricsJSONL(path string, acct *portfolio.Account) error {
+func writeMetricsJSONL(path string, acct portfolio.Portfolio) error {
 	f, err := os.Create(path)
 	if err != nil {
 		return fmt.Errorf("create metrics file: %w", err)
@@ -154,10 +165,10 @@ func writeMetricsJSONL(path string, acct *portfolio.Account) error {
 		return fmt.Errorf("write metrics metadata: %w", err)
 	}
 
-	s := acct.Summary()
-	r := acct.RiskMetrics()
-	t := acct.TradeMetrics()
-	w := acct.WithdrawalMetrics()
+	s, _ := acct.Summary()
+	r, _ := acct.RiskMetrics()
+	t, _ := acct.TradeMetrics()
+	w, _ := acct.WithdrawalMetrics()
 
 	rec := map[string]any{
 		"date": time.Now().Format("2006-01-02"),

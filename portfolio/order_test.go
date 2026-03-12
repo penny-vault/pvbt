@@ -38,15 +38,21 @@ type mockBroker struct {
 	callIdx      int
 }
 
-func (m *mockBroker) Connect(context.Context) error                       { return nil }
-func (m *mockBroker) Close() error                                        { return nil }
-func (m *mockBroker) Cancel(string) error                                 { return nil }
-func (m *mockBroker) Replace(string, broker.Order) ([]broker.Fill, error) { return nil, nil }
-func (m *mockBroker) Orders() ([]broker.Order, error)                     { return nil, nil }
-func (m *mockBroker) Positions() ([]broker.Position, error)               { return nil, nil }
-func (m *mockBroker) Balance() (broker.Balance, error)                    { return broker.Balance{}, nil }
+func (m *mockBroker) Connect(context.Context) error { return nil }
+func (m *mockBroker) Close() error                   { return nil }
+func (m *mockBroker) Cancel(_ context.Context, _ string) error {
+	return nil
+}
+func (m *mockBroker) Replace(_ context.Context, _ string, _ broker.Order) ([]broker.Fill, error) {
+	return nil, nil
+}
+func (m *mockBroker) Orders(_ context.Context) ([]broker.Order, error)       { return nil, nil }
+func (m *mockBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
+func (m *mockBroker) Balance(_ context.Context) (broker.Balance, error) {
+	return broker.Balance{}, nil
+}
 
-func (m *mockBroker) Submit(order broker.Order) ([]broker.Fill, error) {
+func (m *mockBroker) Submit(_ context.Context, order broker.Order) ([]broker.Fill, error) {
 	m.submitted = append(m.submitted, order)
 	if m.submitErr != nil {
 		return nil, m.submitErr
@@ -88,7 +94,7 @@ var _ = Describe("Order", func() {
 	})
 
 	It("places a market buy order via broker", func() {
-		acct.Order(testAsset, portfolio.Buy, 10)
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 10)
 
 		Expect(mb.submitted).To(HaveLen(1))
 		ord := mb.submitted[0]
@@ -101,7 +107,7 @@ var _ = Describe("Order", func() {
 	})
 
 	It("places a limit order", func() {
-		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0))
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 5, portfolio.Limit(50.0))
 
 		Expect(mb.submitted).To(HaveLen(1))
 		Expect(mb.submitted[0].OrderType).To(Equal(broker.Limit))
@@ -109,7 +115,7 @@ var _ = Describe("Order", func() {
 	})
 
 	It("places a stop order", func() {
-		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Stop(45.0))
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 5, portfolio.Stop(45.0))
 
 		Expect(mb.submitted).To(HaveLen(1))
 		Expect(mb.submitted[0].OrderType).To(Equal(broker.Stop))
@@ -117,7 +123,7 @@ var _ = Describe("Order", func() {
 	})
 
 	It("places a stop-limit order", func() {
-		acct.Order(testAsset, portfolio.Buy, 5, portfolio.Limit(50.0), portfolio.Stop(45.0))
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 5, portfolio.Limit(50.0), portfolio.Stop(45.0))
 
 		Expect(mb.submitted).To(HaveLen(1))
 		Expect(mb.submitted[0].OrderType).To(Equal(broker.StopLimit))
@@ -126,7 +132,7 @@ var _ = Describe("Order", func() {
 	})
 
 	It("handles GoodTilCancel modifier", func() {
-		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilCancel)
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 5, portfolio.GoodTilCancel)
 
 		Expect(mb.submitted).To(HaveLen(1))
 		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTC))
@@ -134,7 +140,7 @@ var _ = Describe("Order", func() {
 
 	It("handles GoodTilDate modifier", func() {
 		gtdDate := time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)
-		acct.Order(testAsset, portfolio.Buy, 5, portfolio.GoodTilDate(gtdDate))
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 5, portfolio.GoodTilDate(gtdDate))
 
 		Expect(mb.submitted).To(HaveLen(1))
 		Expect(mb.submitted[0].TimeInForce).To(Equal(broker.GTD))
@@ -148,8 +154,8 @@ var _ = Describe("Order", func() {
 			{{Price: 105.0, Qty: 10, FilledAt: fillTime}},
 		}
 
-		acct.Order(testAsset, portfolio.Buy, 10)
-		acct.Order(testAsset, portfolio.Sell, 10)
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 10)
+		acct.Order(context.Background(), testAsset, portfolio.Sell, 10)
 
 		Expect(mb.submitted).To(HaveLen(2))
 		Expect(mb.submitted[1].Side).To(Equal(broker.Sell))
@@ -166,7 +172,7 @@ var _ = Describe("Order", func() {
 			},
 		}
 
-		acct.Order(testAsset, portfolio.Buy, 10)
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 10)
 
 		Expect(acct.Position(testAsset)).To(Equal(10.0))
 		// cash: 10_000 - (6*300 + 4*299) = 10_000 - 2996 = 7_004
@@ -184,7 +190,7 @@ var _ = Describe("Order", func() {
 
 	It("leaves cash and position unchanged when broker returns an error", func() {
 		mb.submitErr = fmt.Errorf("connection refused")
-		acct.Order(testAsset, portfolio.Buy, 10)
+		acct.Order(context.Background(), testAsset, portfolio.Buy, 10)
 
 		Expect(acct.Cash()).To(Equal(10_000.0))
 		Expect(acct.Position(testAsset)).To(Equal(0.0))
@@ -198,7 +204,7 @@ var _ = Describe("Order", func() {
 
 	Context("edge cases", func() {
 		It("submits an order with zero quantity", func() {
-			acct.Order(testAsset, portfolio.Buy, 0)
+			acct.Order(context.Background(), testAsset, portfolio.Buy, 0)
 
 			// The order is forwarded to the broker with qty=0.
 			Expect(mb.submitted).To(HaveLen(1))
@@ -211,7 +217,7 @@ var _ = Describe("Order", func() {
 		})
 
 		It("submits an order with negative quantity", func() {
-			acct.Order(testAsset, portfolio.Buy, -5)
+			acct.Order(context.Background(), testAsset, portfolio.Buy, -5)
 
 			// The broker receives the negative qty as-is.
 			Expect(mb.submitted).To(HaveLen(1))
@@ -232,8 +238,8 @@ var _ = Describe("Order", func() {
 			}
 
 			// Buy 5 shares, then sell 10 (more than held).
-			acct.Order(testAsset, portfolio.Buy, 5)
-			acct.Order(testAsset, portfolio.Sell, 10)
+			acct.Order(context.Background(), testAsset, portfolio.Buy, 5)
+			acct.Order(context.Background(), testAsset, portfolio.Sell, 10)
 
 			Expect(mb.submitted).To(HaveLen(2))
 
@@ -248,7 +254,7 @@ var _ = Describe("Order", func() {
 
 	DescribeTable("time-in-force modifiers",
 		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
-			acct.Order(testAsset, portfolio.Buy, 1, mod)
+			acct.Order(context.Background(), testAsset, portfolio.Buy, 1, mod)
 			Expect(mb.submitted).To(HaveLen(1))
 			Expect(mb.submitted[0].TimeInForce).To(Equal(expected))
 		},

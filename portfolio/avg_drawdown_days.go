@@ -23,10 +23,10 @@ func (avgDrawdownDays) Description() string {
 	return "Mean duration of drawdown periods in trading days. A drawdown period starts when the equity falls below its peak and ends when a new peak is reached. Complements AvgDrawdown (magnitude) by measuring how long recoveries take."
 }
 
-func (avgDrawdownDays) Compute(a *Account, window *Period) float64 {
+func (avgDrawdownDays) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	dd := drawdownSeries(equity)
@@ -48,7 +48,7 @@ func (avgDrawdownDays) Compute(a *Account, window *Period) float64 {
 	}
 
 	if len(durations) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	total := 0
@@ -56,10 +56,10 @@ func (avgDrawdownDays) Compute(a *Account, window *Period) float64 {
 		total += d
 	}
 
-	return float64(total) / float64(len(durations))
+	return float64(total) / float64(len(durations)), nil
 }
 
-func (avgDrawdownDays) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (avgDrawdownDays) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // AvgDrawdownDays is the mean duration of drawdown episodes in trading
 // days. It measures how long the strategy typically spends recovering

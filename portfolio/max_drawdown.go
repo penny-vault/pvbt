@@ -23,10 +23,10 @@ func (maxDrawdown) Description() string {
 	return "Largest peak-to-trough decline in the equity curve as a decimal fraction. A value of -0.20 means the portfolio fell 20% from its peak. More negative values indicate larger drawdowns."
 }
 
-func (maxDrawdown) Compute(a *Account, window *Period) float64 {
+func (maxDrawdown) Compute(a *Account, window *Period) (float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(eq) == 0 {
-		return 0
+		return 0, nil
 	}
 	dd := drawdownSeries(eq)
 	minDD := 0.0
@@ -35,15 +35,15 @@ func (maxDrawdown) Compute(a *Account, window *Period) float64 {
 			minDD = v
 		}
 	}
-	return minDD
+	return minDD, nil
 }
 
-func (maxDrawdown) ComputeSeries(a *Account, window *Period) []float64 {
+func (maxDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(eq) == 0 {
-		return nil
+		return nil, nil
 	}
-	return drawdownSeries(eq)
+	return drawdownSeries(eq), nil
 }
 
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.

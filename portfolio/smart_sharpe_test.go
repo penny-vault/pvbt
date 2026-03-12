@@ -30,7 +30,9 @@ var _ = Describe("SmartSharpe", func() {
 			[]float64{100, 105, 98, 103, 97, 110},
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
-		Expect(portfolio.SmartSharpe.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.SmartSharpe.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("returns Sharpe divided by autocorrelation penalty", func() {
@@ -39,8 +41,10 @@ var _ = Describe("SmartSharpe", func() {
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
 
-		smartVal := a.PerformanceMetric(portfolio.SmartSharpe).Value()
-		sharpeVal := a.PerformanceMetric(portfolio.Sharpe).Value()
+		smartVal, err := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
+		sharpeVal, err := a.PerformanceMetric(portfolio.Sharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 
 		Expect(smartVal).NotTo(Equal(0.0))
 		Expect(math.IsInf(smartVal, 0)).To(BeFalse())
@@ -50,7 +54,8 @@ var _ = Describe("SmartSharpe", func() {
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountWithRF([]float64{100}, []float64{100})
-		v := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -59,7 +64,8 @@ var _ = Describe("SmartSharpe", func() {
 			[]float64{100, 100, 100, 100, 100},
 			[]float64{100, 100, 100, 100, 100},
 		)
-		v := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
@@ -68,7 +74,8 @@ var _ = Describe("SmartSharpe", func() {
 			[]float64{100, 110},
 			[]float64{100, 100.01},
 		)
-		v := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		v, err := a.PerformanceMetric(portfolio.SmartSharpe).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 })

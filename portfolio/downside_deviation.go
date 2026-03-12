@@ -25,7 +25,11 @@ func (downsideDeviation) Description() string {
 	return "Standard deviation of negative returns only. Unlike standard deviation which treats upside and downside volatility equally, this focuses solely on harmful volatility. Used in the Sortino ratio denominator."
 }
 
-func (downsideDeviation) Compute(a *Account, window *Period) float64 {
+func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.RiskFreePrices()) == 0 {
+		return 0, ErrNoRiskFreeRate
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
@@ -40,15 +44,15 @@ func (downsideDeviation) Compute(a *Account, window *Period) float64 {
 	}
 
 	if len(neg) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	af := annualizationFactor(a.EquityTimes())
-	return stddev(neg) * math.Sqrt(af)
+	return stddev(neg) * math.Sqrt(af), nil
 }
 
-func (downsideDeviation) ComputeSeries(a *Account, window *Period) []float64 {
-	return nil
+func (downsideDeviation) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
 }
 
 // DownsideDeviation measures the volatility of returns below the

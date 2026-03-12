@@ -59,7 +59,8 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
 			a := buildReturnAccount(dates, []float64{100, 110, 105, 115, 120})
 
-			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.20, 1e-9))
 		})
 
@@ -74,7 +75,8 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
 			a := buildReturnAccount(dates, []float64{100, 110, 105, 115, 120})
 
-			series := a.PerformanceMetric(portfolio.TWRR).Series()
+			series, err := a.PerformanceMetric(portfolio.TWRR).Series()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(HaveLen(4))
 			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", 0.05, 1e-9))
@@ -89,7 +91,8 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
 			a := buildReturnAccount(dates, []float64{100, 90, 80})
 
-			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -0.20, 1e-9))
 		})
 
@@ -97,7 +100,8 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
 			a := buildReturnAccount(dates, []float64{100})
 
-			result := a.PerformanceMetric(portfolio.TWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 	})
@@ -129,7 +133,8 @@ var _ = Describe("Return Metrics", func() {
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df1)
 
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			expected := math.Pow(1.1, 365.0/367.0) - 1
 			Expect(result).To(BeNumerically("~", expected, 1e-9))
 		})
@@ -193,8 +198,10 @@ var _ = Describe("Return Metrics", func() {
 			// Verify equity curve is as expected.
 			Expect(a.EquityCurve()).To(Equal([]float64{10_000, 15_500, 16_500}))
 
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
-			twrrResult := a.PerformanceMetric(portfolio.TWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			twrrResult, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// TWRR = (15500/10000)*(16500/15500) - 1 = 1.65 - 1 = 0.65
 			// TWRR naively treats deposit-driven equity growth as returns.
@@ -210,7 +217,8 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
 			a := buildReturnAccount(dates, []float64{10_000})
 
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 
@@ -232,7 +240,8 @@ var _ = Describe("Return Metrics", func() {
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df1)
 
-			series := a.PerformanceMetric(portfolio.MWRR).Series()
+			series, err := a.PerformanceMetric(portfolio.MWRR).Series()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(BeNil())
 		})
 
@@ -261,7 +270,8 @@ var _ = Describe("Return Metrics", func() {
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df1)
 
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			expected := math.Pow(1.15, 365.0/367.0) - 1
 			Expect(result).To(BeNumerically("~", expected, 1e-9))
 		})
@@ -297,7 +307,8 @@ var _ = Describe("Return Metrics", func() {
 			// Equity curve: [10000, 8000]
 			Expect(a.EquityCurve()).To(Equal([]float64{10_000, 8_000}))
 
-			result := a.PerformanceMetric(portfolio.MWRR).Value()
+			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			// Flows: -10000 at d=0 (synthetic), +8000 at d=367 (terminal)
 			// -10000 + 8000/(1+r)^(367/365) = 0
 			// (1+r)^(367/365) = 0.8
@@ -365,11 +376,13 @@ var _ = Describe("Return Metrics", func() {
 			// Verify equity curve.
 			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 10500, 11500, 12500}))
 
-			twrrVal := a.PerformanceMetric(portfolio.TWRR).Value()
+			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(twrrVal).To(BeNumerically("~", 0.25, 1e-9))
 
 			// MWRR should also be positive (we gained 25% in absolute terms).
-			mwrrVal := a.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(mwrrVal).To(BeNumerically(">", 0.0))
 		})
 
@@ -422,10 +435,12 @@ var _ = Describe("Return Metrics", func() {
 
 			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 28600}))
 
-			twrrVal := a.PerformanceMetric(portfolio.TWRR).Value()
+			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(twrrVal).To(BeNumerically("~", 1.86, 1e-9))
 
-			mwrrVal := a.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(mwrrVal).To(BeNumerically(">", 0.0))
 
 			// Compare to the "deposit before decline" test below. We capture
@@ -486,10 +501,12 @@ var _ = Describe("Return Metrics", func() {
 
 			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 17200}))
 
-			twrrVal := a.PerformanceMetric(portfolio.TWRR).Value()
+			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(twrrVal).To(BeNumerically("~", 0.72, 1e-9))
 
-			mwrrVal := a.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Asset CAGR over 366 days: (90/100)^(365/366) - 1 (negative).
 			// MWRR should be below this because more money was exposed to the decline.
@@ -547,7 +564,8 @@ var _ = Describe("Return Metrics", func() {
 
 			Expect(a.EquityCurve()).To(Equal([]float64{10000, 12000, 7500, 8000}))
 
-			twrrVal := a.PerformanceMetric(portfolio.TWRR).Value()
+			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			// TWRR = 1.2 * (7500/12000) * (8000/7500) - 1
 			//      = 1.2 * 0.625 * (16/15) - 1
 			//      = 0.8 - 1 = -0.2
@@ -556,7 +574,8 @@ var _ = Describe("Return Metrics", func() {
 			// MWRR: investor put in 10000, took out 5000 midway, left with 8000.
 			// Net gain = 5000 + 8000 - 10000 = 3000 (positive).
 			// So MWRR should be positive.
-			mwrrVal := a.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(mwrrVal).To(BeNumerically(">", 0.0))
 		})
 
@@ -618,8 +637,10 @@ var _ = Describe("Return Metrics", func() {
 			// Equity B: [10000, 12000, 14000, 18870]
 			Expect(acctB.EquityCurve()).To(Equal([]float64{10000, 12000, 14000, 18870}))
 
-			mwrrA := acctA.PerformanceMetric(portfolio.MWRR).Value()
-			mwrrB := acctB.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrA, err := acctA.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			mwrrB, err := acctB.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// Account A deposited at d1 (price=120). The second tranche rose
 			// to 140 then fell to 110, netting a loss of 10/120 = -8.3%.
@@ -637,8 +658,10 @@ var _ = Describe("Return Metrics", func() {
 			Expect(mwrrA).To(BeNumerically(">", mwrrB))
 
 			// Verify TWRR values match hand-traced expectations.
-			twrrA := acctA.PerformanceMetric(portfolio.TWRR).Value()
-			twrrB := acctB.PerformanceMetric(portfolio.TWRR).Value()
+			twrrA, err := acctA.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			twrrB, err := acctB.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 
 			// TWRR A = product telescopes to 20170/10000 - 1 = 1.017
 			Expect(twrrA).To(BeNumerically("~", 1.017, 1e-9))
@@ -685,12 +708,14 @@ var _ = Describe("Return Metrics", func() {
 
 			Expect(a.EquityCurve()).To(Equal([]float64{10000, 12000, 12000, 13330, 14660}))
 
-			twrrVal := a.PerformanceMetric(portfolio.TWRR).Value()
+			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(twrrVal).To(BeNumerically("~", 0.466, 1e-9))
 
 			// MWRR: only flow is initial deposit -10000, terminal 14660.
 			// Positive gain, so MWRR > 0.
-			mwrrVal := a.PerformanceMetric(portfolio.MWRR).Value()
+			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(mwrrVal).To(BeNumerically(">", 0.0))
 		})
 	})
@@ -748,7 +773,8 @@ var _ = Describe("Return Metrics", func() {
 				[]float64{50, 52, 54},
 			)
 
-			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()
+			result, err := a.PerformanceMetric(portfolio.ActiveReturn).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.12, 1e-9))
 		})
 
@@ -766,7 +792,8 @@ var _ = Describe("Return Metrics", func() {
 				[]float64{50, 55, 60.5},
 			)
 
-			result := a.PerformanceMetric(portfolio.ActiveReturn).Value()
+			result, err := a.PerformanceMetric(portfolio.ActiveReturn).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 
@@ -789,7 +816,8 @@ var _ = Describe("Return Metrics", func() {
 				[]float64{50, 52, 54},
 			)
 
-			series := a.PerformanceMetric(portfolio.ActiveReturn).Series()
+			series, err := a.PerformanceMetric(portfolio.ActiveReturn).Series()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(HaveLen(2))
 			Expect(series[0]).To(BeNumerically("~", 0.06, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", -0.03, 1e-9))

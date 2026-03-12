@@ -25,14 +25,14 @@ func (turnover) Description() string {
 		"value of 1.0 means the entire portfolio was turned over once per year."
 }
 
-func (turnover) Compute(a *Account, _ *Period) float64 {
+func (turnover) Compute(a *Account, _ *Period) (float64, error) {
 	_, totalSellValue := roundTrips(a.Transactions())
 
 	ec := a.EquityCurve()
 	et := a.EquityTimes()
 
 	if len(ec) < 2 || totalSellValue == 0 {
-		return 0
+		return 0, nil
 	}
 
 	var sum float64
@@ -42,18 +42,18 @@ func (turnover) Compute(a *Account, _ *Period) float64 {
 	meanValue := sum / float64(len(ec))
 
 	if meanValue <= 0 {
-		return 0
+		return 0, nil
 	}
 
 	periodDays := et[len(et)-1].Sub(et[0]).Hours() / 24.0
 	if periodDays <= 0 {
-		return 0
+		return 0, nil
 	}
 
-	return (totalSellValue / meanValue) * (365.25 / periodDays)
+	return (totalSellValue / meanValue) * (365.25 / periodDays), nil
 }
 
-func (turnover) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (turnover) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Turnover is the annualized portfolio turnover rate, computed as
 // total sell value divided by mean portfolio value, scaled to a year.

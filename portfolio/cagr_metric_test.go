@@ -27,12 +27,15 @@ import (
 var _ = Describe("CAGR", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 120})
-		Expect(portfolio.CAGR.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.CAGR.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes annualized compound growth rate", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.CAGR).Value()
+		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
 
 		years := 8.0 / 365.25
 		expected := math.Pow(125.0/100.0, 1.0/years) - 1
@@ -41,25 +44,29 @@ var _ = Describe("CAGR", func() {
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.CAGR).Value()
+		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices (start == end)", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.CAGR).Value()
+		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns negative value for declining equity", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85})
-		v := a.PerformanceMetric(portfolio.CAGR).Value()
+		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("<", 0.0))
 	})
 
 	It("returns positive value for growing equity", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.CAGR).Value()
+		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically(">", 0.0))
 	})
 })

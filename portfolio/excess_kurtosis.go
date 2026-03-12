@@ -23,18 +23,18 @@ func (excessKurtosis) Description() string {
 	return "Measures the heaviness of return distribution tails relative to a normal distribution. Positive values indicate fat tails (more extreme returns than expected). Negative values indicate thin tails."
 }
 
-func (excessKurtosis) Compute(a *Account, window *Period) float64 {
+func (excessKurtosis) Compute(a *Account, window *Period) (float64, error) {
 	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(prices)
 
 	n := len(r)
 	if n < 4 {
-		return 0
+		return 0, nil
 	}
 
 	s := stddev(r)
 	if s == 0 {
-		return 0
+		return 0, nil
 	}
 
 	m := mean(r)
@@ -44,10 +44,10 @@ func (excessKurtosis) Compute(a *Account, window *Period) float64 {
 		sum += d * d * d * d
 	}
 
-	return sum/float64(n)/(s*s*s*s) - 3
+	return sum/float64(n)/(s*s*s*s) - 3, nil
 }
 
-func (excessKurtosis) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (excessKurtosis) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // ExcessKurtosis measures tail risk -- how much fatter the tails of
 // the return distribution are compared to a normal distribution.

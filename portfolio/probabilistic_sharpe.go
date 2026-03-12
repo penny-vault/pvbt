@@ -25,7 +25,11 @@ func (probabilisticSharpe) Description() string {
 	return "Probability that the true Sharpe ratio exceeds zero, accounting for skewness and kurtosis of returns. Based on Bailey and Lopez de Prado (2012). Values near 1.0 indicate high confidence the strategy has positive risk-adjusted returns. Values near 0.5 indicate no statistical evidence of skill."
 }
 
-func (probabilisticSharpe) Compute(a *Account, window *Period) float64 {
+func (probabilisticSharpe) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.RiskFreePrices()) == 0 {
+		return 0, ErrNoRiskFreeRate
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(eq)
 	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
@@ -33,13 +37,13 @@ func (probabilisticSharpe) Compute(a *Account, window *Period) float64 {
 
 	n := len(er)
 	if n < 4 {
-		return 0
+		return 0, nil
 	}
 
 	// Compute sample Sharpe (not annualized -- PSR works on per-period).
 	sd := stddev(er)
 	if sd == 0 {
-		return 0
+		return 0, nil
 	}
 	sr := mean(er) / sd
 
@@ -61,21 +65,23 @@ func (probabilisticSharpe) Compute(a *Account, window *Period) float64 {
 	sr2 := sr * sr
 	inner := (1 - skew*sr + (kurt/4)*sr2) / (nf - 1)
 	if inner <= 0 {
-		return 0
+		return 0, nil
 	}
 	se := math.Sqrt(inner)
 
 	if se == 0 {
-		return 0
+		return 0, nil
 	}
 
 	// PSR = Phi(SR / se) where Phi is the standard normal CDF.
 	// Benchmark Sharpe is 0.
 	z := sr / se
-	return normalCDF(z)
+	return normalCDF(z), nil
 }
 
-func (probabilisticSharpe) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (probabilisticSharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // normalCDF approximates the standard normal cumulative distribution function.
 func normalCDF(x float64) float64 {

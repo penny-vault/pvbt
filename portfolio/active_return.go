@@ -25,24 +25,32 @@ func (activeReturn) Description() string {
 
 // Compute returns the portfolio total return minus the benchmark total
 // return. Total return is (end/start) - 1.
-func (activeReturn) Compute(a *Account, window *Period) float64 {
+func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bench := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
 	if len(equity) < 2 || len(bench) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	portReturn := (equity[len(equity)-1] / equity[0]) - 1
 	benchReturn := (bench[len(bench)-1] / bench[0]) - 1
 
-	return portReturn - benchReturn
+	return portReturn - benchReturn, nil
 }
 
 // ComputeSeries returns the element-wise difference between the
 // portfolio cumulative return series and the benchmark cumulative
 // return series.
-func (activeReturn) ComputeSeries(a *Account, window *Period) []float64 {
+func (activeReturn) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return nil, ErrNoBenchmark
+	}
+
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bench := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -54,7 +62,7 @@ func (activeReturn) ComputeSeries(a *Account, window *Period) []float64 {
 		n = len(benchR)
 	}
 	if n == 0 {
-		return nil
+		return nil, nil
 	}
 
 	series := make([]float64, n)
@@ -66,7 +74,7 @@ func (activeReturn) ComputeSeries(a *Account, window *Period) []float64 {
 		series[i] = (cumPort - 1) - (cumBench - 1)
 	}
 
-	return series
+	return series, nil
 }
 
 // ActiveReturn is the difference between portfolio return and benchmark

@@ -23,7 +23,11 @@ func (downsideCaptureRatio) Description() string {
 	return "Measures how much of the benchmark's downside the portfolio experiences. A value of 0.8 means the portfolio loses only 80% of the benchmark's loss during down periods. Lower is better."
 }
 
-func (downsideCaptureRatio) Compute(a *Account, window *Period) float64 {
+func (downsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -45,20 +49,22 @@ func (downsideCaptureRatio) Compute(a *Account, window *Period) float64 {
 	}
 
 	if len(downP) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	geoP := geometricMean(downP)
 	geoB := geometricMean(downB)
 
 	if geoB == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return geoP / geoB
+	return geoP / geoB, nil
 }
 
-func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // DownsideCaptureRatio measures how much of the benchmark's negative
 // returns the portfolio captures. Computed as portfolio geometric mean

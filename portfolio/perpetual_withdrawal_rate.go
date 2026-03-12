@@ -23,15 +23,15 @@ func (perpetualWithdrawalRate) Description() string {
 	return "The withdrawal rate that preserves the real (inflation-adjusted) value of the portfolio indefinitely. More conservative than SafeWithdrawalRate as it aims to maintain purchasing power."
 }
 
-func (perpetualWithdrawalRate) Compute(a *Account, window *Period) float64 {
+func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 12 {
-		return 0
+		return 0, nil
 	}
 
 	monthly := monthlyReturnsFromEquity(equity)
 	if len(monthly) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	// Perpetual withdrawal: ending balance must be >= starting balance.
@@ -39,10 +39,10 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) float64 {
 		return endBalance >= startBalance
 	}
 
-	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false)
+	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false), nil
 }
 
-func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // PerpetualWithdrawalRate is the maximum constant annual withdrawal
 // rate where the ending balance equals or exceeds the inflation-

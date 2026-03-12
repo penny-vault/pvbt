@@ -74,22 +74,30 @@ var _ = Describe("Distribution Metrics", func() {
 	Describe("ComputeSeries returns nil", func() {
 		It("ExcessKurtosis returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			Expect(portfolio.ExcessKurtosis.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.ExcessKurtosis.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("Skewness returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			Expect(portfolio.Skewness.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.Skewness.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("NPositivePeriods returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			Expect(portfolio.NPositivePeriods.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.NPositivePeriods.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 
 		It("GainLossRatio returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			Expect(portfolio.GainLossRatio.ComputeSeries(a, nil)).To(BeNil())
+			s, err := portfolio.GainLossRatio.ComputeSeries(a, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(s).To(BeNil())
 		})
 	})
 
@@ -101,20 +109,23 @@ var _ = Describe("Distribution Metrics", func() {
 
 		It("computes excess kurtosis for a mixed equity curve", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			result := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			result, err := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -1.953889061852303, 1e-9))
 		})
 
 		It("returns zero when fewer than 4 returns", func() {
 			// 4 prices -> 3 returns, which is < 4 threshold
 			a := cashAccount([]float64{100, 105, 102, 108})
-			result := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			result, err := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
 		It("returns zero for constant prices (stddev = 0)", func() {
 			a := cashAccount([]float64{100, 100, 100, 100, 100})
-			result := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			result, err := a.PerformanceMetric(portfolio.ExcessKurtosis).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 	})
@@ -127,20 +138,23 @@ var _ = Describe("Distribution Metrics", func() {
 
 		It("computes skewness for a mixed equity curve", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			result := a.PerformanceMetric(portfolio.Skewness).Value()
+			result, err := a.PerformanceMetric(portfolio.Skewness).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", -0.2553770356869169, 1e-9))
 		})
 
 		It("returns zero when fewer than 3 returns", func() {
 			// 3 prices -> 2 returns, which is < 3 threshold
 			a := cashAccount([]float64{100, 105, 102})
-			result := a.PerformanceMetric(portfolio.Skewness).Value()
+			result, err := a.PerformanceMetric(portfolio.Skewness).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
 		It("returns zero for constant prices (stddev = 0)", func() {
 			a := cashAccount([]float64{100, 100, 100, 100, 100})
-			result := a.PerformanceMetric(portfolio.Skewness).Value()
+			result, err := a.PerformanceMetric(portfolio.Skewness).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
@@ -157,7 +171,8 @@ var _ = Describe("Distribution Metrics", func() {
 				101.6534295,     // +2%
 				99.62036091,     // -2%
 			})
-			result := a.PerformanceMetric(portfolio.Skewness).Value()
+			result, err := a.PerformanceMetric(portfolio.Skewness).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 	})
@@ -168,33 +183,38 @@ var _ = Describe("Distribution Metrics", func() {
 
 		It("computes fraction of positive periods", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 4.0/6.0, 1e-12))
 		})
 
 		It("returns 1.0 when all returns are positive", func() {
 			// Strictly increasing prices -> all returns positive.
 			a := cashAccount([]float64{100, 102, 105, 108, 112})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 1.0, 1e-12))
 		})
 
 		It("returns 0.0 when all returns are negative", func() {
 			// Strictly decreasing prices -> all returns negative.
 			a := cashAccount([]float64{100, 98, 95, 92, 88})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
 		It("returns 1.0 for a single positive return", func() {
 			a := cashAccount([]float64{100, 105})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 1.0, 1e-12))
 		})
 
 		It("returns 0.0 when there are no returns (single price)", func() {
 			a := cashAccount([]float64{100})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
@@ -204,7 +224,8 @@ var _ = Describe("Distribution Metrics", func() {
 				100.0, 105.0, 99.75, 102.7425,
 				99.660225, 101.6534295, 99.62036091,
 			})
-			result := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			result, err := a.PerformanceMetric(portfolio.NPositivePeriods).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.5, 1e-12))
 		})
 	})
@@ -220,25 +241,29 @@ var _ = Describe("Distribution Metrics", func() {
 
 		It("computes gain/loss ratio for mixed returns", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 1.7492183239823191, 1e-9))
 		})
 
 		It("returns zero when all returns are positive (no losses)", func() {
 			a := cashAccount([]float64{100, 102, 105, 108, 112})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
 		It("returns zero when all returns are negative (no gains)", func() {
 			a := cashAccount([]float64{100, 98, 95, 92, 88})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
 		It("returns zero with a single return (only one side)", func() {
 			a := cashAccount([]float64{100, 105})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 
@@ -248,13 +273,15 @@ var _ = Describe("Distribution Metrics", func() {
 				100.0, 105.0, 99.75, 102.7425,
 				99.660225, 101.6534295, 99.62036091,
 			})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 1.0, 1e-9))
 		})
 
 		It("returns zero when there are no returns", func() {
 			a := cashAccount([]float64{100})
-			result := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
 		})
 	})

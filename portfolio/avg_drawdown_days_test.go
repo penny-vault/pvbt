@@ -25,48 +25,57 @@ import (
 var _ = Describe("AvgDrawdownDays", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 100})
-		Expect(portfolio.AvgDrawdownDays.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.AvgDrawdownDays.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("computes mean duration of drawdown episodes", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
 	It("handles multi-day drawdown episodes", func() {
 		a := buildAccountFromEquity([]float64{100, 120, 110, 105, 125, 115, 130})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 1.5, 1e-9))
 	})
 
 	It("returns 0 for single data point", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for monotonically rising equity", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("counts trailing drawdown that does not recover", func() {
 		a := buildAccountFromEquity([]float64{100, 120, 100, 90})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 2.0, 1e-9))
 	})
 
 	It("handles continuous decline (single long episode)", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
-		v := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		v, err := a.PerformanceMetric(portfolio.AvgDrawdownDays).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically("~", 4.0, 1e-9))
 	})
 })

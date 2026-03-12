@@ -27,11 +27,11 @@ var (
 			MarginBottom(1)
 )
 
-func printSummary(acct *portfolio.Account) {
-	s := acct.Summary()
-	r := acct.RiskMetrics()
-	t := acct.TradeMetrics()
-	w := acct.WithdrawalMetrics()
+func printSummary(acct portfolio.Portfolio) {
+	s, _ := acct.Summary()
+	r, _ := acct.RiskMetrics()
+	t, _ := acct.TradeMetrics()
+	w, _ := acct.WithdrawalMetrics()
 
 	var sb strings.Builder
 

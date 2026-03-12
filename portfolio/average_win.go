@@ -25,7 +25,7 @@ func (averageWin) Description() string {
 		"sizing, compare within the same portfolio rather than across different ones."
 }
 
-func (averageWin) Compute(a *Account, _ *Period) float64 {
+func (averageWin) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
 	var wins int
@@ -39,13 +39,13 @@ func (averageWin) Compute(a *Account, _ *Period) float64 {
 	}
 
 	if wins == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return sumWin / float64(wins)
+	return sumWin / float64(wins), nil
 }
 
-func (averageWin) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (averageWin) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // AverageWin is the average profit on winning round-trip trades.
 var AverageWin PerformanceMetric = averageWin{}

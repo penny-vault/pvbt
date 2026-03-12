@@ -25,12 +25,12 @@ func (kRatio) Description() string {
 	return "Measures the consistency of equity curve growth by fitting a linear regression to the log equity curve and dividing the slope by the standard error. Higher values indicate smoother, more consistent growth. Negative values indicate a declining equity curve."
 }
 
-func (kRatio) Compute(a *Account, window *Period) float64 {
+func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	n := len(r)
 	if n < 3 {
-		return 0
+		return 0, nil
 	}
 
 	// Compute log(VAMI) where VAMI = 1000 * cumulative product of (1 + r_i).
@@ -55,7 +55,7 @@ func (kRatio) Compute(a *Account, window *Period) float64 {
 	}
 
 	if sumXXdev == 0 {
-		return 0
+		return 0, nil
 	}
 
 	slope := sumXYdev / sumXXdev
@@ -71,13 +71,13 @@ func (kRatio) Compute(a *Account, window *Period) float64 {
 
 	stderr := math.Sqrt(sumResidSq/(nf-2)) / math.Sqrt(sumXXdev)
 	if stderr == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return slope / stderr
+	return slope / stderr, nil
 }
 
-func (kRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (kRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // KRatio measures the consistency of returns over time: the slope of
 // the log-VAMI regression line divided by the standard error of the

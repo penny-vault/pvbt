@@ -113,7 +113,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// variance(r) = sum((r[i]-mean)^2) / 4  (N-1 = 4)
 			// stddev(r) ~ 0.08438
 			// StdDev = stddev(r) * sqrt(252) ~ 1.33942
-			val := acct.PerformanceMetric(portfolio.StdDev).Value()
+			val, err := acct.PerformanceMetric(portfolio.StdDev).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 1.3394, 1e-3))
 		})
 
@@ -123,7 +124,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 			)
 
-			series := acct.PerformanceMetric(portfolio.StdDev).Series()
+			series, err := acct.PerformanceMetric(portfolio.StdDev).Series()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(HaveLen(5))
 			Expect(series[0]).To(BeNumerically("~", 0.05, 1e-10))
 			Expect(series[1]).To(BeNumerically("~", -0.06667, 1e-4))
@@ -145,7 +147,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			//   peak=525 -> dd=(485-525)/525 = -0.07619
 			//   peak=550 -> dd=0
 			// MaxDrawdown = -0.07619
-			val := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
+			val, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", -0.07619, 1e-4))
 		})
 
@@ -155,7 +158,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 			)
 
-			series := acct.PerformanceMetric(portfolio.MaxDrawdown).Series()
+			series, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Series()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(HaveLen(6))
 			Expect(series[0]).To(BeNumerically("~", 0.0, 1e-10))
 			Expect(series[1]).To(BeNumerically("~", 0.0, 1e-10))
@@ -178,7 +182,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// variance(neg) = ((neg[0]-mean)^2 + (neg[1]-mean)^2) / 1
 			// stddev(neg) ~ 0.005951
 			// DownsideDeviation = stddev(neg) * sqrt(252) ~ 0.09445
-			val := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+			val, err := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 0.09445, 1e-3))
 		})
 	})
@@ -193,7 +198,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// mean(er) ~ 0.02440
 			// stddev(er) ~ 0.08438 (same as stddev(r) approximately)
 			// Sharpe = mean(er)/stddev(er) * sqrt(252) ~ 4.1249
-			val := acct.PerformanceMetric(portfolio.Sharpe).Value()
+			val, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 4.1249, 1e-2))
 		})
 	})
@@ -208,7 +214,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// mean(er) ~ 0.02193
 			// downside_deviation = sqrt(sum(min(er_i,0)^2) / N) ~ 0.03965
 			// Sortino = mean(er)/dd * sqrt(252) ~ 8.778
-			val := acct.PerformanceMetric(portfolio.Sortino).Value()
+			val, err := acct.PerformanceMetric(portfolio.Sortino).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 8.778, 0.01))
 		})
 	})
@@ -225,7 +232,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// cagr = (550/500)^(1/0.01916) - 1 ~ 143.48
 			// maxDD = 0.07619
 			// Calmar = 143.48 / 0.07619 ~ 1883.2
-			val := acct.PerformanceMetric(portfolio.Calmar).Value()
+			val, err := acct.PerformanceMetric(portfolio.Calmar).Value()
+			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 1883.2, 1.0))
 		})
 	})
@@ -242,7 +250,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100, 100, 100, 100},
 					[]float64{100, 100, 100, 100, 100},
 				)
-				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.StdDev).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns MaxDrawdown = 0", func() {
@@ -250,7 +260,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100, 100, 100, 100},
 					[]float64{100, 100, 100, 100, 100},
 				)
-				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns Sharpe = 0 when stddev of excess returns is 0", func() {
@@ -259,7 +271,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100, 100, 100, 100},
 					[]float64{100, 100, 100, 100, 100},
 				)
-				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns Calmar = 0 when max drawdown is 0", func() {
@@ -267,7 +281,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100, 100, 100, 100},
 					[]float64{100, 100, 100, 100, 100},
 				)
-				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.Calmar).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 		})
 
@@ -277,7 +293,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 102, 104, 106, 108},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns Calmar = 0 when no drawdown exists", func() {
@@ -285,7 +303,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 102, 104, 106, 108},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.Calmar).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 		})
 
@@ -296,7 +316,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 110, 121, 133, 146},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				Expect(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns Sortino = 0", func() {
@@ -304,7 +326,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 110, 121, 133, 146},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				Expect(acct.PerformanceMetric(portfolio.Sortino).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.Sortino).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 		})
 
@@ -317,7 +341,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 95, 90, 85, 80},
 					[]float64{100, 101, 102, 103, 104},
 				)
-				val := acct.PerformanceMetric(portfolio.Sharpe).Value()
+				val, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically("<", 0.0))
 			})
 		})
@@ -328,7 +353,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 95, 90, 85, 80},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				val := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+				val, err := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically(">", 0.0))
 			})
 
@@ -337,7 +363,8 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 95, 90, 85, 80},
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
-				val := acct.PerformanceMetric(portfolio.Sortino).Value()
+				val, err := acct.PerformanceMetric(portfolio.Sortino).Value()
+			Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically("<", 0.0))
 			})
 		})
@@ -348,7 +375,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 110},
 					[]float64{100, 100.01},
 				)
-				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.StdDev).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 
 			It("returns Sharpe = 0 when stddev is 0", func() {
@@ -356,7 +385,9 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 110},
 					[]float64{100, 100.01},
 				)
-				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
 			})
 		})
 
@@ -367,12 +398,88 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100},
 				)
 
-				Expect(acct.PerformanceMetric(portfolio.StdDev).Value()).To(Equal(0.0))
-				Expect(acct.PerformanceMetric(portfolio.MaxDrawdown).Value()).To(Equal(0.0))
-				Expect(acct.PerformanceMetric(portfolio.DownsideDeviation).Value()).To(Equal(0.0))
-				Expect(acct.PerformanceMetric(portfolio.Sharpe).Value()).To(Equal(0.0))
-				Expect(acct.PerformanceMetric(portfolio.Sortino).Value()).To(Equal(0.0))
-				Expect(acct.PerformanceMetric(portfolio.Calmar).Value()).To(Equal(0.0))
+				v, err := acct.PerformanceMetric(portfolio.StdDev).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+				v, err = acct.PerformanceMetric(portfolio.MaxDrawdown).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+				v, err = acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+				v, err = acct.PerformanceMetric(portfolio.Sharpe).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+				v, err = acct.PerformanceMetric(portfolio.Sortino).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+				v, err = acct.PerformanceMetric(portfolio.Calmar).Value()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(v).To(Equal(0.0))
+			})
+		})
+	})
+
+	Describe("Missing configuration errors", func() {
+		Context("when risk-free rate is not configured", func() {
+			It("returns ErrNoRiskFreeRate for risk-free-dependent metrics", func() {
+				acct := buildAccountFromEquity([]float64{100, 105, 98, 103, 97, 110})
+				for _, m := range []portfolio.PerformanceMetric{
+					portfolio.Sharpe,
+					portfolio.Sortino,
+					portfolio.SmartSharpe,
+					portfolio.SmartSortino,
+					portfolio.ProbabilisticSharpe,
+					portfolio.DownsideDeviation,
+					portfolio.Treynor,
+					portfolio.Alpha,
+				} {
+					v, err := m.Compute(acct, nil)
+					Expect(err).To(MatchError(portfolio.ErrNoRiskFreeRate), m.Name())
+					Expect(v).To(Equal(0.0), m.Name())
+				}
+			})
+		})
+
+		Context("when benchmark is not configured", func() {
+			It("returns ErrNoBenchmark for benchmark-dependent metrics", func() {
+				acct := buildAccountFromEquity([]float64{100, 105, 98, 103, 97, 110})
+				for _, m := range []portfolio.PerformanceMetric{
+					portfolio.Beta,
+					portfolio.TrackingError,
+					portfolio.InformationRatio,
+					portfolio.RSquared,
+					portfolio.UpsideCaptureRatio,
+					portfolio.DownsideCaptureRatio,
+					portfolio.ActiveReturn,
+				} {
+					v, err := m.Compute(acct, nil)
+					Expect(err).To(MatchError(portfolio.ErrNoBenchmark), m.Name())
+					Expect(v).To(Equal(0.0), m.Name())
+				}
+			})
+		})
+
+		Context("aggregate methods with missing configuration", func() {
+			It("returns partial Summary with joined errors", func() {
+				acct := buildAccountFromEquity([]float64{100, 105, 98, 103, 97, 110})
+				s, err := acct.Summary()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("risk-free rate not configured"))
+				// TWRR, MWRR, Calmar, MaxDrawdown, StdDev should still compute
+				Expect(s.TWRR).NotTo(Equal(0.0))
+				// Sharpe, Sortino should be zero (errored)
+				Expect(s.Sharpe).To(Equal(0.0))
+				Expect(s.Sortino).To(Equal(0.0))
+			})
+
+			It("returns partial RiskMetrics with joined errors", func() {
+				acct := buildAccountFromEquity([]float64{100, 105, 98, 103, 97, 110})
+				r, err := acct.RiskMetrics()
+				Expect(err).To(HaveOccurred())
+				// Beta, Alpha, etc. should be zero (errored)
+				Expect(r.Beta).To(Equal(0.0))
+				Expect(r.Alpha).To(Equal(0.0))
 			})
 		})
 	})

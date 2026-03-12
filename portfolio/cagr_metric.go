@@ -23,19 +23,19 @@ func (cagrMetric) Description() string {
 	return "Compound Annual Growth Rate. The annualized rate of return that would produce the same total return if compounded each year. The standard metric for comparing returns across strategies with different time horizons."
 }
 
-func (cagrMetric) Compute(a *Account, window *Period) float64 {
+func (cagrMetric) Compute(a *Account, window *Period) (float64, error) {
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	eqTimes := windowSliceTimes(a.EquityTimes(), window)
 
 	if len(eq) < 2 || len(eqTimes) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	years := eqTimes[len(eqTimes)-1].Sub(eqTimes[0]).Hours() / 24 / 365.25
-	return cagr(eq[0], eq[len(eq)-1], years)
+	return cagr(eq[0], eq[len(eq)-1], years), nil
 }
 
-func (cagrMetric) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (cagrMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // CAGR is the Compound Annual Growth Rate -- the annualized return
 // that accounts for compounding. It is the standard way to compare

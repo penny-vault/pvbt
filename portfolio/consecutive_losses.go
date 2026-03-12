@@ -23,7 +23,7 @@ func (consecutiveLosses) Description() string {
 	return "Longest streak of consecutive periods with negative returns. Critical for understanding drawdown psychology -- longer losing streaks are harder to endure even if total loss is small. The value is a count of periods."
 }
 
-func (consecutiveLosses) Compute(a *Account, window *Period) float64 {
+func (consecutiveLosses) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 
@@ -40,10 +40,10 @@ func (consecutiveLosses) Compute(a *Account, window *Period) float64 {
 		}
 	}
 
-	return float64(maxStreak)
+	return float64(maxStreak), nil
 }
 
-func (consecutiveLosses) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (consecutiveLosses) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // ConsecutiveLosses is the longest streak of consecutive negative-return
 // periods. Important for assessing the psychological difficulty of

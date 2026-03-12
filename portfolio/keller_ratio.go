@@ -25,10 +25,10 @@ func (kellerRatio) Description() string {
 	return "Combines return and risk into a single measure using the formula (CAGR * (1 + CAGR)) / max_drawdown. Rewards high compound growth while penalizing drawdowns. Higher values indicate better risk-adjusted compound returns."
 }
 
-func (kellerRatio) Compute(a *Account, window *Period) float64 {
+func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	if len(equity) < 2 {
-		return 0
+		return 0, nil
 	}
 
 	totalReturn := (equity[len(equity)-1] / equity[0]) - 1
@@ -44,13 +44,13 @@ func (kellerRatio) Compute(a *Account, window *Period) float64 {
 	maxDD := math.Abs(minDD)
 
 	if totalReturn >= 0 && maxDD <= 0.5 {
-		return totalReturn * (1 - maxDD/(1-maxDD))
+		return totalReturn * (1 - maxDD/(1-maxDD)), nil
 	}
 
-	return 0
+	return 0, nil
 }
 
-func (kellerRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (kellerRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // KellerRatio adjusts return for drawdown severity:
 // K = R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0.

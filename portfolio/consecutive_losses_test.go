@@ -25,42 +25,50 @@ import (
 var _ = Describe("ConsecutiveLosses", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 95})
-		Expect(portfolio.ConsecutiveLosses.ComputeSeries(a, nil)).To(BeNil())
+		s, err := portfolio.ConsecutiveLosses.ComputeSeries(a, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(s).To(BeNil())
 	})
 
 	It("finds the longest negative return streak", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 80, 85, 75, 65, 70})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(2.0))
 	})
 
 	It("returns 0 for empty returns", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 for constant prices", func() {
 		a := buildAccountFromEquity([]float64{100, 100, 100, 100})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns 0 when all returns are positive", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 121, 133})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(0.0))
 	})
 
 	It("returns full length when all returns are negative", func() {
 		a := buildAccountFromEquity([]float64{100, 95, 90, 85, 80})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(4.0))
 	})
 
 	It("returns 1 for alternating returns", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 100, 90, 100})
-		v := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		v, err := a.PerformanceMetric(portfolio.ConsecutiveLosses).Value()
+		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(Equal(1.0))
 	})
 })

@@ -23,12 +23,12 @@ func (stcgMetric) Description() string {
 	return "Total realized short-term capital gains from positions held 365 days or fewer. Computed by replaying the transaction log with FIFO lot matching. Taxed as ordinary income."
 }
 
-func (stcgMetric) Compute(a *Account, _ *Period) float64 {
+func (stcgMetric) Compute(a *Account, _ *Period) (float64, error) {
 	_, stcg, _, _ := realizedGains(a.Transactions())
-	return stcg
+	return stcg, nil
 }
 
-func (stcgMetric) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (stcgMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // STCG is realized short-term capital gains (holding period <= 365 days).
 var STCGMetric PerformanceMetric = stcgMetric{}

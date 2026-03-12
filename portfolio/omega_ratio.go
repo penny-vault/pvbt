@@ -25,11 +25,11 @@ func (omegaRatio) Description() string {
 	return "Probability-weighted ratio of gains over losses relative to a zero threshold. Captures the entire return distribution, not just the first two moments like Sharpe. A value above 1.0 means gains outweigh losses. Higher is better."
 }
 
-func (omegaRatio) Compute(a *Account, window *Period) float64 {
+func (omegaRatio) Compute(a *Account, window *Period) (float64, error) {
 	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	r := returns(equity)
 	if len(r) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	// Omega = sum(max(r_i, 0)) / sum(max(-r_i, 0))
@@ -44,13 +44,13 @@ func (omegaRatio) Compute(a *Account, window *Period) float64 {
 	}
 
 	if losses == 0 {
-		return 0
+		return 0, nil
 	}
 
-	return gains / losses
+	return gains / losses, nil
 }
 
-func (omegaRatio) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (omegaRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // OmegaRatio is the probability-weighted ratio of gains over losses.
 // Unlike Sharpe, it considers the entire return distribution including

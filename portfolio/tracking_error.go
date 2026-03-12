@@ -25,7 +25,11 @@ func (trackingError) Description() string {
 	return "Annualized standard deviation of the difference between portfolio and benchmark returns. Measures how closely the portfolio follows its benchmark. Lower values indicate tighter tracking."
 }
 
-func (trackingError) Compute(a *Account, window *Period) float64 {
+func (trackingError) Compute(a *Account, window *Period) (float64, error) {
+	if len(a.BenchmarkPrices()) == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
 	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
 
@@ -34,16 +38,16 @@ func (trackingError) Compute(a *Account, window *Period) float64 {
 
 	activeReturns := excessReturns(pReturns, bReturns)
 	if len(activeReturns) == 0 {
-		return 0
+		return 0, nil
 	}
 
 	times := a.EquityTimes()
 	af := annualizationFactor(times)
 
-	return stddev(activeReturns) * math.Sqrt(af)
+	return stddev(activeReturns) * math.Sqrt(af), nil
 }
 
-func (trackingError) ComputeSeries(a *Account, window *Period) []float64 { return nil }
+func (trackingError) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // TrackingError is the standard deviation of the difference between
 // portfolio returns and benchmark returns.
