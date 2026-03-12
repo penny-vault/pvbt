@@ -22,11 +22,12 @@ import (
 
 // Parameter describes a single configurable field on a strategy struct.
 type Parameter struct {
-	Name        string       // from pvbt tag, or field name lowercased
-	FieldName   string       // Go struct field name
-	Description string       // from desc tag
-	GoType      reflect.Type // field's Go type
-	Default     string       // from default tag
+	Name        string            `json:"name"`
+	FieldName   string            `json:"fieldName"`
+	Description string            `json:"description,omitempty"`
+	GoType      reflect.Type      `json:"-"`
+	Default     string            `json:"default,omitempty"`
+	Suggestions map[string]string `json:"suggestions,omitempty"` // preset name -> value
 }
 
 // StrategyParameters reflects over the strategy struct and returns metadata
@@ -54,14 +55,36 @@ func StrategyParameters(s Strategy) []Parameter {
 			name = strings.ToLower(field.Name)
 		}
 
+		var suggestions map[string]string
+		if suggestTag := field.Tag.Get("suggest"); suggestTag != "" {
+			suggestions = parseSuggestions(suggestTag)
+		}
+
 		params = append(params, Parameter{
 			Name:        name,
 			FieldName:   field.Name,
 			Description: field.Tag.Get("desc"),
 			GoType:      field.Type,
 			Default:     field.Tag.Get("default"),
+			Suggestions: suggestions,
 		})
 	}
 
 	return params
+}
+
+// parseSuggestions parses a pipe-delimited suggest tag value into a map.
+// Format: "Name1=value1|Name2=value2"
+func parseSuggestions(tag string) map[string]string {
+	m := make(map[string]string)
+	for _, entry := range strings.Split(tag, "|") {
+		parts := strings.SplitN(entry, "=", 2)
+		if len(parts) == 2 {
+			m[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+		}
+	}
+	if len(m) == 0 {
+		return nil
+	}
+	return m
 }

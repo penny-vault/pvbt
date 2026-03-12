@@ -30,7 +30,7 @@ import (
 type paramTestStrategy struct {
 	Lookback float64           `pvbt:"lookback" desc:"Lookback in months" default:"6.0"`
 	Ticker   asset.Asset       `pvbt:"ticker" desc:"Primary ticker" default:"SPY"`
-	RiskOn   universe.Universe `pvbt:"riskOn" desc:"Risk-on universe" default:"VFINX,PRIDX"`
+	RiskOn   universe.Universe `pvbt:"riskOn" desc:"Risk-on universe" default:"VFINX,PRIDX" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
 	Name_    string            // exported, no pvbt tag -- name derived from field name
 	hidden   int               // unexported, should be skipped
 	Duration time.Duration     `pvbt:"dur" desc:"Interval" default:"5m"`
@@ -74,6 +74,37 @@ func TestStrategyParameters(t *testing.T) {
 	}
 	if p2.FieldName != "Name_" {
 		t.Errorf("expected FieldName 'Name_', got %q", p2.FieldName)
+	}
+}
+
+func TestStrategyParametersSuggestions(t *testing.T) {
+	s := &paramTestStrategy{}
+	params := engine.StrategyParameters(s)
+
+	p := findParam(params, "riskOn")
+	if p == nil {
+		t.Fatal("expected parameter 'riskOn'")
+	}
+	if p.Suggestions == nil {
+		t.Fatal("expected Suggestions map to be populated")
+	}
+	if len(p.Suggestions) != 2 {
+		t.Fatalf("expected 2 suggestions, got %d", len(p.Suggestions))
+	}
+	if v, ok := p.Suggestions["Classic"]; !ok || v != "VFINX,PRIDX" {
+		t.Errorf("expected Classic=VFINX,PRIDX, got %q", v)
+	}
+	if v, ok := p.Suggestions["Modern"]; !ok || v != "SPY,QQQ" {
+		t.Errorf("expected Modern=SPY,QQQ, got %q", v)
+	}
+
+	// Fields without suggest tag should have nil Suggestions.
+	p2 := findParam(params, "lookback")
+	if p2 == nil {
+		t.Fatal("expected parameter 'lookback'")
+	}
+	if p2.Suggestions != nil {
+		t.Errorf("expected nil Suggestions for lookback, got %v", p2.Suggestions)
 	}
 }
 
