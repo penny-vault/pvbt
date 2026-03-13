@@ -15,63 +15,7 @@
 
 package data
 
-import (
-	"math"
-	"time"
-)
-
-// SliceMean computes the arithmetic mean of a float64 slice.
-// Returns 0 for empty or nil input.
-func SliceMean(x []float64) float64 {
-	if len(x) == 0 {
-		return 0
-	}
-	sum := 0.0
-	for _, v := range x {
-		sum += v
-	}
-	return sum / float64(len(x))
-}
-
-// Variance computes the sample variance (N-1 denominator).
-// Returns 0 for fewer than 2 elements.
-func Variance(x []float64) float64 {
-	n := len(x)
-	if n < 2 {
-		return 0
-	}
-	m := SliceMean(x)
-	sum := 0.0
-	for _, v := range x {
-		d := v - m
-		sum += d * d
-	}
-	return sum / float64(n-1)
-}
-
-// Stddev computes the sample standard deviation (N-1 denominator).
-func Stddev(x []float64) float64 {
-	return math.Sqrt(Variance(x))
-}
-
-// Covariance computes the sample covariance between x and y.
-// Trims to the shorter of the two slices. Returns 0 for fewer than 2 pairs.
-func Covariance(x, y []float64) float64 {
-	n := len(x)
-	if len(y) < n {
-		n = len(y)
-	}
-	if n < 2 {
-		return 0
-	}
-	mx := SliceMean(x[:n])
-	my := SliceMean(y[:n])
-	sum := 0.0
-	for i := 0; i < n; i++ {
-		sum += (x[i] - mx) * (y[i] - my)
-	}
-	return sum / float64(n-1)
-}
+import "time"
 
 // AnnualizationFactor estimates periods-per-year from timestamps.
 // If the average gap exceeds 20 calendar days, returns 12 (monthly);
@@ -85,17 +29,4 @@ func AnnualizationFactor(times []time.Time) float64 {
 		return 12
 	}
 	return 252
-}
-
-// PeriodsReturns computes period-over-period returns from a price series.
-// Returns a slice of length len(prices)-1. Returns empty slice for fewer than 2 prices.
-func PeriodsReturns(prices []float64) []float64 {
-	if len(prices) < 2 {
-		return []float64{}
-	}
-	r := make([]float64, len(prices)-1)
-	for i := 0; i < len(prices)-1; i++ {
-		r[i] = (prices[i+1] - prices[i]) / prices[i]
-	}
-	return r
 }
