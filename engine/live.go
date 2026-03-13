@@ -76,7 +76,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	}
 
 	// 7. Initialize data cache.
-	e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
+	e.cache = newDataCache(e.cacheMaxBytes)
 
 	// PHASE 2: GOROUTINE
 

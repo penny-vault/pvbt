@@ -18,6 +18,8 @@ package engine
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -42,7 +44,6 @@ type Engine struct {
 
 	// configuration (set via options, used during init)
 	cacheMaxBytes  int64
-	cacheChunkSize time.Duration
 	initialDeposit float64
 	broker         broker.Broker
 	snapshot       portfolio.PortfolioSnapshot
@@ -225,7 +226,7 @@ func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, m
 func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
 	log := zerolog.Ctx(ctx)
 	if e.cache == nil {
-		e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
+		e.cache = newDataCache(e.cacheMaxBytes)
 	}
 
 	rangeStart := periodToTime(e.currentDate, lookback)
@@ -246,70 +247,174 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		Time("currentDate", e.currentDate).
 		Msg("engine.Fetch")
 
-	assetsHash := hashAssets(assets)
-	metricsHash := hashMetrics(metrics)
+	return e.fetchRange(ctx, assets, metrics, rangeStart, rangeEnd)
+}
 
-	boundaries := e.cache.chunkBoundaries(rangeStart, rangeEnd)
-	var chunks []*data.DataFrame
+// FetchAt implements universe.DataSource.
+func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
+	if e.cache == nil {
+		e.cache = newDataCache(e.cacheMaxBytes)
+	}
+	return e.fetchRange(ctx, assets, metrics, t, t)
+}
 
-	for _, chunkStart := range boundaries {
-		key := dataCacheKey{
-			assetsHash:  assetsHash,
-			metricsHash: metricsHash,
-			chunkStart:  chunkStart,
+// fetchRange is the shared implementation for Fetch and FetchAt.
+// It checks the per-column cache, bulk-fetches misses grouped by
+// calendar-year chunk, and assembles the result.
+func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics []data.Metric, rangeStart, rangeEnd time.Time) (*data.DataFrame, error) {
+	log := zerolog.Ctx(ctx)
+
+	years := chunkYears(rangeStart, rangeEnd)
+
+	// Identify cache misses grouped by chunk year.
+	type chunkMiss struct {
+		assets  map[string]asset.Asset // figi -> asset
+		metrics map[data.Metric]bool
+	}
+	misses := make(map[int64]*chunkMiss)
+
+	for _, yr := range years {
+		for _, a := range assets {
+			for _, m := range metrics {
+				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+				if _, ok := e.cache.get(key); !ok {
+					cm, exists := misses[yr]
+					if !exists {
+						cm = &chunkMiss{
+							assets:  make(map[string]asset.Asset),
+							metrics: make(map[data.Metric]bool),
+						}
+						misses[yr] = cm
+					}
+					cm.assets[a.CompositeFigi] = a
+					cm.metrics[m] = true
+				}
+			}
 		}
-		if df, ok := e.cache.get(key); ok {
-			chunks = append(chunks, df)
-			continue
+	}
+
+	// Fetch misses: one bulk call per chunk year.
+	for yr, cm := range misses {
+		missAssets := make([]asset.Asset, 0, len(cm.assets))
+		for _, a := range cm.assets {
+			missAssets = append(missAssets, a)
+		}
+		missMetrics := make([]data.Metric, 0, len(cm.metrics))
+		for m := range cm.metrics {
+			missMetrics = append(missMetrics, m)
 		}
 
-		chunkEnd := chunkStart.Add(e.cache.chunkSize)
-		if chunkEnd.After(rangeEnd) {
-			chunkEnd = rangeEnd
-		}
+		chunkStart := time.Unix(yr, 0).In(nyc)
+		chunkEnd := time.Date(chunkStart.Year()+1, 1, 1, 0, 0, 0, 0, nyc).Add(-time.Nanosecond)
 
-		df, err := e.fetchFromProviders(ctx, assets, metrics, chunkStart, chunkEnd)
+		log.Debug().
+			Int("missAssets", len(missAssets)).
+			Int("missMetrics", len(missMetrics)).
+			Time("chunkStart", chunkStart).
+			Time("chunkEnd", chunkEnd).
+			Msg("engine.fetchRange cache miss")
+
+		df, err := e.fetchFromProviders(ctx, missAssets, missMetrics, chunkStart, chunkEnd)
 		if err != nil {
 			return nil, err
 		}
-		log.Debug().
-			Int("len", df.Len()).
-			Int("assets", len(df.AssetList())).
-			Int("metrics", len(df.MetricList())).
-			Time("chunkStart", chunkStart).
-			Time("chunkEnd", chunkEnd).
-			Msg("engine.Fetch chunk result")
-		e.cache.put(key, df)
-		chunks = append(chunks, df)
-	}
 
-	if len(chunks) == 0 {
-		return data.NewDataFrame(nil, nil, nil, nil)
-	}
-
-	var merged *data.DataFrame
-	if len(chunks) == 1 {
-		merged = chunks[0]
-	} else {
-		var err error
-		merged, err = data.MergeTimes(chunks...)
-		if err != nil {
-			return nil, fmt.Errorf("engine: merge chunks: %w", err)
+		// Decompose the DataFrame into individual columns and cache them.
+		dfTimes := df.Times()
+		for _, a := range df.AssetList() {
+			for _, m := range df.MetricList() {
+				col := df.Column(a, m)
+				if col == nil {
+					continue
+				}
+				colCopy := make([]float64, len(col))
+				copy(colCopy, col)
+				timesCopy := make([]time.Time, len(dfTimes))
+				copy(timesCopy, dfTimes)
+				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+				e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
+			}
 		}
 	}
 
-	result := merged.Between(rangeStart, rangeEnd)
+	// Assemble the requested DataFrame from cached columns.
+	// Build the union time axis.
+	timeSet := make(map[int64]time.Time)
+	for _, yr := range years {
+		for _, a := range assets {
+			for _, m := range metrics {
+				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+				entry, ok := e.cache.get(key)
+				if !ok {
+					continue
+				}
+				for _, t := range entry.times {
+					timeSet[t.Unix()] = t
+				}
+			}
+		}
+	}
+
+	if len(timeSet) == 0 {
+		return data.NewDataFrame(nil, nil, nil, nil)
+	}
+
+	// Sort times.
+	unionTimes := make([]time.Time, 0, len(timeSet))
+	for _, t := range timeSet {
+		unionTimes = append(unionTimes, t)
+	}
+	sort.Slice(unionTimes, func(i, j int) bool {
+		return unionTimes[i].Before(unionTimes[j])
+	})
+
+	// Build time index.
+	timeIdx := make(map[int64]int, len(unionTimes))
+	for i, t := range unionTimes {
+		timeIdx[t.Unix()] = i
+	}
+
+	// Allocate slab and fill with NaN.
+	T := len(unionTimes)
+	M := len(metrics)
+	slab := make([]float64, T*len(assets)*M)
+	for i := range slab {
+		slab[i] = math.NaN()
+	}
+
+	// Scatter cached values into slab.
+	for aIdx, a := range assets {
+		for mIdx, m := range metrics {
+			colStart := (aIdx*M + mIdx) * T
+			for _, yr := range years {
+				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+				entry, ok := e.cache.get(key)
+				if !ok {
+					continue
+				}
+				for i, t := range entry.times {
+					ti, ok := timeIdx[t.Unix()]
+					if !ok {
+						continue
+					}
+					slab[colStart+ti] = entry.values[i]
+				}
+			}
+		}
+	}
+
+	assembled, err := data.NewDataFrame(unionTimes, assets, metrics, slab)
+	if err != nil {
+		return nil, fmt.Errorf("engine: assemble cached data: %w", err)
+	}
+
+	result := assembled.Between(rangeStart, rangeEnd)
 	log.Debug().
 		Int("len", result.Len()).
 		Int("assets", len(result.AssetList())).
 		Int("metrics", len(result.MetricList())).
 		Msg("engine.Fetch final result")
 	return result, nil
-}
-
-// FetchAt implements universe.DataSource.
-func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
-	return e.fetchFromProviders(ctx, assets, metrics, t, t)
 }
 
 // Close releases all resources held by the engine, including closing

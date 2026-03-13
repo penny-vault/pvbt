@@ -73,7 +73,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	}
 
 	// 7. Initialize data cache.
-	e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
+	e.cache = newDataCache(e.cacheMaxBytes)
 
 	// 8. Store start/end on engine.
 	e.start = start
