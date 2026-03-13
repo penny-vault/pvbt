@@ -110,8 +110,8 @@ func (r *RollingDataFrame) Min() *DataFrame {
 	})
 }
 
-// Std returns a DataFrame with the rolling population standard deviation
-// over the window.
+// Std returns a DataFrame with the rolling sample standard deviation
+// (N-1 denominator) over the window.
 func (r *RollingDataFrame) Std() *DataFrame {
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
@@ -134,7 +134,42 @@ func (r *RollingDataFrame) Std() *DataFrame {
 				variance += d * d
 			}
 
-			out[i] = math.Sqrt(variance / float64(n))
+			if n <= 1 {
+				out[i] = 0.0
+			} else {
+				out[i] = math.Sqrt(variance / float64(n-1))
+			}
+		}
+
+		return out
+	})
+}
+
+// Variance returns a DataFrame with the rolling sample variance (N-1
+// denominator) over the window.
+func (r *RollingDataFrame) Variance() *DataFrame {
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		n := r.window
+
+		for i := range col {
+			if i < n-1 {
+				out[i] = math.NaN()
+
+				continue
+			}
+
+			window := col[i-n+1 : i+1]
+			mean := stat.Mean(window, nil)
+
+			variance := 0.0
+
+			for _, v := range window {
+				d := v - mean
+				variance += d * d
+			}
+
+			out[i] = variance / float64(n-1)
 		}
 
 		return out

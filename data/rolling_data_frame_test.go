@@ -86,12 +86,21 @@ var _ = Describe("RollingDataFrame", func() {
 			Expect(col[5]).To(Equal(4.0))
 		})
 
-		It("Std computes rolling standard deviation", func() {
+		It("Std computes rolling sample standard deviation", func() {
 			result := df.Rolling(3).Std()
 			col := result.Column(aapl, data.Price)
-			// Std of [1,2,3]: mean=2, var=(1+0+1)/3=2/3, std=sqrt(2/3)
-			expected := math.Sqrt(2.0 / 3.0)
-			Expect(col[2]).To(BeNumerically("~", expected, 1e-10))
+			// Std of [1,2,3]: mean=2, sample var=(1+0+1)/2=1.0, std=sqrt(1.0)=1.0
+			Expect(col[2]).To(BeNumerically("~", 1.0, 1e-10))
+		})
+
+		It("Variance computes rolling sample variance (N-1)", func() {
+			result := df.Rolling(3).Variance()
+			col := result.Column(aapl, data.Price)
+			Expect(math.IsNaN(col[0])).To(BeTrue())
+			Expect(math.IsNaN(col[1])).To(BeTrue())
+			Expect(col[2]).To(BeNumerically("~", 1.0, 1e-12))
+			Expect(col[3]).To(BeNumerically("~", 1.0, 1e-12))
+			Expect(col[4]).To(BeNumerically("~", 1.0, 1e-12))
 		})
 
 		It("Percentile(0.5) computes rolling median", func() {
