@@ -5,19 +5,19 @@ The portfolio is where strategy decisions become trades. It has two responsibili
 Strategy code interacts with the portfolio through the `Portfolio` interface -- it calls `RebalanceTo`, `Order`, reads state, and inspects the transaction log. The engine uses a separate `PortfolioManager` interface to inject external events like dividends and fees. Both interfaces are implemented by the concrete `Account` type.
 
 ```go
-// create a portfolio with $10K
-acct := portfolio.New(portfolio.WithCash(10_000))
-
 eng := engine.New(&MyStrategy{},
+    engine.WithInitialDeposit(10_000),
     engine.WithDataProvider(provider),
     engine.WithAssetProvider(provider),
 )
 defer eng.Close()
 
-acct, err := eng.Backtest(ctx, acct, start, end)
+p, err := eng.Backtest(ctx, start, end)
 ```
 
-For backtesting, the engine automatically attaches a simulated broker to the account. For live trading, attach a real broker via `portfolio.WithBroker(b)`. The portfolio delegates all order execution to the broker and never computes fill prices itself.
+The engine creates and manages the portfolio account internally. `WithInitialDeposit` sets the starting cash. For advanced use cases, `WithAccount` lets you pass a pre-configured `*portfolio.Account`, and `WithPortfolioSnapshot` restores from a previous run.
+
+For backtesting, the engine automatically attaches a simulated broker. For live trading, pass a real broker via `engine.WithBroker(b)`. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ## Allocation and PortfolioPlan
 
@@ -432,12 +432,12 @@ Anyone can define a custom performance metric by implementing the `PerformanceMe
 type PerformanceMetric interface {
     Name() string
     Description() string
-    Compute(a *Account, window *Period) float64
-    ComputeSeries(a *Account, window *Period) []float64
+    Compute(a *Account, window *Period) (float64, error)
+    ComputeSeries(a *Account, window *Period) ([]float64, error)
 }
 ```
 
-`Compute` receives the full `*Account` so it can access the equity curve, benchmark data, risk-free rate, and transaction history -- not just raw transactions. This is what allows metrics like `Alpha` and `Beta` to reference the benchmark, and `Sharpe` to use the risk-free rate.
+`Compute` receives the full `*Account` so it can access the equity curve, benchmark data, risk-free rate, and transaction history -- not just raw transactions. This is what allows metrics like `Alpha` and `Beta` to reference the benchmark, and `Sharpe` to use the risk-free rate. Both methods return errors for cases like insufficient data or missing benchmark prices.
 
 Each built-in metric is an unexported struct with an exported package-level variable (e.g., `var Sharpe = sharpe{}`). Custom metrics follow the same pattern:
 
@@ -445,8 +445,8 @@ Each built-in metric is an unexported struct with an exported package-level vari
 type myMetric struct{}
 func (myMetric) Name() string { return "MyMetric" }
 func (myMetric) Description() string { return "What this metric measures." }
-func (myMetric) Compute(a *Account, window *Period) float64 { ... }
-func (myMetric) ComputeSeries(a *Account, window *Period) []float64 { ... }
+func (myMetric) Compute(a *Account, window *Period) (float64, error) { ... }
+func (myMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { ... }
 
 var MyMetric = myMetric{}
 
@@ -593,14 +593,23 @@ This approach means any signal in the system can become a factor -- momentum, vo
 
 ## Broker integration
 
-For backtesting, the engine automatically attaches a `SimulatedBroker` that fills all orders at the close price. For live trading, attach a real broker at construction:
+For backtesting, the engine automatically attaches a `SimulatedBroker` that fills all orders at the close price. The simulated broker uses a `PriceProvider` interface (implemented by the engine) to look up current prices, and supports dollar-amount orders (where `Qty` is zero and `Amount` specifies the dollar value to invest). For live trading, pass a real broker to the engine:
 
 ```go
 // backtesting -- engine sets the broker automatically
-acct := portfolio.New(portfolio.WithCash(10_000))
+eng := engine.New(&MyStrategy{},
+    engine.WithInitialDeposit(10_000),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
 
-// live trading -- attach a broker explicitly
-acct := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(liveBroker))
+// live trading -- provide a real broker
+eng := engine.New(&MyStrategy{},
+    engine.WithInitialDeposit(10_000),
+    engine.WithBroker(liveBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
 ```
 
 Strategy code never knows or cares which broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
