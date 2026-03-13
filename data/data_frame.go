@@ -1109,6 +1109,12 @@ func (df *DataFrame) Downsample(freq Frequency) *DownsampledDataFrame {
 	return &DownsampledDataFrame{df: df, freq: freq}
 }
 
+// Upsample returns an UpsampledDataFrame that fills gaps when converting
+// to a higher frequency.
+func (df *DataFrame) Upsample(freq Frequency) *UpsampledDataFrame {
+	return &UpsampledDataFrame{df: df, freq: freq}
+}
+
 // Resample converts the DataFrame to a lower frequency by aggregating
 // values within each period using the specified method.
 func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {

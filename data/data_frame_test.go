@@ -999,6 +999,87 @@ var _ = Describe("DataFrame", func() {
 		})
 	})
 
+	Describe("Upsample", func() {
+		var monthlyDF *data.DataFrame
+		var aapl asset.Asset
+
+		BeforeEach(func() {
+			aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+			t := []time.Time{
+				time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+			}
+			vals := []float64{100, 200, 300}
+			var err error
+			monthlyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Describe("ForwardFill", func() {
+			It("carries last known value forward to fill gaps", func() {
+				result := monthlyDF.Upsample(data.Weekly).ForwardFill()
+				// Should have weekly timestamps between Jan 1 and Mar 1
+				Expect(result.Len()).To(BeNumerically(">", 3))
+
+				// First value should be 100 (Jan 1)
+				col := result.Column(aapl, data.Price)
+				Expect(col[0]).To(Equal(100.0))
+
+				// Values between Jan and Feb should be forward-filled as 100
+				for i := 0; i < len(col); i++ {
+					t := result.Times()[i]
+					if t.Before(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)) {
+						Expect(col[i]).To(Equal(100.0))
+					}
+				}
+			})
+		})
+
+		Describe("BackFill", func() {
+			It("uses next known value to fill gaps", func() {
+				result := monthlyDF.Upsample(data.Weekly).BackFill()
+				col := result.Column(aapl, data.Price)
+				times := result.Times()
+
+				// Values before Feb 1 (but after first) should be back-filled with 200
+				for i := 1; i < len(col); i++ {
+					if times[i].Before(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)) {
+						Expect(col[i]).To(Equal(200.0))
+					}
+				}
+			})
+		})
+
+		Describe("Interpolate", func() {
+			It("linearly interpolates between known values", func() {
+				// Use daily with simple data for easy verification
+				t := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 11, 0, 0, 0, 0, time.UTC),
+				}
+				vals := []float64{0, 100}
+				simple, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+				Expect(err).NotTo(HaveOccurred())
+				result := simple.Upsample(data.Daily).Interpolate()
+
+				col := result.Column(aapl, data.Price)
+				Expect(col[0]).To(Equal(0.0))
+				Expect(col[len(col)-1]).To(Equal(100.0))
+				// Middle values should be linearly interpolated
+				Expect(result.Len()).To(Equal(11)) // Jan 1 through Jan 11
+				Expect(col[5]).To(BeNumerically("~", 50.0, 1e-12))
+			})
+		})
+
+		It("on empty frame returns empty", func() {
+			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			Expect(err).NotTo(HaveOccurred())
+			result := empty.Upsample(data.Daily).ForwardFill()
+			Expect(result.Len()).To(Equal(0))
+		})
+	})
+
 	Describe("Column-wise stats", func() {
 		var statsDF *data.DataFrame
 		var spy, efa asset.Asset
