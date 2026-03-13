@@ -960,41 +960,38 @@ func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) 
 }
 
 func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.Time) *DataFrame {
+	metricLen := len(df.metrics)
+
 	var pairAssets []asset.Asset
+	var pairData []float64
+
 	for i := 0; i < len(assets); i++ {
+		aIdxI, okI := df.assetIndex[assets[i].CompositeFigi]
 		for j := i + 1; j < len(assets); j++ {
+			aIdxJ, okJ := df.assetIndex[assets[j].CompositeFigi]
+
+			if !okI || !okJ {
+				continue
+			}
+
 			pairAssets = append(pairAssets, CompositeAsset(assets[i], assets[j]))
+			for mIdx := 0; mIdx < metricLen; mIdx++ {
+				pairData = append(pairData, sampleCov(
+					df.colSlice(aIdxI, mIdx),
+					df.colSlice(aIdxJ, mIdx),
+				))
+			}
 		}
 	}
 
-	metricLen := len(df.metrics)
+	if len(pairAssets) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	newData := make([]float64, len(pairAssets)*metricLen)
-	pairIdx := 0
-
-	for i := 0; i < len(assets); i++ {
-		for j := i + 1; j < len(assets); j++ {
-			aIdxI, okI := df.assetIndex[assets[i].CompositeFigi]
-			aIdxJ, okJ := df.assetIndex[assets[j].CompositeFigi]
-
-			for mIdx := 0; mIdx < metricLen; mIdx++ {
-				var covVal float64
-				if okI && okJ {
-					covVal = sampleCov(
-						df.colSlice(aIdxI, mIdx),
-						df.colSlice(aIdxJ, mIdx),
-					)
-				}
-				newData[pairIdx*metricLen+mIdx] = covVal
-			}
-
-			pairIdx++
-		}
-	}
-
-	return mustNewDataFrame(lastTime, pairAssets, metrics, newData)
+	return mustNewDataFrame(lastTime, pairAssets, metrics, pairData)
 }
 
 func sampleCov(x, y []float64) float64 {

@@ -169,7 +169,11 @@ func (r *RollingDataFrame) Variance() *DataFrame {
 				variance += d * d
 			}
 
-			out[i] = variance / float64(n-1)
+			if n <= 1 {
+				out[i] = 0
+			} else {
+				out[i] = variance / float64(n-1)
+			}
 		}
 
 		return out
