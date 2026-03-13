@@ -46,11 +46,11 @@ Nothing prevents strategies from requesting data beyond the current simulation d
 
 ### Design
 
-**`Fetch` (range-based):** After computing `rangeEnd`, clamp to `e.currentDate` if it exceeds it. Log a warning via zerolog when clamping occurs.
+**`Fetch` (range-based):** No guard needed. `Fetch` already sets `rangeEnd := e.currentDate`, so the range cannot exceed the current date by construction.
 
-**`FetchAt` (point-in-time):** If the requested `time.Time` is after `e.currentDate`, return an error. A single future-point request is a clear programmer mistake, unlike a range that might overshoot.
+**`FetchAt` (point-in-time):** If the requested `time.Time` is after `e.currentDate`, return an error. This is a clear programmer mistake.
 
-Both methods live in `engine/engine.go`. This protects all data access since `Universe.Window` and `Universe.At` delegate through `DataSource.Fetch`/`FetchAt`.
+The guard lives in `engine/engine.go`. This protects point-in-time data access since `Universe.At` delegates through `DataSource.FetchAt`.
 
 ## 3. Universe Interface Changes
 

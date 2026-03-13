@@ -20,7 +20,7 @@
 | Modify | `data/rolling_data_frame.go` | Error propagation in all RollingDataFrame methods |
 | Modify | `data/data_frame_test.go` | Update existing arithmetic tests for new signatures, add error accumulation + RenameMetric tests |
 | Modify | `data/rolling_data_frame_test.go` | Add error propagation test for RollingDataFrame |
-| Modify | `engine/engine.go` | Look-ahead guard in Fetch and FetchAt |
+| Modify | `engine/engine.go` | Look-ahead guard in FetchAt |
 | Modify | `engine/fetch_test.go` | Add look-ahead guard tests |
 | Modify | `universe/universe.go` | Add `CurrentDate()` to Universe interface |
 | Modify | `universe/static.go` | Implement `CurrentDate()` on StaticUniverse |
@@ -555,17 +555,17 @@ git commit -m "feat(data): add RenameMetric method to DataFrame"
 
 ## Chunk 2: Engine Look-Ahead Guard and Universe CurrentDate
 
-### Task 7: Add look-ahead guard to engine Fetch and FetchAt
+### Task 7: Add look-ahead guard to engine FetchAt
 
 **Files:**
-- Modify: `engine/engine.go:226-259`
+- Modify: `engine/engine.go:253-259`
 - Modify: `engine/fetch_test.go`
 
-Defense in depth: even though `Fetch` currently sets `rangeEnd := e.currentDate`, that's an implementation detail. Both `Fetch` and `FetchAt` should guard against look-ahead bias independently.
+Note: `Fetch` already sets `rangeEnd := e.currentDate` (line 233), so it cannot exceed the current date by construction. Only `FetchAt` needs a guard since it takes a caller-supplied `time.Time`.
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the failing test**
 
-Add strategy types to `engine/fetch_test.go`:
+Add `futureFetchAtStrategy` type to `engine/fetch_test.go`:
 
 ```go
 type futureFetchAtStrategy struct {
@@ -591,7 +591,7 @@ func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine,
 }
 ```
 
-Add the tests inside the existing `Describe("Fetch", ...)`:
+Add the test inside the existing `Describe("Fetch", ...)`:
 
 ```go
 Context("look-ahead guard", func() {
@@ -628,33 +628,9 @@ Context("look-ahead guard", func() {
 Run: `go test ./engine/... -v -run "look-ahead"`
 Expected: FAIL (FetchAt does not reject future dates yet).
 
-- [ ] **Step 3: Implement the look-ahead guards**
+- [ ] **Step 3: Implement the look-ahead guard in FetchAt**
 
-In `engine/engine.go`, modify `Fetch` (around line 232) to add clamping after `rangeEnd` is computed:
-
-```go
-func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
-	log := zerolog.Ctx(ctx)
-	if e.cache == nil {
-		e.cache = newDataCache(e.cacheMaxBytes)
-	}
-
-	rangeStart := periodToTime(e.currentDate, lookback)
-	rangeEnd := e.currentDate
-
-	// Clamp to currentDate as defense in depth against look-ahead bias.
-	if !e.currentDate.IsZero() && rangeEnd.After(e.currentDate) {
-		log.Warn().
-			Time("requested", rangeEnd).
-			Time("currentDate", e.currentDate).
-			Msg("Fetch: clamping range end to current simulation date")
-		rangeEnd = e.currentDate
-	}
-
-	// ... rest unchanged (tickers, figis, log, return e.fetchRange) ...
-```
-
-Modify `FetchAt` (around line 254) to reject future dates:
+In `engine/engine.go`, modify `FetchAt` (around line 254):
 
 ```go
 func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
@@ -684,7 +660,7 @@ Expected: all tests pass.
 
 ```bash
 git add engine/engine.go engine/fetch_test.go
-git commit -m "feat(engine): add look-ahead guard to Fetch and FetchAt"
+git commit -m "feat(engine): add look-ahead guard to FetchAt"
 ```
 
 ---
