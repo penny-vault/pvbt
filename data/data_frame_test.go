@@ -1257,6 +1257,103 @@ var _ = Describe("DataFrame", func() {
 			Expect(string(result)).To(Equal("Price:Volume"))
 		})
 	})
+
+	Describe("Covariance", func() {
+		var covDF *data.DataFrame
+		var spy, efa, voo asset.Asset
+
+		BeforeEach(func() {
+			spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			efa = asset.Asset{CompositeFigi: "EFA", Ticker: "EFA"}
+			voo = asset.Asset{CompositeFigi: "VOO", Ticker: "VOO"}
+			t := []time.Time{
+				time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
+			}
+			// SPY.Price: 1,2,3,4,5   EFA.Price: 2,4,6,8,10   VOO.Price: 10,9,8,7,6
+			// SPY.Volume: 100,200,300,400,500  EFA.Volume: 50,50,50,50,50  VOO.Volume: 10,20,30,40,50
+			vals := []float64{
+				1, 2, 3, 4, 5, // SPY.Price
+				100, 200, 300, 400, 500, // SPY.Volume
+				2, 4, 6, 8, 10, // EFA.Price
+				50, 50, 50, 50, 50, // EFA.Volume
+				10, 9, 8, 7, 6, // VOO.Price
+				10, 20, 30, 40, 50, // VOO.Volume
+			}
+			var err error
+			covDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa, voo}, []data.Metric{data.Price, data.Volume}, vals)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("two assets (per-metric covariance)", func() {
+			It("computes covariance between SPY and EFA for each metric", func() {
+				result := covDF.Covariance(spy, efa)
+				Expect(result.Len()).To(Equal(1))
+
+				composite := data.CompositeAsset(spy, efa)
+				// SPY.Price=[1,2,3,4,5], EFA.Price=[2,4,6,8,10] => perfect linear, cov = 5.0
+				Expect(result.Value(composite, data.Price)).To(BeNumerically("~", 5.0, 1e-12))
+
+				// SPY.Volume=[100..500], EFA.Volume=[50,50,50,50,50] => cov = 0
+				Expect(result.Value(composite, data.Volume)).To(BeNumerically("~", 0.0, 1e-12))
+			})
+		})
+
+		Context("three assets (all unique pairs)", func() {
+			It("returns N*(N-1)/2 composite assets", func() {
+				result := covDF.Covariance(spy, efa, voo)
+				Expect(result.AssetList()).To(HaveLen(3)) // SPY:EFA, SPY:VOO, EFA:VOO
+			})
+
+			It("computes correct covariance for each pair", func() {
+				result := covDF.Covariance(spy, efa, voo)
+				spyEfa := data.CompositeAsset(spy, efa)
+				spyVoo := data.CompositeAsset(spy, voo)
+
+				// SPY.Price and EFA.Price: perfect positive correlation, cov = 5.0
+				Expect(result.Value(spyEfa, data.Price)).To(BeNumerically("~", 5.0, 1e-12))
+
+				// SPY.Price=[1,2,3,4,5] and VOO.Price=[10,9,8,7,6]: perfect negative, cov = -2.5
+				Expect(result.Value(spyVoo, data.Price)).To(BeNumerically("~", -2.5, 1e-12))
+			})
+		})
+
+		Context("single asset (cross-metric covariance)", func() {
+			It("returns composite metric keys for each metric pair", func() {
+				result := covDF.Covariance(spy)
+				// SPY has Price and Volume => one pair: Price:Volume
+				compositeMetric := data.CompositeMetric(data.Price, data.Volume)
+				Expect(result.MetricList()).To(ContainElement(compositeMetric))
+			})
+
+			It("computes covariance between metrics for that asset", func() {
+				result := covDF.Covariance(spy)
+				compositeMetric := data.CompositeMetric(data.Price, data.Volume)
+				// SPY.Price=[1,2,3,4,5], SPY.Volume=[100,200,300,400,500]
+				// Both have identical shape (linear), cov = 250.0
+				Expect(result.Value(spy, compositeMetric)).To(BeNumerically("~", 250.0, 1e-12))
+			})
+		})
+
+		Context("edge cases", func() {
+			It("returns empty DataFrame for zero assets", func() {
+				result := covDF.Covariance()
+				Expect(result.Len()).To(Equal(0))
+			})
+
+			It("returns 0 for fewer than 2 timestamps", func() {
+				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+				short, err := data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, []float64{1, 2})
+				Expect(err).NotTo(HaveOccurred())
+				result := short.Covariance(spy, efa)
+				composite := data.CompositeAsset(spy, efa)
+				Expect(result.Value(composite, data.Price)).To(BeNumerically("==", 0))
+			})
+		})
+	})
 })
 
 var _ = Describe("Aggregation", func() {

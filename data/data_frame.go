@@ -910,6 +910,110 @@ func (df *DataFrame) Std() *DataFrame {
 	})
 }
 
+// -- Covariance --------------------------------------------------------------
+
+// Covariance computes sample covariance (N-1 denominator) between columns.
+//   - 1 asset: cross-metric covariance. Returns composite metric keys.
+//   - 2+ assets: per-metric covariance for all unique pairs. Returns composite asset keys.
+func (df *DataFrame) Covariance(assets ...asset.Asset) *DataFrame {
+	if len(assets) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+
+	var lastTime []time.Time
+	if len(df.times) > 0 {
+		lastTime = []time.Time{df.times[len(df.times)-1]}
+	}
+
+	if len(assets) == 1 {
+		return df.crossMetricCovariance(assets[0], lastTime)
+	}
+
+	return df.crossAssetCovariance(assets, lastTime)
+}
+
+func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) *DataFrame {
+	aIdx, ok := df.assetIndex[a.CompositeFigi]
+	if !ok {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+
+	metricLen := len(df.metrics)
+	var pairMetrics []Metric
+	var pairData []float64
+
+	for i := 0; i < metricLen; i++ {
+		for j := i + 1; j < metricLen; j++ {
+			pairMetrics = append(pairMetrics, CompositeMetric(df.metrics[i], df.metrics[j]))
+			pairData = append(pairData, sampleCov(
+				df.colSlice(aIdx, i),
+				df.colSlice(aIdx, j),
+			))
+		}
+	}
+
+	if len(pairMetrics) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+
+	return mustNewDataFrame(lastTime, []asset.Asset{a}, pairMetrics, pairData)
+}
+
+func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.Time) *DataFrame {
+	var pairAssets []asset.Asset
+	for i := 0; i < len(assets); i++ {
+		for j := i + 1; j < len(assets); j++ {
+			pairAssets = append(pairAssets, CompositeAsset(assets[i], assets[j]))
+		}
+	}
+
+	metricLen := len(df.metrics)
+	metrics := make([]Metric, metricLen)
+	copy(metrics, df.metrics)
+
+	newData := make([]float64, len(pairAssets)*metricLen)
+	pairIdx := 0
+
+	for i := 0; i < len(assets); i++ {
+		for j := i + 1; j < len(assets); j++ {
+			aIdxI, okI := df.assetIndex[assets[i].CompositeFigi]
+			aIdxJ, okJ := df.assetIndex[assets[j].CompositeFigi]
+
+			for mIdx := 0; mIdx < metricLen; mIdx++ {
+				var covVal float64
+				if okI && okJ {
+					covVal = sampleCov(
+						df.colSlice(aIdxI, mIdx),
+						df.colSlice(aIdxJ, mIdx),
+					)
+				}
+				newData[pairIdx*metricLen+mIdx] = covVal
+			}
+
+			pairIdx++
+		}
+	}
+
+	return mustNewDataFrame(lastTime, pairAssets, metrics, newData)
+}
+
+func sampleCov(x, y []float64) float64 {
+	n := len(x)
+	if len(y) < n {
+		n = len(y)
+	}
+	if n < 2 {
+		return 0
+	}
+	mx := stat.Mean(x[:n], nil)
+	my := stat.Mean(y[:n], nil)
+	sum := 0.0
+	for i := 0; i < n; i++ {
+		sum += (x[i] - mx) * (y[i] - my)
+	}
+	return sum / float64(n-1)
+}
+
 // -- Common transforms -------------------------------------------------------
 
 // Pct returns the percent change over n periods. If n is omitted it
