@@ -21,7 +21,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 	// (~14 months) at 0.02% daily growth. This yields differentiated
 	// withdrawal rates: PWR < SWR, both below the 20% ceiling.
 	buildModerateAccount := func() *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(100_000))
+		a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 		price := 100_000.0
 		start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 
@@ -46,7 +46,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 	// buildFlatAccount creates an Account with 300 daily data points and
 	// zero growth -- the equity curve is constant at 100,000.
 	buildFlatAccount := func() *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(100_000))
+		a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 		start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 
 		for i := range 300 {
@@ -62,7 +62,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 	// fewer than the 22 needed for monthlyReturnsFromEquity to produce
 	// any monthly returns.
 	buildShortAccount := func() *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(10_000))
+		a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 		start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
 		for i := range 10 {
@@ -177,7 +177,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 
 	Describe("declining equity curve", func() {
 		buildDecliningAccount := func() *portfolio.Account {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 			price := 100_000.0
 
@@ -225,7 +225,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 		// monthlyReturnsFromEquity requires 22+ points to produce any
 		// monthly return, so the second guard (len(monthly) == 0) triggers.
 		buildMinLengthAccount := func() *portfolio.Account {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
 			for i := range 12 {
@@ -272,7 +272,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 		// The monthly returns are deeply negative, so no withdrawal rate
 		// should be sustainable for either SWR or PWR.
 		buildSteepDeclineAccount := func() *portfolio.Account {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 			price := 100_000.0
 
@@ -324,7 +324,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 		// (10x the moderate account). This should produce higher withdrawal
 		// rates than the moderate-growth account.
 		buildHighGrowthAccount := func() *portfolio.Account {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			price := 100_000.0
 			start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 

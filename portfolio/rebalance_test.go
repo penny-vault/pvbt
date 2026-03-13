@@ -64,7 +64,7 @@ var _ = Describe("RebalanceTo", func() {
 			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
 		}
 
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 		acct.UpdatePrices(df)
 
 		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
@@ -107,7 +107,7 @@ var _ = Describe("RebalanceTo", func() {
 				{{Price: 500.0, Qty: 200, FilledAt: fill}},
 			},
 		}
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mbSetup))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mbSetup))
 		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 200)).To(Succeed())
 		// Now: 0 cash, 200 SPY worth $100k
 
@@ -158,7 +158,7 @@ var _ = Describe("RebalanceTo", func() {
 				{{Price: 500.0, Qty: 100, FilledAt: fill}},
 			},
 		}
-		acct := portfolio.New(portfolio.WithCash(50_000), portfolio.WithBroker(mbSetup))
+		acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}), portfolio.WithBroker(mbSetup))
 		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 100)).To(Succeed())
 		// Now: 0 cash, 100 SPY worth $50k
 
@@ -197,7 +197,7 @@ var _ = Describe("RebalanceTo", func() {
 		mb := &mockBroker{
 			submitErr: fmt.Errorf("no price for SPY"),
 		}
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 
 		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date: t1,
@@ -213,7 +213,7 @@ var _ = Describe("RebalanceTo", func() {
 
 	It("is a no-op when allocation has empty Members and no holdings", func() {
 		mb := &mockBroker{}
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 
 		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
 			Date:    t1,
@@ -240,7 +240,7 @@ var _ = Describe("RebalanceTo", func() {
 			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
 		}
 
-		acct := portfolio.New(portfolio.WithCash(100_000), portfolio.WithBroker(mb))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 		acct.UpdatePrices(df)
 
 		// Pass two allocations with separate assets.

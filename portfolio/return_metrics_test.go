@@ -26,7 +26,7 @@ var _ = Describe("Return Metrics", func() {
 	// It uses DepositTransaction (positive) and WithdrawalTransaction
 	// (negative) to move cash so equity = cash.
 	buildReturnAccount := func(dates []time.Time, equity []float64) *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(equity[0]))
+		a := portfolio.New(portfolio.WithCash(equity[0], time.Time{}))
 		for i, d := range dates {
 			if i > 0 {
 				diff := equity[i] - equity[i-1]
@@ -120,7 +120,7 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
 
@@ -166,7 +166,7 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Day 0: initial state
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -228,7 +228,7 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
 
@@ -258,7 +258,7 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
 
@@ -291,7 +291,7 @@ var _ = Describe("Return Metrics", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
 
@@ -364,7 +364,7 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
 			prices := []float64{100, 110, 105, 115, 125}
 
-			a := portfolio.New(portfolio.WithCash(10000))
+			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, dates[0], 100, 100)
 
 			for _, d := range dates {
@@ -414,7 +414,7 @@ var _ = Describe("Return Metrics", func() {
 			d1 := time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC)
 			d2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			a := portfolio.New(portfolio.WithCash(10000))
+			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
 			df0 := buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
@@ -480,7 +480,7 @@ var _ = Describe("Return Metrics", func() {
 			d1 := time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC)
 			d2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			a := portfolio.New(portfolio.WithCash(10000))
+			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
 			df0 := buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df0)
@@ -545,7 +545,7 @@ var _ = Describe("Return Metrics", func() {
 			d2 := time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC)
 			d3 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			a := portfolio.New(portfolio.WithCash(10000))
+			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
 			a.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
@@ -607,7 +607,7 @@ var _ = Describe("Return Metrics", func() {
 			d3 := time.Date(2024, 10, 2, 0, 0, 0, 0, time.UTC)
 
 			// --- Account A: deposit early (d1, before continued rise) ---
-			acctA := portfolio.New(portfolio.WithCash(10000))
+			acctA := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(acctA, spy, d0, 100, 100)
 			acctA.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
@@ -622,7 +622,7 @@ var _ = Describe("Return Metrics", func() {
 			Expect(acctA.EquityCurve()).To(Equal([]float64{10000, 12000, 25660, 20170}))
 
 			// --- Account B: deposit late (d2, before the decline) ---
-			acctB := portfolio.New(portfolio.WithCash(10000))
+			acctB := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(acctB, spy, d0, 100, 100)
 			acctB.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
@@ -693,7 +693,7 @@ var _ = Describe("Return Metrics", func() {
 			d3 := time.Date(2024, 10, 2, 0, 0, 0, 0, time.UTC)
 			d4 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			a := portfolio.New(portfolio.WithCash(10000))
+			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
 			a.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
@@ -729,7 +729,7 @@ var _ = Describe("Return Metrics", func() {
 			benchPrices []float64,
 		) *portfolio.Account {
 			a := portfolio.New(
-				portfolio.WithCash(equity[0]),
+				portfolio.WithCash(equity[0], time.Time{}),
 				portfolio.WithBenchmark(bm),
 			)
 			for i, d := range dates {

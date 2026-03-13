@@ -21,7 +21,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("realized gains", func() {
 		It("computes STCG for positions held less than one year", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100
 			a.Record(portfolio.Transaction{
@@ -50,7 +50,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("computes LTCG for positions held more than one year", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100 on Jan 1, 2023
 			a.Record(portfolio.Transaction{
@@ -79,7 +79,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("splits gains between STCG and LTCG for mixed holding periods", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100 on Jan 1, 2023
 			a.Record(portfolio.Transaction{
@@ -118,7 +118,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("handles capital losses", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -147,7 +147,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("dividends", func() {
 		It("classifies dividends as qualified when held > 60 days", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy on Jan 1
 			a.Record(portfolio.Transaction{
@@ -182,7 +182,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("classifies dividends as non-qualified when held <= 60 days", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy on Jan 1
 			a.Record(portfolio.Transaction{
@@ -209,7 +209,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("classifies dividends as non-qualified when no position exists", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
@@ -227,7 +227,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("unrealized gains", func() {
 		It("computes unrealized STCG for positions held less than one year", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			buyDate := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
 			a.Record(portfolio.Transaction{
@@ -251,7 +251,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("computes unrealized LTCG for positions held more than one year", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			buyDate := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 			a.Record(portfolio.Transaction{
@@ -277,7 +277,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("TaxCostRatio", func() {
 		It("computes tax cost ratio from estimated taxes and total gain", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 at $100
 			a.Record(portfolio.Transaction{
@@ -344,7 +344,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("returns zero TaxCostRatio when there is no gain", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy and sell at a loss
 			a.Record(portfolio.Transaction{
@@ -385,7 +385,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("multiple assets", func() {
 		It("tracks FIFO gains independently per asset", func() {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
 
@@ -438,7 +438,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("partial lot consumption", func() {
 		It("consumes first lot fully and second lot partially via FIFO", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $10 on day 1
 			a.Record(portfolio.Transaction{
@@ -482,7 +482,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("capital losses and TaxCostRatio", func() {
 		It("records negative STCG and TaxCostRatio is zero when STCG is negative", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100
 			a.Record(portfolio.Transaction{
@@ -527,7 +527,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("edge cases", func() {
 		It("treats exactly 365 days as STCG (boundary: > 365 required for LTCG)", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100 on Jan 1, 2023
 			a.Record(portfolio.Transaction{
@@ -556,7 +556,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("treats 366 days as LTCG", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100 on Jan 1, 2023
 			a.Record(portfolio.Transaction{
@@ -585,7 +585,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("treats buy and sell on same date as STCG", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 50 shares at $100 and sell same day at $105 => STCG = 50*(105-100) = 250
 			a.Record(portfolio.Transaction{
@@ -613,7 +613,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("returns zero TaxMetrics when there are no transactions", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			tm, err := a.TaxMetrics()
 			Expect(err).NotTo(HaveOccurred())
@@ -626,7 +626,7 @@ var _ = Describe("TaxMetrics", func() {
 		})
 
 		It("tracks FIFO per asset with interleaved buys and sells", func() {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
 
 			// Buy 50 SPY @$100 on Jan 1
@@ -692,7 +692,7 @@ var _ = Describe("TaxMetrics", func() {
 
 	Describe("complete scenario", func() {
 		It("computes all tax metrics correctly", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 
 			// Buy 100 shares at $100 on Jan 1, 2023
 			a.Record(portfolio.Transaction{

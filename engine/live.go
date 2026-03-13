@@ -67,7 +67,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	}
 
 	// 6. Create and configure account.
-	acct := e.createAccount()
+	acct := e.createAccount(time.Now())
 	if e.benchmark != (asset.Asset{}) {
 		acct.SetBenchmark(e.benchmark)
 	}

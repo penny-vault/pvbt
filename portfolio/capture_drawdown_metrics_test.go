@@ -32,7 +32,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		dates := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), len(equityVals))
 
 		a := portfolio.New(
-			portfolio.WithCash(equityVals[0]),
+			portfolio.WithCash(equityVals[0], time.Time{}),
 			portfolio.WithBenchmark(bm),
 			portfolio.WithRiskFree(bil),
 		)

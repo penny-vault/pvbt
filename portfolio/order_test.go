@@ -90,7 +90,7 @@ var _ = Describe("Order", func() {
 		mb = &mockBroker{
 			defaultFill: &broker.Fill{Price: 100.0, FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)},
 		}
-		acct = portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(mb))
+		acct = portfolio.New(portfolio.WithCash(10_000, time.Time{}), portfolio.WithBroker(mb))
 	})
 
 	It("places a market buy order via broker", func() {

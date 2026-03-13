@@ -18,7 +18,7 @@ func benchAcct(eqCurve, bmPrices, rfPrices []float64) *portfolio.Account {
 	bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
 	a := portfolio.New(
-		portfolio.WithCash(eqCurve[0]),
+		portfolio.WithCash(eqCurve[0], time.Time{}),
 		portfolio.WithBenchmark(bm),
 		portfolio.WithRiskFree(bil),
 	)

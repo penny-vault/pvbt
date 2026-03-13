@@ -33,13 +33,13 @@ var _ = Describe("Account", func() {
 		})
 
 		It("sets initial cash balance via WithCash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			Expect(a.Cash()).To(Equal(10_000.0))
 			Expect(a.Value()).To(Equal(10_000.0))
 		})
 
 		It("records a DepositTransaction for initial cash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			txns := a.Transactions()
 			Expect(txns).To(HaveLen(1))
 			Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
@@ -48,7 +48,7 @@ var _ = Describe("Account", func() {
 
 		It("stores benchmark and risk-free assets", func() {
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(spy),
 				portfolio.WithRiskFree(bil),
 			)
@@ -65,7 +65,7 @@ var _ = Describe("Account", func() {
 			mb2 := &mockBroker{}
 
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBroker(mb1),
 			)
 
@@ -90,7 +90,7 @@ var _ = Describe("Account", func() {
 
 	Describe("Record", func() {
 		It("records a dividend and increases cash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -102,7 +102,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("records a fee and decreases cash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Type:   portfolio.FeeTransaction,
@@ -112,7 +112,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("records a deposit and increases cash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Type:   portfolio.DepositTransaction,
@@ -122,7 +122,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("records a withdrawal and decreases cash", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Type:   portfolio.WithdrawalTransaction,
@@ -132,7 +132,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("records a buy: decreases cash, increases holdings, creates tax lot", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -146,7 +146,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("records a sell: increases cash, decreases holdings, consumes tax lots FIFO", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -184,7 +184,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("with no holdings, value equals cash only", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			df := buildDF(t1, []asset.Asset{spy}, []float64{450.0}, []float64{448.0})
 			a.UpdatePrices(df)
 
@@ -194,7 +194,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("marks holdings to MetricClose prices", func() {
-			a := portfolio.New(portfolio.WithCash(7_000))
+			a := portfolio.New(portfolio.WithCash(7_000, time.Time{}))
 			// simulate having bought 10 shares
 			a.Record(portfolio.Transaction{
 				Date:   t1,
@@ -216,7 +216,7 @@ var _ = Describe("Account", func() {
 
 		It("accumulates equity curve, benchmark, and risk-free series over multiple calls", func() {
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
 				portfolio.WithRiskFree(rf),
 			)
@@ -250,7 +250,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("does not append benchmark/risk-free when not set", func() {
-			a := portfolio.New(portfolio.WithCash(5_000))
+			a := portfolio.New(portfolio.WithCash(5_000, time.Time{}))
 			df := buildDF(t1, []asset.Asset{spy}, []float64{450.0}, []float64{448.0})
 			a.UpdatePrices(df)
 
@@ -259,7 +259,7 @@ var _ = Describe("Account", func() {
 		})
 
 		It("reflects latest prices in Value and PositionValue after UpdatePrices", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   t1,
 				Asset:  spy,
@@ -284,7 +284,7 @@ var _ = Describe("Account", func() {
 
 		It("appends NaN benchmark price to keep arrays aligned with equity curve", func() {
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
 				portfolio.WithRiskFree(rf),
 			)
@@ -322,7 +322,7 @@ var _ = Describe("Account", func() {
 
 		It("appends NaN risk-free price to keep arrays aligned with equity curve", func() {
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
 				portfolio.WithRiskFree(rf),
 			)
@@ -359,7 +359,7 @@ var _ = Describe("Account", func() {
 
 	Describe("EquityCurve, EquityTimes, BenchmarkPrices, RiskFreePrices accessors", func() {
 		It("returns empty slices before any UpdatePrices calls", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			Expect(a.EquityCurve()).To(BeEmpty())
 			Expect(a.EquityTimes()).To(BeEmpty())
 			Expect(a.BenchmarkPrices()).To(BeEmpty())
@@ -371,7 +371,7 @@ var _ = Describe("Account", func() {
 			rf := asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
 
 			a := portfolio.New(
-				portfolio.WithCash(10_000),
+				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
 				portfolio.WithRiskFree(rf),
 			)
@@ -405,20 +405,20 @@ var _ = Describe("Account", func() {
 
 	Describe("Holdings", func() {
 		It("starts with no holdings", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			count := 0
 			a.Holdings(func(_ asset.Asset, _ float64) { count++ })
 			Expect(count).To(Equal(0))
 		})
 
 		It("returns zero for unknown positions", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			Expect(a.Position(spy)).To(Equal(0.0))
 			Expect(a.PositionValue(spy)).To(Equal(0.0))
 		})
 
 		It("iterates over actual positions with correct asset/qty pairs", func() {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -448,7 +448,7 @@ var _ = Describe("Account", func() {
 
 	Describe("Value with NaN price", func() {
 		It("skips NaN-priced assets and returns cash only", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 			a.Record(portfolio.Transaction{
 				Date:   t1,
@@ -477,7 +477,7 @@ var _ = Describe("Account", func() {
 
 	Describe("PositionValue with nil prices", func() {
 		It("returns 0 when prices have never been set", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -493,7 +493,7 @@ var _ = Describe("Account", func() {
 
 	Describe("Record full position depletion", func() {
 		It("removes asset from holdings when all shares are sold", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
@@ -524,7 +524,7 @@ var _ = Describe("Account", func() {
 
 	Describe("Record with multiple tax lots (FIFO partial consumption)", func() {
 		It("consumes lots in FIFO order across partial sells", func() {
-			a := portfolio.New(portfolio.WithCash(100_000))
+			a := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 
 			// Buy 10 shares at $100 on day 1.
 			a.Record(portfolio.Transaction{
@@ -564,9 +564,9 @@ var _ = Describe("Account", func() {
 		})
 	})
 
-	Describe("WithCash(0)", func() {
+	Describe("WithCash(0, time.Time{})", func() {
 		It("records no deposit transaction when cash is 0", func() {
-			a := portfolio.New(portfolio.WithCash(0))
+			a := portfolio.New(portfolio.WithCash(0, time.Time{}))
 			txns := a.Transactions()
 			// A deposit of 0 is still recorded by WithCash.
 			// Verify cash is 0 and the transaction exists but has 0 amount.
@@ -673,7 +673,7 @@ var _ = Describe("Summary", func() {
 		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
 
 		acct := portfolio.New(
-			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
 			portfolio.WithRiskFree(bil),
 		)
@@ -802,7 +802,7 @@ var _ = Describe("RiskMetrics", func() {
 		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
 
 		acct := portfolio.New(
-			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
 			portfolio.WithRiskFree(bil),
 		)
@@ -945,7 +945,7 @@ var _ = Describe("WithdrawalMetrics", func() {
 	var buildWithdrawalAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 
-		acct := portfolio.New(portfolio.WithCash(100_000))
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
 		price := 100_000.0
 		start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 
@@ -1040,7 +1040,7 @@ var _ = Describe("Window", func() {
 		}
 
 		acct := portfolio.New(
-			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
 			portfolio.WithRiskFree(bil),
 		)

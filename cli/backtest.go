@@ -99,7 +99,7 @@ func runBacktest(strategy engine.Strategy) error {
 	}
 
 	acct := portfolio.New(
-		portfolio.WithCash(cash),
+		portfolio.WithCash(cash, start),
 		portfolio.WithAllMetrics(),
 	)
 

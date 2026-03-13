@@ -22,7 +22,7 @@ var _ = Describe("Distribution Metrics", func() {
 	// We adjust cash via deposit (positive) or withdrawal (negative)
 	// transactions so that the cash balance matches the desired equity value.
 	cashAccount := func(equityValues []float64) *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(equityValues[0]))
+		a := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
 		dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), len(equityValues))
 
 		for i, eq := range equityValues {

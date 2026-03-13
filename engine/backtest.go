@@ -64,7 +64,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	}
 
 	// 6. Create and configure account.
-	acct := e.createAccount()
+	acct := e.createAccount(start)
 	if e.benchmark != (asset.Asset{}) {
 		acct.SetBenchmark(e.benchmark)
 	}
