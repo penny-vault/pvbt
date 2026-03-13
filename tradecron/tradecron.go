@@ -159,6 +159,24 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 		}
 	}
 
+	// Default time for date-only modifiers: @monthend → @close, @monthbegin → @open.
+	if timeFlag == "" && dateFlag != "" {
+		switch dateFlag {
+		case AtMonthEnd, AtWeekEnd:
+			timeFlag = AtClose
+			var parseErr error
+			if timeSpec, parseErr = parseTimeRelativeTo(timeSpecTokens, hours.Close/100, hours.Close%100); parseErr != nil {
+				return nil, parseErr
+			}
+		case AtMonthBegin, AtWeekBegin:
+			timeFlag = AtOpen
+			var parseErr error
+			if timeSpec, parseErr = parseTimeRelativeTo(timeSpecTokens, hours.Open/100, hours.Open%100); parseErr != nil {
+				return nil, parseErr
+			}
+		}
+	}
+
 	if timeSpec == "" {
 		timeSpec = strings.Join(timeSpecTokens, " ")
 	}
@@ -239,6 +257,11 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
 		}
 	default:
+		checkDate = forDate
+	}
+
+	// Ensure we don't search backward from forDate.
+	if checkDate.Before(forDate) {
 		checkDate = forDate
 	}
 
