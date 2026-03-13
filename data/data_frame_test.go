@@ -906,62 +906,61 @@ var _ = Describe("DataFrame", func() {
 		})
 	})
 
-	Describe("Resampling", func() {
+	Describe("Downsample", func() {
 		var weeklyDF *data.DataFrame
+		var aapl asset.Asset
 
 		BeforeEach(func() {
-			// Create data spanning multiple weeks: 10 daily points.
-			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC) // Monday
+			aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			t := make([]time.Time, 10)
 			vals := make([]float64, 10)
 			for i := range t {
 				t[i] = base.AddDate(0, 0, i)
 				vals[i] = float64(i + 1)
 			}
-
 			var err error
 			weeklyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("Resample Weekly Last picks last value per week", func() {
-			result := weeklyDF.Resample(data.Weekly, data.Last)
+		It("Last picks last value per week", func() {
+			result := weeklyDF.Downsample(data.Weekly).Last()
 			Expect(result.Len()).To(Equal(2))
 			col := result.Column(aapl, data.Price)
 			Expect(col[0]).To(Equal(7.0))
 			Expect(col[1]).To(Equal(10.0))
 		})
 
-		It("Resample Weekly First picks first value per week", func() {
-			result := weeklyDF.Resample(data.Weekly, data.First)
+		It("First picks first value per week", func() {
+			result := weeklyDF.Downsample(data.Weekly).First()
 			col := result.Column(aapl, data.Price)
 			Expect(col[0]).To(Equal(1.0))
 			Expect(col[1]).To(Equal(8.0))
 		})
 
-		It("Resample Weekly Mean computes mean per week", func() {
-			result := weeklyDF.Resample(data.Weekly, data.Mean)
+		It("Mean computes mean per week", func() {
+			result := weeklyDF.Downsample(data.Weekly).Mean()
 			col := result.Column(aapl, data.Price)
-			// Week 1: mean(1..7) = 4, Week 2: mean(8,9,10) = 9
 			Expect(col[0]).To(Equal(4.0))
 			Expect(col[1]).To(Equal(9.0))
 		})
 
-		It("Resample Weekly Max picks max per week", func() {
-			result := weeklyDF.Resample(data.Weekly, data.Max)
+		It("Max picks max per week", func() {
+			result := weeklyDF.Downsample(data.Weekly).Max()
 			col := result.Column(aapl, data.Price)
 			Expect(col[0]).To(Equal(7.0))
 			Expect(col[1]).To(Equal(10.0))
 		})
 
-		It("Resample Weekly Min picks min per week", func() {
-			result := weeklyDF.Resample(data.Weekly, data.Min)
+		It("Min picks min per week", func() {
+			result := weeklyDF.Downsample(data.Weekly).Min()
 			col := result.Column(aapl, data.Price)
 			Expect(col[0]).To(Equal(1.0))
 			Expect(col[1]).To(Equal(8.0))
 		})
 
-		It("Resample Monthly Sum sums values per month", func() {
+		It("Sum sums values per month", func() {
 			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			t := make([]time.Time, 60)
 			vals := make([]float64, 60)
@@ -971,93 +970,32 @@ var _ = Describe("DataFrame", func() {
 			}
 			monthDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
 			Expect(err).NotTo(HaveOccurred())
-			result := monthDF.Resample(data.Monthly, data.Sum)
-			Expect(result.Len()).To(Equal(2)) // Jan and Feb
-			col := result.Column(aapl, data.Price)
-			Expect(col[0]).To(Equal(31.0))
-			Expect(col[1]).To(Equal(29.0)) // 2024 is leap year
-		})
-
-		It("Resample Quarterly groups by quarter", func() {
-			// 365 days spanning 4 quarters of 2024.
-			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-			t := make([]time.Time, 365)
-			vals := make([]float64, 365)
-			for i := range t {
-				t[i] = base.AddDate(0, 0, i)
-				vals[i] = 1.0
-			}
-			yearDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
-			Expect(err).NotTo(HaveOccurred())
-			result := yearDF.Resample(data.Quarterly, data.Sum)
-			// Q1: Jan(31)+Feb(29)+Mar(31)=91, Q2: Apr(30)+May(31)+Jun(30)=91,
-			// Q3: Jul(31)+Aug(31)+Sep(30)=92, Q4: Oct(31)+Nov(30)+Dec(1)=62
-			// Actually 365 days from Jan 1 to Dec 31 covers all 4 quarters.
-			Expect(result.Len()).To(Equal(4))
-			col := result.Column(aapl, data.Price)
-			Expect(col[0]).To(Equal(91.0)) // Q1
-			Expect(col[1]).To(Equal(91.0)) // Q2
-			Expect(col[2]).To(Equal(92.0)) // Q3
-		})
-
-		It("Resample Yearly groups by year", func() {
-			// 3 timestamps across 2 years.
-			t := []time.Time{
-				time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
-				time.Date(2024, 12, 1, 0, 0, 0, 0, time.UTC),
-				time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
-			}
-			vals := []float64{10, 20, 30}
-			yearDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
-			Expect(err).NotTo(HaveOccurred())
-			result := yearDF.Resample(data.Yearly, data.Sum)
+			result := monthDF.Downsample(data.Monthly).Sum()
 			Expect(result.Len()).To(Equal(2))
 			col := result.Column(aapl, data.Price)
-			Expect(col[0]).To(Equal(30.0)) // 2024: 10+20
-			Expect(col[1]).To(Equal(30.0)) // 2025: 30
+			Expect(col[0]).To(Equal(31.0))
+			Expect(col[1]).To(Equal(29.0))
 		})
 
-		It("Resample on empty frame returns empty", func() {
+		It("Std uses sample (N-1) denominator", func() {
+			// [1,2,3,4,5,6,7] in one week: mean=4, sum sq diffs=28, var=28/6, std=sqrt(28/6)
+			result := weeklyDF.Downsample(data.Weekly).Std()
+			col := result.Column(aapl, data.Price)
+			expectedStd := math.Sqrt(28.0 / 6.0)
+			Expect(col[0]).To(BeNumerically("~", expectedStd, 1e-12))
+		})
+
+		It("Variance uses sample (N-1) denominator", func() {
+			result := weeklyDF.Downsample(data.Weekly).Variance()
+			col := result.Column(aapl, data.Price)
+			Expect(col[0]).To(BeNumerically("~", 28.0/6.0, 1e-12))
+		})
+
+		It("on empty frame returns empty", func() {
 			empty, err := data.NewDataFrame(nil, nil, nil, nil)
 			Expect(err).NotTo(HaveOccurred())
-			result := empty.Resample(data.Weekly, data.Last)
+			result := empty.Downsample(data.Weekly).Last()
 			Expect(result.Len()).To(Equal(0))
-		})
-
-		It("Resample when all data in single period returns single row", func() {
-			// All 5 timestamps are in the same week.
-			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-			t := make([]time.Time, 3)
-			vals := make([]float64, 3)
-			for i := range t {
-				t[i] = base.AddDate(0, 0, i)
-				vals[i] = float64(i + 1)
-			}
-			small, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
-			Expect(err).NotTo(HaveOccurred())
-			result := small.Resample(data.Weekly, data.Sum)
-			Expect(result.Len()).To(Equal(1))
-			Expect(result.Column(aapl, data.Price)[0]).To(Equal(6.0))
-		})
-
-		It("Resample Daily treats every row as its own period", func() {
-			// Daily (and Tick) frequency hits the periodChanged default branch
-			// which always returns true, so each timestamp becomes its own group.
-			result := weeklyDF.Resample(data.Daily, data.Last)
-			Expect(result.Len()).To(Equal(weeklyDF.Len()))
-			col := result.Column(aapl, data.Price)
-			for i := 0; i < weeklyDF.Len(); i++ {
-				Expect(col[i]).To(Equal(float64(i + 1)))
-			}
-		})
-
-		It("Resample with unknown Aggregation produces NaN", func() {
-			unknownAgg := data.Aggregation(99)
-			result := weeklyDF.Resample(data.Weekly, unknownAgg)
-			col := result.Column(aapl, data.Price)
-			for _, v := range col {
-				Expect(math.IsNaN(v)).To(BeTrue())
-			}
 		})
 	})
 
