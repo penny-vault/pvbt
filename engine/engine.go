@@ -21,10 +21,13 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
+
+	"github.com/rs/zerolog"
 )
 
 // Engine orchestrates data access, computation scheduling, and portfolio
@@ -40,6 +43,11 @@ type Engine struct {
 	// configuration (set via options, used during init)
 	cacheMaxBytes  int64
 	cacheChunkSize time.Duration
+	initialDeposit float64
+	broker         broker.Broker
+	snapshot       portfolio.PortfolioSnapshot
+
+	account *portfolio.Account
 
 	// populated during initialization
 	assets         map[string]asset.Asset
@@ -60,6 +68,40 @@ func New(strategy Strategy, opts ...Option) *Engine {
 		opt(e)
 	}
 	return e
+}
+
+// createAccount builds a portfolio.Account from the engine's configuration.
+// If a snapshot is set, the account is restored from it; otherwise a fresh
+// account is created with the initial deposit.
+// createAccount builds a portfolio.Account from the engine's configuration.
+// If a snapshot is set, the account is restored from it; otherwise a fresh
+// account is created with the initial deposit. If no broker was provided
+// via WithBroker, a SimulatedBroker is created and stored on e.broker.
+func (e *Engine) createAccount() *portfolio.Account {
+	if e.broker == nil {
+		e.broker = NewSimulatedBroker()
+	}
+
+	// Use pre-configured account if provided.
+	if e.account != nil {
+		if e.initialDeposit != 0 || e.snapshot != nil {
+			zerolog.Ctx(context.Background()).Warn().Msg("WithAccount set: ignoring WithInitialDeposit and WithPortfolioSnapshot")
+		}
+		if !e.account.HasBroker() {
+			e.account.SetBroker(e.broker)
+		}
+		return e.account
+	}
+
+	var opts []portfolio.Option
+	if e.snapshot != nil {
+		opts = append(opts, portfolio.WithPortfolioSnapshot(e.snapshot))
+	} else {
+		opts = append(opts, portfolio.WithCash(e.initialDeposit))
+	}
+	opts = append(opts, portfolio.WithBroker(e.broker))
+
+	return portfolio.New(opts...)
 }
 
 // Schedule sets the trading schedule for the engine. Called by the
@@ -181,12 +223,28 @@ func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, m
 
 // Fetch implements universe.DataSource.
 func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
+	log := zerolog.Ctx(ctx)
 	if e.cache == nil {
 		e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
 	}
 
 	rangeStart := periodToTime(e.currentDate, lookback)
 	rangeEnd := e.currentDate
+
+	tickers := make([]string, len(assets))
+	figis := make([]string, len(assets))
+	for i, a := range assets {
+		tickers[i] = a.Ticker
+		figis[i] = a.CompositeFigi
+	}
+	log.Debug().
+		Strs("tickers", tickers).
+		Strs("figis", figis).
+		Int("metrics", len(metrics)).
+		Time("rangeStart", rangeStart).
+		Time("rangeEnd", rangeEnd).
+		Time("currentDate", e.currentDate).
+		Msg("engine.Fetch")
 
 	assetsHash := hashAssets(assets)
 	metricsHash := hashMetrics(metrics)
@@ -214,6 +272,13 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		if err != nil {
 			return nil, err
 		}
+		log.Debug().
+			Int("len", df.Len()).
+			Int("assets", len(df.AssetList())).
+			Int("metrics", len(df.MetricList())).
+			Time("chunkStart", chunkStart).
+			Time("chunkEnd", chunkEnd).
+			Msg("engine.Fetch chunk result")
 		e.cache.put(key, df)
 		chunks = append(chunks, df)
 	}
@@ -233,7 +298,13 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		}
 	}
 
-	return merged.Between(rangeStart, rangeEnd), nil
+	result := merged.Between(rangeStart, rangeEnd)
+	log.Debug().
+		Int("len", result.Len()).
+		Int("assets", len(result.AssetList())).
+		Int("metrics", len(result.MetricList())).
+		Msg("engine.Fetch final result")
+	return result, nil
 }
 
 // FetchAt implements universe.DataSource.
@@ -253,5 +324,14 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
+// Prices implements broker.PriceProvider. It returns close prices for
+// the requested assets at the engine's current simulation date.
+func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
+	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{data.MetricClose})
+}
+
 // Compile-time check that Engine implements universe.DataSource.
 var _ universe.DataSource = (*Engine)(nil)
+
+// Compile-time check that Engine implements broker.PriceProvider.
+var _ broker.PriceProvider = (*Engine)(nil)

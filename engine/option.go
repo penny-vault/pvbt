@@ -18,7 +18,9 @@ package engine
 import (
 	"time"
 
+	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // Option configures the engine.
@@ -51,5 +53,38 @@ func WithCacheMaxBytes(n int64) Option {
 func WithChunkSize(d time.Duration) Option {
 	return func(e *Engine) {
 		e.cacheChunkSize = d
+	}
+}
+
+// WithInitialDeposit sets the starting cash balance for the portfolio.
+// Mutually exclusive with WithPortfolioSnapshot.
+func WithInitialDeposit(amount float64) Option {
+	return func(e *Engine) {
+		e.initialDeposit = amount
+	}
+}
+
+// WithBroker sets the broker used for order execution. If not set,
+// the engine defaults to a SimulatedBroker.
+func WithBroker(b broker.Broker) Option {
+	return func(e *Engine) {
+		e.broker = b
+	}
+}
+
+// WithPortfolioSnapshot restores the portfolio from a previous run's
+// snapshot. Mutually exclusive with WithInitialDeposit.
+func WithPortfolioSnapshot(snap portfolio.PortfolioSnapshot) Option {
+	return func(e *Engine) {
+		e.snapshot = snap
+	}
+}
+
+// WithAccount sets a pre-configured portfolio Account for the engine
+// to use. When set, this takes priority over WithInitialDeposit,
+// WithPortfolioSnapshot, and WithBroker.
+func WithAccount(acct *portfolio.Account) Option {
+	return func(e *Engine) {
+		e.account = acct
 	}
 }
