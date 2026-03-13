@@ -193,20 +193,23 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		figis[i] = a.CompositeFigi
 	}
 
-	// accumulate timestamps and per-column data
+	// accumulate timestamps and per-column data keyed by Unix seconds.
+	// We use int64 keys because time.Time equality in Go compares Location
+	// pointers, making it unsuitable as a map key for times from different
+	// LoadLocation calls.
 	type colKey struct {
 		figi   string
 		metric Metric
 	}
-	colData := make(map[colKey]map[time.Time]float64)
-	timeSet := make(map[time.Time]bool)
+	colData := make(map[colKey]map[int64]float64)
+	timeSet := make(map[int64]time.Time)
 
-	ensureCol := func(figi string, m Metric) map[time.Time]float64 {
+	ensureCol := func(figi string, m Metric) map[int64]float64 {
 		k := colKey{figi, m}
 		if c, ok := colData[k]; ok {
 			return c
 		}
-		c := make(map[time.Time]float64)
+		c := make(map[int64]float64)
 		colData[k] = c
 		return c
 	}
@@ -236,10 +239,15 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 
 	// build sorted time axis
 	times := make([]time.Time, 0, len(timeSet))
-	for t := range timeSet {
+	for _, t := range timeSet {
 		times = append(times, t)
 	}
 	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+
+	log.Debug().
+		Int("unique_times", len(times)).
+		Int("colData_keys", len(colData)).
+		Msg("PVDataProvider.Fetch time axis")
 
 	if len(times) == 0 {
 		df, err := NewDataFrame(nil, nil, nil, nil)
@@ -249,10 +257,10 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		return df, nil
 	}
 
-	// build time index for fast lookup
-	timeIdx := make(map[time.Time]int, len(times))
+	// build time index for fast lookup (by Unix seconds)
+	timeIdx := make(map[int64]int, len(times))
 	for i, t := range times {
-		timeIdx[t] = i
+		timeIdx[t.Unix()] = i
 	}
 
 	T := len(times)
@@ -286,8 +294,8 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 			continue
 		}
 		colStart := (ai*M + mi) * T
-		for t, v := range vals {
-			ti := timeIdx[t]
+		for sec, v := range vals {
+			ti := timeIdx[sec]
 			data[colStart+ti] = v
 		}
 	}
@@ -315,13 +323,19 @@ func (p *PVDataProvider) fetchEod(
 	figis []string,
 	start, end time.Time,
 	metrics []Metric,
-	ensureCol func(string, Metric) map[time.Time]float64,
-	timeSet map[time.Time]bool,
+	ensureCol func(string, Metric) map[int64]float64,
+	timeSet map[int64]time.Time,
 ) error {
+	zerolog.Ctx(ctx).Debug().
+		Strs("figis", figis).
+		Time("start", start).
+		Time("end", end).
+		Msg("fetchEod query")
+
 	rows, err := conn.Query(ctx,
 		`SELECT composite_figi, event_date, open, high, low, close, adj_close, volume, dividend, split_factor
 		 FROM eod
-		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2 AND $3
+		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date
 		 ORDER BY event_date`,
 		figis, start, end,
 	)
@@ -332,7 +346,9 @@ func (p *PVDataProvider) fetchEod(
 
 	want := metricSet(metrics)
 
+	rowCount := 0
 	for rows.Next() {
+		rowCount++
 		var (
 			figi                                 string
 			eventDate                            time.Time
@@ -344,34 +360,37 @@ func (p *PVDataProvider) fetchEod(
 			return fmt.Errorf("pvdata: scan eod row: %w", err)
 		}
 
-		eventDate = normalizeDate(eventDate)
-		timeSet[eventDate] = true
+		eventDate = eodTimestamp(eventDate)
+		sec := eventDate.Unix()
+		timeSet[sec] = eventDate
 
 		if want[MetricOpen] {
-			ensureCol(figi, MetricOpen)[eventDate] = open
+			ensureCol(figi, MetricOpen)[sec] = open
 		}
 		if want[MetricHigh] {
-			ensureCol(figi, MetricHigh)[eventDate] = high
+			ensureCol(figi, MetricHigh)[sec] = high
 		}
 		if want[MetricLow] {
-			ensureCol(figi, MetricLow)[eventDate] = low
+			ensureCol(figi, MetricLow)[sec] = low
 		}
 		if want[MetricClose] {
-			ensureCol(figi, MetricClose)[eventDate] = close
+			ensureCol(figi, MetricClose)[sec] = close
 		}
 		if want[AdjClose] {
-			ensureCol(figi, AdjClose)[eventDate] = adjClose
+			ensureCol(figi, AdjClose)[sec] = adjClose
 		}
 		if want[Volume] {
-			ensureCol(figi, Volume)[eventDate] = volume
+			ensureCol(figi, Volume)[sec] = volume
 		}
 		if want[Dividend] {
-			ensureCol(figi, Dividend)[eventDate] = dividend
+			ensureCol(figi, Dividend)[sec] = dividend
 		}
 		if want[SplitFactor] {
-			ensureCol(figi, SplitFactor)[eventDate] = splitFactor
+			ensureCol(figi, SplitFactor)[sec] = splitFactor
 		}
 	}
+
+	zerolog.Ctx(ctx).Debug().Int("rows", rowCount).Msg("fetchEod result")
 
 	return rows.Err()
 }
@@ -382,13 +401,13 @@ func (p *PVDataProvider) fetchMetrics(
 	figis []string,
 	start, end time.Time,
 	metrics []Metric,
-	ensureCol func(string, Metric) map[time.Time]float64,
-	timeSet map[time.Time]bool,
+	ensureCol func(string, Metric) map[int64]float64,
+	timeSet map[int64]time.Time,
 ) error {
 	rows, err := conn.Query(ctx,
 		`SELECT composite_figi, event_date, market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda, sp500
 		 FROM metrics
-		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2 AND $3
+		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date
 		 ORDER BY event_date`,
 		figis, start, end,
 	)
@@ -411,36 +430,37 @@ func (p *PVDataProvider) fetchMetrics(
 			return fmt.Errorf("pvdata: scan metrics row: %w", err)
 		}
 
-		eventDate = normalizeDate(eventDate)
-		timeSet[eventDate] = true
+		eventDate = eodTimestamp(eventDate)
+		sec := eventDate.Unix()
+		timeSet[sec] = eventDate
 
 		if want[MarketCap] {
-			ensureCol(figi, MarketCap)[eventDate] = float64(marketCap)
+			ensureCol(figi, MarketCap)[sec] = float64(marketCap)
 		}
 		if want[EnterpriseValue] {
-			ensureCol(figi, EnterpriseValue)[eventDate] = float64(ev)
+			ensureCol(figi, EnterpriseValue)[sec] = float64(ev)
 		}
 		if want[PE] {
-			ensureCol(figi, PE)[eventDate] = pe
+			ensureCol(figi, PE)[sec] = pe
 		}
 		if want[PB] {
-			ensureCol(figi, PB)[eventDate] = pb
+			ensureCol(figi, PB)[sec] = pb
 		}
 		if want[PS] {
-			ensureCol(figi, PS)[eventDate] = ps
+			ensureCol(figi, PS)[sec] = ps
 		}
 		if want[EVtoEBIT] {
-			ensureCol(figi, EVtoEBIT)[eventDate] = evEbit
+			ensureCol(figi, EVtoEBIT)[sec] = evEbit
 		}
 		if want[EVtoEBITDA] {
-			ensureCol(figi, EVtoEBITDA)[eventDate] = evEbitda
+			ensureCol(figi, EVtoEBITDA)[sec] = evEbitda
 		}
 		if want[SP500] {
 			v := 0.0
 			if sp500 {
 				v = 1.0
 			}
-			ensureCol(figi, SP500)[eventDate] = v
+			ensureCol(figi, SP500)[sec] = v
 		}
 	}
 
@@ -453,8 +473,8 @@ func (p *PVDataProvider) fetchFundamentals(
 	figis []string,
 	start, end time.Time,
 	metrics []Metric,
-	ensureCol func(string, Metric) map[time.Time]float64,
-	timeSet map[time.Time]bool,
+	ensureCol func(string, Metric) map[int64]float64,
+	timeSet map[int64]time.Time,
 ) error {
 	// build the list of SQL columns we need
 	var sqlCols []string
@@ -475,7 +495,7 @@ func (p *PVDataProvider) fetchFundamentals(
 	query := fmt.Sprintf(
 		`SELECT composite_figi, event_date, %s
 		 FROM fundamentals
-		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2 AND $3 AND dimension = $4
+		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date AND dimension = $4
 		 ORDER BY event_date`,
 		strings.Join(sqlCols, ", "),
 	)
@@ -502,11 +522,12 @@ func (p *PVDataProvider) fetchFundamentals(
 			return fmt.Errorf("pvdata: scan fundamentals row: %w", err)
 		}
 
-		eventDate = normalizeDate(eventDate)
-		timeSet[eventDate] = true
+		eventDate = eodTimestamp(eventDate)
+		sec := eventDate.Unix()
+		timeSet[sec] = eventDate
 
 		for i, m := range metricOrder {
-			ensureCol(figi, m)[eventDate] = floatVals[i]
+			ensureCol(figi, m)[sec] = floatVals[i]
 		}
 	}
 
@@ -734,7 +755,8 @@ func metricSet(ms []Metric) map[Metric]bool {
 	return s
 }
 
-// normalizeDate strips the time component from a timestamp.
-func normalizeDate(t time.Time) time.Time {
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+// eodTimestamp converts a database date to the market close timestamp (16:00 Eastern).
+func eodTimestamp(t time.Time) time.Time {
+	nyc, _ := time.LoadLocation("America/New_York")
+	return time.Date(t.Year(), t.Month(), t.Day(), 16, 0, 0, 0, nyc)
 }
