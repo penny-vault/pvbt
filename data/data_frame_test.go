@@ -1124,6 +1124,36 @@ var _ = Describe("DataFrame", func() {
 				Expect(result.Value(efa, data.Price)).To(BeNumerically("~", 10.0, 1e-12))
 			})
 		})
+
+		Describe("Variance", func() {
+			It("returns single-row DataFrame with sample variance (N-1) of each column", func() {
+				result := statsDF.Variance()
+				// SPY: [1,2,3,4], mean=2.5, sum sq diffs=5, var=5/3
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", 5.0/3.0, 1e-12))
+			})
+
+			It("returns 0 for single timestamp", func() {
+				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{42})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(single.Variance().Value(spy, data.Price)).To(BeNumerically("==", 0))
+			})
+		})
+
+		Describe("Std", func() {
+			It("returns single-row DataFrame with sample std (N-1) of each column", func() {
+				result := statsDF.Std()
+				expectedVariance := 5.0 / 3.0
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", math.Sqrt(expectedVariance), 1e-12))
+			})
+
+			It("returns 0 for single timestamp", func() {
+				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
+				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{42})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(single.Std().Value(spy, data.Price)).To(BeNumerically("==", 0))
+			})
+		})
 	})
 
 	Describe("Extensibility", func() {
