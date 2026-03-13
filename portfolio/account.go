@@ -47,8 +47,10 @@ type Account struct {
 	riskFreePrices  []float64
 	benchmark       asset.Asset
 	riskFree        asset.Asset
-	taxLots         map[asset.Asset][]TaxLot
-	metadata        map[string]string
+	taxLots            map[asset.Asset][]TaxLot
+	metadata           map[string]string
+	metrics            []MetricRow
+	registeredMetrics  []PerformanceMetric
 }
 
 // New creates an Account with the given options.
@@ -61,6 +63,12 @@ func New(opts ...Option) *Account {
 	for _, opt := range opts {
 		opt(a)
 	}
+
+	// Default: register all metrics if none were explicitly specified.
+	if len(a.registeredMetrics) == 0 {
+		WithAllMetrics()(a)
+	}
+
 	return a
 }
 
