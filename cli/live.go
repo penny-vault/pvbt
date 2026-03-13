@@ -6,7 +6,6 @@ import (
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
-	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,23 +44,22 @@ func runLive(strategy engine.Strategy) error {
 	eng := engine.New(strategy,
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
+		engine.WithInitialDeposit(cash),
 	)
 	defer eng.Close()
-
-	acct := portfolio.New(portfolio.WithCash(cash))
 
 	log.Info().
 		Str("strategy", strategy.Name()).
 		Float64("cash", cash).
 		Msg("starting live mode")
 
-	ch, err := eng.RunLive(ctx, acct)
+	ch, err := eng.RunLive(ctx)
 	if err != nil {
 		return fmt.Errorf("live mode failed: %w", err)
 	}
 
-	for acct := range ch {
-		printSummary(acct)
+	for p := range ch {
+		printSummary(p)
 	}
 
 	return nil
