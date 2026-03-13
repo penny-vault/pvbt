@@ -28,9 +28,9 @@ import (
 )
 
 // Backtest executes a full backtest over [start, end] using the engine's
-// configured strategy and data providers. It returns the populated account
+// configured strategy and data providers. It returns the portfolio
 // after running every scheduled trading date.
-func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, end time.Time) (*portfolio.Account, error) {
+func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.Portfolio, error) {
 	// PHASE 1: INITIALIZATION
 
 	// 1. Load asset registry from assetProvider.
@@ -46,7 +46,9 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 	}
 
 	// 2. Hydrate strategy fields from default tags.
-	hydrateFields(e, e.strategy)
+	if err := hydrateFields(e, e.strategy); err != nil {
+		return nil, fmt.Errorf("engine: %w", err)
+	}
 
 	// 3. Build provider routing table.
 	if err := e.buildProviderRouting(); err != nil {
@@ -61,9 +63,8 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
 	}
 
-	// 6. Configure account.
-	simBroker := NewSimulatedBroker()
-	acct.SetBroker(simBroker)
+	// 6. Create and configure account.
+	acct := e.createAccount()
 	if e.benchmark != (asset.Asset{}) {
 		acct.SetBenchmark(e.benchmark)
 	}
@@ -83,10 +84,10 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 	// 9. Walk tradecron.Next() from start until past end.
 	// Subtract one nanosecond so that a date exactly equal to start is included.
 	var dates []time.Time
-	cur := e.schedule.Next(start.Add(-1))
+	cur := e.schedule.Next(start.Add(-time.Nanosecond))
 	for !cur.After(end) {
 		dates = append(dates, cur)
-		cur = e.schedule.Next(cur)
+		cur = e.schedule.Next(cur.Add(time.Nanosecond))
 	}
 
 	// PHASE 3: STEP LOOP
@@ -157,35 +158,9 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 			}
 		}
 
-		// 15. Update simulated broker with current prices.
-		// The price function first checks the housekeeping DataFrame (for already-held
-		// assets), then falls back to a live FetchAt so newly targeted assets (first
-		// step, or newly added positions) can also be priced and filled correctly.
-		simBroker.SetPrices(func(a asset.Asset) (float64, bool) {
-			if housekeepDF != nil {
-				v := housekeepDF.ValueAt(a, data.MetricClose, e.currentDate)
-				if !math.IsNaN(v) {
-					return v, true
-				}
-			}
-			// Fallback: fetch the price directly for this asset.
-			df, fetchErr := e.FetchAt(stepCtx, []asset.Asset{a}, e.currentDate, []data.Metric{data.MetricClose})
-			if fetchErr != nil || df == nil {
-				return 0, false
-			}
-			v := df.ValueAt(a, data.MetricClose, e.currentDate)
-			if math.IsNaN(v) {
-				return 0, false
-			}
-			return v, true
-		}, date)
-
-		// Pre-compute step: set prices so the account has valid prices
-		// (needed by RebalanceTo/Value) before Compute is called.
-		// Use SetPriceData (not UpdatePrices) to avoid appending to the
-		// equity curve -- that happens once after Compute in step 18.
-		if housekeepDF != nil {
-			acct.SetPriceData(housekeepDF.Between(date, date))
+		// 15. Update simulated broker with price provider and date.
+		if sb, ok := e.broker.(*SimulatedBroker); ok {
+			sb.SetPriceProvider(e, date)
 		}
 
 		// 16. Call strategy.Compute.
@@ -213,6 +188,9 @@ func (e *Engine) Backtest(ctx context.Context, acct *portfolio.Account, start, e
 			// 18. Call acct.UpdatePrices.
 			acct.UpdatePrices(priceDF)
 		}
+
+		// 18b. Compute registered metrics across all standard windows.
+		computeMetrics(acct, date)
 
 		// 19. Evict old cache data.
 		e.cache.evictBefore(date)
