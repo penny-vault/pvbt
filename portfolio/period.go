@@ -22,6 +22,9 @@ const (
 	UnitDay PeriodUnit = iota
 	UnitMonth
 	UnitYear
+	UnitYTD // year-to-date: from Jan 1 of the current year
+	UnitMTD // month-to-date: from the 1st of the current month
+	UnitWTD // week-to-date: from the most recent Monday
 )
 
 // Period represents a calendar-aware duration used for performance metric
@@ -40,3 +43,12 @@ func Months(n int) Period { return Period{N: n, Unit: UnitMonth} }
 
 // Years returns a Period of n calendar years.
 func Years(n int) Period { return Period{N: n, Unit: UnitYear} }
+
+// YTD returns a Period representing year-to-date.
+func YTD() Period { return Period{N: 0, Unit: UnitYTD} }
+
+// MTD returns a Period representing month-to-date.
+func MTD() Period { return Period{N: 0, Unit: UnitMTD} }
+
+// WTD returns a Period representing week-to-date.
+func WTD() Period { return Period{N: 0, Unit: UnitWTD} }
