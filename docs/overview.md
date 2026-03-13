@@ -59,8 +59,8 @@ func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfol
 }
 
 func main() {
-    acct := portfolio.New(portfolio.WithCash(10_000))
     eng := engine.New(&ADM{},
+        engine.WithInitialDeposit(10_000),
         engine.WithDataProvider(provider),
         engine.WithAssetProvider(provider),
     )
@@ -70,7 +70,7 @@ func main() {
     start := time.Date(2005, time.January, 1, 0, 0, 0, 0, time.UTC)
     end := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-    acct, err := eng.Backtest(ctx, acct, start, end)
+    p, err := eng.Backtest(ctx, start, end)
 }
 ```
 
@@ -142,8 +142,8 @@ The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using th
 
 ```go
 func main() {
-    acct := portfolio.New(portfolio.WithCash(10_000))
     eng := engine.New(&ADM{},
+        engine.WithInitialDeposit(10_000),
         engine.WithDataProvider(provider),
         engine.WithAssetProvider(provider),
     )
@@ -153,11 +153,13 @@ func main() {
     start := time.Date(2005, time.January, 1, 0, 0, 0, 0, time.UTC)
     end := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-    acct, err := eng.Backtest(ctx, acct, start, end)
+    p, err := eng.Backtest(ctx, start, end)
 }
 ```
 
-The portfolio is created with initial cash via `portfolio.New(portfolio.WithCash(10_000))`. The engine is created with the strategy and options via `engine.New`. `WithDataProvider` registers data providers for market data. `WithAssetProvider` registers the provider used to resolve tickers to full `asset.Asset` values. `Backtest` takes a context (for cancellation), the portfolio, and start/end dates. The portfolio is returned with its full history after the run. `Close` releases all resources including data provider connections. The same strategy code works for any time range, any starting capital, and -- critically -- in production with live data via `RunLive`.
+The engine is created with the strategy and options via `engine.New`. `WithInitialDeposit` sets the starting cash -- the engine creates and manages the portfolio account internally. `WithDataProvider` registers data providers for market data. `WithAssetProvider` registers the provider used to resolve tickers to full `asset.Asset` values. `Backtest` takes a context (for cancellation) and start/end dates. It returns a `Portfolio` with its full history after the run. `Close` releases all resources including data provider connections. The same strategy code works for any time range, any starting capital, and -- critically -- in production with live data via `RunLive`.
+
+For advanced use cases, `WithAccount` lets you pass a pre-configured `*portfolio.Account` directly, and `WithPortfolioSnapshot` restores from a previous run's snapshot.
 
 ## What the engine does when you run this
 
@@ -165,7 +167,7 @@ A backtest proceeds in four phases.
 
 ### Phase 1: Initialization
 
-The engine loads the asset registry from the `AssetProvider`, then uses reflection to populate exported strategy fields from their `default` struct tags. It builds a routing table mapping each data metric to its provider. Then it calls `Setup`, where the strategy sets the schedule, benchmark, risk-free asset, and does any other one-time initialization. Finally the engine configures the account with a simulated broker and initializes the data cache.
+The engine loads the asset registry from the `AssetProvider`, then uses reflection to populate exported strategy fields from their `default` struct tags. It builds a routing table mapping each data metric to its provider. Then it calls `Setup`, where the strategy sets the schedule, benchmark, risk-free asset, and does any other one-time initialization. The engine creates a portfolio account from the initial deposit (or snapshot, or pre-configured account), attaches a simulated broker (unless one was provided), and initializes the per-column data cache.
 
 ### Phase 2: Date enumeration
 
@@ -176,10 +178,10 @@ The engine walks the tradecron schedule from start to end, collecting every trad
 At each date the engine:
 1. Fetches housekeeping data (close, adjusted close, dividends) for held assets, the benchmark, and the risk-free asset.
 2. Records dividend income for held positions.
-3. Updates the simulated broker's price function so orders can fill.
-4. Sets current prices on the account (without updating the equity curve).
-5. Calls `ADM.Compute`. The strategy fetches data via `e.Fetch`, computes signals, and tells the portfolio to rebalance.
-6. Fetches post-Compute prices for all held assets (including newly acquired positions) and updates the account's equity curve.
+3. Updates the simulated broker with the current price provider and date so orders can fill.
+4. Calls `ADM.Compute`. The strategy fetches data via `e.Fetch`, computes signals, and tells the portfolio to rebalance.
+5. Fetches post-Compute prices for all held assets (including newly acquired positions) and updates the account's equity curve.
+6. Computes all registered performance metrics across standard windows (5yr, 3yr, 1yr, YTD, MTD, WTD, and since-inception).
 7. Evicts stale cache entries.
 
 ### Phase 4: Return

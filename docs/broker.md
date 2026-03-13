@@ -10,14 +10,16 @@ When a portfolio has an associated broker, order execution is delegated to the b
 type Broker interface {
     Connect(ctx context.Context) error
     Close() error
-    Submit(order Order) ([]Fill, error)
-    Cancel(orderID string) error
-    Replace(orderID string, order Order) ([]Fill, error)
-    Orders() ([]Order, error)
-    Positions() ([]Position, error)
-    Balance() (Balance, error)
+    Submit(ctx context.Context, order Order) ([]Fill, error)
+    Cancel(ctx context.Context, orderID string) error
+    Replace(ctx context.Context, orderID string, order Order) ([]Fill, error)
+    Orders(ctx context.Context) ([]Order, error)
+    Positions(ctx context.Context) ([]Position, error)
+    Balance(ctx context.Context) (Balance, error)
 }
 ```
+
+All trading and query methods now accept a `context.Context` for cancellation and deadline propagation.
 
 ### Lifecycle
 
@@ -45,7 +47,9 @@ type Order struct {
     ID          string
     Asset       asset.Asset
     Side        Side
+    Status      OrderStatus
     Qty         float64
+    Amount      float64
     OrderType   OrderType
     TimeInForce TimeInForce
     LimitPrice  float64
@@ -62,6 +66,26 @@ type Side int
 const (
     Buy Side = iota
     Sell
+)
+```
+
+### Dollar-amount orders
+
+When `Qty` is zero and `Amount` is positive, the broker treats it as a dollar-amount order and computes the share quantity from the current market price. This is useful for allocating a fixed dollar amount rather than a specific number of shares.
+
+### Order status
+
+`OrderStatus` tracks the lifecycle state of an order:
+
+```go
+type OrderStatus int
+
+const (
+    OrderOpen OrderStatus = iota
+    OrderSubmitted
+    OrderFilled
+    OrderPartiallyFilled
+    OrderCancelled
 )
 ```
 
@@ -126,20 +150,45 @@ type Balance struct {
 }
 ```
 
-## Connecting a broker to a portfolio
+## Connecting a broker
 
-A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, attach a real one. The portfolio delegates all order execution to the broker and never computes fill prices itself.
+A broker is always required. For backtesting, the engine provides a simulated broker; for live trading, pass a real broker to the engine via `engine.WithBroker(b)`. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ```go
-// at construction
-p := portfolio.New(portfolio.WithCash(10_000), portfolio.WithBroker(b))
+// backtesting -- simulated broker is attached automatically
+eng := engine.New(&MyStrategy{},
+    engine.WithInitialDeposit(10_000),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
 
-// swap brokers at runtime
-p.SetBroker(liveBroker)
+// live trading -- provide a real broker
+eng := engine.New(&MyStrategy{},
+    engine.WithInitialDeposit(10_000),
+    engine.WithBroker(liveBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
 ```
 
 The portfolio translates its modifier-based orders (`Limit(150.00)`, `GoodTilCancel`, etc.) into `broker.Order` values with concrete `OrderType` and `TimeInForce` fields before calling `Submit`. Strategy code is never aware of the broker.
 
+## PriceProvider
+
+The `PriceProvider` interface supplies current market prices. The engine implements this interface; the simulated broker uses it to determine fill prices and convert dollar-amount orders to share quantities.
+
+```go
+type PriceProvider interface {
+    Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error)
+}
+```
+
 ## Implementations
 
-Broker implementations live in sub-packages under `broker/`. The first planned implementations are a simulated broker for backtesting and a tastytrade broker for live trading. Additional brokers (e.g., Interactive Brokers, Schwab) can be added by implementing the `Broker` interface.
+### SimulatedBroker
+
+The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each computation step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). The simulated broker does not support `Cancel` or `Replace` operations.
+
+### Future implementations
+
+Additional brokers (e.g., tastytrade, Interactive Brokers, Schwab) can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
