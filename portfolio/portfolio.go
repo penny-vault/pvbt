@@ -111,6 +111,15 @@ type Portfolio interface {
 	// DynamicWithdrawalRate) derived from Monte Carlo simulation
 	// of historical returns.
 	WithdrawalMetrics() (WithdrawalMetrics, error)
+
+	// SetMetadata stores a key-value string pair in the portfolio's
+	// metadata map. Use this for run-level information like run ID,
+	// strategy name, start/end dates, and strategy parameters.
+	SetMetadata(key, value string)
+
+	// GetMetadata retrieves a metadata value by key. Returns empty
+	// string if the key has not been set.
+	GetMetadata(key string) string
 }
 
 // PortfolioManager is the interface the engine uses to manage the
