@@ -861,6 +861,40 @@ func (df *DataFrame) Min() *DataFrame {
 	})
 }
 
+// Variance returns a single-row DataFrame with the sample variance (N-1
+// denominator) of each column over the time dimension.
+func (df *DataFrame) Variance() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		if len(col) < 2 {
+			return 0
+		}
+		m := stat.Mean(col, nil)
+		sum := 0.0
+		for _, v := range col {
+			d := v - m
+			sum += d * d
+		}
+		return sum / float64(len(col)-1)
+	})
+}
+
+// Std returns a single-row DataFrame with the sample standard deviation
+// (N-1 denominator) of each column over the time dimension.
+func (df *DataFrame) Std() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		if len(col) < 2 {
+			return 0
+		}
+		m := stat.Mean(col, nil)
+		sum := 0.0
+		for _, v := range col {
+			d := v - m
+			sum += d * d
+		}
+		return math.Sqrt(sum / float64(len(col)-1))
+	})
+}
+
 // -- Common transforms -------------------------------------------------------
 
 // Pct returns the percent change over n periods. If n is omitted it
