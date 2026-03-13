@@ -16,8 +16,6 @@
 package engine
 
 import (
-	"time"
-
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -45,14 +43,6 @@ func WithAssetProvider(p data.AssetProvider) Option {
 func WithCacheMaxBytes(n int64) Option {
 	return func(e *Engine) {
 		e.cacheMaxBytes = n
-	}
-}
-
-// WithChunkSize sets the time duration of each data cache chunk.
-// Default is 1 year.
-func WithChunkSize(d time.Duration) Option {
-	return func(e *Engine) {
-		e.cacheChunkSize = d
 	}
 }
 

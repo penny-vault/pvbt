@@ -16,126 +16,103 @@
 package engine
 
 import (
-	"hash/fnv"
-	"sort"
 	"time"
 
-	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
-const (
-	defaultMaxBytes  int64         = 512 * 1024 * 1024    // 512 MB
-	defaultChunkSize time.Duration = 365 * 24 * time.Hour // ~1 year
-)
+const defaultMaxBytes int64 = 512 * 1024 * 1024 // 512 MB
 
-type dataCacheKey struct {
-	assetsHash  uint64
-	metricsHash uint64
-	chunkStart  time.Time
+var nyc *time.Location
+
+func init() {
+	var err error
+	nyc, err = time.LoadLocation("America/New_York")
+	if err != nil {
+		panic("engine: load America/New_York: " + err.Error())
+	}
+}
+
+// colCacheKey identifies a single cached column: one asset, one metric,
+// one calendar-year chunk.
+type colCacheKey struct {
+	figi       string
+	metric     data.Metric
+	chunkStart int64 // Unix seconds, Jan 1 00:00 Eastern
+}
+
+// colCacheEntry holds a single time-series column.
+type colCacheEntry struct {
+	times  []time.Time
+	values []float64
 }
 
 type dataCache struct {
-	entries   map[dataCacheKey]*data.DataFrame
-	curBytes  int64
-	maxBytes  int64
-	chunkSize time.Duration
+	entries  map[colCacheKey]*colCacheEntry
+	curBytes int64
+	maxBytes int64
 }
 
-func newDataCache(maxBytes int64, chunkSize time.Duration) *dataCache {
+func newDataCache(maxBytes int64) *dataCache {
 	if maxBytes <= 0 {
 		maxBytes = defaultMaxBytes
 	}
-	if chunkSize <= 0 {
-		chunkSize = defaultChunkSize
-	}
 	return &dataCache{
-		entries:   make(map[dataCacheKey]*data.DataFrame),
-		maxBytes:  maxBytes,
-		chunkSize: chunkSize,
+		entries:  make(map[colCacheKey]*colCacheEntry),
+		maxBytes: maxBytes,
 	}
 }
 
-func (c *dataCache) get(key dataCacheKey) (*data.DataFrame, bool) {
-	df, ok := c.entries[key]
-	return df, ok
+func (c *dataCache) get(key colCacheKey) (*colCacheEntry, bool) {
+	e, ok := c.entries[key]
+	return e, ok
 }
 
-func (c *dataCache) put(key dataCacheKey, df *data.DataFrame) {
-	sz := estimateBytes(df)
-	// If already present, subtract old size first.
+func (c *dataCache) put(key colCacheKey, entry *colCacheEntry) {
+	sz := estimateEntryBytes(entry)
 	if old, ok := c.entries[key]; ok {
-		c.curBytes -= estimateBytes(old)
+		c.curBytes -= estimateEntryBytes(old)
 	}
-	c.entries[key] = df
+	c.entries[key] = entry
 	c.curBytes += sz
 }
 
-// evictBefore removes all entries whose chunk ends before t.
+// evictBefore removes all entries whose chunk year ends before t.
 func (c *dataCache) evictBefore(t time.Time) {
-	for key, df := range c.entries {
-		chunkEnd := key.chunkStart.Add(c.chunkSize)
-		if chunkEnd.Before(t) {
-			c.curBytes -= estimateBytes(df)
+	year := t.In(nyc).Year()
+	for key, entry := range c.entries {
+		chunkYear := time.Unix(key.chunkStart, 0).In(nyc).Year()
+		if chunkYear < year {
+			c.curBytes -= estimateEntryBytes(entry)
 			delete(c.entries, key)
 		}
 	}
 }
 
-// chunkBoundaries returns the start times of all chunks that cover [start, end].
-// Chunks are aligned to the chunkSize from the epoch (2000-01-01).
-func (c *dataCache) chunkBoundaries(start, end time.Time) []time.Time {
-	epoch := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-
-	// Find the chunk boundary at or before start.
-	elapsed := start.Sub(epoch)
-	chunkIdx := elapsed / c.chunkSize
-	if elapsed < 0 {
-		chunkIdx--
-	}
-	chunkStart := epoch.Add(chunkIdx * c.chunkSize)
-
-	var boundaries []time.Time
-	for !chunkStart.After(end) {
-		boundaries = append(boundaries, chunkStart)
-		chunkStart = chunkStart.Add(c.chunkSize)
-	}
-	return boundaries
+// chunkStartFor returns the Unix seconds of Jan 1 00:00 Eastern for the
+// year containing t (in Eastern time).
+func chunkStartFor(t time.Time) int64 {
+	et := t.In(nyc)
+	jan1 := time.Date(et.Year(), 1, 1, 0, 0, 0, 0, nyc)
+	return jan1.Unix()
 }
 
-func estimateBytes(df *data.DataFrame) int64 {
-	if df == nil {
+// chunkYears returns the chunkStart values (Unix seconds) for every
+// calendar year that overlaps [start, end].
+func chunkYears(start, end time.Time) []int64 {
+	startYear := start.In(nyc).Year()
+	endYear := end.In(nyc).Year()
+	years := make([]int64, 0, endYear-startYear+1)
+	for y := startYear; y <= endYear; y++ {
+		jan1 := time.Date(y, 1, 1, 0, 0, 0, 0, nyc)
+		years = append(years, jan1.Unix())
+	}
+	return years
+}
+
+func estimateEntryBytes(e *colCacheEntry) int64 {
+	if e == nil {
 		return 0
 	}
-	return int64(df.Len() * len(df.AssetList()) * len(df.MetricList()) * 8)
-}
-
-func hashAssets(assets []asset.Asset) uint64 {
-	sorted := make([]string, len(assets))
-	for i, a := range assets {
-		sorted[i] = a.CompositeFigi
-	}
-	sort.Strings(sorted)
-
-	h := fnv.New64a()
-	for _, s := range sorted {
-		h.Write([]byte(s))
-		h.Write([]byte{0}) // separator
-	}
-	return h.Sum64()
-}
-
-func hashMetrics(metrics []data.Metric) uint64 {
-	sorted := make([]string, len(metrics))
-	for i, m := range metrics {
-		sorted[i] = string(m)
-	}
-	sort.Strings(sorted)
-
-	h := fnv.New64a()
-	for _, s := range sorted {
-		h.Write([]byte(s))
-		h.Write([]byte{0})
-	}
-	return h.Sum64()
+	return int64(len(e.values)*8 + len(e.times)*24)
 }
