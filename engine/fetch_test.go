@@ -13,295 +13,223 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package engine
+package engine_test
 
 import (
 	"context"
-	"testing"
+	"fmt"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 )
 
-// makeDailyDF creates a DataFrame with daily timestamps starting at start
-// for nDays days, covering the given assets and metrics. Values are sequential
-// floats starting from 1.0.
-func makeDailyDF(t *testing.T, start time.Time, nDays int, assets []asset.Asset, metrics []data.Metric) *data.DataFrame {
-	t.Helper()
+// fetchStrategy captures data fetched during Compute for test assertions.
+type fetchStrategy struct {
+	lookback portfolio.Period
+	metrics  []data.Metric
+	assets   []asset.Asset
+	fetched  *data.DataFrame
+	fetchErr error
+}
+
+func (s *fetchStrategy) Name() string { return "fetchStrategy" }
+
+func (s *fetchStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("fetchStrategy.Setup: %v", err))
+	}
+	eng.Schedule(tc)
+}
+
+func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+	s.fetched, s.fetchErr = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
+}
+
+// fetchAtStrategy calls FetchAt during Compute.
+type fetchAtStrategy struct {
+	metrics  []data.Metric
+	assets   []asset.Asset
+	fetched  *data.DataFrame
+	fetchErr error
+}
+
+func (s *fetchAtStrategy) Name() string { return "fetchAtStrategy" }
+
+func (s *fetchAtStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("fetchAtStrategy.Setup: %v", err))
+	}
+	eng.Schedule(tc)
+}
+
+func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, eng.CurrentDate(), s.metrics)
+}
+
+// countingProvider wraps a TestProvider and counts Fetch calls.
+type countingProvider struct {
+	data.DataProvider
+	inner     *data.TestProvider
+	fetchCount int
+}
+
+func newCountingProvider(metrics []data.Metric, df *data.DataFrame) *countingProvider {
+	inner := data.NewTestProvider(metrics, df)
+	return &countingProvider{DataProvider: inner, inner: inner}
+}
+
+func (cp *countingProvider) Fetch(ctx context.Context, req data.DataRequest) (*data.DataFrame, error) {
+	cp.fetchCount++
+	return cp.inner.Fetch(ctx, req)
+}
+
+// makeDailyDF creates a DataFrame with daily timestamps at 16:00 UTC.
+func makeDailyDF(start time.Time, nDays int, testAssets []asset.Asset, metrics []data.Metric) *data.DataFrame {
 	times := make([]time.Time, nDays)
 	for i := range times {
-		times[i] = start.AddDate(0, 0, i)
+		day := start.AddDate(0, 0, i)
+		times[i] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 	}
-	vals := make([]float64, nDays*len(assets)*len(metrics))
+	vals := make([]float64, nDays*len(testAssets)*len(metrics))
 	for i := range vals {
 		vals[i] = float64(i + 1)
 	}
-	df, err := data.NewDataFrame(times, assets, metrics, vals)
-	if err != nil {
-		t.Fatalf("makeDailyDF: %v", err)
-	}
+	df, err := data.NewDataFrame(times, testAssets, metrics, vals)
+	Expect(err).NotTo(HaveOccurred())
 	return df
 }
 
-// TestPeriodToTime verifies that periodToTime subtracts days, months, and years correctly.
-func TestPeriodToTime(t *testing.T) {
-	base := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
-
-	tests := []struct {
-		name   string
-		period portfolio.Period
-		want   time.Time
-	}{
-		{
-			name:   "subtract 10 days",
-			period: portfolio.Days(10),
-			want:   time.Date(2024, 6, 5, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:   "subtract 3 months",
-			period: portfolio.Months(3),
-			want:   time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:   "subtract 2 years",
-			period: portfolio.Years(2),
-			want:   time.Date(2022, 6, 15, 0, 0, 0, 0, time.UTC),
-		},
-		{
-			name:   "zero days",
-			period: portfolio.Days(0),
-			want:   base,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := periodToTime(base, tt.period)
-			if !got.Equal(tt.want) {
-				t.Errorf("periodToTime(%v, %+v) = %v, want %v", base, tt.period, got, tt.want)
-			}
-		})
-	}
-}
-
-// TestBuildProviderRouting verifies that buildProviderRouting correctly maps
-// metrics to their respective providers.
-func TestBuildProviderRouting(t *testing.T) {
-	assets := []asset.Asset{{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}}
-
-	closeMetrics := []data.Metric{data.MetricClose}
-	volumeMetrics := []data.Metric{data.Volume}
-
-	closeDF := makeDailyDF(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 30, assets, closeMetrics)
-	volumeDF := makeDailyDF(t, time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC), 30, assets, volumeMetrics)
-
-	closeProvider := data.NewTestProvider(closeMetrics, closeDF)
-	volumeProvider := data.NewTestProvider(volumeMetrics, volumeDF)
-
-	e := New(nil, WithDataProvider(closeProvider, volumeProvider))
-	if err := e.buildProviderRouting(); err != nil {
-		t.Fatalf("buildProviderRouting: %v", err)
-	}
-
-	if e.metricProvider == nil {
-		t.Fatal("metricProvider map is nil after buildProviderRouting")
-	}
-
-	if _, ok := e.metricProvider[data.MetricClose]; !ok {
-		t.Error("metricProvider missing MetricClose")
-	}
-	if _, ok := e.metricProvider[data.Volume]; !ok {
-		t.Error("metricProvider missing Volume")
-	}
-
-	// Verify the correct provider is mapped.
-	if e.metricProvider[data.MetricClose] != closeProvider {
-		t.Error("MetricClose mapped to wrong provider")
-	}
-	if e.metricProvider[data.Volume] != volumeProvider {
-		t.Error("Volume mapped to wrong provider")
-	}
-}
-
-// TestEngineFetch verifies that Fetch returns the correct windowed DataFrame
-// and populates the cache.
-func TestEngineFetch(t *testing.T) {
-	assets := []asset.Asset{
-		{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"},
-		{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"},
-	}
-	metrics := []data.Metric{data.MetricClose}
-
-	// Build 30 days of data starting 2024-01-01.
-	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	df := makeDailyDF(t, start, 30, assets, metrics)
-	provider := data.NewTestProvider(metrics, df)
-
-	// Use a small chunk size so we exercise chunking logic.
-	chunkSize := 15 * 24 * time.Hour
-
-	e := New(nil,
-		WithDataProvider(provider),
-		WithChunkSize(chunkSize),
+var _ = Describe("Fetch", func() {
+	var (
+		aapl          asset.Asset
+		testAssets    []asset.Asset
+		assetProvider *mockAssetProvider
 	)
-	if err := e.buildProviderRouting(); err != nil {
-		t.Fatalf("buildProviderRouting: %v", err)
-	}
 
-	// currentDate is 2024-01-20; request last 10 days.
-	e.currentDate = time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
+	BeforeEach(func() {
+		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		testAssets = []asset.Asset{aapl}
+		assetProvider = &mockAssetProvider{assets: testAssets}
+	})
 
-	ctx := context.Background()
-	result, err := e.Fetch(ctx, assets, portfolio.Days(10), metrics)
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if result == nil {
-		t.Fatal("Fetch returned nil DataFrame")
-	}
+	Context("with a lookback period", func() {
+		It("returns data for the requested window", func() {
+			metrics := []data.Metric{data.MetricClose}
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyDF(dataStart, 90, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
 
-	// Expect timestamps from 2024-01-10 to 2024-01-20 (11 rows).
-	wantStart := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
-	wantEnd := time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
+			strategy := &fetchStrategy{
+				lookback: portfolio.Days(10),
+				metrics:  metrics,
+				assets:   testAssets,
+			}
 
-	// 2024-01-10 through 2024-01-20 inclusive = 11 rows.
-	if result.Len() != 11 {
-		t.Errorf("result.Len() = %d, want 11", result.Len())
-	}
-	if !result.Start().Equal(wantStart) {
-		t.Errorf("result.Start() = %v, want %v", result.Start(), wantStart)
-	}
-	if !result.End().Equal(wantEnd) {
-		t.Errorf("result.End() = %v, want %v", result.End(), wantEnd)
-	}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
 
-	// Verify cache was populated.
-	if e.cache == nil {
-		t.Fatal("cache is nil after Fetch")
-	}
-	if len(e.cache.entries) == 0 {
-		t.Error("cache has no entries after Fetch")
-	}
-}
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
 
-// TestEngineFetchCacheHit verifies that a second Fetch for the same range
-// returns data from the cache without calling the provider again.
-func TestEngineFetchCacheHit(t *testing.T) {
-	assets := []asset.Asset{{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}}
-	metrics := []data.Metric{data.MetricClose}
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(BeNumerically(">", 0))
+		})
+	})
 
-	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	df := makeDailyDF(t, start, 30, assets, metrics)
-	provider := data.NewTestProvider(metrics, df)
+	Context("with multiple providers", func() {
+		It("merges metrics from different providers", func() {
+			goog := asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
+			multiAssets := []asset.Asset{aapl, goog}
+			assetProvider = &mockAssetProvider{assets: multiAssets}
 
-	e := New(nil, WithDataProvider(provider))
-	if err := e.buildProviderRouting(); err != nil {
-		t.Fatalf("buildProviderRouting: %v", err)
-	}
-	e.currentDate = time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
+			closeMetrics := []data.Metric{data.MetricClose}
+			volumeMetrics := []data.Metric{data.Volume}
 
-	ctx := context.Background()
-	result1, err := e.Fetch(ctx, assets, portfolio.Days(10), metrics)
-	if err != nil {
-		t.Fatalf("first Fetch: %v", err)
-	}
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(dataStart, 90, multiAssets, closeMetrics)
+			volumeDF := makeDailyDF(dataStart, 90, multiAssets, volumeMetrics)
 
-	result2, err := e.Fetch(ctx, assets, portfolio.Days(10), metrics)
-	if err != nil {
-		t.Fatalf("second Fetch: %v", err)
-	}
+			closeProvider := data.NewTestProvider(closeMetrics, closeDF)
+			volumeProvider := data.NewTestProvider(volumeMetrics, volumeDF)
 
-	// Both results should cover the same range.
-	if result1.Len() != result2.Len() {
-		t.Errorf("cache hit result length %d != first result length %d", result2.Len(), result1.Len())
-	}
-}
+			allMetrics := []data.Metric{data.MetricClose, data.Volume}
+			strategy := &fetchStrategy{
+				lookback: portfolio.Days(5),
+				metrics:  allMetrics,
+				assets:   multiAssets,
+			}
 
-// TestEngineFetchMultiProvider verifies that Fetch with metrics from two
-// providers merges the results correctly.
-func TestEngineFetchMultiProvider(t *testing.T) {
-	assets := []asset.Asset{{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, volumeProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
 
-	closeMetrics := []data.Metric{data.MetricClose}
-	volumeMetrics := []data.Metric{data.Volume}
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
 
-	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	nDays := 30
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
 
-	closeDF := makeDailyDF(t, start, nDays, assets, closeMetrics)
-	volumeDF := makeDailyDF(t, start, nDays, assets, volumeMetrics)
+			metricList := strategy.fetched.MetricList()
+			hasClose := false
+			hasVolume := false
+			for _, metric := range metricList {
+				if metric == data.MetricClose {
+					hasClose = true
+				}
+				if metric == data.Volume {
+					hasVolume = true
+				}
+			}
+			Expect(hasClose).To(BeTrue(), "merged result should contain MetricClose")
+			Expect(hasVolume).To(BeTrue(), "merged result should contain Volume")
+		})
+	})
 
-	closeProvider := data.NewTestProvider(closeMetrics, closeDF)
-	volumeProvider := data.NewTestProvider(volumeMetrics, volumeDF)
+	Context("FetchAt", func() {
+		It("returns data for a single point in time", func() {
+			metrics := []data.Metric{data.MetricClose}
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyDF(dataStart, 90, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
 
-	e := New(nil, WithDataProvider(closeProvider, volumeProvider))
-	if err := e.buildProviderRouting(); err != nil {
-		t.Fatalf("buildProviderRouting: %v", err)
-	}
-	e.currentDate = time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC)
+			strategy := &fetchAtStrategy{
+				metrics: metrics,
+				assets:  testAssets,
+			}
 
-	ctx := context.Background()
-	result, err := e.Fetch(ctx, assets, portfolio.Days(10), []data.Metric{data.MetricClose, data.Volume})
-	if err != nil {
-		t.Fatalf("Fetch: %v", err)
-	}
-	if result == nil {
-		t.Fatal("Fetch returned nil DataFrame")
-	}
-	if result.Len() == 0 {
-		t.Fatal("Fetch returned empty DataFrame")
-	}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
 
-	// Verify both metrics are present.
-	metricList := result.MetricList()
-	hasClose := false
-	hasVolume := false
-	for _, m := range metricList {
-		if m == data.MetricClose {
-			hasClose = true
-		}
-		if m == data.Volume {
-			hasVolume = true
-		}
-	}
-	if !hasClose {
-		t.Error("merged result missing MetricClose")
-	}
-	if !hasVolume {
-		t.Error("merged result missing Volume")
-	}
-}
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
 
-// TestEngineFetchAt verifies that FetchAt returns a single-timestamp DataFrame.
-func TestEngineFetchAt(t *testing.T) {
-	assets := []asset.Asset{{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}}
-	metrics := []data.Metric{data.MetricClose}
-
-	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	df := makeDailyDF(t, start, 30, assets, metrics)
-	provider := data.NewTestProvider(metrics, df)
-
-	e := New(nil, WithDataProvider(provider))
-	if err := e.buildProviderRouting(); err != nil {
-		t.Fatalf("buildProviderRouting: %v", err)
-	}
-
-	target := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
-	ctx := context.Background()
-
-	result, err := e.FetchAt(ctx, assets, target, metrics)
-	if err != nil {
-		t.Fatalf("FetchAt: %v", err)
-	}
-	if result == nil {
-		t.Fatal("FetchAt returned nil DataFrame")
-	}
-	if result.Len() != 1 {
-		t.Errorf("FetchAt result has %d rows, want 1", result.Len())
-	}
-	if !result.Start().Equal(target) {
-		t.Errorf("FetchAt result timestamp = %v, want %v", result.Start(), target)
-	}
-}
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(Equal(1))
+		})
+	})
+})

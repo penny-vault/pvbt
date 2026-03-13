@@ -18,8 +18,10 @@ package engine_test
 import (
 	"context"
 	"reflect"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/engine"
@@ -43,76 +45,56 @@ func (s *paramTestStrategy) Name() string                                       
 func (s *paramTestStrategy) Setup(_ *engine.Engine)                                            {}
 func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
 
-func TestStrategyParameters(t *testing.T) {
-	s := &paramTestStrategy{}
-	params := engine.StrategyParameters(s)
-
-	// Should include exported fields only: Lookback, Ticker, RiskOn, Name_, Duration, Enabled, Count, Label = 8
-	if len(params) != 8 {
-		t.Fatalf("expected 8 parameters, got %d", len(params))
-	}
-
-	// Check first param
-	p := findParam(params, "lookback")
-	if p == nil {
-		t.Fatal("expected parameter 'lookback'")
-	}
-	if p.Description != "Lookback in months" {
-		t.Errorf("expected desc 'Lookback in months', got %q", p.Description)
-	}
-	if p.Default != "6.0" {
-		t.Errorf("expected default '6.0', got %q", p.Default)
-	}
-	if p.GoType != reflect.TypeOf(float64(0)) {
-		t.Errorf("expected float64 type, got %v", p.GoType)
-	}
-
-	// Check field with no pvbt tag -- name derived from field name lowercased
-	p2 := findParam(params, "name_")
-	if p2 == nil {
-		t.Fatal("expected parameter 'name_' (lowercased from Name_)")
-	}
-	if p2.FieldName != "Name_" {
-		t.Errorf("expected FieldName 'Name_', got %q", p2.FieldName)
-	}
-}
-
-func TestStrategyParametersSuggestions(t *testing.T) {
-	s := &paramTestStrategy{}
-	params := engine.StrategyParameters(s)
-
-	p := findParam(params, "riskOn")
-	if p == nil {
-		t.Fatal("expected parameter 'riskOn'")
-	}
-	if p.Suggestions == nil {
-		t.Fatal("expected Suggestions map to be populated")
-	}
-	if len(p.Suggestions) != 2 {
-		t.Fatalf("expected 2 suggestions, got %d", len(p.Suggestions))
-	}
-	if v, ok := p.Suggestions["Classic"]; !ok || v != "VFINX,PRIDX" {
-		t.Errorf("expected Classic=VFINX,PRIDX, got %q", v)
-	}
-	if v, ok := p.Suggestions["Modern"]; !ok || v != "SPY,QQQ" {
-		t.Errorf("expected Modern=SPY,QQQ, got %q", v)
-	}
-
-	// Fields without suggest tag should have nil Suggestions.
-	p2 := findParam(params, "lookback")
-	if p2 == nil {
-		t.Fatal("expected parameter 'lookback'")
-	}
-	if p2.Suggestions != nil {
-		t.Errorf("expected nil Suggestions for lookback, got %v", p2.Suggestions)
-	}
-}
-
 func findParam(params []engine.Parameter, name string) *engine.Parameter {
-	for i := range params {
-		if params[i].Name == name {
-			return &params[i]
+	for idx := range params {
+		if params[idx].Name == name {
+			return &params[idx]
 		}
 	}
 	return nil
 }
+
+var _ = Describe("StrategyParameters", func() {
+	It("extracts exported fields with correct metadata", func() {
+		strategy := &paramTestStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		// Should include exported fields only: Lookback, Ticker, RiskOn, Name_, Duration, Enabled, Count, Label = 8
+		Expect(params).To(HaveLen(8))
+
+		lookback := findParam(params, "lookback")
+		Expect(lookback).NotTo(BeNil())
+		Expect(lookback.Description).To(Equal("Lookback in months"))
+		Expect(lookback.Default).To(Equal("6.0"))
+		Expect(lookback.GoType).To(Equal(reflect.TypeOf(float64(0))))
+	})
+
+	It("derives name from field name when pvbt tag is missing", func() {
+		strategy := &paramTestStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		nameParam := findParam(params, "name_")
+		Expect(nameParam).NotTo(BeNil())
+		Expect(nameParam.FieldName).To(Equal("Name_"))
+	})
+
+	It("parses suggest tags into a suggestions map", func() {
+		strategy := &paramTestStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		riskOn := findParam(params, "riskOn")
+		Expect(riskOn).NotTo(BeNil())
+		Expect(riskOn.Suggestions).To(HaveLen(2))
+		Expect(riskOn.Suggestions["Classic"]).To(Equal("VFINX,PRIDX"))
+		Expect(riskOn.Suggestions["Modern"]).To(Equal("SPY,QQQ"))
+	})
+
+	It("leaves suggestions nil when no suggest tag is present", func() {
+		strategy := &paramTestStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		lookback := findParam(params, "lookback")
+		Expect(lookback).NotTo(BeNil())
+		Expect(lookback.Suggestions).To(BeNil())
+	})
+})
