@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
 // Broker is the interface between the portfolio and a brokerage. When a
@@ -38,23 +39,23 @@ type Broker interface {
 	// Submit sends an order to the brokerage and returns one or more fill
 	// reports. Large orders may be filled in multiple lots at different
 	// prices.
-	Submit(order Order) ([]Fill, error)
+	Submit(ctx context.Context, order Order) ([]Fill, error)
 
 	// Cancel requests cancellation of an open order by ID.
-	Cancel(orderID string) error
+	Cancel(ctx context.Context, orderID string) error
 
 	// Replace cancels an existing order and submits a replacement atomically
 	// (cancel-replace). Returns one or more fills for the replacement order.
-	Replace(orderID string, order Order) ([]Fill, error)
+	Replace(ctx context.Context, orderID string, order Order) ([]Fill, error)
 
 	// Orders returns all orders for the current trading day.
-	Orders() ([]Order, error)
+	Orders(ctx context.Context) ([]Order, error)
 
 	// Positions returns all current positions in the account.
-	Positions() ([]Position, error)
+	Positions(ctx context.Context) ([]Position, error)
 
 	// Balance returns the current account balance.
-	Balance() (Balance, error)
+	Balance(ctx context.Context) (Balance, error)
 }
 
 // Side indicates a buy or sell direction at the broker level.
@@ -65,12 +66,27 @@ const (
 	Sell
 )
 
+// OrderStatus tracks the lifecycle state of an order.
+type OrderStatus int
+
+const (
+	OrderOpen OrderStatus = iota
+	OrderSubmitted
+	OrderFilled
+	OrderPartiallyFilled
+	OrderCancelled
+)
+
 // Order represents an order submitted to a broker.
+// When Qty is 0 and Amount > 0, the broker treats it as a dollar-amount
+// order and computes the share quantity from the current market price.
 type Order struct {
 	ID          string
 	Asset       asset.Asset
 	Side        Side
+	Status      OrderStatus
 	Qty         float64
+	Amount      float64
 	OrderType   OrderType
 	TimeInForce TimeInForce
 	LimitPrice  float64
@@ -124,4 +140,11 @@ type Balance struct {
 	NetLiquidatingValue float64
 	EquityBuyingPower   float64
 	MaintenanceReq      float64
+}
+
+// PriceProvider supplies current market prices. The engine implements
+// this interface; the simulated broker uses it to determine fill prices
+// and convert dollar-amount orders to share quantities.
+type PriceProvider interface {
+	Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error)
 }
