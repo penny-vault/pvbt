@@ -103,11 +103,11 @@ func (u *indexUniverse) Prefetch(ctx context.Context, start, end time.Time) erro
 	return nil
 }
 
-func (u *indexUniverse) Window(_ portfolio.Period, _ ...data.Metric) (*data.DataFrame, error) {
+func (u *indexUniverse) Window(_ context.Context, _ portfolio.Period, _ ...data.Metric) (*data.DataFrame, error) {
 	return nil, fmt.Errorf("indexUniverse has no data source; was it created via engine.Universe()?")
 }
 
-func (u *indexUniverse) At(_ time.Time, _ ...data.Metric) (*data.DataFrame, error) {
+func (u *indexUniverse) At(_ context.Context, _ time.Time, _ ...data.Metric) (*data.DataFrame, error) {
 	return nil, fmt.Errorf("indexUniverse has no data source; was it created via engine.Universe()?")
 }
 
