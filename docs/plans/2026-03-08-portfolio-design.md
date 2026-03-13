@@ -145,15 +145,22 @@ These are helper methods on Account or free functions used by metrics:
 **Return metrics:**
 - TWRR: compound sub-period returns from equity curve
 - MWRR: XIRR on cash flows (deposits, withdrawals) and ending value
+- CAGR: annualized return accounting for compounding
 - ActiveReturn: portfolio return minus benchmark return
 
 **Risk-adjusted ratios:**
 - Sharpe: mean excess return / std dev of excess returns, annualized
 - Sortino: mean excess return / downside deviation, annualized
+- SmartSharpe: Sharpe corrected for return autocorrelation via Lo (2002) penalty
+- SmartSortino: Sortino corrected for return autocorrelation via Lo (2002) penalty
+- ProbabilisticSharpe: P(true Sharpe > 0) accounting for skew/kurtosis (Bailey & Lopez de Prado 2012)
 - Calmar: CAGR / max drawdown
 - Treynor: excess return / beta
 - InformationRatio: mean active return / tracking error, annualized
-- KRatio: slope of log-VAMI regression / (N * std error of slope)
+- OmegaRatio: probability-weighted gains / losses (captures full distribution)
+- RecoveryFactor: total return / max drawdown
+- GainToPainRatio: sum(returns) / abs(sum(negative returns)) -- Schwager
+- KRatio: slope of log-VAMI regression / std error of slope
 - KellerRatio: R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0
 
 **Risk and volatility:**
@@ -164,10 +171,13 @@ These are helper methods on Account or free functions used by metrics:
 - TrackingError: std dev of active returns
 - UlcerIndex: sqrt(mean of squared percentage drawdowns), 14-day lookback
 - ValueAtRisk: percentile-based at 95% confidence
+- CVaR: average loss in worst 5% of periods (Expected Shortfall)
+- TailRatio: 95th percentile return / abs(5th percentile return)
 
 **Drawdown:**
 - MaxDrawdown: largest peak-to-trough decline
-- AvgDrawdown: mean of all drawdown magnitudes
+- AvgDrawdown: mean of all drawdown values across equity curve
+- AvgDrawdownDays: mean duration of drawdown episodes in trading days
 
 **Distribution:**
 - ExcessKurtosis: kurtosis - 3
@@ -181,6 +191,10 @@ These are helper methods on Account or free functions used by metrics:
 **Win/loss:**
 - NPositivePeriods: percentage of periods with positive returns
 - GainLossRatio: average gain / average loss
+- KellyCriterion: W - (1-W)/R optimal capital allocation fraction
+- ConsecutiveWins: longest streak of consecutive positive-return periods
+- ConsecutiveLosses: longest streak of consecutive negative-return periods
+- Exposure: fraction of periods with non-zero returns (time in market)
 
 **Withdrawal rates:**
 - SafeWithdrawalRate: Monte Carlo, max rate where balance never hits zero

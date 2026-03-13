@@ -251,6 +251,8 @@ The specifics of risk control configuration are outside the strategy API. Strate
 
 The portfolio tracks its own history and can compute performance metrics over any window. Each metric is a type that implements the `PerformanceMetric` interface, and new metrics can be defined by anyone.
 
+Portfolio metrics operate on the returns and transactions of a specific portfolio. The same metric (e.g. `Sharpe` or `MaxDrawdown`) will produce different values for different portfolios because each portfolio has its own equity curve shaped by its particular trades, cash flows, and timing. This is the key distinction from signals (see [Data - Signals](data.md#signals)), which operate on market data like prices and economic indicators and produce the same output regardless of portfolio state.
+
 ### Individual metrics
 
 Use `PerformanceMetric` to query a single metric. It returns a `PerformanceMetricQuery` builder with optional `Window` and then `Value` (scalar) or `Series` (rolling `[]float64`):
