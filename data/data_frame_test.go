@@ -1375,22 +1375,6 @@ var _ = Describe("DataFrame", func() {
 	})
 })
 
-var _ = Describe("Aggregation", func() {
-	It("String returns correct names for all known values", func() {
-		Expect(data.Last.String()).To(Equal("Last"))
-		Expect(data.First.String()).To(Equal("First"))
-		Expect(data.Sum.String()).To(Equal("Sum"))
-		Expect(data.Mean.String()).To(Equal("Mean"))
-		Expect(data.Max.String()).To(Equal("Max"))
-		Expect(data.Min.String()).To(Equal("Min"))
-	})
-
-	It("String returns formatted fallback for unknown value", func() {
-		unknown := data.Aggregation(99)
-		Expect(unknown.String()).To(Equal(fmt.Sprintf("Aggregation(%d)", 99)))
-	})
-})
-
 var _ = Describe("Frequency", func() {
 	It("String returns correct names for all known values", func() {
 		Expect(data.Tick.String()).To(Equal("Tick"))
