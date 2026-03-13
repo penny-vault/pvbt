@@ -13,17 +13,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package engine
+package engine_test
 
 import (
-	"testing"
+	"context"
+	"fmt"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 )
 
-type hydrateTarget struct {
+// hydrateStrategy has default-tagged fields that the engine should hydrate
+// before Setup is called. Compute records field values for assertion.
+type hydrateStrategy struct {
 	FloatVal    float64           `default:"3.14"`
 	IntVal      int               `default:"42"`
 	StringVal   string            `default:"hello"`
@@ -31,81 +41,71 @@ type hydrateTarget struct {
 	DurationVal time.Duration     `default:"5m"`
 	AssetVal    asset.Asset       `default:"AAPL"`
 	UniverseVal universe.Universe `default:"AAPL,GOOG"`
-	NoDefault   float64
-	PreSet      float64 `default:"99.0"`
+	PreSet      float64           `default:"99.0"`
+
+	// captured during Compute for assertions
+	computeCalled bool
 }
 
-func TestHydrateScalarFields(t *testing.T) {
-	target := &hydrateTarget{PreSet: 1.0}
+func (s *hydrateStrategy) Name() string { return "hydrateStrategy" }
 
-	e := &Engine{
-		assets: map[string]asset.Asset{
-			"AAPL": {CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"},
-			"GOOG": {CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"},
-		},
+func (s *hydrateStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("hydrateStrategy.Setup: %v", err))
 	}
-
-	hydrateFields(e, target)
-
-	if target.FloatVal != 3.14 {
-		t.Errorf("FloatVal: expected 3.14, got %f", target.FloatVal)
-	}
-	if target.IntVal != 42 {
-		t.Errorf("IntVal: expected 42, got %d", target.IntVal)
-	}
-	if target.StringVal != "hello" {
-		t.Errorf("StringVal: expected 'hello', got %q", target.StringVal)
-	}
-	if target.BoolVal != true {
-		t.Errorf("BoolVal: expected true, got %v", target.BoolVal)
-	}
-	if target.DurationVal != 5*time.Minute {
-		t.Errorf("DurationVal: expected 5m, got %v", target.DurationVal)
-	}
-	if target.NoDefault != 0 {
-		t.Errorf("NoDefault: expected 0, got %f", target.NoDefault)
-	}
-	// PreSet should NOT be overwritten.
-	if target.PreSet != 1.0 {
-		t.Errorf("PreSet: expected 1.0 (not overwritten), got %f", target.PreSet)
-	}
+	eng.Schedule(tc)
 }
 
-func TestHydrateAssetField(t *testing.T) {
-	target := &hydrateTarget{}
-	e := &Engine{
-		assets: map[string]asset.Asset{
-			"AAPL": {CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"},
-			"GOOG": {CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"},
-		},
-	}
-
-	hydrateFields(e, target)
-
-	if target.AssetVal.CompositeFigi != "FIGI-AAPL" {
-		t.Errorf("AssetVal: expected FIGI-AAPL, got %q", target.AssetVal.CompositeFigi)
-	}
+func (s *hydrateStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {
+	s.computeCalled = true
 }
 
-func TestHydrateUniverseField(t *testing.T) {
-	target := &hydrateTarget{}
-	e := &Engine{
-		assets: map[string]asset.Asset{
-			"AAPL": {CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"},
-			"GOOG": {CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"},
-		},
-	}
+var _ = Describe("Hydration", func() {
+	var (
+		aapl          asset.Asset
+		goog          asset.Asset
+		assetProvider *mockAssetProvider
+	)
 
-	hydrateFields(e, target)
+	BeforeEach(func() {
+		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		goog = asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
+		assetProvider = &mockAssetProvider{assets: []asset.Asset{aapl, goog}}
+	})
 
-	if target.UniverseVal == nil {
-		t.Fatal("UniverseVal should not be nil")
-	}
-	members := target.UniverseVal.Assets(time.Now())
-	if len(members) != 2 {
-		t.Fatalf("expected 2 members, got %d", len(members))
-	}
-	if members[0].CompositeFigi != "FIGI-AAPL" {
-		t.Errorf("first member: expected FIGI-AAPL, got %q", members[0].CompositeFigi)
-	}
-}
+	It("populates default-tagged fields before Compute runs", func() {
+		metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		df := makeDailyTestData(dataStart, 90, []asset.Asset{aapl, goog}, metrics)
+		provider := data.NewTestProvider(metrics, df)
+
+		strategy := &hydrateStrategy{PreSet: 1.0}
+		eng := engine.New(strategy,
+			engine.WithDataProvider(provider),
+			engine.WithAssetProvider(assetProvider),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+		end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
+
+		_, err := eng.Backtest(context.Background(), start, end)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.computeCalled).To(BeTrue())
+
+		Expect(strategy.FloatVal).To(Equal(3.14))
+		Expect(strategy.IntVal).To(Equal(42))
+		Expect(strategy.StringVal).To(Equal("hello"))
+		Expect(strategy.BoolVal).To(BeTrue())
+		Expect(strategy.DurationVal).To(Equal(5 * time.Minute))
+		Expect(strategy.AssetVal.CompositeFigi).To(Equal("FIGI-AAPL"))
+		Expect(strategy.UniverseVal).NotTo(BeNil())
+
+		members := strategy.UniverseVal.Assets(time.Now())
+		Expect(members).To(HaveLen(2))
+
+		// PreSet should NOT be overwritten since it was non-zero.
+		Expect(strategy.PreSet).To(Equal(1.0))
+	})
+})

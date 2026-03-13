@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
@@ -35,14 +36,14 @@ var (
 // from their `default` tags. Fields with non-zero values are not overwritten.
 // asset.Asset fields are resolved via the engine's asset registry.
 // universe.Universe fields are built from comma-separated tickers via e.Universe.
-func hydrateFields(e *Engine, target interface{}) {
+func hydrateFields(e *Engine, target interface{}) error {
 	v := reflect.ValueOf(target)
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
 	t := v.Type()
 	if t.Kind() != reflect.Struct {
-		return
+		return nil
 	}
 
 	for i := 0; i < t.NumField(); i++ {
@@ -81,27 +82,36 @@ func hydrateFields(e *Engine, target interface{}) {
 			fv.Set(reflect.ValueOf(u))
 
 		case field.Type == durationType:
-			if d, err := time.ParseDuration(defaultVal); err == nil {
-				fv.Set(reflect.ValueOf(d))
+			d, err := time.ParseDuration(defaultVal)
+			if err != nil {
+				return fmt.Errorf("hydrate %s.%s: parsing duration %q: %w", t.Name(), field.Name, defaultVal, err)
 			}
+			fv.Set(reflect.ValueOf(d))
 
 		default:
 			switch field.Type.Kind() {
 			case reflect.Float64:
-				if f, err := strconv.ParseFloat(defaultVal, 64); err == nil {
-					fv.SetFloat(f)
+				f, err := strconv.ParseFloat(defaultVal, 64)
+				if err != nil {
+					return fmt.Errorf("hydrate %s.%s: parsing float64 %q: %w", t.Name(), field.Name, defaultVal, err)
 				}
+				fv.SetFloat(f)
 			case reflect.Int:
-				if n, err := strconv.Atoi(defaultVal); err == nil {
-					fv.SetInt(int64(n))
+				n, err := strconv.Atoi(defaultVal)
+				if err != nil {
+					return fmt.Errorf("hydrate %s.%s: parsing int %q: %w", t.Name(), field.Name, defaultVal, err)
 				}
+				fv.SetInt(int64(n))
 			case reflect.String:
 				fv.SetString(defaultVal)
 			case reflect.Bool:
-				if b, err := strconv.ParseBool(defaultVal); err == nil {
-					fv.SetBool(b)
+				b, err := strconv.ParseBool(defaultVal)
+				if err != nil {
+					return fmt.Errorf("hydrate %s.%s: parsing bool %q: %w", t.Name(), field.Name, defaultVal, err)
 				}
+				fv.SetBool(b)
 			}
 		}
 	}
+	return nil
 }
