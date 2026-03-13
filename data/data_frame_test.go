@@ -1242,6 +1242,21 @@ var _ = Describe("DataFrame", func() {
 			Expect(result.ColCount()).To(Equal(0))
 		})
 	})
+
+	Describe("Composite keys", func() {
+		It("CompositeAsset joins two assets with colon separator", func() {
+			spyAsset := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			efaAsset := asset.Asset{CompositeFigi: "EFA", Ticker: "EFA"}
+			result := data.CompositeAsset(spyAsset, efaAsset)
+			Expect(result.CompositeFigi).To(Equal("SPY:EFA"))
+			Expect(result.Ticker).To(Equal("SPY:EFA"))
+		})
+
+		It("CompositeMetric joins two metrics with colon separator", func() {
+			result := data.CompositeMetric(data.Price, data.Volume)
+			Expect(string(result)).To(Equal("Price:Volume"))
+		})
+	})
 })
 
 var _ = Describe("Aggregation", func() {
