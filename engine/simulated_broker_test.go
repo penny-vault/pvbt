@@ -17,80 +17,99 @@ package engine_test
 
 import (
 	"context"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 )
 
-func TestSimulatedBrokerSubmitMarketOrder(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
-	date := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
+// mockPriceProvider implements broker.PriceProvider for tests.
+type mockPriceProvider struct {
+	prices map[asset.Asset]float64
+	date   time.Time
+}
 
-	sb := engine.NewSimulatedBroker()
-	sb.SetPrices(func(a asset.Asset) (float64, bool) {
-		if a.CompositeFigi == "FIGI-AAPL" {
-			return 150.0, true
+func (m *mockPriceProvider) Prices(_ context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
+	times := []time.Time{m.date}
+	metrics := []data.Metric{data.MetricClose}
+	vals := make([]float64, len(assets))
+	for idx, held := range assets {
+		if price, ok := m.prices[held]; ok {
+			vals[idx] = price
 		}
-		return 0, false
-	}, date)
-
-	fills, err := sb.Submit(broker.Order{
-		Asset:     aapl,
-		Side:      broker.Buy,
-		Qty:       100,
-		OrderType: broker.Market,
-	})
-
+	}
+	df, err := data.NewDataFrame(times, assets, metrics, vals)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		return nil, err
 	}
-	if len(fills) != 1 {
-		t.Fatalf("expected 1 fill, got %d", len(fills))
-	}
-	if fills[0].Price != 150.0 {
-		t.Errorf("expected price 150.0, got %f", fills[0].Price)
-	}
-	if fills[0].Qty != 100 {
-		t.Errorf("expected qty 100, got %f", fills[0].Qty)
-	}
-	if !fills[0].FilledAt.Equal(date) {
-		t.Errorf("expected fill at %v, got %v", date, fills[0].FilledAt)
-	}
-}
-
-func TestSimulatedBrokerSubmitUnknownAsset(t *testing.T) {
-	unknown := asset.Asset{CompositeFigi: "FIGI-UNKNOWN", Ticker: "UNKNOWN"}
-	date := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-
-	sb := engine.NewSimulatedBroker()
-	sb.SetPrices(func(_ asset.Asset) (float64, bool) {
-		return 0, false
-	}, date)
-
-	_, err := sb.Submit(broker.Order{
-		Asset:     unknown,
-		Side:      broker.Buy,
-		Qty:       100,
-		OrderType: broker.Market,
-	})
-
-	if err == nil {
-		t.Fatal("expected error for unknown asset")
-	}
-}
-
-func TestSimulatedBrokerConnectClose(t *testing.T) {
-	sb := engine.NewSimulatedBroker()
-	if err := sb.Connect(context.Background()); err != nil {
-		t.Fatalf("Connect should succeed: %v", err)
-	}
-	if err := sb.Close(); err != nil {
-		t.Fatalf("Close should succeed: %v", err)
-	}
+	return df, nil
 }
 
 // Compile-time interface check.
 var _ broker.Broker = (*engine.SimulatedBroker)(nil)
+
+var _ = Describe("SimulatedBroker", func() {
+	var (
+		aapl asset.Asset
+		date time.Time
+	)
+
+	BeforeEach(func() {
+		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		date = time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
+	})
+
+	Context("Submit", func() {
+		It("fills a market order at the close price", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 150.0},
+				date:   date,
+			}, date)
+
+			fills, err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       100,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fills).To(HaveLen(1))
+			Expect(fills[0].Price).To(Equal(150.0))
+			Expect(fills[0].Qty).To(Equal(100.0))
+			Expect(fills[0].FilledAt).To(Equal(date))
+		})
+
+		It("returns an error for an asset with no price", func() {
+			unknown := asset.Asset{CompositeFigi: "FIGI-UNKNOWN", Ticker: "UNKNOWN"}
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{},
+				date:   date,
+			}, date)
+
+			_, err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     unknown,
+				Side:      broker.Buy,
+				Qty:       100,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
+	Context("Connect and Close", func() {
+		It("succeeds without error", func() {
+			simBroker := engine.NewSimulatedBroker()
+			Expect(simBroker.Connect(context.Background())).To(Succeed())
+			Expect(simBroker.Close()).To(Succeed())
+		})
+	})
+})
