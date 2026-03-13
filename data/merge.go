@@ -77,9 +77,23 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 		return frames[0], nil
 	}
 
+	// Filter out empty frames.
+	nonEmpty := make([]*DataFrame, 0, len(frames))
+	for _, f := range frames {
+		if f.Len() > 0 {
+			nonEmpty = append(nonEmpty, f)
+		}
+	}
+	if len(nonEmpty) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil), nil
+	}
+	if len(nonEmpty) == 1 {
+		return nonEmpty[0], nil
+	}
+
 	// Sort frames by start time.
-	sorted := make([]*DataFrame, len(frames))
-	copy(sorted, frames)
+	sorted := make([]*DataFrame, len(nonEmpty))
+	copy(sorted, nonEmpty)
 	sort.Slice(sorted, func(i, j int) bool {
 		return sorted[i].Start().Before(sorted[j].Start())
 	})
