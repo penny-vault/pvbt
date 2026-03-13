@@ -118,6 +118,21 @@ func (df *DataFrame) colSlice(aIdx, mIdx int) []float64 {
 	return df.data[off : off+len(df.times)]
 }
 
+// CompositeAsset creates an asset representing a pair, with fields
+// joined by ":". Used by Covariance for multi-asset results.
+func CompositeAsset(a, b asset.Asset) asset.Asset {
+	return asset.Asset{
+		CompositeFigi: a.CompositeFigi + ":" + b.CompositeFigi,
+		Ticker:        a.Ticker + ":" + b.Ticker,
+	}
+}
+
+// CompositeMetric creates a metric representing a pair, joined by ":".
+// Used by Covariance for cross-metric results.
+func CompositeMetric(a, b Metric) Metric {
+	return Metric(string(a) + ":" + string(b))
+}
+
 // -- Accessors ---------------------------------------------------------------
 
 // Start returns the earliest timestamp in the frame. Returns the zero
