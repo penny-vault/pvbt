@@ -63,15 +63,7 @@ func windowSlice(series []float64, times []time.Time, window *Period) []float64 
 
 	last := times[len(times)-1]
 
-	var cutoff time.Time
-	switch window.Unit {
-	case UnitDay:
-		cutoff = last.AddDate(0, 0, -window.N)
-	case UnitMonth:
-		cutoff = last.AddDate(0, -window.N, 0)
-	case UnitYear:
-		cutoff = last.AddDate(-window.N, 0, 0)
-	}
+	cutoff := periodCutoff(last, window)
 
 	for i, t := range times {
 		if !t.Before(cutoff) {
@@ -157,16 +149,7 @@ func windowSliceTimes(times []time.Time, window *Period) []time.Time {
 	}
 
 	last := times[len(times)-1]
-
-	var cutoff time.Time
-	switch window.Unit {
-	case UnitDay:
-		cutoff = last.AddDate(0, 0, -window.N)
-	case UnitMonth:
-		cutoff = last.AddDate(0, -window.N, 0)
-	case UnitYear:
-		cutoff = last.AddDate(-window.N, 0, 0)
-	}
+	cutoff := periodCutoff(last, window)
 
 	for i, t := range times {
 		if !t.Before(cutoff) {
@@ -175,6 +158,31 @@ func windowSliceTimes(times []time.Time, window *Period) []time.Time {
 	}
 
 	return times
+}
+
+// periodCutoff computes the start date for a given period relative to last.
+func periodCutoff(last time.Time, window *Period) time.Time {
+	switch window.Unit {
+	case UnitDay:
+		return last.AddDate(0, 0, -window.N)
+	case UnitMonth:
+		return last.AddDate(0, -window.N, 0)
+	case UnitYear:
+		return last.AddDate(-window.N, 0, 0)
+	case UnitYTD:
+		return time.Date(last.Year(), 1, 1, 0, 0, 0, 0, last.Location())
+	case UnitMTD:
+		return time.Date(last.Year(), last.Month(), 1, 0, 0, 0, 0, last.Location())
+	case UnitWTD:
+		// Find most recent Monday.
+		offset := int(last.Weekday()) - int(time.Monday)
+		if offset < 0 {
+			offset += 7
+		}
+		return last.AddDate(0, 0, -offset)
+	default:
+		return last
+	}
 }
 
 // annualizationFactor estimates the number of periods per year from timestamps.
