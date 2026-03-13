@@ -1103,6 +1103,12 @@ func (df *DataFrame) Shift(n int) *DataFrame {
 
 // -- Resampling --------------------------------------------------------------
 
+// Downsample returns a DownsampledDataFrame that aggregates values when
+// converting to a lower frequency.
+func (df *DataFrame) Downsample(freq Frequency) *DownsampledDataFrame {
+	return &DownsampledDataFrame{df: df, freq: freq}
+}
+
 // Resample converts the DataFrame to a lower frequency by aggregating
 // values within each period using the specified method.
 func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {
