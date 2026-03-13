@@ -48,6 +48,7 @@ type Account struct {
 	benchmark       asset.Asset
 	riskFree        asset.Asset
 	taxLots         map[asset.Asset][]TaxLot
+	metadata        map[string]string
 }
 
 // New creates an Account with the given options.
@@ -55,6 +56,7 @@ func New(opts ...Option) *Account {
 	a := &Account{
 		holdings: make(map[asset.Asset]float64),
 		taxLots:  make(map[asset.Asset][]TaxLot),
+		metadata: make(map[string]string),
 	}
 	for _, opt := range opts {
 		opt(a)
