@@ -30,10 +30,10 @@ import (
 // RunLive starts continuous live trading execution. It performs the same
 // initialization as Backtest (loading assets, hydrating fields, building
 // provider routing, calling Setup), then launches a goroutine that fires on
-// each scheduled time. The returned channel receives the account pointer after
+// each scheduled time. The returned channel receives the portfolio after
 // each step; sends are non-blocking so a slow consumer does not block the loop.
 // Cancel the context to stop execution and close the channel.
-func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *portfolio.Account, error) {
+func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error) {
 	// PHASE 1: INITIALIZATION
 
 	// 1. Load asset registry from assetProvider.
@@ -49,7 +49,9 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 	}
 
 	// 2. Hydrate strategy fields from default tags.
-	hydrateFields(e, e.strategy)
+	if err := hydrateFields(e, e.strategy); err != nil {
+		return nil, fmt.Errorf("engine: %w", err)
+	}
 
 	// 3. Build provider routing table.
 	if err := e.buildProviderRouting(); err != nil {
@@ -63,16 +65,22 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
 	}
-	if !acct.HasBroker() {
-		return nil, fmt.Errorf("engine: RunLive requires a broker on the account")
+
+	// 6. Create and configure account.
+	acct := e.createAccount()
+	if e.benchmark != (asset.Asset{}) {
+		acct.SetBenchmark(e.benchmark)
+	}
+	if e.riskFree != (asset.Asset{}) {
+		acct.SetRiskFree(e.riskFree)
 	}
 
-	// 6. Initialize data cache.
+	// 7. Initialize data cache.
 	e.cache = newDataCache(e.cacheMaxBytes, e.cacheChunkSize)
 
 	// PHASE 2: GOROUTINE
 
-	ch := make(chan *portfolio.Account, 1)
+	ch := make(chan portfolio.Portfolio, 1)
 
 	go func() {
 		defer close(ch)
@@ -152,9 +160,9 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 				}
 			}
 
-			// g. Set prices before Compute without updating the equity curve.
-			if housekeepDF != nil {
-				acct.SetPriceData(housekeepDF.Between(e.currentDate, e.currentDate))
+			// g. Update simulated broker with price provider if applicable.
+			if sb, ok := e.broker.(*SimulatedBroker); ok {
+				sb.SetPriceProvider(e, e.currentDate)
 			}
 
 			// h. Call strategy.Compute.
@@ -181,7 +189,7 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 				}
 			}
 
-			// j. Non-blocking send of updated account.
+			// j. Non-blocking send of updated portfolio.
 			select {
 			case ch <- acct:
 			default:
@@ -189,6 +197,5 @@ func (e *Engine) RunLive(ctx context.Context, acct *portfolio.Account) (<-chan *
 		}
 	}()
 
-	// 9. Return channel immediately.
 	return ch, nil
 }

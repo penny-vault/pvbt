@@ -17,9 +17,10 @@ package engine_test
 
 import (
 	"context"
-	"strings"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
@@ -33,110 +34,61 @@ type liveStrategy struct{}
 
 func (s *liveStrategy) Name() string { return "liveStrategy" }
 
-func (s *liveStrategy) Setup(e *engine.Engine) {
+func (s *liveStrategy) Setup(eng *engine.Engine) {
 	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
 	if err != nil {
 		panic("liveStrategy.Setup: " + err.Error())
 	}
-	e.Schedule(tc)
+	eng.Schedule(tc)
 }
 
 func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
 
-// TestRunLiveContextCancel verifies that RunLive returns a channel and no error,
-// and that the channel is closed when the context is cancelled.
-func TestRunLiveContextCancel(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
-	assets := []asset.Asset{aapl}
+var _ = Describe("RunLive", func() {
+	Context("context cancellation", func() {
+		It("closes the channel when the context is cancelled", func() {
+			aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+			testAssets := []asset.Asset{aapl}
 
-	dataStart := time.Now().AddDate(0, 0, -30)
-	metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
-	df := makeDailyTestData(t, dataStart, 60, assets, metrics)
-	provider := data.NewTestProvider(metrics, df)
+			dataStart := time.Now().AddDate(0, 0, -30)
+			metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+			df := makeDailyTestData(dataStart, 60, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+			assetProvider := &mockAssetProvider{assets: testAssets}
 
-	assetProvider := &mockAssetProvider{assets: assets}
-	strategy := &liveStrategy{}
+			eng := engine.New(&liveStrategy{},
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
 
-	eng := engine.New(strategy,
-		engine.WithDataProvider(provider),
-		engine.WithAssetProvider(assetProvider),
-	)
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
 
-	broker := engine.NewSimulatedBroker()
-	acct := portfolio.New(
-		portfolio.WithCash(100_000.0),
-		portfolio.WithBroker(broker),
-	)
+			ch, err := eng.RunLive(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ch).NotTo(BeNil())
 
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
-	defer cancel()
+			// Drain the channel until it is closed (context timeout triggers close).
+			for range ch {
+			}
+			// Reaching here means the channel was closed without panicking.
+		})
+	})
 
-	ch, err := eng.RunLive(ctx, acct)
-	if err != nil {
-		t.Fatalf("RunLive returned unexpected error: %v", err)
-	}
-	if ch == nil {
-		t.Fatal("RunLive returned nil channel")
-	}
+	Context("validation", func() {
+		It("returns an error when no schedule is set", func() {
+			aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+			assetProvider := &mockAssetProvider{assets: []asset.Asset{aapl}}
 
-	// Drain the channel until it is closed (context timeout triggers close).
-	for range ch {
-	}
-	// Reaching here means the channel was closed without panicking.
-}
+			eng := engine.New(&noScheduleStrategy{},
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
 
-// TestRunLiveNoBroker verifies that RunLive returns an error when the account
-// has no broker set.
-func TestRunLiveNoBroker(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
-	assets := []asset.Asset{aapl}
-
-	dataStart := time.Now().AddDate(0, 0, -30)
-	metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
-	df := makeDailyTestData(t, dataStart, 60, assets, metrics)
-	provider := data.NewTestProvider(metrics, df)
-
-	assetProvider := &mockAssetProvider{assets: assets}
-	strategy := &liveStrategy{}
-
-	eng := engine.New(strategy,
-		engine.WithDataProvider(provider),
-		engine.WithAssetProvider(assetProvider),
-	)
-
-	// Account without a broker.
-	acct := portfolio.New(portfolio.WithCash(100_000.0))
-
-	_, err := eng.RunLive(context.Background(), acct)
-	if err == nil {
-		t.Fatal("expected error for account with no broker, got nil")
-	}
-	if !strings.Contains(err.Error(), "broker") {
-		t.Errorf("expected error message to mention broker, got: %v", err)
-	}
-}
-
-// TestRunLiveNoSchedule verifies that RunLive returns an error when the
-// strategy does not set a schedule during Setup.
-func TestRunLiveNoSchedule(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
-	assets := []asset.Asset{aapl}
-	assetProvider := &mockAssetProvider{assets: assets}
-	strategy := &noScheduleStrategy{}
-
-	eng := engine.New(strategy, engine.WithAssetProvider(assetProvider))
-
-	broker := engine.NewSimulatedBroker()
-	acct := portfolio.New(
-		portfolio.WithCash(100_000.0),
-		portfolio.WithBroker(broker),
-	)
-
-	_, err := eng.RunLive(context.Background(), acct)
-	if err == nil {
-		t.Fatal("expected error for missing schedule, got nil")
-	}
-	if !strings.Contains(err.Error(), "schedule") {
-		t.Errorf("expected error message to mention schedule, got: %v", err)
-	}
-}
+			_, err := eng.RunLive(context.Background())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("schedule"))
+		})
+	})
+})
