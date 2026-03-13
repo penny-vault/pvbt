@@ -80,21 +80,56 @@ func TestDataCachePutGet(t *testing.T) {
 
 func TestDataCacheEvictBefore(t *testing.T) {
 	c := newDataCache(0)
+	key2023 := colCacheKey{figi: "FIGI-A", metric: "close", chunkStart: chunkStartFor(time.Date(2023, 6, 1, 0, 0, 0, 0, nyc))}
 	key2024 := colCacheKey{figi: "FIGI-A", metric: "close", chunkStart: chunkStartFor(time.Date(2024, 6, 1, 0, 0, 0, 0, nyc))}
 	key2025 := colCacheKey{figi: "FIGI-A", metric: "close", chunkStart: chunkStartFor(time.Date(2025, 6, 1, 0, 0, 0, 0, nyc))}
 	entry := &colCacheEntry{times: []time.Time{}, values: []float64{}}
+	c.put(key2023, entry)
 	c.put(key2024, entry)
 	c.put(key2025, entry)
 
-	// Evict before a 2025 date: should remove 2024, keep 2025.
+	// Evict before a 2025 date: should remove 2023, keep 2024 and 2025.
+	// Previous year is kept because lookbacks commonly span year boundaries.
 	c.evictBefore(time.Date(2025, 3, 1, 0, 0, 0, 0, nyc))
+	_, ok2023 := c.get(key2023)
 	_, ok2024 := c.get(key2024)
 	_, ok2025 := c.get(key2025)
-	if ok2024 {
-		t.Error("expected 2024 entry to be evicted")
+	if ok2023 {
+		t.Error("expected 2023 entry to be evicted")
+	}
+	if !ok2024 {
+		t.Error("expected 2024 entry to remain (previous year)")
 	}
 	if !ok2025 {
 		t.Error("expected 2025 entry to remain")
+	}
+}
+
+func TestAssemblyHeterogeneousTimeAxes(t *testing.T) {
+	c := newDataCache(0)
+	yr := chunkStartFor(time.Date(2025, 1, 1, 0, 0, 0, 0, nyc))
+
+	// Daily close: 3 days
+	dailyTimes := []time.Time{
+		time.Date(2025, 1, 2, 16, 0, 0, 0, nyc),
+		time.Date(2025, 1, 3, 16, 0, 0, 0, nyc),
+		time.Date(2025, 1, 6, 16, 0, 0, 0, nyc),
+	}
+	c.put(colCacheKey{figi: "FIGI-A", metric: "close", chunkStart: yr},
+		&colCacheEntry{times: dailyTimes, values: []float64{100, 101, 102}})
+
+	// Quarterly revenue: only 1 date overlapping
+	quarterlyTimes := []time.Time{
+		time.Date(2025, 1, 3, 16, 0, 0, 0, nyc),
+	}
+	c.put(colCacheKey{figi: "FIGI-A", metric: "revenue", chunkStart: yr},
+		&colCacheEntry{times: quarterlyTimes, values: []float64{5000}})
+
+	// Verify both entries are cached.
+	_, ok1 := c.get(colCacheKey{figi: "FIGI-A", metric: "close", chunkStart: yr})
+	_, ok2 := c.get(colCacheKey{figi: "FIGI-A", metric: "revenue", chunkStart: yr})
+	if !ok1 || !ok2 {
+		t.Fatal("expected both entries to be cached")
 	}
 }
 

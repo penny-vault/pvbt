@@ -77,12 +77,14 @@ func (c *dataCache) put(key colCacheKey, entry *colCacheEntry) {
 	c.curBytes += sz
 }
 
-// evictBefore removes all entries whose chunk year ends before t.
+// evictBefore removes all entries whose chunk year is more than one year
+// before t. We keep the previous year because lookback windows commonly
+// span across year boundaries.
 func (c *dataCache) evictBefore(t time.Time) {
 	year := t.In(nyc).Year()
 	for key, entry := range c.entries {
 		chunkYear := time.Unix(key.chunkStart, 0).In(nyc).Year()
-		if chunkYear < year {
+		if chunkYear < year-1 {
 			c.curBytes -= estimateEntryBytes(entry)
 			delete(c.entries, key)
 		}

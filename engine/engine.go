@@ -320,19 +320,30 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		}
 
 		// Decompose the DataFrame into individual columns and cache them.
+		// For empty results, cache empty entries so we don't re-fetch.
 		dfTimes := df.Times()
-		for _, a := range df.AssetList() {
-			for _, m := range df.MetricList() {
-				col := df.Column(a, m)
-				if col == nil {
-					continue
+		if len(dfTimes) == 0 {
+			empty := &colCacheEntry{}
+			for _, a := range missAssets {
+				for _, m := range missMetrics {
+					key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+					e.cache.put(key, empty)
 				}
-				colCopy := make([]float64, len(col))
-				copy(colCopy, col)
-				timesCopy := make([]time.Time, len(dfTimes))
-				copy(timesCopy, dfTimes)
-				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
-				e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
+			}
+		} else {
+			for _, a := range df.AssetList() {
+				for _, m := range df.MetricList() {
+					col := df.Column(a, m)
+					if col == nil {
+						continue
+					}
+					colCopy := make([]float64, len(col))
+					copy(colCopy, col)
+					timesCopy := make([]time.Time, len(dfTimes))
+					copy(timesCopy, dfTimes)
+					key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+					e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
+				}
 			}
 		}
 	}
