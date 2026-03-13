@@ -717,9 +717,10 @@ func (df *DataFrame) DivScalar(f float64) *DataFrame {
 
 // -- Aggregation across assets per timestamp ---------------------------------
 
-// Max returns a new DataFrame with the maximum value across all assets for
-// each timestamp and metric.
-func (df *DataFrame) Max() *DataFrame {
+// MaxAcrossAssets returns a new DataFrame with the maximum value across all
+// assets for each timestamp and metric. The result has a single synthetic
+// asset with Ticker "MAX".
+func (df *DataFrame) MaxAcrossAssets() *DataFrame {
 	timeLen := len(df.times)
 	metricLen := len(df.metrics)
 	assetLen := len(df.assets)
@@ -753,9 +754,10 @@ func (df *DataFrame) Max() *DataFrame {
 	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
 }
 
-// Min returns a new DataFrame with the minimum value across all assets for
-// each timestamp and metric.
-func (df *DataFrame) Min() *DataFrame {
+// MinAcrossAssets returns a new DataFrame with the minimum value across all
+// assets for each timestamp and metric. The result has a single synthetic
+// asset with Ticker "MIN".
+func (df *DataFrame) MinAcrossAssets() *DataFrame {
 	timeLen := len(df.times)
 	metricLen := len(df.metrics)
 	assetLen := len(df.assets)
@@ -789,9 +791,9 @@ func (df *DataFrame) Min() *DataFrame {
 	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
 }
 
-// IdxMax returns, for each timestamp, the asset that holds the maximum
-// value for the first metric.
-func (df *DataFrame) IdxMax() []asset.Asset {
+// IdxMaxAcrossAssets returns, for each timestamp, the asset that holds the
+// maximum value for the first metric across all assets.
+func (df *DataFrame) IdxMaxAcrossAssets() []asset.Asset {
 	timeLen := len(df.times)
 	assetLen := len(df.assets)
 
@@ -814,6 +816,49 @@ func (df *DataFrame) IdxMax() []asset.Asset {
 	}
 
 	return result
+}
+
+// -- Column-wise stats (reduce time dimension) ------------------------------
+
+// Mean returns a single-row DataFrame with the arithmetic mean of each
+// column over the time dimension.
+func (df *DataFrame) Mean() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		if len(col) == 0 {
+			return math.NaN()
+		}
+		return stat.Mean(col, nil)
+	})
+}
+
+// Sum returns a single-row DataFrame with the sum of each column over
+// the time dimension.
+func (df *DataFrame) Sum() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		return floats.Sum(col)
+	})
+}
+
+// Max returns a single-row DataFrame with the maximum value of each
+// column over the time dimension.
+func (df *DataFrame) Max() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		if len(col) == 0 {
+			return math.NaN()
+		}
+		return floats.Max(col)
+	})
+}
+
+// Min returns a single-row DataFrame with the minimum value of each
+// column over the time dimension.
+func (df *DataFrame) Min() *DataFrame {
+	return df.Reduce(func(col []float64) float64 {
+		if len(col) == 0 {
+			return math.NaN()
+		}
+		return floats.Min(col)
+	})
 }
 
 // -- Common transforms -------------------------------------------------------

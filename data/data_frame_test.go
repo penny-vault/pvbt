@@ -670,48 +670,48 @@ var _ = Describe("DataFrame", func() {
 	})
 
 	Describe("Aggregation", func() {
-		It("Max returns max across assets per timestamp", func() {
-			maxDF := df.Max()
+		It("MaxAcrossAssets returns max across assets per timestamp", func() {
+			maxDF := df.MaxAcrossAssets()
 			col := maxDF.Column(asset.Asset{Ticker: "MAX"}, data.Price)
 			Expect(col).To(Equal([]float64{200, 202, 204, 206, 208}))
 		})
 
-		It("Min returns min across assets per timestamp", func() {
-			minDF := df.Min()
+		It("MinAcrossAssets returns min across assets per timestamp", func() {
+			minDF := df.MinAcrossAssets()
 			col := minDF.Column(asset.Asset{Ticker: "MIN"}, data.Price)
 			Expect(col).To(Equal([]float64{100, 101, 102, 103, 104}))
 		})
 
-		It("Max on single-asset frame returns same values", func() {
+		It("MaxAcrossAssets on single-asset frame returns same values", func() {
 			single := df.Assets(aapl)
-			maxDF := single.Max()
+			maxDF := single.MaxAcrossAssets()
 			Expect(maxDF.Len()).To(Equal(5))
 			col := maxDF.Column(asset.Asset{Ticker: "MAX"}, data.Price)
 			Expect(col).To(Equal([]float64{100, 101, 102, 103, 104}))
 		})
 
-		It("Min on single-asset frame returns same values", func() {
+		It("MinAcrossAssets on single-asset frame returns same values", func() {
 			single := df.Assets(aapl)
-			minDF := single.Min()
+			minDF := single.MinAcrossAssets()
 			col := minDF.Column(asset.Asset{Ticker: "MIN"}, data.Price)
 			Expect(col).To(Equal([]float64{100, 101, 102, 103, 104}))
 		})
 
-		It("Max/Min aggregates across all metrics", func() {
-			maxDF := df.Max()
+		It("MaxAcrossAssets/MinAcrossAssets aggregates across all metrics", func() {
+			maxDF := df.MaxAcrossAssets()
 			volCol := maxDF.Column(asset.Asset{Ticker: "MAX"}, data.Volume)
 			Expect(volCol).To(Equal([]float64{2000, 2200, 2400, 2600, 2800}))
 		})
 
-		It("IdxMax returns asset with max value per timestamp", func() {
-			result := df.IdxMax()
+		It("IdxMaxAcrossAssets returns asset with max value per timestamp", func() {
+			result := df.IdxMaxAcrossAssets()
 			Expect(result).To(HaveLen(5))
 			for _, a := range result {
 				Expect(a.CompositeFigi).To(Equal("GOOG"))
 			}
 		})
 
-		It("IdxMax with alternating maxes", func() {
+		It("IdxMaxAcrossAssets with alternating maxes", func() {
 			// AAPL > GOOG on even indices, GOOG > AAPL on odd.
 			vals := []float64{
 				10, 1, 10, 1, 10, // AAPL Price
@@ -719,7 +719,7 @@ var _ = Describe("DataFrame", func() {
 			}
 			altDF, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, vals)
 			Expect(err).NotTo(HaveOccurred())
-			result := altDF.IdxMax()
+			result := altDF.IdxMaxAcrossAssets()
 			Expect(result[0].CompositeFigi).To(Equal("AAPL"))
 			Expect(result[1].CompositeFigi).To(Equal("GOOG"))
 			Expect(result[2].CompositeFigi).To(Equal("AAPL"))
@@ -1058,6 +1058,71 @@ var _ = Describe("DataFrame", func() {
 			for _, v := range col {
 				Expect(math.IsNaN(v)).To(BeTrue())
 			}
+		})
+	})
+
+	Describe("Column-wise stats", func() {
+		var statsDF *data.DataFrame
+		var spy, efa asset.Asset
+
+		BeforeEach(func() {
+			spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			efa = asset.Asset{CompositeFigi: "EFA", Ticker: "EFA"}
+			t := []time.Time{
+				time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+			}
+			vals := []float64{1, 2, 3, 4, 10, 20, 30, 40}
+			var err error
+			statsDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, vals)
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Describe("Mean", func() {
+			It("returns single-row DataFrame with mean of each column", func() {
+				result := statsDF.Mean()
+				Expect(result.Len()).To(Equal(1))
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", 2.5, 1e-12))
+				Expect(result.Value(efa, data.Price)).To(BeNumerically("~", 25.0, 1e-12))
+			})
+
+			It("preserves asset and metric dimensions", func() {
+				result := statsDF.Mean()
+				Expect(result.AssetList()).To(HaveLen(2))
+				Expect(result.MetricList()).To(HaveLen(1))
+			})
+
+			It("returns empty DataFrame for empty input", func() {
+				empty, err := data.NewDataFrame(nil, nil, nil, nil)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(empty.Mean().Len()).To(Equal(0))
+			})
+		})
+
+		Describe("Sum", func() {
+			It("returns single-row DataFrame with sum of each column", func() {
+				result := statsDF.Sum()
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", 10.0, 1e-12))
+				Expect(result.Value(efa, data.Price)).To(BeNumerically("~", 100.0, 1e-12))
+			})
+		})
+
+		Describe("Max", func() {
+			It("returns single-row DataFrame with max of each column over time", func() {
+				result := statsDF.Max()
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", 4.0, 1e-12))
+				Expect(result.Value(efa, data.Price)).To(BeNumerically("~", 40.0, 1e-12))
+			})
+		})
+
+		Describe("Min", func() {
+			It("returns single-row DataFrame with min of each column over time", func() {
+				result := statsDF.Min()
+				Expect(result.Value(spy, data.Price)).To(BeNumerically("~", 1.0, 1e-12))
+				Expect(result.Value(efa, data.Price)).To(BeNumerically("~", 10.0, 1e-12))
+			})
 		})
 	})
 
