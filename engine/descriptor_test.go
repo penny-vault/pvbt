@@ -18,7 +18,9 @@ package engine_test
 import (
 	"context"
 	"encoding/json"
-	"testing"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/engine"
@@ -28,19 +30,19 @@ import (
 
 // descriptorStrategy implements both Strategy and Descriptor.
 type descriptorStrategy struct {
-	Lookback int `pvbt:"lookback" desc:"Lookback period" default:"6"`
+	Lookback int    `pvbt:"lookback" desc:"Lookback period" default:"6"`
 	Tickers  string `pvbt:"tickers" desc:"Asset tickers" default:"SPY,QQQ" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
 }
 
-func (s *descriptorStrategy) Name() string                                                      { return "DescriptorTest" }
-func (s *descriptorStrategy) Setup(e *engine.Engine) {
+func (s *descriptorStrategy) Name() string { return "DescriptorTest" }
+func (s *descriptorStrategy) Setup(eng *engine.Engine) {
 	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
 	if err != nil {
 		panic(err)
 	}
-	e.Schedule(tc)
-	e.SetBenchmark(asset.Asset{Ticker: "SPY"})
-	e.RiskFreeAsset(asset.Asset{Ticker: "SHV"})
+	eng.Schedule(tc)
+	eng.SetBenchmark(asset.Asset{Ticker: "SPY"})
+	eng.RiskFreeAsset(asset.Asset{Ticker: "SHV"})
 }
 func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
 func (s *descriptorStrategy) Describe() engine.StrategyDescription {
@@ -57,147 +59,86 @@ type plainStrategy struct {
 	Window int `pvbt:"window" desc:"Rolling window" default:"12"`
 }
 
-func (s *plainStrategy) Name() string                                                      { return "PlainTest" }
-func (s *plainStrategy) Setup(e *engine.Engine) {
+func (s *plainStrategy) Name() string { return "PlainTest" }
+func (s *plainStrategy) Setup(eng *engine.Engine) {
 	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
 	if err != nil {
 		panic(err)
 	}
-	e.Schedule(tc)
+	eng.Schedule(tc)
 }
 func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
 
-func TestDescribeStrategyWithDescriptor(t *testing.T) {
-	s := &descriptorStrategy{}
-	e := engine.New(s)
-	s.Setup(e)
+var _ = Describe("DescribeStrategy", func() {
+	Context("with a Descriptor implementation", func() {
+		It("populates all fields from the descriptor and strategy", func() {
+			strategy := &descriptorStrategy{}
+			eng := engine.New(strategy)
+			strategy.Setup(eng)
 
-	info := engine.DescribeStrategy(e)
+			info := engine.DescribeStrategy(eng)
 
-	if info.Name != "DescriptorTest" {
-		t.Errorf("expected name DescriptorTest, got %q", info.Name)
-	}
-	if info.ShortCode != "dt" {
-		t.Errorf("expected shortcode dt, got %q", info.ShortCode)
-	}
-	if info.Description != "A test strategy with descriptor" {
-		t.Errorf("expected description, got %q", info.Description)
-	}
-	if info.Source != "unit test" {
-		t.Errorf("expected source 'unit test', got %q", info.Source)
-	}
-	if info.Version != "1.0.0" {
-		t.Errorf("expected version 1.0.0, got %q", info.Version)
-	}
-	if info.Schedule != "0 16 * * 1-5" {
-		t.Errorf("expected schedule '0 16 * * 1-5', got %q", info.Schedule)
-	}
-	if info.Benchmark != "SPY" {
-		t.Errorf("expected benchmark SPY, got %q", info.Benchmark)
-	}
-	if info.RiskFree != "SHV" {
-		t.Errorf("expected riskFree SHV, got %q", info.RiskFree)
-	}
+			Expect(info.Name).To(Equal("DescriptorTest"))
+			Expect(info.ShortCode).To(Equal("dt"))
+			Expect(info.Description).To(Equal("A test strategy with descriptor"))
+			Expect(info.Source).To(Equal("unit test"))
+			Expect(info.Version).To(Equal("1.0.0"))
+			Expect(info.Schedule).To(Equal("0 16 * * 1-5"))
+			Expect(info.Benchmark).To(Equal("SPY"))
+			Expect(info.RiskFree).To(Equal("SHV"))
+			Expect(info.Parameters).To(HaveLen(2))
+			Expect(info.Suggestions).To(HaveLen(2))
+			Expect(info.Suggestions["Classic"]["tickers"]).To(Equal("VFINX,PRIDX"))
+		})
 
-	// Check parameters.
-	if len(info.Parameters) != 2 {
-		t.Fatalf("expected 2 parameters, got %d", len(info.Parameters))
-	}
+		It("round-trips through JSON", func() {
+			strategy := &descriptorStrategy{}
+			eng := engine.New(strategy)
+			strategy.Setup(eng)
+			info := engine.DescribeStrategy(eng)
 
-	// Check suggestions are pivoted correctly.
-	if info.Suggestions == nil {
-		t.Fatal("expected suggestions to be populated")
-	}
-	if len(info.Suggestions) != 2 {
-		t.Fatalf("expected 2 suggestion presets, got %d", len(info.Suggestions))
-	}
-	classic, ok := info.Suggestions["Classic"]
-	if !ok {
-		t.Fatal("expected 'Classic' suggestion preset")
-	}
-	if classic["tickers"] != "VFINX,PRIDX" {
-		t.Errorf("expected Classic.tickers=VFINX,PRIDX, got %q", classic["tickers"])
-	}
+			encoded, err := json.Marshal(info)
+			Expect(err).NotTo(HaveOccurred())
 
-	// Verify JSON round-trip.
-	data, err := json.Marshal(info)
-	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
-	}
+			var decoded engine.StrategyInfo
+			Expect(json.Unmarshal(encoded, &decoded)).To(Succeed())
+			Expect(decoded.Name).To(Equal(info.Name))
+			Expect(decoded.ShortCode).To(Equal(info.ShortCode))
+		})
+	})
 
-	var decoded engine.StrategyInfo
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("json.Unmarshal failed: %v", err)
-	}
-	if decoded.Name != info.Name {
-		t.Errorf("round-trip name mismatch: %q vs %q", decoded.Name, info.Name)
-	}
-	if decoded.ShortCode != info.ShortCode {
-		t.Errorf("round-trip shortcode mismatch: %q vs %q", decoded.ShortCode, info.ShortCode)
-	}
-}
+	Context("without a Descriptor implementation", func() {
+		It("uses defaults for missing descriptor fields", func() {
+			strategy := &plainStrategy{}
+			eng := engine.New(strategy)
+			strategy.Setup(eng)
 
-func TestDescribeStrategyWithoutDescriptor(t *testing.T) {
-	s := &plainStrategy{}
-	e := engine.New(s)
-	s.Setup(e)
+			info := engine.DescribeStrategy(eng)
 
-	info := engine.DescribeStrategy(e)
+			Expect(info.Name).To(Equal("PlainTest"))
+			Expect(info.ShortCode).To(BeEmpty())
+			Expect(info.Description).To(BeEmpty())
+			Expect(info.Benchmark).To(BeEmpty())
+			Expect(info.RiskFree).To(BeEmpty())
+			Expect(info.Suggestions).To(BeNil())
+			Expect(info.Parameters).To(HaveLen(1))
+			Expect(info.Parameters[0].Name).To(Equal("window"))
+			Expect(info.Parameters[0].Type).To(Equal("int"))
+		})
 
-	if info.Name != "PlainTest" {
-		t.Errorf("expected name PlainTest, got %q", info.Name)
-	}
-	if info.ShortCode != "" {
-		t.Errorf("expected empty shortcode, got %q", info.ShortCode)
-	}
-	if info.Description != "" {
-		t.Errorf("expected empty description, got %q", info.Description)
-	}
-	if info.Benchmark != "" {
-		t.Errorf("expected empty benchmark, got %q", info.Benchmark)
-	}
-	if info.RiskFree != "" {
-		t.Errorf("expected empty riskFree, got %q", info.RiskFree)
-	}
-	if info.Suggestions != nil {
-		t.Errorf("expected nil suggestions, got %v", info.Suggestions)
-	}
+		It("omits empty fields in JSON", func() {
+			strategy := &plainStrategy{}
+			eng := engine.New(strategy)
+			strategy.Setup(eng)
+			info := engine.DescribeStrategy(eng)
 
-	// Check parameter.
-	if len(info.Parameters) != 1 {
-		t.Fatalf("expected 1 parameter, got %d", len(info.Parameters))
-	}
-	if info.Parameters[0].Name != "window" {
-		t.Errorf("expected parameter name 'window', got %q", info.Parameters[0].Name)
-	}
-	if info.Parameters[0].Type != "int" {
-		t.Errorf("expected parameter type 'int', got %q", info.Parameters[0].Type)
-	}
+			encoded, err := json.Marshal(info)
+			Expect(err).NotTo(HaveOccurred())
 
-	// Verify JSON omits empty fields.
-	data, err := json.Marshal(info)
-	if err != nil {
-		t.Fatalf("json.Marshal failed: %v", err)
-	}
-	jsonStr := string(data)
-
-	// shortcode, description, source, version should not appear.
-	for _, field := range []string{`"shortcode"`, `"source"`, `"version"`} {
-		if contains(jsonStr, field) {
-			t.Errorf("expected %s to be omitted from JSON, got: %s", field, jsonStr)
-		}
-	}
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && searchString(s, substr)
-}
-
-func searchString(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
+			jsonStr := string(encoded)
+			Expect(jsonStr).NotTo(ContainSubstring(`"shortcode"`))
+			Expect(jsonStr).NotTo(ContainSubstring(`"source"`))
+			Expect(jsonStr).NotTo(ContainSubstring(`"version"`))
+		})
+	})
+})
