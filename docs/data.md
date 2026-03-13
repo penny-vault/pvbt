@@ -304,7 +304,9 @@ result := df.Assets(aapl).Metrics(data.Price).Pct(5).Rolling(20).Mean()
 
 ## Signals
 
-Signals are reusable computations that derive new time series from metrics. They live in the `signal` package as plain functions. Each signal takes a DataFrame and returns a new DataFrame with one column per asset containing the computed score.
+Signals are reusable computations that derive new time series from market data -- prices, volume, fundamentals, economic indicators. They live in the `signal` package as plain functions. Each signal takes a DataFrame and returns a new DataFrame with one column per asset containing the computed score.
+
+Signals operate on market data, not portfolio state. A signal like `Momentum(df, 12)` produces the same output regardless of what the portfolio holds or how it has traded. This is the key distinction from portfolio metrics (see [Portfolio - Performance measurement](portfolio.md#performance-measurement)), which operate on the returns and transactions of a specific portfolio and change based on the portfolio's particular trading history.
 
 ```go
 mom3 := signal.Momentum(df, 3)
