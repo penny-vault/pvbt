@@ -70,33 +70,7 @@ var _ = Describe("defaultOutputPath", func() {
 		shortID := "ab12c"
 
 		path := defaultOutputPath("MyStrategy", start, end, shortID)
-		Expect(path).To(Equal("mystrategy-backtest-20200115-20250630-ab12c.jsonl"))
-	})
-})
-
-var _ = Describe("outputBasePath", func() {
-	It("splits .jsonl extension", func() {
-		base, ext := outputBasePath("foo.jsonl")
-		Expect(base).To(Equal("foo"))
-		Expect(ext).To(Equal(".jsonl"))
-	})
-
-	It("splits .parquet extension", func() {
-		base, ext := outputBasePath("foo.parquet")
-		Expect(base).To(Equal("foo"))
-		Expect(ext).To(Equal(".parquet"))
-	})
-
-	It("defaults to .jsonl when no extension is present", func() {
-		base, ext := outputBasePath("foo")
-		Expect(base).To(Equal("foo"))
-		Expect(ext).To(Equal(".jsonl"))
-	})
-
-	It("handles paths with directories", func() {
-		base, ext := outputBasePath("output/results/run.parquet")
-		Expect(base).To(Equal("output/results/run"))
-		Expect(ext).To(Equal(".parquet"))
+		Expect(path).To(Equal("mystrategy-backtest-20200115-20250630-ab12c.db"))
 	})
 })
 
