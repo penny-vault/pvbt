@@ -1,9 +1,26 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package universe_test
 
 import (
 	"context"
-	"testing"
 	"time"
+
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
@@ -37,55 +54,50 @@ func (m *mockDataSource) CurrentDate() time.Time {
 	return m.currentDate
 }
 
-func TestStaticUniverseWindow(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
-	goog := asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
+var _ = Describe("Static Universe", func() {
+	var (
+		aapl    asset.Asset
+		goog    asset.Asset
+		now     time.Time
+		emptyDF *data.DataFrame
+	)
 
-	now := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-	emptyDF, _ := data.NewDataFrame(nil, nil, nil, nil)
+	BeforeEach(func() {
+		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		goog = asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
+		now = time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
+		emptyDF, _ = data.NewDataFrame(nil, nil, nil, nil)
+	})
 
-	ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
-	u := universe.NewStaticWithSource([]asset.Asset{aapl, goog}, ds)
+	Describe("Window", func() {
+		It("delegates to the data source Fetch method", func() {
+			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
+			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl, goog}, ds)
 
-	_, err := u.Window(portfolio.Months(3), data.MetricClose)
-	if err != nil {
-		t.Fatalf("Window returned error: %v", err)
-	}
+			_, err := staticUniverse.Window(context.Background(), portfolio.Months(3), data.MetricClose)
+			Expect(err).NotTo(HaveOccurred())
 
-	if !ds.fetchCalled {
-		t.Fatal("expected Fetch to be called")
-	}
-	if len(ds.fetchAssets) != 2 {
-		t.Fatalf("expected 2 assets, got %d", len(ds.fetchAssets))
-	}
-	if ds.fetchPeriod != portfolio.Months(3) {
-		t.Fatalf("expected Months(3), got %+v", ds.fetchPeriod)
-	}
-}
+			Expect(ds.fetchCalled).To(BeTrue())
+			Expect(ds.fetchAssets).To(HaveLen(2))
+			Expect(ds.fetchPeriod).To(Equal(portfolio.Months(3)))
+		})
 
-func TestStaticUniverseAt(t *testing.T) {
-	aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		It("returns an error when no data source is set", func() {
+			staticUniverse := universe.NewStatic("AAPL")
+			_, err := staticUniverse.Window(context.Background(), portfolio.Months(3), data.MetricClose)
+			Expect(err).To(HaveOccurred())
+		})
+	})
 
-	now := time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-	emptyDF, _ := data.NewDataFrame(nil, nil, nil, nil)
+	Describe("At", func() {
+		It("delegates to the data source FetchAt method", func() {
+			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
+			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
 
-	ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
-	u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+			_, err := staticUniverse.At(context.Background(), now, data.MetricClose)
+			Expect(err).NotTo(HaveOccurred())
 
-	_, err := u.At(now, data.MetricClose)
-	if err != nil {
-		t.Fatalf("At returned error: %v", err)
-	}
-
-	if !ds.fetchCalled {
-		t.Fatal("expected FetchAt to be called")
-	}
-}
-
-func TestStaticUniverseWindowNoDataSource(t *testing.T) {
-	u := universe.NewStatic("AAPL")
-	_, err := u.Window(portfolio.Months(3), data.MetricClose)
-	if err == nil {
-		t.Fatal("expected error when no data source is set")
-	}
-}
+			Expect(ds.fetchCalled).To(BeTrue())
+		})
+	})
+})

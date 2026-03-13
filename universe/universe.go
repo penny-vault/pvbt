@@ -37,8 +37,8 @@ type Universe interface {
 
 	// Window returns a DataFrame covering [currentDate - lookback, currentDate]
 	// for the requested metrics, using the universe's current membership.
-	Window(lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
+	Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
 
 	// At returns a single-row DataFrame at time t for the requested metrics.
-	At(t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+	At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
 }
