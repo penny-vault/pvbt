@@ -1115,61 +1115,6 @@ func (df *DataFrame) Upsample(freq Frequency) *UpsampledDataFrame {
 	return &UpsampledDataFrame{df: df, freq: freq}
 }
 
-// Resample converts the DataFrame to a lower frequency by aggregating
-// values within each period using the specified method.
-func (df *DataFrame) Resample(freq Frequency, agg Aggregation) *DataFrame {
-	if len(df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
-	}
-
-	// Group timestamps by period boundary.
-	type group struct {
-		start int
-		end   int // exclusive
-	}
-
-	var groups []group
-	groupStart := 0
-
-	for i := 1; i < len(df.times); i++ {
-		if periodChanged(df.times[i-1], df.times[i], freq) {
-			groups = append(groups, group{groupStart, i})
-			groupStart = i
-		}
-	}
-
-	groups = append(groups, group{groupStart, len(df.times)})
-
-	// Build result.
-	newTimeLen := len(groups)
-	assetLen := len(df.assets)
-	metricLen := len(df.metrics)
-	newData := make([]float64, assetLen*metricLen*newTimeLen)
-	newTimes := make([]time.Time, newTimeLen)
-
-	for gIdx, g := range groups {
-		newTimes[gIdx] = df.times[g.end-1]
-
-		for aIdx := 0; aIdx < assetLen; aIdx++ {
-			for mIdx := 0; mIdx < metricLen; mIdx++ {
-				srcOff := df.colOffset(aIdx, mIdx)
-				vals := df.data[srcOff+g.start : srcOff+g.end]
-				dstOff := (aIdx*metricLen + mIdx) * newTimeLen
-
-				newData[dstOff+gIdx] = aggregate(vals, agg)
-			}
-		}
-	}
-
-	assets := make([]asset.Asset, assetLen)
-	copy(assets, df.assets)
-
-	metrics := make([]Metric, metricLen)
-	copy(metrics, df.metrics)
-
-	return mustNewDataFrame(newTimes, assets, metrics, newData)
-}
-
 func periodChanged(prev, curr time.Time, freq Frequency) bool {
 	switch freq {
 	case Weekly:
@@ -1184,25 +1129,6 @@ func periodChanged(prev, curr time.Time, freq Frequency) bool {
 		return prev.Year() != curr.Year()
 	default:
 		return true
-	}
-}
-
-func aggregate(vals []float64, agg Aggregation) float64 {
-	switch agg {
-	case Last:
-		return vals[len(vals)-1]
-	case First:
-		return vals[0]
-	case Sum:
-		return floats.Sum(vals)
-	case Mean:
-		return stat.Mean(vals, nil)
-	case Max:
-		return floats.Max(vals)
-	case Min:
-		return floats.Min(vals)
-	default:
-		return math.NaN()
 	}
 }
 
