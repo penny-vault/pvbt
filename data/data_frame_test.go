@@ -1173,6 +1173,38 @@ var _ = Describe("DataFrame", func() {
 				Expect(single.Std().Value(spy, data.Price)).To(BeNumerically("==", 0))
 			})
 		})
+
+		Describe("NaN propagation", func() {
+			It("propagates NaN through Mean", func() {
+				t := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				}
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(math.IsNaN(nanDF.Mean().Value(spy, data.Price))).To(BeTrue())
+			})
+
+			It("propagates NaN through Sum", func() {
+				t := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				}
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(math.IsNaN(nanDF.Sum().Value(spy, data.Price))).To(BeTrue())
+			})
+
+			It("propagates NaN through Variance", func() {
+				t := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				}
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				Expect(err).NotTo(HaveOccurred())
+				Expect(math.IsNaN(nanDF.Variance().Value(spy, data.Price))).To(BeTrue())
+			})
+		})
 	})
 
 	Describe("Extensibility", func() {
@@ -1370,6 +1402,15 @@ var _ = Describe("DataFrame", func() {
 				result := short.Covariance(spy, efa)
 				composite := data.CompositeAsset(spy, efa)
 				Expect(result.Value(composite, data.Price)).To(BeNumerically("==", 0))
+			})
+
+			It("excludes pairs involving missing assets", func() {
+				missing := asset.Asset{CompositeFigi: "MISSING", Ticker: "MISSING"}
+				result := covDF.Covariance(spy, missing, efa)
+				// SPY:MISSING and MISSING:EFA excluded, only SPY:EFA remains
+				Expect(result.AssetList()).To(HaveLen(1))
+				composite := data.CompositeAsset(spy, efa)
+				Expect(result.Value(composite, data.Price)).To(BeNumerically("~", 5.0, 1e-12))
 			})
 		})
 	})
