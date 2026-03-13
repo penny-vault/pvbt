@@ -3,7 +3,6 @@ package cli
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -35,9 +34,6 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("end", now.Format("2006-01-02"), "Backtest end date (YYYY-MM-DD)")
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 	cmd.Flags().String("output", "", "Output file path (default: auto-generated)")
-	cmd.Flags().Bool("output-transactions", false, "Write transaction log")
-	cmd.Flags().Bool("output-holdings", false, "Write holdings snapshots")
-	cmd.Flags().Bool("output-metrics", false, "Write rolling performance metrics")
 	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
 
 	viper.BindPFlags(cmd.Flags())
@@ -53,7 +49,7 @@ func runID() (string, string) {
 }
 
 func defaultOutputPath(strategyName string, start, end time.Time, shortID string) string {
-	return fmt.Sprintf("%s-backtest-%s-%s-%s.jsonl",
+	return fmt.Sprintf("%s-backtest-%s-%s-%s.db",
 		strings.ToLower(strategyName),
 		start.Format("20060102"),
 		end.Format("20060102"),
@@ -61,23 +57,15 @@ func defaultOutputPath(strategyName string, start, end time.Time, shortID string
 	)
 }
 
-func outputBasePath(path string) (string, string) {
-	ext := filepath.Ext(path)
-	base := strings.TrimSuffix(path, ext)
-	if ext == "" {
-		ext = ".jsonl"
-	}
-	return base, ext
-}
-
 func runBacktest(strategy engine.Strategy) error {
-	ctx := context.Background()
+	ctx := log.Logger.WithContext(context.Background())
 
-	start, err := time.Parse("2006-01-02", viper.GetString("start"))
+	nyc, _ := time.LoadLocation("America/New_York")
+	start, err := time.ParseInLocation("2006-01-02", viper.GetString("start"), nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
-	end, err := time.Parse("2006-01-02", viper.GetString("end"))
+	end, err := time.ParseInLocation("2006-01-02", viper.GetString("end"), nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
@@ -101,12 +89,6 @@ func runBacktest(strategy engine.Strategy) error {
 
 	applyStrategyFlags(strategy)
 
-	// validate output format early
-	_, ext := outputBasePath(outputPath)
-	if ext != ".jsonl" {
-		return fmt.Errorf("output format %q is not yet supported; use .jsonl or omit --output", ext)
-	}
-
 	if viper.GetBool("tui") {
 		return runBacktestWithTUI(strategy)
 	}
@@ -116,44 +98,41 @@ func runBacktest(strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
+	acct := portfolio.New(
+		portfolio.WithCash(cash),
+		portfolio.WithAllMetrics(),
+	)
+
 	eng := engine.New(strategy,
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
+		engine.WithAccount(acct),
 	)
 	defer eng.Close()
 
-	acct := portfolio.New(portfolio.WithCash(cash))
-	acct, err = eng.Backtest(ctx, acct, start, end)
+	p, err := eng.Backtest(ctx, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
+	// Set metadata on the portfolio.
+	p.SetMetadata("run_id", fullID)
+	p.SetMetadata("strategy", strategy.Name())
+	p.SetMetadata("start", start.Format("2006-01-02"))
+	p.SetMetadata("end", end.Format("2006-01-02"))
+
 	params := strategyParams(strategy)
-
-	base, _ := outputBasePath(outputPath)
-	if err := writePortfolio(base, ext, fullID, strategy.Name(), start, end, cash, params, acct); err != nil {
-		return err
+	for k, v := range params {
+		p.SetMetadata(fmt.Sprintf("param_%s", k), fmt.Sprintf("%v", v))
 	}
 
-	if viper.GetBool("output-transactions") {
-		if err := writeTransactions(base, ext, acct); err != nil {
-			return err
-		}
+	if err := acct.ToSQLite(outputPath); err != nil {
+		return fmt.Errorf("write output: %w", err)
 	}
 
-	if viper.GetBool("output-holdings") {
-		if err := writeHoldings(base, ext, acct); err != nil {
-			return err
-		}
-	}
+	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	if viper.GetBool("output-metrics") {
-		if err := writeMetrics(base, ext, acct); err != nil {
-			return err
-		}
-	}
-
-	printSummary(acct)
+	printSummary(p)
 
 	return nil
 }
