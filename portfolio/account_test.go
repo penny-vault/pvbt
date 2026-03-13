@@ -282,7 +282,7 @@ var _ = Describe("Account", func() {
 			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_100.0}))
 		})
 
-		It("skips NaN benchmark price without appending to benchmark series", func() {
+		It("appends NaN benchmark price to keep arrays aligned with equity curve", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000),
 				portfolio.WithBenchmark(bm),
@@ -299,7 +299,7 @@ var _ = Describe("Account", func() {
 			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
 			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
 
-			// Day 2: benchmark has NaN AdjClose
+			// Day 2: benchmark has NaN AdjClose and NaN Close
 			df2, err := data.NewDataFrame(
 				[]time.Time{t2},
 				[]asset.Asset{spy, bm, rf},
@@ -313,13 +313,14 @@ var _ = Describe("Account", func() {
 			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df2)
 
-			// Benchmark NaN should be skipped; risk-free should still append.
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
+			// NaN is appended to keep benchmarkPrices aligned with equityCurve.
+			Expect(a.BenchmarkPrices()).To(HaveLen(2))
+			Expect(math.IsNaN(a.BenchmarkPrices()[1])).To(BeTrue())
 			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5, 50.0}))
 			Expect(a.EquityCurve()).To(HaveLen(2))
 		})
 
-		It("skips NaN risk-free price without appending to risk-free series", func() {
+		It("appends NaN risk-free price to keep arrays aligned with equity curve", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000),
 				portfolio.WithBenchmark(bm),
@@ -334,7 +335,7 @@ var _ = Describe("Account", func() {
 			)
 			a.UpdatePrices(df1)
 
-			// Day 2: risk-free has NaN AdjClose
+			// Day 2: risk-free has NaN AdjClose and NaN Close
 			df2, err := data.NewDataFrame(
 				[]time.Time{t2},
 				[]asset.Asset{spy, bm, rf},
@@ -349,7 +350,9 @@ var _ = Describe("Account", func() {
 			a.UpdatePrices(df2)
 
 			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0, 101.0}))
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
+			// NaN is appended to keep riskFreePrices aligned with equityCurve.
+			Expect(a.RiskFreePrices()).To(HaveLen(2))
+			Expect(math.IsNaN(a.RiskFreePrices()[1])).To(BeTrue())
 			Expect(a.EquityCurve()).To(HaveLen(2))
 		})
 	})

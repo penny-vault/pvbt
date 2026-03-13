@@ -627,20 +627,22 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 	a.equityCurve = append(a.equityCurve, total)
 	a.equityTimes = append(a.equityTimes, df.End())
 
-	// Track benchmark price series (AdjClose).
+	// Track benchmark price series. Prefer AdjClose, fall back to Close.
 	if a.benchmark != (asset.Asset{}) {
 		v := df.Value(a.benchmark, data.AdjClose)
-		if !math.IsNaN(v) {
-			a.benchmarkPrices = append(a.benchmarkPrices, v)
+		if math.IsNaN(v) || v == 0 {
+			v = df.Value(a.benchmark, data.MetricClose)
 		}
+		a.benchmarkPrices = append(a.benchmarkPrices, v)
 	}
 
-	// Track risk-free price series (AdjClose).
+	// Track risk-free price series. Prefer AdjClose, fall back to Close.
 	if a.riskFree != (asset.Asset{}) {
 		v := df.Value(a.riskFree, data.AdjClose)
-		if !math.IsNaN(v) {
-			a.riskFreePrices = append(a.riskFreePrices, v)
+		if math.IsNaN(v) || v == 0 {
+			v = df.Value(a.riskFree, data.MetricClose)
 		}
+		a.riskFreePrices = append(a.riskFreePrices, v)
 	}
 }
 
