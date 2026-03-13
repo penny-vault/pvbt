@@ -78,7 +78,7 @@ func New(strategy Strategy, opts ...Option) *Engine {
 // If a snapshot is set, the account is restored from it; otherwise a fresh
 // account is created with the initial deposit. If no broker was provided
 // via WithBroker, a SimulatedBroker is created and stored on e.broker.
-func (e *Engine) createAccount() *portfolio.Account {
+func (e *Engine) createAccount(start time.Time) *portfolio.Account {
 	if e.broker == nil {
 		e.broker = NewSimulatedBroker()
 	}
@@ -98,7 +98,7 @@ func (e *Engine) createAccount() *portfolio.Account {
 	if e.snapshot != nil {
 		opts = append(opts, portfolio.WithPortfolioSnapshot(e.snapshot))
 	} else {
-		opts = append(opts, portfolio.WithCash(e.initialDeposit))
+		opts = append(opts, portfolio.WithCash(e.initialDeposit, start))
 	}
 	opts = append(opts, portfolio.WithBroker(e.broker))
 

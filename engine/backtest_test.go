@@ -196,7 +196,7 @@ var _ = Describe("Backtest", func() {
 			provider := data.NewTestProvider(metrics, df)
 
 			acct := portfolio.New(
-				portfolio.WithCash(50000),
+				portfolio.WithCash(50000, time.Time{}),
 				portfolio.WithMetric(portfolio.Sharpe),
 			)
 			acct.SetMetadata("test_key", "test_value")
@@ -223,7 +223,7 @@ var _ = Describe("Backtest", func() {
 			provider := data.NewTestProvider(metrics, df)
 
 			acct := portfolio.New(
-				portfolio.WithCash(100000),
+				portfolio.WithCash(100000, time.Time{}),
 				portfolio.WithMetric(portfolio.Sharpe),
 			)
 

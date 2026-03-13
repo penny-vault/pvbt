@@ -81,11 +81,12 @@ func WithBroker(b broker.Broker) Option {
 }
 
 // WithCash returns an Option that sets the initial cash balance and
-// records a DepositTransaction.
-func WithCash(amount float64) Option {
+// records a DepositTransaction on the given date.
+func WithCash(amount float64, date time.Time) Option {
 	return func(a *Account) {
 		a.cash = amount
 		a.transactions = append(a.transactions, Transaction{
+			Date:   date,
 			Type:   DepositTransaction,
 			Amount: amount,
 		})
@@ -129,7 +130,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 			qty    float64 // share count (for full liquidations)
 		}
 
-		var sells, buys []pendingOrder
+		var sells []pendingOrder
 
 		// Sell all holdings not in the target allocation.
 		for ast, qty := range a.holdings {
@@ -138,20 +139,18 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 			}
 		}
 
-		// Compute target dollar amounts and diff against current positions.
+		// Compute sells for overweight positions.
 		for ast, weight := range alloc.Members {
 			targetDollars := weight * totalValue
 			currentDollars := a.PositionValue(ast)
 			diff := targetDollars - currentDollars
 
-			if diff > 0 {
-				buys = append(buys, pendingOrder{asset: ast, side: Buy, amount: diff})
-			} else if diff < 0 {
+			if diff < 0 {
 				sells = append(sells, pendingOrder{asset: ast, side: Sell, amount: -diff})
 			}
 		}
 
-		// Process sells first to free up cash, then buys.
+		// Process sells first to free up cash.
 		for _, o := range sells {
 			order := broker.Order{
 				Asset:       o.asset,
@@ -165,6 +164,22 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				return fmt.Errorf("RebalanceTo: sell %s: %w", o.asset.Ticker, err)
 			}
 		}
+
+		// Recompute target values after sells so buys use actual
+		// available cash rather than the pre-sell portfolio value.
+		postSellValue := a.Value()
+
+		var buys []pendingOrder
+		for ast, weight := range alloc.Members {
+			targetDollars := weight * postSellValue
+			currentDollars := a.PositionValue(ast)
+			diff := targetDollars - currentDollars
+
+			if diff > 0 {
+				buys = append(buys, pendingOrder{asset: ast, side: Buy, amount: diff})
+			}
+		}
+
 		for _, o := range buys {
 			order := broker.Order{
 				Asset:       o.asset,

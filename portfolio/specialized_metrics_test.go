@@ -18,7 +18,7 @@ var _ = Describe("Specialized Metrics", func() {
 	// so we use deposit/withdrawal transactions to move cash to the desired
 	// level before each UpdatePrices call.
 	buildAccountFromEquity := func(equityValues []float64) *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(equityValues[0]))
+		a := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
 		start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 		dates := daySeq(start, len(equityValues))
 

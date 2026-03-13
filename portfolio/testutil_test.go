@@ -90,7 +90,7 @@ func monthSeq(start time.Time, n int) []time.Time {
 // given values exactly using deposit/withdrawal transactions.
 func buildAccountFromEquity(equityValues []float64) *portfolio.Account {
 	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-	a := portfolio.New(portfolio.WithCash(equityValues[0]))
+	a := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
 	start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 	dates := daySeq(start, len(equityValues))
 
@@ -127,7 +127,7 @@ func buildAccountWithRF(spyPrices, bilPrices []float64) *portfolio.Account {
 	times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
 
 	acct := portfolio.New(
-		portfolio.WithCash(5*spyPrices[0]),
+		portfolio.WithCash(5*spyPrices[0], time.Time{}),
 		portfolio.WithBenchmark(spy),
 		portfolio.WithRiskFree(bil),
 	)

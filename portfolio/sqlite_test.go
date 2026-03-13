@@ -34,7 +34,7 @@ var _ = Describe("SQLite", func() {
 			bil := asset.Asset{Ticker: "BIL", CompositeFigi: "BBG000BIL001"}
 
 			acct := portfolio.New(
-				portfolio.WithCash(10000),
+				portfolio.WithCash(10000, time.Time{}),
 				portfolio.WithBenchmark(spy),
 				portfolio.WithRiskFree(bil),
 			)

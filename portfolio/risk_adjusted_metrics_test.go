@@ -44,7 +44,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
 
 		acct := portfolio.New(
-			portfolio.WithCash(5*spyPrices[0]),
+			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
 			portfolio.WithRiskFree(bil),
 		)

@@ -26,7 +26,7 @@ var _ = Describe("TradeMetrics", func() {
 		var tm portfolio.TradeMetrics
 
 		BeforeEach(func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Trade 1: Buy 10 ACME at $100, Sell at $120, held 30 days -> win $200
 			a.Record(portfolio.Transaction{
@@ -115,7 +115,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("with no trades", func() {
 		It("returns zero values", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			tm, err := a.TradeMetrics()
 			Expect(err).NotTo(HaveOccurred())
 
@@ -130,7 +130,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("with only winning trades", func() {
 		It("sets ProfitFactor and GainLossRatio to zero (no losses)", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
@@ -160,7 +160,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("NPositivePeriods", func() {
 		It("computes fraction of positive equity curve returns", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			// Simulate an equity curve: 10000, 10100, 10050, 10200, 10150
 			// Returns: +100 (pos), -50 (neg), +150 (pos), -50 (neg) => 2/4 = 0.5
 			a.Record(portfolio.Transaction{
@@ -203,7 +203,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("Turnover", func() {
 		It("computes annualized turnover from sell volume and mean portfolio value", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			buildDF := func(t time.Time, price float64) *data.DataFrame {
 				df, err := data.NewDataFrame(
@@ -254,7 +254,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("with only losing trades", func() {
 		It("returns WinRate=0, AverageWin=0, ProfitFactor=0", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Trade 1: Buy 10 ACME at $100, Sell at $90 -> loss -$100
 			a.Record(portfolio.Transaction{
@@ -304,7 +304,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("with a break-even trade", func() {
 		It("counts break-even (PnL=0) as a loss", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Buy 10 ACME at $100, Sell at $100 -> PnL = 0
 			a.Record(portfolio.Transaction{
@@ -337,7 +337,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("with multiple assets", func() {
 		It("matches FIFO independently per asset", func() {
-			a := portfolio.New(portfolio.WithCash(50_000))
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 			aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
 
@@ -395,7 +395,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("single winning trade", func() {
 		It("sets WinRate=1.0 and zeroes ProfitFactor/GainLossRatio", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Buy 10 ACME at $100, Sell at $120 (31 days) -> win $200
 			a.Record(portfolio.Transaction{
@@ -427,7 +427,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("single losing trade", func() {
 		It("sets WinRate=0 and zeroes ProfitFactor/GainLossRatio", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Buy 10 ACME at $100, Sell at $80 (31 days) -> loss -$200
 			a.Record(portfolio.Transaction{
@@ -459,7 +459,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("NPositivePeriods with flat equity curve", func() {
 		It("returns NPositivePeriods=0 when all returns are zero", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			buildDF := func(t time.Time, price float64) *data.DataFrame {
 				df, err := data.NewDataFrame(
@@ -487,7 +487,7 @@ var _ = Describe("TradeMetrics", func() {
 
 	Describe("FIFO matching with partial fills", func() {
 		It("splits a buy lot across multiple sells", func() {
-			a := portfolio.New(portfolio.WithCash(10_000))
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Buy 20 at $100
 			a.Record(portfolio.Transaction{
