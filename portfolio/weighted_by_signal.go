@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"fmt"
 	"math"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -24,49 +25,73 @@ import (
 
 // WeightedBySignal builds a PortfolioPlan from a DataFrame by weighting
 // each selected asset proportionally to the values in the named metric
-// column. Weights are normalized so they sum to 1.0 at each timestep.
-// The DataFrame should have been filtered by a Selector first.
+// column. It reads the Selected metric column to determine which assets
+// are chosen at each timestep. Any asset with Selected > 0 is included;
+// magnitude is ignored. Weights are normalized to sum to 1.0.
 //
-// For example, weighting by market cap:
-//
-//	plan := WeightedBySignal(selected, data.MarketCap)
-func WeightedBySignal(df *data.DataFrame, metric data.Metric) PortfolioPlan {
+// Zero, NaN, and negative metric values are discarded. If all selected
+// assets have non-positive metric values at a timestep, equal weight is
+// assigned among the selected assets. Returns an error if the Selected
+// column is absent.
+func WeightedBySignal(df *data.DataFrame, metric data.Metric) (PortfolioPlan, error) {
 	times := df.Times()
 	assets := df.AssetList()
 
+	// Verify Selected column exists.
+	hasSelected := false
+	for _, m := range df.MetricList() {
+		if m == Selected {
+			hasSelected = true
+			break
+		}
+	}
+	if !hasSelected {
+		return nil, fmt.Errorf("WeightedBySignal: DataFrame missing %q column", Selected)
+	}
+
 	plan := make(PortfolioPlan, len(times))
-	equalWeight := 1.0 / float64(len(assets))
 
 	for i, t := range times {
-		// Read signal values and sum positives.
-		values := make([]float64, len(assets))
+		// Collect selected assets and their signal values.
+		var chosen []asset.Asset
+		var values []float64
 		sum := 0.0
 
-		for j, a := range assets {
+		for _, a := range assets {
+			sel := df.ValueAt(a, Selected, t)
+			if sel <= 0 || math.IsNaN(sel) {
+				continue
+			}
+			chosen = append(chosen, a)
+
 			v := df.ValueAt(a, metric, t)
-			if math.IsNaN(v) || v < 0 {
-				values[j] = 0
+			if math.IsNaN(v) || v <= 0 {
+				values = append(values, 0)
 			} else {
-				values[j] = v
+				values = append(values, v)
 				sum += v
 			}
 		}
 
-		members := make(map[asset.Asset]float64, len(assets))
+		members := make(map[asset.Asset]float64, len(chosen))
 
-		if sum == 0 {
-			// Fall back to equal weight.
-			for _, a := range assets {
-				members[a] = equalWeight
+		if sum == 0 && len(chosen) > 0 {
+			// Fall back to equal weight among selected assets.
+			w := 1.0 / float64(len(chosen))
+			for _, a := range chosen {
+				members[a] = w
 			}
 		} else {
-			for j, a := range assets {
-				members[a] = values[j] / sum
+			for j, a := range chosen {
+				w := values[j] / sum
+				if w > 0 {
+					members[a] = w
+				}
 			}
 		}
 
 		plan[i] = Allocation{Date: t, Members: members}
 	}
 
-	return plan
+	return plan, nil
 }
