@@ -20,59 +20,117 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/rs/zerolog/log"
 )
 
 type maxAboveZero struct {
-	fallback []asset.Asset
+	metric   data.Metric
+	fallback *data.DataFrame
 }
 
-// Select filters the DataFrame to the single asset with the highest
-// signal value above zero at each timestep. If no assets have a
-// positive value at a given timestep, the fallback assets are selected
-// instead.
+// Select marks the asset with the highest positive value in the
+// configured metric as selected at each timestep. If no asset has a
+// positive value, fallback assets are inserted into the DataFrame and
+// marked as selected. The DataFrame is mutated in place.
+//
+// Insert errors are logged but not returned because the Selector
+// interface does not support error returns. A mismatched fallback
+// DataFrame (e.g., different timestamps) will produce log warnings.
 func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 	times := df.Times()
 	assets := df.AssetList()
-	metric := df.MetricList()[0]
+	T := len(times)
 
-	selected := make(map[string]asset.Asset)
+	// Build Selected column per asset.
+	selCols := make(map[string][]float64)
+	for _, a := range assets {
+		selCols[a.CompositeFigi] = make([]float64, T)
+	}
 
-	for _, t := range times {
+	// Track which fallback assets need to be inserted.
+	needsFallback := false
+	var fbAssets []asset.Asset
+	fbSelCols := make(map[string][]float64)
+	fbSet := make(map[string]bool)
+	if m.fallback != nil {
+		fbAssets = m.fallback.AssetList()
+		for _, a := range fbAssets {
+			fbSelCols[a.CompositeFigi] = make([]float64, T)
+			fbSet[a.CompositeFigi] = true
+		}
+	}
+
+	for ti, t := range times {
 		bestVal := math.Inf(-1)
-		var bestAsset *asset.Asset
+		var bestFigi string
 
-		for i := range assets {
-			v := df.ValueAt(assets[i], metric, t)
+		for _, a := range assets {
+			// Skip assets that are in the fallback set so they
+			// do not prevent fallback from triggering.
+			if fbSet[a.CompositeFigi] {
+				continue
+			}
+			v := df.ValueAt(a, m.metric, t)
 			if math.IsNaN(v) {
 				continue
 			}
-
 			if v > 0 && v > bestVal {
 				bestVal = v
-				bestAsset = &assets[i]
+				bestFigi = a.CompositeFigi
 			}
 		}
 
-		if bestAsset != nil {
-			selected[bestAsset.CompositeFigi] = *bestAsset
-		} else {
-			for _, fb := range m.fallback {
-				selected[fb.CompositeFigi] = fb
+		if bestFigi != "" {
+			selCols[bestFigi][ti] = 1.0
+		} else if m.fallback != nil {
+			needsFallback = true
+			for _, a := range fbAssets {
+				fbSelCols[a.CompositeFigi][ti] = 1.0
 			}
 		}
 	}
 
-	result := make([]asset.Asset, 0, len(selected))
-	for _, a := range selected {
-		result = append(result, a)
+	// Insert fallback asset data into the DataFrame.
+	if needsFallback {
+		fbMetrics := m.fallback.MetricList()
+		for _, a := range fbAssets {
+			for _, met := range fbMetrics {
+				vals := m.fallback.Column(a, met)
+				if err := df.Insert(a, met, vals); err != nil {
+					log.Warn().Err(err).
+						Str("asset", a.CompositeFigi).
+						Str("metric", string(met)).
+						Msg("MaxAboveZero: failed to insert fallback data")
+				}
+			}
+		}
 	}
 
-	return df.Assets(result...)
+	// Write Selected columns for original assets.
+	for _, a := range assets {
+		if err := df.Insert(a, Selected, selCols[a.CompositeFigi]); err != nil {
+			log.Warn().Err(err).
+				Str("asset", a.CompositeFigi).
+				Msg("MaxAboveZero: failed to insert Selected column")
+		}
+	}
+
+	// Write Selected columns for fallback assets.
+	for _, a := range fbAssets {
+		if err := df.Insert(a, Selected, fbSelCols[a.CompositeFigi]); err != nil {
+			log.Warn().Err(err).
+				Str("asset", a.CompositeFigi).
+				Msg("MaxAboveZero: failed to insert fallback Selected column")
+		}
+	}
+
+	return df
 }
 
 // MaxAboveZero returns a Selector that picks the asset with the highest
-// signal value above zero. If no assets qualify, the fallback assets
-// are used.
-func MaxAboveZero(fallback []asset.Asset) Selector {
-	return maxAboveZero{fallback: fallback}
+// value above zero in the given metric column. If no assets qualify at
+// a timestep, the fallback DataFrame's assets are inserted and marked
+// as selected. Pass nil for fallback if no fallback is needed.
+func MaxAboveZero(metric data.Metric, fallback *data.DataFrame) Selector {
+	return maxAboveZero{metric: metric, fallback: fallback}
 }
