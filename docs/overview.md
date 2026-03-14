@@ -48,12 +48,16 @@ func (s *ADM) Setup(e *engine.Engine) {
 }
 
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(s.RiskOn, Months(1))
-    mom3 := signal.Momentum(s.RiskOn, Months(3))
-    mom6 := signal.Momentum(s.RiskOn, Months(6))
+    mom1 := signal.Momentum(ctx, s.RiskOn, Months(1))
+    mom3 := signal.Momentum(ctx, s.RiskOn, Months(3))
+    mom6 := signal.Momentum(ctx, s.RiskOn, Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
-    symbols := momentum.Select(portfolio.MaxAboveZero(s.RiskOff))
+    if err := momentum.Err(); err != nil {
+        log.Error().Err(err).Msg("signal computation failed")
+        return
+    }
+    symbols := portfolio.MaxAboveZero(s.RiskOff).Select(momentum)
 
     p.RebalanceTo(portfolio.EqualWeight(symbols)...)
 }
@@ -117,12 +121,16 @@ Setup is also where a strategy would register universes it creates itself (e.g.,
 
 ```go
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(s.RiskOn, Months(1))
-    mom3 := signal.Momentum(s.RiskOn, Months(3))
-    mom6 := signal.Momentum(s.RiskOn, Months(6))
+    mom1 := signal.Momentum(ctx, s.RiskOn, Months(1))
+    mom3 := signal.Momentum(ctx, s.RiskOn, Months(3))
+    mom6 := signal.Momentum(ctx, s.RiskOn, Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
-    symbols := momentum.Select(portfolio.MaxAboveZero(s.RiskOff))
+    if err := momentum.Err(); err != nil {
+        log.Error().Err(err).Msg("signal computation failed")
+        return
+    }
+    symbols := portfolio.MaxAboveZero(s.RiskOff).Select(momentum)
 
     p.RebalanceTo(portfolio.EqualWeight(symbols)...)
 }
