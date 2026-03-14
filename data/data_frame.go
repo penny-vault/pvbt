@@ -699,23 +699,30 @@ func (df *DataFrame) findIntersection(other *DataFrame) ([]colPair, []asset.Asse
 	return pairs, resAssets, resMetrics
 }
 
-func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64) []float64) (*DataFrame, error) {
+func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64) []float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+	if other.err != nil {
+		return WithErr(other.err)
+	}
+
 	timeLen := len(df.times)
 	if len(other.times) != timeLen {
-		return nil, fmt.Errorf("elemWiseOp: timestamp count mismatch: %d vs %d", timeLen, len(other.times))
+		return WithErr(fmt.Errorf("elemWiseOp: timestamp count mismatch: %d vs %d", timeLen, len(other.times)))
 	}
 
 	// Validate that timestamps match, not just count.
 	for i := 0; i < timeLen; i++ {
 		if !df.times[i].Equal(other.times[i]) {
-			return nil, fmt.Errorf("elemWiseOp: timestamp mismatch at index %d: %s vs %s",
-				i, df.times[i].Format(time.RFC3339), other.times[i].Format(time.RFC3339))
+			return WithErr(fmt.Errorf("elemWiseOp: timestamp mismatch at index %d: %s vs %s",
+				i, df.times[i].Format(time.RFC3339), other.times[i].Format(time.RFC3339)))
 		}
 	}
 
 	pairs, resAssets, resMetrics := df.findIntersection(other)
 	if len(pairs) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil), nil
+		return mustNewDataFrame(nil, nil, nil, nil)
 	}
 
 	resIdx := make(map[string]int, len(resAssets))
@@ -744,27 +751,27 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	return mustNewDataFrame(times, resAssets, resMetrics, newData), nil
+	return mustNewDataFrame(times, resAssets, resMetrics, newData)
 }
 
 // Add returns a new DataFrame with element-wise addition of two DataFrames
 // aligned by asset and metric.
-func (df *DataFrame) Add(other *DataFrame) (*DataFrame, error) {
+func (df *DataFrame) Add(other *DataFrame) *DataFrame {
 	return df.elemWiseOp(other, floats.AddTo)
 }
 
 // Sub returns a new DataFrame with element-wise subtraction.
-func (df *DataFrame) Sub(other *DataFrame) (*DataFrame, error) {
+func (df *DataFrame) Sub(other *DataFrame) *DataFrame {
 	return df.elemWiseOp(other, floats.SubTo)
 }
 
 // Mul returns a new DataFrame with element-wise multiplication.
-func (df *DataFrame) Mul(other *DataFrame) (*DataFrame, error) {
+func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
 	return df.elemWiseOp(other, floats.MulTo)
 }
 
 // Div returns a new DataFrame with element-wise division.
-func (df *DataFrame) Div(other *DataFrame) (*DataFrame, error) {
+func (df *DataFrame) Div(other *DataFrame) *DataFrame {
 	return df.elemWiseOp(other, floats.DivTo)
 }
 

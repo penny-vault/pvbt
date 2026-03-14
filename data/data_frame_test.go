@@ -518,27 +518,27 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Add performs element-wise addition", func() {
-			result, err := df.Add(other)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Add(other)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.Value(aapl, data.Price)).To(Equal(114.0))
 			Expect(result.Value(goog, data.Volume)).To(Equal(3000.0))
 		})
 
 		It("Sub performs element-wise subtraction", func() {
-			result, err := df.Sub(other)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Sub(other)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.Value(aapl, data.Price)).To(Equal(94.0))
 		})
 
 		It("Mul performs element-wise multiplication", func() {
-			result, err := df.Mul(other)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Mul(other)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.Value(aapl, data.Price)).To(Equal(1040.0))
 		})
 
 		It("Div performs element-wise division", func() {
-			result, err := df.Div(other)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Div(other)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.Value(aapl, data.Price)).To(Equal(10.4))
 		})
 
@@ -546,8 +546,8 @@ var _ = Describe("DataFrame", func() {
 			zeroVals := make([]float64, 20)
 			zero, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, zeroVals)
 			Expect(err).NotTo(HaveOccurred())
-			result, err := df.Div(zero)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Div(zero)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			v := result.Value(aapl, data.Price)
 			Expect(math.IsInf(v, 1)).To(BeTrue())
 		})
@@ -558,8 +558,8 @@ var _ = Describe("DataFrame", func() {
 			Expect(err).NotTo(HaveOccurred())
 			zeroB, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, make([]float64, 20))
 			Expect(err).NotTo(HaveOccurred())
-			result, err := zeroA.Div(zeroB)
-			Expect(err).NotTo(HaveOccurred())
+			result := zeroA.Div(zeroB)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(math.IsNaN(result.Value(aapl, data.Price))).To(BeTrue())
 		})
 
@@ -568,8 +568,8 @@ var _ = Describe("DataFrame", func() {
 			partialVals := []float64{1, 1, 1, 1, 1}
 			partial, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, partialVals)
 			Expect(err).NotTo(HaveOccurred())
-			result, err := df.Add(partial)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Add(partial)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.ColCount()).To(Equal(1)) // only AAPL/Price
 			Expect(result.Value(aapl, data.Price)).To(Equal(105.0))
 			// GOOG should not be present.
@@ -580,8 +580,8 @@ var _ = Describe("DataFrame", func() {
 			msft := asset.Asset{CompositeFigi: "MSFT", Ticker: "MSFT"}
 			noOverlap, err := data.NewDataFrame(times, []asset.Asset{msft}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
 			Expect(err).NotTo(HaveOccurred())
-			result, err := df.Add(noOverlap)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Add(noOverlap)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			Expect(result.Len()).To(Equal(0))
 		})
 
@@ -589,8 +589,8 @@ var _ = Describe("DataFrame", func() {
 			shortTimes := times[:3]
 			short, err := data.NewDataFrame(shortTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
 			Expect(err).NotTo(HaveOccurred())
-			_, err = df.Add(short)
-			Expect(err).To(HaveOccurred())
+			result := df.Add(short)
+			Expect(result.Err()).To(HaveOccurred())
 		})
 
 		It("arithmetic returns error on timestamp value mismatch", func() {
@@ -601,15 +601,15 @@ var _ = Describe("DataFrame", func() {
 			}
 			other2, err := data.NewDataFrame(offsetTimes, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, make([]float64, 20))
 			Expect(err).NotTo(HaveOccurred())
-			_, err = df.Add(other2)
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("timestamp mismatch"))
+			result := df.Add(other2)
+			Expect(result.Err()).To(HaveOccurred())
+			Expect(result.Err().Error()).To(ContainSubstring("timestamp mismatch"))
 		})
 
 		It("arithmetic does not modify original frames", func() {
 			origAAPL := df.Value(aapl, data.Price)
 			origOther := other.Value(aapl, data.Price)
-			_, _ = df.Add(other)
+			_ = df.Add(other)
 			Expect(df.Value(aapl, data.Price)).To(Equal(origAAPL))
 			Expect(other.Value(aapl, data.Price)).To(Equal(origOther))
 		})
@@ -624,8 +624,8 @@ var _ = Describe("DataFrame", func() {
 			nanFrame, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 				[]data.Metric{data.Price, data.Volume}, nanVals)
 			Expect(err).NotTo(HaveOccurred())
-			result, err := df.Add(nanFrame)
-			Expect(err).NotTo(HaveOccurred())
+			result := df.Add(nanFrame)
+			Expect(result.Err()).NotTo(HaveOccurred())
 			col := result.Column(aapl, data.Price)
 			// NaN + 101 = NaN at index 1.
 			Expect(math.IsNaN(col[1])).To(BeTrue())
