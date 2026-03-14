@@ -51,7 +51,11 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 
 	// Select the asset with the highest positive return; fall back to risk-off.
 	selected := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
-	plan := portfolio.EqualWeight(selected)
+	plan, err := portfolio.EqualWeight(selected)
+	if err != nil {
+		log.Error().Err(err).Msg("EqualWeight failed")
+		return
+	}
 
 	if err := p.RebalanceTo(ctx, plan...); err != nil {
 		log.Error().Err(err).Msg("rebalance failed")

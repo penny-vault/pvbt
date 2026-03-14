@@ -38,7 +38,11 @@ var _ = Describe("EqualWeight", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.EqualWeight(df)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1, 1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1, 1})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(2))
 
 		for _, alloc := range plan {
@@ -57,7 +61,10 @@ var _ = Describe("EqualWeight", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.EqualWeight(df)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(1.0))
 	})
@@ -71,7 +78,10 @@ var _ = Describe("EqualWeight", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.EqualWeight(df)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1, 1})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(2))
 		Expect(plan[0].Date).To(Equal(t1))
 		Expect(plan[1].Date).To(Equal(t2))
@@ -297,7 +307,10 @@ var _ = Describe("EqualWeight edge cases", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.EqualWeight(df)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(0))
 	})
 
@@ -308,14 +321,160 @@ var _ = Describe("EqualWeight edge cases", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			nil,
-			[]data.Metric{data.MetricClose},
+			[]data.Metric{data.MetricClose, portfolio.Selected},
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.EqualWeight(df)
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Date).To(Equal(t1))
+		Expect(plan[0].Members).To(HaveLen(0))
+	})
+})
+
+var _ = Describe("EqualWeight with Selected column", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+		bil  asset.Asset
+		t1   time.Time
+		t2   time.Time
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+		t1 = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		t2 = time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("returns error when Selected column is missing", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = portfolio.EqualWeight(df)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("assigns equal weight only to selected assets at each timestep", func() {
+		// 3 assets, 2 timesteps. SPY selected at t1, AAPL selected at t2.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				100, 101, // SPY
+				200, 201, // AAPL
+				50, 51,   // BIL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Insert Selected columns: SPY=1 at t1, 0 at t2
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1, 0})).To(Succeed())
+		// AAPL=0 at t1, 1 at t2
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{0, 1})).To(Succeed())
+		// BIL=0 at both
+		Expect(df.Insert(bil, portfolio.Selected, []float64{0, 0})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(2))
+
+		// t1: only SPY selected => weight 1.0
+		Expect(plan[0].Date).To(Equal(t1))
+		Expect(plan[0].Members).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+
+		// t2: only AAPL selected => weight 1.0
+		Expect(plan[1].Date).To(Equal(t2))
+		Expect(plan[1].Members).To(HaveLen(1))
+		Expect(plan[1].Members[aapl]).To(Equal(1.0))
+	})
+
+	It("assigns equal weight when multiple assets selected at same timestep", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{100, 200, 50},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(bil, portfolio.Selected, []float64{0})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members).To(HaveLen(2))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("treats fractional Selected > 0 as selected", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{0.5})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1.0})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		// Both selected (magnitude ignored), equal weight
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("treats NaN in Selected column as not selected", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1.0})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{math.NaN()})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+	})
+
+	It("produces empty members when no assets are selected at a timestep", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{0})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{0})).To(Succeed())
+
+		plan, err := portfolio.EqualWeight(df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members).To(HaveLen(0))
 	})
 })
