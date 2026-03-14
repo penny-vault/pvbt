@@ -1414,6 +1414,74 @@ var _ = Describe("DataFrame", func() {
 			})
 		})
 	})
+
+	Describe("Error accumulation", func() {
+		It("Err returns nil on a healthy DataFrame", func() {
+			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(df.Err()).To(BeNil())
+		})
+
+		It("propagates error through Add chain", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+
+			result := df.Add(short).AddScalar(1)
+			Expect(result.Err()).To(HaveOccurred())
+			Expect(result.Err().Error()).To(ContainSubstring("timestamp count mismatch"))
+		})
+
+		It("propagates error through mixed chain", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+
+			result := df.Add(short).MulScalar(2).Pct().Last()
+			Expect(result.Err()).To(HaveOccurred())
+		})
+
+		It("successful chain has nil Err", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			other, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{10, 20, 30, 40, 50})
+
+			result := df.Add(other).MulScalar(2)
+			Expect(result.Err()).To(BeNil())
+			Expect(result.Value(aapl, data.Price)).To(Equal(110.0)) // (5+50)*2
+		})
+
+		It("propagates error through Rolling", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+
+			result := df.Add(short).Rolling(3).Mean()
+			Expect(result.Err()).To(HaveOccurred())
+		})
+
+		It("propagates other's error through Add", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+
+			errDF := df.Add(short) // has error
+			good, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+
+			result := good.Add(errDF) // other has error
+			Expect(result.Err()).To(HaveOccurred())
+		})
+
+		It("returns NaN from Value on error DataFrame", func() {
+			errDF := data.WithErr(fmt.Errorf("test error"))
+			Expect(math.IsNaN(errDF.Value(aapl, data.Price))).To(BeTrue())
+		})
+
+		It("returns nil from Column on error DataFrame", func() {
+			errDF := data.WithErr(fmt.Errorf("test error"))
+			Expect(errDF.Column(aapl, data.Price)).To(BeNil())
+		})
+
+		It("returns 0 from Len on error DataFrame", func() {
+			errDF := data.WithErr(fmt.Errorf("test error"))
+			Expect(errDF.Len()).To(Equal(0))
+		})
+	})
 })
 
 var _ = Describe("Frequency", func() {
