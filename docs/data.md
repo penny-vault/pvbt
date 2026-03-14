@@ -132,6 +132,7 @@ type DataSource interface {
         metrics []data.Metric) (*data.DataFrame, error)
     FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
         metrics []data.Metric) (*data.DataFrame, error)
+    CurrentDate() time.Time
 }
 ```
 
@@ -178,7 +179,7 @@ df.Duration()                       // time span
 df.Len()                            // number of timestamps
 df.ColCount()                       // number of columns (assets * metrics)
 df.Value(aapl, data.Price)          // most recent value
-df.Value(aapl, data.Price, t)       // value at time t
+df.ValueAt(aapl, data.Price, t)     // value at time t
 df.Column(aapl, data.Price)         // contiguous []float64, gonum-compatible
 df.At(t)                            // single-row DataFrame at time t
 df.Last()                           // single-row DataFrame, most recent
@@ -214,8 +215,23 @@ result := df1.Div(df2)
 
 // Scalar
 result := df.AddScalar(1.0)
+result := df.SubScalar(0.5)
 result := df.MulScalar(0.5)
 result := df.DivScalar(100.0)
+```
+
+### Per-column aggregation
+
+These collapse the time dimension, producing one value per column:
+
+```go
+df.Mean()                           // mean of each column over time
+df.Sum()                            // sum of each column over time
+df.Max()                            // max of each column over time
+df.Min()                            // min of each column over time
+df.Variance()                       // sample variance of each column
+df.Std()                            // sample standard deviation of each column
+df.Covariance()                     // covariance matrix
 ```
 
 ### Aggregation across assets
@@ -223,9 +239,9 @@ result := df.DivScalar(100.0)
 These collapse the asset dimension, producing one value per timestamp per metric:
 
 ```go
-df.Max()                            // max across all assets
-df.Min()                            // min across all assets
-df.IdxMax()                         // which asset has the max
+df.MaxAcrossAssets()                // max across all assets per timestamp
+df.MinAcrossAssets()                // min across all assets per timestamp
+df.IdxMaxAcrossAssets()             // which asset has the max (returns []asset.Asset)
 ```
 
 ### Common transforms
@@ -236,19 +252,31 @@ df.Pct(5)                           // 5-period percent change
 df.Diff()                           // first difference
 df.Log()                            // natural logarithm
 df.CumSum()                         // cumulative sum
+df.CumMax()                         // running maximum
 df.Shift(1)                         // shift forward by 1 period
 df.Shift(-1)                        // shift backward by 1 period
 ```
 
 ### Resampling
 
+Downsampling reduces frequency by aggregating values within each period. It returns a builder -- call an aggregation method to get the result:
+
 ```go
-df.Resample(data.Weekly, data.Last)  // weekly close
-df.Resample(data.Weekly, data.Sum)   // weekly total volume
-df.Resample(data.Monthly, data.Max)  // monthly high
+df.Downsample(data.Weekly).Last()    // weekly close
+df.Downsample(data.Weekly).Sum()     // weekly total volume
+df.Downsample(data.Monthly).Max()    // monthly high
+df.Downsample(data.Monthly).First()  // monthly open
 ```
 
-OHLC bars are not a primitive. They are a pattern of resamples: Open is `First`, High is `Max`, Low is `Min`, Close is `Last`, Volume is `Sum`.
+Upsampling increases frequency by filling gaps:
+
+```go
+df.Upsample(data.Daily).ForwardFill()  // fill gaps with previous value
+df.Upsample(data.Daily).BackFill()     // fill gaps with next value
+df.Upsample(data.Daily).Interpolate()  // linear interpolation
+```
+
+OHLC bars are not a primitive. They are a pattern of downsamples: Open is `First()`, High is `Max()`, Low is `Min()`, Close is `Last()`, Volume is `Sum()`.
 
 ### Rolling window operations
 
@@ -258,6 +286,7 @@ df.Rolling(20).Sum()                // rolling sum
 df.Rolling(20).Max()                // rolling max
 df.Rolling(20).Min()                // rolling min
 df.Rolling(20).Std()                // rolling standard deviation
+df.Rolling(20).Variance()           // rolling variance
 df.Rolling(20).Percentile(0.9)      // rolling 90th percentile
 ```
 
@@ -364,29 +393,4 @@ const (
 
 ### Aggregation
 
-```go
-type Aggregation int
-
-const (
-    Last Aggregation = iota
-    First
-    Sum
-    Mean
-    Max
-    Min
-)
-
-// OHLC aliases
-const (
-    Close = Last
-    Open  = First
-    High  = Max
-    Low   = Min
-)
-```
-
-## Automatic frequency alignment
-
-When you combine data of different frequencies, the engine aligns them automatically. If you divide daily price by quarterly earnings to get a P/E ratio, the engine forward-fills the quarterly data to daily frequency behind the scenes.
-
-Explicit resampling is for situations where you want to change how data is represented -- aggregating daily prices into weekly bars, or computing monthly returns from daily prices.
+Aggregation is expressed as methods on `DownsampledDataFrame` rather than a top-level enum. The available aggregations are: `Mean()`, `Sum()`, `Max()`, `Min()`, `First()`, `Last()`, `Std()`, `Variance()`.

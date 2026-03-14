@@ -58,7 +58,8 @@ Strategy metadata like name, description, and schedule are part of the Go code r
 func (s *ADM) Name() string { return "adm" }
 
 func (s *ADM) Setup(e *engine.Engine) {
-    e.Schedule(tradecron.New("@monthend"))
+    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
+    e.Schedule(tc)
     e.SetBenchmark(e.Asset("VFINX"))
     e.RiskFreeAsset(e.Asset("DGS3MO"))
 }

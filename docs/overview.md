@@ -28,10 +28,12 @@ import (
     "context"
     "time"
 
-    "github.com/penny-vault/pvbt/data"
     "github.com/penny-vault/pvbt/engine"
     "github.com/penny-vault/pvbt/portfolio"
+    "github.com/penny-vault/pvbt/signal"
+    "github.com/penny-vault/pvbt/tradecron"
     "github.com/penny-vault/pvbt/universe"
+    "github.com/rs/zerolog/log"
 )
 
 type ADM struct {
@@ -42,24 +44,25 @@ type ADM struct {
 func (s *ADM) Name() string { return "adm" }
 
 func (s *ADM) Setup(e *engine.Engine) {
-    e.Schedule(tradecron.New("@monthend"))
+    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
+    e.Schedule(tc)
     e.SetBenchmark(e.Asset("VFINX"))
     e.RiskFreeAsset(e.Asset("DGS3MO"))
 }
 
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(ctx, s.RiskOn, Months(1))
-    mom3 := signal.Momentum(ctx, s.RiskOn, Months(3))
-    mom6 := signal.Momentum(ctx, s.RiskOn, Months(6))
+    mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
+    mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
+    mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
         log.Error().Err(err).Msg("signal computation failed")
         return
     }
-    symbols := portfolio.MaxAboveZero(s.RiskOff).Select(momentum)
+    symbols := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
 
-    p.RebalanceTo(portfolio.EqualWeight(symbols)...)
+    p.RebalanceTo(ctx, portfolio.EqualWeight(symbols)...)
 }
 
 func main() {
@@ -103,7 +106,8 @@ The `pvbt` tag controls the CLI flag name. If omitted, the lowercase field name 
 
 ```go
 func (s *ADM) Setup(e *engine.Engine) {
-    e.Schedule(tradecron.New("@monthend"))
+    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
+    e.Schedule(tc)
     e.SetBenchmark(e.Asset("VFINX"))
     e.RiskFreeAsset(e.Asset("DGS3MO"))
 }
@@ -121,30 +125,30 @@ Setup is also where a strategy would register universes it creates itself (e.g.,
 
 ```go
 func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    mom1 := signal.Momentum(ctx, s.RiskOn, Months(1))
-    mom3 := signal.Momentum(ctx, s.RiskOn, Months(3))
-    mom6 := signal.Momentum(ctx, s.RiskOn, Months(6))
+    mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
+    mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
+    mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
         log.Error().Err(err).Msg("signal computation failed")
         return
     }
-    symbols := portfolio.MaxAboveZero(s.RiskOff).Select(momentum)
+    symbols := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
 
-    p.RebalanceTo(portfolio.EqualWeight(symbols)...)
+    p.RebalanceTo(ctx, portfolio.EqualWeight(symbols)...)
 }
 ```
 
 Compute runs at each scheduled step -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for data fetching via `e.Fetch` and `e.FetchAt`), and the **portfolio** (the strategy's holdings, exposed as the `Portfolio` interface).
 
-The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period count, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
+The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
 
-`momentum.Select(portfolio.MaxAboveZero(s.riskOff))` is the selection step. It filters the DataFrame to the asset with the highest momentum, but only if that score is above zero. If no risk-on asset has positive momentum, the selection falls back to the risk-off universe. The result is a filtered DataFrame.
+`portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)` is the selection step. `MaxAboveZero` takes a `[]asset.Asset` fallback list (here, the risk-off universe resolved at the current date) and returns a `Selector`. Calling `Select(momentum)` filters the DataFrame to the asset with the highest momentum above zero. If no risk-on asset has positive momentum, the fallback assets are used instead.
 
 `portfolio.EqualWeight(symbols)` is the weighting step. It takes the filtered DataFrame and builds a `PortfolioPlan` with equal weights at each timestep. Since ADM typically selects a single asset, this means 100% in that asset.
 
-`p.RebalanceTo(plan...)` applies the plan. The portfolio diffs current holdings against the target and generates the necessary trades, applying commission and slippage, respecting any risk controls the operator has configured.
+`p.RebalanceTo(ctx, plan...)` applies the plan. The portfolio diffs current holdings against the target and generates the necessary trades, applying commission and slippage, respecting any risk controls the operator has configured.
 
 ### main
 

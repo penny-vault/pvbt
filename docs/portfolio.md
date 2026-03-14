@@ -51,7 +51,7 @@ type Selector interface {
 The returned DataFrame has the same structure but with unselected assets removed. For example, `MaxAboveZero` picks the asset with the highest signal value above zero at each timestep, falling back to specified assets if nothing qualifies:
 
 ```go
-selected := momentum.Select(portfolio.MaxAboveZero(s.riskOff))
+selected := portfolio.MaxAboveZero(s.riskOff).Select(momentum)
 ```
 
 ## Weighting
@@ -80,19 +80,18 @@ There are two ways to express allocation decisions, and they can be mixed freely
 The most common approach. The strategy computes a selection and weighting, then tells the portfolio to match it:
 
 ```go
-selected := momentum.Select(portfolio.MaxAboveZero(s.riskOff))
+selected := portfolio.MaxAboveZero(s.riskOff).Select(momentum)
 plan := portfolio.EqualWeight(selected)
-p.RebalanceTo(plan...)
+p.RebalanceTo(ctx, plan...)
 ```
 
 `RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The engine diffs current holdings against each target and generates the necessary buy/sell orders. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
 
-A more involved example -- select the 50 cheapest stocks by P/E and weight by market cap:
+A more involved example -- weight selected assets by market cap:
 
 ```go
-cheapest := pe.Sort(Ascending).Top(50)
-plan := portfolio.WeightedBySignal(cheapest, data.MarketCap)
-p.RebalanceTo(plan...)
+plan := portfolio.WeightedBySignal(selected, data.MarketCap)
+p.RebalanceTo(ctx, plan...)
 ```
 
 ### Imperative: Order
@@ -100,8 +99,8 @@ p.RebalanceTo(plan...)
 When a strategy needs more control, it can place individual orders:
 
 ```go
-p.Order(asset, Buy, 100)
-p.Order(asset, Sell, 50)
+p.Order(ctx, asset, Buy, 100)
+p.Order(ctx, asset, Sell, 50)
 ```
 
 Order behavior is controlled by optional modifiers passed as variadic arguments. Modifiers fall into two categories: order type (price conditions) and time in force (lifetime).
@@ -113,19 +112,19 @@ A plain `Order` with no modifiers is a **market order**, filled at the next avai
 **Limit** sets a maximum buy price or minimum sell price:
 
 ```go
-p.Order(asset, Buy, 100, Limit(150.00))
+p.Order(ctx, asset, Buy, 100, Limit(150.00))
 ```
 
 **Stop** (stop loss) triggers a market order when the price reaches a threshold:
 
 ```go
-p.Order(asset, Sell, 100, Stop(140.00))
+p.Order(ctx, asset, Sell, 100, Stop(140.00))
 ```
 
 Combining `Stop` and `Limit` creates a **stop-limit order** -- the order activates at the stop price, then fills only at the limit price or better:
 
 ```go
-p.Order(asset, Sell, 100, Stop(140.00), Limit(135.00))
+p.Order(ctx, asset, Sell, 100, Stop(140.00), Limit(135.00))
 ```
 
 #### Time in force
@@ -145,9 +144,9 @@ Time in force controls how long the order stays active. The default is `DayOrder
 Order type and time in force modifiers can be combined freely:
 
 ```go
-p.Order(asset, Buy, 100, Limit(150.00), GoodTilCancel)
-p.Order(asset, Sell, 50, Stop(140.00), FillOrKill)
-p.Order(asset, Buy, 200, OnTheOpen)
+p.Order(ctx, asset, Buy, 100, Limit(150.00), GoodTilCancel)
+p.Order(ctx, asset, Sell, 50, Stop(140.00), FillOrKill)
+p.Order(ctx, asset, Buy, 200, OnTheOpen)
 ```
 
 ### Mixing approaches
@@ -155,15 +154,14 @@ p.Order(asset, Buy, 200, OnTheOpen)
 A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments:
 
 ```go
-func (s *MyStrategy) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
+func (s *MyStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
     // Core allocation
-    cheapest := pe.Sort(Ascending).Top(50)
-    plan := portfolio.EqualWeight(cheapest)
-    p.RebalanceTo(plan...)
+    plan := portfolio.EqualWeight(selected)
+    p.RebalanceTo(ctx, plan...)
 
     // Tactical overlay
-    if vix.Last() > 30 {
-        p.Order(spy, Buy, 100, Limit(150.00))
+    if vix.Value(spy, data.MetricClose) > 30 {
+        p.Order(ctx, spy, Buy, 100, Limit(150.00))
     }
 }
 ```
@@ -259,13 +257,13 @@ Use `PerformanceMetric` to query a single metric. It returns a `PerformanceMetri
 
 ```go
 // full history
-sharpe := p.PerformanceMetric(Sharpe).Value()
+sharpe, err := p.PerformanceMetric(Sharpe).Value()
 
 // trailing 36-month window
-sharpe36 := p.PerformanceMetric(Sharpe).Window(Months(36)).Value()
+sharpe36, err := p.PerformanceMetric(Sharpe).Window(Months(36)).Value()
 
 // rolling series as []float64, compatible with gonum
-series := p.PerformanceMetric(Sharpe).Series()
+series, err := p.PerformanceMetric(Sharpe).Series()
 ```
 
 Windows are specified with `Days(n)`, `Months(n)`, or `Years(n)`. These handle calendar-aware durations correctly (months and years have variable lengths).
@@ -459,11 +457,10 @@ val := p.PerformanceMetric(MyMetric).Window(Years(3)).Value()
 While performance metrics are most commonly examined after a backtest completes, they are available during computation. A strategy might use them to adjust its behavior:
 
 ```go
-func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
-    dd := p.PerformanceMetric(MaxDrawdown).Value()
-    if dd > 0.15 {
+func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+    dd, err := p.PerformanceMetric(MaxDrawdown).Value()
+    if err == nil && dd > 0.15 {
         // drawdown exceeds 15%, reduce exposure
-        p.RebalanceTo(EqualWeight(s.riskOff))
         return
     }
 
@@ -474,7 +471,9 @@ func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p Portfolio) {
 
 This is less common but occasionally useful for strategies that adapt to their own performance.
 
-## Factor analysis
+## Factor analysis (planned)
+
+> **Note:** Factor analysis is a planned feature. The API described below is the target design but is not yet implemented.
 
 Factor analysis decomposes a portfolio's returns into exposures to known market drivers. Instead of asking "did my strategy beat the market?" it asks "where did the returns actually come from?" A strategy that appears to generate alpha might just be loading on well-known risk factors like value or momentum -- and factor analysis reveals that.
 
@@ -489,7 +488,7 @@ The portfolio's excess returns (returns minus the risk-free rate) are regressed 
 
 ```go
 // Run your strategy
-p, err := e.Run(ctx, account, start, end)
+p, err := e.Backtest(ctx, start, end)
 
 // Regress against factor return series
 result := p.FactorAnalysis(smb, hml, mktrf)
@@ -566,23 +565,21 @@ Run the factor strategy through the engine to get its equity curve, then convert
 // Define a low-volatility factor as a strategy
 type LowVolFactor struct{}
 
-func (s *LowVolFactor) Compute(ctx context.Context, p portfolio.Portfolio) {
-    vol := signal.Volatility(prices, 60)
+func (s *LowVolFactor) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+    vol := signal.Volatility(ctx, s.Universe, portfolio.Months(3))
 
     // Long the least volatile stocks
-    lowVol := vol.Sort(Ascending).Top(30)
     longPlan := portfolio.EqualWeight(lowVol)
 
     // Short the most volatile stocks
-    highVol := vol.Sort(Descending).Top(30)
-    shortPlan := portfolio.EqualWeight(highVol)  // shorted
+    shortPlan := portfolio.EqualWeight(highVol)
 
-    p.RebalanceTo(longPlan...)
-    p.RebalanceTo(shortPlan...)  // short side
+    p.RebalanceTo(ctx, longPlan...)
+    p.RebalanceTo(ctx, shortPlan...)
 }
 
 // Run the factor strategy
-factorAccount, _ := factorEngine.Run(ctx, factorAcct, start, end)
+factorAccount, _ := factorEngine.Backtest(ctx, start, end)
 
 // Use its returns as a factor
 lowVol := portfolio.FactorFromAccount("LowVol", factorAccount)
