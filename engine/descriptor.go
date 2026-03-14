@@ -16,6 +16,8 @@
 package engine
 
 import (
+	"time"
+
 	"github.com/penny-vault/pvbt/asset"
 )
 
@@ -29,8 +31,9 @@ type Descriptor interface {
 type StrategyDescription struct {
 	ShortCode   string `json:"shortcode,omitempty"`
 	Description string `json:"description,omitempty"`
-	Source      string `json:"source,omitempty"`
-	Version     string `json:"version,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	VersionDate time.Time `json:"versionDate,omitzero"`
 }
 
 // ParameterInfo is the JSON-serializable form of a Parameter.
@@ -48,6 +51,7 @@ type StrategyInfo struct {
 	Description string                       `json:"description,omitempty"`
 	Source      string                       `json:"source,omitempty"`
 	Version     string                       `json:"version,omitempty"`
+	VersionDate time.Time                    `json:"versionDate,omitzero"`
 	Schedule    string                       `json:"schedule,omitempty"`
 	Benchmark   string                       `json:"benchmark,omitempty"`
 	RiskFree    string                       `json:"riskFree,omitempty"`
@@ -69,6 +73,7 @@ func DescribeStrategy(e *Engine) StrategyInfo {
 		info.Description = desc.Description
 		info.Source = desc.Source
 		info.Version = desc.Version
+		info.VersionDate = desc.VersionDate
 	}
 
 	// Engine state from Setup.
