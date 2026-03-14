@@ -252,6 +252,11 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 
 // FetchAt implements universe.DataSource.
 func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
+	if !e.currentDate.IsZero() && t.After(e.currentDate) {
+		return nil, fmt.Errorf("FetchAt: requested future date %s (current simulation date is %s)",
+			t.Format("2006-01-02"), e.currentDate.Format("2006-01-02"))
+	}
+
 	if e.cache == nil {
 		e.cache = newDataCache(e.cacheMaxBytes)
 	}
