@@ -221,6 +221,8 @@ var _ = Describe("Account", func() {
 				portfolio.WithRiskFree(rf),
 			)
 
+			perfAsset := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+
 			// Day 1
 			df1 := buildDF(t1,
 				[]asset.Asset{spy, bm, rf},
@@ -233,6 +235,11 @@ var _ = Describe("Account", func() {
 			Expect(a.EquityCurve()[0]).To(Equal(10_000.0))
 			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
 			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
+
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Len()).To(Equal(1))
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0}))
 
 			// Day 2
 			df2 := buildDF(t2,
@@ -247,6 +254,11 @@ var _ = Describe("Account", func() {
 			Expect(a.EquityTimes()).To(Equal([]time.Time{t1, t2}))
 			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0, 101.0}))
 			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5, 50.0}))
+
+			Expect(pd.Len()).To(Equal(2))
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0, 10_000.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0, 101.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5, 50.0}))
 		})
 
 		It("does not append benchmark/risk-free when not set", func() {
