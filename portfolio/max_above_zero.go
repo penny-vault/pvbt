@@ -51,12 +51,10 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 	needsFallback := false
 	var fbAssets []asset.Asset
 	fbSelCols := make(map[string][]float64)
-	fbSet := make(map[string]bool)
 	if m.fallback != nil {
 		fbAssets = m.fallback.AssetList()
 		for _, a := range fbAssets {
 			fbSelCols[a.CompositeFigi] = make([]float64, T)
-			fbSet[a.CompositeFigi] = true
 		}
 	}
 
@@ -65,11 +63,6 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 		var bestFigi string
 
 		for _, a := range assets {
-			// Skip assets that are in the fallback set so they
-			// do not prevent fallback from triggering.
-			if fbSet[a.CompositeFigi] {
-				continue
-			}
 			v := df.ValueAt(a, m.metric, t)
 			if math.IsNaN(v) {
 				continue
@@ -115,8 +108,12 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 		}
 	}
 
-	// Write Selected columns for fallback assets.
+	// Write Selected columns for fallback assets not already in the
+	// input DataFrame (overlapping assets were already handled above).
 	for _, a := range fbAssets {
+		if _, exists := selCols[a.CompositeFigi]; exists {
+			continue
+		}
 		if err := df.Insert(a, Selected, fbSelCols[a.CompositeFigi]); err != nil {
 			log.Warn().Err(err).
 				Str("asset", a.CompositeFigi).
