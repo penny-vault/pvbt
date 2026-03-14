@@ -1241,6 +1241,29 @@ func (df *DataFrame) CumSum() *DataFrame {
 	})
 }
 
+// CumMax returns the running maximum along the time axis for each column.
+func (df *DataFrame) CumMax() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	return df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		if len(col) == 0 {
+			return out
+		}
+		out[0] = col[0]
+		for i := 1; i < len(col); i++ {
+			if col[i] > out[i-1] {
+				out[i] = col[i]
+			} else {
+				out[i] = out[i-1]
+			}
+		}
+		return out
+	})
+}
+
 // Shift shifts every column forward by n periods, filling leading values
 // with NaN. Negative n shifts backward.
 func (df *DataFrame) Shift(n int) *DataFrame {
