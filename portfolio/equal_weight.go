@@ -16,27 +16,53 @@
 package portfolio
 
 import (
+	"fmt"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
 // EqualWeight builds a PortfolioPlan from a DataFrame by assigning equal
-// weights to all selected assets at each timestep. For example, if three
-// assets are selected at a given date, each receives a weight of 1/3.
-// The DataFrame should have been filtered by a Selector first.
-func EqualWeight(df *data.DataFrame) PortfolioPlan {
+// weights to all selected assets at each timestep. It reads the Selected
+// metric column to determine which assets are chosen. Any asset with
+// Selected > 0 at a given timestep receives equal weight; magnitude is
+// ignored. Returns an error if the Selected column is absent.
+func EqualWeight(df *data.DataFrame) (PortfolioPlan, error) {
 	times := df.Times()
 	assets := df.AssetList()
-	weight := 1.0 / float64(len(assets))
+
+	// Verify Selected column exists.
+	hasSelected := false
+	for _, m := range df.MetricList() {
+		if m == Selected {
+			hasSelected = true
+			break
+		}
+	}
+	if !hasSelected {
+		return nil, fmt.Errorf("EqualWeight: DataFrame missing %q column", Selected)
+	}
 
 	plan := make(PortfolioPlan, len(times))
 	for i, t := range times {
-		members := make(map[asset.Asset]float64, len(assets))
+		// Collect selected assets at this timestep.
+		var chosen []asset.Asset
 		for _, a := range assets {
-			members[a] = weight
+			v := df.ValueAt(a, Selected, t)
+			if v > 0 {
+				chosen = append(chosen, a)
+			}
+		}
+
+		members := make(map[asset.Asset]float64, len(chosen))
+		if len(chosen) > 0 {
+			w := 1.0 / float64(len(chosen))
+			for _, a := range chosen {
+				members[a] = w
+			}
 		}
 		plan[i] = Allocation{Date: t, Members: members}
 	}
 
-	return plan
+	return plan, nil
 }
