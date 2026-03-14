@@ -48,131 +48,172 @@ var _ = Describe("MaxAboveZero", func() {
 		t3 = time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC)
 	})
 
-	It("selects the asset with the highest positive value at each timestep", func() {
-		// Two assets, three timesteps; SPY always higher.
+	It("marks the asset with the highest positive value as selected", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1, t2, t3},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			[]float64{
-				// SPY: t1=5, t2=3, t3=8
-				5, 3, 8,
-				// AAPL: t1=2, t2=1, t3=4
-				2, 1, 4,
+				5, 3, 8, // SPY
+				2, 1, 4, // AAPL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		// SPY wins every timestep, so only SPY should be in result.
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+		Expect(result.AssetList()).To(HaveLen(2))
+
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t2)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t3)).To(Equal(1.0))
+
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t2)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t3)).To(Equal(0.0))
 	})
 
-	It("falls back to specified assets when no assets are above zero", func() {
-		// All signal values negative; BIL is present as a fallback candidate.
+	It("inserts fallback assets when no asset is above zero", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
-			[]asset.Asset{spy, aapl, bil},
+			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
-			[]float64{
-				-1, // SPY
-				-2, // AAPL
-				-3, // BIL
-			},
+			[]float64{-1, -2},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
+		Expect(result.AssetList()).To(HaveLen(3))
+
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+
+		Expect(result.ValueAt(bil, data.MetricClose, t1)).To(Equal(90.0))
 	})
 
 	It("handles leadership changes across timesteps", func() {
-		// SPY leads at t1, AAPL leads at t2 -- both should appear in result.
 		df, err := data.NewDataFrame(
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			[]float64{
-				// SPY: t1=10, t2=1
-				10, 1,
-				// AAPL: t1=5, t2=20
-				5, 20,
+				10, 1, // SPY
+				5, 20, // AAPL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		// Both assets are selected (each leads at one timestep).
-		Expect(result.AssetList()).To(HaveLen(2))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t2)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t2)).To(Equal(1.0))
 	})
 
-	It("uses fallback when all signal values are NaN", func() {
-		df, err := data.NewDataFrame(
-			[]time.Time{t1},
-			[]asset.Asset{spy, aapl, bil},
-			[]data.Metric{data.MetricClose},
-			[]float64{
-				math.NaN(), // SPY
-				math.NaN(), // AAPL
-				math.NaN(), // BIL
-			},
-		)
-		Expect(err).NotTo(HaveOccurred())
-
-		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
-		result := sel.Select(df)
-
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
-	})
-
-	It("deterministically selects first asset when all values are equal positive", func() {
+	It("uses fallback when all values are NaN", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
-			[]float64{
-				5, // SPY
-				5, // AAPL
-			},
+			[]float64{math.NaN(), math.NaN()},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
 		result := sel.Select(df)
 
-		// Both have equal values; the first asset in iteration wins (strict >).
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
 	})
 
-	It("returns empty result with nil fallback when no values are positive", func() {
+	It("selects first asset when all values are equal positive", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			[]float64{5, 5},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
+		result := sel.Select(df)
+
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+	})
+
+	It("selects no assets with nil fallback when none are positive", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			[]float64{-1, 0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
+		result := sel.Select(df)
+
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+	})
+
+	It("uses fallback at some timesteps and regular selection at others", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
 			[]float64{
-				-1, // SPY
-				0,  // AAPL (zero is not above zero)
+				10, -5, // SPY
+				5, -3,  // AAPL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90, 91},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(0.0))
+
+		Expect(result.ValueAt(spy, portfolio.Selected, t2)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t2)).To(Equal(0.0))
+		Expect(result.ValueAt(bil, portfolio.Selected, t2)).To(Equal(1.0))
 	})
 
-	It("trivially selects a single asset with positive signal", func() {
+	It("trivially selects a single asset with positive value", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			[]asset.Asset{spy},
@@ -181,11 +222,10 @@ var _ = Describe("MaxAboveZero", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
 	})
 
 	It("treats +Inf as above zero and selects it", func() {
@@ -193,63 +233,84 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
-			[]float64{
-				math.Inf(1), // SPY
-				5,           // AAPL
-			},
+			[]float64{math.Inf(1), 5},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero(nil)
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
 	})
 
 	It("treats -Inf as not above zero and falls back", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
-			[]asset.Asset{spy, aapl, bil},
+			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
-			[]float64{
-				math.Inf(-1), // SPY
-				math.Inf(-1), // AAPL
-				-1,           // BIL (also not positive, but selected via fallback)
-			},
+			[]float64{math.Inf(-1), math.Inf(-1)},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("BIL001"))
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
 	})
 
 	It("selects the positive asset when mixed with NaN at the same timestep", func() {
-		// SPY is positive, AAPL is NaN -- SPY should win.
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
-			[]asset.Asset{spy, aapl, bil},
+			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
-			[]float64{
-				10,           // SPY (positive)
-				math.NaN(),   // AAPL (NaN, skipped)
-				math.NaN(),   // BIL (NaN, skipped)
-			},
+			[]float64{10, math.NaN()},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		Expect(result.AssetList()).To(HaveLen(1))
-		Expect(result.AssetList()[0].CompositeFigi).To(Equal("SPY001"))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
 	})
 
-	It("returns empty result for an empty DataFrame with zero timestamps", func() {
-		// Zero timestamps, one asset, one metric -- data length is 0*1*1 = 0.
+	It("handles fallback asset that overlaps with input asset", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{-1, 80},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
+		result := sel.Select(df)
+
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
+		Expect(result.ValueAt(bil, data.MetricClose, t1)).To(Equal(90.0))
+	})
+
+	It("returns empty DataFrame with Selected for zero timestamps", func() {
 		df, err := data.NewDataFrame(
 			nil,
 			[]asset.Asset{spy},
@@ -258,11 +319,9 @@ var _ = Describe("MaxAboveZero", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		sel := portfolio.MaxAboveZero([]asset.Asset{bil})
+		sel := portfolio.MaxAboveZero(data.MetricClose, nil)
 		result := sel.Select(df)
 
-		// No timesteps to iterate, so no assets are selected.
-		Expect(result.AssetList()).To(HaveLen(0))
 		Expect(result.Times()).To(HaveLen(0))
 	})
 })
