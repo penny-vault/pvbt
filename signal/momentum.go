@@ -15,15 +15,32 @@
 
 package signal
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+	"fmt"
 
-// Momentum computes the percent change over the given number of periods
-// for each asset in the DataFrame. The input DataFrame must contain
-// price data. Returns a DataFrame with one column per asset containing
-// the momentum score at each timestamp.
-func Momentum(df *data.DataFrame, periods int) *data.DataFrame {
-	// Compute percent change over the lookback period for each
-	// asset's price column. Return a new DataFrame with a single
-	// metric ("Momentum") and the same assets and timestamps.
-	return nil
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/universe"
+)
+
+// Momentum computes the percent change over the given period for each
+// asset in the universe. Returns a single-row DataFrame with one column
+// per asset containing the momentum score.
+func Momentum(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
+	metric := data.MetricClose
+	if len(metrics) > 0 {
+		metric = metrics[0]
+	}
+
+	df, err := u.Window(ctx, period, metric)
+	if err != nil {
+		return data.WithErr(fmt.Errorf("Momentum: %w", err))
+	}
+
+	if df.Len() < 2 {
+		return data.WithErr(fmt.Errorf("Momentum: need at least 2 data points, got %d", df.Len()))
+	}
+
+	return df.Pct(df.Len() - 1).Last().RenameMetric(metric, MomentumSignal)
 }
