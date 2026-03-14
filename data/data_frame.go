@@ -589,6 +589,9 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 // and metric. The length of values must equal Len(). Returns an error if
 // the values length does not match.
 func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) error {
+	if df.err != nil {
+		return df.err
+	}
 	if len(values) != len(df.times) {
 		return fmt.Errorf("Insert: values length %d does not match Len() %d", len(values), len(df.times))
 	}
