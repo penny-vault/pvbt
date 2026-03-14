@@ -1566,6 +1566,43 @@ var _ = Describe("Window", func() {
 	})
 })
 
+var _ = Describe("CumMax", func() {
+	It("computes running maximum per column", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		assets := []asset.Asset{spy}
+		metrics := []data.Metric{data.MetricClose}
+		vals := []float64{100, 120, 110, 130}
+		df, err := data.NewDataFrame(times, assets, metrics, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.CumMax()
+		col := result.Column(spy, data.MetricClose)
+		Expect(col).To(Equal([]float64{100, 120, 120, 130}))
+	})
+
+	It("handles single value", func() {
+		times := []time.Time{time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, []float64{50})
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.CumMax()
+		Expect(result.Column(spy, data.MetricClose)).To(Equal([]float64{50}))
+	})
+
+	It("propagates error", func() {
+		errDF := data.WithErr(fmt.Errorf("test error"))
+		result := errDF.CumMax()
+		Expect(result.Err()).To(HaveOccurred())
+	})
+})
+
 var _ = Describe("Frequency", func() {
 	It("String returns correct names for all known values", func() {
 		Expect(data.Tick.String()).To(Equal("Tick"))
