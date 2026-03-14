@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type calmar struct{}
 
@@ -26,10 +30,16 @@ func (calmar) Description() string {
 }
 
 func (calmar) Compute(a *Account, window *Period) (float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	eqTimes := windowSliceTimes(a.EquityTimes(), window)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	perfDF := pd.Window(window)
+	eq := perfDF.Metrics(data.PortfolioEquity)
+	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	eqTimes := perfDF.Times()
 
-	if len(eq) < 2 || len(eqTimes) < 2 {
+	if len(eqCol) < 2 || len(eqTimes) < 2 {
 		return 0, nil
 	}
 
@@ -38,11 +48,14 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	annualizedReturn := cagr(eq[0], eq[len(eq)-1], years)
+	annualizedReturn := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1
 
-	dd := drawdownSeries(eq)
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+
 	minDD := 0.0
-	for _, v := range dd {
+	for _, v := range ddCol {
 		if v < minDD {
 			minDD = v
 		}

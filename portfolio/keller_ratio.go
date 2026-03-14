@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type kellerRatio struct{}
 
@@ -26,17 +30,25 @@ func (kellerRatio) Description() string {
 }
 
 func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	if len(equity) < 2 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	if len(eqCol) < 2 {
 		return 0, nil
 	}
 
-	totalReturn := (equity[len(equity)-1] / equity[0]) - 1
-	dd := drawdownSeries(equity)
+	totalReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
+
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Find max drawdown as a positive number (abs of most negative drawdown).
 	minDD := 0.0
-	for _, d := range dd {
+	for _, d := range ddCol {
 		if d < minDD {
 			minDD = d
 		}

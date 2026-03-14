@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type dynamicWithdrawalRate struct{}
 
 func (dynamicWithdrawalRate) Name() string { return "DynamicWithdrawalRate" }
@@ -24,7 +26,11 @@ func (dynamicWithdrawalRate) Description() string {
 }
 
 func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
 	if len(equity) < 12 {
 		return 0, nil
 	}

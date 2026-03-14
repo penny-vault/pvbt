@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type activeReturn struct{}
 
 func (activeReturn) Name() string { return "ActiveReturn" }
@@ -26,19 +32,25 @@ func (activeReturn) Description() string {
 // Compute returns the portfolio total return minus the benchmark total
 // return. Total return is (end/start) - 1.
 func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bench := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
+	perfDF := pd.Window(window)
+	eqCol := perfDF.Column(portfolioAsset, data.PortfolioEquity)
+	benchCol := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	if len(equity) < 2 || len(bench) < 2 {
+	if len(eqCol) < 2 || len(benchCol) < 2 {
 		return 0, nil
 	}
 
-	portReturn := (equity[len(equity)-1] / equity[0]) - 1
-	benchReturn := (bench[len(bench)-1] / bench[0]) - 1
+	portReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
+	benchReturn := (benchCol[len(benchCol)-1] / benchCol[0]) - 1
 
 	return portReturn - benchReturn, nil
 }
@@ -47,15 +59,22 @@ func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
 // portfolio cumulative return series and the benchmark cumulative
 // return series.
 func (activeReturn) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return nil, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return nil, ErrNoBenchmark
 	}
 
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bench := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-
-	portR := returns(equity)
-	benchR := returns(bench)
+	perfDF := pd.Window(window).Metrics(data.PortfolioEquity, data.PortfolioBenchmark)
+	returns := perfDF.Pct().Drop(math.NaN())
+	if returns.Len() == 0 {
+		return nil, nil
+	}
+	portR := returns.Column(portfolioAsset, data.PortfolioEquity)
+	benchR := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
 	n := len(portR)
 	if len(benchR) < n {

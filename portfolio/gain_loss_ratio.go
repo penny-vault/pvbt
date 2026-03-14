@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type gainLossRatio struct{}
 
@@ -26,11 +31,19 @@ func (gainLossRatio) Description() string {
 }
 
 func (gainLossRatio) Compute(a *Account, window *Period) (float64, error) {
-	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(prices)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	var positive, negative []float64
-	for _, v := range r {
+	for _, v := range col {
 		if v > 0 {
 			positive = append(positive, v)
 		} else if v < 0 {
@@ -42,7 +55,7 @@ func (gainLossRatio) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	return mean(positive) / math.Abs(mean(negative)), nil
+	return stat.Mean(positive, nil) / math.Abs(stat.Mean(negative, nil)), nil
 }
 
 func (gainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

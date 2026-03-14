@@ -18,6 +18,8 @@ package portfolio
 import (
 	"math"
 	"time"
+
+	"github.com/penny-vault/pvbt/data"
 )
 
 type mwrr struct{}
@@ -34,8 +36,12 @@ func (mwrr) Description() string {
 // positive terminal cash flow. Newton-Raphson is used to find the rate r
 // such that sum(cf_i / (1+r)^(t_i/365)) = 0.
 func (mwrr) Compute(a *Account, window *Period) (float64, error) {
-	equity := a.EquityCurve()
-	times := a.EquityTimes()
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	equity := pd.Column(portfolioAsset, data.PortfolioEquity)
+	times := pd.Times()
 	if len(equity) < 2 {
 		return 0, nil
 	}

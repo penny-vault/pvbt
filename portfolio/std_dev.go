@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type stdDev struct{}
 
@@ -26,18 +31,39 @@ func (stdDev) Description() string {
 }
 
 func (stdDev) Compute(a *Account, window *Period) (float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(eq)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
-	af := annualizationFactor(a.EquityTimes())
-	return stddev(r) * math.Sqrt(af), nil
+	perfDF := pd.Window(window)
+	eq := perfDF.Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	if len(col) < 2 {
+		return 0, nil
+	}
+	sd := stat.StdDev(col, nil)
+	if math.IsNaN(sd) {
+		return 0, nil
+	}
+	af := annualizationFactor(perfDF.Times())
+	return sd * math.Sqrt(af), nil
 }
 
 func (stdDev) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	return returns(eq), nil
+	pd := a.PerfData()
+	if pd == nil {
+		return nil, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return nil, nil
+	}
+	return r.Column(portfolioAsset, data.PortfolioEquity), nil
 }
 
 // StdDev is the annualized standard deviation of portfolio returns.

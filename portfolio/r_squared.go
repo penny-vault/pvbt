@@ -15,6 +15,13 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
+
 type rSquared struct{}
 
 func (rSquared) Name() string { return "RSquared" }
@@ -24,28 +31,34 @@ func (rSquared) Description() string {
 }
 
 func (rSquared) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+	perfDF := pd.Window(window)
+	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
+	if returns.Len() == 0 {
+		return 0, nil
+	}
+	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
+	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-
-	pReturns := returns(eq)
-	bReturns := returns(bm)
-
-	if len(pReturns) == 0 || len(bReturns) == 0 {
+	if len(pCol) < 2 || len(bCol) < 2 {
 		return 0, nil
 	}
 
-	sp := stddev(pReturns)
-	sb := stddev(bReturns)
+	sp := stat.StdDev(pCol, nil)
+	sb := stat.StdDev(bCol, nil)
 
-	if sp == 0 || sb == 0 {
+	if sp == 0 || sb == 0 || math.IsNaN(sp) || math.IsNaN(sb) {
 		return 0, nil
 	}
 
-	corr := covariance(pReturns, bReturns) / (sp * sb)
+	corr := stat.Covariance(pCol, bCol, nil) / (sp * sb)
 
 	return corr * corr, nil
 }

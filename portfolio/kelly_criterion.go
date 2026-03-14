@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type kellyCriterion struct{}
 
@@ -26,15 +30,20 @@ func (kellyCriterion) Description() string {
 }
 
 func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	var wins, losses int
 	var avgWin, avgLoss float64
-	for _, v := range r {
+	for _, v := range col {
 		if v > 0 {
 			wins++
 			avgWin += v
@@ -51,7 +60,7 @@ func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
 	avgWin /= float64(wins)
 	avgLoss /= float64(losses)
 
-	w := float64(wins) / float64(len(r))
+	w := float64(wins) / float64(len(col))
 	// Kelly = W - (1 - W) / R, where R = avgWin / avgLoss
 	return w - (1-w)/(avgWin/avgLoss), nil
 }

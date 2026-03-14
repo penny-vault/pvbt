@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type nPositivePeriods struct{}
 
 func (nPositivePeriods) Name() string { return "NPositivePeriods" }
@@ -24,21 +30,25 @@ func (nPositivePeriods) Description() string {
 }
 
 func (nPositivePeriods) Compute(a *Account, window *Period) (float64, error) {
-	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(prices)
-
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	count := 0
-	for _, v := range r {
+	for _, v := range col {
 		if v > 0 {
 			count++
 		}
 	}
 
-	return float64(count) / float64(len(r)), nil
+	return float64(count) / float64(len(col)), nil
 }
 
 func (nPositivePeriods) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

@@ -15,6 +15,13 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
+
 type excessKurtosis struct{}
 
 func (excessKurtosis) Name() string { return "ExcessKurtosis" }
@@ -24,22 +31,30 @@ func (excessKurtosis) Description() string {
 }
 
 func (excessKurtosis) Compute(a *Account, window *Period) (float64, error) {
-	prices := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(prices)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
-	n := len(r)
+	n := len(col)
 	if n < 4 {
 		return 0, nil
 	}
 
-	s := stddev(r)
+	s := stat.StdDev(col, nil)
 	if s == 0 {
 		return 0, nil
 	}
 
-	m := mean(r)
+	m := stat.Mean(col, nil)
 	sum := 0.0
-	for _, v := range r {
+	for _, v := range col {
 		d := v - m
 		sum += d * d * d * d
 	}

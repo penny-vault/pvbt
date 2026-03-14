@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type consecutiveWins struct{}
 
 func (consecutiveWins) Name() string { return "ConsecutiveWins" }
@@ -24,12 +30,20 @@ func (consecutiveWins) Description() string {
 }
 
 func (consecutiveWins) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	maxStreak := 0
 	current := 0
-	for _, v := range r {
+	for _, v := range col {
 		if v > 0 {
 			current++
 			if current > maxStreak {

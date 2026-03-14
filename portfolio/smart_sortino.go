@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type smartSortino struct{}
 
@@ -26,22 +31,29 @@ func (smartSortino) Description() string {
 }
 
 func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.RiskFreePrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
+	perfDF := pd.Window(window)
+	returns := perfDF.Pct().Drop(math.NaN())
+	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
+	if er.Len() == 0 {
+		return 0, nil
+	}
+	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(eq)
-	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
-	er := excessReturns(r, rf)
-
-	n := len(er)
+	n := len(erCol)
 	if n == 0 {
 		return 0, nil
 	}
 
 	sumSq := 0.0
-	for _, v := range er {
+	for _, v := range erCol {
 		if v < 0 {
 			sumSq += v * v
 		}
@@ -52,10 +64,10 @@ func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(a.EquityTimes())
-	rawSortino := mean(er) / dd * math.Sqrt(af)
+	af := annualizationFactor(perfDF.Times())
+	rawSortino := stat.Mean(erCol, nil) / dd * math.Sqrt(af)
 
-	penalty := autocorrelationPenalty(er)
+	penalty := autocorrelationPenalty(erCol)
 	if penalty == 0 {
 		return 0, nil
 	}

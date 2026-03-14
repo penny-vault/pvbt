@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type omegaRatio struct{}
 
@@ -26,16 +30,21 @@ func (omegaRatio) Description() string {
 }
 
 func (omegaRatio) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Omega = sum(max(r_i, 0)) / sum(max(-r_i, 0))
 	// Threshold is 0 (no risk-free subtraction).
 	var gains, losses float64
-	for _, v := range r {
+	for _, v := range col {
 		if v > 0 {
 			gains += v
 		} else {

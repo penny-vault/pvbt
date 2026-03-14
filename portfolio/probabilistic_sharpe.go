@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type probabilisticSharpe struct{}
 
@@ -26,31 +31,38 @@ func (probabilisticSharpe) Description() string {
 }
 
 func (probabilisticSharpe) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.RiskFreePrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
+	perfDF := pd.Window(window)
+	returns := perfDF.Pct().Drop(math.NaN())
+	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
+	if er.Len() == 0 {
+		return 0, nil
+	}
+	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(eq)
-	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
-	er := excessReturns(r, rf)
-
-	n := len(er)
+	n := len(erCol)
 	if n < 4 {
 		return 0, nil
 	}
 
 	// Compute sample Sharpe (not annualized -- PSR works on per-period).
-	sd := stddev(er)
+	sd := stat.StdDev(erCol, nil)
 	if sd == 0 {
 		return 0, nil
 	}
-	sr := mean(er) / sd
+	sr := stat.Mean(erCol, nil) / sd
 
 	// Compute skewness and kurtosis of excess returns.
-	m := mean(er)
+	m := stat.Mean(erCol, nil)
 	var sum3, sum4 float64
-	for _, v := range er {
+	for _, v := range erCol {
 		d := v - m
 		d2 := d * d
 		sum3 += d2 * d

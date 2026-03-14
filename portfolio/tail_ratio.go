@@ -18,6 +18,8 @@ package portfolio
 import (
 	"math"
 	"sort"
+
+	"github.com/penny-vault/pvbt/data"
 )
 
 type tailRatio struct{}
@@ -29,14 +31,19 @@ func (tailRatio) Description() string {
 }
 
 func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
-	sorted := make([]float64, len(r))
-	copy(sorted, r)
+	sorted := make([]float64, len(col))
+	copy(sorted, col)
 	sort.Float64s(sorted)
 
 	n := len(sorted)

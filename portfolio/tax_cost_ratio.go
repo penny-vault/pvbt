@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type taxCostRatio struct{}
 
 func (taxCostRatio) Name() string { return "TaxCostRatio" }
@@ -24,7 +26,11 @@ func (taxCostRatio) Description() string {
 }
 
 func (taxCostRatio) Compute(a *Account, _ *Period) (float64, error) {
-	ec := a.EquityCurve()
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	ec := pd.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ec) < 2 {
 		return 0, nil
 	}

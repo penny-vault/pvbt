@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type cagrMetric struct{}
 
 func (cagrMetric) Name() string { return "CAGR" }
@@ -24,15 +30,25 @@ func (cagrMetric) Description() string {
 }
 
 func (cagrMetric) Compute(a *Account, window *Period) (float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	eqTimes := windowSliceTimes(a.EquityTimes(), window)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	perfDF := pd.Window(window)
+	eq := perfDF.Metrics(data.PortfolioEquity)
+	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	eqTimes := perfDF.Times()
 
-	if len(eq) < 2 || len(eqTimes) < 2 {
+	if len(eqCol) < 2 || len(eqTimes) < 2 {
 		return 0, nil
 	}
 
 	years := eqTimes[len(eqTimes)-1].Sub(eqTimes[0]).Hours() / 24 / 365.25
-	return cagr(eq[0], eq[len(eq)-1], years), nil
+	if years <= 0 || eqCol[0] <= 0 || eqCol[len(eqCol)-1] <= 0 {
+		return 0, nil
+	}
+
+	return math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1, nil
 }
 
 func (cagrMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

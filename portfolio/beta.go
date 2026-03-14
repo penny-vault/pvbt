@@ -15,6 +15,13 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
+
 type beta struct{}
 
 func (beta) Name() string { return "Beta" }
@@ -24,26 +31,41 @@ func (beta) Description() string {
 }
 
 func (beta) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+	perfDF := pd.Window(window)
+	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
+	if returns.Len() == 0 {
+		return 0, nil
+	}
+	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
+	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-
-	pReturns := returns(eq)
-	bReturns := returns(bm)
-
-	if len(pReturns) == 0 || len(bReturns) == 0 {
+	if len(pCol) == 0 || len(bCol) == 0 {
 		return 0, nil
 	}
 
-	v := variance(bReturns)
-	if v == 0 {
+	if len(pCol) < 2 || len(bCol) < 2 {
 		return 0, nil
 	}
 
-	return covariance(pReturns, bReturns) / v, nil
+	v := stat.Variance(bCol, nil)
+	if v == 0 || math.IsNaN(v) {
+		return 0, nil
+	}
+
+	cov := stat.Covariance(pCol, bCol, nil)
+	if math.IsNaN(cov) {
+		return 0, nil
+	}
+
+	return cov / v, nil
 }
 
 func (beta) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

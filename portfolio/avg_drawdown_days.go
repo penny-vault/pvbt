@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type avgDrawdownDays struct{}
 
 func (avgDrawdownDays) Name() string { return "AvgDrawdownDays" }
@@ -24,17 +26,22 @@ func (avgDrawdownDays) Description() string {
 }
 
 func (avgDrawdownDays) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	if len(equity) < 2 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
-
-	dd := drawdownSeries(equity)
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	if eq.Len() < 2 {
+		return 0, nil
+	}
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Count drawdown episodes and their durations.
 	var durations []int
 	current := 0
-	for _, v := range dd {
+	for _, v := range ddCol {
 		if v < 0 {
 			current++
 		} else if current > 0 {

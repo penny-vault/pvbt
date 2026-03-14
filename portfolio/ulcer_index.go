@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type ulcerIndex struct{}
 
@@ -26,18 +30,23 @@ func (ulcerIndex) Description() string {
 }
 
 func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
 
 	const lookback = 14
 
-	if len(equity) < lookback {
+	if len(eqCol) < lookback {
 		return 0, nil
 	}
 
 	// Use the last 14 periods. Within that window, track the rolling
 	// peak and compute percentage drawdowns -- matching the standard
 	// Ulcer Index definition.
-	tail := equity[len(equity)-lookback:]
+	tail := eqCol[len(eqCol)-lookback:]
 	peak := tail[0]
 	sumSq := 0.0
 

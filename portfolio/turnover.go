@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type turnover struct{}
 
 func (turnover) Name() string { return "Turnover" }
@@ -28,8 +30,12 @@ func (turnover) Description() string {
 func (turnover) Compute(a *Account, _ *Period) (float64, error) {
 	_, totalSellValue := roundTrips(a.Transactions())
 
-	ec := a.EquityCurve()
-	et := a.EquityTimes()
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	ec := pd.Column(portfolioAsset, data.PortfolioEquity)
+	et := pd.Times()
 
 	if len(ec) < 2 || totalSellValue == 0 {
 		return 0, nil
