@@ -16,8 +16,6 @@
 package portfolio
 
 import (
-	"math"
-
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/rs/zerolog/log"
@@ -39,35 +37,33 @@ type maxAboveZero struct {
 func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 	times := df.Times()
 	assets := df.AssetList()
-	T := len(times)
+	nTimes := len(times)
 
 	// Build Selected column per asset.
-	selCols := make(map[string][]float64)
+	selCols := make(map[string][]float64, len(assets))
 	for _, a := range assets {
-		selCols[a.CompositeFigi] = make([]float64, T)
+		selCols[a.CompositeFigi] = make([]float64, nTimes)
 	}
 
 	// Track which fallback assets need to be inserted.
 	needsFallback := false
 	var fbAssets []asset.Asset
-	fbSelCols := make(map[string][]float64)
+	var fbSelCols map[string][]float64
 	if m.fallback != nil {
 		fbAssets = m.fallback.AssetList()
+		fbSelCols = make(map[string][]float64, len(fbAssets))
 		for _, a := range fbAssets {
-			fbSelCols[a.CompositeFigi] = make([]float64, T)
+			fbSelCols[a.CompositeFigi] = make([]float64, nTimes)
 		}
 	}
 
 	for ti, t := range times {
-		bestVal := math.Inf(-1)
+		bestVal := 0.0 // only values strictly above zero qualify
 		var bestFigi string
 
 		for _, a := range assets {
 			v := df.ValueAt(a, m.metric, t)
-			if math.IsNaN(v) {
-				continue
-			}
-			if v > 0 && v > bestVal {
+			if v > bestVal {
 				bestVal = v
 				bestFigi = a.CompositeFigi
 			}
@@ -94,6 +90,19 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 						Str("asset", a.CompositeFigi).
 						Str("metric", string(met)).
 						Msg("MaxAboveZero: failed to insert fallback data")
+				}
+			}
+		}
+	}
+
+	// Merge fallback selections into selCols for overlapping assets
+	// (assets that appear in both the input and fallback DataFrames).
+	for _, a := range fbAssets {
+		if sel, exists := selCols[a.CompositeFigi]; exists {
+			fbSel := fbSelCols[a.CompositeFigi]
+			for i, v := range fbSel {
+				if v > sel[i] {
+					sel[i] = v
 				}
 			}
 		}

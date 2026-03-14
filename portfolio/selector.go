@@ -17,11 +17,12 @@ package portfolio
 
 import "github.com/penny-vault/pvbt/data"
 
-// Selector filters a DataFrame down to only the assets that should be
-// held at each timestep. The returned DataFrame has the same structure
-// as the input but with unselected assets removed or marked. This is
-// the first step in portfolio construction -- selection happens before
-// weighting.
+// Selector marks which assets should be held at each timestep by
+// inserting a Selected metric column into the DataFrame. Selected > 0
+// means the asset is chosen at that timestep; 0 means it is not.
+// The DataFrame is mutated in place and the same pointer is returned.
+// This is the first step in portfolio construction -- selection
+// happens before weighting.
 type Selector interface {
 	Select(df *data.DataFrame) *data.DataFrame
 }

@@ -40,7 +40,7 @@ Portfolio construction is a two-step pipeline: **selection** filters a DataFrame
 
 ## Selection
 
-A `Selector` filters a DataFrame to only the assets that should be held at each timestep:
+A `Selector` marks which assets should be held at each timestep by inserting a `Selected` metric column into the DataFrame. `Selected > 0` means the asset is chosen at that timestep; `0` means it is not. The DataFrame is mutated in place and the same pointer is returned:
 
 ```go
 type Selector interface {
@@ -48,10 +48,10 @@ type Selector interface {
 }
 ```
 
-The returned DataFrame has the same structure but with unselected assets removed. For example, `MaxAboveZero` picks the asset with the highest signal value above zero at each timestep, falling back to specified assets if nothing qualifies:
+For example, `MaxAboveZero` picks the asset with the highest value above zero in a given metric column at each timestep, falling back to a provided DataFrame of assets if nothing qualifies:
 
 ```go
-selected := portfolio.MaxAboveZero(s.riskOff).Select(momentum)
+portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 ```
 
 ## Weighting
@@ -60,15 +60,15 @@ Weighting functions take a filtered DataFrame and produce a `PortfolioPlan` with
 
 | Function | Description |
 |----------|-------------|
-| `EqualWeight(df)` | Assigns equal weights to all selected assets (3 assets = 1/3 each) |
-| `WeightedBySignal(df, metric)` | Weights proportionally to a metric column, normalized to sum to 1.0 |
+| `EqualWeight(df)` | Assigns equal weights to all assets where `Selected > 0` (3 selected = 1/3 each). Returns `(PortfolioPlan, error)`. |
+| `WeightedBySignal(df, metric)` | Weights selected assets proportionally to a metric column, normalized to sum to 1.0. Returns `(PortfolioPlan, error)`. |
 
 ```go
-// equal weight
-plan := portfolio.EqualWeight(selected)
+// equal weight among selected assets
+plan, err := portfolio.EqualWeight(momentum)
 
-// weight by market cap
-plan := portfolio.WeightedBySignal(selected, data.MarketCap)
+// weight selected assets by market cap
+plan, err := portfolio.WeightedBySignal(momentum, data.MarketCap)
 ```
 
 ## Construction
@@ -80,8 +80,11 @@ There are two ways to express allocation decisions, and they can be mixed freely
 The most common approach. The strategy computes a selection and weighting, then tells the portfolio to match it:
 
 ```go
-selected := portfolio.MaxAboveZero(s.riskOff).Select(momentum)
-plan := portfolio.EqualWeight(selected)
+portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+plan, err := portfolio.EqualWeight(momentum)
+if err != nil {
+    // handle error
+}
 p.RebalanceTo(ctx, plan...)
 ```
 
@@ -90,7 +93,11 @@ p.RebalanceTo(ctx, plan...)
 A more involved example -- weight selected assets by market cap:
 
 ```go
-plan := portfolio.WeightedBySignal(selected, data.MarketCap)
+portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+plan, err := portfolio.WeightedBySignal(momentum, data.MarketCap)
+if err != nil {
+    // handle error
+}
 p.RebalanceTo(ctx, plan...)
 ```
 
@@ -156,7 +163,10 @@ A strategy can use `RebalanceTo` for its core allocation and `Order` for specifi
 ```go
 func (s *MyStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
     // Core allocation
-    plan := portfolio.EqualWeight(selected)
+    plan, err := portfolio.EqualWeight(selected)
+    if err != nil {
+        return
+    }
     p.RebalanceTo(ctx, plan...)
 
     // Tactical overlay
@@ -569,10 +579,10 @@ func (s *LowVolFactor) Compute(ctx context.Context, e *engine.Engine, p portfoli
     vol := signal.Volatility(ctx, s.Universe, portfolio.Months(3))
 
     // Long the least volatile stocks
-    longPlan := portfolio.EqualWeight(lowVol)
+    longPlan, _ := portfolio.EqualWeight(lowVol)
 
     // Short the most volatile stocks
-    shortPlan := portfolio.EqualWeight(highVol)
+    shortPlan, _ := portfolio.EqualWeight(highVol)
 
     p.RebalanceTo(ctx, longPlan...)
     p.RebalanceTo(ctx, shortPlan...)

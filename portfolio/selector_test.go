@@ -315,6 +315,41 @@ var _ = Describe("MaxAboveZero", func() {
 		Expect(result.ValueAt(bil, data.MetricClose, t1)).To(Equal(80.0))
 	})
 
+	It("selects overlapping fallback asset via fallback at timesteps where no input asset qualifies", func() {
+		// BIL is in both input and fallback. At t1 SPY wins normally.
+		// At t2 nothing is positive, so fallback triggers and BIL
+		// should be marked Selected via the fallback path.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy, bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{
+				10, -5, // SPY
+				-1, -2, // BIL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		fbDF, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{bil},
+			[]data.Metric{data.MetricClose},
+			[]float64{90, 91},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
+		result := sel.Select(df)
+
+		// t1: SPY wins normally.
+		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(1.0))
+		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(0.0))
+
+		// t2: fallback triggers, BIL selected.
+		Expect(result.ValueAt(spy, portfolio.Selected, t2)).To(Equal(0.0))
+		Expect(result.ValueAt(bil, portfolio.Selected, t2)).To(Equal(1.0))
+	})
+
 	It("returns empty DataFrame with Selected for zero timestamps", func() {
 		df, err := data.NewDataFrame(
 			nil,
