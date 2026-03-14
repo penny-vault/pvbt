@@ -53,13 +53,16 @@ func MaxAboveZero(metric data.Metric, fallback *data.DataFrame) Selector
 ```
 
 - `metric` -- the column to evaluate (replaces the implicit `df.MetricList()[0]` convention).
-- `fallback` -- a DataFrame containing fallback asset data for the same timestamps. When no asset has a positive value at a timestep, the fallback assets are inserted into the input DataFrame and marked `Selected=1.0`.
+- `fallback` -- a DataFrame containing fallback asset data. Must share the same timestamps as the input DataFrame (required by `Insert`'s length check). When no asset has a positive value at a timestep, the fallback assets are inserted into the input DataFrame and marked `Selected=1.0`.
 
-Behavior per timestep:
+Behavior:
 
-1. Find the asset with the highest positive value in `metric`.
-2. Set `Selected=1.0` for that asset, `Selected=0.0` for all others.
-3. If no asset qualifies, insert each fallback asset into the DataFrame (with its metric data) and set `Selected=1.0` for them at that timestep.
+1. For each asset (including fallback assets), build a complete `[]float64` of length `len(df.Times())` for the `Selected` column.
+2. At each timestep, find the asset with the highest positive value in `metric`. Set its `Selected` entry to 1.0; set all others to 0.0.
+3. If no asset qualifies at a timestep, insert each fallback asset's metric data into the DataFrame by iterating over the fallback DataFrame's metrics and calling `df.Insert(asset, metric, values)` for each. Set `Selected=1.0` for each fallback asset at that timestep.
+4. After processing all timesteps, call `df.Insert(asset, Selected, values)` once per asset to write the complete selection column.
+
+Note: `Insert` zero-initializes new columns (not NaN). When fallback assets are inserted, their metric columns will contain 0.0 at timesteps where no data was explicitly provided. This is acceptable because `WeightedBySignal` discards zero values (see below).
 
 ### EqualWeight
 
@@ -90,9 +93,9 @@ Behavior:
 
 1. Look for the `Selected` column. If absent, return an error.
 2. At each timestep, collect all assets where `Selected > 0`.
-3. Among those assets, read the `metric` values. Discard NaN and negative values.
+3. Among those assets, read the `metric` values. Discard NaN, zero, and negative values.
 4. Normalize remaining values to sum to 1.0.
-5. If all values are zero, NaN, or negative among selected assets, fall back to equal weight among the selected assets for that timestep.
+5. If all values are zero, NaN, or negative among selected assets, fall back to equal weight among the selected assets for that timestep. The denominator is the count of selected assets at that specific timestep (not the total asset count).
 
 Any non-zero `Selected` value means "in" -- the magnitude is ignored.
 
