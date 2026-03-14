@@ -1618,3 +1618,89 @@ var _ = Describe("Frequency", func() {
 		Expect(unknown.String()).To(Equal(fmt.Sprintf("Frequency(%d)", 99)))
 	})
 })
+
+var _ = Describe("AppendRow", func() {
+	It("appends a row to a single-column DataFrame", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Len()).To(Equal(2))
+		Expect(df.Column(spy, data.MetricClose)).To(Equal([]float64{100, 110}))
+		Expect(df.End()).To(Equal(t2))
+	})
+
+	It("appends rows with multiple columns", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		metrics := []data.Metric{data.MetricClose, data.PortfolioEquity}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy}, metrics, []float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110, 220})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Column(spy, data.MetricClose)).To(Equal([]float64{100, 110}))
+		Expect(df.Column(spy, data.PortfolioEquity)).To(Equal([]float64{200, 220}))
+	})
+
+	It("rejects non-chronological timestamp", func() {
+		t1 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		t0 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t0, []float64{90})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("chronological"))
+	})
+
+	It("rejects wrong values length", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110, 220})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("values length"))
+	})
+
+	It("does not affect prior Window snapshots", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		snapshot := df.Window(nil)
+		Expect(snapshot.Len()).To(Equal(1))
+
+		err = df.AppendRow(t2, []float64{110})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Snapshot should be unaffected
+		Expect(snapshot.Len()).To(Equal(1))
+		Expect(df.Len()).To(Equal(2))
+	})
+})

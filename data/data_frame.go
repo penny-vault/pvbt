@@ -1388,6 +1388,53 @@ func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
 	return mustNewDataFrame(times, assets, metrics, newData)
 }
 
+// AppendRow appends a single timestamp and its column values to the
+// DataFrame in place. The values slice must have length len(assets) *
+// len(metrics), ordered as [asset0_metric0, asset0_metric1, ...,
+// asset1_metric0, ...] (matching column-major layout). Returns an error
+// if the timestamp is not after the current End() or if the values
+// length is wrong.
+//
+// AppendRow is the only DataFrame method that mutates in place. This is
+// safe because all read methods produce independent copies via make+copy.
+func (df *DataFrame) AppendRow(t time.Time, values []float64) error {
+	if df.err != nil {
+		return df.err
+	}
+
+	colCount := len(df.assets) * len(df.metrics)
+	if len(values) != colCount {
+		return fmt.Errorf("AppendRow: values length %d does not match column count %d", len(values), colCount)
+	}
+
+	if len(df.times) > 0 && !t.After(df.End()) {
+		return fmt.Errorf("AppendRow: timestamp %s is not after current End() %s (must be chronological)",
+			t.Format(time.RFC3339), df.End().Format(time.RFC3339))
+	}
+
+	// The data slab is column-major: each column is contiguous.
+	// To append one row, we need to insert one value at the end of each
+	// column. This requires rebuilding the slab because columns shift.
+	oldT := len(df.times)
+	newT := oldT + 1
+	metricLen := len(df.metrics)
+
+	newData := make([]float64, colCount*newT)
+	for aIdx := 0; aIdx < len(df.assets); aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
+			oldOff := (aIdx*metricLen + mIdx) * oldT
+			newOff := (aIdx*metricLen + mIdx) * newT
+			copy(newData[newOff:newOff+oldT], df.data[oldOff:oldOff+oldT])
+			newData[newOff+oldT] = values[aIdx*metricLen+mIdx]
+		}
+	}
+
+	df.data = newData
+	df.times = append(df.times, t)
+
+	return nil
+}
+
 // Reduce runs fn on each column, collapsing it to a single value. The
 // result is a single-row DataFrame with the same assets and metrics.
 func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
