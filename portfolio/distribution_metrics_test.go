@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -246,25 +247,25 @@ var _ = Describe("Distribution Metrics", func() {
 			Expect(result).To(BeNumerically("~", 1.7492183239823191, 1e-9))
 		})
 
-		It("returns zero when all returns are positive (no losses)", func() {
+		It("returns NaN when all returns are positive (no losses)", func() {
 			a := cashAccount([]float64{100, 102, 105, 108, 112})
 			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
+			Expect(math.IsNaN(result)).To(BeTrue())
 		})
 
-		It("returns zero when all returns are negative (no gains)", func() {
+		It("returns NaN when all returns are negative (no gains)", func() {
 			a := cashAccount([]float64{100, 98, 95, 92, 88})
 			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
+			Expect(math.IsNaN(result)).To(BeTrue())
 		})
 
-		It("returns zero with a single return (only one side)", func() {
+		It("returns NaN with a single positive return (only one side)", func() {
 			a := cashAccount([]float64{100, 105})
 			result, err := a.PerformanceMetric(portfolio.GainLossRatio).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 0.0, 1e-12))
+			Expect(math.IsNaN(result)).To(BeTrue())
 		})
 
 		It("returns 1.0 for symmetric returns", func() {

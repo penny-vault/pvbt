@@ -52,7 +52,7 @@ func (gainLossRatio) Compute(a *Account, window *Period) (float64, error) {
 	}
 
 	if len(positive) == 0 || len(negative) == 0 {
-		return 0, nil
+		return math.NaN(), nil
 	}
 
 	return stat.Mean(positive, nil) / math.Abs(stat.Mean(negative, nil)), nil

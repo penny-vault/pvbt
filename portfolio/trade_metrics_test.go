@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -122,14 +123,14 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
-			Expect(tm.ProfitFactor).To(Equal(0.0))
+			Expect(math.IsNaN(tm.ProfitFactor)).To(BeTrue())
 			Expect(tm.AverageHoldingPeriod).To(Equal(0.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
 	Describe("with only winning trades", func() {
-		It("sets ProfitFactor and GainLossRatio to zero (no losses)", func() {
+		It("sets ProfitFactor and GainLossRatio to +Inf (no losses)", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -153,8 +154,8 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.WinRate).To(Equal(1.0))
 			Expect(tm.AverageWin).To(Equal(200.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
-			Expect(tm.ProfitFactor).To(Equal(0.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.ProfitFactor)).To(BeTrue())
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
@@ -298,7 +299,7 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.ProfitFactor).To(Equal(0.0))
 			Expect(tm.AverageLoss).To(Equal(-150.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
@@ -330,8 +331,8 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.WinRate).To(Equal(0.0))
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
-			Expect(tm.ProfitFactor).To(Equal(0.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.ProfitFactor)).To(BeTrue())
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
@@ -394,7 +395,7 @@ var _ = Describe("TradeMetrics", func() {
 	})
 
 	Describe("single winning trade", func() {
-		It("sets WinRate=1.0 and zeroes ProfitFactor/GainLossRatio", func() {
+		It("sets WinRate=1.0 and +Inf ProfitFactor/GainLossRatio", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
 			// Buy 10 ACME at $100, Sell at $120 (31 days) -> win $200
@@ -420,8 +421,8 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.WinRate).To(Equal(1.0))
 			Expect(tm.AverageWin).To(Equal(200.0))
 			Expect(tm.AverageLoss).To(Equal(0.0))
-			Expect(tm.ProfitFactor).To(Equal(0.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.ProfitFactor)).To(BeTrue())
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
@@ -453,7 +454,7 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.AverageWin).To(Equal(0.0))
 			Expect(tm.AverageLoss).To(Equal(-200.0))
 			Expect(tm.ProfitFactor).To(Equal(0.0))
-			Expect(tm.GainLossRatio).To(Equal(0.0))
+			Expect(math.IsNaN(tm.GainLossRatio)).To(BeTrue())
 		})
 	})
 
