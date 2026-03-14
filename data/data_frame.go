@@ -1303,6 +1303,26 @@ func periodChanged(prev, curr time.Time, freq Frequency) bool {
 
 // -- Windowed operations -----------------------------------------------------
 
+// Window returns a DataFrame containing only timestamps within the
+// trailing window defined by p. When p is nil, returns the full DataFrame.
+// When the window exceeds the available data, returns the full DataFrame.
+func (df *DataFrame) Window(p *Period) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+	if p == nil {
+		return df.Copy()
+	}
+	if len(df.times) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+	start := p.Before(df.End())
+	if !start.After(df.Start()) {
+		return df.Copy()
+	}
+	return df.Between(start, df.End())
+}
+
 // Rolling returns a RollingDataFrame that applies rolling-window operations
 // with a window of n periods.
 func (df *DataFrame) Rolling(n int) *RollingDataFrame {

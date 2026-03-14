@@ -1521,6 +1521,51 @@ var _ = Describe("DataFrame", func() {
 	})
 })
 
+var _ = Describe("Window", func() {
+	var df *data.DataFrame
+
+	BeforeEach(func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+		}
+		assets := []asset.Asset{{CompositeFigi: "SPY", Ticker: "SPY"}}
+		metrics := []data.Metric{data.MetricClose}
+		vals := []float64{100, 110, 120, 130, 140}
+		var err error
+		df, err = data.NewDataFrame(times, assets, metrics, vals)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("returns full DataFrame when window is nil", func() {
+		result := df.Window(nil)
+		Expect(result.Len()).To(Equal(5))
+	})
+
+	It("trims to last 2 months", func() {
+		w := data.Months(2)
+		result := df.Window(&w)
+		// End is 2025-05-01, Before = 2025-03-01, so includes Mar, Apr, May
+		Expect(result.Len()).To(Equal(3))
+	})
+
+	It("returns full DataFrame when window exceeds data", func() {
+		w := data.Years(10)
+		result := df.Window(&w)
+		Expect(result.Len()).To(Equal(5))
+	})
+
+	It("propagates error", func() {
+		errDF := data.WithErr(fmt.Errorf("test error"))
+		w := data.Months(1)
+		result := errDF.Window(&w)
+		Expect(result.Err()).To(HaveOccurred())
+	})
+})
+
 var _ = Describe("Frequency", func() {
 	It("String returns correct names for all known values", func() {
 		Expect(data.Tick.String()).To(Equal("Tick"))
