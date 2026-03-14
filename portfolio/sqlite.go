@@ -363,7 +363,7 @@ func (a *Account) writePriceSeries(tx *sql.Tx) error {
 	defer stmt.Close()
 
 	for i, v := range a.benchmarkPrices {
-		if i < len(a.equityTimes) {
+		if i < len(a.equityTimes) && !math.IsNaN(v) {
 			d := a.equityTimes[i].Format(dateFormat)
 			if _, err := stmt.Exec("benchmark", d, v); err != nil {
 				return fmt.Errorf("insert benchmark price: %w", err)
@@ -372,7 +372,7 @@ func (a *Account) writePriceSeries(tx *sql.Tx) error {
 	}
 
 	for i, v := range a.riskFreePrices {
-		if i < len(a.equityTimes) {
+		if i < len(a.equityTimes) && !math.IsNaN(v) {
 			d := a.equityTimes[i].Format(dateFormat)
 			if _, err := stmt.Exec("risk_free", d, v); err != nil {
 				return fmt.Errorf("insert risk_free price: %w", err)
