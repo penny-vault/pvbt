@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package asset defines the Asset type representing a tradeable instrument.
 package asset
 
 // Asset represents a single tradeable instrument.
