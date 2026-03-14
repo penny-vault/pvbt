@@ -583,6 +583,31 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 	})
 }
 
+// RenameMetric returns a new DataFrame with metric old replaced by new.
+// Returns a DataFrame with Err set if old is not found or new already exists.
+func (df *DataFrame) RenameMetric(old, new Metric) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	oldIdx := -1
+	for i, m := range df.metrics {
+		if m == old {
+			oldIdx = i
+		}
+		if m == new {
+			return WithErr(fmt.Errorf("RenameMetric: metric %q already exists", new))
+		}
+	}
+	if oldIdx == -1 {
+		return WithErr(fmt.Errorf("RenameMetric: metric %q not found", old))
+	}
+
+	result := df.Copy()
+	result.metrics[oldIdx] = new
+	return result
+}
+
 // -- Mutation ----------------------------------------------------------------
 
 // Insert adds or overwrites a column in the DataFrame for the given asset

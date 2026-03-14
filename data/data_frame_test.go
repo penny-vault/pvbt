@@ -1482,6 +1482,43 @@ var _ = Describe("DataFrame", func() {
 			Expect(errDF.Len()).To(Equal(0))
 		})
 	})
+
+	Describe("RenameMetric", func() {
+		It("renames a metric successfully", func() {
+			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			Expect(err).NotTo(HaveOccurred())
+
+			result := df.RenameMetric(data.Price, data.Metric("Signal"))
+			Expect(result.Err()).To(BeNil())
+			Expect(result.MetricList()).To(Equal([]data.Metric{data.Metric("Signal")}))
+			Expect(result.Value(aapl, data.Metric("Signal"))).To(Equal(5.0))
+		})
+
+		It("returns error when old metric not found", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+
+			result := df.RenameMetric(data.Volume, data.Metric("Signal"))
+			Expect(result.Err()).To(HaveOccurred())
+			Expect(result.Err().Error()).To(ContainSubstring("Volume"))
+		})
+
+		It("returns error when new metric already exists", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price, data.Volume},
+				[]float64{1, 2, 3, 4, 5, 10, 20, 30, 40, 50})
+
+			result := df.RenameMetric(data.Price, data.Volume)
+			Expect(result.Err()).To(HaveOccurred())
+			Expect(result.Err().Error()).To(ContainSubstring("already exists"))
+		})
+
+		It("propagates existing error", func() {
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+
+			result := df.Add(short).RenameMetric(data.Price, data.Metric("Signal"))
+			Expect(result.Err()).To(HaveOccurred())
+		})
+	})
 })
 
 var _ = Describe("Frequency", func() {
