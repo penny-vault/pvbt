@@ -89,6 +89,21 @@ var _ = Describe("Static Universe", func() {
 		})
 	})
 
+	Describe("CurrentDate", func() {
+		It("delegates to the data source", func() {
+			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
+			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+			Expect(staticUniverse.CurrentDate()).To(Equal(now))
+		})
+
+		It("returns zero time when no data source is set", func() {
+			staticUniverse := universe.NewStatic("AAPL")
+
+			Expect(staticUniverse.CurrentDate()).To(Equal(time.Time{}))
+		})
+	})
+
 	Describe("At", func() {
 		It("delegates to the data source FetchAt method", func() {
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
