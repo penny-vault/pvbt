@@ -285,7 +285,10 @@ var _ = Describe("MaxAboveZero", func() {
 		Expect(result.ValueAt(aapl, portfolio.Selected, t1)).To(Equal(0.0))
 	})
 
-	It("handles fallback asset that overlaps with input asset", func() {
+	It("selects overlapping fallback asset normally when it has positive value", func() {
+		// BIL is in both the input DataFrame and the fallback DataFrame.
+		// BIL has a positive value (80) in the input, so it should be
+		// selected normally -- the fallback path should NOT trigger.
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			[]asset.Asset{spy, bil},
@@ -305,9 +308,11 @@ var _ = Describe("MaxAboveZero", func() {
 		sel := portfolio.MaxAboveZero(data.MetricClose, fbDF)
 		result := sel.Select(df)
 
+		// BIL selected via normal path (highest positive), not fallback.
 		Expect(result.ValueAt(bil, portfolio.Selected, t1)).To(Equal(1.0))
 		Expect(result.ValueAt(spy, portfolio.Selected, t1)).To(Equal(0.0))
-		Expect(result.ValueAt(bil, data.MetricClose, t1)).To(Equal(90.0))
+		// BIL's price is NOT overwritten -- fallback didn't trigger.
+		Expect(result.ValueAt(bil, data.MetricClose, t1)).To(Equal(80.0))
 	})
 
 	It("returns empty DataFrame with Selected for zero timestamps", func() {
