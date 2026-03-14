@@ -26,9 +26,8 @@ var (
 // etc.). Each implementation lives in its own file with an unexported
 // struct and an exported package-level var. The Account is passed to
 // give metrics access to everything they might need: the transaction
-// log, equity curve history, benchmark returns, risk-free returns, and
-// current positions. Anyone can define custom metrics by implementing
-// this interface.
+// log, performance data (perfData DataFrame), and current positions.
+// Anyone can define custom metrics by implementing this interface.
 type PerformanceMetric interface {
 	// Name returns a human-readable name for the metric (e.g. "Sharpe").
 	Name() string

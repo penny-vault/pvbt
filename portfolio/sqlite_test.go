@@ -106,12 +106,16 @@ var _ = Describe("SQLite", func() {
 			// Verify cash.
 			Expect(restored.Cash()).To(Equal(acct.Cash()))
 
-			// Verify equity curve.
-			Expect(restored.EquityCurve()).To(Equal(acct.EquityCurve()))
-			Expect(restored.EquityTimes()).To(HaveLen(len(acct.EquityTimes())))
-			for i, t := range restored.EquityTimes() {
-				Expect(t.Equal(acct.EquityTimes()[i])).To(BeTrue(),
-					"equity time mismatch at index %d", i)
+			// Verify perf data.
+			origPD := acct.PerfData()
+			resPD := restored.PerfData()
+			Expect(resPD).NotTo(BeNil())
+			perfA := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+			Expect(resPD.Column(perfA, data.PortfolioEquity)).To(Equal(origPD.Column(perfA, data.PortfolioEquity)))
+			Expect(resPD.Times()).To(HaveLen(len(origPD.Times())))
+			for i, t := range resPD.Times() {
+				Expect(t.Equal(origPD.Times()[i])).To(BeTrue(),
+					"perf data time mismatch at index %d", i)
 			}
 
 			// Verify transactions.
@@ -149,9 +153,9 @@ var _ = Describe("SQLite", func() {
 				}
 			}
 
-			// Verify benchmark and risk-free prices.
-			Expect(restored.BenchmarkPrices()).To(Equal(acct.BenchmarkPrices()))
-			Expect(restored.RiskFreePrices()).To(Equal(acct.RiskFreePrices()))
+			// Verify benchmark and risk-free prices via perfData.
+			Expect(resPD.Column(perfA, data.PortfolioBenchmark)).To(Equal(origPD.Column(perfA, data.PortfolioBenchmark)))
+			Expect(resPD.Column(perfA, data.PortfolioRiskFree)).To(Equal(origPD.Column(perfA, data.PortfolioRiskFree)))
 
 			// Verify benchmark and risk-free identity.
 			Expect(restored.Benchmark()).To(Equal(acct.Benchmark()))
@@ -190,11 +194,9 @@ var _ = Describe("SQLite", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(restored.Cash()).To(Equal(0.0))
-			Expect(restored.EquityCurve()).To(BeEmpty())
+			Expect(restored.PerfData()).To(BeNil())
 			Expect(restored.Transactions()).To(BeEmpty())
 			Expect(restored.Metrics()).To(BeEmpty())
-			Expect(restored.BenchmarkPrices()).To(BeEmpty())
-			Expect(restored.RiskFreePrices()).To(BeEmpty())
 		})
 	})
 
@@ -222,6 +224,3 @@ var _ = Describe("SQLite", func() {
 		})
 	})
 })
-
-// Ensure data.MetricClose is used (avoid unused import).
-var _ = data.MetricClose

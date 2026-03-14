@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
 // TaxLot tracks the purchase date, quantity, and price of a position for
@@ -36,10 +37,7 @@ type PortfolioSnapshot interface {
 	Cash() float64
 	Holdings(func(asset.Asset, float64))
 	Transactions() []Transaction
-	EquityCurve() []float64
-	EquityTimes() []time.Time
-	BenchmarkPrices() []float64
-	RiskFreePrices() []float64
+	PerfData() *data.DataFrame
 	TaxLots() map[asset.Asset][]TaxLot
 	Metrics() []MetricRow
 	AllMetadata() map[string]string
@@ -54,10 +52,9 @@ func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
 			a.holdings[ast] = qty
 		})
 		a.transactions = append(a.transactions, snap.Transactions()...)
-		a.equityCurve = append(a.equityCurve, snap.EquityCurve()...)
-		a.equityTimes = append(a.equityTimes, snap.EquityTimes()...)
-		a.benchmarkPrices = append(a.benchmarkPrices, snap.BenchmarkPrices()...)
-		a.riskFreePrices = append(a.riskFreePrices, snap.RiskFreePrices()...)
+		if snap.PerfData() != nil {
+			a.perfData = snap.PerfData().Copy()
+		}
 		for ast, lots := range snap.TaxLots() {
 			a.taxLots[ast] = append(a.taxLots[ast], lots...)
 		}

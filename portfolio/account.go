@@ -47,10 +47,6 @@ type Account struct {
 	transactions    []Transaction
 	broker          broker.Broker
 	prices          *data.DataFrame
-	equityCurve     []float64
-	equityTimes     []time.Time
-	benchmarkPrices []float64
-	riskFreePrices  []float64
 	perfData        *data.DataFrame
 	benchmark       asset.Asset
 	riskFree        asset.Asset
@@ -632,12 +628,11 @@ func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
 }
 
 // UpdatePrices stores the latest price DataFrame, computes the total
-// portfolio value, and appends it to the equity curve. It also tracks
+// portfolio value, and appends it to the perfData DataFrame. It also tracks
 // benchmark and risk-free price series when those assets are configured.
 func (a *Account) UpdatePrices(df *data.DataFrame) {
 	a.prices = df
 
-	// Compute total portfolio value: cash + marked holdings.
 	total := a.cash
 	for ast, qty := range a.holdings {
 		v := df.Value(ast, data.MetricClose)
@@ -646,34 +641,20 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 		}
 	}
 
-	a.equityCurve = append(a.equityCurve, total)
-	a.equityTimes = append(a.equityTimes, df.End())
-
-	// Track benchmark price series. Prefer AdjClose, fall back to Close.
+	var benchVal, rfVal float64
 	if a.benchmark != (asset.Asset{}) {
 		v := df.Value(a.benchmark, data.AdjClose)
 		if math.IsNaN(v) || v == 0 {
 			v = df.Value(a.benchmark, data.MetricClose)
 		}
-		a.benchmarkPrices = append(a.benchmarkPrices, v)
+		benchVal = v
 	}
-
-	// Track risk-free price series. Prefer AdjClose, fall back to Close.
 	if a.riskFree != (asset.Asset{}) {
 		v := df.Value(a.riskFree, data.AdjClose)
 		if math.IsNaN(v) || v == 0 {
 			v = df.Value(a.riskFree, data.MetricClose)
 		}
-		a.riskFreePrices = append(a.riskFreePrices, v)
-	}
-
-	// Build perfData in parallel with old fields.
-	var benchVal, rfVal float64
-	if a.benchmark != (asset.Asset{}) {
-		benchVal = a.benchmarkPrices[len(a.benchmarkPrices)-1]
-	}
-	if a.riskFree != (asset.Asset{}) {
-		rfVal = a.riskFreePrices[len(a.riskFreePrices)-1]
+		rfVal = v
 	}
 
 	if a.perfData == nil {
@@ -693,18 +674,6 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 		}
 	}
 }
-
-// EquityCurve returns the equity curve slice.
-func (a *Account) EquityCurve() []float64 { return a.equityCurve }
-
-// EquityTimes returns the equity times slice.
-func (a *Account) EquityTimes() []time.Time { return a.equityTimes }
-
-// BenchmarkPrices returns the benchmark prices slice.
-func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
-
-// RiskFreePrices returns the risk-free prices slice.
-func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
 
 // PerfData returns the accumulated performance DataFrame, or nil if no
 // prices have been recorded yet.

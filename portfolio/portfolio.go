@@ -17,7 +17,6 @@ package portfolio
 
 import (
 	"context"
-	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
@@ -71,11 +70,10 @@ type Portfolio interface {
 	// trades, dividends, fees, deposits, and withdrawals.
 	Transactions() []Transaction
 
-	// EquityCurve returns the portfolio value at each step, in chronological order.
-	EquityCurve() []float64
-
-	// EquityTimes returns the timestamp for each equity curve entry.
-	EquityTimes() []time.Time
+	// PerfData returns the accumulated performance DataFrame containing
+	// equity curve, benchmark, and risk-free price series. Returns nil
+	// if no prices have been recorded yet.
+	PerfData() *data.DataFrame
 
 	// PerformanceMetric returns a PerformanceMetricQuery builder for the given
 	// metric. Use .Value() to get a single number over the full

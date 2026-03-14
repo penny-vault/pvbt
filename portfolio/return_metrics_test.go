@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -196,7 +197,7 @@ var _ = Describe("Return Metrics", func() {
 			a.UpdatePrices(df2)
 
 			// Verify equity curve is as expected.
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000, 15_500, 16_500}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000, 15_500, 16_500}))
 
 			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -305,7 +306,7 @@ var _ = Describe("Return Metrics", func() {
 			a.UpdatePrices(df1)
 
 			// Equity curve: [10000, 8000]
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000, 8_000}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000, 8_000}))
 
 			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -374,7 +375,7 @@ var _ = Describe("Return Metrics", func() {
 			}
 
 			// Verify equity curve.
-			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 10500, 11500, 12500}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 11000, 10500, 11500, 12500}))
 
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -433,7 +434,7 @@ var _ = Describe("Return Metrics", func() {
 			df2 := buildDF(d2, []asset.Asset{spy}, []float64{150}, []float64{150})
 			a.UpdatePrices(df2)
 
-			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 28600}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 11000, 28600}))
 
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -499,7 +500,7 @@ var _ = Describe("Return Metrics", func() {
 			df2 := buildDF(d2, []asset.Asset{spy}, []float64{90}, []float64{90})
 			a.UpdatePrices(df2)
 
-			Expect(a.EquityCurve()).To(Equal([]float64{10000, 11000, 17200}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 11000, 17200}))
 
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -562,7 +563,7 @@ var _ = Describe("Return Metrics", func() {
 			a.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{130}, []float64{130}))
 			a.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{140}, []float64{140}))
 
-			Expect(a.EquityCurve()).To(Equal([]float64{10000, 12000, 7500, 8000}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 7500, 8000}))
 
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -619,7 +620,7 @@ var _ = Describe("Return Metrics", func() {
 			acctA.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
 			// Equity A: [10000, 12000, 25660, 20170]
-			Expect(acctA.EquityCurve()).To(Equal([]float64{10000, 12000, 25660, 20170}))
+			Expect(acctA.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 25660, 20170}))
 
 			// --- Account B: deposit late (d2, before the decline) ---
 			acctB := portfolio.New(portfolio.WithCash(10000, time.Time{}))
@@ -635,7 +636,7 @@ var _ = Describe("Return Metrics", func() {
 			acctB.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
 			// Equity B: [10000, 12000, 14000, 18870]
-			Expect(acctB.EquityCurve()).To(Equal([]float64{10000, 12000, 14000, 18870}))
+			Expect(acctB.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 14000, 18870}))
 
 			mwrrA, err := acctA.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -706,7 +707,7 @@ var _ = Describe("Return Metrics", func() {
 			a.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{100}, []float64{100}))
 			a.UpdatePrices(buildDF(d4, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
-			Expect(a.EquityCurve()).To(Equal([]float64{10000, 12000, 12000, 13330, 14660}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 12000, 13330, 14660}))
 
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())

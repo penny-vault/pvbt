@@ -252,7 +252,8 @@ var _ = Describe("Backtest", func() {
 			restored, err := portfolio.FromSQLite(dbPath)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(restored.GetMetadata("strategy")).To(Equal(strategy.Name()))
-			Expect(restored.EquityCurve()).To(Equal(acct.EquityCurve()))
+			perfA := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+			Expect(restored.PerfData().Column(perfA, data.PortfolioEquity)).To(Equal(acct.PerfData().Column(perfA, data.PortfolioEquity)))
 			Expect(restored.Metrics()).To(Equal(acct.Metrics()))
 		})
 	})
