@@ -15,40 +15,25 @@
 
 package portfolio
 
-// PeriodUnit identifies the calendar unit of a Period.
-type PeriodUnit int
+import "github.com/penny-vault/pvbt/data"
+
+type Period = data.Period
+type PeriodUnit = data.PeriodUnit
 
 const (
-	UnitDay PeriodUnit = iota
-	UnitMonth
-	UnitYear
-	UnitYTD // year-to-date: from Jan 1 of the current year
-	UnitMTD // month-to-date: from the 1st of the current month
-	UnitWTD // week-to-date: from the most recent Monday
+	UnitDay   = data.UnitDay
+	UnitMonth = data.UnitMonth
+	UnitYear  = data.UnitYear
+	UnitYTD   = data.UnitYTD
+	UnitMTD   = data.UnitMTD
+	UnitWTD   = data.UnitWTD
 )
 
-// Period represents a calendar-aware duration used for performance metric
-// windows. Unlike time.Duration, it handles variable-length units like
-// months and years correctly.
-type Period struct {
-	N    int
-	Unit PeriodUnit
-}
-
-// Days returns a Period of n calendar days.
-func Days(n int) Period { return Period{N: n, Unit: UnitDay} }
-
-// Months returns a Period of n calendar months.
-func Months(n int) Period { return Period{N: n, Unit: UnitMonth} }
-
-// Years returns a Period of n calendar years.
-func Years(n int) Period { return Period{N: n, Unit: UnitYear} }
-
-// YTD returns a Period representing year-to-date.
-func YTD() Period { return Period{N: 0, Unit: UnitYTD} }
-
-// MTD returns a Period representing month-to-date.
-func MTD() Period { return Period{N: 0, Unit: UnitMTD} }
-
-// WTD returns a Period representing week-to-date.
-func WTD() Period { return Period{N: 0, Unit: UnitWTD} }
+var (
+	Days   = data.Days
+	Months = data.Months
+	Years  = data.Years
+	YTD    = data.YTD
+	MTD    = data.MTD
+	WTD    = data.WTD
+)
