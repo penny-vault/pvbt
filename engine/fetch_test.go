@@ -125,6 +125,29 @@ func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engi
 	s.fetchAtResult, s.fetchAtErr = eng.FetchAt(ctx, s.assets, eng.CurrentDate(), s.metrics)
 }
 
+// futureFetchAtStrategy calls FetchAt with a future date during Compute.
+type futureFetchAtStrategy struct {
+	metrics  []data.Metric
+	assets   []asset.Asset
+	fetched  *data.DataFrame
+	fetchErr error
+}
+
+func (s *futureFetchAtStrategy) Name() string { return "futureFetchAtStrategy" }
+
+func (s *futureFetchAtStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("futureFetchAtStrategy.Setup: %v", err))
+	}
+	eng.Schedule(tc)
+}
+
+func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+	futureDate := eng.CurrentDate().AddDate(0, 0, 30)
+	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, futureDate, s.metrics)
+}
+
 // countingProvider wraps a TestProvider and counts Fetch calls.
 type countingProvider struct {
 	data.DataProvider
@@ -346,6 +369,34 @@ var _ = Describe("Fetch", func() {
 
 			Expect(cp.fetchCount).To(BeNumerically("<=", 2),
 				"FetchAt should use the cache after Fetch populates it")
+		})
+	})
+
+	Context("look-ahead guard", func() {
+		It("FetchAt rejects a future date", func() {
+			metrics := []data.Metric{data.MetricClose}
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyDF(dataStart, 90, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			futureStrategy := &futureFetchAtStrategy{
+				metrics: metrics,
+				assets:  testAssets,
+			}
+
+			eng := engine.New(futureStrategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 3, 23, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(futureStrategy.fetchErr).To(HaveOccurred())
+			Expect(futureStrategy.fetchErr.Error()).To(ContainSubstring("future"))
 		})
 	})
 
