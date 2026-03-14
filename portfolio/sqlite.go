@@ -19,6 +19,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "1"
+const schemaVersion = "2"
 
 const dateFormat = "2006-01-02"
 
@@ -37,9 +38,10 @@ CREATE TABLE metadata (
     value TEXT
 );
 
-CREATE TABLE equity_curve (
-    date  TEXT NOT NULL,
-    value REAL NOT NULL
+CREATE TABLE perf_data (
+    date      TEXT NOT NULL,
+    metric    TEXT NOT NULL,
+    value     REAL NOT NULL
 );
 
 CREATE TABLE transactions (
@@ -67,12 +69,6 @@ CREATE TABLE tax_lots (
     date         TEXT NOT NULL,
     quantity     REAL NOT NULL,
     price        REAL NOT NULL
-);
-
-CREATE TABLE price_series (
-    series TEXT NOT NULL,
-    date   TEXT NOT NULL,
-    value  REAL NOT NULL
 );
 
 CREATE TABLE metrics (
@@ -154,8 +150,8 @@ func (a *Account) ToSQLite(path string) error {
 		return err
 	}
 
-	// Write equity curve.
-	if err := a.writeEquityCurve(tx); err != nil {
+	// Write perf data.
+	if err := a.writePerfData(tx); err != nil {
 		return err
 	}
 
@@ -171,11 +167,6 @@ func (a *Account) ToSQLite(path string) error {
 
 	// Write tax lots.
 	if err := a.writeTaxLots(tx); err != nil {
-		return err
-	}
-
-	// Write price series.
-	if err := a.writePriceSeries(tx); err != nil {
 		return err
 	}
 
@@ -238,21 +229,27 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 	return nil
 }
 
-func (a *Account) writeEquityCurve(tx *sql.Tx) error {
-	if len(a.equityCurve) == 0 {
+func (a *Account) writePerfData(tx *sql.Tx) error {
+	if a.perfData == nil {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO equity_curve (date, value) VALUES (?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO perf_data (date, metric, value) VALUES (?, ?, ?)")
 	if err != nil {
-		return fmt.Errorf("prepare equity_curve: %w", err)
+		return fmt.Errorf("prepare perf_data: %w", err)
 	}
 	defer stmt.Close()
 
-	for i, v := range a.equityCurve {
-		d := a.equityTimes[i].Format(dateFormat)
-		if _, err := stmt.Exec(d, v); err != nil {
-			return fmt.Errorf("insert equity_curve: %w", err)
+	times := a.perfData.Times()
+	for _, m := range a.perfData.MetricList() {
+		col := a.perfData.Column(portfolioAsset, m)
+		for i, v := range col {
+			if !math.IsNaN(v) {
+				d := times[i].Format(dateFormat)
+				if _, err := stmt.Exec(d, string(m), v); err != nil {
+					return fmt.Errorf("insert perf_data: %w", err)
+				}
+			}
 		}
 	}
 
@@ -351,38 +348,6 @@ func (a *Account) writeTaxLots(tx *sql.Tx) error {
 	return nil
 }
 
-func (a *Account) writePriceSeries(tx *sql.Tx) error {
-	if len(a.benchmarkPrices) == 0 && len(a.riskFreePrices) == 0 {
-		return nil
-	}
-
-	stmt, err := tx.Prepare("INSERT INTO price_series (series, date, value) VALUES (?, ?, ?)")
-	if err != nil {
-		return fmt.Errorf("prepare price_series: %w", err)
-	}
-	defer stmt.Close()
-
-	for i, v := range a.benchmarkPrices {
-		if i < len(a.equityTimes) && !math.IsNaN(v) {
-			d := a.equityTimes[i].Format(dateFormat)
-			if _, err := stmt.Exec("benchmark", d, v); err != nil {
-				return fmt.Errorf("insert benchmark price: %w", err)
-			}
-		}
-	}
-
-	for i, v := range a.riskFreePrices {
-		if i < len(a.equityTimes) && !math.IsNaN(v) {
-			d := a.equityTimes[i].Format(dateFormat)
-			if _, err := stmt.Exec("risk_free", d, v); err != nil {
-				return fmt.Errorf("insert risk_free price: %w", err)
-			}
-		}
-	}
-
-	return nil
-}
-
 func (a *Account) writeMetrics(tx *sql.Tx) error {
 	if len(a.metrics) == 0 {
 		return nil
@@ -405,7 +370,7 @@ func (a *Account) writeMetrics(tx *sql.Tx) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "1".
+// The database must have been created by ToSQLite with schema_version "2".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
@@ -466,8 +431,8 @@ func FromSQLite(path string) (*Account, error) {
 	delete(a.metadata, "risk_free_ticker")
 	delete(a.metadata, "risk_free_figi")
 
-	// Read equity curve.
-	if err := a.readEquityCurve(db); err != nil {
+	// Read perf data.
+	if err := a.readPerfData(db); err != nil {
 		return nil, err
 	}
 
@@ -483,11 +448,6 @@ func FromSQLite(path string) (*Account, error) {
 
 	// Read tax lots.
 	if err := a.readTaxLots(db); err != nil {
-		return nil, err
-	}
-
-	// Read price series.
-	if err := a.readPriceSeries(db); err != nil {
 		return nil, err
 	}
 
@@ -517,28 +477,83 @@ func (a *Account) readMetadata(db *sql.DB) error {
 	return rows.Err()
 }
 
-func (a *Account) readEquityCurve(db *sql.DB) error {
-	rows, err := db.Query("SELECT date, value FROM equity_curve ORDER BY date")
+func (a *Account) readPerfData(db *sql.DB) error {
+	rows, err := db.Query("SELECT date, metric, value FROM perf_data ORDER BY date, metric")
 	if err != nil {
-		return fmt.Errorf("query equity_curve: %w", err)
+		return fmt.Errorf("query perf_data: %w", err)
 	}
 	defer rows.Close()
 
+	type entry struct {
+		t time.Time
+		m data.Metric
+		v float64
+	}
+	var entries []entry
+	timeSet := make(map[time.Time]bool)
+
 	for rows.Next() {
-		var dateStr string
+		var dateStr, metric string
 		var v float64
-		if err := rows.Scan(&dateStr, &v); err != nil {
-			return fmt.Errorf("scan equity_curve: %w", err)
+		if err := rows.Scan(&dateStr, &metric, &v); err != nil {
+			return fmt.Errorf("scan perf_data: %w", err)
 		}
 		t, err := time.Parse(dateFormat, dateStr)
 		if err != nil {
-			return fmt.Errorf("parse equity_curve date: %w", err)
+			return fmt.Errorf("parse perf_data date: %w", err)
 		}
-		a.equityCurve = append(a.equityCurve, v)
-		a.equityTimes = append(a.equityTimes, t)
+		entries = append(entries, entry{t: t, m: data.Metric(metric), v: v})
+		timeSet[t] = true
+	}
+	if err := rows.Err(); err != nil {
+		return err
 	}
 
-	return rows.Err()
+	if len(entries) == 0 {
+		return nil
+	}
+
+	// Build sorted unique times.
+	times := make([]time.Time, 0, len(timeSet))
+	for t := range timeSet {
+		times = append(times, t)
+	}
+	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
+
+	// Build time index for fast lookup.
+	timeIndex := make(map[time.Time]int, len(times))
+	for i, t := range times {
+		timeIndex[t] = i
+	}
+
+	// Fixed metric order.
+	metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
+	assets := []asset.Asset{portfolioAsset}
+	vals := make([]float64, len(times)*len(metrics))
+
+	metricIndex := make(map[data.Metric]int, len(metrics))
+	for i, m := range metrics {
+		metricIndex[m] = i
+	}
+
+	for _, e := range entries {
+		mIdx, ok := metricIndex[e.m]
+		if !ok {
+			continue
+		}
+		tIdx := timeIndex[e.t]
+		// Column-major: offset = (assetIdx*len(metrics) + metricIdx) * len(times) + timeIdx
+		// Only one asset, so assetIdx = 0.
+		vals[mIdx*len(times)+tIdx] = e.v
+	}
+
+	df, err := data.NewDataFrame(times, assets, metrics, vals)
+	if err != nil {
+		return fmt.Errorf("build perfData: %w", err)
+	}
+	a.perfData = df
+
+	return nil
 }
 
 func (a *Account) readTransactions(db *sql.DB) error {
@@ -632,30 +647,6 @@ func (a *Account) readTaxLots(db *sql.DB) error {
 			Qty:   qty,
 			Price: price,
 		})
-	}
-
-	return rows.Err()
-}
-
-func (a *Account) readPriceSeries(db *sql.DB) error {
-	rows, err := db.Query("SELECT series, value FROM price_series ORDER BY date")
-	if err != nil {
-		return fmt.Errorf("query price_series: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var series string
-		var v float64
-		if err := rows.Scan(&series, &v); err != nil {
-			return fmt.Errorf("scan price_series: %w", err)
-		}
-		switch series {
-		case "benchmark":
-			a.benchmarkPrices = append(a.benchmarkPrices, v)
-		case "risk_free":
-			a.riskFreePrices = append(a.riskFreePrices, v)
-		}
 	}
 
 	return rows.Err()

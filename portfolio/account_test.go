@@ -14,6 +14,8 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
+var perfAsset = asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+
 var _ = Describe("Account", func() {
 	var (
 		spy asset.Asset
@@ -189,8 +191,10 @@ var _ = Describe("Account", func() {
 			a.UpdatePrices(df)
 
 			Expect(a.Value()).To(Equal(10_000.0))
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0}))
-			Expect(a.EquityTimes()).To(Equal([]time.Time{t1}))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0}))
+			Expect(pd.Times()).To(Equal([]time.Time{t1}))
 		})
 
 		It("marks holdings to MetricClose prices", func() {
@@ -210,7 +214,9 @@ var _ = Describe("Account", func() {
 
 			// total = 4000 + 10*450 = 8500
 			Expect(a.Value()).To(Equal(8_500.0))
-			Expect(a.EquityCurve()).To(Equal([]float64{8_500.0}))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{8_500.0}))
 			Expect(a.PositionValue(spy)).To(Equal(4_500.0))
 		})
 
@@ -221,8 +227,6 @@ var _ = Describe("Account", func() {
 				portfolio.WithRiskFree(rf),
 			)
 
-			perfAsset := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
-
 			// Day 1
 			df1 := buildDF(t1,
 				[]asset.Asset{spy, bm, rf},
@@ -231,15 +235,12 @@ var _ = Describe("Account", func() {
 			)
 			a.UpdatePrices(df1)
 
-			Expect(a.EquityCurve()).To(HaveLen(1))
-			Expect(a.EquityCurve()[0]).To(Equal(10_000.0))
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
-
 			pd := a.PerfData()
 			Expect(pd).NotTo(BeNil())
 			Expect(pd.Len()).To(Equal(1))
 			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5}))
 
 			// Day 2
 			df2 := buildDF(t2,
@@ -249,25 +250,22 @@ var _ = Describe("Account", func() {
 			)
 			a.UpdatePrices(df2)
 
-			Expect(a.EquityCurve()).To(HaveLen(2))
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_000.0}))
-			Expect(a.EquityTimes()).To(Equal([]time.Time{t1, t2}))
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0, 101.0}))
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5, 50.0}))
-
 			Expect(pd.Len()).To(Equal(2))
 			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0, 10_000.0}))
+			Expect(pd.Times()).To(Equal([]time.Time{t1, t2}))
 			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0, 101.0}))
 			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5, 50.0}))
 		})
 
-		It("does not append benchmark/risk-free when not set", func() {
+		It("stores zero benchmark/risk-free when not set", func() {
 			a := portfolio.New(portfolio.WithCash(5_000, time.Time{}))
 			df := buildDF(t1, []asset.Asset{spy}, []float64{450.0}, []float64{448.0})
 			a.UpdatePrices(df)
 
-			Expect(a.BenchmarkPrices()).To(BeEmpty())
-			Expect(a.RiskFreePrices()).To(BeEmpty())
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{0}))
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{0}))
 		})
 
 		It("reflects latest prices in Value and PositionValue after UpdatePrices", func() {
@@ -291,7 +289,9 @@ var _ = Describe("Account", func() {
 			a.UpdatePrices(df2)
 			Expect(a.Value()).To(Equal(10_100.0))           // 8000 + 5*420
 			Expect(a.PositionValue(spy)).To(Equal(2_100.0)) // 5*420
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_100.0}))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0, 10_100.0}))
 		})
 
 		It("appends NaN benchmark price to keep arrays aligned with equity curve", func() {
@@ -308,8 +308,10 @@ var _ = Describe("Account", func() {
 				[]float64{448.0, 99.0, 49.5},
 			)
 			a.UpdatePrices(df1)
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0}))
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5}))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5}))
 
 			// Day 2: benchmark has NaN AdjClose and NaN Close
 			df2, err := data.NewDataFrame(
@@ -325,11 +327,12 @@ var _ = Describe("Account", func() {
 			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df2)
 
-			// NaN is appended to keep benchmarkPrices aligned with equityCurve.
-			Expect(a.BenchmarkPrices()).To(HaveLen(2))
-			Expect(math.IsNaN(a.BenchmarkPrices()[1])).To(BeTrue())
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.5, 50.0}))
-			Expect(a.EquityCurve()).To(HaveLen(2))
+			// NaN is appended to keep benchmark aligned with equity curve.
+			benchCol := pd.Column(perfAsset, data.PortfolioBenchmark)
+			Expect(benchCol).To(HaveLen(2))
+			Expect(math.IsNaN(benchCol[1])).To(BeTrue())
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5, 50.0}))
+			Expect(pd.Len()).To(Equal(2))
 		})
 
 		It("appends NaN risk-free price to keep arrays aligned with equity curve", func() {
@@ -361,24 +364,24 @@ var _ = Describe("Account", func() {
 			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df2)
 
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{99.0, 101.0}))
-			// NaN is appended to keep riskFreePrices aligned with equityCurve.
-			Expect(a.RiskFreePrices()).To(HaveLen(2))
-			Expect(math.IsNaN(a.RiskFreePrices()[1])).To(BeTrue())
-			Expect(a.EquityCurve()).To(HaveLen(2))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0, 101.0}))
+			// NaN is appended to keep riskFree aligned with equity curve.
+			rfCol := pd.Column(perfAsset, data.PortfolioRiskFree)
+			Expect(rfCol).To(HaveLen(2))
+			Expect(math.IsNaN(rfCol[1])).To(BeTrue())
+			Expect(pd.Len()).To(Equal(2))
 		})
 	})
 
-	Describe("EquityCurve, EquityTimes, BenchmarkPrices, RiskFreePrices accessors", func() {
-		It("returns empty slices before any UpdatePrices calls", func() {
+	Describe("PerfData before any UpdatePrices", func() {
+		It("returns nil before any UpdatePrices calls", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
-			Expect(a.EquityCurve()).To(BeEmpty())
-			Expect(a.EquityTimes()).To(BeEmpty())
-			Expect(a.BenchmarkPrices()).To(BeEmpty())
-			Expect(a.RiskFreePrices()).To(BeEmpty())
+			Expect(a.PerfData()).To(BeNil())
 		})
 
-		It("returns correct accumulated slices after multiple UpdatePrices calls", func() {
+		It("returns correct accumulated data after multiple UpdatePrices calls", func() {
 			bm := asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 			rf := asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
 
@@ -408,10 +411,12 @@ var _ = Describe("Account", func() {
 				[]float64{103.0, 206.0, 50.0},
 			))
 
-			Expect(a.EquityCurve()).To(Equal([]float64{10_000.0, 10_000.0, 10_000.0}))
-			Expect(a.EquityTimes()).To(Equal([]time.Time{t1, t2, t3}))
-			Expect(a.BenchmarkPrices()).To(Equal([]float64{198.0, 202.0, 206.0}))
-			Expect(a.RiskFreePrices()).To(Equal([]float64{49.0, 49.5, 50.0}))
+			pd := a.PerfData()
+			Expect(pd).NotTo(BeNil())
+			Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0, 10_000.0, 10_000.0}))
+			Expect(pd.Times()).To(Equal([]time.Time{t1, t2, t3}))
+			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{198.0, 202.0, 206.0}))
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.0, 49.5, 50.0}))
 		})
 	})
 
