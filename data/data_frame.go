@@ -780,24 +780,93 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 }
 
 // Add returns a new DataFrame with element-wise addition of two DataFrames
-// aligned by asset and metric.
-func (df *DataFrame) Add(other *DataFrame) *DataFrame {
-	return df.elemWiseOp(other, floats.AddTo)
+// aligned by asset and metric. If metrics are provided, each named metric
+// column from other is broadcast across all columns of df.
+func (df *DataFrame) Add(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.AddTo)
+	}
+	return df.broadcastOp(other, metrics, floats.AddTo)
 }
 
-// Sub returns a new DataFrame with element-wise subtraction.
-func (df *DataFrame) Sub(other *DataFrame) *DataFrame {
-	return df.elemWiseOp(other, floats.SubTo)
+// Sub returns a new DataFrame with element-wise subtraction. If metrics are
+// provided, each named metric column from other is broadcast across all
+// columns of df.
+func (df *DataFrame) Sub(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.SubTo)
+	}
+	return df.broadcastOp(other, metrics, floats.SubTo)
 }
 
-// Mul returns a new DataFrame with element-wise multiplication.
-func (df *DataFrame) Mul(other *DataFrame) *DataFrame {
-	return df.elemWiseOp(other, floats.MulTo)
+// Mul returns a new DataFrame with element-wise multiplication. If metrics
+// are provided, each named metric column from other is broadcast across all
+// columns of df.
+func (df *DataFrame) Mul(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.MulTo)
+	}
+	return df.broadcastOp(other, metrics, floats.MulTo)
 }
 
-// Div returns a new DataFrame with element-wise division.
-func (df *DataFrame) Div(other *DataFrame) *DataFrame {
-	return df.elemWiseOp(other, floats.DivTo)
+// Div returns a new DataFrame with element-wise division. If metrics are
+// provided, each named metric column from other is broadcast across all
+// columns of df.
+func (df *DataFrame) Div(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.DivTo)
+	}
+	return df.broadcastOp(other, metrics, floats.DivTo)
+}
+
+// broadcastOp applies apply(dst, dst, otherCol) for each named metric column
+// in other against every column in df. The result is a copy of df with the
+// operation applied in-place. Metrics are applied sequentially so chaining
+// multiple metrics is equivalent to calling the operation once per metric.
+func (df *DataFrame) broadcastOp(other *DataFrame, metrics []Metric, apply func(dst, s, t []float64) []float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+	if other.err != nil {
+		return WithErr(other.err)
+	}
+
+	timeLen := len(df.times)
+	if len(other.times) != timeLen {
+		return WithErr(fmt.Errorf("broadcastOp: timestamp count mismatch: %d vs %d", timeLen, len(other.times)))
+	}
+
+	for i := 0; i < timeLen; i++ {
+		if !df.times[i].Equal(other.times[i]) {
+			return WithErr(fmt.Errorf("broadcastOp: timestamp mismatch at index %d", i))
+		}
+	}
+
+	result := df.Copy()
+
+	for _, m := range metrics {
+		mIdx, ok := other.metricIndex(m)
+		if !ok {
+			continue
+		}
+
+		for aIdx := 0; aIdx < len(result.assets); aIdx++ {
+			otherAIdx, ok := other.assetIndex[result.assets[aIdx].CompositeFigi]
+			if !ok {
+				continue
+			}
+
+			otherCol := other.colSlice(otherAIdx, mIdx)
+
+			for rMIdx := 0; rMIdx < len(result.metrics); rMIdx++ {
+				off := result.colOffset(aIdx, rMIdx)
+				dst := result.data[off : off+timeLen]
+				apply(dst, dst, otherCol)
+			}
+		}
+	}
+
+	return result
 }
 
 // -- Scalar arithmetic -------------------------------------------------------

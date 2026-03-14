@@ -1703,4 +1703,74 @@ var _ = Describe("AppendRow", func() {
 		Expect(snapshot.Len()).To(Equal(1))
 		Expect(df.Len()).To(Equal(2))
 	})
+
+	Describe("Broadcast Sub", func() {
+		It("subtracts a selected metric column from all columns", func() {
+			t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+			df, err := data.NewDataFrame(
+				[]time.Time{t1, t2}, []asset.Asset{spy},
+				[]data.Metric{data.PortfolioEquity}, []float64{10, 20},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			other, err := data.NewDataFrame(
+				[]time.Time{t1, t2}, []asset.Asset{spy},
+				[]data.Metric{data.PortfolioEquity, data.PortfolioRiskFree},
+				[]float64{10, 20, 1, 2},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := df.Sub(other, data.PortfolioRiskFree)
+			Expect(result.Err()).NotTo(HaveOccurred())
+			col := result.Column(spy, data.PortfolioEquity)
+			Expect(col).To(Equal([]float64{9, 18}))
+		})
+
+		It("chains multiple metrics sequentially", func() {
+			t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+			df, err := data.NewDataFrame(
+				[]time.Time{t1}, []asset.Asset{spy},
+				[]data.Metric{data.PortfolioEquity}, []float64{100},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			other, err := data.NewDataFrame(
+				[]time.Time{t1}, []asset.Asset{spy},
+				[]data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree},
+				[]float64{100, 5, 3},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			// (100 - 5) - 3 = 92
+			result := df.Sub(other, data.PortfolioBenchmark, data.PortfolioRiskFree)
+			Expect(result.Err()).NotTo(HaveOccurred())
+			Expect(result.Column(spy, data.PortfolioEquity)).To(Equal([]float64{92}))
+		})
+
+		It("falls back to intersection when no metrics specified", func() {
+			t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+			a, err := data.NewDataFrame(
+				[]time.Time{t1}, []asset.Asset{spy},
+				[]data.Metric{data.MetricClose}, []float64{100},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			b, err := data.NewDataFrame(
+				[]time.Time{t1}, []asset.Asset{spy},
+				[]data.Metric{data.MetricClose}, []float64{30},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := a.Sub(b)
+			Expect(result.Err()).NotTo(HaveOccurred())
+			Expect(result.Column(spy, data.MetricClose)).To(Equal([]float64{70}))
+		})
+	})
 })
