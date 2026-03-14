@@ -46,7 +46,7 @@ func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
 	}
 
 	if wins == 0 || losses == 0 {
-		return 0, nil
+		return math.NaN(), nil
 	}
 
 	avgWin := sumWin / float64(wins)

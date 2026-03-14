@@ -633,6 +633,10 @@ func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
 func (a *Account) UpdatePrices(df *data.DataFrame) {
 	a.prices = df
 
+	if df.Len() == 0 {
+		return
+	}
+
 	total := a.cash
 	for ast, qty := range a.holdings {
 		v := df.Value(ast, data.MetricClose)

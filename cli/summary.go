@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 
@@ -69,8 +70,8 @@ func printSummary(acct portfolio.Portfolio) {
 	// Trading section
 	sb.WriteString(sectionStyle.Render(renderSection("Trading", []row{
 		{"Win Rate", fmtPct(t.WinRate)},
-		{"Average Win", fmtPct(t.AverageWin)},
-		{"Average Loss", fmtPct(t.AverageLoss)},
+		{"Average Win", fmtCurrency(t.AverageWin)},
+		{"Average Loss", fmtCurrency(t.AverageLoss)},
 		{"Profit Factor", fmtRatio(t.ProfitFactor)},
 		{"Avg Holding Period", fmt.Sprintf("%.0f days", t.AverageHoldingPeriod)},
 		{"Turnover", fmtPct(t.Turnover)},
@@ -106,9 +107,19 @@ func renderSection(title string, rows []row) string {
 }
 
 func fmtPct(v float64) string {
+	if math.IsNaN(v) {
+		return "N/A"
+	}
 	return fmt.Sprintf("%.2f%%", v*100)
 }
 
+func fmtCurrency(v float64) string {
+	return fmt.Sprintf("$%.2f", v)
+}
+
 func fmtRatio(v float64) string {
+	if math.IsNaN(v) {
+		return "N/A"
+	}
 	return fmt.Sprintf("%.3f", v)
 }

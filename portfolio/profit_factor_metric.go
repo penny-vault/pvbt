@@ -42,7 +42,7 @@ func (profitFactor) Compute(a *Account, _ *Period) (float64, error) {
 	}
 
 	if sumLoss == 0 {
-		return 0, nil
+		return math.NaN(), nil
 	}
 
 	return sumWin / math.Abs(sumLoss), nil
