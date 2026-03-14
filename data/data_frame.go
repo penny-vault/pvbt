@@ -198,6 +198,10 @@ func (df *DataFrame) MetricList() []Metric {
 
 // Value returns the most recent float64 for the given asset and metric.
 func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
+	if df.err != nil {
+		return math.NaN()
+	}
+
 	aIdx, ok := df.assetIndex[a.CompositeFigi]
 	if !ok {
 		return math.NaN()
@@ -214,6 +218,10 @@ func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
 
 // ValueAt returns the float64 for the given asset, metric, and timestamp.
 func (df *DataFrame) ValueAt(a asset.Asset, m Metric, t time.Time) float64 {
+	if df.err != nil {
+		return math.NaN()
+	}
+
 	aIdx, ok := df.assetIndex[a.CompositeFigi]
 	if !ok {
 		return math.NaN()
@@ -237,6 +245,10 @@ func (df *DataFrame) ValueAt(a asset.Asset, m Metric, t time.Time) float64 {
 // metric. The returned slice shares the underlying Data array and is
 // directly compatible with gonum.
 func (df *DataFrame) Column(a asset.Asset, m Metric) []float64 {
+	if df.err != nil {
+		return nil
+	}
+
 	aIdx, ok := df.assetIndex[a.CompositeFigi]
 	if !ok {
 		return nil
@@ -253,6 +265,10 @@ func (df *DataFrame) Column(a asset.Asset, m Metric) []float64 {
 // At returns a single-row DataFrame containing all assets and metrics at
 // the given timestamp.
 func (df *DataFrame) At(t time.Time) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	tIdx, ok := df.timeIndex(t)
 	if !ok {
 		return mustNewDataFrame(nil, nil, nil, nil)
@@ -281,6 +297,10 @@ func (df *DataFrame) At(t time.Time) *DataFrame {
 
 // Last returns a single-row DataFrame containing the most recent timestamp.
 func (df *DataFrame) Last() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	if len(df.times) == 0 {
 		return mustNewDataFrame(nil, nil, nil, nil)
 	}
@@ -290,6 +310,10 @@ func (df *DataFrame) Last() *DataFrame {
 // Copy returns a deep copy of the DataFrame. The underlying Data slab is
 // duplicated so modifications to the copy do not affect the original.
 func (df *DataFrame) Copy() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	newData := make([]float64, len(df.data))
 	copy(newData, df.data)
 
@@ -308,6 +332,10 @@ func (df *DataFrame) Copy() *DataFrame {
 // Table returns an ASCII table representation of the DataFrame for
 // debugging and interactive use.
 func (df *DataFrame) Table() string {
+	if df.err != nil {
+		return "(error DataFrame)"
+	}
+
 	if len(df.times) == 0 {
 		return "(empty DataFrame)"
 	}
@@ -346,6 +374,10 @@ func (df *DataFrame) Table() string {
 
 // Assets returns a new DataFrame containing only the specified assets.
 func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	timeLen := len(df.times)
 	metricLen := len(df.metrics)
 
@@ -384,6 +416,10 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 
 // Metrics returns a new DataFrame containing only the specified metrics.
 func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	timeLen := len(df.times)
 	assetLen := len(df.assets)
 
@@ -424,6 +460,10 @@ func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
 // Between returns a new DataFrame containing only timestamps within the
 // inclusive range [start, end].
 func (df *DataFrame) Between(start, end time.Time) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	startIdx := sort.Search(len(df.times), func(i int) bool {
 		return !df.times[i].Before(start)
 	})
@@ -469,6 +509,10 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 // returns true. The function receives the timestamp and a single-row
 // DataFrame with all assets and metrics at that point.
 func (df *DataFrame) Filter(fn func(t time.Time, row *DataFrame) bool) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	var indices []int
 
 	for tIdx, t := range df.times {
@@ -518,6 +562,10 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 
 // Drop removes all timestamps where any value equals val (e.g. NaN).
 func (df *DataFrame) Drop(val float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	isNaN := math.IsNaN(val)
 
 	return df.Filter(func(_ time.Time, row *DataFrame) bool {
@@ -721,6 +769,10 @@ func (df *DataFrame) Div(other *DataFrame) (*DataFrame, error) {
 
 // AddScalar adds a constant to every value in the DataFrame.
 func (df *DataFrame) AddScalar(f float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	result := df.Copy()
 	floats.AddConst(f, result.data)
 	return result
@@ -728,11 +780,19 @@ func (df *DataFrame) AddScalar(f float64) *DataFrame {
 
 // SubScalar subtracts a constant from every value in the DataFrame.
 func (df *DataFrame) SubScalar(f float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.AddScalar(-f)
 }
 
 // MulScalar multiplies every value in the DataFrame by a constant.
 func (df *DataFrame) MulScalar(f float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	result := df.Copy()
 	floats.Scale(f, result.data)
 	return result
@@ -740,6 +800,10 @@ func (df *DataFrame) MulScalar(f float64) *DataFrame {
 
 // DivScalar divides every value in the DataFrame by a constant.
 func (df *DataFrame) DivScalar(f float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.MulScalar(1.0 / f)
 }
 
@@ -749,6 +813,10 @@ func (df *DataFrame) DivScalar(f float64) *DataFrame {
 // assets for each timestamp and metric. The result has a single synthetic
 // asset with Ticker "MAX".
 func (df *DataFrame) MaxAcrossAssets() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	timeLen := len(df.times)
 	metricLen := len(df.metrics)
 	assetLen := len(df.assets)
@@ -786,6 +854,10 @@ func (df *DataFrame) MaxAcrossAssets() *DataFrame {
 // assets for each timestamp and metric. The result has a single synthetic
 // asset with Ticker "MIN".
 func (df *DataFrame) MinAcrossAssets() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	timeLen := len(df.times)
 	metricLen := len(df.metrics)
 	assetLen := len(df.assets)
@@ -822,6 +894,10 @@ func (df *DataFrame) MinAcrossAssets() *DataFrame {
 // IdxMaxAcrossAssets returns, for each timestamp, the asset that holds the
 // maximum value for the first metric across all assets.
 func (df *DataFrame) IdxMaxAcrossAssets() []asset.Asset {
+	if df.err != nil {
+		return nil
+	}
+
 	timeLen := len(df.times)
 	assetLen := len(df.assets)
 
@@ -851,6 +927,10 @@ func (df *DataFrame) IdxMaxAcrossAssets() []asset.Asset {
 // Mean returns a single-row DataFrame with the arithmetic mean of each
 // column over the time dimension.
 func (df *DataFrame) Mean() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		if len(col) == 0 {
 			return math.NaN()
@@ -862,6 +942,10 @@ func (df *DataFrame) Mean() *DataFrame {
 // Sum returns a single-row DataFrame with the sum of each column over
 // the time dimension.
 func (df *DataFrame) Sum() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		return floats.Sum(col)
 	})
@@ -870,6 +954,10 @@ func (df *DataFrame) Sum() *DataFrame {
 // Max returns a single-row DataFrame with the maximum value of each
 // column over the time dimension.
 func (df *DataFrame) Max() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		if len(col) == 0 {
 			return math.NaN()
@@ -881,6 +969,10 @@ func (df *DataFrame) Max() *DataFrame {
 // Min returns a single-row DataFrame with the minimum value of each
 // column over the time dimension.
 func (df *DataFrame) Min() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		if len(col) == 0 {
 			return math.NaN()
@@ -892,6 +984,10 @@ func (df *DataFrame) Min() *DataFrame {
 // Variance returns a single-row DataFrame with the sample variance (N-1
 // denominator) of each column over the time dimension.
 func (df *DataFrame) Variance() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		if len(col) < 2 {
 			return 0
@@ -909,6 +1005,10 @@ func (df *DataFrame) Variance() *DataFrame {
 // Std returns a single-row DataFrame with the sample standard deviation
 // (N-1 denominator) of each column over the time dimension.
 func (df *DataFrame) Std() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Reduce(func(col []float64) float64 {
 		if len(col) < 2 {
 			return 0
@@ -929,6 +1029,10 @@ func (df *DataFrame) Std() *DataFrame {
 //   - 1 asset: cross-metric covariance. Returns composite metric keys.
 //   - 2+ assets: per-metric covariance for all unique pairs. Returns composite asset keys.
 func (df *DataFrame) Covariance(assets ...asset.Asset) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	if len(assets) == 0 {
 		return mustNewDataFrame(nil, nil, nil, nil)
 	}
@@ -1029,6 +1133,10 @@ func sampleCov(x, y []float64) float64 {
 // Pct returns the percent change over n periods. If n is omitted it
 // defaults to 1.
 func (df *DataFrame) Pct(n ...int) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	period := 1
 	if len(n) > 0 {
 		period = n[0]
@@ -1051,6 +1159,10 @@ func (df *DataFrame) Pct(n ...int) *DataFrame {
 
 // Diff returns the first difference between consecutive values.
 func (df *DataFrame) Diff() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		if len(col) == 0 {
@@ -1066,6 +1178,10 @@ func (df *DataFrame) Diff() *DataFrame {
 
 // Log returns the natural logarithm of every value.
 func (df *DataFrame) Log() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 
@@ -1079,6 +1195,10 @@ func (df *DataFrame) Log() *DataFrame {
 
 // CumSum returns the cumulative sum along the time axis for each column.
 func (df *DataFrame) CumSum() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		floats.CumSum(out, col)
@@ -1089,6 +1209,10 @@ func (df *DataFrame) CumSum() *DataFrame {
 // Shift shifts every column forward by n periods, filling leading values
 // with NaN. Negative n shifts backward.
 func (df *DataFrame) Shift(n int) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 
@@ -1156,6 +1280,10 @@ func (df *DataFrame) Rolling(n int) *RollingDataFrame {
 // transformed values. The function receives a contiguous []float64 column
 // and must return a slice of the same length.
 func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	timeLen := len(df.times)
 	assetLen := len(df.assets)
 	metricLen := len(df.metrics)
@@ -1185,6 +1313,10 @@ func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
 // Reduce runs fn on each column, collapsing it to a single value. The
 // result is a single-row DataFrame with the same assets and metrics.
 func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
 	assetLen := len(df.assets)
 	metricLen := len(df.metrics)
 	newData := make([]float64, assetLen*metricLen)
