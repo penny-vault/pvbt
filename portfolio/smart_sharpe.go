@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type smartSharpe struct{}
 
@@ -26,24 +31,34 @@ func (smartSharpe) Description() string {
 }
 
 func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.RiskFreePrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(eq)
-	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
-	er := excessReturns(r, rf)
-
-	sd := stddev(er)
-	if sd == 0 {
+	perfDF := pd.Window(window)
+	returns := perfDF.Pct().Drop(math.NaN())
+	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
+	if er.Len() == 0 {
+		return 0, nil
+	}
+	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	if len(erCol) < 2 {
 		return 0, nil
 	}
 
-	af := annualizationFactor(a.EquityTimes())
-	rawSharpe := mean(er) / sd * math.Sqrt(af)
+	sd := stat.StdDev(erCol, nil)
+	if sd == 0 || math.IsNaN(sd) {
+		return 0, nil
+	}
 
-	penalty := autocorrelationPenalty(er)
+	af := annualizationFactor(perfDF.Times())
+	rawSharpe := stat.Mean(erCol, nil) / sd * math.Sqrt(af)
+
+	penalty := autocorrelationPenalty(erCol)
 	if penalty == 0 {
 		return 0, nil
 	}
@@ -62,7 +77,7 @@ func autocorrelationPenalty(r []float64) float64 {
 		return 1
 	}
 
-	m := mean(r)
+	m := stat.Mean(r, nil)
 	maxLag := min(n/4, 6)
 
 	// Compute variance (denominator for autocorrelation).

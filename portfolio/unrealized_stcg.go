@@ -31,9 +31,14 @@ func (unrealizedSTCG) Description() string {
 
 func (unrealizedSTCG) Compute(a *Account, _ *Period) (float64, error) {
 	prices := a.Prices()
-	times := a.EquityTimes()
+	pd := a.PerfData()
 
-	if prices == nil || len(times) == 0 {
+	if prices == nil || pd == nil {
+		return 0, nil
+	}
+
+	times := pd.Times()
+	if len(times) == 0 {
 		return 0, nil
 	}
 

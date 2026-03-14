@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type kRatio struct{}
 
@@ -26,9 +31,17 @@ func (kRatio) Description() string {
 }
 
 func (kRatio) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	n := len(r)
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	n := len(col)
 	if n < 3 {
 		return 0, nil
 	}
@@ -36,7 +49,7 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	// Compute log(VAMI) where VAMI = 1000 * cumulative product of (1 + r_i).
 	logVAMI := make([]float64, n)
 	cumProd := 1000.0
-	for i, ri := range r {
+	for i, ri := range col {
 		cumProd *= (1 + ri)
 		logVAMI[i] = math.Log(cumProd)
 	}
@@ -44,7 +57,7 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	// OLS regression: y = logVAMI, x = [0, 1, ..., n-1].
 	nf := float64(n)
 	meanX := (nf - 1) / 2.0
-	meanY := mean(logVAMI)
+	meanY := stat.Mean(logVAMI, nil)
 
 	sumXXdev := 0.0
 	sumXYdev := 0.0

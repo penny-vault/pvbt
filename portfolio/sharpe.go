@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type sharpe struct{}
 
@@ -26,22 +31,32 @@ func (sharpe) Description() string {
 }
 
 func (sharpe) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.RiskFreePrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(eq)
-	rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
-	er := excessReturns(r, rf)
-
-	sd := stddev(er)
-	if sd == 0 {
+	perfDF := pd.Window(window)
+	returns := perfDF.Pct().Drop(math.NaN())
+	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
+	if er.Len() == 0 {
+		return 0, nil
+	}
+	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	if len(erCol) < 2 {
 		return 0, nil
 	}
 
-	af := annualizationFactor(a.EquityTimes())
-	return mean(er) / sd * math.Sqrt(af), nil
+	sd := stat.StdDev(erCol, nil)
+	if sd == 0 || math.IsNaN(sd) {
+		return 0, nil
+	}
+
+	af := annualizationFactor(perfDF.Times())
+	return stat.Mean(erCol, nil) / sd * math.Sqrt(af), nil
 }
 
 func (sharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

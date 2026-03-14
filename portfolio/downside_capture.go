@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type downsideCaptureRatio struct{}
 
 func (downsideCaptureRatio) Name() string { return "DownsideCaptureRatio" }
@@ -24,27 +30,33 @@ func (downsideCaptureRatio) Description() string {
 }
 
 func (downsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+	perfDF := pd.Window(window)
+	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
+	if returns.Len() == 0 {
+		return 0, nil
+	}
+	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
+	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-
-	pRet := returns(eq)
-	bRet := returns(bm)
-
-	n := len(pRet)
-	if len(bRet) < n {
-		n = len(bRet)
+	n := len(pCol)
+	if len(bCol) < n {
+		n = len(bCol)
 	}
 
 	// Filter periods where benchmark return < 0.
 	var downP, downB []float64
 	for i := 0; i < n; i++ {
-		if bRet[i] < 0 {
-			downP = append(downP, pRet[i])
-			downB = append(downB, bRet[i])
+		if bCol[i] < 0 {
+			downP = append(downP, pCol[i])
+			downB = append(downB, bCol[i])
 		}
 	}
 

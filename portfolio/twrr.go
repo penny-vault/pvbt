@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type twrr struct{}
 
 func (twrr) Name() string { return "TWRR" }
@@ -27,14 +33,19 @@ func (twrr) Description() string {
 // history when window is nil). It compounds sub-period returns derived
 // from the equity curve: product(1 + r_i) - 1.
 func (twrr) Compute(a *Account, window *Period) (float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	product := 1.0
-	for _, ri := range r {
+	for _, ri := range col {
 		product *= (1 + ri)
 	}
 
@@ -44,15 +55,20 @@ func (twrr) Compute(a *Account, window *Period) (float64, error) {
 // ComputeSeries returns the cumulative return at each point: the running
 // product of (1 + r_i) minus 1. The result has length len(equity)-1.
 func (twrr) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	r := returns(equity)
-	if len(r) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return nil, nil
 	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return nil, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
-	cum := make([]float64, len(r))
+	cum := make([]float64, len(col))
 	product := 1.0
-	for i, ri := range r {
+	for i, ri := range col {
 		product *= (1 + ri)
 		cum[i] = product - 1
 	}

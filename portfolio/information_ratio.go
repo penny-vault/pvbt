@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type informationRatio struct{}
 
@@ -26,30 +31,36 @@ func (informationRatio) Description() string {
 }
 
 func (informationRatio) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.BenchmarkPrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
-
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-
-	pReturns := returns(eq)
-	bReturns := returns(bm)
-
-	activeReturns := excessReturns(pReturns, bReturns)
-	if len(activeReturns) == 0 {
+	perfDF := pd.Window(window)
+	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
+	if returns.Len() == 0 {
+		return 0, nil
+	}
+	// Active returns = portfolio returns - benchmark returns
+	activeReturns := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioBenchmark)
+	if activeReturns.Len() == 0 {
+		return 0, nil
+	}
+	arCol := activeReturns.Column(portfolioAsset, data.PortfolioEquity)
+	if len(arCol) < 2 {
 		return 0, nil
 	}
 
-	te := stddev(activeReturns)
-	if te == 0 {
+	te := stat.StdDev(arCol, nil)
+	if te == 0 || math.IsNaN(te) {
 		return 0, nil
 	}
 
-	times := a.EquityTimes()
-	af := annualizationFactor(times)
-
-	return mean(activeReturns) / te * math.Sqrt(af), nil
+	af := annualizationFactor(perfDF.Times())
+	return stat.Mean(arCol, nil) / te * math.Sqrt(af), nil
 }
 
 func (informationRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {

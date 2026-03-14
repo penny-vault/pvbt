@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type alpha struct{}
 
 func (alpha) Name() string { return "Alpha" }
@@ -24,24 +26,32 @@ func (alpha) Description() string {
 }
 
 func (alpha) Compute(a *Account, window *Period) (float64, error) {
-	if len(a.RiskFreePrices()) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-	if len(a.BenchmarkPrices()) == 0 {
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-	rf := windowSlice(a.RiskFreePrices(), a.EquityTimes(), window)
+	perfDF := pd.Window(window)
+	eq := perfDF.Metrics(data.PortfolioEquity)
+	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	bmWinCol := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
+	rfWinCol := perfDF.Column(portfolioAsset, data.PortfolioRiskFree)
 
-	if len(eq) < 2 || len(bm) < 2 || len(rf) < 2 {
+	if len(eqCol) < 2 || len(bmWinCol) < 2 || len(rfWinCol) < 2 {
 		return 0, nil
 	}
 
-	portfolioReturn := (eq[len(eq)-1] / eq[0]) - 1
-	benchmarkReturn := (bm[len(bm)-1] / bm[0]) - 1
-	riskFreeReturn := (rf[len(rf)-1] / rf[0]) - 1
+	portfolioReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
+	benchmarkReturn := (bmWinCol[len(bmWinCol)-1] / bmWinCol[0]) - 1
+	riskFreeReturn := (rfWinCol[len(rfWinCol)-1] / rfWinCol[0]) - 1
 
 	b, err := Beta.Compute(a, window)
 	if err != nil {

@@ -15,6 +15,11 @@
 
 package portfolio
 
+import (
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
+
 type avgDrawdown struct{}
 
 func (avgDrawdown) Name() string { return "AvgDrawdown" }
@@ -24,9 +29,21 @@ func (avgDrawdown) Description() string {
 }
 
 func (avgDrawdown) Compute(a *Account, window *Period) (float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	dd := drawdownSeries(eq)
-	return mean(dd), nil
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	if eq.Len() == 0 {
+		return 0, nil
+	}
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+	if len(ddCol) == 0 {
+		return 0, nil
+	}
+	return stat.Mean(ddCol, nil), nil
 }
 
 func (avgDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

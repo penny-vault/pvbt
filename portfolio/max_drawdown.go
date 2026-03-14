@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "github.com/penny-vault/pvbt/data"
+
 type maxDrawdown struct{}
 
 func (maxDrawdown) Name() string { return "MaxDrawdown" }
@@ -24,13 +26,20 @@ func (maxDrawdown) Description() string {
 }
 
 func (maxDrawdown) Compute(a *Account, window *Period) (float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	if len(eq) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return 0, nil
 	}
-	dd := drawdownSeries(eq)
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	if eq.Len() == 0 {
+		return 0, nil
+	}
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+
 	minDD := 0.0
-	for _, v := range dd {
+	for _, v := range ddCol {
 		if v < minDD {
 			minDD = v
 		}
@@ -39,11 +48,17 @@ func (maxDrawdown) Compute(a *Account, window *Period) (float64, error) {
 }
 
 func (maxDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-	if len(eq) == 0 {
+	pd := a.PerfData()
+	if pd == nil {
 		return nil, nil
 	}
-	return drawdownSeries(eq), nil
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	if eq.Len() == 0 {
+		return nil, nil
+	}
+	peak := eq.CumMax()
+	dd := eq.Sub(peak).Div(peak)
+	return dd.Column(portfolioAsset, data.PortfolioEquity), nil
 }
 
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.
