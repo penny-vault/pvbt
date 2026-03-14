@@ -25,7 +25,13 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/rs/zerolog/log"
 )
+
+var portfolioAsset = asset.Asset{
+	CompositeFigi: "_PORTFOLIO_",
+	Ticker:        "_PORTFOLIO_",
+}
 
 // Option configures an Account during construction.
 type Option func(*Account)
@@ -45,6 +51,7 @@ type Account struct {
 	equityTimes     []time.Time
 	benchmarkPrices []float64
 	riskFreePrices  []float64
+	perfData        *data.DataFrame
 	benchmark       asset.Asset
 	riskFree        asset.Asset
 	taxLots            map[asset.Asset][]TaxLot
@@ -659,6 +666,32 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 		}
 		a.riskFreePrices = append(a.riskFreePrices, v)
 	}
+
+	// Build perfData in parallel with old fields.
+	var benchVal, rfVal float64
+	if a.benchmark != (asset.Asset{}) {
+		benchVal = a.benchmarkPrices[len(a.benchmarkPrices)-1]
+	}
+	if a.riskFree != (asset.Asset{}) {
+		rfVal = a.riskFreePrices[len(a.riskFreePrices)-1]
+	}
+
+	if a.perfData == nil {
+		t := []time.Time{df.End()}
+		assets := []asset.Asset{portfolioAsset}
+		metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
+		row, err := data.NewDataFrame(t, assets, metrics, []float64{total, benchVal, rfVal})
+		if err != nil {
+			log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
+			return
+		}
+		a.perfData = row
+	} else {
+		if err := a.perfData.AppendRow(df.End(), []float64{total, benchVal, rfVal}); err != nil {
+			log.Error().Err(err).Msg("UpdatePrices: failed to append to perfData")
+			return
+		}
+	}
 }
 
 // EquityCurve returns the equity curve slice.
@@ -672,6 +705,10 @@ func (a *Account) BenchmarkPrices() []float64 { return a.benchmarkPrices }
 
 // RiskFreePrices returns the risk-free prices slice.
 func (a *Account) RiskFreePrices() []float64 { return a.riskFreePrices }
+
+// PerfData returns the accumulated performance DataFrame, or nil if no
+// prices have been recorded yet.
+func (a *Account) PerfData() *data.DataFrame { return a.perfData }
 
 // TaxLots returns the current tax lot positions keyed by asset.
 func (a *Account) TaxLots() map[asset.Asset][]TaxLot { return a.taxLots }
