@@ -55,14 +55,29 @@ func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfol
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
+    // Average the three momentum scores across all risk-on assets.
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
         log.Error().Err(err).Msg("signal computation failed")
         return
     }
-    symbols := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
 
-    p.RebalanceTo(ctx, portfolio.EqualWeight(symbols)...)
+    // Pick the risk-on asset with the highest positive momentum.
+    // If none are positive, fall back to the risk-off asset (TLT).
+    riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+    if err != nil {
+        log.Error().Err(err).Msg("risk-off data fetch failed")
+        return
+    }
+    portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+
+    // Build an equal-weight plan and rebalance into it.
+    plan, err := portfolio.EqualWeight(momentum)
+    if err != nil {
+        log.Error().Err(err).Msg("EqualWeight failed")
+        return
+    }
+    p.RebalanceTo(ctx, plan...)
 }
 
 func main() {
@@ -129,14 +144,29 @@ func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfol
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
+    // Average the three momentum scores across all risk-on assets.
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
         log.Error().Err(err).Msg("signal computation failed")
         return
     }
-    symbols := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
 
-    p.RebalanceTo(ctx, portfolio.EqualWeight(symbols)...)
+    // Pick the risk-on asset with the highest positive momentum.
+    // If none are positive, fall back to the risk-off asset (TLT).
+    riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+    if err != nil {
+        log.Error().Err(err).Msg("risk-off data fetch failed")
+        return
+    }
+    portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+
+    // Build an equal-weight plan and rebalance into it.
+    plan, err := portfolio.EqualWeight(momentum)
+    if err != nil {
+        log.Error().Err(err).Msg("EqualWeight failed")
+        return
+    }
+    p.RebalanceTo(ctx, plan...)
 }
 ```
 
@@ -144,9 +174,9 @@ Compute runs at each scheduled step -- once per month for ADM. It receives a con
 
 The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
 
-`portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)` is the selection step. `MaxAboveZero` takes a `[]asset.Asset` fallback list (here, the risk-off universe resolved at the current date) and returns a `Selector`. Calling `Select(momentum)` filters the DataFrame to the asset with the highest momentum above zero. If no risk-on asset has positive momentum, the fallback assets are used instead.
+The selection step fetches risk-off asset data as a fallback DataFrame, then builds a `Selector` with `MaxAboveZero`. The selector's `Select` method inserts a `Selected` column into the momentum DataFrame, marking the asset with the highest positive momentum as selected at each timestep. If nothing qualifies, the fallback assets are inserted and marked as selected instead.
 
-`portfolio.EqualWeight(symbols)` is the weighting step. It takes the filtered DataFrame and builds a `PortfolioPlan` with equal weights at each timestep. Since ADM typically selects a single asset, this means 100% in that asset.
+`portfolio.EqualWeight(momentum)` is the weighting step. It reads the `Selected` column and builds a `PortfolioPlan` with equal weights among selected assets at each timestep. Since ADM typically selects a single asset, this means 100% in that asset.
 
 `p.RebalanceTo(ctx, plan...)` applies the plan. The portfolio diffs current holdings against the target and generates the necessary trades, applying commission and slippage, respecting any risk controls the operator has configured.
 

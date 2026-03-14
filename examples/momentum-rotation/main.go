@@ -49,9 +49,16 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 	// Compute total return over the full window, take the last row.
 	momentum := df.Pct(df.Len() - 1).Last()
 
+	// Build a fallback DataFrame for risk-off assets at the current date.
+	riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+	if err != nil {
+		log.Error().Err(err).Msg("risk-off data fetch failed")
+		return
+	}
+
 	// Select the asset with the highest positive return; fall back to risk-off.
-	selected := portfolio.MaxAboveZero(s.RiskOff.Assets(e.CurrentDate())).Select(momentum)
-	plan, err := portfolio.EqualWeight(selected)
+	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+	plan, err := portfolio.EqualWeight(momentum)
 	if err != nil {
 		log.Error().Err(err).Msg("EqualWeight failed")
 		return

@@ -46,9 +46,10 @@ func (s *ADM) Compute(ctx context.Context, p portfolio.Portfolio) {
 	mom6 := signal.Momentum(df, 6)
 
 	momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
-	symbols := momentum.Select(portfolio.MaxAboveZero(s.riskOff))
+	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 
-	p.RebalanceTo(portfolio.EqualWeight(symbols)...)
+	plan, _ := portfolio.EqualWeight(momentum)
+	p.RebalanceTo(plan...)
 }
 
 func main() {
