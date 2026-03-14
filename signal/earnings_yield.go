@@ -15,15 +15,56 @@
 
 package signal
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/universe"
+)
 
 // EarningsYield computes earnings per share divided by price for each
-// asset in the DataFrame. The input DataFrame must contain EPS and
-// Price data. Returns a DataFrame with one column per asset containing
-// the earnings yield at each timestamp.
-func EarningsYield(df *data.DataFrame) *data.DataFrame {
-	// Extract EPS and Price columns for each asset, divide
-	// element-wise, and return a new DataFrame with a single
-	// metric ("EarningsYield") and the same assets and timestamps.
-	return nil
+// asset in the universe. Returns a single-row DataFrame with one column
+// per asset containing the earnings yield.
+func EarningsYield(ctx context.Context, u universe.Universe, t ...time.Time) *data.DataFrame {
+	fetchTime := u.CurrentDate()
+	if len(t) > 0 {
+		fetchTime = t[0]
+	}
+
+	df, err := u.At(ctx, fetchTime, data.EarningsPerShare, data.Price)
+	if err != nil {
+		return data.WithErr(fmt.Errorf("EarningsYield: %w", err))
+	}
+
+	// Validate required metrics are present.
+	epsDF := df.Metrics(data.EarningsPerShare)
+	if epsDF.ColCount() == 0 {
+		return data.WithErr(fmt.Errorf("EarningsYield: missing EarningsPerShare metric"))
+	}
+
+	priceDF := df.Metrics(data.Price)
+	if priceDF.ColCount() == 0 {
+		return data.WithErr(fmt.Errorf("EarningsYield: missing Price metric"))
+	}
+
+	// Build result manually to avoid the Div metric-intersection problem.
+	// (Two DataFrames with different metrics would have an empty intersection.)
+	assets := df.AssetList()
+	times := df.Times()
+	resultData := make([]float64, len(assets))
+
+	for i, a := range assets {
+		eps := df.ValueAt(a, data.EarningsPerShare, times[0])
+		price := df.ValueAt(a, data.Price, times[0])
+		resultData[i] = eps / price
+	}
+
+	result, buildErr := data.NewDataFrame(times, assets, []data.Metric{EarningsYieldSignal}, resultData)
+	if buildErr != nil {
+		return data.WithErr(fmt.Errorf("EarningsYield: %w", buildErr))
+	}
+
+	return result
 }
