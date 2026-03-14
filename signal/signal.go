@@ -18,3 +18,15 @@
 // takes a DataFrame and returns a new DataFrame with one column per
 // asset containing the computed signal score.
 package signal
+
+import "github.com/penny-vault/pvbt/data"
+
+// Signal output names. These are typed as data.Metric so they can be
+// used in DataFrame operations, but they represent computed signals,
+// not raw market data. The Signal suffix avoids collision with the
+// function names in this package.
+const (
+	MomentumSignal      data.Metric = "Momentum"
+	VolatilitySignal    data.Metric = "Volatility"
+	EarningsYieldSignal data.Metric = "EarningsYield"
+)
