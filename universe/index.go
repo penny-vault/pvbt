@@ -111,6 +111,10 @@ func (u *indexUniverse) At(_ context.Context, _ time.Time, _ ...data.Metric) (*d
 	return nil, fmt.Errorf("indexUniverse has no data source; was it created via engine.Universe()?")
 }
 
+func (u *indexUniverse) CurrentDate() time.Time {
+	return time.Time{}
+}
+
 // SP500 creates a universe tracking S&P 500 membership historically.
 func SP500(p data.IndexProvider) Universe {
 	return &indexUniverse{provider: p, indexName: "SP500"}

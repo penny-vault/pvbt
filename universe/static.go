@@ -52,6 +52,13 @@ func (u *StaticUniverse) At(ctx context.Context, t time.Time, metrics ...data.Me
 	return u.ds.FetchAt(ctx, u.members, t, metrics)
 }
 
+func (u *StaticUniverse) CurrentDate() time.Time {
+	if u.ds == nil {
+		return time.Time{}
+	}
+	return u.ds.CurrentDate()
+}
+
 // NewStatic creates a static universe from explicit ticker symbols.
 // The universe has no data source until it is created via engine.Universe().
 func NewStatic(tickers ...string) *StaticUniverse {

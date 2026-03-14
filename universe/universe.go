@@ -41,4 +41,7 @@ type Universe interface {
 
 	// At returns a single-row DataFrame at time t for the requested metrics.
 	At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+
+	// CurrentDate returns the current simulation date from the data source.
+	CurrentDate() time.Time
 }
