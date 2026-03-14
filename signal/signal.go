@@ -13,10 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package signal provides reusable computations that derive new time
-// series from DataFrame metrics. Each signal is a plain function that
-// takes a DataFrame and returns a new DataFrame with one column per
-// asset containing the computed signal score.
 package signal
 
 import "github.com/penny-vault/pvbt/data"
