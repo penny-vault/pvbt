@@ -1,0 +1,80 @@
+// Copyright 2021-2026
+// SPDX-License-Identifier: Apache-2.0
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package data
+
+import "time"
+
+// PeriodUnit identifies the calendar unit of a Period.
+type PeriodUnit int
+
+const (
+	UnitDay PeriodUnit = iota
+	UnitMonth
+	UnitYear
+	UnitYTD // year-to-date: from Jan 1 of the current year
+	UnitMTD // month-to-date: from the 1st of the current month
+	UnitWTD // week-to-date: from the most recent Monday
+)
+
+// Period represents a calendar-aware duration used for performance metric
+// windows. Unlike time.Duration, it handles variable-length units like
+// months and years correctly.
+type Period struct {
+	N    int
+	Unit PeriodUnit
+}
+
+// Days returns a Period of n calendar days.
+func Days(n int) Period { return Period{N: n, Unit: UnitDay} }
+
+// Months returns a Period of n calendar months.
+func Months(n int) Period { return Period{N: n, Unit: UnitMonth} }
+
+// Years returns a Period of n calendar years.
+func Years(n int) Period { return Period{N: n, Unit: UnitYear} }
+
+// YTD returns a Period representing year-to-date.
+func YTD() Period { return Period{N: 0, Unit: UnitYTD} }
+
+// MTD returns a Period representing month-to-date.
+func MTD() Period { return Period{N: 0, Unit: UnitMTD} }
+
+// WTD returns a Period representing week-to-date.
+func WTD() Period { return Period{N: 0, Unit: UnitWTD} }
+
+// Before returns the start time of the period ending at ref.
+func (p Period) Before(ref time.Time) time.Time {
+	switch p.Unit {
+	case UnitDay:
+		return ref.AddDate(0, 0, -p.N)
+	case UnitMonth:
+		return ref.AddDate(0, -p.N, 0)
+	case UnitYear:
+		return ref.AddDate(-p.N, 0, 0)
+	case UnitYTD:
+		return time.Date(ref.Year(), 1, 1, 0, 0, 0, 0, ref.Location())
+	case UnitMTD:
+		return time.Date(ref.Year(), ref.Month(), 1, 0, 0, 0, 0, ref.Location())
+	case UnitWTD:
+		offset := int(ref.Weekday()) - int(time.Monday)
+		if offset < 0 {
+			offset += 7
+		}
+		return ref.AddDate(0, 0, -offset)
+	default:
+		return ref
+	}
+}
