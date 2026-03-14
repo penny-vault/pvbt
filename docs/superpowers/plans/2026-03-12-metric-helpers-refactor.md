@@ -2,392 +2,1319 @@
 
 > **For agentic workers:** REQUIRED: Use superpowers:subagent-driven-development (if subagents available) or superpowers:executing-plans to implement this plan. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace unexported metric helpers with proper PerformanceMetric implementations, consolidate Account's raw slices into a DataFrame, and move pure math to the data package.
+**Goal:** Replace unexported metric helpers with DataFrame method chains and consolidate Account's 4 parallel slices into a single `perfData *data.DataFrame`.
 
-**Architecture:** Account stores equity/benchmark/risk-free data in a single `perfData` DataFrame. PerformanceMetrics compose with each other (Returns, DrawdownSeries, ExcessReturns) instead of calling unexported helpers. Pure statistical functions (SliceMean, Variance, Stddev, Covariance) live in `data/stats.go`.
+**Architecture:** Move Period to `data` package, add `Window`, `CumMax`, `AppendRow` to DataFrame, extend `Sub/Add/Mul/Div` with variadic metric broadcast, replace Account's `equityCurve`/`equityTimes`/`benchmarkPrices`/`riskFreePrices` with `perfData`, migrate all ~43 metric files from helper calls to DataFrame chains, update SQLite serialization.
 
-**Tech Stack:** Go, ginkgo v2 + gomega for tests, gonum for float operations.
-
-**Spec:** `docs/superpowers/specs/2026-03-12-metric-helpers-refactor-design.md`
+**Tech Stack:** Go, ginkgo v2 + gomega testing, gonum/floats, gonum/stat, modernc.org/sqlite
 
 ---
 
-## Chunk 1: Foundation (data package + Account internals)
+## Chunk 1: Data Package Foundation
 
-### Task 1: Add portfolio metric constants to data package
-
-**Files:**
-- Modify: `data/metric.go`
-
-- [ ] **Step 1: Add the constants**
-
-Add to `data/metric.go` after the existing metric groups:
-
-```go
-// Portfolio performance tracking metrics.
-const (
-	PortfolioEquity    Metric = "PortfolioEquity"
-	PortfolioBenchmark Metric = "PortfolioBenchmark"
-	PortfolioRiskFree  Metric = "PortfolioRiskFree"
-)
-```
-
-- [ ] **Step 2: Verify compilation**
-
-Run: `go build ./data/...`
-Expected: SUCCESS
-
-- [ ] **Step 3: Commit**
-
-```
-git add data/metric.go
-git commit -m "feat(data): add PortfolioEquity, PortfolioBenchmark, PortfolioRiskFree metric constants"
-```
-
----
-
-### Task 2: Create data/stats.go with pure math functions
+### Task 1: Period type in data package
 
 **Files:**
-- Create: `data/stats.go`
-- Create: `data/stats_test.go`
+- Create: `data/period.go`
+- Create: `data/period_test.go`
+- Modify: `portfolio/period.go`
 
-- [ ] **Step 1: Write failing tests for SliceMean**
+- [ ] **Step 1: Write failing test for Period.Before with UnitDay**
 
-Create `data/stats_test.go` with black-box ginkgo tests (`package data_test`):
+Note: The `data` package already has a test suite bootstrap in `data/data_suite_test.go`. Add these tests to the existing `data/data_frame_test.go` file (or a new `data/period_test.go` if the existing file is already large). Do NOT add another `TestXxx` bootstrap function.
 
 ```go
+// Add to existing test suite in data/ package
+// data/period_test.go (same package data_test, no new bootstrap needed)
 package data_test
 
 import (
-	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
 	"github.com/penny-vault/pvbt/data"
 )
 
-var _ = Describe("Stats", func() {
-	Describe("SliceMean", func() {
-		It("returns 0 for empty slice", func() {
-			Expect(data.SliceMean([]float64{})).To(BeNumerically("==", 0))
+var _ = Describe("Period", func() {
+	ref := time.Date(2025, 3, 15, 0, 0, 0, 0, time.UTC)
+
+	Describe("Before", func() {
+		It("subtracts days", func() {
+			p := data.Days(10)
+			Expect(p.Before(ref)).To(Equal(time.Date(2025, 3, 5, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("returns 0 for nil slice", func() {
-			Expect(data.SliceMean(nil)).To(BeNumerically("==", 0))
+		It("subtracts months", func() {
+			p := data.Months(2)
+			Expect(p.Before(ref)).To(Equal(time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("returns the single value for one-element slice", func() {
-			Expect(data.SliceMean([]float64{7.5})).To(BeNumerically("~", 7.5, 1e-12))
+		It("subtracts years", func() {
+			p := data.Years(1)
+			Expect(p.Before(ref)).To(Equal(time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("computes arithmetic mean for multiple elements", func() {
-			Expect(data.SliceMean([]float64{1, 2, 3, 4})).To(BeNumerically("~", 2.5, 1e-12))
-		})
-	})
-
-	Describe("Variance", func() {
-		It("returns 0 for empty input", func() {
-			Expect(data.Variance([]float64{})).To(BeNumerically("==", 0))
+		It("returns Jan 1 for YTD", func() {
+			p := data.YTD()
+			Expect(p.Before(ref)).To(Equal(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("returns 0 for single element", func() {
-			Expect(data.Variance([]float64{42})).To(BeNumerically("==", 0))
+		It("returns 1st of month for MTD", func() {
+			p := data.MTD()
+			Expect(p.Before(ref)).To(Equal(time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("computes correct sample variance", func() {
-			// [1, 2, 3], mean=2, sum of sq diffs = 2, var = 2/2 = 1.0
-			Expect(data.Variance([]float64{1, 2, 3})).To(BeNumerically("~", 1.0, 1e-12))
+		It("returns most recent Monday for WTD", func() {
+			// 2025-03-15 is a Saturday; most recent Monday is 2025-03-10
+			p := data.WTD()
+			Expect(p.Before(ref)).To(Equal(time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC)))
 		})
 
-		It("returns 0 for identical values", func() {
-			Expect(data.Variance([]float64{5, 5, 5, 5})).To(BeNumerically("==", 0))
-		})
-	})
-
-	Describe("Stddev", func() {
-		It("returns 0 for empty input", func() {
-			Expect(data.Stddev([]float64{})).To(BeNumerically("==", 0))
-		})
-
-		It("is the square root of the variance", func() {
-			Expect(data.Stddev([]float64{1, 2, 3})).To(BeNumerically("~", 1.0, 1e-12))
-		})
-	})
-
-	Describe("Covariance", func() {
-		It("returns 0 for empty inputs", func() {
-			Expect(data.Covariance([]float64{}, []float64{})).To(BeNumerically("==", 0))
-		})
-
-		It("returns 0 for single-element inputs", func() {
-			Expect(data.Covariance([]float64{5}, []float64{10})).To(BeNumerically("==", 0))
-		})
-
-		It("trims to the shorter array", func() {
-			x := []float64{1, 2, 3}
-			y := []float64{2, 4}
-			Expect(data.Covariance(x, y)).To(BeNumerically("~", 1.0, 1e-12))
-		})
-
-		It("computes correct sample covariance for perfect linear relationship", func() {
-			x := []float64{1, 2, 3, 4, 5}
-			y := []float64{2, 4, 6, 8, 10}
-			Expect(data.Covariance(x, y)).To(BeNumerically("~", 5.0, 1e-12))
-		})
-	})
-
-	Describe("AnnualizationFactor", func() {
-		It("returns 252 for daily timestamps", func() {
-			start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
-			times := make([]time.Time, 10)
-			for i := range times {
-				times[i] = start.AddDate(0, 0, i)
-			}
-			Expect(data.AnnualizationFactor(times)).To(BeNumerically("==", 252))
-		})
-
-		It("returns 12 for monthly timestamps", func() {
-			start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-			times := make([]time.Time, 6)
-			for i := range times {
-				times[i] = start.AddDate(0, i, 0)
-			}
-			Expect(data.AnnualizationFactor(times)).To(BeNumerically("==", 12))
-		})
-
-		It("defaults to 252 for a single timestamp", func() {
-			times := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
-			Expect(data.AnnualizationFactor(times)).To(BeNumerically("==", 252))
-		})
-
-		It("defaults to 252 for empty slice", func() {
-			Expect(data.AnnualizationFactor(nil)).To(BeNumerically("==", 252))
-		})
-
-		It("returns 252 for gap of exactly 20 days (boundary)", func() {
-			t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-			t1 := time.Date(2024, 1, 21, 0, 0, 0, 0, time.UTC)
-			Expect(data.AnnualizationFactor([]time.Time{t0, t1})).To(BeNumerically("==", 252))
-		})
-
-		It("returns 12 for gap of 21 days", func() {
-			t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-			t1 := time.Date(2024, 1, 22, 0, 0, 0, 0, time.UTC)
-			Expect(data.AnnualizationFactor([]time.Time{t0, t1})).To(BeNumerically("==", 12))
-		})
-	})
-
-	Describe("PeriodsReturns", func() {
-		It("returns empty slice for single element", func() {
-			Expect(data.PeriodsReturns([]float64{100})).To(HaveLen(0))
-		})
-
-		It("returns empty slice for empty input", func() {
-			Expect(data.PeriodsReturns([]float64{})).To(HaveLen(0))
-		})
-
-		It("computes period-over-period returns", func() {
-			r := data.PeriodsReturns([]float64{100, 110, 99})
-			Expect(r).To(HaveLen(2))
-			Expect(r[0]).To(BeNumerically("~", 0.10, 1e-12))
-			Expect(r[1]).To(BeNumerically("~", -0.1, 1e-12))
-		})
-
-		It("handles zero values safely", func() {
-			r := data.PeriodsReturns([]float64{100, 0})
-			Expect(r).To(HaveLen(1))
-			Expect(r[0]).To(BeNumerically("~", -1.0, 1e-12))
-		})
-
-		It("returns +Inf for zero-to-positive", func() {
-			r := data.PeriodsReturns([]float64{0, 100})
-			Expect(r).To(HaveLen(1))
-			Expect(math.IsInf(r[0], 1)).To(BeTrue())
+		It("returns ref for WTD when ref is Monday", func() {
+			monday := time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC)
+			p := data.WTD()
+			Expect(p.Before(monday)).To(Equal(monday))
 		})
 	})
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [ ] **Step 2: Run test to verify it fails**
 
-Run: `ginkgo run ./data/...`
-Expected: FAIL -- `SliceMean`, `Variance`, etc. not defined
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run Period -v`
+Expected: FAIL -- `data.Days` not defined
 
-- [ ] **Step 3: Write the implementations**
-
-Create `data/stats.go`:
+- [ ] **Step 3: Write Period type and Before method in data/period.go**
 
 ```go
+// data/period.go
 package data
 
-import (
-	"math"
-	"time"
+import "time"
+
+// PeriodUnit identifies the calendar unit of a Period.
+type PeriodUnit int
+
+const (
+	UnitDay PeriodUnit = iota
+	UnitMonth
+	UnitYear
+	UnitYTD // year-to-date: from Jan 1 of the current year
+	UnitMTD // month-to-date: from the 1st of the current month
+	UnitWTD // week-to-date: from the most recent Monday
 )
 
-// SliceMean computes the arithmetic mean of a float64 slice.
-// Returns 0 for empty or nil input.
-func SliceMean(x []float64) float64 {
-	if len(x) == 0 {
-		return 0
-	}
-	sum := 0.0
-	for _, v := range x {
-		sum += v
-	}
-	return sum / float64(len(x))
+// Period represents a calendar-aware duration used for performance metric
+// windows. Unlike time.Duration, it handles variable-length units like
+// months and years correctly.
+type Period struct {
+	N    int
+	Unit PeriodUnit
 }
 
-// Variance computes the sample variance (N-1 denominator).
-// Returns 0 for fewer than 2 elements.
-func Variance(x []float64) float64 {
-	n := len(x)
-	if n < 2 {
-		return 0
-	}
-	m := SliceMean(x)
-	sum := 0.0
-	for _, v := range x {
-		d := v - m
-		sum += d * d
-	}
-	return sum / float64(n-1)
-}
+// Days returns a Period of n calendar days.
+func Days(n int) Period { return Period{N: n, Unit: UnitDay} }
 
-// Stddev computes the sample standard deviation (N-1 denominator).
-func Stddev(x []float64) float64 {
-	return math.Sqrt(Variance(x))
-}
+// Months returns a Period of n calendar months.
+func Months(n int) Period { return Period{N: n, Unit: UnitMonth} }
 
-// Covariance computes the sample covariance between x and y.
-// Trims to the shorter of the two slices. Returns 0 for fewer than 2 pairs.
-func Covariance(x, y []float64) float64 {
-	n := len(x)
-	if len(y) < n {
-		n = len(y)
-	}
-	if n < 2 {
-		return 0
-	}
-	mx := SliceMean(x[:n])
-	my := SliceMean(y[:n])
-	sum := 0.0
-	for i := 0; i < n; i++ {
-		sum += (x[i] - mx) * (y[i] - my)
-	}
-	return sum / float64(n-1)
-}
+// Years returns a Period of n calendar years.
+func Years(n int) Period { return Period{N: n, Unit: UnitYear} }
 
-// AnnualizationFactor estimates periods-per-year from timestamps.
-// If the average gap exceeds 20 calendar days, returns 12 (monthly);
-// otherwise returns 252 (daily). Defaults to 252 for fewer than 2 timestamps.
-func AnnualizationFactor(times []time.Time) float64 {
-	if len(times) < 2 {
-		return 252
-	}
-	avgDays := times[len(times)-1].Sub(times[0]).Hours() / 24 / float64(len(times)-1)
-	if avgDays > 20 {
-		return 12
-	}
-	return 252
-}
+// YTD returns a Period representing year-to-date.
+func YTD() Period { return Period{N: 0, Unit: UnitYTD} }
 
-// PeriodsReturns computes period-over-period returns from a price series.
-// Returns a slice of length len(prices)-1. Returns empty slice for fewer than 2 prices.
-func PeriodsReturns(prices []float64) []float64 {
-	if len(prices) < 2 {
-		return []float64{}
+// MTD returns a Period representing month-to-date.
+func MTD() Period { return Period{N: 0, Unit: UnitMTD} }
+
+// WTD returns a Period representing week-to-date.
+func WTD() Period { return Period{N: 0, Unit: UnitWTD} }
+
+// Before computes the start date for a trailing window ending at ref.
+func (p Period) Before(ref time.Time) time.Time {
+	switch p.Unit {
+	case UnitDay:
+		return ref.AddDate(0, 0, -p.N)
+	case UnitMonth:
+		return ref.AddDate(0, -p.N, 0)
+	case UnitYear:
+		return ref.AddDate(-p.N, 0, 0)
+	case UnitYTD:
+		return time.Date(ref.Year(), 1, 1, 0, 0, 0, 0, ref.Location())
+	case UnitMTD:
+		return time.Date(ref.Year(), ref.Month(), 1, 0, 0, 0, 0, ref.Location())
+	case UnitWTD:
+		offset := int(ref.Weekday()) - int(time.Monday)
+		if offset < 0 {
+			offset += 7
+		}
+		return ref.AddDate(0, 0, -offset)
+	default:
+		return ref
 	}
-	r := make([]float64, len(prices)-1)
-	for i := 0; i < len(prices)-1; i++ {
-		r[i] = (prices[i+1] - prices[i]) / prices[i]
-	}
-	return r
 }
 ```
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `ginkgo run ./data/...`
-Expected: ALL PASS
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run Period -v`
+Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Replace portfolio/period.go with type aliases**
 
+Replace contents of `portfolio/period.go` with:
+
+```go
+package portfolio
+
+import "github.com/penny-vault/pvbt/data"
+
+// Period is an alias for data.Period to maintain API compatibility.
+type Period = data.Period
+
+// PeriodUnit is an alias for data.PeriodUnit.
+type PeriodUnit = data.PeriodUnit
+
+const (
+	UnitDay   = data.UnitDay
+	UnitMonth = data.UnitMonth
+	UnitYear  = data.UnitYear
+	UnitYTD   = data.UnitYTD
+	UnitMTD   = data.UnitMTD
+	UnitWTD   = data.UnitWTD
+)
+
+var (
+	Days   = data.Days
+	Months = data.Months
+	Years  = data.Years
+	YTD    = data.YTD
+	MTD    = data.MTD
+	WTD    = data.WTD
+)
 ```
-git add data/stats.go data/stats_test.go
-git commit -m "feat(data): add SliceMean, Variance, Stddev, Covariance, AnnualizationFactor, PeriodsReturns"
+
+- [ ] **Step 6: Verify existing tests still pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ ./portfolio/ -count=1`
+Expected: PASS (no behavioral change)
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add data/period.go data/period_test.go portfolio/period.go
+git commit -m "feat(data): move Period type to data package with Before method"
 ```
 
 ---
 
-### Task 3: Refactor Account to use perfData DataFrame
+### Task 2: DataFrame.Window
+
+**Files:**
+- Modify: `data/data_frame.go` (add Window method)
+- Modify: `data/data_frame_test.go` (add Window tests)
+
+- [ ] **Step 1: Write failing tests for Window**
+
+Add to `data/data_frame_test.go`:
+
+```go
+Describe("Window", func() {
+	var df *data.DataFrame
+
+	BeforeEach(func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 3, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 4, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 5, 1, 0, 0, 0, 0, time.UTC),
+		}
+		assets := []asset.Asset{{CompositeFigi: "SPY", Ticker: "SPY"}}
+		metrics := []data.Metric{data.MetricClose}
+		vals := []float64{100, 110, 120, 130, 140}
+		var err error
+		df, err = data.NewDataFrame(times, assets, metrics, vals)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("returns full DataFrame when window is nil", func() {
+		result := df.Window(nil)
+		Expect(result.Len()).To(Equal(5))
+	})
+
+	It("trims to last 2 months", func() {
+		w := data.Months(2)
+		result := df.Window(&w)
+		// End is 2025-05-01, Before = 2025-03-01, so includes Mar, Apr, May
+		Expect(result.Len()).To(Equal(3))
+	})
+
+	It("returns full DataFrame when window exceeds data", func() {
+		w := data.Years(10)
+		result := df.Window(&w)
+		Expect(result.Len()).To(Equal(5))
+	})
+
+	It("propagates error", func() {
+		errDF := data.WithErr(fmt.Errorf("test error"))
+		w := data.Months(1)
+		result := errDF.Window(&w)
+		Expect(result.Err()).To(HaveOccurred())
+	})
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run Window -v`
+Expected: FAIL -- `Window` not defined
+
+- [ ] **Step 3: Implement DataFrame.Window**
+
+Add to `data/data_frame.go`:
+
+```go
+// Window returns a DataFrame containing only timestamps within the
+// trailing window defined by p. When p is nil, returns the full DataFrame.
+// When the window exceeds the available data, returns the full DataFrame.
+func (df *DataFrame) Window(p *Period) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+	if p == nil {
+		return df.Copy()
+	}
+	if len(df.times) == 0 {
+		return mustNewDataFrame(nil, nil, nil, nil)
+	}
+	start := p.Before(df.End())
+	if !start.After(df.Start()) {
+		return df.Copy()
+	}
+	return df.Between(start, df.End())
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run Window -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add data/data_frame.go data/data_frame_test.go
+git commit -m "feat(data): add DataFrame.Window for Period-based windowing"
+```
+
+---
+
+### Task 3: DataFrame.CumMax
+
+**Files:**
+- Modify: `data/data_frame.go` (add CumMax method)
+- Modify: `data/data_frame_test.go` (add CumMax tests)
+
+- [ ] **Step 1: Write failing test for CumMax**
+
+Add to `data/data_frame_test.go`:
+
+```go
+Describe("CumMax", func() {
+	It("computes running maximum per column", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		assets := []asset.Asset{spy}
+		metrics := []data.Metric{data.MetricClose}
+		vals := []float64{100, 120, 110, 130}
+		df, err := data.NewDataFrame(times, assets, metrics, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.CumMax()
+		col := result.Column(spy, data.MetricClose)
+		Expect(col).To(Equal([]float64{100, 120, 120, 130}))
+	})
+
+	It("handles single value", func() {
+		times := []time.Time{time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, []float64{50})
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.CumMax()
+		Expect(result.Column(spy, data.MetricClose)).To(Equal([]float64{50}))
+	})
+
+	It("propagates error", func() {
+		errDF := data.WithErr(fmt.Errorf("test error"))
+		result := errDF.CumMax()
+		Expect(result.Err()).To(HaveOccurred())
+	})
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run CumMax -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement CumMax**
+
+Add to `data/data_frame.go` near `CumSum`:
+
+```go
+// CumMax returns the running maximum along the time axis for each column.
+func (df *DataFrame) CumMax() *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	return df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		if len(col) == 0 {
+			return out
+		}
+		out[0] = col[0]
+		for i := 1; i < len(col); i++ {
+			if col[i] > out[i-1] {
+				out[i] = col[i]
+			} else {
+				out[i] = out[i-1]
+			}
+		}
+		return out
+	})
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run CumMax -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add data/data_frame.go data/data_frame_test.go
+git commit -m "feat(data): add DataFrame.CumMax for running maximum"
+```
+
+---
+
+### Task 4: DataFrame.AppendRow
+
+**Files:**
+- Modify: `data/data_frame.go` (add AppendRow method)
+- Modify: `data/data_frame_test.go` (add AppendRow tests)
+
+- [ ] **Step 1: Write failing tests for AppendRow**
+
+Add to `data/data_frame_test.go`:
+
+```go
+Describe("AppendRow", func() {
+	It("appends a row to a single-column DataFrame", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Len()).To(Equal(2))
+		Expect(df.Column(spy, data.MetricClose)).To(Equal([]float64{100, 110}))
+		Expect(df.End()).To(Equal(t2))
+	})
+
+	It("appends rows with multiple columns", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		metrics := []data.Metric{data.MetricClose, data.PortfolioEquity}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy}, metrics, []float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110, 220})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Column(spy, data.MetricClose)).To(Equal([]float64{100, 110}))
+		Expect(df.Column(spy, data.PortfolioEquity)).To(Equal([]float64{200, 220}))
+	})
+
+	It("rejects non-chronological timestamp", func() {
+		t1 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		t0 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t0, []float64{90})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("chronological"))
+	})
+
+	It("rejects wrong values length", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		err = df.AppendRow(t2, []float64{110, 220})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("values length"))
+	})
+
+	It("does not affect prior Window snapshots", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		snapshot := df.Window(nil)
+		Expect(snapshot.Len()).To(Equal(1))
+
+		err = df.AppendRow(t2, []float64{110})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Snapshot should be unaffected
+		Expect(snapshot.Len()).To(Equal(1))
+		Expect(df.Len()).To(Equal(2))
+	})
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run AppendRow -v`
+Expected: FAIL
+
+- [ ] **Step 3: Implement AppendRow**
+
+Add to `data/data_frame.go`:
+
+```go
+// AppendRow appends a single timestamp and its column values to the
+// DataFrame in place. The values slice must have length len(assets) *
+// len(metrics), ordered as [asset0_metric0, asset0_metric1, ...,
+// asset1_metric0, ...] (matching column-major layout). Returns an error
+// if the timestamp is not after the current End() or if the values
+// length is wrong.
+//
+// AppendRow is the only DataFrame method that mutates in place. This is
+// safe because all read methods produce independent copies via make+copy.
+func (df *DataFrame) AppendRow(t time.Time, values []float64) error {
+	if df.err != nil {
+		return df.err
+	}
+
+	colCount := len(df.assets) * len(df.metrics)
+	if len(values) != colCount {
+		return fmt.Errorf("AppendRow: values length %d does not match column count %d", len(values), colCount)
+	}
+
+	if len(df.times) > 0 && !t.After(df.End()) {
+		return fmt.Errorf("AppendRow: timestamp %s is not after current End() %s (must be chronological)",
+			t.Format(time.RFC3339), df.End().Format(time.RFC3339))
+	}
+
+	// The data slab is column-major: each column is contiguous.
+	// To append one row, we need to insert one value at the end of each
+	// column. This requires rebuilding the slab because columns shift.
+	oldT := len(df.times)
+	newT := oldT + 1
+	metricLen := len(df.metrics)
+
+	newData := make([]float64, colCount*newT)
+	for aIdx := 0; aIdx < len(df.assets); aIdx++ {
+		for mIdx := 0; mIdx < metricLen; mIdx++ {
+			oldOff := (aIdx*metricLen + mIdx) * oldT
+			newOff := (aIdx*metricLen + mIdx) * newT
+			copy(newData[newOff:newOff+oldT], df.data[oldOff:oldOff+oldT])
+			newData[newOff+oldT] = values[aIdx*metricLen+mIdx]
+		}
+	}
+
+	df.data = newData
+	df.times = append(df.times, t)
+
+	return nil
+}
+```
+
+Note: This implementation rebuilds the slab each time because the column-major layout means columns are interleaved. For a backtest of ~5000 trading days with 3 columns, each rebuild copies ~15K floats, which is fast.
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run AppendRow -v`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add data/data_frame.go data/data_frame_test.go
+git commit -m "feat(data): add DataFrame.AppendRow for in-place row append"
+```
+
+---
+
+### Task 5: Broadcast Sub/Add/Mul/Div
+
+**Files:**
+- Modify: `data/data_frame.go` (extend Sub, Add, Mul, Div signatures)
+- Modify: `data/data_frame_test.go` (add broadcast tests)
+
+- [ ] **Step 1: Write failing test for broadcast Sub**
+
+Add to `data/data_frame_test.go`:
+
+```go
+Describe("Broadcast Sub", func() {
+	It("subtracts a selected metric column from all columns", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		// df has metric PortfolioEquity with values [10, 20]
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2}, []asset.Asset{spy},
+			[]data.Metric{data.PortfolioEquity}, []float64{10, 20},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// other has metrics PortfolioEquity and PortfolioRiskFree
+		other, err := data.NewDataFrame(
+			[]time.Time{t1, t2}, []asset.Asset{spy},
+			[]data.Metric{data.PortfolioEquity, data.PortfolioRiskFree},
+			[]float64{10, 20, 1, 2},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Broadcast: subtract PortfolioRiskFree column from all df columns
+		result := df.Sub(other, data.PortfolioRiskFree)
+		Expect(result.Err()).NotTo(HaveOccurred())
+		col := result.Column(spy, data.PortfolioEquity)
+		Expect(col).To(Equal([]float64{9, 18}))
+	})
+
+	It("chains multiple metrics sequentially", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.PortfolioEquity}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		other, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree},
+			[]float64{100, 5, 3},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// (100 - 5) - 3 = 92
+		result := df.Sub(other, data.PortfolioBenchmark, data.PortfolioRiskFree)
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(result.Column(spy, data.PortfolioEquity)).To(Equal([]float64{92}))
+	})
+
+	It("falls back to intersection when no metrics specified", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		a, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		b, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, []float64{30},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := a.Sub(b)
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(result.Column(spy, data.MetricClose)).To(Equal([]float64{70}))
+	})
+})
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run "Broadcast Sub" -v`
+Expected: FAIL -- `Sub` does not accept variadic metric args
+
+- [ ] **Step 3: Implement broadcast extension**
+
+Modify `Sub`, `Add`, `Mul`, `Div` in `data/data_frame.go`. Change their signatures to accept variadic metrics:
+
+```go
+// Sub returns a new DataFrame with element-wise subtraction. When metrics
+// are specified, selects those metric columns from other and broadcasts
+// each against all columns of df. Multiple metrics chain sequentially.
+// When no metrics are specified, uses intersection matching (original behavior).
+func (df *DataFrame) Sub(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.SubTo)
+	}
+	return df.broadcastOp(other, metrics, floats.SubTo)
+}
+
+// Add returns a new DataFrame with element-wise addition.
+func (df *DataFrame) Add(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.AddTo)
+	}
+	return df.broadcastOp(other, metrics, floats.AddTo)
+}
+
+// Mul returns a new DataFrame with element-wise multiplication.
+func (df *DataFrame) Mul(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.MulTo)
+	}
+	return df.broadcastOp(other, metrics, floats.MulTo)
+}
+
+// Div returns a new DataFrame with element-wise division.
+func (df *DataFrame) Div(other *DataFrame, metrics ...Metric) *DataFrame {
+	if len(metrics) == 0 {
+		return df.elemWiseOp(other, floats.DivTo)
+	}
+	return df.broadcastOp(other, metrics, floats.DivTo)
+}
+```
+
+Add `broadcastOp` helper:
+
+```go
+// broadcastOp selects specified metric columns from other and applies
+// the operation against every column in df. Multiple metrics chain
+// sequentially with accumulated results. Result retains df's column
+// structure.
+func (df *DataFrame) broadcastOp(other *DataFrame, metrics []Metric, apply func(dst, s, t []float64) []float64) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+	if other.err != nil {
+		return WithErr(other.err)
+	}
+
+	timeLen := len(df.times)
+	if len(other.times) != timeLen {
+		return WithErr(fmt.Errorf("broadcastOp: timestamp count mismatch: %d vs %d", timeLen, len(other.times)))
+	}
+
+	for i := 0; i < timeLen; i++ {
+		if !df.times[i].Equal(other.times[i]) {
+			return WithErr(fmt.Errorf("broadcastOp: timestamp mismatch at index %d", i))
+		}
+	}
+
+	// Start with a copy of df's data.
+	result := df.Copy()
+
+	for _, m := range metrics {
+		mIdx, ok := other.metricIndex(m)
+		if !ok {
+			continue
+		}
+
+		// For each asset in other that also exists in df, broadcast
+		// that metric column against all df columns for that asset.
+		for aIdx := 0; aIdx < len(result.assets); aIdx++ {
+			otherAIdx, ok := other.assetIndex[result.assets[aIdx].CompositeFigi]
+			if !ok {
+				continue
+			}
+
+			otherCol := other.colSlice(otherAIdx, mIdx)
+
+			for rMIdx := 0; rMIdx < len(result.metrics); rMIdx++ {
+				off := result.colOffset(aIdx, rMIdx)
+				dst := result.data[off : off+timeLen]
+				apply(dst, dst, otherCol)
+			}
+		}
+	}
+
+	return result
+}
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -run "Broadcast Sub" -v`
+Expected: PASS
+
+- [ ] **Step 5: Run all data tests to verify no regressions**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./data/ -count=1`
+Expected: PASS
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add data/data_frame.go data/data_frame_test.go
+git commit -m "feat(data): extend Sub/Add/Mul/Div with variadic metric broadcast"
+```
+
+---
+
+## Chunk 2: Account Consolidation and Interface Changes
+
+### Task 6: Add perfData to Account (keep old accessors temporarily)
 
 **Files:**
 - Modify: `portfolio/account.go`
-- Modify: `portfolio/snapshot.go`
+- Modify: `portfolio/account_test.go`
 
-This task replaces the four separate slices (`equityCurve`, `equityTimes`, `benchmarkPrices`, `riskFreePrices`) with a single `perfData *data.DataFrame` and rewrites `UpdatePrices` to build single-row DataFrames and merge them.
+This task adds `perfData` alongside the existing fields. Old accessors (`EquityCurve`, `EquityTimes`, `BenchmarkPrices`, `RiskFreePrices`) are kept until all consumers are migrated (Task 15). This avoids breaking compilation during the transition.
 
-- [ ] **Step 1: Add portfolioAsset and PerfData accessor**
+- [ ] **Step 1: Add portfolioAsset var and perfData field**
 
-In `portfolio/account.go`, add the synthetic asset variable and the `PerfData()` method. Replace the four slice fields with `perfData`:
+In `portfolio/account.go`, add `portfolioAsset` package-level var, `perfData` field to Account, and `PerfData()` accessor. Add `"github.com/rs/zerolog/log"` import.
 
 ```go
-// portfolioAsset is a synthetic asset used as the key in the perfData DataFrame.
 var portfolioAsset = asset.Asset{
 	CompositeFigi: "_PORTFOLIO_",
 	Ticker:        "_PORTFOLIO_",
 }
 ```
 
-In the `Account` struct, replace:
-```go
-equityCurve     []float64
-equityTimes     []time.Time
-benchmarkPrices []float64
-riskFreePrices  []float64
-```
-with:
+Add to Account struct:
 ```go
 perfData *data.DataFrame
 ```
 
 Add accessor:
 ```go
-// PerfData returns the performance tracking DataFrame containing
-// PortfolioEquity, PortfolioBenchmark, and PortfolioRiskFree columns.
+// PerfData returns the accumulated performance DataFrame, or nil if no
+// prices have been recorded yet.
 func (a *Account) PerfData() *data.DataFrame { return a.perfData }
 ```
 
-- [ ] **Step 2: Add windowedPerfData method**
+- [ ] **Step 2: Update UpdatePrices to build perfData in addition to old fields**
+
+Add perfData construction to UpdatePrices AFTER the existing append calls (keep old behavior for now):
 
 ```go
-// windowedPerfData returns the perfData DataFrame trimmed to the given window.
-// If window is nil, returns the full perfData.
-func (a *Account) windowedPerfData(window *Period) *data.DataFrame {
-	if window == nil || a.perfData == nil {
-		return a.perfData
+// ... existing appends to equityCurve, equityTimes, benchmarkPrices, riskFreePrices ...
+
+// Build perfData in parallel with old fields.
+var benchVal, rfVal float64
+if a.benchmark != (asset.Asset{}) {
+	benchVal = a.benchmarkPrices[len(a.benchmarkPrices)-1]
+}
+if a.riskFree != (asset.Asset{}) {
+	rfVal = a.riskFreePrices[len(a.riskFreePrices)-1]
+}
+
+if a.perfData == nil {
+	t := []time.Time{df.End()}
+	assets := []asset.Asset{portfolioAsset}
+	metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
+	row, err := data.NewDataFrame(t, assets, metrics, []float64{total, benchVal, rfVal})
+	if err != nil {
+		log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
+		return
 	}
-	end := a.perfData.End()
-	var start time.Time
-	switch window.Unit {
-	case UnitDay:
-		start = end.AddDate(0, 0, -window.N)
-	case UnitMonth:
-		start = end.AddDate(0, -window.N, 0)
-	case UnitYear:
-		start = end.AddDate(-window.N, 0, 0)
+	a.perfData = row
+} else {
+	if err := a.perfData.AppendRow(df.End(), []float64{total, benchVal, rfVal}); err != nil {
+		log.Error().Err(err).Msg("UpdatePrices: failed to append to perfData")
+		return
 	}
-	return a.perfData.Between(start, end)
 }
 ```
 
-- [ ] **Step 3: Rewrite UpdatePrices**
+- [ ] **Step 3: Add PerfData tests to account_test.go**
 
-Replace the existing `UpdatePrices` method with:
+Add new test cases that verify `PerfData()` returns correct values alongside the existing assertions. Do NOT modify existing assertions yet.
+
+```go
+perfAsset := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+
+// After UpdatePrices:
+pd := a.PerfData()
+Expect(pd).NotTo(BeNil())
+Expect(pd.Len()).To(Equal(1))
+Expect(pd.Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10_000.0}))
+```
+
+- [ ] **Step 4: Verify tests compile and pass**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./portfolio/ -run Account -v -count=1`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add portfolio/account.go portfolio/account_test.go
+git commit -m "feat(portfolio): add perfData DataFrame alongside existing fields"
+```
+
+---
+
+## Chunk 3: Metric Migration
+
+### Task 7: Delete old helpers and cleanup
+
+**Files:**
+- Modify: `portfolio/metric_helpers.go`
+
+- [ ] **Step 1: Trim metric_helpers.go**
+
+Remove all functions except `roundTrips`, `realizedGains`, `roundTrip` struct, and `annualizationFactor`. Remove: `periodCutoff`, `windowSlice`, `windowSliceTimes`, `returns`, `excessReturns`, `mean`, `variance`, `stddev`, `covariance`, `cagr`, `drawdownSeries`.
+
+```bash
+rm portfolio/export_test.go portfolio/metric_helpers_test.go
+```
+
+- [ ] **Step 3: Delete data/stats.go and data/stats_test.go**
+
+```bash
+rm data/stats.go data/stats_test.go
+```
+
+- [ ] **Step 4: Do NOT commit yet** -- metrics won't compile until migrated.
+
+---
+
+### Task 9: Migrate equity-only metrics
+
+These metrics use `windowSlice(a.EquityCurve(), a.EquityTimes(), window)` then `returns(eq)`.
+
+**New pattern:**
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+eq := pd.Window(window).Metrics(data.PortfolioEquity)
+r := eq.Pct().Drop(math.NaN())
+if r.Len() == 0 { return 0, nil }
+col := r.Column(portfolioAsset, data.PortfolioEquity)
+```
+
+**Files to modify** (each follows the same transformation):
+- `portfolio/twrr.go`
+- `portfolio/tail_ratio.go`
+- `portfolio/n_positive_periods.go`
+- `portfolio/excess_kurtosis.go`
+- `portfolio/skewness.go`
+- `portfolio/consecutive_wins.go`
+- `portfolio/consecutive_losses.go`
+- `portfolio/omega_ratio.go`
+- `portfolio/cvar.go`
+- `portfolio/value_at_risk.go`
+- `portfolio/kelly_criterion.go`
+- `portfolio/gain_loss_ratio.go`
+- `portfolio/gain_to_pain.go`
+- `portfolio/exposure.go`
+- `portfolio/k_ratio.go`
+
+For each file:
+
+- [ ] **Step 1: Migrate the metric to DataFrame chains**
+
+Replace `windowSlice(a.EquityCurve(), a.EquityTimes(), window)` with `pd.Window(window).Metrics(data.PortfolioEquity)` where `pd := a.PerfData()`.
+
+Replace `returns(eq)` with `eq.Pct().Drop(math.NaN())`.
+
+Where the metric needs raw `[]float64` values (e.g., for sorting, iteration), extract via `col := r.Column(portfolioAsset, data.PortfolioEquity)`.
+
+Replace `mean(x)` on raw slices with `stat.Mean(x, nil)` (from `gonum.org/v1/gonum/stat`).
+
+Replace `stddev(x)` on raw slices with `stat.StdDev(x, nil)`.
+
+Replace `variance(x)` on raw slices with `stat.Variance(x, nil)`.
+
+Add `"github.com/penny-vault/pvbt/data"` and `"gonum.org/v1/gonum/stat"` imports as needed.
+
+**Example: twrr.go Compute:**
+```go
+func (twrr) Compute(a *Account, window *Period) (float64, error) {
+	pd := a.PerfData()
+	if pd == nil {
+		return 0, nil
+	}
+	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+	r := eq.Pct().Drop(math.NaN())
+	if r.Len() == 0 {
+		return 0, nil
+	}
+	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	product := 1.0
+	for _, v := range col {
+		product *= (1 + v)
+	}
+	return product - 1, nil
+}
+```
+
+**Example: gain_loss_ratio.go** -- splits returns into positive/negative and calls mean on each:
+```go
+col := r.Column(portfolioAsset, data.PortfolioEquity)
+var positive, negative []float64
+for _, v := range col {
+	if v > 0 { positive = append(positive, v) }
+	if v < 0 { negative = append(negative, v) }
+}
+if len(positive) == 0 || len(negative) == 0 { return 0, nil }
+return stat.Mean(positive, nil) / math.Abs(stat.Mean(negative, nil)), nil
+```
+
+**Example: excess_kurtosis.go** -- uses mean and stddev on raw slices:
+```go
+col := r.Column(portfolioAsset, data.PortfolioEquity)
+s := stat.StdDev(col, nil)
+if s == 0 { return 0, nil }
+m := stat.Mean(col, nil)
+// ... kurtosis formula using col, m, s
+```
+
+- [ ] **Step 2: Verify these files compile**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go build ./portfolio/...`
+Expected: Some metrics still won't compile (benchmark/risk-free ones). The equity-only ones should compile.
+
+---
+
+### Task 10: Migrate drawdown metrics
+
+These metrics use `drawdownSeries(eq)`.
+
+**New pattern:**
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+eq := pd.Window(window).Metrics(data.PortfolioEquity)
+if eq.Len() == 0 { return 0, nil }
+peak := eq.CumMax()
+dd := eq.Sub(peak).Div(peak)
+ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+```
+
+**Files:**
+- `portfolio/max_drawdown.go`
+- `portfolio/avg_drawdown.go`
+- `portfolio/avg_drawdown_days.go`
+- `portfolio/recovery_factor.go`
+- `portfolio/calmar.go`
+- `portfolio/keller_ratio.go`
+- `portfolio/ulcer_index.go`
+
+For each file:
+
+- [ ] **Step 1: Migrate to CumMax-based drawdown**
+
+Replace `drawdownSeries(eq)` with the CumMax pattern above. Extract column for iteration.
+
+For `calmar.go`, also replace `cagr(eq[0], eq[len(eq)-1], years)` with:
+```go
+eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+startVal := eqCol[0]
+endVal := eqCol[len(eqCol)-1]
+annReturn := math.Pow(endVal/startVal, 1.0/years) - 1
+```
+
+Replace `windowSliceTimes(a.EquityTimes(), window)` with `pd.Window(window).Times()`.
+
+- [ ] **Step 2: Verify compilation**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go build ./portfolio/...`
+
+---
+
+### Task 11: Migrate risk-free metrics
+
+These metrics use `RiskFreePrices()`, `excessReturns()`, `annualizationFactor()`.
+
+**New pattern:**
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+if len(rfCol) == 0 || rfCol[0] == 0 { return 0, ErrNoRiskFreeRate }
+perfDF := pd.Window(window)
+returns := perfDF.Pct().Drop(math.NaN())
+er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
+if err := er.Err(); err != nil { return 0, err }
+```
+
+**Files:**
+- `portfolio/sharpe.go` -- follow spec section 9 exactly
+- `portfolio/sortino.go`
+- `portfolio/smart_sharpe.go`
+- `portfolio/smart_sortino.go`
+- `portfolio/probabilistic_sharpe.go`
+- `portfolio/downside_deviation.go`
+- `portfolio/std_dev.go`
+
+For each file:
+
+- [ ] **Step 1: Migrate to DataFrame chains**
+
+Follow the Sharpe pattern from spec section 9.
+
+For `std_dev.go`: does NOT use risk-free. Pattern:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+perfDF := pd.Window(window)
+eq := perfDF.Metrics(data.PortfolioEquity)
+r := eq.Pct().Drop(math.NaN())
+sd := r.Std().Value(portfolioAsset, data.PortfolioEquity)
+af := annualizationFactor(perfDF.Times())
+return sd * math.Sqrt(af), nil
+```
+
+For `sortino.go` and `smart_sortino.go`: extract excess returns column, filter negatives manually, compute stddev on negative subset using `stat.StdDev(neg, nil)`.
+
+For `probabilistic_sharpe.go`: uses mean, stddev, kurtosis, skewness of excess returns. Extract column and compute using gonum stat functions.
+
+- [ ] **Step 2: Verify compilation**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go build ./portfolio/...`
+
+---
+
+### Task 12: Migrate benchmark metrics
+
+These metrics use `BenchmarkPrices()`.
+
+**New pattern:**
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+if len(bmCol) == 0 || bmCol[0] == 0 { return 0, ErrNoBenchmark }
+perfDF := pd.Window(window)
+returns := perfDF.Pct().Drop(math.NaN())
+```
+
+**Files:**
+- `portfolio/beta.go`
+- `portfolio/tracking_error.go`
+- `portfolio/information_ratio.go`
+- `portfolio/r_squared.go`
+- `portfolio/upside_capture.go`
+- `portfolio/downside_capture.go`
+- `portfolio/active_return.go`
+
+For each file:
+
+- [ ] **Step 1: Migrate to DataFrame chains**
+
+**beta.go example:**
+```go
+func (beta) Compute(a *Account, window *Period) (float64, error) {
+	pd := a.PerfData()
+	if pd == nil { return 0, nil }
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmCol) == 0 || bmCol[0] == 0 { return 0, ErrNoBenchmark }
+
+	perfDF := pd.Window(window)
+	returns := perfDF.Pct().Drop(math.NaN())
+	if returns.Len() == 0 { return 0, nil }
+
+	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
+	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+
+	v := stat.Variance(bCol, nil)
+	if v == 0 { return 0, nil }
+
+	cov := stat.Covariance(pCol, nil, bCol, nil)
+	return cov / v, nil
+}
+```
+
+For `tracking_error.go` and `information_ratio.go`: compute active returns by extracting columns and subtracting element-wise, or use broadcast `Sub(returns, data.PortfolioBenchmark)` on equity-filtered returns.
+
+- [ ] **Step 2: Verify compilation**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go build ./portfolio/...`
+
+---
+
+### Task 13: Migrate combined and remaining metrics
+
+**Files:**
+- `portfolio/alpha.go` (uses both risk-free and benchmark)
+- `portfolio/treynor.go` (uses both risk-free and benchmark)
+- `portfolio/mwrr.go` (uses EquityCurve/EquityTimes directly)
+- `portfolio/turnover.go` (uses EquityCurve)
+- `portfolio/tax_cost_ratio.go` (uses EquityCurve)
+- `portfolio/unrealized_ltcg.go` (uses EquityTimes)
+- `portfolio/unrealized_stcg.go` (uses EquityTimes)
+- `portfolio/cagr_metric.go` (uses cagr + windowSliceTimes)
+- `portfolio/dynamic_withdrawal_rate.go`
+- `portfolio/safe_withdrawal_rate.go`
+- `portfolio/perpetual_withdrawal_rate.go`
+
+For each file:
+
+- [ ] **Step 1: Migrate to DataFrame chains**
+
+**alpha.go** -- needs both risk-free and benchmark:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+if len(rfCol) == 0 || rfCol[0] == 0 { return 0, ErrNoRiskFreeRate }
+bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+if len(bmCol) == 0 || bmCol[0] == 0 { return 0, ErrNoBenchmark }
+// ... rest using pd.Window(window).Pct().Drop(math.NaN())
+```
+
+**mwrr.go** -- uses EquityCurve() and EquityTimes() for IRR cash flow matching:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+equity := pd.Column(portfolioAsset, data.PortfolioEquity)
+times := pd.Times()
+```
+
+**turnover.go** and **tax_cost_ratio.go** -- similar direct access pattern via `pd.Column(...)`.
+
+**unrealized_ltcg.go** and **unrealized_stcg.go** -- only use timestamps:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+times := pd.Times()
+```
+
+**cagr_metric.go** -- uses windowSliceTimes:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+perfDF := pd.Window(window)
+eqCol := perfDF.Column(portfolioAsset, data.PortfolioEquity)
+eqTimes := perfDF.Times()
+// inline cagr: math.Pow(endVal/startVal, 1.0/years) - 1
+```
+
+**withdrawal metrics** -- use `windowSlice(a.EquityCurve(), ...)`:
+```go
+pd := a.PerfData()
+if pd == nil { return 0, nil }
+equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
+```
+
+- [ ] **Step 2: Verify full compilation**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go build ./...`
+Expected: PASS
+
+- [ ] **Step 3: Commit all metric migrations together with the helper deletion**
+
+```bash
+git add portfolio/metric_helpers.go portfolio/sharpe.go portfolio/sortino.go portfolio/smart_sharpe.go portfolio/smart_sortino.go portfolio/probabilistic_sharpe.go portfolio/downside_deviation.go portfolio/std_dev.go portfolio/beta.go portfolio/tracking_error.go portfolio/information_ratio.go portfolio/r_squared.go portfolio/upside_capture.go portfolio/downside_capture.go portfolio/active_return.go portfolio/alpha.go portfolio/treynor.go portfolio/twrr.go portfolio/tail_ratio.go portfolio/n_positive_periods.go portfolio/excess_kurtosis.go portfolio/skewness.go portfolio/consecutive_wins.go portfolio/consecutive_losses.go portfolio/omega_ratio.go portfolio/cvar.go portfolio/value_at_risk.go portfolio/kelly_criterion.go portfolio/gain_loss_ratio.go portfolio/gain_to_pain.go portfolio/exposure.go portfolio/k_ratio.go portfolio/max_drawdown.go portfolio/avg_drawdown.go portfolio/avg_drawdown_days.go portfolio/recovery_factor.go portfolio/calmar.go portfolio/keller_ratio.go portfolio/ulcer_index.go portfolio/mwrr.go portfolio/turnover.go portfolio/tax_cost_ratio.go portfolio/unrealized_ltcg.go portfolio/unrealized_stcg.go portfolio/cagr_metric.go portfolio/dynamic_withdrawal_rate.go portfolio/safe_withdrawal_rate.go portfolio/perpetual_withdrawal_rate.go
+git commit -m "refactor(portfolio): migrate all metrics from helpers to DataFrame chains"
+```
+
+---
+
+## Chunk 4: Interface Changes, Test Updates, and Cleanup
+
+### Task 14: Update test files that reference old accessors
+
+**Files:**
+- `portfolio/return_metrics_test.go`
+- `portfolio/account_test.go`
+- `portfolio/benchmark_metrics_test.go`
+- `portfolio/risk_adjusted_metrics_test.go`
+- `portfolio/capture_drawdown_metrics_test.go`
+- `portfolio/distribution_metrics_test.go`
+- `portfolio/sqlite_test.go`
+- `engine/backtest_test.go`
+- Any other test files referencing old accessors
+
+- [ ] **Step 1: Update return_metrics_test.go**
+
+Replace `Expect(a.EquityCurve()).To(Equal(...))` with:
+```go
+perfAsset := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+pd := a.PerfData()
+Expect(pd).NotTo(BeNil())
+eqCol := pd.Column(perfAsset, data.PortfolioEquity)
+Expect(eqCol).To(Equal([]float64{...}))
+```
+
+- [ ] **Step 2: Update account_test.go**
+
+Replace all `EquityCurve()`, `EquityTimes()`, `BenchmarkPrices()`, `RiskFreePrices()` assertions with `PerfData()` equivalents. Remove the PerfData-alongside-old-accessors tests added in Task 6 (they become the primary assertions now).
+
+- [ ] **Step 3: Update engine/backtest_test.go**
+
+Replace `EquityCurve()` references with `PerfData()` based assertions.
+
+- [ ] **Step 4: Update sqlite_test.go**
+
+Replace `EquityCurve()`, `BenchmarkPrices()`, `RiskFreePrices()` assertions with `PerfData()` equivalents.
+
+- [ ] **Step 5: Update any remaining test files**
+
+Search for remaining references:
+```bash
+grep -r "EquityCurve\|EquityTimes\|BenchmarkPrices\|RiskFreePrices" --include="*_test.go" portfolio/ engine/
+```
+
+Fix any remaining references.
+
+- [ ] **Step 6: Verify tests pass with old accessors still present**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./... -count=1`
+Expected: PASS
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add portfolio/*_test.go engine/backtest_test.go
+git commit -m "test: update all tests from old accessors to PerfData"
+```
+
+---
+
+### Task 15: Remove old accessors and update interfaces
+
+Now that all consumers (metrics and tests) use `PerfData()`, remove old fields, accessors, and interface methods.
+
+**Files:**
+- Modify: `portfolio/account.go`
+- Modify: `portfolio/portfolio.go`
+- Modify: `portfolio/snapshot.go`
+- Modify: `portfolio/metric_query.go`
+- Modify: `portfolio/sqlite.go`
+
+- [ ] **Step 1: Rewrite UpdatePrices to use only perfData**
+
+Remove old `equityCurve`, `equityTimes`, `benchmarkPrices`, `riskFreePrices` fields from Account struct. Remove old `EquityCurve()`, `EquityTimes()`, `BenchmarkPrices()`, `RiskFreePrices()` methods. Rewrite `UpdatePrices` to ONLY build perfData (remove the old append calls):
 
 ```go
 func (a *Account) UpdatePrices(df *data.DataFrame) {
@@ -404,616 +1331,121 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 	var benchVal, rfVal float64
 	if a.benchmark != (asset.Asset{}) {
 		v := df.Value(a.benchmark, data.AdjClose)
-		if !math.IsNaN(v) {
-			benchVal = v
+		if math.IsNaN(v) || v == 0 {
+			v = df.Value(a.benchmark, data.MetricClose)
 		}
+		benchVal = v
 	}
 	if a.riskFree != (asset.Asset{}) {
 		v := df.Value(a.riskFree, data.AdjClose)
-		if !math.IsNaN(v) {
-			rfVal = v
+		if math.IsNaN(v) || v == 0 {
+			v = df.Value(a.riskFree, data.MetricClose)
 		}
-	}
-
-	t := []time.Time{df.End()}
-	assets := []asset.Asset{portfolioAsset}
-	metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
-	row, err := data.NewDataFrame(t, assets, metrics, []float64{total, benchVal, rfVal})
-	if err != nil {
-		return
+		rfVal = v
 	}
 
 	if a.perfData == nil {
-		a.perfData = row
-	} else {
-		merged, err := data.MergeTimes(a.perfData, row)
+		t := []time.Time{df.End()}
+		assets := []asset.Asset{portfolioAsset}
+		metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
+		row, err := data.NewDataFrame(t, assets, metrics, []float64{total, benchVal, rfVal})
 		if err != nil {
+			log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
 			return
 		}
-		a.perfData = merged
+		a.perfData = row
+	} else {
+		if err := a.perfData.AppendRow(df.End(), []float64{total, benchVal, rfVal}); err != nil {
+			log.Error().Err(err).Msg("UpdatePrices: failed to append to perfData")
+			return
+		}
 	}
 }
 ```
 
-- [ ] **Step 4: Remove old accessor methods**
+- [ ] **Step 2: Update Portfolio interface**
 
-Delete these methods from `account.go`:
-- `EquityCurve() []float64`
-- `EquityTimes() []time.Time`
-- `BenchmarkPrices() []float64`
-- `RiskFreePrices() []float64`
-
-- [ ] **Step 5: Update PortfolioSnapshot interface and WithPortfolioSnapshot**
-
-In `portfolio/snapshot.go`, change the interface from:
-```go
-EquityCurve() []float64
-EquityTimes() []time.Time
-BenchmarkPrices() []float64
-RiskFreePrices() []float64
-```
-to:
+In `portfolio/portfolio.go`, replace `EquityCurve()` and `EquityTimes()` with:
 ```go
 PerfData() *data.DataFrame
 ```
 
-Update `WithPortfolioSnapshot`:
+- [ ] **Step 3: Update PortfolioSnapshot interface**
+
+In `portfolio/snapshot.go`, replace `EquityCurve()`, `EquityTimes()`, `BenchmarkPrices()`, `RiskFreePrices()` with:
 ```go
-func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
-	return func(a *Account) {
-		a.cash = snap.Cash()
-		snap.Holdings(func(ast asset.Asset, qty float64) {
-			a.holdings[ast] = qty
-		})
-		a.transactions = append(a.transactions, snap.Transactions()...)
-		a.perfData = snap.PerfData()
-		for ast, lots := range snap.TaxLots() {
-			a.taxLots[ast] = append(a.taxLots[ast], lots...)
-		}
-	}
-}
+PerfData() *data.DataFrame
 ```
 
-- [ ] **Step 6: Verify compilation**
+Update `WithPortfolioSnapshot` to use `snap.PerfData().Copy()` instead of appending to old slices.
 
-Run: `go build ./portfolio/...`
-Expected: FAIL -- many metric files still reference removed methods. This is expected; those files are updated in subsequent tasks.
+- [ ] **Step 4: Update metric_query.go doc comment**
 
-- [ ] **Step 7: Commit (with --no-verify if build fails due to downstream)**
+Update `PerformanceMetric` interface doc to reference `perfData` instead of "equity curve".
 
-Do NOT commit yet -- wait until Task 4-8 are done so the tree compiles.
+- [ ] **Step 5: Update SQLite serialization**
 
----
+Update `portfolio/sqlite.go`:
+- Change `schemaVersion` to `"2"`
+- Replace `equity_curve` and `price_series` table definitions with `perf_data` table
+- Replace `writeEquityCurve`/`writePriceSeries` with `writePerfData`
+- Replace `readEquityCurve`/`readPriceSeries` with `readPerfData`
+- Update `FromSQLite` schema version check to `"2"`
+- Add `"sort"` import
 
-### Task 4: Create Returns PerformanceMetric
+See Task 7 in the original plan for the exact `writePerfData` and `readPerfData` implementations.
 
-**Files:**
-- Create: `portfolio/returns.go`
+- [ ] **Step 6: Delete export_test.go and metric_helpers_test.go**
 
-- [ ] **Step 1: Create returns.go**
-
-```go
-package portfolio
-
-import (
-	"github.com/penny-vault/pvbt/data"
-)
-
-type returnsMetric struct{}
-
-func (returnsMetric) Name() string { return "Returns" }
-
-func (returnsMetric) Description() string {
-	return "Period-over-period returns derived from the equity curve."
-}
-
-func (returnsMetric) Compute(a *Account, window *Period) (float64, error) {
-	perfDF := a.windowedPerfData(window)
-	eq := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-	if len(eq) < 2 {
-		return 0, nil
-	}
-	return (eq[len(eq)-1] - eq[0]) / eq[0], nil
-}
-
-func (returnsMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	perfDF := a.windowedPerfData(window)
-	eq := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-	if len(eq) < 2 {
-		return nil, nil
-	}
-	r := make([]float64, len(eq)-1)
-	for i := range r {
-		r[i] = (eq[i+1] - eq[i]) / eq[i]
-	}
-	return r, nil
-}
-
-// Returns computes period-over-period returns from the portfolio equity curve.
-var Returns PerformanceMetric = returnsMetric{}
-```
-
-- [ ] **Step 2: Verify it compiles in isolation**
-
-Run: `go vet ./portfolio/returns.go` (may fail due to other broken files -- that's OK)
-
----
-
-### Task 5: Create DrawdownSeries PerformanceMetric
-
-**Files:**
-- Create: `portfolio/drawdown_series.go`
-
-- [ ] **Step 1: Create drawdown_series.go**
-
-```go
-package portfolio
-
-import (
-	"math"
-
-	"github.com/penny-vault/pvbt/data"
-)
-
-type drawdownSeriesMetric struct{}
-
-func (drawdownSeriesMetric) Name() string { return "DrawdownSeries" }
-
-func (drawdownSeriesMetric) Description() string {
-	return "Drawdown at each point in the equity curve, as negative fractions from peak."
-}
-
-func (d drawdownSeriesMetric) Compute(a *Account, window *Period) (float64, error) {
-	series, err := d.ComputeSeries(a, window)
-	if err != nil || len(series) == 0 {
-		return 0, err
-	}
-	return series[len(series)-1], nil
-}
-
-func (drawdownSeriesMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	perfDF := a.windowedPerfData(window)
-	eq := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-	dd := make([]float64, len(eq))
-	peak := math.Inf(-1)
-	for i, v := range eq {
-		if v > peak {
-			peak = v
-		}
-		dd[i] = (v - peak) / peak
-	}
-	return dd, nil
-}
-
-// DrawdownSeries computes the drawdown at each point in the equity curve.
-var DrawdownSeries PerformanceMetric = drawdownSeriesMetric{}
-```
-
----
-
-### Task 6: Create ExcessReturns PerformanceMetric
-
-**Files:**
-- Create: `portfolio/excess_returns.go`
-
-- [ ] **Step 1: Create excess_returns.go**
-
-```go
-package portfolio
-
-import (
-	"github.com/penny-vault/pvbt/data"
-)
-
-type excessReturnsMetric struct{}
-
-func (excessReturnsMetric) Name() string { return "ExcessReturns" }
-
-func (excessReturnsMetric) Description() string {
-	return "Portfolio returns minus risk-free returns, element-wise."
-}
-
-func (e excessReturnsMetric) Compute(a *Account, window *Period) (float64, error) {
-	series, err := e.ComputeSeries(a, window)
-	if err != nil || len(series) == 0 {
-		return 0, err
-	}
-	return data.SliceMean(series), nil
-}
-
-func (excessReturnsMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	perfDF := a.windowedPerfData(window)
-	eq := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-	rf := perfDF.Column(portfolioAsset, data.PortfolioRiskFree)
-
-	r := data.PeriodsReturns(eq)
-	rfr := data.PeriodsReturns(rf)
-
-	n := len(r)
-	if len(rfr) < n {
-		n = len(rfr)
-	}
-	er := make([]float64, n)
-	for i := 0; i < n; i++ {
-		er[i] = r[i] - rfr[i]
-	}
-	return er, nil
-}
-
-// ExcessReturns computes portfolio returns minus risk-free returns.
-var ExcessReturns PerformanceMetric = excessReturnsMetric{}
-```
-
----
-
-### Task 7: Strip metric_helpers.go down to transaction helpers only
-
-**Files:**
-- Modify: `portfolio/metric_helpers.go`
-
-- [ ] **Step 1: Remove all functions except roundTrips and realizedGains**
-
-Delete these functions from `metric_helpers.go`:
-- `returns`
-- `excessReturns`
-- `windowSlice`
-- `windowSliceTimes`
-- `annualizationFactor`
-- `drawdownSeries`
-- `cagr`
-- `mean`
-- `variance`
-- `stddev`
-- `covariance`
-
-Keep:
-- `roundTrip` type
-- `roundTrips` function
-- `realizedGains` function
-
-Remove unused imports (the `math` and `time` imports that were needed by the deleted functions may no longer be needed -- check).
-
----
-
-### Task 8: Delete export shims and internal tests
-
-**Files:**
-- Delete: `portfolio/export_test.go`
-- Delete: `portfolio/metric_helpers_test.go`
-
-- [ ] **Step 1: Delete both files**
-
-```
+```bash
 rm portfolio/export_test.go portfolio/metric_helpers_test.go
 ```
 
----
+- [ ] **Step 7: Delete data/stats.go and data/stats_test.go**
 
-## Chunk 2: Migrate all ~45 metric implementations
-
-Each metric file needs the same pattern applied. The migration depends on which helpers the file uses. Read each file, apply the transformation, and move on.
-
-**Common patterns:**
-
-Pattern A -- files that used `windowSlice(a.EquityCurve(), a.EquityTimes(), window)` + `returns(eq)`:
-```go
-// Before:
-eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-r := returns(eq)
-
-// After:
-r, err := Returns.ComputeSeries(a, window)
-if err != nil { return 0, err }
+```bash
+rm data/stats.go data/stats_test.go
 ```
 
-Pattern B -- files that used `excessReturns`:
-```go
-// Before:
-eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-r := returns(eq)
-rf := returns(windowSlice(a.RiskFreePrices(), a.EquityTimes(), window))
-er := excessReturns(r, rf)
+- [ ] **Step 8: Verify full compilation and tests**
 
-// After:
-er, err := ExcessReturns.ComputeSeries(a, window)
-if err != nil { return 0, err }
-```
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./... -count=1`
+Expected: PASS
 
-Pattern C -- files that used `drawdownSeries`:
-```go
-// Before:
-eq := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-dd := drawdownSeries(eq)
+- [ ] **Step 9: Commit**
 
-// After:
-dd, err := DrawdownSeries.ComputeSeries(a, window)
-if err != nil { return 0, err }
-```
-
-Pattern D -- files that used `mean`, `stddev`, `variance`, `covariance`:
-```go
-// Before:           // After:
-mean(x)              data.SliceMean(x)
-stddev(x)            data.Stddev(x)
-variance(x)          data.Variance(x)
-covariance(x, y)     data.Covariance(x, y)
-```
-
-Pattern E -- files that used `annualizationFactor`:
-```go
-// Before:
-af := annualizationFactor(a.EquityTimes())
-
-// After:
-perfDF := a.windowedPerfData(window)
-af := data.AnnualizationFactor(perfDF.Times())
-```
-
-Pattern F -- files that used `windowSlice` on equity directly (without returns):
-```go
-// Before:
-equity := windowSlice(a.EquityCurve(), a.EquityTimes(), window)
-
-// After:
-perfDF := a.windowedPerfData(window)
-equity := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-```
-
-Pattern G -- files that used benchmark data:
-```go
-// Before:
-if len(a.BenchmarkPrices()) == 0 { return 0, nil }
-bm := windowSlice(a.BenchmarkPrices(), a.EquityTimes(), window)
-bReturns := returns(bm)
-
-// After:
-perfDF := a.windowedPerfData(window)
-bm := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
-if len(bm) == 0 { return 0, nil }
-bReturns := data.PeriodsReturns(bm)
-```
-
-Pattern H -- files that used risk-free data directly (not via excessReturns):
-```go
-// Before:
-if len(a.RiskFreePrices()) == 0 { return 0, nil }
-rf := windowSlice(a.RiskFreePrices(), a.EquityTimes(), window)
-
-// After:
-perfDF := a.windowedPerfData(window)
-rf := perfDF.Column(portfolioAsset, data.PortfolioRiskFree)
-if len(rf) == 0 { return 0, nil }
-```
-
-### Task 9: Migrate ExcessReturns-based metrics (8 files)
-
-**Files:** `portfolio/sharpe.go`, `portfolio/sortino.go`, `portfolio/smart_sharpe.go`, `portfolio/smart_sortino.go`, `portfolio/probabilistic_sharpe.go`, `portfolio/downside_deviation.go`, `portfolio/information_ratio.go`, `portfolio/tracking_error.go`
-
-These files use patterns B + D + E. Read each file, apply the patterns. Note that `information_ratio.go` and `tracking_error.go` use `excessReturns(pReturns, bReturns)` for active returns (portfolio vs benchmark, not portfolio vs risk-free), so they need `data.PeriodsReturns` on both series and inline subtraction, not `ExcessReturns.ComputeSeries`.
-
-- [ ] **Step 1: Read and migrate each file**
-
-For each file:
-1. Read the current implementation
-2. Replace `windowSlice`/`returns`/`excessReturns`/`mean`/`stddev`/`annualizationFactor`/`EquityCurve`/`EquityTimes`/`RiskFreePrices`/`BenchmarkPrices` calls per the patterns above
-3. Update imports: add `"github.com/penny-vault/pvbt/data"`, remove unused imports
-
-- [ ] **Step 2: Verify compilation**
-
-Run: `go build ./portfolio/...`
-Expected: may still fail if other files aren't migrated yet
-
----
-
-### Task 10: Migrate DrawdownSeries-based metrics (6 files)
-
-**Files:** `portfolio/max_drawdown.go`, `portfolio/avg_drawdown.go`, `portfolio/avg_drawdown_days.go`, `portfolio/calmar.go`, `portfolio/keller_ratio.go`, `portfolio/recovery_factor.go`
-
-These use pattern C + possibly D. `calmar.go` also uses `cagr()` -- inline the computation (see spec section 6).
-
-- [ ] **Step 1: Read and migrate each file**
-
-For each file, apply patterns C, D, F as needed. For `calmar.go`, replace `cagr(eq[0], eq[len(eq)-1], years)` with inline `math.Pow(eq[len(eq)-1]/eq[0], 1.0/years) - 1`.
-
-- [ ] **Step 2: Migrate cagr_metric.go**
-
-Replace `cagr()` call with inline computation per spec section 6.
-
----
-
-### Task 11: Migrate simple windowSlice+returns metrics (21 files)
-
-**Files:** `portfolio/twrr.go`, `portfolio/std_dev.go`, `portfolio/consecutive_wins.go`, `portfolio/consecutive_losses.go`, `portfolio/cvar.go`, `portfolio/excess_kurtosis.go`, `portfolio/exposure.go`, `portfolio/gain_loss_ratio.go`, `portfolio/gain_to_pain.go`, `portfolio/k_ratio.go`, `portfolio/kelly_criterion.go`, `portfolio/n_positive_periods.go`, `portfolio/omega_ratio.go`, `portfolio/skewness.go`, `portfolio/tail_ratio.go`, `portfolio/value_at_risk.go`, `portfolio/dynamic_withdrawal_rate.go`, `portfolio/perpetual_withdrawal_rate.go`, `portfolio/safe_withdrawal_rate.go`, `portfolio/ulcer_index.go`, `portfolio/treynor.go`
-
-These use patterns A + D + F + possibly H. Apply the transformations.
-
-- [ ] **Step 1: Read and migrate each file**
-
-For each file:
-1. Replace `windowSlice(a.EquityCurve(), a.EquityTimes(), window)` + `returns()` with `Returns.ComputeSeries(a, window)` or `a.windowedPerfData(window)` + `perfDF.Column(...)` as appropriate
-2. Replace `mean`/`stddev`/`variance`/`covariance` with `data.SliceMean`/`data.Stddev`/`data.Variance`/`data.Covariance`
-3. Files that need the raw equity (not returns) like `ulcer_index.go`, `dynamic_withdrawal_rate.go`, `perpetual_withdrawal_rate.go`, `safe_withdrawal_rate.go` use pattern F
-4. `treynor.go` uses risk-free data directly -- use pattern H
-5. Update imports
-
----
-
-### Task 12: Migrate benchmark-based metrics (8 files)
-
-**Files:** `portfolio/active_return.go`, `portfolio/alpha.go`, `portfolio/beta.go`, `portfolio/r_squared.go`, `portfolio/downside_capture.go`, `portfolio/upside_capture.go`
-
-Note: `information_ratio.go` and `tracking_error.go` were already migrated in Task 9.
-
-These use patterns G + D + possibly A. Apply the transformations.
-
-- [ ] **Step 1: Read and migrate each file**
-
-For each file:
-1. Replace `a.BenchmarkPrices()` checks and `windowSlice(a.BenchmarkPrices(), ...)` with `perfDF.Column(portfolioAsset, data.PortfolioBenchmark)`
-2. Replace `returns(bm)` with `data.PeriodsReturns(bm)`
-3. Replace `variance`/`covariance`/`stddev`/`mean` with `data.` equivalents
-4. `alpha.go` also uses risk-free data -- use pattern H
-5. Update imports
-
----
-
-### Task 13: Verify full compilation and run tests
-
-- [ ] **Step 1: Build the portfolio package**
-
-Run: `go build ./portfolio/...`
-Expected: SUCCESS
-
-- [ ] **Step 2: Run all portfolio tests**
-
-Run: `ginkgo run ./portfolio/...`
-Expected: ALL PASS (some tests may need updates in Task 14)
-
-- [ ] **Step 3: Build and test full project**
-
-Run: `go build ./...`
-Run: `ginkgo run ./...`
-Expected: ALL PASS
-
-- [ ] **Step 4: Commit all changes**
-
-```
-git add -A
-git commit -m "refactor(portfolio): replace metric helpers with PerformanceMetric composition and data.stats
-
-- Account stores perfData DataFrame instead of separate equityCurve/benchmarkPrices/riskFreePrices slices
-- Returns, DrawdownSeries, ExcessReturns promoted to PerformanceMetric implementations
-- Pure math (SliceMean, Variance, Stddev, Covariance, AnnualizationFactor) moved to data/stats.go
-- Deleted cagr helper; CAGR metric computes inline
-- Deleted export_test.go and metric_helpers_test.go (violate black-box testing)
-- All ~45 metric files migrated to use composition and data.stats functions"
-```
-
----
-
-## Chunk 3: Update tests and callers
-
-### Task 14: Update account_test.go
-
-**Files:**
-- Modify: `portfolio/account_test.go`
-
-- [ ] **Step 1: Read account_test.go and identify all references to removed methods**
-
-Search for: `EquityCurve()`, `EquityTimes()`, `BenchmarkPrices()`, `RiskFreePrices()`
-
-- [ ] **Step 2: Replace with PerfData() equivalents**
-
-```go
-// Before:
-a.EquityCurve()
-a.EquityTimes()
-a.BenchmarkPrices()
-a.RiskFreePrices()
-
-// After:
-a.PerfData().Column(portfolioAsset, data.PortfolioEquity)
-a.PerfData().Times()
-a.PerfData().Column(portfolioAsset, data.PortfolioBenchmark)
-a.PerfData().Column(portfolioAsset, data.PortfolioRiskFree)
-```
-
-Note: `portfolioAsset` is unexported, so test code in `package portfolio_test` cannot access it directly. The tests should use `PerfData()` and access columns via the exported metric constants. Check if the test needs to reference `portfolioAsset` -- if so, the test may need to assert on the DataFrame's column list or use `PerfData().Column()` with a locally constructed asset matching the CompositeFigi.
-
-Alternative: export `PortfolioAsset` as a public var, or provide `EquityCurve()` as a convenience wrapper. Check what the tests actually need.
-
-- [ ] **Step 3: Run portfolio tests**
-
-Run: `ginkgo run ./portfolio/...`
-Expected: ALL PASS
-
-- [ ] **Step 4: Commit**
-
-```
-git add portfolio/account_test.go
-git commit -m "test(portfolio): update account tests to use PerfData DataFrame"
-```
-
----
-
-### Task 15: Add tests for new PerformanceMetrics
-
-**Files:**
-- Modify: `portfolio/return_metrics_test.go` (or create new test file)
-
-- [ ] **Step 1: Add Returns tests**
-
-Add to an appropriate test file (e.g., `portfolio/return_metrics_test.go`):
-
-```go
-Describe("Returns", func() {
-	It("computes total return over full history", func() {
-		// Build account with known equity curve
-		// Assert Returns.Compute gives expected total return
-	})
-
-	It("computes period-over-period return series", func() {
-		// Assert Returns.ComputeSeries gives expected values
-	})
-})
-```
-
-Build the Account using `portfolio.New()` + `UpdatePrices()` calls to create a known equity curve.
-
-- [ ] **Step 2: Add DrawdownSeries tests**
-
-```go
-Describe("DrawdownSeries", func() {
-	It("returns all zeros for rising equity", func() { ... })
-	It("computes correct drawdown for peak-trough pattern", func() { ... })
-})
-```
-
-- [ ] **Step 3: Add ExcessReturns tests**
-
-```go
-Describe("ExcessReturns", func() {
-	It("subtracts risk-free returns from portfolio returns", func() { ... })
-})
-```
-
-- [ ] **Step 4: Run tests**
-
-Run: `ginkgo run ./portfolio/...`
-Expected: ALL PASS
-
-- [ ] **Step 5: Commit**
-
-```
-git add portfolio/return_metrics_test.go
-git commit -m "test(portfolio): add black-box tests for Returns, DrawdownSeries, ExcessReturns"
+```bash
+git add portfolio/account.go portfolio/portfolio.go portfolio/snapshot.go portfolio/metric_query.go portfolio/sqlite.go portfolio/sqlite_test.go
+git rm portfolio/export_test.go portfolio/metric_helpers_test.go data/stats.go data/stats_test.go
+git commit -m "refactor(portfolio): remove old accessors, update interfaces and SQLite to schema v2"
 ```
 
 ---
 
 ### Task 16: Final verification
 
-- [ ] **Step 1: Run full test suite**
+- [ ] **Step 1: Verify no references to deleted symbols**
 
-Run: `ginkgo run ./...`
-Expected: ALL PASS
-
-- [ ] **Step 2: Verify no remaining references to deleted helpers**
-
-Run: `grep -rn 'windowSlice\|windowSliceTimes\|annualizationFactor\|excessReturns\|drawdownSeries\| cagr(' portfolio/*.go | grep -v _test.go`
-Expected: NO OUTPUT (all references removed)
-
-Run: `grep -rn 'EquityCurve()\|EquityTimes()\|BenchmarkPrices()\|RiskFreePrices()' portfolio/*.go cli/*.go`
-Expected: NO OUTPUT (all references removed)
-
-- [ ] **Step 3: Verify export_test.go is gone**
-
-Run: `ls portfolio/export_test.go`
-Expected: "No such file or directory"
-
-- [ ] **Step 4: Final commit if any stragglers**
-
+```bash
+cd /Users/jdf/Developer/penny-vault/pvbt2
+grep -r "EquityCurve\|EquityTimes\|BenchmarkPrices\|RiskFreePrices\|windowSlice\|excessReturns\|drawdownSeries\|data\.AnnualizationFactor" --include="*.go" | grep -v "vendor/"
 ```
+
+Expected: No matches (except possibly comments in test files referencing math formulas).
+
+- [ ] **Step 2: Run full test suite one final time**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go test ./... -count=1`
+Expected: PASS
+
+- [ ] **Step 3: Run go vet**
+
+Run: `cd /Users/jdf/Developer/penny-vault/pvbt2 && go vet ./...`
+Expected: No issues
+
+- [ ] **Step 4: Commit any remaining fixes**
+
+```bash
 git add -A
-git commit -m "chore: clean up remaining references after metric helpers refactor"
+git commit -m "chore: final cleanup after metric helpers refactor"
 ```

@@ -188,7 +188,7 @@ The Downsample builder methods also use sample (N-1) for `Std()` and `Variance()
 
 ### 8. AnnualizationFactor
 
-`AnnualizationFactor(times []time.Time) float64` stays as a package-level function in `data/stats.go`. It estimates periods-per-year from timestamps (252 for daily, 12 for monthly). It only needs a `[]time.Time`, not a DataFrame, so a method would not add clarity. Callers pass `df.Times()`.
+**SUPERSEDED**: The metric-helpers-refactor spec (`2026-03-12-metric-helpers-refactor-design.md`) moves `AnnualizationFactor` to the `portfolio` package as an unexported helper. It is a financial concept (252/12) that does not belong in the generic `data` package. `data/stats.go` and `data/stats_test.go` are deleted.
 
 ### 9. Deleted code
 
@@ -204,7 +204,7 @@ The Downsample builder methods also use sample (N-1) for `Std()` and `Variance()
 | `data/stats.go`: `Covariance` | Replaced by `DataFrame.Covariance()` |
 | `data/stats.go`: `PeriodsReturns` | Replaced by `DataFrame.Pct()` |
 
-`AnnualizationFactor` is the only function that remains in `data/stats.go`.
+`AnnualizationFactor` is also deleted (see Section 8 -- superseded by metric-helpers-refactor spec). `data/stats.go` becomes empty and is deleted.
 
 ### 10. Impact on metric helpers refactor
 
