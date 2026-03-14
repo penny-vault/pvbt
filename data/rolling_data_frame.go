@@ -32,6 +32,10 @@ type RollingDataFrame struct {
 
 // Mean returns a DataFrame with the rolling mean over the window.
 func (r *RollingDataFrame) Mean() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -52,6 +56,10 @@ func (r *RollingDataFrame) Mean() *DataFrame {
 
 // Sum returns a DataFrame with the rolling sum over the window.
 func (r *RollingDataFrame) Sum() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -72,6 +80,10 @@ func (r *RollingDataFrame) Sum() *DataFrame {
 
 // Max returns a DataFrame with the rolling maximum over the window.
 func (r *RollingDataFrame) Max() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -92,6 +104,10 @@ func (r *RollingDataFrame) Max() *DataFrame {
 
 // Min returns a DataFrame with the rolling minimum over the window.
 func (r *RollingDataFrame) Min() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -113,6 +129,10 @@ func (r *RollingDataFrame) Min() *DataFrame {
 // Std returns a DataFrame with the rolling sample standard deviation
 // (N-1 denominator) over the window.
 func (r *RollingDataFrame) Std() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -148,6 +168,10 @@ func (r *RollingDataFrame) Std() *DataFrame {
 // Variance returns a DataFrame with the rolling sample variance (N-1
 // denominator) over the window.
 func (r *RollingDataFrame) Variance() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
@@ -183,6 +207,10 @@ func (r *RollingDataFrame) Variance() *DataFrame {
 // Percentile returns a DataFrame with the rolling p-th percentile over
 // the window. p should be in the range [0, 1].
 func (r *RollingDataFrame) Percentile(p float64) *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 		n := r.window
