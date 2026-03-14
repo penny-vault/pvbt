@@ -112,7 +112,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(0.75))
 		Expect(plan[0].Members[aapl]).To(Equal(0.25))
@@ -127,7 +131,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 
 		sum := 0.0
@@ -146,7 +154,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(0.5))
 		Expect(plan[0].Members[aapl]).To(Equal(0.5))
@@ -161,11 +173,15 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
-		// SPY gets 300/300 = 1.0, AAPL gets 0/300 = 0.0
+		// SPY gets 300/300 = 1.0, AAPL omitted (NaN metric, zero weight)
+		Expect(plan[0].Members).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(1.0))
-		Expect(plan[0].Members[aapl]).To(Equal(0.0))
 	})
 
 	It("assigns weight 1.0 to a single asset", func() {
@@ -177,7 +193,10 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(1.0))
 	})
@@ -191,7 +210,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members[spy]).To(Equal(0.5))
 		Expect(plan[0].Members[aapl]).To(Equal(0.5))
@@ -212,13 +235,18 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(bil, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 
 		// positive sum = 300 + 100 = 400
-		// SPY = 300/400 = 0.75, AAPL = 0, BIL = 100/400 = 0.25
+		// SPY = 300/400 = 0.75, AAPL omitted (negative metric), BIL = 100/400 = 0.25
+		Expect(plan[0].Members).To(HaveLen(2))
 		Expect(plan[0].Members[spy]).To(Equal(0.75))
-		Expect(plan[0].Members[aapl]).To(Equal(0.0))
 		Expect(plan[0].Members[bil]).To(Equal(0.25))
 	})
 
@@ -238,7 +266,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1, 1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1, 1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(2))
 
 		// t1: SPY=300/(300+100)=0.75, AAPL=100/400=0.25
@@ -261,7 +293,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 
 		// All NaN => sum is 0 => falls back to equal weight.
@@ -278,7 +314,11 @@ var _ = Describe("WeightedBySignal", func() {
 		)
 		Expect(err).ToNot(HaveOccurred())
 
-		plan := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Date).To(Equal(t1))
 
@@ -476,5 +516,127 @@ var _ = Describe("EqualWeight with Selected column", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(plan).To(HaveLen(1))
 		Expect(plan[0].Members).To(HaveLen(0))
+	})
+})
+
+var _ = Describe("WeightedBySignal with Selected column", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+		bil  asset.Asset
+		t1   time.Time
+		t2   time.Time
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+		t1 = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		t2 = time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("returns error when Selected column is missing", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MarketCap},
+			[]float64{300},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("weights only selected assets by signal", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MarketCap},
+			[]float64{300, 100, 500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(bil, portfolio.Selected, []float64{0})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+
+		Expect(plan[0].Members).To(HaveLen(2))
+		Expect(plan[0].Members[spy]).To(Equal(0.75))
+		Expect(plan[0].Members[aapl]).To(Equal(0.25))
+	})
+
+	It("uses per-timestep selection for weighting", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{
+				300, 100, // SPY
+				100, 300, // AAPL
+			},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1, 0})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{0, 1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(2))
+
+		Expect(plan[0].Members).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+
+		Expect(plan[1].Members).To(HaveLen(1))
+		Expect(plan[1].Members[aapl]).To(Equal(1.0))
+	})
+
+	It("falls back to equal weight among selected when all signal values are zero", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl, bil},
+			[]data.Metric{data.MarketCap},
+			[]float64{0, 0, 500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(bil, portfolio.Selected, []float64{0})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+
+		Expect(plan[0].Members).To(HaveLen(2))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("discards zero signal values in normalization", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			[]float64{300, 0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.WeightedBySignal(df, data.MarketCap)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+
+		// SPY=300/300=1.0, AAPL discarded (zero signal, omitted from map)
+		Expect(plan[0].Members).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
 	})
 })
