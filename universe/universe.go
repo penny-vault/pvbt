@@ -13,7 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package universe defines collections of assets that strategies operate on.
 package universe
 
 import (
