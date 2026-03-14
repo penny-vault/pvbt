@@ -15,17 +15,36 @@
 
 package signal
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+	"fmt"
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/universe"
+)
 
 // Volatility computes the rolling standard deviation of returns over
-// the given number of periods for each asset in the DataFrame. The
-// input DataFrame must contain price data. Returns a DataFrame with
-// one column per asset containing the volatility score at each
-// timestamp.
-func Volatility(df *data.DataFrame, periods int) *data.DataFrame {
-	// Compute percent change, then rolling standard deviation over
-	// the lookback window for each asset. Return a new DataFrame
-	// with a single metric ("Volatility") and the same assets and
-	// timestamps.
-	return nil
+// the given period for each asset in the universe. Returns a single-row
+// DataFrame with one column per asset containing the volatility score.
+func Volatility(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
+	metric := data.MetricClose
+	if len(metrics) > 0 {
+		metric = metrics[0]
+	}
+
+	df, err := u.Window(ctx, period, metric)
+	if err != nil {
+		return data.WithErr(fmt.Errorf("Volatility: %w", err))
+	}
+
+	if df.Len() < 3 {
+		return data.WithErr(fmt.Errorf("Volatility: need at least 3 data points, got %d", df.Len()))
+	}
+
+	// Compute daily returns, drop leading NaN, then rolling std over all returns.
+	returns := df.Pct(1).Drop(math.NaN())
+	result := returns.Rolling(returns.Len()).Std().Last().RenameMetric(metric, VolatilitySignal)
+	return result
 }
