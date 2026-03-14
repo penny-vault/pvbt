@@ -52,6 +52,19 @@ type DataFrame struct {
 	// assetIndex maps CompositeFigi to the asset's position in assets
 	// for O(1) lookup.
 	assetIndex map[string]int
+
+	// err holds the first error encountered during chained operations.
+	err error
+}
+
+// Err returns the first error encountered during chained operations.
+func (df *DataFrame) Err() error { return df.err }
+
+// WithErr returns a zero-value DataFrame carrying the given error.
+// All accessor methods (Len, AssetList, etc.) return safe defaults on this form.
+// Exported so that packages like signal can create error DataFrames.
+func WithErr(err error) *DataFrame {
+	return &DataFrame{err: err}
 }
 
 // NewDataFrame constructs a DataFrame from the given dimensions and data.
