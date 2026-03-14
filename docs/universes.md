@@ -10,12 +10,21 @@ Universes change over time. The S&P 500 adds and removes companies. ETFs get cre
 type Universe interface {
     Assets(t time.Time) []asset.Asset
     Prefetch(ctx context.Context, start, end time.Time) error
+    Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
+    At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+    CurrentDate() time.Time
 }
 ```
 
 `Assets` returns the list of instruments in the universe at time `t`. The engine calls this at each computation step to resolve membership for the current simulation date.
 
 `Prefetch` allows the engine to tell the universe what time range it will operate over. The engine calls this before the run loop starts. Universes that need to load data (like index membership from a database) can fetch everything in one shot. Static universes ignore it.
+
+`Window` fetches a DataFrame for the universe's current assets over a lookback period from the current date. This is the primary way signals get data for the universe.
+
+`At` fetches a single-row DataFrame for the universe's assets at a specific time.
+
+`CurrentDate` returns the simulation date the universe is currently positioned at.
 
 ## Creating universes
 
@@ -68,12 +77,10 @@ Index universes cache membership in memory. The first call to `Assets(t)` for a 
 The primary use of a universe is to get a DataFrame for its assets. The engine resolves `u.Assets(t)` into a `DataRequest`, fetches the data from providers, and hands the strategy a DataFrame. From there, the strategy operates on the DataFrame:
 
 ```go
-func (s *ADM) Compute(ctx context.Context, p portfolio.Portfolio) {
-    // The engine provides a DataFrame populated with data for the
-    // universe's assets at the current simulation date.
-    mom1 := signal.Momentum(df, 1)
-    mom3 := signal.Momentum(df, 3)
-    mom6 := signal.Momentum(df, 6)
+func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+    mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
+    mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
+    mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     // ...
@@ -87,12 +94,14 @@ Filtering, ranking, and selection all happen through the DataFrame API. See [Dat
 A strategy's equity curve is itself a time series. The engine can expose it as a synthetic asset, which means one strategy can be included in another strategy's universe:
 
 ```go
-func (s *Blend) Setup(e *engine.Engine, config engine.Config) {
+func (s *Blend) Setup(e *engine.Engine) {
     s.strategies = universe.NewStatic("strategy:ADM", "strategy:Value", "strategy:Growth")
 }
 ```
 
 The `strategy:` prefix tells the engine to run that strategy first and expose its equity curve as the price series. From the meta-strategy's perspective these are just assets with price data in a DataFrame.
+
+> **Note:** The `strategy:` prefix is a planned feature and may not be fully implemented yet.
 
 ## Universe membership and time
 
