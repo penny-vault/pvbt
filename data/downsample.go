@@ -33,7 +33,7 @@ type DownsampledDataFrame struct {
 
 func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame {
 	if len(d.df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	type group struct {
@@ -42,6 +42,7 @@ func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame 
 	}
 
 	var groups []group
+
 	groupStart := 0
 
 	for i := 1; i < len(d.df.times); i++ {
@@ -50,6 +51,7 @@ func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame 
 			groupStart = i
 		}
 	}
+
 	groups = append(groups, group{groupStart, len(d.df.times)})
 
 	newTimeLen := len(groups)
@@ -73,10 +75,11 @@ func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame 
 
 	assets := make([]asset.Asset, assetLen)
 	copy(assets, d.df.assets)
+
 	metrics := make([]Metric, metricLen)
 	copy(metrics, d.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, newData)
+	return mustNewDataFrame(newTimes, assets, metrics, d.freq, newData)
 }
 
 // Mean returns a DataFrame with the mean of each group.
@@ -129,12 +132,15 @@ func (d *DownsampledDataFrame) Std() *DataFrame {
 		if n < 2 {
 			return 0
 		}
+
 		m := stat.Mean(vals, nil)
 		sum := 0.0
+
 		for _, v := range vals {
 			diff := v - m
 			sum += diff * diff
 		}
+
 		return math.Sqrt(sum / float64(n-1))
 	})
 }
@@ -147,12 +153,15 @@ func (d *DownsampledDataFrame) Variance() *DataFrame {
 		if n < 2 {
 			return 0
 		}
+
 		m := stat.Mean(vals, nil)
 		sum := 0.0
+
 		for _, v := range vals {
 			diff := v - m
 			sum += diff * diff
 		}
+
 		return sum / float64(n-1)
 	})
 }

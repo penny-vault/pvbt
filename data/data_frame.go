@@ -56,10 +56,16 @@ type DataFrame struct {
 
 	// err holds the first error encountered during chained operations.
 	err error
+
+	// freq holds the data resolution of this DataFrame.
+	freq Frequency
 }
 
 // Err returns the first error encountered during chained operations.
 func (df *DataFrame) Err() error { return df.err }
+
+// Frequency returns the data resolution of this DataFrame.
+func (df *DataFrame) Frequency() Frequency { return df.freq }
 
 // WithErr returns a zero-value DataFrame carrying the given error.
 // All accessor methods (Len, AssetList, etc.) return safe defaults on this form.
@@ -71,7 +77,7 @@ func WithErr(err error) *DataFrame {
 // NewDataFrame constructs a DataFrame from the given dimensions and data.
 // The data slice must have length len(times) * len(assets) * len(metrics),
 // laid out in column-major order as described on DataFrame.
-func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, data []float64) (*DataFrame, error) {
+func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, data []float64) (*DataFrame, error) {
 	expected := len(times) * len(assets) * len(metrics)
 	if len(data) != expected {
 		return nil, fmt.Errorf("data length %d does not match dimensions %d (times=%d, assets=%d, metrics=%d)",
@@ -89,13 +95,14 @@ func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, dat
 		assets:     assets,
 		metrics:    metrics,
 		assetIndex: idx,
+		freq:       freq,
 	}, nil
 }
 
 // mustNewDataFrame is an internal helper that calls NewDataFrame and panics
 // on error. Use only when dimensions are guaranteed correct by construction.
-func mustNewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, data []float64) *DataFrame {
-	df, err := NewDataFrame(times, assets, metrics, data)
+func mustNewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, data []float64) *DataFrame {
+	df, err := NewDataFrame(times, assets, metrics, freq, data)
 	if err != nil {
 		panic("internal error: " + err.Error())
 	}
@@ -282,7 +289,7 @@ func (df *DataFrame) At(t time.Time) *DataFrame {
 
 	tIdx, ok := df.timeIndex(t)
 	if !ok {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	assetLen := len(df.assets)
@@ -304,7 +311,7 @@ func (df *DataFrame) At(t time.Time) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
 }
 
 // Last returns a single-row DataFrame containing the most recent timestamp.
@@ -314,7 +321,7 @@ func (df *DataFrame) Last() *DataFrame {
 	}
 
 	if len(df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	return df.At(df.times[len(df.times)-1])
@@ -339,7 +346,7 @@ func (df *DataFrame) Copy() *DataFrame {
 	metrics := make([]Metric, len(df.metrics))
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
 }
 
 // Table returns an ASCII table representation of the DataFrame for
@@ -407,7 +414,7 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 	}
 
 	if len(matched) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newData := make([]float64, len(matched)*metricLen*timeLen)
@@ -426,7 +433,7 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, matched, metrics, newData)
+	return mustNewDataFrame(times, matched, metrics, df.freq, newData)
 }
 
 // Metrics returns a new DataFrame containing only the specified metrics.
@@ -451,7 +458,7 @@ func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
 	}
 
 	if len(matched) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newMetricLen := len(matched)
@@ -471,7 +478,7 @@ func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
 	assetsCopy := make([]asset.Asset, assetLen)
 	copy(assetsCopy, df.assets)
 
-	return mustNewDataFrame(times, assetsCopy, matched, newData)
+	return mustNewDataFrame(times, assetsCopy, matched, df.freq, newData)
 }
 
 // Between returns a new DataFrame containing only timestamps within the
@@ -490,7 +497,7 @@ func (df *DataFrame) Between(start, end time.Time) *DataFrame {
 	})
 
 	if startIdx >= endIdx {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	return df.sliceByTimeIndices(startIdx, endIdx)
@@ -519,7 +526,7 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
 }
 
 // Filter returns a new DataFrame keeping only the timestamps for which fn
@@ -544,7 +551,7 @@ func (df *DataFrame) Filter(fn func(t time.Time, row *DataFrame) bool) *DataFram
 
 func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 	if len(indices) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newTimeLen := len(indices)
@@ -574,7 +581,7 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
 }
 
 // Drop removes all timestamps where any value equals val (e.g. NaN).
@@ -775,7 +782,7 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 
 	pairs, resAssets, resMetrics := df.findIntersection(other)
 	if len(pairs) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	resIdx := make(map[string]int, len(resAssets))
@@ -804,7 +811,7 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	return mustNewDataFrame(times, resAssets, resMetrics, newData)
+	return mustNewDataFrame(times, resAssets, resMetrics, df.freq, newData)
 }
 
 // Add returns a new DataFrame with element-wise addition of two DataFrames
@@ -986,7 +993,7 @@ func (df *DataFrame) MaxAcrossAssets() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
+	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData)
 }
 
 // MinAcrossAssets returns a new DataFrame with the minimum value across all
@@ -1027,7 +1034,7 @@ func (df *DataFrame) MinAcrossAssets() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, newData)
+	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData)
 }
 
 // IdxMaxAcrossAssets returns, for each timestamp, the asset that holds the
@@ -1182,7 +1189,7 @@ func (df *DataFrame) Covariance(assets ...asset.Asset) *DataFrame {
 	}
 
 	if len(assets) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	var lastTime []time.Time
@@ -1200,7 +1207,7 @@ func (df *DataFrame) Covariance(assets ...asset.Asset) *DataFrame {
 func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) *DataFrame {
 	aIdx, ok := df.assetIndex[a.CompositeFigi]
 	if !ok {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	metricLen := len(df.metrics)
@@ -1221,10 +1228,10 @@ func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) 
 	}
 
 	if len(pairMetrics) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
-	return mustNewDataFrame(lastTime, []asset.Asset{a}, pairMetrics, pairData)
+	return mustNewDataFrame(lastTime, []asset.Asset{a}, pairMetrics, df.freq, pairData)
 }
 
 func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.Time) *DataFrame {
@@ -1255,13 +1262,13 @@ func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.
 	}
 
 	if len(pairAssets) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(lastTime, pairAssets, metrics, pairData)
+	return mustNewDataFrame(lastTime, pairAssets, metrics, df.freq, pairData)
 }
 
 func sampleCov(x, y []float64) float64 {
@@ -1465,7 +1472,7 @@ func (df *DataFrame) Window(p *Period) *DataFrame {
 	}
 
 	if len(df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	start := p.Before(df.End())
@@ -1515,7 +1522,7 @@ func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, newData)
+	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
 }
 
 // AppendRow appends a single timestamp and its column values to the
@@ -1596,7 +1603,7 @@ func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(lastTime, assets, metrics, newData)
+	return mustNewDataFrame(lastTime, assets, metrics, df.freq, newData)
 }
 
 // Annotate pushes every non-NaN cell in the DataFrame as a key-value

@@ -213,6 +213,13 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 		return fmt.Errorf("insert cash: %w", err)
 	}
 
+	// Perf data frequency.
+	if a.perfData != nil {
+		if _, err := stmt.Exec("perf_data_frequency", a.perfData.Frequency().String()); err != nil {
+			return fmt.Errorf("insert perf_data_frequency: %w", err)
+		}
+	}
+
 	// Benchmark identity.
 	if a.benchmark != (asset.Asset{}) {
 		if _, err := stmt.Exec("benchmark_ticker", a.benchmark.Ticker); err != nil {
@@ -490,6 +497,7 @@ func FromSQLite(path string) (*Account, error) {
 	delete(a.metadata, "benchmark_figi")
 	delete(a.metadata, "risk_free_ticker")
 	delete(a.metadata, "risk_free_figi")
+	delete(a.metadata, "perf_data_frequency")
 
 	// Read perf data.
 	if err := a.readPerfData(db); err != nil {
@@ -623,7 +631,15 @@ func (a *Account) readPerfData(db *sql.DB) error {
 		vals[mIdx*len(times)+tIdx] = e.v
 	}
 
-	df, err := data.NewDataFrame(times, assets, metrics, vals)
+	perfFreq := data.Daily
+	if freqStr, ok := a.metadata["perf_data_frequency"]; ok {
+		parsed, parseErr := data.ParseFrequency(freqStr)
+		if parseErr == nil {
+			perfFreq = parsed
+		}
+	}
+
+	df, err := data.NewDataFrame(times, assets, metrics, perfFreq, vals)
 	if err != nil {
 		return fmt.Errorf("build perfData: %w", err)
 	}
