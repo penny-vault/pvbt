@@ -149,6 +149,76 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(count).To(Equal(2))
 		})
 	})
+
+	Describe("index member recording", func() {
+		It("records index members from IndexMembers() call", func() {
+			members := []asset.Asset{
+				{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"},
+			}
+
+			nyc, _ := time.LoadLocation("America/New_York")
+			date := time.Date(2024, 1, 2, 16, 0, 0, 0, nyc)
+
+			stub := &stubIndexProvider{members: members}
+
+			var err error
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				IndexProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: members},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := recorder.IndexMembers(ctx, "SP500", date)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(members))
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var count int
+			Expect(db.QueryRow("SELECT count(*) FROM index_members").Scan(&count)).To(Succeed())
+			Expect(count).To(Equal(1))
+		})
+	})
+
+	Describe("rating recording", func() {
+		It("records rated assets from RatedAssets() call", func() {
+			rated := []asset.Asset{
+				{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"},
+			}
+
+			nyc, _ := time.LoadLocation("America/New_York")
+			date := time.Date(2024, 1, 2, 16, 0, 0, 0, nyc)
+
+			stub := &stubRatingProvider{assets: rated}
+
+			var err error
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				RatingProvider: stub,
+				AssetProvider:  &stubAssetProvider{assets: rated},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := recorder.RatedAssets(ctx, "morningstar", data.RatingEq(5), date)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(rated))
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var count int
+			Expect(db.QueryRow("SELECT count(*) FROM ratings").Scan(&count)).To(Succeed())
+			Expect(count).To(Equal(1))
+		})
+	})
 })
 
 // -- stubs --
@@ -164,4 +234,20 @@ func (s *stubAssetProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 
 func (s *stubAssetProvider) LookupAsset(ctx context.Context, ticker string) (asset.Asset, error) {
 	return s.lookupResult, nil
+}
+
+type stubIndexProvider struct {
+	members []asset.Asset
+}
+
+func (s *stubIndexProvider) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error) {
+	return s.members, nil
+}
+
+type stubRatingProvider struct {
+	assets []asset.Asset
+}
+
+func (s *stubRatingProvider) RatedAssets(ctx context.Context, analyst string, filter data.RatingFilter, t time.Time) ([]asset.Asset, error) {
+	return s.assets, nil
 }
