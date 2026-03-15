@@ -20,7 +20,9 @@
 // change over time: the S&P 500 regularly adds and removes companies, for
 // example. The engine resolves membership at each historical point so that
 // backtests reflect the assets that were actually available on a given date,
-// preventing survivorship bias.
+// preventing survivorship bias (the distortion that occurs when backtests
+// only consider companies that survived to the present, ignoring those that
+// were delisted, acquired, or went bankrupt).
 //
 // # Universe Interface
 //

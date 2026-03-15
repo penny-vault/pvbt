@@ -164,9 +164,9 @@
 // see what trades are coming before the actual trade date.
 //
 // The method clones the current portfolio, advances the engine's date to the
-// next scheduled trade date, forward-fills any data gaps (copying the last
-// available prices forward day-by-day), and runs the strategy's Compute
-// against the shadow copy. The strategy is completely unaware it is a
+// next scheduled trade date, fills any data gaps by copying the last available
+// prices forward day-by-day, and runs the strategy's Compute against the
+// shadow copy. The strategy is completely unaware it is a
 // prediction run.
 //
 // Call it after a backtest or during live operation:

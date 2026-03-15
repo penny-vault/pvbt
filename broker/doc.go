@@ -71,11 +71,12 @@
 // # Time in Force
 //
 //   - Day: valid for the current trading session only.
-//   - GTC: good until cancelled; remains active across sessions.
-//   - GTD: good until the date specified by GTDDate.
-//   - IOC: immediate or cancel; fill what is possible immediately, cancel
-//     the remainder.
-//   - FOK: fill or kill; fill the entire order immediately or cancel it
+//   - GTC (good until cancelled): remains active across sessions.
+//   - GTD (good until date): remains active until the date specified by
+//     GTDDate.
+//   - IOC (immediate or cancel): fill what is possible immediately,
+//     cancel the remainder.
+//   - FOK (fill or kill): fill the entire order immediately or cancel it
 //     entirely.
 //   - OnOpen: execute during the opening auction.
 //   - OnClose: execute during the closing auction.
