@@ -10,6 +10,8 @@
 
 **Spec:** `docs/superpowers/specs/2026-03-14-rated-universe-design.md`
 
+**Note:** All new `.go` files must include the project's standard Apache 2.0 copyright header (see any existing file, e.g., `data/metric.go:1-15`). The code blocks below omit the header for brevity.
+
 ---
 
 ## File Structure
@@ -131,8 +133,12 @@ func RatingIn(vs ...int) RatingFilter {
 }
 
 // RatingLTE creates a filter matching rating values from 1 through v (inclusive).
-// Assumes ratings are positive integers starting at 1.
+// Assumes ratings are positive integers starting at 1. Returns the zero-value
+// filter (matches nothing) if v <= 0.
 func RatingLTE(v int) RatingFilter {
+	if v <= 0 {
+		return RatingFilter{}
+	}
 	vals := make([]int, v)
 	for i := range vals {
 		vals[i] = i + 1
