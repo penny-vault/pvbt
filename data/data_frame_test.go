@@ -1774,3 +1774,93 @@ var _ = Describe("AppendRow", func() {
 		})
 	})
 })
+
+type mockAnnotator struct {
+	entries []struct {
+		timestamp int64
+		key       string
+		value     string
+	}
+}
+
+func (mockAnn *mockAnnotator) Annotate(timestamp int64, key, value string) {
+	mockAnn.entries = append(mockAnn.entries, struct {
+		timestamp int64
+		key       string
+		value     string
+	}{timestamp, key, value})
+}
+
+var _ = Describe("DataFrame.Annotate", func() {
+	It("pushes non-NaN cells as annotations with TICKER/Metric keys", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		efa := asset.Asset{CompositeFigi: "EFA001", Ticker: "EFA"}
+		t1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, efa},
+			[]data.Metric{data.MetricClose},
+			[]float64{150.5, 75.25},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		dest := &mockAnnotator{}
+		result := df.Annotate(dest)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		Expect(dest.entries).To(HaveLen(2))
+
+		keys := make(map[string]string)
+		for _, entry := range dest.entries {
+			Expect(entry.timestamp).To(Equal(t1.Unix()))
+			keys[entry.key] = entry.value
+		}
+
+		Expect(keys).To(HaveKey("SPY/Close"))
+		Expect(keys).To(HaveKey("EFA/Close"))
+	})
+
+	It("skips NaN values", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		t1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{math.NaN()},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		dest := &mockAnnotator{}
+		df.Annotate(dest)
+		Expect(dest.entries).To(BeEmpty())
+	})
+
+	It("is a no-op when DataFrame has an error", func() {
+		errDF := data.WithErr(fmt.Errorf("test error"))
+
+		dest := &mockAnnotator{}
+		errDF.Annotate(dest)
+		Expect(dest.entries).To(BeEmpty())
+	})
+
+	It("handles multiple rows and metrics", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		t1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+		t2 := time.Date(2024, 1, 16, 16, 0, 0, 0, time.UTC)
+
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose, data.AdjClose},
+			[]float64{150.0, 151.0, 149.5, 150.5},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		dest := &mockAnnotator{}
+		df.Annotate(dest)
+		Expect(dest.entries).To(HaveLen(4))
+	})
+})
