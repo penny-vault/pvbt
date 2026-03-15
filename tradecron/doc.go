@@ -21,6 +21,15 @@
 // Directives may be combined with standard cron fields (minute, hour,
 // day-of-month, month, day-of-week).
 //
+// # Time Zones
+//
+// Market-aware directives (@monthend, @weekbegin, @open, @close, etc.)
+// produce timestamps in America/New_York. Plain cron expressions like
+// "0 16 * * 1-5" produce UTC timestamps. Data providers must use matching
+// time zones -- if the schedule produces Eastern timestamps but the data
+// uses UTC, the engine's time-range filtering will silently return empty
+// DataFrames.
+//
 // # Common Schedules
 //
 //	@monthend             last trading day of each month
