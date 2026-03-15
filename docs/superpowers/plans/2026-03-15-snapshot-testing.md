@@ -582,43 +582,29 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 		mIdx[metric] = idx
 	}
 
+	// getValue returns the value for a metric, or nil if the metric was
+	// not requested or the value is NaN. This ensures unrequested metrics
+	// are stored as NULL rather than zero.
+	type nullableFloat = interface{}
+
 	for assetIdx, a := range df.assets {
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format(time.RFC3339)
 
-			getValue := func(metric Metric) float64 {
+			getValue := func(metric Metric) nullableFloat {
+				if !want[metric] {
+					return nil
+				}
 				mi, ok := mIdx[metric]
 				if !ok {
-					return math.NaN()
+					return nil
 				}
 				colStart := (assetIdx*numMetrics + mi) * numTimes
-				return df.data[colStart+timeIdx]
-			}
-
-			var open, high, low, closeVal, adjClose, volume, dividend, splitFactor float64
-			if want[MetricOpen] {
-				open = getValue(MetricOpen)
-			}
-			if want[MetricHigh] {
-				high = getValue(MetricHigh)
-			}
-			if want[MetricLow] {
-				low = getValue(MetricLow)
-			}
-			if want[MetricClose] {
-				closeVal = getValue(MetricClose)
-			}
-			if want[AdjClose] {
-				adjClose = getValue(AdjClose)
-			}
-			if want[Volume] {
-				volume = getValue(Volume)
-			}
-			if want[Dividend] {
-				dividend = getValue(Dividend)
-			}
-			if want[SplitFactor] {
-				splitFactor = getValue(SplitFactor)
+				val := df.data[colStart+timeIdx]
+				if math.IsNaN(val) {
+					return nil
+				}
+				return val
 			}
 
 			_, err := tx.Exec(
@@ -626,7 +612,9 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 				 (composite_figi, event_date, open, high, low, close, adj_close, volume, dividend, split_factor)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				a.CompositeFigi, dateStr,
-				open, high, low, closeVal, adjClose, volume, dividend, splitFactor,
+				getValue(MetricOpen), getValue(MetricHigh), getValue(MetricLow),
+				getValue(MetricClose), getValue(AdjClose), getValue(Volume),
+				getValue(Dividend), getValue(SplitFactor),
 			)
 			if err != nil {
 				return err
@@ -1339,6 +1327,9 @@ func (p *SnapshotProvider) Provides() []Metric {
 			}
 		}
 	}
+
+	// Sort for deterministic output.
+	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
 
 	return result
 }
@@ -2148,16 +2139,27 @@ func runSnapshot(strategy engine.Strategy) error {
 		engine.WithAssetProvider(recorder),
 		engine.WithAccount(acct),
 	)
-	defer eng.Close()
+
+	// Do NOT defer eng.Close() here -- the engine would close the recorder
+	// (its registered provider), causing a double-close when we also close
+	// the recorder and the underlying provider below.
 
 	_, err = eng.Backtest(ctx, start, end)
 	if err != nil {
 		recorder.Close()
+		provider.Close()
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
+	// Close the recorder first (flushes SQLite), then the underlying provider
+	// (releases the pgxpool). The engine does not own these lifetimes.
 	if err := recorder.Close(); err != nil {
+		provider.Close()
 		return fmt.Errorf("close snapshot recorder: %w", err)
+	}
+
+	if err := provider.Close(); err != nil {
+		return fmt.Errorf("close data provider: %w", err)
 	}
 
 	// Print summary with row counts per table.
