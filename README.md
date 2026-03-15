@@ -131,6 +131,7 @@ The engine runs in three phases:
 Detailed documentation for each concept:
 
 - [Overview](docs/overview.md) -- full walkthrough of the example strategy
+- [Engine](docs/engine.md) -- configuration, strategy interface, data access, trade preview
 - [Universes](docs/universes.md) -- asset groups, index tracking, historical membership
 - [Data](docs/data.md) -- metrics, data providers, DataFrames, signals
 - [Portfolio](docs/portfolio.md) -- construction, order types, performance measurement
