@@ -144,6 +144,20 @@ func (e *Engine) Universe(assets ...asset.Asset) universe.Universe {
 	return universe.NewStaticWithSource(assets, e)
 }
 
+// RatedUniverse creates a universe whose membership is determined by analyst
+// ratings. The engine finds a RatingProvider from its registered providers,
+// creates the universe, and wires it with the engine's data source.
+func (e *Engine) RatedUniverse(analyst string, filter data.RatingFilter) universe.Universe {
+	for _, p := range e.providers {
+		if rp, ok := p.(data.RatingProvider); ok {
+			u := universe.NewRated(rp, analyst, filter)
+			u.SetDataSource(e)
+			return u
+		}
+	}
+	panic(fmt.Sprintf("engine: no provider implements RatingProvider (needed for analyst %q)", analyst))
+}
+
 // CurrentDate returns the current simulation date.
 func (e *Engine) CurrentDate() time.Time {
 	return e.currentDate
