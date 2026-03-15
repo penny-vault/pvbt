@@ -27,8 +27,10 @@ type Strategy interface {
 }
 ```
 
-The parameter name `portfolio` is intentional despite shadowing the package name;
-Go permits this and the domain term is the clearest choice.
+This change also renames the existing single-letter parameter names (`e` to `eng`,
+`p` to `portfolio`) for clarity. The parameter name `portfolio` is intentional
+despite shadowing the package name; Go permits this and the domain term is the
+clearest choice.
 
 ## Engine Behavior
 
@@ -68,7 +70,11 @@ if err := eng.strategy.Compute(stepCtx, eng, acct); err != nil {
 
 - `engine/fetch_test.go` -- update 5 test strategy `Compute` signatures
 - `engine/example_test.go` -- update 2 test strategy `Compute` signatures
-- `engine/backtest_test.go` -- update 1 test strategy `Compute` signature
+- `engine/backtest_test.go` -- update 2 test strategy `Compute` signatures
+- `engine/live_test.go` -- update 1 test strategy `Compute` signature
+- `engine/parameter_test.go` -- update 1 test strategy `Compute` signature
+- `engine/descriptor_test.go` -- update 2 test strategy `Compute` signatures
+- `engine/hydrate_test.go` -- update 1 test strategy `Compute` signature
 - `cli/cli_test.go` -- update 1 test strategy `Compute` signature
 
 ### Documentation
