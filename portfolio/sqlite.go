@@ -28,7 +28,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "2"
+const schemaVersion = "3"
 
 const dateFormat = "2006-01-02"
 
@@ -45,14 +45,15 @@ CREATE TABLE perf_data (
 );
 
 CREATE TABLE transactions (
-    date      TEXT NOT NULL,
-    type      TEXT NOT NULL,
-    ticker    TEXT,
-    figi      TEXT,
-    quantity  REAL,
-    price     REAL,
-    amount    REAL,
-    qualified INTEGER
+    date          TEXT NOT NULL,
+    type          TEXT NOT NULL,
+    ticker        TEXT,
+    figi          TEXT,
+    quantity      REAL,
+    price         REAL,
+    amount        REAL,
+    qualified     INTEGER,
+    justification TEXT
 );
 
 CREATE TABLE holdings (
@@ -81,6 +82,14 @@ CREATE TABLE metrics (
 CREATE INDEX idx_metrics_date ON metrics(date);
 CREATE INDEX idx_metrics_name ON metrics(name);
 CREATE INDEX idx_transactions_date ON transactions(date);
+
+CREATE TABLE annotations (
+    timestamp INTEGER NOT NULL,
+    key       TEXT NOT NULL,
+    value     TEXT NOT NULL
+);
+
+CREATE INDEX idx_annotations_timestamp ON annotations(timestamp);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
@@ -175,6 +184,11 @@ func (a *Account) ToSQLite(path string) error {
 		return err
 	}
 
+	// Write annotations.
+	if err := a.writeAnnotations(tx); err != nil {
+		return err
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit: %w", err)
 	}
@@ -204,6 +218,7 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 		if _, err := stmt.Exec("benchmark_ticker", a.benchmark.Ticker); err != nil {
 			return fmt.Errorf("insert benchmark_ticker: %w", err)
 		}
+
 		if _, err := stmt.Exec("benchmark_figi", a.benchmark.CompositeFigi); err != nil {
 			return fmt.Errorf("insert benchmark_figi: %w", err)
 		}
@@ -214,6 +229,7 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 		if _, err := stmt.Exec("risk_free_ticker", a.riskFree.Ticker); err != nil {
 			return fmt.Errorf("insert risk_free_ticker: %w", err)
 		}
+
 		if _, err := stmt.Exec("risk_free_figi", a.riskFree.CompositeFigi); err != nil {
 			return fmt.Errorf("insert risk_free_figi: %w", err)
 		}
@@ -261,7 +277,7 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO transactions (date, type, ticker, figi, quantity, price, amount, qualified) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO transactions (date, type, ticker, figi, quantity, price, amount, qualified, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare transactions: %w", err)
 	}
@@ -270,11 +286,13 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 	for _, t := range a.transactions {
 		d := t.Date.Format(dateFormat)
 		typStr := transactionTypeToString(t.Type)
+
 		qualified := 0
 		if t.Qualified {
 			qualified = 1
 		}
-		if _, err := stmt.Exec(d, typStr, t.Asset.Ticker, t.Asset.CompositeFigi, t.Qty, t.Price, t.Amount, qualified); err != nil {
+
+		if _, err := stmt.Exec(d, typStr, t.Asset.Ticker, t.Asset.CompositeFigi, t.Qty, t.Price, t.Amount, qualified, sql.NullString{String: t.Justification, Valid: t.Justification != ""}); err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
 		}
 	}
@@ -296,6 +314,7 @@ func (a *Account) writeHoldings(tx *sql.Tx) error {
 	for ast, qty := range a.holdings {
 		// Compute average cost from tax lots.
 		var avgCost float64
+
 		lots := a.taxLots[ast]
 		if len(lots) > 0 {
 			var totalCost, totalQty float64
@@ -303,6 +322,7 @@ func (a *Account) writeHoldings(tx *sql.Tx) error {
 				totalCost += lot.Price * lot.Qty
 				totalQty += lot.Qty
 			}
+
 			if totalQty > 0 {
 				avgCost = totalCost / totalQty
 			}
@@ -310,6 +330,7 @@ func (a *Account) writeHoldings(tx *sql.Tx) error {
 
 		// Compute market value from latest prices.
 		var marketValue float64
+
 		if a.prices != nil {
 			v := a.prices.Value(ast, data.MetricClose)
 			if !math.IsNaN(v) {
@@ -369,8 +390,46 @@ func (a *Account) writeMetrics(tx *sql.Tx) error {
 	return nil
 }
 
+func (a *Account) writeAnnotations(tx *sql.Tx) error {
+	if len(a.annotations) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO annotations (timestamp, key, value) VALUES (?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare annotations: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, ann := range a.annotations {
+		if _, err := stmt.Exec(ann.Timestamp, ann.Key, ann.Value); err != nil {
+			return fmt.Errorf("insert annotation: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *Account) readAnnotations(db *sql.DB) error {
+	rows, err := db.Query("SELECT timestamp, key, value FROM annotations ORDER BY timestamp, key")
+	if err != nil {
+		return fmt.Errorf("query annotations: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var ann Annotation
+		if err := rows.Scan(&ann.Timestamp, &ann.Key, &ann.Value); err != nil {
+			return fmt.Errorf("scan annotation: %w", err)
+		}
+		a.annotations = append(a.annotations, ann)
+	}
+
+	return rows.Err()
+}
+
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "2".
+// The database must have been created by ToSQLite with schema_version "3".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
@@ -416,6 +475,7 @@ func FromSQLite(path string) (*Account, error) {
 			CompositeFigi: a.metadata["benchmark_figi"],
 		}
 	}
+
 	if ticker, ok := a.metadata["risk_free_ticker"]; ok {
 		a.riskFree = asset.Asset{
 			Ticker:        ticker,
@@ -456,6 +516,11 @@ func FromSQLite(path string) (*Account, error) {
 		return nil, err
 	}
 
+	// Read annotations.
+	if err := a.readAnnotations(db); err != nil {
+		return nil, err
+	}
+
 	return a, nil
 }
 
@@ -471,6 +536,7 @@ func (a *Account) readMetadata(db *sql.DB) error {
 		if err := rows.Scan(&k, &v); err != nil {
 			return fmt.Errorf("scan metadata: %w", err)
 		}
+
 		a.metadata[k] = v
 	}
 
@@ -489,22 +555,30 @@ func (a *Account) readPerfData(db *sql.DB) error {
 		m data.Metric
 		v float64
 	}
+
 	var entries []entry
+
 	timeSet := make(map[time.Time]bool)
 
 	for rows.Next() {
-		var dateStr, metric string
-		var v float64
+		var (
+			dateStr, metric string
+			v               float64
+		)
+
 		if err := rows.Scan(&dateStr, &metric, &v); err != nil {
 			return fmt.Errorf("scan perf_data: %w", err)
 		}
+
 		t, err := time.Parse(dateFormat, dateStr)
 		if err != nil {
 			return fmt.Errorf("parse perf_data date: %w", err)
 		}
+
 		entries = append(entries, entry{t: t, m: data.Metric(metric), v: v})
 		timeSet[t] = true
 	}
+
 	if err := rows.Err(); err != nil {
 		return err
 	}
@@ -518,6 +592,7 @@ func (a *Account) readPerfData(db *sql.DB) error {
 	for t := range timeSet {
 		times = append(times, t)
 	}
+
 	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
 
 	// Build time index for fast lookup.
@@ -541,6 +616,7 @@ func (a *Account) readPerfData(db *sql.DB) error {
 		if !ok {
 			continue
 		}
+
 		tIdx := timeIndex[e.t]
 		// Column-major: offset = (assetIdx*len(metrics) + metricIdx) * len(times) + timeIdx
 		// Only one asset, so assetIdx = 0.
@@ -551,24 +627,29 @@ func (a *Account) readPerfData(db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("build perfData: %w", err)
 	}
+
 	a.perfData = df
 
 	return nil
 }
 
 func (a *Account) readTransactions(db *sql.DB) error {
-	rows, err := db.Query("SELECT date, type, ticker, figi, quantity, price, amount, qualified FROM transactions ORDER BY date")
+	rows, err := db.Query("SELECT date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY date")
 	if err != nil {
 		return fmt.Errorf("query transactions: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var dateStr, typStr string
-		var ticker, figi sql.NullString
-		var qty, price, amount sql.NullFloat64
-		var qualified sql.NullInt64
-		if err := rows.Scan(&dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified); err != nil {
+		var (
+			dateStr, typStr    string
+			ticker, figi       sql.NullString
+			qty, price, amount sql.NullFloat64
+			qualified          sql.NullInt64
+			justification      sql.NullString
+		)
+
+		if err := rows.Scan(&dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified, &justification); err != nil {
 			return fmt.Errorf("scan transaction: %w", err)
 		}
 
@@ -598,6 +679,10 @@ func (a *Account) readTransactions(db *sql.DB) error {
 			}
 		}
 
+		if justification.Valid {
+			tx.Justification = justification.String
+		}
+
 		a.transactions = append(a.transactions, tx)
 	}
 
@@ -612,11 +697,15 @@ func (a *Account) readHoldings(db *sql.DB) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		var ticker, figi string
-		var qty float64
+		var (
+			ticker, figi string
+			qty          float64
+		)
+
 		if err := rows.Scan(&ticker, &figi, &qty); err != nil {
 			return fmt.Errorf("scan holding: %w", err)
 		}
+
 		ast := asset.Asset{Ticker: ticker, CompositeFigi: figi}
 		a.holdings[ast] = qty
 	}
@@ -632,15 +721,20 @@ func (a *Account) readTaxLots(db *sql.DB) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		var ticker, figi, dateStr string
-		var qty, price float64
+		var (
+			ticker, figi, dateStr string
+			qty, price            float64
+		)
+
 		if err := rows.Scan(&ticker, &figi, &dateStr, &qty, &price); err != nil {
 			return fmt.Errorf("scan tax_lot: %w", err)
 		}
+
 		t, err := time.Parse(dateFormat, dateStr)
 		if err != nil {
 			return fmt.Errorf("parse tax_lot date: %w", err)
 		}
+
 		ast := asset.Asset{Ticker: ticker, CompositeFigi: figi}
 		a.taxLots[ast] = append(a.taxLots[ast], TaxLot{
 			Date:  t,
@@ -660,15 +754,20 @@ func (a *Account) readMetrics(db *sql.DB) error {
 	defer rows.Close()
 
 	for rows.Next() {
-		var dateStr, name, window string
-		var value sql.NullFloat64
+		var (
+			dateStr, name, window string
+			value                 sql.NullFloat64
+		)
+
 		if err := rows.Scan(&dateStr, &name, &window, &value); err != nil {
 			return fmt.Errorf("scan metric: %w", err)
 		}
+
 		t, err := time.Parse(dateFormat, dateStr)
 		if err != nil {
 			return fmt.Errorf("parse metric date: %w", err)
 		}
+
 		a.metrics = append(a.metrics, MetricRow{
 			Date:   t,
 			Name:   name,

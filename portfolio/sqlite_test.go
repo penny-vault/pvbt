@@ -180,6 +180,64 @@ var _ = Describe("SQLite", func() {
 				Expect(m.Value).To(Equal(metricSet[key]))
 			}
 		})
+
+		It("round-trips annotations", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			ts1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC).Unix()
+			ts2 := time.Date(2024, 2, 15, 16, 0, 0, 0, time.UTC).Unix()
+			acct.Annotate(ts1, "SPY/Momentum", "0.87")
+			acct.Annotate(ts1, "bond_fraction", "0.3")
+			acct.Annotate(ts2, "SPY/Momentum", "0.92")
+
+			path := filepath.Join(tmpDir, "annotations.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			annotations := restored.Annotations()
+			Expect(annotations).To(HaveLen(3))
+			Expect(annotations[0].Timestamp).To(Equal(ts1))
+			Expect(annotations[0].Key).To(Equal("SPY/Momentum"))
+			Expect(annotations[0].Value).To(Equal("0.87"))
+			Expect(annotations[2].Timestamp).To(Equal(ts2))
+		})
+
+		It("round-trips transaction justification", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			acct.Record(portfolio.Transaction{
+				Date:          time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:         asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"},
+				Type:          portfolio.BuyTransaction,
+				Qty:           10,
+				Price:         500,
+				Amount:        -5000,
+				Justification: "momentum crossover",
+			})
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC),
+				Asset:  asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"},
+				Type:   portfolio.SellTransaction,
+				Qty:    5,
+				Price:  510,
+				Amount: 2550,
+			})
+
+			path := filepath.Join(tmpDir, "justification.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			txns := restored.Transactions()
+			// First is the deposit from WithCash, then our two trades.
+			Expect(txns).To(HaveLen(3))
+			Expect(txns[1].Justification).To(Equal("momentum crossover"))
+			Expect(txns[2].Justification).To(BeEmpty())
+		})
 	})
 
 	Describe("empty portfolio round-trip", func() {
