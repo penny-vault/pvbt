@@ -42,7 +42,9 @@ func (s *liveStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
+func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 
 var _ = Describe("RunLive", func() {
 	Context("context cancellation", func() {

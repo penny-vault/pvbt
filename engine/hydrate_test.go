@@ -57,8 +57,9 @@ func (s *hydrateStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *hydrateStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {
+func (s *hydrateStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	s.computeCalled = true
+	return nil
 }
 
 var _ = Describe("Hydration", func() {

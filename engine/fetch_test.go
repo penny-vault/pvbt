@@ -49,8 +49,9 @@ func (s *fetchStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
 	s.fetched, s.fetchErr = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
+	return nil
 }
 
 // fetchAtStrategy calls FetchAt during Compute.
@@ -71,8 +72,9 @@ func (s *fetchAtStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
 	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, eng.CurrentDate(), s.metrics)
+	return nil
 }
 
 // doubleFetchStrategy calls Fetch twice per Compute with overlapping data.
@@ -94,9 +96,10 @@ func (s *doubleFetchStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *doubleFetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+func (s *doubleFetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
 	s.fetched1, s.fetchErr1 = eng.Fetch(ctx, s.assets1, s.lookback, s.metrics)
 	s.fetched2, s.fetchErr2 = eng.Fetch(ctx, s.assets2, s.lookback, s.metrics)
+	return nil
 }
 
 // fetchThenFetchAtStrategy calls Fetch then FetchAt in the same Compute.
@@ -118,11 +121,12 @@ func (s *fetchThenFetchAtStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
 	// First call populates the cache.
 	_, _ = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
 	// Second call should hit the cache.
 	s.fetchAtResult, s.fetchAtErr = eng.FetchAt(ctx, s.assets, eng.CurrentDate(), s.metrics)
+	return nil
 }
 
 // futureFetchAtStrategy calls FetchAt with a future date during Compute.
@@ -143,9 +147,10 @@ func (s *futureFetchAtStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) {
+func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
 	futureDate := eng.CurrentDate().AddDate(0, 0, 30)
 	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, futureDate, s.metrics)
+	return nil
 }
 
 // countingProvider wraps a TestProvider and counts Fetch calls.

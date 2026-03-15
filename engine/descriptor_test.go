@@ -44,7 +44,9 @@ func (s *descriptorStrategy) Setup(eng *engine.Engine) {
 	eng.SetBenchmark(asset.Asset{Ticker: "SPY"})
 	eng.RiskFreeAsset(asset.Asset{Ticker: "SHV"})
 }
-func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
+func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 func (s *descriptorStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{
 		ShortCode:   "dt",
@@ -67,7 +69,9 @@ func (s *plainStrategy) Setup(eng *engine.Engine) {
 	}
 	eng.Schedule(tc)
 }
-func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
+func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 
 var _ = Describe("DescribeStrategy", func() {
 	Context("with a Descriptor implementation", func() {

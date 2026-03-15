@@ -33,17 +33,17 @@ func (s *MomentumRotation) Setup(e *engine.Engine) {
 	e.RiskFreeAsset(e.Asset("SHV"))
 }
 
-func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
 	log := zerolog.Ctx(ctx)
 
 	// Fetch close prices for the lookback period.
 	df, err := s.RiskOn.Window(ctx, portfolio.Months(s.Lookback), data.MetricClose)
 	if err != nil {
 		log.Error().Err(err).Msg("Window fetch failed")
-		return
+		return nil
 	}
 	if df.Len() < 2 {
-		return
+		return nil
 	}
 
 	// Compute total return over the full window, take the last row.
@@ -53,7 +53,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 	riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
 	if err != nil {
 		log.Error().Err(err).Msg("risk-off data fetch failed")
-		return
+		return nil
 	}
 
 	// Select the asset with the highest positive return; fall back to risk-off.
@@ -61,12 +61,13 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 	plan, err := portfolio.EqualWeight(momentum)
 	if err != nil {
 		log.Error().Err(err).Msg("EqualWeight failed")
-		return
+		return nil
 	}
 
 	if err := p.RebalanceTo(ctx, plan...); err != nil {
 		log.Error().Err(err).Msg("rebalance failed")
 	}
+	return nil
 }
 
 func (s *MomentumRotation) Describe() engine.StrategyDescription {

@@ -66,13 +66,13 @@ func (s *backtestStrategy) Setup(eng *engine.Engine) {
 	eng.Schedule(tc)
 }
 
-func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) {
+func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
 	if len(s.assets) == 0 {
-		return
+		return nil
 	}
 	priceDF, err := eng.FetchAt(ctx, s.assets, eng.CurrentDate(), []data.Metric{data.MetricClose})
 	if err != nil || priceDF == nil {
-		return
+		return nil
 	}
 
 	weight := 1.0 / float64(len(s.assets))
@@ -113,14 +113,17 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 			fund.Order(ctx, target, portfolio.Sell, -diff)
 		}
 	}
+	return nil
 }
 
 // noScheduleStrategy omits calling e.Schedule in Setup.
 type noScheduleStrategy struct{}
 
-func (s *noScheduleStrategy) Name() string               { return "noSchedule" }
-func (s *noScheduleStrategy) Setup(_ *engine.Engine)      {}
-func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
+func (s *noScheduleStrategy) Name() string { return "noSchedule" }
+func (s *noScheduleStrategy) Setup(_ *engine.Engine) {}
+func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 
 // makeDailyTestData creates a DataFrame with daily prices for the given assets
 // and metrics, covering nDays starting at start. Timestamps are set to 16:00
