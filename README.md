@@ -126,6 +126,8 @@ The engine runs in three phases:
 
 **Configuration** is defined in a TOML file alongside the strategy code, making strategies user-configurable without touching Go.
 
+**Predicted Portfolio** shows what a strategy would buy on the next trade date. Call `eng.PredictedPortfolio(ctx)` after a backtest or during live operation to preview upcoming trades without affecting the real portfolio.
+
 ## Documentation
 
 Detailed documentation for each concept:
