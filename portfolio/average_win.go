@@ -28,8 +28,10 @@ func (averageWin) Description() string {
 func (averageWin) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
-	var wins int
-	var sumWin float64
+	var (
+		wins   int
+		sumWin float64
+	)
 
 	for _, rt := range trips {
 		if rt.pnl > 0 {

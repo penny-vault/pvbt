@@ -25,11 +25,12 @@ func (treynor) Description() string {
 	return "Excess return per unit of systematic risk (beta). Similar to Sharpe but uses beta instead of standard deviation. Appropriate for well-diversified portfolios where unsystematic risk has been eliminated."
 }
 
-func (treynor) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
+func (treynor) Compute(acct *Account, window *Period) (float64, error) {
+	pd := acct.PerfData()
 	if pd == nil {
 		return 0, nil
 	}
+
 	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
@@ -47,15 +48,16 @@ func (treynor) Compute(a *Account, window *Period) (float64, error) {
 	portfolioReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
 	riskFreeReturn := (rfWinCol[len(rfWinCol)-1] / rfWinCol[0]) - 1
 
-	b, err := Beta.Compute(a, window)
+	betaValue, err := Beta.Compute(acct, window)
 	if err != nil {
 		return 0, err
 	}
-	if b == 0 {
+
+	if betaValue == 0 {
 		return 0, nil
 	}
 
-	return (portfolioReturn - riskFreeReturn) / b, nil
+	return (portfolioReturn - riskFreeReturn) / betaValue, nil
 }
 
 func (treynor) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

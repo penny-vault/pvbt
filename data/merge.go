@@ -36,14 +36,14 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 
 	// Verify all frames have the same timestamps.
 	base := frames[0]
-	for i := 1; i < len(frames); i++ {
-		if len(frames[i].times) != len(base.times) {
+	for frameIdx := 1; frameIdx < len(frames); frameIdx++ {
+		if len(frames[frameIdx].times) != len(base.times) {
 			return nil, fmt.Errorf("MergeColumns: timestamp count mismatch: %d vs %d",
-				len(base.times), len(frames[i].times))
+				len(base.times), len(frames[frameIdx].times))
 		}
 
 		for j := range base.times {
-			if !base.times[j].Equal(frames[i].times[j]) {
+			if !base.times[j].Equal(frames[frameIdx].times[j]) {
 				return nil, fmt.Errorf("MergeColumns: timestamp mismatch at index %d", j)
 			}
 		}
@@ -52,16 +52,16 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 	// Start with a copy of the base, then insert columns from other frames.
 	result := base.Copy()
 
-	for i := 1; i < len(frames); i++ {
-		f := frames[i]
-		for _, a := range f.assets {
-			for _, m := range f.metrics {
-				col := f.Column(a, m)
+	for frameIdx := 1; frameIdx < len(frames); frameIdx++ {
+		f := frames[frameIdx]
+		for _, mergeAsset := range f.assets {
+			for _, metric := range f.metrics {
+				col := f.Column(mergeAsset, metric)
 				if col != nil {
 					colCopy := make([]float64, len(col))
 					copy(colCopy, col)
 
-					if err := result.Insert(a, m, colCopy); err != nil {
+					if err := result.Insert(mergeAsset, metric, colCopy); err != nil {
 						return nil, fmt.Errorf("MergeColumns: insert: %w", err)
 					}
 				}

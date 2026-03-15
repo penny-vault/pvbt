@@ -16,14 +16,15 @@
 package portfolio
 
 // WithMetric registers a single PerformanceMetric for computation.
-func WithMetric(m PerformanceMetric) Option {
-	return func(a *Account) {
-		for _, existing := range a.registeredMetrics {
-			if existing.Name() == m.Name() {
+func WithMetric(metric PerformanceMetric) Option {
+	return func(acct *Account) {
+		for _, existing := range acct.registeredMetrics {
+			if existing.Name() == metric.Name() {
 				return // deduplicate
 			}
 		}
-		a.registeredMetrics = append(a.registeredMetrics, m)
+
+		acct.registeredMetrics = append(acct.registeredMetrics, metric)
 	}
 }
 
@@ -34,75 +35,76 @@ func (a *Account) RegisteredMetrics() []PerformanceMetric {
 
 // WithSummaryMetrics registers the summary metric group.
 func WithSummaryMetrics() Option {
-	return func(a *Account) {
-		for _, m := range []PerformanceMetric{TWRR, MWRR, Sharpe, Sortino, Calmar, MaxDrawdown, StdDev} {
-			WithMetric(m)(a)
+	return func(acct *Account) {
+		for _, metric := range []PerformanceMetric{TWRR, MWRR, Sharpe, Sortino, Calmar, MaxDrawdown, StdDev} {
+			WithMetric(metric)(acct)
 		}
 	}
 }
 
 // WithRiskMetrics registers the risk metric group.
 func WithRiskMetrics() Option {
-	return func(a *Account) {
-		for _, m := range []PerformanceMetric{
+	return func(acct *Account) {
+		for _, metric := range []PerformanceMetric{
 			Beta, Alpha, TrackingError, DownsideDeviation,
 			InformationRatio, Treynor, UlcerIndex, ExcessKurtosis,
 			Skewness, RSquared, ValueAtRisk, UpsideCaptureRatio, DownsideCaptureRatio,
 		} {
-			WithMetric(m)(a)
+			WithMetric(metric)(acct)
 		}
 	}
 }
 
 // WithTradeMetrics registers the trade metric group.
 func WithTradeMetrics() Option {
-	return func(a *Account) {
-		for _, m := range []PerformanceMetric{
+	return func(acct *Account) {
+		for _, metric := range []PerformanceMetric{
 			WinRate, AverageWin, AverageLoss, ProfitFactor,
 			AverageHoldingPeriod, Turnover, NPositivePeriods, TradeGainLossRatio,
 		} {
-			WithMetric(m)(a)
+			WithMetric(metric)(acct)
 		}
 	}
 }
 
 // WithWithdrawalMetrics registers the withdrawal metric group.
 func WithWithdrawalMetrics() Option {
-	return func(a *Account) {
-		for _, m := range []PerformanceMetric{SafeWithdrawalRate, PerpetualWithdrawalRate, DynamicWithdrawalRate} {
-			WithMetric(m)(a)
+	return func(acct *Account) {
+		for _, metric := range []PerformanceMetric{SafeWithdrawalRate, PerpetualWithdrawalRate, DynamicWithdrawalRate} {
+			WithMetric(metric)(acct)
 		}
 	}
 }
 
 // WithTaxMetrics registers the tax metric group.
 func WithTaxMetrics() Option {
-	return func(a *Account) {
-		for _, m := range []PerformanceMetric{
+	return func(acct *Account) {
+		for _, metric := range []PerformanceMetric{
 			LTCGMetric, STCGMetric, UnrealizedLTCGMetric, UnrealizedSTCGMetric,
 			QualifiedDividendsMetric, NonQualifiedIncomeMetric, TaxCostRatioMetric,
 		} {
-			WithMetric(m)(a)
+			WithMetric(metric)(acct)
 		}
 	}
 }
 
 // WithAllMetrics registers every known PerformanceMetric.
 func WithAllMetrics() Option {
-	return func(a *Account) {
-		WithSummaryMetrics()(a)
-		WithRiskMetrics()(a)
-		WithTradeMetrics()(a)
-		WithWithdrawalMetrics()(a)
-		WithTaxMetrics()(a)
-		for _, m := range []PerformanceMetric{
+	return func(acct *Account) {
+		WithSummaryMetrics()(acct)
+		WithRiskMetrics()(acct)
+		WithTradeMetrics()(acct)
+		WithWithdrawalMetrics()(acct)
+		WithTaxMetrics()(acct)
+
+		for _, metric := range []PerformanceMetric{
 			CAGR, ActiveReturn, SmartSharpe, SmartSortino,
 			ProbabilisticSharpe, KRatio, KellerRatio, KellyCriterion,
 			OmegaRatio, GainToPainRatio, CVaR, TailRatio, RecoveryFactor,
 			Exposure, ConsecutiveWins, ConsecutiveLosses,
 			AvgDrawdown, AvgDrawdownDays, GainLossRatio,
 		} {
-			WithMetric(m)(a)
+			WithMetric(metric)(acct)
 		}
 	}
 }

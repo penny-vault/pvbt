@@ -79,31 +79,31 @@ func (ms *MarketStatus) IsMarketHoliday(t time.Time) bool {
 
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
 
-	marketHoliday, ok := holidays[d.Unix()]
+	marketHoliday, isHoliday := holidays[d.Unix()]
 	if marketHoliday != 0 {
 		// Non-zero means early close, not a full holiday.
 		return false
 	}
 
-	return ok
+	return isHoliday
 }
 
 // IsMarketOpen returns true if the specified time is during market hours
 // (i.e. not a market holiday or weekend)
-func (ms *MarketStatus) IsMarketOpen(t time.Time) bool {
-	if !ms.IsMarketDay(t) {
+func (ms *MarketStatus) IsMarketOpen(checkTime time.Time) bool {
+	if !ms.IsMarketDay(checkTime) {
 		return false
 	}
 
 	// check time
 	closeTime := ms.marketHours.Close
 
-	earlyClose := ms.EarlyClose(t)
+	earlyClose := ms.EarlyClose(checkTime)
 	if earlyClose != 0 {
 		closeTime = earlyClose
 	}
 
-	timeOfDay := t.Hour()*100 + t.Minute()
+	timeOfDay := checkTime.Hour()*100 + checkTime.Minute()
 	if timeOfDay < ms.marketHours.Open || timeOfDay > closeTime {
 		return false
 	}
@@ -134,41 +134,41 @@ func NewMarketStatus(hours *MarketHours) *MarketStatus {
 // NextFirstTradingDayOfMonth returns the first trading day of the next month
 func (ms *MarketStatus) NextFirstTradingDayOfMonth(t time.Time) time.Time {
 	// construct a new date for the first of the month
-	d := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, ms.tz)
+	firstOfMonth := time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, ms.tz)
 	// add a month to the date
-	d = d.AddDate(0, 1, 0)
+	firstOfMonth = firstOfMonth.AddDate(0, 1, 0)
 
 	// Check if the market is open on the date
 	marketOpen := false
 
 	for !marketOpen {
-		marketOpen = ms.IsMarketDay(d)
+		marketOpen = ms.IsMarketDay(firstOfMonth)
 		if !marketOpen {
-			d = d.AddDate(0, 0, 1)
+			firstOfMonth = firstOfMonth.AddDate(0, 0, 1)
 		}
 	}
 
-	return d
+	return firstOfMonth
 }
 
 // NextFirstTradingDayOfWeek returns the first trading day of the week.
 func (ms *MarketStatus) NextFirstTradingDayOfWeek(t time.Time) time.Time {
 	daysToWeekBegin := (8 - t.Weekday()) % 7
-	t2 := t.AddDate(0, 0, int(daysToWeekBegin))
+	weekStart := t.AddDate(0, 0, int(daysToWeekBegin))
 
 	marketOpen := false
 
 	for !marketOpen {
-		marketOpen = ms.IsMarketDay(t2)
+		marketOpen = ms.IsMarketDay(weekStart)
 		if !marketOpen {
-			t2 = t2.AddDate(0, 0, 1)
+			weekStart = weekStart.AddDate(0, 0, 1)
 		}
 	}
 
-	// adjust t2 to midnight
-	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 0, 0, 0, 0, ms.tz)
+	// adjust weekStart to midnight
+	weekStart = time.Date(weekStart.Year(), weekStart.Month(), weekStart.Day(), 0, 0, 0, 0, ms.tz)
 
-	return t2
+	return weekStart
 }
 
 // NextLastTradingDayOfMonth returns the next last trading day of month that

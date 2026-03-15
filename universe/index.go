@@ -40,15 +40,15 @@ type indexUniverse struct {
 	cache      map[time.Time][]asset.Asset
 }
 
-func (u *indexUniverse) Assets(t time.Time) []asset.Asset {
+func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	if members, ok := u.cache[t]; ok {
+	if members, ok := u.cache[asOfDate]; ok {
 		return members
 	}
 
-	members, err := u.provider.IndexMembers(context.Background(), u.indexName, t)
+	members, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
 	if err != nil {
 		return nil
 	}
@@ -60,7 +60,8 @@ func (u *indexUniverse) Assets(t time.Time) []asset.Asset {
 	if u.cache == nil {
 		u.cache = make(map[time.Time][]asset.Asset)
 	}
-	u.cache[t] = members
+
+	u.cache[asOfDate] = members
 
 	return members
 }
@@ -77,12 +78,12 @@ func (u *indexUniverse) Prefetch(ctx context.Context, start, end time.Time) erro
 	// Walk each day in the range and fetch membership. The provider
 	// may optimize this internally, but from our side we cache each
 	// distinct date we'll need.
-	for t := start; !t.After(end); t = t.AddDate(0, 0, 1) {
-		if _, ok := u.cache[t]; ok {
+	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
+		if _, ok := u.cache[date]; ok {
 			continue
 		}
 
-		members, err := u.provider.IndexMembers(ctx, u.indexName, t)
+		members, err := u.provider.IndexMembers(ctx, u.indexName, date)
 		if err != nil {
 			return err
 		}
@@ -94,7 +95,8 @@ func (u *indexUniverse) Prefetch(ctx context.Context, start, end time.Time) erro
 		if u.cache == nil {
 			u.cache = make(map[time.Time][]asset.Asset)
 		}
-		u.cache[t] = members
+
+		u.cache[date] = members
 	}
 
 	u.cachedFrom = start

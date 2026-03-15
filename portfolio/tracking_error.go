@@ -31,15 +31,18 @@ func (trackingError) Description() string {
 }
 
 func (trackingError) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+
+	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
-	perfDF := pd.Window(window)
+
+	perfDF := perfData.Window(window)
+
 	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return 0, nil
@@ -49,18 +52,20 @@ func (trackingError) Compute(a *Account, window *Period) (float64, error) {
 	if activeReturns.Len() == 0 {
 		return 0, nil
 	}
+
 	arCol := activeReturns.Column(portfolioAsset, data.PortfolioEquity)
 	if len(arCol) < 2 {
 		return 0, nil
 	}
 
-	sd := stat.StdDev(arCol, nil)
-	if math.IsNaN(sd) {
+	stdDev := stat.StdDev(arCol, nil)
+	if math.IsNaN(stdDev) {
 		return 0, nil
 	}
 
 	af := annualizationFactor(perfDF.Times())
-	return sd * math.Sqrt(af), nil
+
+	return stdDev * math.Sqrt(af), nil
 }
 
 func (trackingError) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

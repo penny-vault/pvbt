@@ -29,6 +29,7 @@ func (f RatingFilter) Matches(rating int) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -49,9 +50,11 @@ func RatingLTE(v int) RatingFilter {
 	if v <= 0 {
 		return RatingFilter{}
 	}
+
 	vals := make([]int, v)
 	for i := range vals {
 		vals[i] = i + 1
 	}
+
 	return RatingFilter{Values: vals}
 }

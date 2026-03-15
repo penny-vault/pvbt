@@ -164,12 +164,14 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 		switch dateFlag {
 		case AtMonthEnd, AtWeekEnd:
 			timeFlag = AtClose
+
 			var parseErr error
 			if timeSpec, parseErr = parseTimeRelativeTo(timeSpecTokens, hours.Close/100, hours.Close%100); parseErr != nil {
 				return nil, parseErr
 			}
 		case AtMonthBegin, AtWeekBegin:
 			timeFlag = AtOpen
+
 			var parseErr error
 			if timeSpec, parseErr = parseTimeRelativeTo(timeSpecTokens, hours.Open/100, hours.Open%100); parseErr != nil {
 				return nil, parseErr
@@ -187,7 +189,7 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 		return nil, err
 	}
 
-	tc := &TradeCron{
+	tradeCron := &TradeCron{
 		Schedule:       schedule,
 		ScheduleString: cronSpec,
 		TimeSpec:       timeSpec,
@@ -196,20 +198,20 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 		marketStatus:   NewMarketStatus(&hours),
 	}
 
-	return tc, nil
+	return tradeCron, nil
 }
 
 // IsTradeDay evaluates the given date against the schedule and returns true if the date falls
 // on a trading day according to the schedule. The time portion of the schedule is ignored when
 // evaluating this function.
 func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
-	t1 := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
-	t2 := t1.AddDate(0, 0, -1)
-	t2 = time.Date(t2.Year(), t2.Month(), t2.Day(), 23, 59, 59, 999_999_999, tc.marketStatus.tz)
-	next := tc.Next(t2)
+	startOfDay := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
+	previousDay := startOfDay.AddDate(0, 0, -1)
+	previousDay = time.Date(previousDay.Year(), previousDay.Month(), previousDay.Day(), 23, 59, 59, 999_999_999, tc.marketStatus.tz)
+	next := tc.Next(previousDay)
 	nextDate := time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 
-	return nextDate.Equal(t1)
+	return nextDate.Equal(startOfDay)
 }
 
 // Next returns the next tradeable date.

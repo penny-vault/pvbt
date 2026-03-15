@@ -31,42 +31,48 @@ func (sortino) Description() string {
 }
 
 func (sortino) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+
+	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-	perfDF := pd.Window(window)
+
+	perfDF := perfData.Window(window)
 	returns := perfDF.Pct().Drop(math.NaN())
+
 	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
 	if er.Len() == 0 {
 		return 0, nil
 	}
+
 	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Downside deviation: sqrt(mean(min(r_i, 0)^2)) using all N observations.
-	n := len(erCol)
-	if n == 0 {
+	count := len(erCol)
+	if count == 0 {
 		return 0, nil
 	}
 
 	sumSq := 0.0
+
 	for _, v := range erCol {
 		if v < 0 {
 			sumSq += v * v
 		}
 	}
 
-	dd := math.Sqrt(sumSq / float64(n))
-	if dd == 0 {
+	downsideDev := math.Sqrt(sumSq / float64(count))
+	if downsideDev == 0 {
 		return 0, nil
 	}
 
 	af := annualizationFactor(perfDF.Times())
-	return stat.Mean(erCol, nil) / dd * math.Sqrt(af), nil
+
+	return stat.Mean(erCol, nil) / downsideDev * math.Sqrt(af), nil
 }
 
 func (sortino) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

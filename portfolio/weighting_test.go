@@ -430,7 +430,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]float64{
 				100, 101, // SPY
 				200, 201, // AAPL
-				50, 51,   // BIL
+				50, 51, // BIL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())

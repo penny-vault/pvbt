@@ -51,19 +51,19 @@ func ExampleData() (*TestProvider, AssetProvider) {
 
 	var times []time.Time
 
-	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
-		wd := d.Weekday()
+	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
+		wd := date.Weekday()
 		if wd == time.Saturday || wd == time.Sunday {
 			continue
 		}
 
-		times = append(times, d)
+		times = append(times, date)
 	}
 
-	T := len(times)
-	A := len(assets)
-	M := len(metrics)
-	vals := make([]float64, T*A*M)
+	numTimes := len(times)
+	numAssets := len(assets)
+	numMetrics := len(metrics)
+	vals := make([]float64, numTimes*numAssets*numMetrics)
 
 	// Deterministic price curves using simple sine-modulated trends.
 	//   SPY: starts 450, trends up ~8% annualized
@@ -73,18 +73,18 @@ func ExampleData() (*TestProvider, AssetProvider) {
 	dailyDrift := []float64{0.08 / 252, -0.03 / 252, 0.05 / 252}
 	amplitude := []float64{5.0, 2.0, 3.0}
 
-	for aIdx := range A {
-		for t := range T {
-			wave := amplitude[aIdx] * math.Sin(2*math.Pi*float64(t)/63)
-			price := basePrice[aIdx]*(1+dailyDrift[aIdx]*float64(t)) + wave
+	for aIdx := range numAssets {
+		for timeIdx := range numTimes {
+			wave := amplitude[aIdx] * math.Sin(2*math.Pi*float64(timeIdx)/63)
+			price := basePrice[aIdx]*(1+dailyDrift[aIdx]*float64(timeIdx)) + wave
 			price = math.Round(price*100) / 100
 
 			// MetricClose column
-			vals[(aIdx*M+0)*T+t] = price
+			vals[(aIdx*numMetrics+0)*numTimes+timeIdx] = price
 			// AdjClose column (same as close for this synthetic data)
-			vals[(aIdx*M+1)*T+t] = price
+			vals[(aIdx*numMetrics+1)*numTimes+timeIdx] = price
 			// Dividend column (zero -- no dividends in synthetic data)
-			vals[(aIdx*M+2)*T+t] = 0
+			vals[(aIdx*numMetrics+2)*numTimes+timeIdx] = 0
 		}
 	}
 

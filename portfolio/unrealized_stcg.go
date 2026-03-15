@@ -29,9 +29,9 @@ func (unrealizedSTCG) Description() string {
 	return "Unrealized short-term capital gains from open positions held 365 days or fewer. Computed by comparing current market prices to cost basis of existing tax lots. If held past 365 days, these would convert to long-term gains."
 }
 
-func (unrealizedSTCG) Compute(a *Account, _ *Period) (float64, error) {
-	prices := a.Prices()
-	pd := a.PerfData()
+func (unrealizedSTCG) Compute(acct *Account, _ *Period) (float64, error) {
+	prices := acct.Prices()
+	pd := acct.PerfData()
 
 	if prices == nil || pd == nil {
 		return 0, nil
@@ -43,13 +43,15 @@ func (unrealizedSTCG) Compute(a *Account, _ *Period) (float64, error) {
 	}
 
 	now := times[len(times)-1]
+
 	var total float64
 
-	for ast, lots := range a.TaxLots() {
-		currentPrice := prices.Value(ast, data.MetricClose)
+	for taxedAsset, lots := range acct.TaxLots() {
+		currentPrice := prices.Value(taxedAsset, data.MetricClose)
 		if math.IsNaN(currentPrice) {
 			return math.NaN(), nil
 		}
+
 		for _, lot := range lots {
 			holdingDays := now.Sub(lot.Date).Hours() / 24
 			if holdingDays <= 365 {

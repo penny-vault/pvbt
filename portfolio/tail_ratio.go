@@ -35,11 +35,14 @@ func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	sorted := make([]float64, len(col))
@@ -47,14 +50,14 @@ func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
 	sort.Float64s(sorted)
 
 	n := len(sorted)
-	p5 := sorted[int(math.Floor(0.05*float64(n)))]
+	fifthPercentile := sorted[int(math.Floor(0.05*float64(n)))]
 	p95 := sorted[int(math.Floor(0.95*float64(n)))]
 
-	if p5 == 0 {
+	if fifthPercentile == 0 {
 		return 0, nil
 	}
 
-	return p95 / math.Abs(p5), nil
+	return p95 / math.Abs(fifthPercentile), nil
 }
 
 func (tailRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

@@ -35,15 +35,19 @@ func (rSquared) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+
 	perfDF := pd.Window(window)
+
 	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return 0, nil
 	}
+
 	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
 	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
@@ -51,14 +55,14 @@ func (rSquared) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	sp := stat.StdDev(pCol, nil)
-	sb := stat.StdDev(bCol, nil)
+	portfolioStdDev := stat.StdDev(pCol, nil)
+	benchStdDev := stat.StdDev(bCol, nil)
 
-	if sp == 0 || sb == 0 || math.IsNaN(sp) || math.IsNaN(sb) {
+	if portfolioStdDev == 0 || benchStdDev == 0 || math.IsNaN(portfolioStdDev) || math.IsNaN(benchStdDev) {
 		return 0, nil
 	}
 
-	corr := stat.Covariance(pCol, bCol, nil) / (sp * sb)
+	corr := stat.Covariance(pCol, bCol, nil) / (portfolioStdDev * benchStdDev)
 
 	return corr * corr, nil
 }

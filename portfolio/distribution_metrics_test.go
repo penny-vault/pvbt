@@ -165,12 +165,12 @@ var _ = Describe("Distribution Metrics", func() {
 			// Prices built by compounding: 100 * (1+r0) * (1+r1) * ...
 			a := cashAccount([]float64{
 				100.0,
-				105.0,           // +5%
-				99.75,           // -5%
-				102.7425,        // +3%
-				99.660225,       // -3%
-				101.6534295,     // +2%
-				99.62036091,     // -2%
+				105.0,       // +5%
+				99.75,       // -5%
+				102.7425,    // +3%
+				99.660225,   // -3%
+				101.6534295, // +2%
+				99.62036091, // -2%
 			})
 			result, err := a.PerformanceMetric(portfolio.Skewness).Value()
 			Expect(err).NotTo(HaveOccurred())

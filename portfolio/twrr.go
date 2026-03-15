@@ -37,11 +37,14 @@ func (twrr) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	product := 1.0
@@ -59,14 +62,18 @@ func (twrr) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 	if pd == nil {
 		return nil, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return nil, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	cum := make([]float64, len(col))
+
 	product := 1.0
 	for i, ri := range col {
 		product *= (1 + ri)

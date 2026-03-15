@@ -38,16 +38,16 @@ func (r *RollingDataFrame) Mean() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			out[i] = stat.Mean(col[i-n+1:i+1], nil)
+			out[idx] = stat.Mean(col[idx-windowSize+1:idx+1], nil)
 		}
 
 		return out
@@ -62,16 +62,16 @@ func (r *RollingDataFrame) Sum() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			out[i] = floats.Sum(col[i-n+1 : i+1])
+			out[idx] = floats.Sum(col[idx-windowSize+1 : idx+1])
 		}
 
 		return out
@@ -86,16 +86,16 @@ func (r *RollingDataFrame) Max() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			out[i] = floats.Max(col[i-n+1 : i+1])
+			out[idx] = floats.Max(col[idx-windowSize+1 : idx+1])
 		}
 
 		return out
@@ -110,16 +110,16 @@ func (r *RollingDataFrame) Min() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			out[i] = floats.Min(col[i-n+1 : i+1])
+			out[idx] = floats.Min(col[idx-windowSize+1 : idx+1])
 		}
 
 		return out
@@ -135,29 +135,29 @@ func (r *RollingDataFrame) Std() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			window := col[i-n+1 : i+1]
+			window := col[idx-windowSize+1 : idx+1]
 			mean := stat.Mean(window, nil)
 
 			variance := 0.0
 
 			for _, v := range window {
-				d := v - mean
-				variance += d * d
+				diff := v - mean
+				variance += diff * diff
 			}
 
-			if n <= 1 {
-				out[i] = 0.0
+			if windowSize <= 1 {
+				out[idx] = 0.0
 			} else {
-				out[i] = math.Sqrt(variance / float64(n-1))
+				out[idx] = math.Sqrt(variance / float64(windowSize-1))
 			}
 		}
 
@@ -174,29 +174,29 @@ func (r *RollingDataFrame) Variance() *DataFrame {
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			window := col[i-n+1 : i+1]
+			window := col[idx-windowSize+1 : idx+1]
 			mean := stat.Mean(window, nil)
 
 			variance := 0.0
 
 			for _, v := range window {
-				d := v - mean
-				variance += d * d
+				diff := v - mean
+				variance += diff * diff
 			}
 
-			if n <= 1 {
-				out[i] = 0
+			if windowSize <= 1 {
+				out[idx] = 0
 			} else {
-				out[i] = variance / float64(n-1)
+				out[idx] = variance / float64(windowSize-1)
 			}
 		}
 
@@ -206,27 +206,27 @@ func (r *RollingDataFrame) Variance() *DataFrame {
 
 // Percentile returns a DataFrame with the rolling p-th percentile over
 // the window. p should be in the range [0, 1].
-func (r *RollingDataFrame) Percentile(p float64) *DataFrame {
+func (r *RollingDataFrame) Percentile(percentile float64) *DataFrame {
 	if r.df.err != nil {
 		return WithErr(r.df.err)
 	}
 
 	return r.df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
-		n := r.window
+		windowSize := r.window
 
-		for i := range col {
-			if i < n-1 {
-				out[i] = math.NaN()
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
 
 				continue
 			}
 
-			sorted := make([]float64, n)
-			copy(sorted, col[i-n+1:i+1])
+			sorted := make([]float64, windowSize)
+			copy(sorted, col[idx-windowSize+1:idx+1])
 			sort.Float64s(sorted)
 
-			out[i] = stat.Quantile(p, stat.LinInterp, sorted, nil)
+			out[idx] = stat.Quantile(percentile, stat.LinInterp, sorted, nil)
 		}
 
 		return out

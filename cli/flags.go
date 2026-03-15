@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -17,17 +18,18 @@ import (
 // The description comes from the `desc` tag. Default values come from
 // the `default` tag or the field's current value.
 func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
-	v := reflect.ValueOf(strategy)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
 		return
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
 		if !field.IsExported() {
 			continue
 		}
@@ -39,53 +41,64 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 
 		desc := field.Tag.Get("desc")
 		defaultStr := field.Tag.Get("default")
-		fv := v.Field(i)
+		fieldValue := val.Field(ii)
 
 		switch field.Type.Kind() {
 		case reflect.Float64:
-			def := fv.Float()
+			def := fieldValue.Float()
+
 			if defaultStr != "" {
 				if parsed, err := strconv.ParseFloat(defaultStr, 64); err == nil {
 					def = parsed
 				}
 			}
+
 			cmd.Flags().Float64(name, def, desc)
 		case reflect.String:
-			def := fv.String()
+			def := fieldValue.String()
 			if defaultStr != "" {
 				def = defaultStr
 			}
+
 			cmd.Flags().String(name, def, desc)
 		case reflect.Bool:
-			def := fv.Bool()
+			def := fieldValue.Bool()
+
 			if defaultStr != "" {
 				if parsed, err := strconv.ParseBool(defaultStr); err == nil {
 					def = parsed
 				}
 			}
+
 			cmd.Flags().Bool(name, def, desc)
 		case reflect.Int:
-			def := int(fv.Int())
+			def := int(fieldValue.Int())
+
 			if defaultStr != "" {
 				if parsed, err := strconv.Atoi(defaultStr); err == nil {
 					def = parsed
 				}
 			}
+
 			cmd.Flags().Int(name, def, desc)
 		default:
 			if field.Type == reflect.TypeOf(time.Duration(0)) {
-				def := time.Duration(fv.Int())
+				def := time.Duration(fieldValue.Int())
+
 				if defaultStr != "" {
 					if parsed, err := time.ParseDuration(defaultStr); err == nil {
 						def = parsed
 					}
 				}
+
 				cmd.Flags().Duration(name, def, desc)
 			}
 		}
 
 		if f := cmd.Flags().Lookup(name); f != nil {
-			viper.BindPFlag(name, f)
+			if err := viper.BindPFlag(name, f); err != nil {
+				log.Fatal().Err(err).Str("flag", name).Msg("failed to bind strategy flag")
+			}
 		}
 	}
 }
@@ -93,17 +106,18 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 // applyStrategyFlags reads flag values from viper and sets them on the
 // strategy struct's fields via reflection.
 func applyStrategyFlags(strategy engine.Strategy) {
-	v := reflect.ValueOf(strategy)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
 		return
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
 		if !field.IsExported() {
 			continue
 		}
@@ -113,23 +127,23 @@ func applyStrategyFlags(strategy engine.Strategy) {
 			name = toKebabCase(field.Name)
 		}
 
-		fv := v.Field(i)
-		if !fv.CanSet() {
+		flagValue := val.Field(ii)
+		if !flagValue.CanSet() {
 			continue
 		}
 
 		switch field.Type.Kind() {
 		case reflect.Float64:
-			fv.SetFloat(viper.GetFloat64(name))
+			flagValue.SetFloat(viper.GetFloat64(name))
 		case reflect.String:
-			fv.SetString(viper.GetString(name))
+			flagValue.SetString(viper.GetString(name))
 		case reflect.Bool:
-			fv.SetBool(viper.GetBool(name))
+			flagValue.SetBool(viper.GetBool(name))
 		case reflect.Int:
 			if field.Type == reflect.TypeOf(time.Duration(0)) {
-				fv.SetInt(int64(viper.GetDuration(name)))
+				flagValue.SetInt(int64(viper.GetDuration(name)))
 			} else {
-				fv.SetInt(int64(viper.GetInt(name)))
+				flagValue.SetInt(int64(viper.GetInt(name)))
 			}
 		}
 	}
@@ -138,11 +152,14 @@ func applyStrategyFlags(strategy engine.Strategy) {
 // toKebabCase converts a PascalCase or camelCase name to kebab-case.
 func toKebabCase(s string) string {
 	var result strings.Builder
+
 	for i, r := range s {
 		if i > 0 && r >= 'A' && r <= 'Z' {
 			result.WriteByte('-')
 		}
+
 		result.WriteRune(r)
 	}
+
 	return strings.ToLower(result.String())
 }

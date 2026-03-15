@@ -36,18 +36,19 @@ var (
 // from their `default` tags. Fields with non-zero values are not overwritten.
 // asset.Asset fields are resolved via the engine's asset registry.
 // universe.Universe fields are built from comma-separated tickers via e.Universe.
-func hydrateFields(e *Engine, target interface{}) error {
-	v := reflect.ValueOf(target)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+func hydrateFields(eng *Engine, target interface{}) error {
+	val := reflect.ValueOf(target)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
+
+	targetType := val.Type()
+	if targetType.Kind() != reflect.Struct {
 		return nil
 	}
 
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+	for ii := 0; ii < targetType.NumField(); ii++ {
+		field := targetType.Field(ii)
 		if !field.IsExported() {
 			continue
 		}
@@ -57,61 +58,68 @@ func hydrateFields(e *Engine, target interface{}) error {
 			continue
 		}
 
-		fv := v.Field(i)
-		if !fv.CanSet() {
+		fieldValue := val.Field(ii)
+		if !fieldValue.CanSet() {
 			continue
 		}
 
 		// Skip non-zero fields (caller may have pre-set them).
-		if !fv.IsZero() {
+		if !fieldValue.IsZero() {
 			continue
 		}
 
 		switch {
 		case field.Type == assetType:
-			a := e.Asset(defaultVal)
-			fv.Set(reflect.ValueOf(a))
+			a := eng.Asset(defaultVal)
+			fieldValue.Set(reflect.ValueOf(a))
 
 		case field.Type.Implements(universeType):
 			tickers := strings.Split(defaultVal, ",")
+
 			assets := make([]asset.Asset, len(tickers))
 			for j, ticker := range tickers {
-				assets[j] = e.Asset(strings.TrimSpace(ticker))
+				assets[j] = eng.Asset(strings.TrimSpace(ticker))
 			}
-			u := e.Universe(assets...)
-			fv.Set(reflect.ValueOf(u))
+
+			u := eng.Universe(assets...)
+			fieldValue.Set(reflect.ValueOf(u))
 
 		case field.Type == durationType:
 			d, err := time.ParseDuration(defaultVal)
 			if err != nil {
-				return fmt.Errorf("hydrate %s.%s: parsing duration %q: %w", t.Name(), field.Name, defaultVal, err)
+				return fmt.Errorf("hydrate %s.%s: parsing duration %q: %w", targetType.Name(), field.Name, defaultVal, err)
 			}
-			fv.Set(reflect.ValueOf(d))
+
+			fieldValue.Set(reflect.ValueOf(d))
 
 		default:
 			switch field.Type.Kind() {
 			case reflect.Float64:
 				f, err := strconv.ParseFloat(defaultVal, 64)
 				if err != nil {
-					return fmt.Errorf("hydrate %s.%s: parsing float64 %q: %w", t.Name(), field.Name, defaultVal, err)
+					return fmt.Errorf("hydrate %s.%s: parsing float64 %q: %w", targetType.Name(), field.Name, defaultVal, err)
 				}
-				fv.SetFloat(f)
+
+				fieldValue.SetFloat(f)
 			case reflect.Int:
 				n, err := strconv.Atoi(defaultVal)
 				if err != nil {
-					return fmt.Errorf("hydrate %s.%s: parsing int %q: %w", t.Name(), field.Name, defaultVal, err)
+					return fmt.Errorf("hydrate %s.%s: parsing int %q: %w", targetType.Name(), field.Name, defaultVal, err)
 				}
-				fv.SetInt(int64(n))
+
+				fieldValue.SetInt(int64(n))
 			case reflect.String:
-				fv.SetString(defaultVal)
+				fieldValue.SetString(defaultVal)
 			case reflect.Bool:
 				b, err := strconv.ParseBool(defaultVal)
 				if err != nil {
-					return fmt.Errorf("hydrate %s.%s: parsing bool %q: %w", t.Name(), field.Name, defaultVal, err)
+					return fmt.Errorf("hydrate %s.%s: parsing bool %q: %w", targetType.Name(), field.Name, defaultVal, err)
 				}
-				fv.SetBool(b)
+
+				fieldValue.SetBool(b)
 			}
 		}
 	}
+
 	return nil
 }

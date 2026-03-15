@@ -35,22 +35,28 @@ func (stdDev) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	perfDF := pd.Window(window)
 	eq := perfDF.Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 	if len(col) < 2 {
 		return 0, nil
 	}
-	sd := stat.StdDev(col, nil)
-	if math.IsNaN(sd) {
+
+	stdDev := stat.StdDev(col, nil)
+	if math.IsNaN(stdDev) {
 		return 0, nil
 	}
+
 	af := annualizationFactor(perfDF.Times())
-	return sd * math.Sqrt(af), nil
+
+	return stdDev * math.Sqrt(af), nil
 }
 
 func (stdDev) ComputeSeries(a *Account, window *Period) ([]float64, error) {
@@ -58,11 +64,14 @@ func (stdDev) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 	if pd == nil {
 		return nil, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return nil, nil
 	}
+
 	return r.Column(portfolioAsset, data.PortfolioEquity), nil
 }
 

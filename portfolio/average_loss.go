@@ -29,8 +29,10 @@ func (averageLoss) Description() string {
 func (averageLoss) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
-	var losses int
-	var sumLoss float64
+	var (
+		losses  int
+		sumLoss float64
+	)
 
 	for _, rt := range trips {
 		if rt.pnl <= 0 {

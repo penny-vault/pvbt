@@ -27,6 +27,7 @@ var nyc *time.Location
 
 func init() {
 	var err error
+
 	nyc, err = time.LoadLocation("America/New_York")
 	if err != nil {
 		panic("engine: load America/New_York: " + err.Error())
@@ -57,6 +58,7 @@ func newDataCache(maxBytes int64) *dataCache {
 	if maxBytes <= 0 {
 		maxBytes = defaultMaxBytes
 	}
+
 	return &dataCache{
 		entries:  make(map[colCacheKey]*colCacheEntry),
 		maxBytes: maxBytes,
@@ -69,12 +71,13 @@ func (c *dataCache) get(key colCacheKey) (*colCacheEntry, bool) {
 }
 
 func (c *dataCache) put(key colCacheKey, entry *colCacheEntry) {
-	sz := estimateEntryBytes(entry)
+	entrySize := estimateEntryBytes(entry)
 	if old, ok := c.entries[key]; ok {
 		c.curBytes -= estimateEntryBytes(old)
 	}
+
 	c.entries[key] = entry
-	c.curBytes += sz
+	c.curBytes += entrySize
 }
 
 // evictBefore removes all entries whose chunk year is more than one year
@@ -91,24 +94,18 @@ func (c *dataCache) evictBefore(t time.Time) {
 	}
 }
 
-// chunkStartFor returns the Unix seconds of Jan 1 00:00 Eastern for the
-// year containing t (in Eastern time).
-func chunkStartFor(t time.Time) int64 {
-	et := t.In(nyc)
-	jan1 := time.Date(et.Year(), 1, 1, 0, 0, 0, 0, nyc)
-	return jan1.Unix()
-}
-
 // chunkYears returns the chunkStart values (Unix seconds) for every
 // calendar year that overlaps [start, end].
 func chunkYears(start, end time.Time) []int64 {
 	startYear := start.In(nyc).Year()
 	endYear := end.In(nyc).Year()
+
 	years := make([]int64, 0, endYear-startYear+1)
 	for y := startYear; y <= endYear; y++ {
 		jan1 := time.Date(y, 1, 1, 0, 0, 0, 0, nyc)
 		years = append(years, jan1.Unix())
 	}
+
 	return years
 }
 
@@ -116,5 +113,6 @@ func estimateEntryBytes(e *colCacheEntry) int64 {
 	if e == nil {
 		return 0
 	}
+
 	return int64(len(e.values)*8 + len(e.times)*24)
 }

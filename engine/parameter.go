@@ -38,14 +38,16 @@ func StrategyParameters(s Strategy) []Parameter {
 	if v.Kind() == reflect.Ptr {
 		v = v.Elem()
 	}
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
+
+	paramType := v.Type()
+	if paramType.Kind() != reflect.Struct {
 		return nil
 	}
 
 	var params []Parameter
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+
+	for ii := 0; ii < paramType.NumField(); ii++ {
+		field := paramType.Field(ii)
 		if !field.IsExported() {
 			continue
 		}
@@ -76,15 +78,18 @@ func StrategyParameters(s Strategy) []Parameter {
 // parseSuggestions parses a pipe-delimited suggest tag value into a map.
 // Format: "Name1=value1|Name2=value2"
 func parseSuggestions(tag string) map[string]string {
-	m := make(map[string]string)
+	paramMap := make(map[string]string)
+
 	for _, entry := range strings.Split(tag, "|") {
 		parts := strings.SplitN(entry, "=", 2)
 		if len(parts) == 2 {
-			m[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+			paramMap[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
 		}
 	}
-	if len(m) == 0 {
+
+	if len(paramMap) == 0 {
 		return nil
 	}
-	return m
+
+	return paramMap
 }

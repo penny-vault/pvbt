@@ -33,16 +33,20 @@ func (avgDrawdown) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-	if eq.Len() == 0 {
+
+	equity := pd.Window(window).Metrics(data.PortfolioEquity)
+	if equity.Len() == 0 {
 		return 0, nil
 	}
-	peak := eq.CumMax()
-	dd := eq.Sub(peak).Div(peak)
+
+	peak := equity.CumMax()
+	dd := equity.Sub(peak).Div(peak)
+
 	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ddCol) == 0 {
 		return 0, nil
 	}
+
 	return stat.Mean(ddCol, nil), nil
 }
 

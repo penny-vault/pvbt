@@ -19,11 +19,11 @@ package portfolio
 // derived from the transaction log and tax lot tracking. These help
 // evaluate the tax efficiency of a strategy.
 type TaxMetrics struct {
-	LTCG                 float64 // realized long-term capital gains
-	STCG                 float64 // realized short-term capital gains
-	UnrealizedLTCG       float64 // unrealized long-term capital gains
-	UnrealizedSTCG       float64 // unrealized short-term capital gains
-	QualifiedDividends   float64 // qualified dividend income
-	NonQualifiedIncome   float64 // non-qualified dividend and interest income
-	TaxCostRatio         float64 // percentage of return lost to taxes
+	LTCG               float64 // realized long-term capital gains
+	STCG               float64 // realized short-term capital gains
+	UnrealizedLTCG     float64 // unrealized long-term capital gains
+	UnrealizedSTCG     float64 // unrealized short-term capital gains
+	QualifiedDividends float64 // qualified dividend income
+	NonQualifiedIncome float64 // non-qualified dividend and interest income
+	TaxCostRatio       float64 // percentage of return lost to taxes
 }

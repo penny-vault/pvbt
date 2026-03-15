@@ -32,5 +32,6 @@ func (a *Account) AllMetadata() map[string]string {
 	for k, v := range a.metadata {
 		m[k] = v
 	}
+
 	return m
 }

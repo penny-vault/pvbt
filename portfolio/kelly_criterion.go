@@ -34,22 +34,28 @@ func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
-	var wins, losses int
-	var avgWin, avgLoss float64
-	for _, v := range col {
-		if v > 0 {
+	var (
+		wins, losses    int
+		avgWin, avgLoss float64
+	)
+
+	for _, val := range col {
+		if val > 0 {
 			wins++
-			avgWin += v
-		} else if v < 0 {
+			avgWin += val
+		} else if val < 0 {
 			losses++
-			avgLoss += math.Abs(v)
+			avgLoss += math.Abs(val)
 		}
 	}
 

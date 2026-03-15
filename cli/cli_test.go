@@ -34,8 +34,8 @@ type testStrategy struct {
 	Threshold float64 `pvbt:"threshold" desc:"signal threshold" default:"0.5"`
 }
 
-func (s *testStrategy) Name() string                                                       { return "test" }
-func (s *testStrategy) Setup(e *engine.Engine)                                              {}
+func (s *testStrategy) Name() string           { return "test" }
+func (s *testStrategy) Setup(e *engine.Engine) {}
 func (s *testStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
 }

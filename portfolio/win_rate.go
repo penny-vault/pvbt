@@ -33,6 +33,7 @@ func (winRate) Compute(a *Account, _ *Period) (float64, error) {
 	}
 
 	wins := 0
+
 	for _, rt := range trips {
 		if rt.pnl > 0 {
 			wins++

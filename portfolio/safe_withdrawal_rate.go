@@ -50,7 +50,7 @@ func withdrawalSimulation(
 	}
 
 	rng := rand.New(rand.NewSource(42))
-	n := len(monthlyReturns)
+	numMonths := len(monthlyReturns)
 	blockSize := 12 // one year block for preserving autocorrelation
 
 	// Binary search over withdrawal rates from 0% to 20% in 0.1% increments.
@@ -60,6 +60,7 @@ func withdrawalSimulation(
 		rate := float64(rateBps) / 1000.0 // 0.001 to 0.200
 
 		successes := 0
+
 		for sim := 0; sim < nSims; sim++ {
 			balance := 1_000_000.0
 			startBalance := balance
@@ -69,6 +70,7 @@ func withdrawalSimulation(
 			for year := 0; year < simYears; year++ {
 				// Withdraw at the start of the year.
 				withdrawal := annualWithdrawal
+
 				if dynamic {
 					currentRateWithdrawal := balance * rate
 					if currentRateWithdrawal < withdrawal {
@@ -83,9 +85,10 @@ func withdrawalSimulation(
 				}
 
 				// Apply 12 months of bootstrapped returns.
-				startIdx := rng.Intn(n)
+				startIdx := rng.Intn(numMonths)
 				for m := 0; m < blockSize; m++ {
-					idx := (startIdx + m) % n
+					idx := (startIdx + m) % numMonths
+
 					balance *= (1 + monthlyReturns[idx])
 					if balance <= 0 {
 						failed = true
@@ -125,12 +128,14 @@ func monthlyReturnsFromEquity(equity []float64) []float64 {
 	}
 
 	var monthly []float64
-	for i := tradingDaysPerMonth; i < len(equity); i += tradingDaysPerMonth {
-		prev := equity[i-tradingDaysPerMonth]
+
+	for monthIdx := tradingDaysPerMonth; monthIdx < len(equity); monthIdx += tradingDaysPerMonth {
+		prev := equity[monthIdx-tradingDaysPerMonth]
 		if prev <= 0 {
 			continue
 		}
-		r := (equity[i] - prev) / prev
+
+		r := (equity[monthIdx] - prev) / prev
 		monthly = append(monthly, r)
 	}
 
@@ -150,6 +155,7 @@ func (safeWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
 	if len(equity) < 12 {
 		return 0, nil
@@ -170,7 +176,9 @@ func (safeWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false), nil
 }
 
-func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // SafeWithdrawalRate is the maximum constant annual withdrawal rate
 // (as a percentage of initial balance) where the portfolio balance

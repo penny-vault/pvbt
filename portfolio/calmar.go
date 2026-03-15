@@ -34,9 +34,10 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	perfDF := pd.Window(window)
-	eq := perfDF.Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	equity := perfDF.Metrics(data.PortfolioEquity)
+	eqCol := equity.Column(portfolioAsset, data.PortfolioEquity)
 	eqTimes := perfDF.Times()
 
 	if len(eqCol) < 2 || len(eqTimes) < 2 {
@@ -50,8 +51,8 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 
 	annualizedReturn := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1
 
-	peak := eq.CumMax()
-	dd := eq.Sub(peak).Div(peak)
+	peak := equity.CumMax()
+	dd := equity.Sub(peak).Div(peak)
 	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	minDD := 0.0

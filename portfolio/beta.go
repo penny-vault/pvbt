@@ -35,15 +35,19 @@ func (beta) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+
 	perfDF := pd.Window(window)
+
 	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return 0, nil
 	}
+
 	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
 	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
@@ -55,8 +59,8 @@ func (beta) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	v := stat.Variance(bCol, nil)
-	if v == 0 || math.IsNaN(v) {
+	benchVariance := stat.Variance(bCol, nil)
+	if benchVariance == 0 || math.IsNaN(benchVariance) {
 		return 0, nil
 	}
 
@@ -65,7 +69,7 @@ func (beta) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	return cov / v, nil
+	return cov / benchVariance, nil
 }
 
 func (beta) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

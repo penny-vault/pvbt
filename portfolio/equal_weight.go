@@ -33,22 +33,25 @@ func EqualWeight(df *data.DataFrame) (PortfolioPlan, error) {
 
 	// Verify Selected column exists.
 	hasSelected := false
+
 	for _, m := range df.MetricList() {
 		if m == Selected {
 			hasSelected = true
 			break
 		}
 	}
+
 	if !hasSelected {
 		return nil, fmt.Errorf("EqualWeight: DataFrame missing %q column", Selected)
 	}
 
 	plan := make(PortfolioPlan, len(times))
-	for i, t := range times {
+	for idx, allocDate := range times {
 		// Collect selected assets at this timestep.
 		var chosen []asset.Asset
+
 		for _, a := range assets {
-			v := df.ValueAt(a, Selected, t)
+			v := df.ValueAt(a, Selected, allocDate)
 			if v > 0 {
 				chosen = append(chosen, a)
 			}
@@ -61,7 +64,8 @@ func EqualWeight(df *data.DataFrame) (PortfolioPlan, error) {
 				members[a] = w
 			}
 		}
-		plan[i] = Allocation{Date: t, Members: members}
+
+		plan[idx] = Allocation{Date: allocDate, Members: members}
 	}
 
 	return plan, nil

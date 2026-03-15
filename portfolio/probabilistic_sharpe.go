@@ -31,63 +31,74 @@ func (probabilisticSharpe) Description() string {
 }
 
 func (probabilisticSharpe) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+
+	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-	perfDF := pd.Window(window)
+
+	perfDF := perfData.Window(window)
 	returns := perfDF.Pct().Drop(math.NaN())
+
 	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
 	if er.Len() == 0 {
 		return 0, nil
 	}
+
 	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 
-	n := len(erCol)
-	if n < 4 {
+	count := len(erCol)
+	if count < 4 {
 		return 0, nil
 	}
 
 	// Compute sample Sharpe (not annualized -- PSR works on per-period).
-	sd := stat.StdDev(erCol, nil)
-	if sd == 0 {
+	stdDev := stat.StdDev(erCol, nil)
+	if stdDev == 0 {
 		return 0, nil
 	}
-	sr := stat.Mean(erCol, nil) / sd
+
+	sharpeRatio := stat.Mean(erCol, nil) / stdDev
 
 	// Compute skewness and kurtosis of excess returns.
 	m := stat.Mean(erCol, nil)
+
 	var sum3, sum4 float64
+
 	for _, v := range erCol {
 		d := v - m
 		d2 := d * d
 		sum3 += d2 * d
 		sum4 += d2 * d2
 	}
-	nf := float64(n)
-	skew := (sum3 / nf) / (sd * sd * sd)
-	kurt := (sum4/nf)/(sd*sd*sd*sd) - 3
+
+	numPeriods := float64(count)
+	skew := (sum3 / numPeriods) / (stdDev * stdDev * stdDev)
+	kurt := (sum4/numPeriods)/(stdDev*stdDev*stdDev*stdDev) - 3
 
 	// Standard error of the Sharpe ratio (Lo, 2002 / Bailey & Lopez de Prado).
 	// se(SR) = sqrt((1 - skew*SR + (kurt/4)*SR^2) / (n - 1))
-	sr2 := sr * sr
-	inner := (1 - skew*sr + (kurt/4)*sr2) / (nf - 1)
+	sr2 := sharpeRatio * sharpeRatio
+
+	inner := (1 - skew*sharpeRatio + (kurt/4)*sr2) / (numPeriods - 1)
 	if inner <= 0 {
 		return 0, nil
 	}
-	se := math.Sqrt(inner)
 
-	if se == 0 {
+	stdErr := math.Sqrt(inner)
+
+	if stdErr == 0 {
 		return 0, nil
 	}
 
 	// PSR = Phi(SR / se) where Phi is the standard normal CDF.
 	// Benchmark Sharpe is 0.
-	z := sr / se
+	z := sharpeRatio / stdErr
+
 	return normalCDF(z), nil
 }
 

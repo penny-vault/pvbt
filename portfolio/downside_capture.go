@@ -30,33 +30,38 @@ func (downsideCaptureRatio) Description() string {
 }
 
 func (downsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+
+	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
-	perfDF := pd.Window(window)
+
+	perfDF := perfData.Window(window)
+
 	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return 0, nil
 	}
+
 	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
 	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	n := len(pCol)
-	if len(bCol) < n {
-		n = len(bCol)
+	count := len(pCol)
+	if len(bCol) < count {
+		count = len(bCol)
 	}
 
 	// Filter periods where benchmark return < 0.
 	var downP, downB []float64
-	for i := 0; i < n; i++ {
-		if bCol[i] < 0 {
-			downP = append(downP, pCol[i])
-			downB = append(downB, bCol[i])
+
+	for ii := 0; ii < count; ii++ {
+		if bCol[ii] < 0 {
+			downP = append(downP, pCol[ii])
+			downB = append(downB, bCol[ii])
 		}
 	}
 

@@ -61,16 +61,16 @@ func (u *ratedUniverse) SetDataSource(ds DataSource) {
 
 // Assets returns the rated assets at time t, sorted by ticker. Results are
 // cached. Errors from the provider are swallowed and nil is returned.
-func (u *ratedUniverse) Assets(t time.Time) []asset.Asset {
+func (u *ratedUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	key := t.Unix()
+	key := asOfDate.Unix()
 	if members, ok := u.cache[key]; ok {
 		return members
 	}
 
-	members, err := u.provider.RatedAssets(context.Background(), u.analyst, u.filter, t)
+	members, err := u.provider.RatedAssets(context.Background(), u.analyst, u.filter, asOfDate)
 	if err != nil || len(members) == 0 {
 		return nil
 	}
@@ -80,6 +80,7 @@ func (u *ratedUniverse) Assets(t time.Time) []asset.Asset {
 	})
 
 	u.cache[key] = members
+
 	return members
 }
 
@@ -88,13 +89,13 @@ func (u *ratedUniverse) Prefetch(ctx context.Context, start, end time.Time) erro
 	u.mu.Lock()
 	defer u.mu.Unlock()
 
-	for t := start; !t.After(end); t = t.AddDate(0, 0, 1) {
-		key := t.Unix()
+	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
+		key := date.Unix()
 		if _, ok := u.cache[key]; ok {
 			continue
 		}
 
-		members, err := u.provider.RatedAssets(ctx, u.analyst, u.filter, t)
+		members, err := u.provider.RatedAssets(ctx, u.analyst, u.filter, date)
 		if err != nil {
 			return err
 		}
@@ -116,18 +117,22 @@ func (u *ratedUniverse) Window(ctx context.Context, lookback portfolio.Period, m
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.RatedUniverse()?")
 	}
+
 	members := u.Assets(u.ds.CurrentDate())
+
 	return u.ds.Fetch(ctx, members, lookback, metrics)
 }
 
 // At returns a single-row DataFrame at time t for the resolved assets and
 // requested metrics.
-func (u *ratedUniverse) At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
+func (u *ratedUniverse) At(ctx context.Context, asOfDate time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.RatedUniverse()?")
 	}
-	members := u.Assets(t)
-	return u.ds.FetchAt(ctx, members, t, metrics)
+
+	members := u.Assets(asOfDate)
+
+	return u.ds.FetchAt(ctx, members, asOfDate, metrics)
 }
 
 // CurrentDate returns the current simulation date from the data source, or
@@ -136,5 +141,6 @@ func (u *ratedUniverse) CurrentDate() time.Time {
 	if u.ds == nil {
 		return time.Time{}
 	}
+
 	return u.ds.CurrentDate()
 }

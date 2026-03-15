@@ -46,21 +46,24 @@ type PortfolioSnapshot interface {
 // WithPortfolioSnapshot returns an Option that restores an Account from
 // a previous snapshot. This is used by the engine to resume from saved state.
 func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
-	return func(a *Account) {
-		a.cash = snap.Cash()
+	return func(acct *Account) {
+		acct.cash = snap.Cash()
 		snap.Holdings(func(ast asset.Asset, qty float64) {
-			a.holdings[ast] = qty
+			acct.holdings[ast] = qty
 		})
-		a.transactions = append(a.transactions, snap.Transactions()...)
+
+		acct.transactions = append(acct.transactions, snap.Transactions()...)
 		if snap.PerfData() != nil {
-			a.perfData = snap.PerfData().Copy()
+			acct.perfData = snap.PerfData().Copy()
 		}
+
 		for ast, lots := range snap.TaxLots() {
-			a.taxLots[ast] = append(a.taxLots[ast], lots...)
+			acct.taxLots[ast] = append(acct.taxLots[ast], lots...)
 		}
-		a.metrics = append(a.metrics, snap.Metrics()...)
+
+		acct.metrics = append(acct.metrics, snap.Metrics()...)
 		for k, v := range snap.AllMetadata() {
-			a.metadata[k] = v
+			acct.metadata[k] = v
 		}
 	}
 }

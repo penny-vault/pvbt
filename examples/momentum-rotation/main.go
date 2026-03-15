@@ -23,17 +23,18 @@ type MomentumRotation struct {
 
 func (s *MomentumRotation) Name() string { return "momentum-rotation" }
 
-func (s *MomentumRotation) Setup(e *engine.Engine) {
+func (s *MomentumRotation) Setup(eng *engine.Engine) {
 	tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
 	if err != nil {
 		panic(err)
 	}
-	e.Schedule(tc)
-	e.SetBenchmark(e.Asset("SPY"))
-	e.RiskFreeAsset(e.Asset("SHV"))
+
+	eng.Schedule(tc)
+	eng.SetBenchmark(eng.Asset("SPY"))
+	eng.RiskFreeAsset(eng.Asset("SHV"))
 }
 
-func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
+func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
 	log := zerolog.Ctx(ctx)
 
 	// Fetch close prices for the lookback period.
@@ -42,6 +43,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 		log.Error().Err(err).Msg("Window fetch failed")
 		return nil
 	}
+
 	if df.Len() < 2 {
 		return nil
 	}
@@ -50,7 +52,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 	momentum := df.Pct(df.Len() - 1).Last()
 
 	// Build a fallback DataFrame for risk-off assets at the current date.
-	riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+	riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
 	if err != nil {
 		log.Error().Err(err).Msg("risk-off data fetch failed")
 		return nil
@@ -58,15 +60,17 @@ func (s *MomentumRotation) Compute(ctx context.Context, e *engine.Engine, p port
 
 	// Select the asset with the highest positive return; fall back to risk-off.
 	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+
 	plan, err := portfolio.EqualWeight(momentum)
 	if err != nil {
 		log.Error().Err(err).Msg("EqualWeight failed")
 		return nil
 	}
 
-	if err := p.RebalanceTo(ctx, plan...); err != nil {
+	if err := port.RebalanceTo(ctx, plan...); err != nil {
 		log.Error().Err(err).Msg("rebalance failed")
 	}
+
 	return nil
 }
 

@@ -54,9 +54,9 @@ var metricRegistry = map[string]Metric{
 	// Cash flow
 	"FreeCashFlow": FreeCashFlow, "NetCashFlow": NetCashFlow,
 	"NetCashFlowFromOperations": NetCashFlowFromOperations,
-	"NetCashFlowFromInvesting": NetCashFlowFromInvesting,
-	"NetCashFlowFromFinancing": NetCashFlowFromFinancing,
-	"NetCashFlowBusiness": NetCashFlowBusiness, "NetCashFlowCommon": NetCashFlowCommon,
+	"NetCashFlowFromInvesting":  NetCashFlowFromInvesting,
+	"NetCashFlowFromFinancing":  NetCashFlowFromFinancing,
+	"NetCashFlowBusiness":       NetCashFlowBusiness, "NetCashFlowCommon": NetCashFlowCommon,
 	"NetCashFlowDebt": NetCashFlowDebt, "NetCashFlowDividend": NetCashFlowDividend,
 	"NetCashFlowInvest": NetCashFlowInvest, "NetCashFlowFx": NetCashFlowFx,
 	"CapitalExpenditure": CapitalExpenditure, "DepreciationAmortization": DepreciationAmortization,
@@ -91,6 +91,8 @@ func AllMetricNames() []string {
 	for name := range metricRegistry {
 		names = append(names, name)
 	}
+
 	sort.Strings(names)
+
 	return names
 }

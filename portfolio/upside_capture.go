@@ -34,26 +34,31 @@ func (upsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
+
 	perfDF := pd.Window(window)
+
 	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return 0, nil
 	}
+
 	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
 	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	n := len(pCol)
-	if len(bCol) < n {
-		n = len(bCol)
+	numPeriods := len(pCol)
+	if len(bCol) < numPeriods {
+		numPeriods = len(bCol)
 	}
 
 	// Filter periods where benchmark return > 0.
 	var upP, upB []float64
-	for i := 0; i < n; i++ {
+
+	for i := 0; i < numPeriods; i++ {
 		if bCol[i] > 0 {
 			upP = append(upP, pCol[i])
 			upB = append(upB, bCol[i])
@@ -80,17 +85,17 @@ func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) ([]float64, 
 
 // geometricMean computes the geometric mean of returns:
 // (product(1 + r_i))^(1/n) - 1
-func geometricMean(r []float64) float64 {
-	if len(r) == 0 {
+func geometricMean(returns []float64) float64 {
+	if len(returns) == 0 {
 		return 0
 	}
 
 	product := 1.0
-	for _, v := range r {
+	for _, v := range returns {
 		product *= (1 + v)
 	}
 
-	return math.Pow(product, 1.0/float64(len(r))) - 1
+	return math.Pow(product, 1.0/float64(len(returns))) - 1
 }
 
 // UpsideCaptureRatio measures how much of the benchmark's positive

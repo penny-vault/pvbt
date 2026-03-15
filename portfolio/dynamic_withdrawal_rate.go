@@ -30,6 +30,7 @@ func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error
 	if pd == nil {
 		return 0, nil
 	}
+
 	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
 	if len(equity) < 12 {
 		return 0, nil
@@ -49,7 +50,9 @@ func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error
 	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, true), nil
 }
 
-func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // DynamicWithdrawalRate is the maximum annual withdrawal rate using
 // dynamic adjustments: each year's withdrawal is the lesser of the

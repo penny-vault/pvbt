@@ -25,15 +25,17 @@ func (alpha) Description() string {
 	return "Annualized excess return above what the CAPM predicts given the portfolio's beta. Positive alpha indicates the portfolio outperformed its risk-adjusted expectation. The \"skill\" component of returns."
 }
 
-func (alpha) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
+func (alpha) Compute(acct *Account, window *Period) (float64, error) {
+	pd := acct.PerfData()
 	if pd == nil {
 		return 0, nil
 	}
+
 	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
+
 	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
@@ -53,7 +55,7 @@ func (alpha) Compute(a *Account, window *Period) (float64, error) {
 	benchmarkReturn := (bmWinCol[len(bmWinCol)-1] / bmWinCol[0]) - 1
 	riskFreeReturn := (rfWinCol[len(rfWinCol)-1] / rfWinCol[0]) - 1
 
-	b, err := Beta.Compute(a, window)
+	b, err := Beta.Compute(acct, window)
 	if err != nil {
 		return 0, err
 	}
@@ -61,7 +63,7 @@ func (alpha) Compute(a *Account, window *Period) (float64, error) {
 	return portfolioReturn - (riskFreeReturn + b*(benchmarkReturn-riskFreeReturn)), nil
 }
 
-func (alpha) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (alpha) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
 
 // Alpha is Jensen's alpha: the portfolio's excess return over what CAPM
 // would predict given its beta.

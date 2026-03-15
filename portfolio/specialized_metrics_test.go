@@ -330,7 +330,7 @@ var _ = Describe("Specialized Metrics", func() {
 				equity := []float64{100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50, 45, 40, 30}
 				a := buildAccountFromEquity(equity)
 				result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 38.8678, 1e-2))
 				// Much larger than the mild-drawdown UI of ~1.16
 				Expect(result).To(BeNumerically(">", 30.0))
@@ -348,7 +348,7 @@ var _ = Describe("Specialized Metrics", func() {
 				equity := []float64{100, 80, 60, 40, 30, 35, 40, 50, 55, 60, 65, 70, 75, 80}
 				a := buildAccountFromEquity(equity)
 				result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 44.4010, 1e-2))
 				// Even though equity recovers to 80, the drawdown lingers because
 				// the peak of 100 is never restored.
@@ -370,7 +370,7 @@ var _ = Describe("Specialized Metrics", func() {
 					100, 102, 104, 106, 108, 40, 110, 112, 114, 116, 118,
 				})
 				result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -0.629629629629630, 1e-9))
 			})
 
@@ -387,7 +387,7 @@ var _ = Describe("Specialized Metrics", func() {
 					100, 95, 90, 85, 80, 75, 70, 65, 60, 55, 50,
 				})
 				result, err := a.PerformanceMetric(portfolio.ValueAtRisk).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -5.0/55.0, 1e-9))
 			})
 		})
@@ -404,7 +404,7 @@ var _ = Describe("Specialized Metrics", func() {
 				// KRatio = slope / stderr = 0.04918 / 0.08882 = 0.45738 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 130, 95, 140, 90, 145, 100, 150})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 0.45737915846086635, 1e-9))
 				// Positive but much smaller than the steady-growth case
 				Expect(result).To(BeNumerically(">", 0))
@@ -419,7 +419,7 @@ var _ = Describe("Specialized Metrics", func() {
 				// KRatio = 0.042684 / 0.000666 = 64.113 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120, 125, 130})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 64.11253704211674, 1e-6))
 				// Orders of magnitude larger than the volatile case
 				Expect(result).To(BeNumerically(">", 10))
@@ -434,7 +434,7 @@ var _ = Describe("Specialized Metrics", func() {
 				// KRatio = -0.14936 / 0.01053 = -14.176 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 80, 55, 35, 20, 10})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", -14.175542222575912, 1e-6))
 				Expect(result).To(BeNumerically("<", -2))
 			})
@@ -453,7 +453,7 @@ var _ = Describe("Specialized Metrics", func() {
 				//   = 0.608695652173913
 				a := buildAccountFromEquity([]float64{100, 160, 115, 200})
 				result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("~", 0.608695652173913, 1e-9))
 				// A strong positive value reflecting good risk-adjusted return
 				Expect(result).To(BeNumerically(">", 0.5))
@@ -468,7 +468,7 @@ var _ = Describe("Specialized Metrics", func() {
 				// Since maxDD > 0.5, Keller returns 0 regardless of total return.
 				a := buildAccountFromEquity([]float64{100, 200, 99.8, 300})
 				result, err := a.PerformanceMetric(portfolio.KellerRatio).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(result).To(BeNumerically("==", 0))
 			})
 		})

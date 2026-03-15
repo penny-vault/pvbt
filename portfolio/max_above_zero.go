@@ -47,22 +47,28 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 
 	// Track which fallback assets need to be inserted.
 	needsFallback := false
-	var fbAssets []asset.Asset
-	var fbSelCols map[string][]float64
+
+	var (
+		fbAssets  []asset.Asset
+		fbSelCols map[string][]float64
+	)
+
 	if m.fallback != nil {
 		fbAssets = m.fallback.AssetList()
+
 		fbSelCols = make(map[string][]float64, len(fbAssets))
 		for _, a := range fbAssets {
 			fbSelCols[a.CompositeFigi] = make([]float64, nTimes)
 		}
 	}
 
-	for ti, t := range times {
+	for timeIdx, timestamp := range times {
 		bestVal := 0.0 // only values strictly above zero qualify
+
 		var bestFigi string
 
 		for _, a := range assets {
-			v := df.ValueAt(a, m.metric, t)
+			v := df.ValueAt(a, m.metric, timestamp)
 			if v > bestVal {
 				bestVal = v
 				bestFigi = a.CompositeFigi
@@ -70,11 +76,12 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 		}
 
 		if bestFigi != "" {
-			selCols[bestFigi][ti] = 1.0
+			selCols[bestFigi][timeIdx] = 1.0
 		} else if m.fallback != nil {
 			needsFallback = true
+
 			for _, a := range fbAssets {
-				fbSelCols[a.CompositeFigi][ti] = 1.0
+				fbSelCols[a.CompositeFigi][timeIdx] = 1.0
 			}
 		}
 	}
@@ -119,13 +126,14 @@ func (m maxAboveZero) Select(df *data.DataFrame) *data.DataFrame {
 
 	// Write Selected columns for fallback assets not already in the
 	// input DataFrame (overlapping assets were already handled above).
-	for _, a := range fbAssets {
-		if _, exists := selCols[a.CompositeFigi]; exists {
+	for _, asset := range fbAssets {
+		if _, exists := selCols[asset.CompositeFigi]; exists {
 			continue
 		}
-		if err := df.Insert(a, Selected, fbSelCols[a.CompositeFigi]); err != nil {
+
+		if err := df.Insert(asset, Selected, fbSelCols[asset.CompositeFigi]); err != nil {
 			log.Warn().Err(err).
-				Str("asset", a.CompositeFigi).
+				Str("asset", asset.CompositeFigi).
 				Msg("MaxAboveZero: failed to insert fallback Selected column")
 		}
 	}

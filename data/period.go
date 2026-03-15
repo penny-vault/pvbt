@@ -73,6 +73,7 @@ func (p Period) Before(ref time.Time) time.Time {
 		if offset < 0 {
 			offset += 7
 		}
+
 		return ref.AddDate(0, 0, -offset)
 	default:
 		return ref

@@ -40,22 +40,22 @@ func (u *UpsampledDataFrame) generateTimes() []time.Time {
 
 	var times []time.Time
 
-	for t := start; !t.After(end); {
-		times = append(times, t)
+	for current := start; !current.After(end); {
+		times = append(times, current)
 
 		switch u.freq {
 		case Daily:
-			t = t.AddDate(0, 0, 1)
+			current = current.AddDate(0, 0, 1)
 		case Weekly:
-			t = t.AddDate(0, 0, 7)
+			current = current.AddDate(0, 0, 7)
 		case Monthly:
-			t = t.AddDate(0, 1, 0)
+			current = current.AddDate(0, 1, 0)
 		case Quarterly:
-			t = t.AddDate(0, 3, 0)
+			current = current.AddDate(0, 3, 0)
 		case Yearly:
-			t = t.AddDate(1, 0, 0)
+			current = current.AddDate(1, 0, 0)
 		default:
-			t = t.AddDate(0, 0, 1) // default to daily
+			current = current.AddDate(0, 0, 1) // default to daily
 		}
 	}
 
@@ -80,13 +80,13 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
 			srcIdx := 0
 
-			for i, t := range newTimes {
-				// Advance source index to the latest timestamp <= t
-				for srcIdx < len(u.df.times)-1 && !u.df.times[srcIdx+1].After(t) {
+			for idx, timestamp := range newTimes {
+				// Advance source index to the latest timestamp <= timestamp
+				for srcIdx < len(u.df.times)-1 && !u.df.times[srcIdx+1].After(timestamp) {
 					srcIdx++
 				}
 
-				newData[dstOff+i] = srcCol[srcIdx]
+				newData[dstOff+idx] = srcCol[srcIdx]
 			}
 		}
 	}
@@ -117,13 +117,13 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
 			srcIdx := 0
 
-			for i, t := range newTimes {
-				// Advance source index to the earliest timestamp >= t
-				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx].Before(t) {
+			for idx, timestamp := range newTimes {
+				// Advance source index to the earliest timestamp >= timestamp
+				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx].Before(timestamp) {
 					srcIdx++
 				}
 
-				newData[dstOff+i] = srcCol[srcIdx]
+				newData[dstOff+idx] = srcCol[srcIdx]
 			}
 		}
 	}
@@ -155,22 +155,22 @@ func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
 			srcIdx := 0
 
-			for i, t := range newTimes {
+			for idx, timestamp := range newTimes {
 				// Find surrounding source timestamps.
-				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx+1].Before(t) {
+				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx+1].Before(timestamp) {
 					srcIdx++
 				}
 
-				if srcIdx >= len(u.df.times)-1 || t.Equal(u.df.times[srcIdx]) {
-					newData[dstOff+i] = srcCol[srcIdx]
+				if srcIdx >= len(u.df.times)-1 || timestamp.Equal(u.df.times[srcIdx]) {
+					newData[dstOff+idx] = srcCol[srcIdx]
 				} else {
 					// Linear interpolation.
 					t0 := u.df.times[srcIdx]
 					t1 := u.df.times[srcIdx+1]
 					v0 := srcCol[srcIdx]
 					v1 := srcCol[srcIdx+1]
-					frac := float64(t.Sub(t0)) / float64(t1.Sub(t0))
-					newData[dstOff+i] = v0 + frac*(v1-v0)
+					frac := float64(timestamp.Sub(t0)) / float64(t1.Sub(t0))
+					newData[dstOff+idx] = v0 + frac*(v1-v0)
 				}
 			}
 		}

@@ -34,16 +34,18 @@ func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+
+	equity := pd.Window(window).Metrics(data.PortfolioEquity)
+
+	eqCol := equity.Column(portfolioAsset, data.PortfolioEquity)
 	if len(eqCol) < 2 {
 		return 0, nil
 	}
 
 	totalReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
 
-	peak := eq.CumMax()
-	dd := eq.Sub(peak).Div(peak)
+	peak := equity.CumMax()
+	dd := equity.Sub(peak).Div(peak)
 	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Find max drawdown as a positive number (abs of most negative drawdown).
@@ -53,6 +55,7 @@ func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
 			minDD = d
 		}
 	}
+
 	maxDD := math.Abs(minDD)
 
 	if totalReturn >= 0 && maxDD <= 0.5 {

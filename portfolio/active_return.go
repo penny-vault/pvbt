@@ -32,16 +32,17 @@ func (activeReturn) Description() string {
 // Compute returns the portfolio total return minus the benchmark total
 // return. Total return is (end/start) - 1.
 func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+
+	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	perfDF := pd.Window(window)
+	perfDF := perfData.Window(window)
 	eqCol := perfDF.Column(portfolioAsset, data.PortfolioEquity)
 	benchCol := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
 
@@ -59,35 +60,40 @@ func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
 // portfolio cumulative return series and the benchmark cumulative
 // return series.
 func (activeReturn) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return nil, nil
 	}
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+
+	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return nil, ErrNoBenchmark
 	}
 
-	perfDF := pd.Window(window).Metrics(data.PortfolioEquity, data.PortfolioBenchmark)
+	perfDF := perfData.Window(window).Metrics(data.PortfolioEquity, data.PortfolioBenchmark)
+
 	returns := perfDF.Pct().Drop(math.NaN())
 	if returns.Len() == 0 {
 		return nil, nil
 	}
+
 	portR := returns.Column(portfolioAsset, data.PortfolioEquity)
 	benchR := returns.Column(portfolioAsset, data.PortfolioBenchmark)
 
-	n := len(portR)
-	if len(benchR) < n {
-		n = len(benchR)
+	count := len(portR)
+	if len(benchR) < count {
+		count = len(benchR)
 	}
-	if n == 0 {
+
+	if count == 0 {
 		return nil, nil
 	}
 
-	series := make([]float64, n)
+	series := make([]float64, count)
 	cumPort := 1.0
 	cumBench := 1.0
-	for i := 0; i < n; i++ {
+
+	for i := 0; i < count; i++ {
 		cumPort *= (1 + portR[i])
 		cumBench *= (1 + benchR[i])
 		series[i] = (cumPort - 1) - (cumBench - 1)

@@ -30,6 +30,7 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, err
 	if pd == nil {
 		return 0, nil
 	}
+
 	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
 	if len(equity) < 12 {
 		return 0, nil
@@ -48,7 +49,9 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, err
 	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false), nil
 }
 
-func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // PerpetualWithdrawalRate is the maximum constant annual withdrawal
 // rate where the ending balance equals or exceeds the inflation-

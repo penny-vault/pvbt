@@ -34,6 +34,7 @@ func (cagrMetric) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	perfDF := pd.Window(window)
 	eq := perfDF.Metrics(data.PortfolioEquity)
 	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)

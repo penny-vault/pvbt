@@ -61,15 +61,15 @@ type Engine struct {
 
 // New creates a new engine for the given strategy.
 func New(strategy Strategy, opts ...Option) *Engine {
-	e := &Engine{
+	eng := &Engine{
 		strategy: strategy,
 		assets:   make(map[string]asset.Asset),
 	}
 	for _, opt := range opts {
-		opt(e)
+		opt(eng)
 	}
 
-	return e
+	return eng
 }
 
 // createAccount builds a portfolio.Account from the engine's configuration.
@@ -170,14 +170,14 @@ func (e *Engine) CurrentDate() time.Time {
 }
 
 // periodToTime returns base minus the given period.
-func periodToTime(base time.Time, p portfolio.Period) time.Time {
-	switch p.Unit {
+func periodToTime(base time.Time, period portfolio.Period) time.Time {
+	switch period.Unit {
 	case portfolio.UnitDay:
-		return base.AddDate(0, 0, -p.N)
+		return base.AddDate(0, 0, -period.N)
 	case portfolio.UnitMonth:
-		return base.AddDate(0, -p.N, 0)
+		return base.AddDate(0, -period.N, 0)
 	case portfolio.UnitYear:
-		return base.AddDate(-p.N, 0, 0)
+		return base.AddDate(-period.N, 0, 0)
 	default:
 		return base
 	}
@@ -188,14 +188,14 @@ func periodToTime(base time.Time, p portfolio.Period) time.Time {
 // Returns an error if a provider does not implement BatchProvider.
 func (e *Engine) buildProviderRouting() error {
 	e.metricProvider = make(map[data.Metric]data.BatchProvider)
-	for _, p := range e.providers {
-		bp, ok := p.(data.BatchProvider)
+	for _, provider := range e.providers {
+		batchProvider, ok := provider.(data.BatchProvider)
 		if !ok {
-			return fmt.Errorf("engine: provider %T does not implement BatchProvider", p)
+			return fmt.Errorf("engine: provider %T does not implement BatchProvider", provider)
 		}
 
-		for _, m := range p.Provides() {
-			e.metricProvider[m] = bp
+		for _, metric := range provider.Provides() {
+			e.metricProvider[metric] = batchProvider
 		}
 	}
 
@@ -212,18 +212,18 @@ func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, m
 	// Group metrics by provider.
 	providerMetrics := make(map[data.BatchProvider][]data.Metric)
 
-	for _, m := range metrics {
-		bp, ok := e.metricProvider[m]
+	for _, metric := range metrics {
+		batchProvider, ok := e.metricProvider[metric]
 		if !ok {
-			return nil, fmt.Errorf("engine: no provider registered for metric %q", m)
+			return nil, fmt.Errorf("engine: no provider registered for metric %q", metric)
 		}
 
-		providerMetrics[bp] = append(providerMetrics[bp], m)
+		providerMetrics[batchProvider] = append(providerMetrics[batchProvider], metric)
 	}
 
 	var frames []*data.DataFrame
 
-	for bp, provMetrics := range providerMetrics {
+	for batchProvider, provMetrics := range providerMetrics {
 		req := data.DataRequest{
 			Assets:    assets,
 			Metrics:   provMetrics,
@@ -232,7 +232,7 @@ func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, m
 			Frequency: data.Daily,
 		}
 
-		df, err := bp.Fetch(ctx, req)
+		df, err := batchProvider.Fetch(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("engine: provider fetch: %w", err)
 		}
@@ -283,17 +283,17 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 }
 
 // FetchAt implements universe.DataSource.
-func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error) {
-	if !e.currentDate.IsZero() && t.After(e.currentDate) {
+func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp time.Time, metrics []data.Metric) (*data.DataFrame, error) {
+	if !e.currentDate.IsZero() && timestamp.After(e.currentDate) {
 		return nil, fmt.Errorf("FetchAt: requested future date %s (current simulation date is %s)",
-			t.Format("2006-01-02"), e.currentDate.Format("2006-01-02"))
+			timestamp.Format("2006-01-02"), e.currentDate.Format("2006-01-02"))
 	}
 
 	if e.cache == nil {
 		e.cache = newDataCache(e.cacheMaxBytes)
 	}
 
-	return e.fetchRange(ctx, assets, metrics, t, t)
+	return e.fetchRange(ctx, assets, metrics, timestamp, timestamp)
 }
 
 // fetchRange is the shared implementation for Fetch and FetchAt.
@@ -312,40 +312,40 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 
 	misses := make(map[int64]*chunkMiss)
 
-	for _, yr := range years {
-		for _, a := range assets {
-			for _, m := range metrics {
-				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+	for _, year := range years {
+		for _, assetItem := range assets {
+			for _, metric := range metrics {
+				key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
 				if _, ok := e.cache.get(key); !ok {
-					cm, exists := misses[yr]
+					cacheMiss, exists := misses[year]
 					if !exists {
-						cm = &chunkMiss{
+						cacheMiss = &chunkMiss{
 							assets:  make(map[string]asset.Asset),
 							metrics: make(map[data.Metric]bool),
 						}
-						misses[yr] = cm
+						misses[year] = cacheMiss
 					}
 
-					cm.assets[a.CompositeFigi] = a
-					cm.metrics[m] = true
+					cacheMiss.assets[assetItem.CompositeFigi] = assetItem
+					cacheMiss.metrics[metric] = true
 				}
 			}
 		}
 	}
 
 	// Fetch misses: one bulk call per chunk year.
-	for yr, cm := range misses {
-		missAssets := make([]asset.Asset, 0, len(cm.assets))
-		for _, a := range cm.assets {
-			missAssets = append(missAssets, a)
+	for year, cacheMiss := range misses {
+		missAssets := make([]asset.Asset, 0, len(cacheMiss.assets))
+		for _, assetItem := range cacheMiss.assets {
+			missAssets = append(missAssets, assetItem)
 		}
 
-		missMetrics := make([]data.Metric, 0, len(cm.metrics))
-		for m := range cm.metrics {
-			missMetrics = append(missMetrics, m)
+		missMetrics := make([]data.Metric, 0, len(cacheMiss.metrics))
+		for metric := range cacheMiss.metrics {
+			missMetrics = append(missMetrics, metric)
 		}
 
-		chunkStart := time.Unix(yr, 0).In(nyc)
+		chunkStart := time.Unix(year, 0).In(nyc)
 		chunkEnd := time.Date(chunkStart.Year()+1, 1, 1, 0, 0, 0, 0, nyc).Add(-time.Nanosecond)
 
 		log.Debug().
@@ -366,16 +366,16 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		if len(dfTimes) == 0 {
 			empty := &colCacheEntry{}
 
-			for _, a := range missAssets {
-				for _, m := range missMetrics {
-					key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+			for _, assetItem := range missAssets {
+				for _, metric := range missMetrics {
+					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
 					e.cache.put(key, empty)
 				}
 			}
 		} else {
-			for _, a := range df.AssetList() {
-				for _, m := range df.MetricList() {
-					col := df.Column(a, m)
+			for _, assetItem := range df.AssetList() {
+				for _, metric := range df.MetricList() {
+					col := df.Column(assetItem, metric)
 					if col == nil {
 						continue
 					}
@@ -386,7 +386,7 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 					timesCopy := make([]time.Time, len(dfTimes))
 					copy(timesCopy, dfTimes)
 
-					key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
 					e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
 				}
 			}
@@ -397,10 +397,10 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	// Build the union time axis.
 	timeSet := make(map[int64]time.Time)
 
-	for _, yr := range years {
-		for _, a := range assets {
-			for _, m := range metrics {
-				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+	for _, year := range years {
+		for _, assetItem := range assets {
+			for _, metric := range metrics {
+				key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
 
 				entry, ok := e.cache.get(key)
 				if !ok {
@@ -435,10 +435,10 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	}
 
 	// Allocate slab and fill with NaN.
-	T := len(unionTimes)
-	M := len(metrics)
+	numTimes := len(unionTimes)
+	numMetrics := len(metrics)
 
-	slab := make([]float64, T*len(assets)*M)
+	slab := make([]float64, numTimes*len(assets)*numMetrics)
 	for i := range slab {
 		slab[i] = math.NaN()
 	}
@@ -446,23 +446,23 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	// Scatter cached values into slab.
 	for aIdx, a := range assets {
 		for mIdx, m := range metrics {
-			colStart := (aIdx*M + mIdx) * T
+			colStart := (aIdx*numMetrics + mIdx) * numTimes
 
-			for _, yr := range years {
-				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: yr}
+			for _, year := range years {
+				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: year}
 
 				entry, ok := e.cache.get(key)
 				if !ok {
 					continue
 				}
 
-				for i, t := range entry.times {
+				for ii, t := range entry.times {
 					ti, ok := timeIdx[t.Unix()]
 					if !ok {
 						continue
 					}
 
-					slab[colStart+ti] = entry.values[i]
+					slab[colStart+ti] = entry.values[ii]
 				}
 			}
 		}

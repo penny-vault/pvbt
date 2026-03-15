@@ -21,8 +21,8 @@ import "time"
 // specific date and window. The engine appends these at each step.
 type MetricRow struct {
 	Date   time.Time
-	Name   string  // e.g. "sharpe", "beta"
-	Window string  // e.g. "5yr", "3yr", "1yr", "ytd", "mtd", "wtd", "since_inception"
+	Name   string // e.g. "sharpe", "beta"
+	Window string // e.g. "5yr", "3yr", "1yr", "ytd", "mtd", "wtd", "since_inception"
 	Value  float64
 }
 
