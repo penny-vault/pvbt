@@ -39,7 +39,7 @@ var _ = Describe("Volatility", func() {
 			times[i] = now.AddDate(0, 0, i-4)
 		}
 		vals := []float64{100, 110, 105, 115, 120}
-		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, vals)
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -79,7 +79,7 @@ var _ = Describe("Volatility", func() {
 			times[i] = now.AddDate(0, 0, i-3)
 		}
 		vals := []float64{50, 55, 52, 58}
-		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.AdjClose}, vals)
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.AdjClose}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -93,7 +93,7 @@ var _ = Describe("Volatility", func() {
 	It("returns error on degenerate window (fewer than 3 rows)", func() {
 		times := []time.Time{now.AddDate(0, 0, -1), now}
 		vals := []float64{100, 110}
-		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, vals)
+		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
 		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)

@@ -33,7 +33,7 @@ func TestMergeColumns(t *testing.T) {
 	a2 := asset.Asset{CompositeFigi: "BBG000BVPV84", Ticker: "AMZN"}
 
 	// Frame 1: Close metric for both assets.
-	df1, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricClose}, []float64{
+	df1, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricClose}, Daily, []float64{
 		100, 101, 102, // a1 Close
 		200, 201, 202, // a2 Close
 	})
@@ -42,7 +42,7 @@ func TestMergeColumns(t *testing.T) {
 	}
 
 	// Frame 2: Open metric for both assets.
-	df2, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricOpen}, []float64{
+	df2, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricOpen}, Daily, []float64{
 		99, 100, 101, // a1 Open
 		199, 200, 201, // a2 Open
 	})
@@ -111,14 +111,14 @@ func TestMergeTimes(t *testing.T) {
 		time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
 	}
 
-	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, []float64{
+	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
 		100, 101,
 	})
 	if err != nil {
 		t.Fatalf("NewDataFrame df1: %v", err)
 	}
 
-	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, []float64{
+	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
 		102, 103,
 	})
 	if err != nil {
@@ -168,14 +168,14 @@ func TestMergeTimesOverlap(t *testing.T) {
 		time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 	}
 
-	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, []float64{
+	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
 		100, 101,
 	})
 	if err != nil {
 		t.Fatalf("NewDataFrame df1: %v", err)
 	}
 
-	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, []float64{
+	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
 		101, 102,
 	})
 	if err != nil {

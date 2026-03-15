@@ -27,6 +27,7 @@ func buildDF(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *da
 		[]time.Time{t},
 		assets,
 		[]data.Metric{data.MetricClose, data.AdjClose},
+		data.Daily,
 		vals,
 	)
 	Expect(err).NotTo(HaveOccurred())
@@ -56,6 +57,7 @@ func buildMultiDF(times []time.Time, assets []asset.Asset, closeSeries, adjClose
 		times,
 		assets,
 		[]data.Metric{data.MetricClose, data.AdjClose},
+		data.Daily,
 		vals,
 	)
 	Expect(err).NotTo(HaveOccurred())

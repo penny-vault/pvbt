@@ -41,7 +41,7 @@ var _ = Describe("Momentum", func() {
 			100, 105, 110, 115, 120, // AAPL/Close
 			200, 190, 180, 170, 160, // GOOG/Close
 		}
-		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.MetricClose}, vals)
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.MetricClose}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -61,7 +61,7 @@ var _ = Describe("Momentum", func() {
 			times[i] = now.AddDate(0, 0, i-2)
 		}
 		vals := []float64{50, 60, 75} // single asset AdjClose: (75-50)/50 = 0.50
-		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.AdjClose}, vals)
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.AdjClose}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -75,7 +75,7 @@ var _ = Describe("Momentum", func() {
 	It("returns error on degenerate window (fewer than 2 rows)", func() {
 		times := []time.Time{now}
 		vals := []float64{100}
-		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, vals)
+		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
 		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)

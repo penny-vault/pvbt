@@ -34,6 +34,7 @@ var _ = Describe("EqualWeight", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 101, 200, 201},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -57,6 +58,7 @@ var _ = Describe("EqualWeight", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -74,6 +76,7 @@ var _ = Describe("EqualWeight", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 101},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -108,6 +111,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300, 100},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -127,6 +131,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300, 100},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -150,6 +155,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{-10, -20},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -169,6 +175,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300, math.NaN()},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -189,6 +196,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{500},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -206,6 +214,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{0, 0},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -227,6 +236,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{
 				300, // SPY
 				-50, // AAPL (negative, should be ignored)
@@ -257,6 +267,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{
 				// SPY: t1=300, t2=100
 				300, 100,
@@ -289,6 +300,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{math.NaN(), math.NaN()},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -310,6 +322,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{200, 800},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -343,6 +356,7 @@ var _ = Describe("EqualWeight edge cases", func() {
 			nil,
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -362,6 +376,7 @@ var _ = Describe("EqualWeight edge cases", func() {
 			[]time.Time{t1},
 			nil,
 			[]data.Metric{data.MetricClose, portfolio.Selected},
+			data.Daily,
 			nil,
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -396,6 +411,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -410,6 +426,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{
 				100, 101, // SPY
 				200, 201, // AAPL
@@ -445,6 +462,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 200, 50},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -466,6 +484,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -486,6 +505,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -505,6 +525,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{100, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -541,6 +562,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -554,6 +576,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300, 100, 500},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -576,6 +599,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{
 				300, 100, // SPY
 				100, 300, // AAPL
@@ -602,6 +626,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{0, 0, 500},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -624,6 +649,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
+			data.Daily,
 			[]float64{300, 0},
 		)
 		Expect(err).NotTo(HaveOccurred())

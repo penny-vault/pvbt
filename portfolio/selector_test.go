@@ -53,6 +53,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2, t3},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{
 				5, 3, 8, // SPY
 				2, 1, 4, // AAPL
@@ -79,6 +80,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{-1, -2},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -87,6 +89,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -108,6 +111,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{
 				10, 1, // SPY
 				5, 20, // AAPL
@@ -129,6 +133,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{math.NaN(), math.NaN()},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -137,6 +142,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -154,6 +160,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{5, 5},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -170,6 +177,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{-1, 0},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -186,6 +194,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{
 				10, -5, // SPY
 				5, -3,  // AAPL
@@ -197,6 +206,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90, 91},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -218,6 +228,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{42},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -233,6 +244,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{math.Inf(1), 5},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -249,6 +261,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{math.Inf(-1), math.Inf(-1)},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -257,6 +270,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -274,6 +288,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{10, math.NaN()},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -293,6 +308,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{-1, 80},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -301,6 +317,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -323,6 +340,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{
 				10, -5, // SPY
 				-1, -2, // BIL
@@ -334,6 +352,7 @@ var _ = Describe("MaxAboveZero", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{bil},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{90, 91},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -355,6 +374,7 @@ var _ = Describe("MaxAboveZero", func() {
 			nil,
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			nil,
 		)
 		Expect(err).NotTo(HaveOccurred())

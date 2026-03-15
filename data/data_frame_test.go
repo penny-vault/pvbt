@@ -59,7 +59,7 @@ var _ = Describe("DataFrame", func() {
 		}
 
 		var err error
-		df, err = data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, values)
+		df, err = data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, values)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -70,12 +70,12 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("returns error when data length mismatches dimensions", func() {
-			_, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2})
+			_, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2})
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("accepts empty dimensions with nil data", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(empty.Len()).To(Equal(0))
 			Expect(empty.ColCount()).To(Equal(0))
@@ -176,7 +176,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Last on empty frame returns empty frame", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			last := empty.Last()
 			Expect(last.Len()).To(Equal(0))
@@ -197,7 +197,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Table on empty frame returns sentinel string", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(empty.Table()).To(Equal("(empty DataFrame)"))
 		})
@@ -207,7 +207,7 @@ var _ = Describe("DataFrame", func() {
 
 			BeforeEach(func() {
 				var err error
-				empty, err = data.NewDataFrame(nil, nil, nil, nil)
+				empty, err = data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 				Expect(err).NotTo(HaveOccurred())
 			})
 
@@ -235,7 +235,7 @@ var _ = Describe("DataFrame", func() {
 		Context("single-element frame", func() {
 			It("works for all accessors", func() {
 				t := []time.Time{times[0]}
-				single, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{42.0})
+				single, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{42.0})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(single.Len()).To(Equal(1))
 				Expect(single.Start()).To(Equal(times[0]))
@@ -261,7 +261,7 @@ var _ = Describe("DataFrame", func() {
 			metrics := []data.Metric{data.AdjClose}
 			vals := []float64{100.0, 101.0}
 			var err error
-			df2, err = data.NewDataFrame(t, assets, metrics, vals)
+			df2, err = data.NewDataFrame(t, assets, metrics, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -415,7 +415,7 @@ var _ = Describe("DataFrame", func() {
 		It("Drop removes rows containing NaN", func() {
 			vals := []float64{1, math.NaN(), 3}
 			t := []time.Time{times[0], times[1], times[2]}
-			small, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			small, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 
 			cleaned := small.Drop(math.NaN())
@@ -424,7 +424,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Drop with non-NaN sentinel removes matching rows", func() {
 			vals := []float64{1, -999, 3, -999, 5}
-			small, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			small, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			cleaned := small.Drop(-999)
 			Expect(cleaned.Len()).To(Equal(3))
@@ -444,7 +444,7 @@ var _ = Describe("DataFrame", func() {
 				10, 20, 30, // GOOG Price
 			}
 			t := []time.Time{times[0], times[1], times[2]}
-			multi, err := data.NewDataFrame(t, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, vals)
+			multi, err := data.NewDataFrame(t, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			cleaned := multi.Drop(math.NaN())
 			Expect(cleaned.Len()).To(Equal(2))
@@ -513,7 +513,7 @@ var _ = Describe("DataFrame", func() {
 				200, 200, 200, 200, 200,
 			}
 			var err error
-			other, err = data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, otherVals)
+			other, err = data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, otherVals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -544,7 +544,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Div by zero produces Inf", func() {
 			zeroVals := make([]float64, 20)
-			zero, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, zeroVals)
+			zero, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, zeroVals)
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Div(zero)
 			Expect(result.Err()).NotTo(HaveOccurred())
@@ -554,9 +554,9 @@ var _ = Describe("DataFrame", func() {
 
 		It("Div zero by zero produces NaN", func() {
 			zeroVals := make([]float64, 20)
-			zeroA, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, zeroVals)
+			zeroA, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, zeroVals)
 			Expect(err).NotTo(HaveOccurred())
-			zeroB, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, make([]float64, 20))
+			zeroB, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, make([]float64, 20))
 			Expect(err).NotTo(HaveOccurred())
 			result := zeroA.Div(zeroB)
 			Expect(result.Err()).NotTo(HaveOccurred())
@@ -566,7 +566,7 @@ var _ = Describe("DataFrame", func() {
 		It("arithmetic with partial overlap returns intersection only", func() {
 			// other has only AAPL with only Price.
 			partialVals := []float64{1, 1, 1, 1, 1}
-			partial, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, partialVals)
+			partial, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, partialVals)
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Add(partial)
 			Expect(result.Err()).NotTo(HaveOccurred())
@@ -578,7 +578,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("arithmetic with no overlap returns empty frame", func() {
 			msft := asset.Asset{CompositeFigi: "MSFT", Ticker: "MSFT"}
-			noOverlap, err := data.NewDataFrame(times, []asset.Asset{msft}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			noOverlap, err := data.NewDataFrame(times, []asset.Asset{msft}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Add(noOverlap)
 			Expect(result.Err()).NotTo(HaveOccurred())
@@ -587,7 +587,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("arithmetic returns error on timestamp count mismatch", func() {
 			shortTimes := times[:3]
-			short, err := data.NewDataFrame(shortTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			short, err := data.NewDataFrame(shortTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Add(short)
 			Expect(result.Err()).To(HaveOccurred())
@@ -599,7 +599,7 @@ var _ = Describe("DataFrame", func() {
 			for i := range offsetTimes {
 				offsetTimes[i] = times[i].AddDate(1, 0, 0) // shift by 1 year
 			}
-			other2, err := data.NewDataFrame(offsetTimes, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, make([]float64, 20))
+			other2, err := data.NewDataFrame(offsetTimes, []asset.Asset{aapl, goog}, []data.Metric{data.Price, data.Volume}, data.Daily, make([]float64, 20))
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Add(other2)
 			Expect(result.Err()).To(HaveOccurred())
@@ -622,7 +622,7 @@ var _ = Describe("DataFrame", func() {
 				1000, 2000, 3000, 4000, 5000,
 			}
 			nanFrame, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
-				[]data.Metric{data.Price, data.Volume}, nanVals)
+				[]data.Metric{data.Price, data.Volume}, data.Daily, nanVals)
 			Expect(err).NotTo(HaveOccurred())
 			result := df.Add(nanFrame)
 			Expect(result.Err()).NotTo(HaveOccurred())
@@ -717,7 +717,7 @@ var _ = Describe("DataFrame", func() {
 				10, 1, 10, 1, 10, // AAPL Price
 				1, 10, 1, 10, 1, // GOOG Price
 			}
-			altDF, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, vals)
+			altDF, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := altDF.IdxMaxAcrossAssets()
 			Expect(result[0].CompositeFigi).To(Equal("AAPL"))
@@ -748,7 +748,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Pct with zero denominator produces Inf", func() {
 			vals := []float64{0, 1, 2, 3, 4}
-			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := zdf.Pct()
 			Expect(math.IsInf(result.Column(aapl, data.Price)[1], 1)).To(BeTrue())
@@ -769,7 +769,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Diff on single-element frame", func() {
-			single, err := data.NewDataFrame(times[:1], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{42.0})
+			single, err := data.NewDataFrame(times[:1], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{42.0})
 			Expect(err).NotTo(HaveOccurred())
 			result := single.Diff()
 			col := result.Column(aapl, data.Price)
@@ -856,7 +856,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Log of zero produces -Inf", func() {
 			vals := []float64{0, 1, 2, 3, 4}
-			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := zdf.Log()
 			col := result.Column(aapl, data.Price)
@@ -865,7 +865,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Log of negative value produces NaN", func() {
 			vals := []float64{-1, 1, 2, 3, 4}
-			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			zdf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := zdf.Log()
 			col := result.Column(aapl, data.Price)
@@ -874,7 +874,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("Diff on frame with zero timestamps does not panic", func() {
 			// A frame with assets and metrics but no timestamps has T=0.
-			noTime, err := data.NewDataFrame(nil, []asset.Asset{aapl}, []data.Metric{data.Price}, nil)
+			noTime, err := data.NewDataFrame(nil, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(func() {
 				_ = noTime.Diff()
@@ -920,7 +920,7 @@ var _ = Describe("DataFrame", func() {
 				vals[i] = float64(i + 1)
 			}
 			var err error
-			weeklyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			weeklyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -968,7 +968,7 @@ var _ = Describe("DataFrame", func() {
 				t[i] = base.AddDate(0, 0, i)
 				vals[i] = 1.0
 			}
-			monthDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			monthDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := monthDF.Downsample(data.Monthly).Sum()
 			Expect(result.Len()).To(Equal(2))
@@ -992,7 +992,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("on empty frame returns empty", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			result := empty.Downsample(data.Weekly).Last()
 			Expect(result.Len()).To(Equal(0))
@@ -1012,7 +1012,7 @@ var _ = Describe("DataFrame", func() {
 			}
 			vals := []float64{100, 200, 300}
 			var err error
-			monthlyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+			monthlyDF, err = data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1059,7 +1059,7 @@ var _ = Describe("DataFrame", func() {
 					time.Date(2024, 1, 11, 0, 0, 0, 0, time.UTC),
 				}
 				vals := []float64{0, 100}
-				simple, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+				simple, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 				Expect(err).NotTo(HaveOccurred())
 				result := simple.Upsample(data.Daily).Interpolate()
 
@@ -1073,7 +1073,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("on empty frame returns empty", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			result := empty.Upsample(data.Daily).ForwardFill()
 			Expect(result.Len()).To(Equal(0))
@@ -1095,7 +1095,7 @@ var _ = Describe("DataFrame", func() {
 			}
 			vals := []float64{1, 2, 3, 4, 10, 20, 30, 40}
 			var err error
-			statsDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, vals)
+			statsDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1114,7 +1114,7 @@ var _ = Describe("DataFrame", func() {
 			})
 
 			It("returns empty DataFrame for empty input", func() {
-				empty, err := data.NewDataFrame(nil, nil, nil, nil)
+				empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 				Expect(err).NotTo(HaveOccurred())
 				Expect(empty.Mean().Len()).To(Equal(0))
 			})
@@ -1153,7 +1153,7 @@ var _ = Describe("DataFrame", func() {
 
 			It("returns 0 for single timestamp", func() {
 				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
-				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{42})
+				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, data.Daily, []float64{42})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(single.Variance().Value(spy, data.Price)).To(BeNumerically("==", 0))
 			})
@@ -1168,7 +1168,7 @@ var _ = Describe("DataFrame", func() {
 
 			It("returns 0 for single timestamp", func() {
 				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
-				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{42})
+				single, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, data.Daily, []float64{42})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(single.Std().Value(spy, data.Price)).To(BeNumerically("==", 0))
 			})
@@ -1180,7 +1180,7 @@ var _ = Describe("DataFrame", func() {
 					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				}
-				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, data.Daily, []float64{1, math.NaN()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(math.IsNaN(nanDF.Mean().Value(spy, data.Price))).To(BeTrue())
 			})
@@ -1190,7 +1190,7 @@ var _ = Describe("DataFrame", func() {
 					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				}
-				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, data.Daily, []float64{1, math.NaN()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(math.IsNaN(nanDF.Sum().Value(spy, data.Price))).To(BeTrue())
 			})
@@ -1200,7 +1200,7 @@ var _ = Describe("DataFrame", func() {
 					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				}
-				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, []float64{1, math.NaN()})
+				nanDF, err := data.NewDataFrame(t, []asset.Asset{spy}, []data.Metric{data.Price}, data.Daily, []float64{1, math.NaN()})
 				Expect(err).NotTo(HaveOccurred())
 				Expect(math.IsNaN(nanDF.Variance().Value(spy, data.Price))).To(BeTrue())
 			})
@@ -1276,7 +1276,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Reduce on empty frame returns empty frame", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			result := empty.Reduce(func(col []float64) float64 { return 0 })
 			Expect(result.Len()).To(Equal(0))
@@ -1284,7 +1284,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("Apply on empty frame returns empty frame", func() {
-			empty, err := data.NewDataFrame(nil, nil, nil, nil)
+			empty, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 			Expect(err).NotTo(HaveOccurred())
 			result := empty.Apply(func(col []float64) []float64 {
 				return col
@@ -1335,7 +1335,7 @@ var _ = Describe("DataFrame", func() {
 				10, 20, 30, 40, 50, // VOO.Volume
 			}
 			var err error
-			covDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa, voo}, []data.Metric{data.Price, data.Volume}, vals)
+			covDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa, voo}, []data.Metric{data.Price, data.Volume}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -1397,7 +1397,7 @@ var _ = Describe("DataFrame", func() {
 
 			It("returns 0 for fewer than 2 timestamps", func() {
 				t := []time.Time{time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)}
-				short, err := data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, []float64{1, 2})
+				short, err := data.NewDataFrame(t, []asset.Asset{spy, efa}, []data.Metric{data.Price}, data.Daily, []float64{1, 2})
 				Expect(err).NotTo(HaveOccurred())
 				result := short.Covariance(spy, efa)
 				composite := data.CompositeAsset(spy, efa)
@@ -1417,14 +1417,14 @@ var _ = Describe("DataFrame", func() {
 
 	Describe("Error accumulation", func() {
 		It("Err returns nil on a healthy DataFrame", func() {
-			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(df.Err()).To(BeNil())
 		})
 
 		It("propagates error through Add chain", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 
 			result := df.Add(short).AddScalar(1)
 			Expect(result.Err()).To(HaveOccurred())
@@ -1432,16 +1432,16 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("propagates error through mixed chain", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 
 			result := df.Add(short).MulScalar(2).Pct().Last()
 			Expect(result.Err()).To(HaveOccurred())
 		})
 
 		It("successful chain has nil Err", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			other, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{10, 20, 30, 40, 50})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			other, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{10, 20, 30, 40, 50})
 
 			result := df.Add(other).MulScalar(2)
 			Expect(result.Err()).To(BeNil())
@@ -1449,19 +1449,19 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("propagates error through Rolling", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 
 			result := df.Add(short).Rolling(3).Mean()
 			Expect(result.Err()).To(HaveOccurred())
 		})
 
 		It("propagates other's error through Add", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 
 			errDF := df.Add(short) // has error
-			good, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			good, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
 
 			result := good.Add(errDF) // other has error
 			Expect(result.Err()).To(HaveOccurred())
@@ -1485,7 +1485,7 @@ var _ = Describe("DataFrame", func() {
 
 	Describe("RenameMetric", func() {
 		It("renames a metric successfully", func() {
-			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
 			Expect(err).NotTo(HaveOccurred())
 
 			result := df.RenameMetric(data.Price, data.Metric("Signal"))
@@ -1495,7 +1495,7 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("returns error when old metric not found", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
 
 			result := df.RenameMetric(data.Volume, data.Metric("Signal"))
 			Expect(result.Err()).To(HaveOccurred())
@@ -1504,7 +1504,7 @@ var _ = Describe("DataFrame", func() {
 
 		It("returns error when new metric already exists", func() {
 			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price, data.Volume},
-				[]float64{1, 2, 3, 4, 5, 10, 20, 30, 40, 50})
+				data.Daily, []float64{1, 2, 3, 4, 5, 10, 20, 30, 40, 50})
 
 			result := df.RenameMetric(data.Price, data.Volume)
 			Expect(result.Err()).To(HaveOccurred())
@@ -1512,8 +1512,8 @@ var _ = Describe("DataFrame", func() {
 		})
 
 		It("propagates existing error", func() {
-			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3, 4, 5})
-			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, []float64{1, 2, 3})
+			df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			short, _ := data.NewDataFrame(times[:3], []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3})
 
 			result := df.Add(short).RenameMetric(data.Price, data.Metric("Signal"))
 			Expect(result.Err()).To(HaveOccurred())
@@ -1536,7 +1536,7 @@ var _ = Describe("Window", func() {
 		metrics := []data.Metric{data.MetricClose}
 		vals := []float64{100, 110, 120, 130, 140}
 		var err error
-		df, err = data.NewDataFrame(times, assets, metrics, vals)
+		df, err = data.NewDataFrame(times, assets, metrics, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -1578,7 +1578,7 @@ var _ = Describe("CumMax", func() {
 		assets := []asset.Asset{spy}
 		metrics := []data.Metric{data.MetricClose}
 		vals := []float64{100, 120, 110, 130}
-		df, err := data.NewDataFrame(times, assets, metrics, vals)
+		df, err := data.NewDataFrame(times, assets, metrics, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		result := df.CumMax()
@@ -1589,7 +1589,7 @@ var _ = Describe("CumMax", func() {
 	It("handles single value", func() {
 		times := []time.Time{time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)}
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, []float64{50})
+		df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, data.Daily, []float64{50})
 		Expect(err).NotTo(HaveOccurred())
 
 		result := df.CumMax()
@@ -1626,7 +1626,7 @@ var _ = Describe("AppendRow", func() {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		df, err := data.NewDataFrame(
 			[]time.Time{t1}, []asset.Asset{spy},
-			[]data.Metric{data.MetricClose}, []float64{100},
+			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1643,7 +1643,7 @@ var _ = Describe("AppendRow", func() {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		metrics := []data.Metric{data.MetricClose, data.PortfolioEquity}
 		df, err := data.NewDataFrame(
-			[]time.Time{t1}, []asset.Asset{spy}, metrics, []float64{100, 200},
+			[]time.Time{t1}, []asset.Asset{spy}, metrics, data.Daily, []float64{100, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1659,7 +1659,7 @@ var _ = Describe("AppendRow", func() {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		df, err := data.NewDataFrame(
 			[]time.Time{t1}, []asset.Asset{spy},
-			[]data.Metric{data.MetricClose}, []float64{100},
+			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1674,7 +1674,7 @@ var _ = Describe("AppendRow", func() {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		df, err := data.NewDataFrame(
 			[]time.Time{t1}, []asset.Asset{spy},
-			[]data.Metric{data.MetricClose}, []float64{100},
+			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1689,7 +1689,7 @@ var _ = Describe("AppendRow", func() {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		df, err := data.NewDataFrame(
 			[]time.Time{t1}, []asset.Asset{spy},
-			[]data.Metric{data.MetricClose}, []float64{100},
+			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1712,14 +1712,14 @@ var _ = Describe("AppendRow", func() {
 
 			df, err := data.NewDataFrame(
 				[]time.Time{t1, t2}, []asset.Asset{spy},
-				[]data.Metric{data.PortfolioEquity}, []float64{10, 20},
+				[]data.Metric{data.PortfolioEquity}, data.Daily, []float64{10, 20},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			other, err := data.NewDataFrame(
 				[]time.Time{t1, t2}, []asset.Asset{spy},
 				[]data.Metric{data.PortfolioEquity, data.PortfolioRiskFree},
-				[]float64{10, 20, 1, 2},
+				data.Daily, []float64{10, 20, 1, 2},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1735,14 +1735,14 @@ var _ = Describe("AppendRow", func() {
 
 			df, err := data.NewDataFrame(
 				[]time.Time{t1}, []asset.Asset{spy},
-				[]data.Metric{data.PortfolioEquity}, []float64{100},
+				[]data.Metric{data.PortfolioEquity}, data.Daily, []float64{100},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			other, err := data.NewDataFrame(
 				[]time.Time{t1}, []asset.Asset{spy},
 				[]data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree},
-				[]float64{100, 5, 3},
+				data.Daily, []float64{100, 5, 3},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1758,13 +1758,13 @@ var _ = Describe("AppendRow", func() {
 
 			a, err := data.NewDataFrame(
 				[]time.Time{t1}, []asset.Asset{spy},
-				[]data.Metric{data.MetricClose}, []float64{100},
+				[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
 			b, err := data.NewDataFrame(
 				[]time.Time{t1}, []asset.Asset{spy},
-				[]data.Metric{data.MetricClose}, []float64{30},
+				[]data.Metric{data.MetricClose}, data.Daily, []float64{30},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -1801,6 +1801,7 @@ var _ = Describe("DataFrame.Annotate", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, efa},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{150.5, 75.25},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -1829,6 +1830,7 @@ var _ = Describe("DataFrame.Annotate", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{math.NaN()},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -1855,6 +1857,7 @@ var _ = Describe("DataFrame.Annotate", func() {
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose, data.AdjClose},
+			data.Daily,
 			[]float64{150.0, 151.0, 149.5, 150.5},
 		)
 		Expect(err).NotTo(HaveOccurred())

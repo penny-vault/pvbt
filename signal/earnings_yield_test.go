@@ -40,7 +40,7 @@ var _ = Describe("EarningsYield", func() {
 			200, // GOOG/Price
 		}
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
-			[]data.Metric{data.EarningsPerShare, data.Price}, vals)
+			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -59,7 +59,7 @@ var _ = Describe("EarningsYield", func() {
 		times := []time.Time{explicitTime}
 		vals := []float64{8, 160} // EPS=8, Price=160 => 0.05
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl},
-			[]data.Metric{data.EarningsPerShare, data.Price}, vals)
+			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -73,7 +73,7 @@ var _ = Describe("EarningsYield", func() {
 	It("returns error when EarningsPerShare metric is missing", func() {
 		times := []time.Time{now}
 		vals := []float64{100} // only Price, no EPS
-		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, vals)
+		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
 		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
@@ -86,7 +86,7 @@ var _ = Describe("EarningsYield", func() {
 	It("returns error when Price metric is missing", func() {
 		times := []time.Time{now}
 		vals := []float64{5} // only EPS, no Price
-		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.EarningsPerShare}, vals)
+		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.EarningsPerShare}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
 		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)

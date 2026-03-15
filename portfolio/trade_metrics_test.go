@@ -180,6 +180,7 @@ var _ = Describe("TradeMetrics", func() {
 					[]time.Time{t},
 					[]asset.Asset{acme},
 					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
 					[]float64{price, price},
 				)
 				Expect(err).NotTo(HaveOccurred())
@@ -211,6 +212,7 @@ var _ = Describe("TradeMetrics", func() {
 					[]time.Time{t},
 					[]asset.Asset{acme},
 					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
 					[]float64{price, price},
 				)
 				Expect(err).NotTo(HaveOccurred())
@@ -467,6 +469,7 @@ var _ = Describe("TradeMetrics", func() {
 					[]time.Time{t},
 					[]asset.Asset{acme},
 					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
 					[]float64{price, price},
 				)
 				Expect(err).NotTo(HaveOccurred())

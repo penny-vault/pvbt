@@ -43,7 +43,7 @@ func (m *mockPriceProvider) Prices(_ context.Context, assets ...asset.Asset) (*d
 			vals[idx] = price
 		}
 	}
-	df, err := data.NewDataFrame(times, assets, metrics, vals)
+	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, vals)
 	if err != nil {
 		return nil, err
 	}

@@ -74,7 +74,7 @@ var _ = Describe("Rated Universe", func() {
 		goog = asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
 		now = time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-		emptyDF, _ = data.NewDataFrame(nil, nil, nil, nil)
+		emptyDF, _ = data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 		filter = data.RatingEq(1)
 	})
 
