@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -103,7 +104,7 @@ func (p *SnapshotProvider) Provides() []Metric {
 	}
 
 	// Sort for deterministic output.
-	sort.Slice(result, func(i, j int) bool { return result[i] < result[j] })
+	slices.Sort(result)
 
 	return result
 }
@@ -225,7 +226,7 @@ func (p *SnapshotProvider) fetchEod(
 	timeSet map[int64]time.Time,
 ) error {
 	placeholders := make([]string, len(figis))
-	args := make([]interface{}, len(figis)+2)
+	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
@@ -266,7 +267,7 @@ func (p *SnapshotProvider) fetchEod(
 			dateStr string
 		)
 
-		scanArgs := make([]interface{}, 0, 2+len(columns))
+		scanArgs := make([]any, 0, 2+len(columns))
 		scanArgs = append(scanArgs, &figi, &dateStr)
 		for idx := range columns {
 			scanArgs = append(scanArgs, &vals[idx])
@@ -306,7 +307,7 @@ func (p *SnapshotProvider) fetchMetrics(
 	timeSet map[int64]time.Time,
 ) error {
 	placeholders := make([]string, len(figis))
-	args := make([]interface{}, len(figis)+2)
+	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
@@ -354,7 +355,7 @@ func (p *SnapshotProvider) fetchMetrics(
 			dateStr string
 		)
 
-		scanArgs := make([]interface{}, 0, 2+len(columns))
+		scanArgs := make([]any, 0, 2+len(columns))
 		scanArgs = append(scanArgs, &figi, &dateStr)
 
 		for idx, col := range columns {
@@ -421,7 +422,7 @@ func (p *SnapshotProvider) fetchFundamentals(
 	}
 
 	placeholders := make([]string, len(figis))
-	args := make([]interface{}, len(figis)+2)
+	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
@@ -453,7 +454,7 @@ func (p *SnapshotProvider) fetchFundamentals(
 			dateStr string
 		)
 
-		vals := make([]interface{}, len(sqlCols)+2)
+		vals := make([]any, len(sqlCols)+2)
 		vals[0] = &figi
 		vals[1] = &dateStr
 
