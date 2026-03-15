@@ -12,10 +12,10 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
@@ -23,7 +23,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 		Use:   "backtest",
 		Short: "Run a historical backtest",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBacktest(strategy)
+			return runBacktest(cmd, strategy)
 		},
 	}
 
@@ -35,10 +35,6 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 	cmd.Flags().String("output", "", "Output file path (default: auto-generated)")
 	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
-
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		log.Fatal().Err(err).Msg("failed to bind backtest flags")
-	}
 
 	registerStrategyFlags(cmd, strategy)
 
@@ -59,7 +55,7 @@ func defaultOutputPath(strategyName string, start, end time.Time, shortID string
 	)
 }
 
-func runBacktest(strategy engine.Strategy) error {
+func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	ctx := log.Logger.WithContext(context.Background())
 
 	nyc, err := time.LoadLocation("America/New_York")
@@ -67,20 +63,24 @@ func runBacktest(strategy engine.Strategy) error {
 		return fmt.Errorf("load America/New_York timezone: %w", err)
 	}
 
-	start, err := time.ParseInLocation("2006-01-02", viper.GetString("start"), nyc)
+	startStr, _ := cmd.Flags().GetString("start")
+
+	start, err := time.ParseInLocation("2006-01-02", startStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	end, err := time.ParseInLocation("2006-01-02", viper.GetString("end"), nyc)
+	endStr, _ := cmd.Flags().GetString("end")
+
+	end, err := time.ParseInLocation("2006-01-02", endStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
 
-	cash := viper.GetFloat64("cash")
+	cash, _ := cmd.Flags().GetFloat64("cash")
 	fullID, shortID := runID()
 
-	outputPath := viper.GetString("output")
+	outputPath, _ := cmd.Flags().GetString("output")
 	if outputPath == "" {
 		outputPath = defaultOutputPath(strategy.Name(), start, end, shortID)
 	}
@@ -96,7 +96,8 @@ func runBacktest(strategy engine.Strategy) error {
 
 	applyStrategyFlags(strategy)
 
-	if viper.GetBool("tui") {
+	useTUI, _ := cmd.Flags().GetBool("tui")
+	if useTUI {
 		return runBacktestWithTUI(strategy)
 	}
 
@@ -104,6 +105,15 @@ func runBacktest(strategy engine.Strategy) error {
 	if err != nil {
 		return fmt.Errorf("create data provider: %w", err)
 	}
+
+	holidays, err := provider.FetchMarketHolidays(ctx)
+	if err != nil {
+		return fmt.Errorf("load market holidays: %w", err)
+	}
+
+	tradecron.SetMarketHolidays(holidays)
+
+	log.Info().Int("holidays", len(holidays)).Msg("loaded market holidays")
 
 	acct := portfolio.New(
 		portfolio.WithCash(cash, start),

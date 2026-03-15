@@ -28,6 +28,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog"
 )
 
@@ -337,6 +338,58 @@ func (p *PVDataProvider) Close() error {
 	}
 
 	return nil
+}
+
+// FetchMarketHolidays loads all market holidays from the database.
+func (p *PVDataProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error) {
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: acquire connection for holidays: %w", err)
+	}
+	defer conn.Release()
+
+	rows, err := conn.Query(ctx,
+		`SELECT event_date, early_close, close_time
+		 FROM market_holidays
+		 WHERE market = 'us'
+		 ORDER BY event_date`)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: query market_holidays: %w", err)
+	}
+	defer rows.Close()
+
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: load timezone: %w", err)
+	}
+
+	var holidays []tradecron.MarketHoliday
+
+	for rows.Next() {
+		var (
+			eventDate  time.Time
+			earlyClose bool
+			closeTime  time.Time
+		)
+
+		if err := rows.Scan(&eventDate, &earlyClose, &closeTime); err != nil {
+			return nil, fmt.Errorf("pvdata: scan market_holidays row: %w", err)
+		}
+
+		closeHHMM := closeTime.Hour()*100 + closeTime.Minute()
+
+		holidays = append(holidays, tradecron.MarketHoliday{
+			Date:       time.Date(eventDate.Year(), eventDate.Month(), eventDate.Day(), 0, 0, 0, 0, nyc),
+			EarlyClose: earlyClose,
+			CloseTime:  closeHHMM,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pvdata: iterate market_holidays: %w", err)
+	}
+
+	return holidays, nil
 }
 
 // -- fetch helpers -----------------------------------------------------------

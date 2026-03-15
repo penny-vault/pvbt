@@ -86,7 +86,7 @@ PVDataProvider database and displays it as a table or graph.
 				return runListMetrics()
 			}
 
-			return runExplore(args[0], args[1])
+			return runExplore(cmd, args[0], args[1])
 		},
 	}
 
@@ -94,10 +94,6 @@ PVDataProvider database and displays it as a table or graph.
 	cmd.Flags().String("end", now.Format("2006-01-02"), "End date (YYYY-MM-DD)")
 	cmd.Flags().Bool("graph", false, "Show TUI graph instead of table")
 	cmd.Flags().Bool("list-metrics", false, "List all available metric names and exit")
-
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		log.Fatal().Err(err).Msg("failed to bind explore flags")
-	}
 
 	return cmd
 }
@@ -111,7 +107,7 @@ func runListMetrics() error {
 	return nil
 }
 
-func runExplore(tickersArg, metricsArg string) error {
+func runExplore(cmd *cobra.Command, tickersArg, metricsArg string) error {
 	ctx := context.Background()
 
 	tickers := strings.Split(tickersArg, ",")
@@ -131,12 +127,16 @@ func runExplore(tickersArg, metricsArg string) error {
 	}
 
 	// parse dates
-	start, err := time.Parse("2006-01-02", viper.GetString("start"))
+	startStr, _ := cmd.Flags().GetString("start")
+
+	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	end, err := time.Parse("2006-01-02", viper.GetString("end"))
+	endStr, _ := cmd.Flags().GetString("end")
+
+	end, err := time.Parse("2006-01-02", endStr)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
@@ -186,7 +186,8 @@ func runExplore(tickersArg, metricsArg string) error {
 		return nil
 	}
 
-	if viper.GetBool("graph") {
+	showGraph, _ := cmd.Flags().GetBool("graph")
+	if showGraph {
 		return runExploreGraph(df)
 	}
 

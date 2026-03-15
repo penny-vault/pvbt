@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Capture backtest data access into portable SQLite snapshots for reproducible offline testing
+- Support index-based universes so strategies can filter by index membership
+- Add ForwardPE, PEG, PriceToCashFlow, and Beta metrics
+
+### Fixed
+
+- Load market holidays from the database so backtests skip non-trading days like Good Friday
+- Honor --start, --end, and other CLI flags on the backtest, snapshot, and explore subcommands
+
 ## [0.1.0] - 2026-03-14
 
 ### Added

@@ -12,7 +12,6 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	_ "modernc.org/sqlite"
 )
@@ -22,7 +21,7 @@ func newSnapshotCmd(strategy engine.Strategy) *cobra.Command {
 		Use:   "snapshot",
 		Short: "Run a backtest and capture all data access to a snapshot file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSnapshot(strategy)
+			return runSnapshot(cmd, strategy)
 		},
 	}
 
@@ -33,10 +32,6 @@ func newSnapshotCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("end", now.Format("2006-01-02"), "Backtest end date (YYYY-MM-DD)")
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 	cmd.Flags().String("output", "", "Snapshot output path (default: pv-data-snapshot-{strategy}-{start}-{end}.db)")
-
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		log.Fatal().Err(err).Msg("failed to bind snapshot flags")
-	}
 
 	registerStrategyFlags(cmd, strategy)
 
@@ -51,7 +46,7 @@ func defaultSnapshotPath(strategyName string, start, end time.Time) string {
 	)
 }
 
-func runSnapshot(strategy engine.Strategy) error {
+func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 	ctx := log.Logger.WithContext(context.Background())
 
 	nyc, err := time.LoadLocation("America/New_York")
@@ -59,19 +54,23 @@ func runSnapshot(strategy engine.Strategy) error {
 		return fmt.Errorf("load America/New_York timezone: %w", err)
 	}
 
-	start, err := time.ParseInLocation("2006-01-02", viper.GetString("start"), nyc)
+	startStr, _ := cmd.Flags().GetString("start")
+
+	start, err := time.ParseInLocation("2006-01-02", startStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	end, err := time.ParseInLocation("2006-01-02", viper.GetString("end"), nyc)
+	endStr, _ := cmd.Flags().GetString("end")
+
+	end, err := time.ParseInLocation("2006-01-02", endStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
 
-	cash := viper.GetFloat64("cash")
+	cash, _ := cmd.Flags().GetFloat64("cash")
 
-	outputPath := viper.GetString("output")
+	outputPath, _ := cmd.Flags().GetString("output")
 	if outputPath == "" {
 		outputPath = defaultSnapshotPath(strategy.Name(), start, end)
 	}
