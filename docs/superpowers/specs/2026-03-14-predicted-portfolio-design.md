@@ -187,6 +187,11 @@ historical data.
     prediction matches what a normal Compute would produce.
   - Verify the original account is not mutated by the prediction run.
   - Verify annotations and justifications appear on the predicted portfolio.
+  - Daily strategy: schedule is daily ("0 16 * * 1-5"). Next trade date
+    is the next business day. Verify prediction works with minimal
+    or no forward-fill.
+  - Weekly strategy: schedule is weekly. Verify correct forward-fill
+    across multiple days to the next weekly trade date.
 - `engine/forward_fill_test.go` -- test forwardFillTo:
   - Daily frequency: fill a gap of several days, verify row count and
     values match the last available row.
