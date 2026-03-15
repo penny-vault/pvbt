@@ -259,6 +259,7 @@ Two principles shaped the API.
 
 The rest of the documentation walks through each concept in detail:
 
+- [Engine](engine.md) covers engine configuration, the strategy interface, data access, and advanced features like predicted portfolios.
 - [Universes](universes.md) covers the different ways to define asset groups, including predefined indexes and using other strategies as assets.
 - [Data](data.md) explains metrics, data providers, DataFrames, and signals.
 - [Portfolio](portfolio.md) covers portfolio construction, order types, and performance measurement.
