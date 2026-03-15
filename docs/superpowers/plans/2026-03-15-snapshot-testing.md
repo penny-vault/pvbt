@@ -1475,14 +1475,30 @@ func (p *SnapshotProvider) fetchEod(
 
 	want := metricSet(metrics)
 
+	type eodCol struct {
+		metric Metric
+	}
+
+	columns := []eodCol{
+		{MetricOpen}, {MetricHigh}, {MetricLow}, {MetricClose},
+		{AdjClose}, {Volume}, {Dividend}, {SplitFactor},
+	}
+
+	vals := make([]sql.NullFloat64, len(columns))
+
 	for rows.Next() {
 		var (
-			figi                             string
-			dateStr                          string
-			open, high, low, closeVal, adjCl float64
-			volume, dividend, splitFactor    float64
+			figi    string
+			dateStr string
 		)
-		if err := rows.Scan(&figi, &dateStr, &open, &high, &low, &closeVal, &adjCl, &volume, &dividend, &splitFactor); err != nil {
+
+		scanArgs := make([]interface{}, 0, 2+len(columns))
+		scanArgs = append(scanArgs, &figi, &dateStr)
+		for idx := range columns {
+			scanArgs = append(scanArgs, &vals[idx])
+		}
+
+		if err := rows.Scan(scanArgs...); err != nil {
 			return fmt.Errorf("snapshot provider: scan eod: %w", err)
 		}
 
@@ -1494,29 +1510,13 @@ func (p *SnapshotProvider) fetchEod(
 		sec := t.Unix()
 		timeSet[sec] = t
 
-		if want[MetricOpen] {
-			ensureCol(figi, MetricOpen)[sec] = open
-		}
-		if want[MetricHigh] {
-			ensureCol(figi, MetricHigh)[sec] = high
-		}
-		if want[MetricLow] {
-			ensureCol(figi, MetricLow)[sec] = low
-		}
-		if want[MetricClose] {
-			ensureCol(figi, MetricClose)[sec] = closeVal
-		}
-		if want[AdjClose] {
-			ensureCol(figi, AdjClose)[sec] = adjCl
-		}
-		if want[Volume] {
-			ensureCol(figi, Volume)[sec] = volume
-		}
-		if want[Dividend] {
-			ensureCol(figi, Dividend)[sec] = dividend
-		}
-		if want[SplitFactor] {
-			ensureCol(figi, SplitFactor)[sec] = splitFactor
+		for idx, col := range columns {
+			if !want[col.metric] {
+				continue
+			}
+			if vals[idx].Valid {
+				ensureCol(figi, col.metric)[sec] = vals[idx].Float64
+			}
 		}
 	}
 
@@ -2146,6 +2146,9 @@ func runSnapshot(strategy engine.Strategy) error {
 
 	_, err = eng.Backtest(ctx, start, end)
 	if err != nil {
+		// Engine.Close() only closes registered providers, and the recorder is
+		// the only registered provider. Close recorder and underlying provider
+		// directly -- no need to also close the engine.
 		recorder.Close()
 		provider.Close()
 		return fmt.Errorf("backtest failed: %w", err)
