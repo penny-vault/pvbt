@@ -24,6 +24,6 @@ import (
 // Strategy is the interface that all strategies must implement.
 type Strategy interface {
 	Name() string
-	Setup(e *Engine)
-	Compute(ctx context.Context, e *Engine, p portfolio.Portfolio)
+	Setup(eng *Engine)
+	Compute(ctx context.Context, eng *Engine, portfolio portfolio.Portfolio) error
 }
