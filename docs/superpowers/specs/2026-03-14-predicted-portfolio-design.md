@@ -176,7 +176,23 @@ historical data.
 
 ### Tests
 
-- `engine/predicted_portfolio_test.go` -- test PredictedPortfolio with a
-  simple strategy, verify the returned portfolio has expected trades
-- `engine/forward_fill_test.go` -- test forwardFillTo with various frequencies
-- `portfolio/account_test.go` -- test Account.Clone preserves state
+- `engine/predicted_portfolio_test.go` -- test PredictedPortfolio scenarios:
+  - Mid-month prediction: currentDate is mid-month, next trade date is
+    month-end. Verify forward-fill spans multiple days and the returned
+    portfolio has expected trades.
+  - Day-before prediction: currentDate is the day before the next trade
+    date. Verify only one day of forward-fill and correct trades.
+  - Same-day prediction: currentDate IS the next trade date (or the day
+    it would actually run). Verify no forward-fill is needed and the
+    prediction matches what a normal Compute would produce.
+  - Verify the original account is not mutated by the prediction run.
+  - Verify annotations and justifications appear on the predicted portfolio.
+- `engine/forward_fill_test.go` -- test forwardFillTo:
+  - Daily frequency: fill a gap of several days, verify row count and
+    values match the last available row.
+  - Weekly/Monthly frequencies: verify correct timestamp spacing.
+  - Tick frequency: verify error is returned.
+  - No gap (DataFrame already covers target date): verify no-op.
+- `portfolio/account_test.go` -- test Account.Clone preserves state:
+  - Holdings, cash, metadata, annotations are independent copies.
+  - Mutations to the clone do not affect the original.
