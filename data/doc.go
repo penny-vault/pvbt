@@ -199,6 +199,19 @@
 // If any step encounters an error the resulting [DataFrame] carries the error
 // (retrievable via [DataFrame.Err]) and subsequent operations short-circuit.
 //
+// # Annotations
+//
+// [DataFrame.Annotate] pushes every non-NaN cell as a key-value annotation to
+// an [Annotator] destination. Keys are formatted as "TICKER/Metric" and values
+// are the float formatted as a string. This allows a strategy to annotate its
+// reasoning with a single call:
+//
+//	momentumDF.Annotate(portfolio)
+//
+// The [Annotator] interface is intentionally narrow (a single Annotate method)
+// to avoid a circular dependency with the portfolio package. The portfolio
+// [Portfolio] interface satisfies it.
+//
 // # Frequency
 //
 // The [Frequency] type represents data publication frequency. Constants
