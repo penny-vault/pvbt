@@ -57,6 +57,7 @@ type Engine struct {
 	start          time.Time
 	end            time.Time
 	metricProvider map[data.Metric]data.BatchProvider
+	predicting     bool
 }
 
 // New creates a new engine for the given strategy.
@@ -279,12 +280,26 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		Time("currentDate", e.currentDate).
 		Msg("engine.Fetch")
 
-	return e.fetchRange(ctx, assets, metrics, rangeStart, rangeEnd)
+	assembled, fetchErr := e.fetchRange(ctx, assets, metrics, rangeStart, rangeEnd)
+	if fetchErr != nil {
+		return nil, fetchErr
+	}
+
+	if e.predicting && assembled.Len() > 0 && assembled.End().Before(e.currentDate) {
+		filled, fillErr := ForwardFillTo(assembled, e.currentDate)
+		if fillErr != nil {
+			return nil, fmt.Errorf("engine: forward-fill in Fetch: %w", fillErr)
+		}
+
+		assembled = filled
+	}
+
+	return assembled, nil
 }
 
 // FetchAt implements universe.DataSource.
 func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp time.Time, metrics []data.Metric) (*data.DataFrame, error) {
-	if !e.currentDate.IsZero() && timestamp.After(e.currentDate) {
+	if !e.predicting && !e.currentDate.IsZero() && timestamp.After(e.currentDate) {
 		return nil, fmt.Errorf("FetchAt: requested future date %s (current simulation date is %s)",
 			timestamp.Format("2006-01-02"), e.currentDate.Format("2006-01-02"))
 	}
@@ -293,7 +308,21 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 		e.cache = newDataCache(e.cacheMaxBytes)
 	}
 
-	return e.fetchRange(ctx, assets, metrics, timestamp, timestamp)
+	result, err := e.fetchRange(ctx, assets, metrics, timestamp, timestamp)
+	if err != nil {
+		return nil, err
+	}
+
+	if e.predicting && result.Len() > 0 && result.End().Before(timestamp) {
+		filled, fillErr := ForwardFillTo(result, timestamp)
+		if fillErr != nil {
+			return nil, fmt.Errorf("engine: forward-fill in FetchAt: %w", fillErr)
+		}
+
+		result = filled
+	}
+
+	return result, nil
 }
 
 // fetchRange is the shared implementation for Fetch and FetchAt.
@@ -500,6 +529,50 @@ func (e *Engine) Close() error {
 // the requested assets at the engine's current simulation date.
 func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
 	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{data.MetricClose})
+}
+
+// PredictedPortfolio runs the strategy's Compute against a shadow copy of the
+// current portfolio using the next scheduled trade date. Data is forward-filled
+// from the last available date to the predicted date. The strategy is unaware
+// it is a prediction run.
+func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, error) {
+	if e.schedule == nil {
+		return nil, fmt.Errorf("engine: PredictedPortfolio requires a schedule")
+	}
+
+	if e.account == nil {
+		return nil, fmt.Errorf("engine: PredictedPortfolio requires an initialized account")
+	}
+
+	// Determine the next trade date.
+	predictedDate := e.schedule.Next(e.currentDate)
+
+	// Clone the current account.
+	clone := e.account.Clone()
+
+	// Set up the shadow broker.
+	shadowBroker := NewSimulatedBroker()
+	clone.SetBroker(shadowBroker)
+
+	// Save and restore engine state.
+	savedDate := e.currentDate
+	e.predicting = true
+	e.currentDate = predictedDate
+	defer func() {
+		e.currentDate = savedDate
+		e.predicting = false
+	}()
+
+	// Set the broker's price provider.
+	shadowBroker.SetPriceProvider(e, predictedDate)
+
+	// Run Compute.
+	if err := e.strategy.Compute(ctx, e, clone); err != nil {
+		return nil, fmt.Errorf("engine: PredictedPortfolio compute on %v: %w",
+			predictedDate, err)
+	}
+
+	return clone, nil
 }
 
 // Compile-time check that Engine implements universe.DataSource.
