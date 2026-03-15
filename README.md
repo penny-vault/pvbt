@@ -16,21 +16,6 @@ pvbt is Penny Vault's backtesting engine. It lets you write investment strategie
 Accelerating Dual Momentum:
 
 ```go
-package main
-
-import (
-	"context"
-	"log"
-	"time"
-
-	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/engine"
-	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/signal"
-	"github.com/penny-vault/pvbt/tradecron"
-	"github.com/penny-vault/pvbt/universe"
-)
-
 type ADM struct {
 	RiskOn  universe.Universe `pvbt:"riskOn"  desc:"equity universe" default:"SPY,GLD,VWO"`
 	RiskOff universe.Universe `pvbt:"riskOff" desc:"safe-haven"      default:"TLT"`
@@ -63,24 +48,6 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portf
 	}
 	p.RebalanceTo(ctx, plan...)
 	return nil
-}
-
-func main() {
-	eng := engine.New(&ADM{},
-		engine.WithInitialDeposit(10_000),
-	)
-	defer eng.Close()
-
-	ctx := context.Background()
-	start := time.Date(2005, time.January, 1, 0, 0, 0, 0, time.UTC)
-	end := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
-
-	result, err := eng.Backtest(ctx, start, end)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Printf("Final value: $%.2f\n", result.Value())
 }
 ```
 
