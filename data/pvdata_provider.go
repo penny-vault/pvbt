@@ -34,6 +34,7 @@ import (
 // Compile-time interface checks.
 var _ BatchProvider = (*PVDataProvider)(nil)
 var _ AssetProvider = (*PVDataProvider)(nil)
+var _ RatingProvider = (*PVDataProvider)(nil)
 
 // pvdataConfig is the subset of ~/.pvdata.toml we care about.
 type pvdataConfig struct {
@@ -532,6 +533,46 @@ func (p *PVDataProvider) fetchFundamentals(
 	}
 
 	return rows.Err()
+}
+
+// RatedAssets returns the set of assets whose most-recent rating (on or before t)
+// from the named analyst matches filter. It returns nil, nil when filter has no
+// values to match.
+func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, t time.Time) ([]asset.Asset, error) {
+	if len(filter.Values) == 0 {
+		return nil, nil
+	}
+
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	rows, err := conn.Query(ctx,
+		`SELECT composite_figi, ticker FROM (
+		     SELECT DISTINCT ON (composite_figi) composite_figi, ticker, rating
+		     FROM ratings
+		     WHERE analyst = $1 AND event_date <= $2
+		     ORDER BY composite_figi, event_date DESC
+		 ) sub
+		 WHERE rating = ANY($3)`,
+		analyst, t, filter.Values,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: query rated assets: %w", err)
+	}
+	defer rows.Close()
+
+	var assets []asset.Asset
+	for rows.Next() {
+		var a asset.Asset
+		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
+			return nil, fmt.Errorf("pvdata: scan rated asset: %w", err)
+		}
+		assets = append(assets, a)
+	}
+	return assets, rows.Err()
 }
 
 // -- metric mappings ---------------------------------------------------------
