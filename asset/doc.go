@@ -18,9 +18,10 @@
 //
 // # Asset Type
 //
-// The Asset struct has two fields: CompositeFigi (the canonical identifier from
-// the Financial Instrument Global Identifier system) and Ticker (a
-// human-readable symbol like "SPY" or "AAPL"). Assets are resolved from
+// The Asset struct has two fields: CompositeFigi (a globally unique identifier
+// from the Financial Instrument Global Identifier standard, used to
+// unambiguously identify securities across exchanges and data sources) and
+// Ticker (a human-readable symbol like "SPY" or "AAPL"). Assets are resolved from
 // tickers via an AssetProvider registered with the engine.
 //
 // # Economic Indicators

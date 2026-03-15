@@ -98,9 +98,9 @@
 //
 // [DataFrame] stores contiguous float64 data in column-major order. Each
 // column represents a single (asset, metric) pair across all timestamps.
-// Columns are stored contiguously so that time-series operations and SIMD
-// can work on a single uninterrupted []float64 slice. The [DataFrame.Column]
-// method returns the raw slice, which is directly usable with gonum routines.
+// Columns are stored contiguously so that time-series operations can work on
+// a single uninterrupted []float64 slice. The [DataFrame.Column] method
+// returns the raw slice, which is directly usable with gonum routines.
 //
 // For a frame with T timestamps, A assets, and M metrics the total length
 // of the internal data slab is T*A*M. The column for asset index a and metric

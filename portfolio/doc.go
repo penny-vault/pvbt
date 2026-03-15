@@ -185,8 +185,11 @@
 //
 // Return metrics:
 //
-//   - [TWRR]: time-weighted rate of return.
-//   - [MWRR]: money-weighted rate of return (IRR).
+//   - [TWRR]: time-weighted rate of return, measuring portfolio growth
+//     independent of the timing and size of deposits and withdrawals.
+//   - [MWRR]: money-weighted rate of return (also called internal rate of
+//     return), measuring the actual return earned on invested capital
+//     including the effect of cash flow timing.
 //   - [CAGR]: compound annual growth rate.
 //   - [ActiveReturn]: excess return over the benchmark.
 //
@@ -203,8 +206,11 @@
 //   - [OmegaRatio]: probability-weighted ratio of gains to losses.
 //   - [RecoveryFactor]: cumulative return divided by maximum drawdown.
 //   - [GainToPainRatio]: sum of returns divided by sum of absolute losses.
-//   - [KRatio]: slope of the log-equity curve regression.
-//   - [KellerRatio]: momentum quality indicator.
+//   - [KRatio]: measures how consistently returns grow over time by
+//     fitting a line to the cumulative return curve; higher values
+//     indicate steadier growth.
+//   - [KellerRatio]: measures the quality and persistence of an asset's
+//     momentum, distinguishing smooth trends from noisy ones.
 //
 // Risk and volatility:
 //
@@ -213,9 +219,12 @@
 //   - [Alpha]: excess return over CAPM prediction.
 //   - [DownsideDeviation]: volatility of returns below the risk-free rate.
 //   - [TrackingError]: standard deviation of return difference vs benchmark.
-//   - [UlcerIndex]: downside risk based on drawdown depth and duration.
-//   - [ValueAtRisk]: maximum expected loss at a confidence level.
-//   - [CVaR]: conditional value at risk (expected shortfall beyond VaR).
+//   - [UlcerIndex]: downside risk that accounts for both the depth and
+//     duration of drawdowns, penalizing long, deep declines more heavily.
+//   - [ValueAtRisk]: maximum expected loss at a given confidence level
+//     (e.g., "95% of the time, losses will not exceed X").
+//   - [CVaR]: conditional value at risk -- the average loss in the worst
+//     cases beyond the ValueAtRisk threshold (the expected shortfall).
 //   - [TailRatio]: ratio of right-tail gains to left-tail losses.
 //
 // Drawdown:
@@ -239,7 +248,8 @@
 //
 //   - [NPositivePeriods]: percentage of periods with positive returns.
 //   - [GainLossRatio]: average gain divided by average loss.
-//   - [KellyCriterion]: optimal bet size from win rate and payoff ratio.
+//   - [KellyCriterion]: optimal fraction of capital to risk per trade,
+//     derived from the win rate and average payoff ratio.
 //   - [ConsecutiveWins]: longest streak of consecutive winning periods.
 //   - [ConsecutiveLosses]: longest streak of consecutive losing periods.
 //   - [Exposure]: fraction of time the portfolio is invested.
