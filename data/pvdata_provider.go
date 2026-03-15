@@ -436,8 +436,33 @@ func (p *PVDataProvider) fetchMetrics(
 	ensureCol func(string, Metric) map[int64]float64,
 	timeSet map[int64]time.Time,
 ) error {
+	// metricsColumns defines the SQL column order and corresponding Metric for
+	// each value returned by the metrics query. The scan destination for each
+	// entry is a *float64 into the vals slice at the same index.
+	type metricsColumn struct {
+		metric Metric
+		// intCol means the SQL column is bigint; the scanned int64 is converted to float64.
+		intCol bool
+	}
+
+	columns := []metricsColumn{
+		{metric: MarketCap, intCol: true},
+		{metric: EnterpriseValue, intCol: true},
+		{metric: PE},
+		{metric: PB},
+		{metric: PS},
+		{metric: EVtoEBIT},
+		{metric: EVtoEBITDA},
+		{metric: ForwardPE},
+		{metric: PEG},
+		{metric: PriceToCashFlow},
+		{metric: Beta},
+	}
+
 	rows, err := conn.Query(ctx,
-		`SELECT composite_figi, event_date, market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda, sp500
+		`SELECT composite_figi, event_date,
+		        market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda,
+		        pe_forward, peg, price_to_cash_flow, beta
 		 FROM metrics
 		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date
 		 ORDER BY event_date`,
@@ -450,15 +475,29 @@ func (p *PVDataProvider) fetchMetrics(
 
 	want := metricSet(metrics)
 
+	// Pre-allocate scan destinations reused across rows.
+	intVals := make([]int64, len(columns))
+	floatVals := make([]float64, len(columns))
+
 	for rows.Next() {
 		var (
-			figi                                                         string
-			eventDate                                                    time.Time
-			marketCap, enterpriseValue                                   int64
-			priceToEarnings, priceToBook, priceToSales, evEbit, evEbitda float64
-			sp500                                                        bool
+			figi      string
+			eventDate time.Time
 		)
-		if err := rows.Scan(&figi, &eventDate, &marketCap, &enterpriseValue, &priceToEarnings, &priceToBook, &priceToSales, &evEbit, &evEbitda, &sp500); err != nil {
+
+		// Build scan args: figi, eventDate, then one dest per column.
+		scanArgs := make([]any, 0, 2+len(columns))
+		scanArgs = append(scanArgs, &figi, &eventDate)
+
+		for idx, col := range columns {
+			if col.intCol {
+				scanArgs = append(scanArgs, &intVals[idx])
+			} else {
+				scanArgs = append(scanArgs, &floatVals[idx])
+			}
+		}
+
+		if err := rows.Scan(scanArgs...); err != nil {
 			return fmt.Errorf("pvdata: scan metrics row: %w", err)
 		}
 
@@ -466,41 +505,16 @@ func (p *PVDataProvider) fetchMetrics(
 		sec := eventDate.Unix()
 		timeSet[sec] = eventDate
 
-		if want[MarketCap] {
-			ensureCol(figi, MarketCap)[sec] = float64(marketCap)
-		}
-
-		if want[EnterpriseValue] {
-			ensureCol(figi, EnterpriseValue)[sec] = float64(enterpriseValue)
-		}
-
-		if want[PE] {
-			ensureCol(figi, PE)[sec] = priceToEarnings
-		}
-
-		if want[PB] {
-			ensureCol(figi, PB)[sec] = priceToBook
-		}
-
-		if want[PS] {
-			ensureCol(figi, PS)[sec] = priceToSales
-		}
-
-		if want[EVtoEBIT] {
-			ensureCol(figi, EVtoEBIT)[sec] = evEbit
-		}
-
-		if want[EVtoEBITDA] {
-			ensureCol(figi, EVtoEBITDA)[sec] = evEbitda
-		}
-
-		if want[SP500] {
-			v := 0.0
-			if sp500 {
-				v = 1.0
+		for idx, col := range columns {
+			if !want[col.metric] {
+				continue
 			}
 
-			ensureCol(figi, SP500)[sec] = v
+			if col.intCol {
+				ensureCol(figi, col.metric)[sec] = float64(intVals[idx])
+			} else {
+				ensureCol(figi, col.metric)[sec] = floatVals[idx]
+			}
 		}
 	}
 
@@ -646,7 +660,10 @@ var metricView = map[Metric]string{
 	PS:              "metrics",
 	EVtoEBIT:        "metrics",
 	EVtoEBITDA:      "metrics",
-	SP500:           "metrics",
+	ForwardPE:       "metrics",
+	PEG:             "metrics",
+	PriceToCashFlow: "metrics",
+	Beta:            "metrics",
 
 	// fundamentals view
 	Revenue:                             "fundamentals",

@@ -25,7 +25,8 @@ var metricRegistry = map[string]Metric{
 	"Price": Price, "Bid": Bid, "Ask": Ask,
 	// Valuation
 	"MarketCap": MarketCap, "EnterpriseValue": EnterpriseValue, "PE": PE, "PB": PB, "PS": PS,
-	"EVtoEBIT": EVtoEBIT, "EVtoEBITDA": EVtoEBITDA, "SP500": SP500,
+	"EVtoEBIT": EVtoEBIT, "EVtoEBITDA": EVtoEBITDA,
+	"ForwardPE": ForwardPE, "PEG": PEG, "PriceToCashFlow": PriceToCashFlow, "Beta": Beta,
 	// Income statement
 	"Revenue": Revenue, "CostOfRevenue": CostOfRevenue, "GrossProfit": GrossProfit,
 	"OperatingExpenses": OperatingExpenses, "OperatingIncome": OperatingIncome,
