@@ -1867,3 +1867,79 @@ var _ = Describe("DataFrame.Annotate", func() {
 		Expect(dest.entries).To(HaveLen(4))
 	})
 })
+
+var _ = Describe("DataFrame Frequency", func() {
+	It("returns the frequency set at construction", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Now()},
+			[]asset.Asset{{CompositeFigi: "SPY001", Ticker: "SPY"}},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{100.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Frequency()).To(Equal(data.Daily))
+	})
+
+	It("propagates frequency through Assets narrowing", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Now()},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			data.Monthly,
+			[]float64{100.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		narrowed := df.Assets(spy)
+		Expect(narrowed.Frequency()).To(Equal(data.Monthly))
+	})
+
+	It("propagates frequency through Copy", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Now()},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			data.Weekly,
+			[]float64{100.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		copied := df.Copy()
+		Expect(copied.Frequency()).To(Equal(data.Weekly))
+	})
+
+	It("sets target frequency on downsampled result", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		times := []time.Time{
+			time.Date(2024, 1, 2, 16, 0, 0, 0, time.UTC),
+			time.Date(2024, 1, 3, 16, 0, 0, 0, time.UTC),
+			time.Date(2024, 2, 1, 16, 0, 0, 0, time.UTC),
+		}
+		df, err := data.NewDataFrame(times, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, data.Daily,
+			[]float64{100, 101, 110},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		monthly := df.Downsample(data.Monthly).Last()
+		Expect(monthly.Frequency()).To(Equal(data.Monthly))
+	})
+})
+
+var _ = Describe("ParseFrequency", func() {
+	It("round-trips all frequency constants through String/Parse", func() {
+		for _, freq := range []data.Frequency{data.Tick, data.Daily, data.Weekly, data.Monthly, data.Quarterly, data.Yearly} {
+			parsed, err := data.ParseFrequency(freq.String())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(parsed).To(Equal(freq))
+		}
+	})
+
+	It("returns error for unknown frequency string", func() {
+		_, err := data.ParseFrequency("bogus")
+		Expect(err).To(HaveOccurred())
+	})
+})
