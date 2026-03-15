@@ -156,7 +156,7 @@ func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine,
 // countingProvider wraps a TestProvider and counts Fetch calls.
 type countingProvider struct {
 	data.DataProvider
-	inner     *data.TestProvider
+	inner      *data.TestProvider
 	fetchCount int
 }
 

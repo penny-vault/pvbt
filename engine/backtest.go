@@ -37,10 +37,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	if e.assetProvider == nil {
 		return nil, fmt.Errorf("engine: assetProvider is required for Backtest")
 	}
+
 	allAssets, err := e.assetProvider.Assets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("engine: loading asset registry: %w", err)
 	}
+
 	for _, a := range allAssets {
 		e.assets[a.Ticker] = a
 	}
@@ -68,6 +70,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	if e.benchmark != (asset.Asset{}) {
 		acct.SetBenchmark(e.benchmark)
 	}
+
 	if e.riskFree != (asset.Asset{}) {
 		acct.SetRiskFree(e.riskFree)
 	}
@@ -84,6 +87,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// 9. Walk tradecron.Next() from start until past end.
 	// Subtract one nanosecond so that a date exactly equal to start is included.
 	var dates []time.Time
+
 	cur := e.schedule.Next(start.Add(-time.Nanosecond))
 	for !cur.After(end) {
 		dates = append(dates, cur)
@@ -95,7 +99,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
 
-	for i, date := range dates {
+	for dateIdx, date := range dates {
 		// 10. Check context cancellation.
 		if err := ctx.Err(); err != nil {
 			return acct, err
@@ -108,29 +112,34 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		stepLogger := zerolog.Ctx(ctx).With().
 			Str("strategy", e.strategy.Name()).
 			Time("date", date).
-			Int("step", i+1).
+			Int("step", dateIdx+1).
 			Int("total", len(dates)).
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
 		// 13. Fetch housekeeping data for held assets.
 		var heldAssets []asset.Asset
+
 		acct.Holdings(func(a asset.Asset, _ float64) {
 			heldAssets = append(heldAssets, a)
 		})
 
 		var housekeepAssets []asset.Asset
+
 		housekeepAssets = append(housekeepAssets, heldAssets...)
 		if e.benchmark != (asset.Asset{}) {
 			housekeepAssets = append(housekeepAssets, e.benchmark)
 		}
+
 		if e.riskFree != (asset.Asset{}) {
 			housekeepAssets = append(housekeepAssets, e.riskFree)
 		}
 
 		var housekeepDF *data.DataFrame
+
 		if len(housekeepAssets) > 0 {
 			var fetchErr error
+
 			housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
 			if fetchErr != nil {
 				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
@@ -139,16 +148,17 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// 14. Record dividends for held assets.
 		if housekeepDF != nil {
-			for _, a := range heldAssets {
-				qty := acct.Position(a)
+			for _, heldAsset := range heldAssets {
+				qty := acct.Position(heldAsset)
 				if qty <= 0 {
 					continue
 				}
-				divPerShare := housekeepDF.ValueAt(a, data.Dividend, date)
+
+				divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
 				if !math.IsNaN(divPerShare) && divPerShare > 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   date,
-						Asset:  a,
+						Asset:  heldAsset,
 						Type:   portfolio.DividendTransaction,
 						Amount: divPerShare * qty,
 						Qty:    qty,
@@ -172,12 +182,15 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		// 17. Build price DataFrame for all assets seen this step (including any
 		// newly acquired positions from Compute).
 		var priceAssets []asset.Asset
+
 		acct.Holdings(func(a asset.Asset, _ float64) {
 			priceAssets = append(priceAssets, a)
 		})
+
 		if e.benchmark != (asset.Asset{}) {
 			priceAssets = append(priceAssets, e.benchmark)
 		}
+
 		if e.riskFree != (asset.Asset{}) {
 			priceAssets = append(priceAssets, e.riskFree)
 		}

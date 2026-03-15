@@ -30,28 +30,30 @@ func (turnover) Description() string {
 func (turnover) Compute(a *Account, _ *Period) (float64, error) {
 	_, totalSellValue := roundTrips(a.Transactions())
 
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	ec := pd.Column(portfolioAsset, data.PortfolioEquity)
-	et := pd.Times()
 
-	if len(ec) < 2 || totalSellValue == 0 {
+	equityCol := perfData.Column(portfolioAsset, data.PortfolioEquity)
+	equityTimes := perfData.Times()
+
+	if len(equityCol) < 2 || totalSellValue == 0 {
 		return 0, nil
 	}
 
 	var sum float64
-	for _, v := range ec {
+	for _, v := range equityCol {
 		sum += v
 	}
-	meanValue := sum / float64(len(ec))
+
+	meanValue := sum / float64(len(equityCol))
 
 	if meanValue <= 0 {
 		return 0, nil
 	}
 
-	periodDays := et[len(et)-1].Sub(et[0]).Hours() / 24.0
+	periodDays := equityTimes[len(equityTimes)-1].Sub(equityTimes[0]).Hours() / 24.0
 	if periodDays <= 0 {
 		return 0, nil
 	}

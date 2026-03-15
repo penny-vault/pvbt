@@ -49,8 +49,8 @@ func (f Frequency) String() string {
 }
 
 // ParseFrequency converts a string back to a Frequency constant.
-func ParseFrequency(s string) (Frequency, error) {
-	switch s {
+func ParseFrequency(freqStr string) (Frequency, error) {
+	switch freqStr {
 	case "Tick":
 		return Tick, nil
 	case "Daily":
@@ -64,6 +64,6 @@ func ParseFrequency(s string) (Frequency, error) {
 	case "Yearly":
 		return Yearly, nil
 	default:
-		return 0, fmt.Errorf("unknown frequency: %q", s)
+		return 0, fmt.Errorf("unknown frequency: %q", freqStr)
 	}
 }

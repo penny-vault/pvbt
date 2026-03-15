@@ -213,18 +213,18 @@ func (df *DataFrame) MetricList() []Metric {
 }
 
 // Value returns the most recent float64 for the given asset and metric.
-func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
+func (df *DataFrame) Value(a asset.Asset, metric Metric) float64 {
 	if df.err != nil {
 		return math.NaN()
 	}
 
-	aIdx, ok := df.assetIndex[a.CompositeFigi]
-	if !ok {
+	aIdx, found := df.assetIndex[a.CompositeFigi]
+	if !found {
 		return math.NaN()
 	}
 
-	mIdx, ok := df.metricIndex(m)
-	if !ok {
+	mIdx, found := df.metricIndex(metric)
+	if !found {
 		return math.NaN()
 	}
 
@@ -234,23 +234,23 @@ func (df *DataFrame) Value(a asset.Asset, m Metric) float64 {
 }
 
 // ValueAt returns the float64 for the given asset, metric, and timestamp.
-func (df *DataFrame) ValueAt(a asset.Asset, m Metric, t time.Time) float64 {
+func (df *DataFrame) ValueAt(a asset.Asset, metric Metric, timestamp time.Time) float64 {
 	if df.err != nil {
 		return math.NaN()
 	}
 
-	aIdx, ok := df.assetIndex[a.CompositeFigi]
-	if !ok {
+	aIdx, found := df.assetIndex[a.CompositeFigi]
+	if !found {
 		return math.NaN()
 	}
 
-	mIdx, ok := df.metricIndex(m)
-	if !ok {
+	mIdx, found := df.metricIndex(metric)
+	if !found {
 		return math.NaN()
 	}
 
-	tIdx, ok := df.timeIndex(t)
-	if !ok {
+	tIdx, found := df.timeIndex(timestamp)
+	if !found {
 		return math.NaN()
 	}
 
@@ -262,18 +262,18 @@ func (df *DataFrame) ValueAt(a asset.Asset, m Metric, t time.Time) float64 {
 // Column returns the contiguous []float64 slice for the given asset and
 // metric. The returned slice shares the underlying Data array and is
 // directly compatible with gonum.
-func (df *DataFrame) Column(a asset.Asset, m Metric) []float64 {
+func (df *DataFrame) Column(a asset.Asset, metric Metric) []float64 {
 	if df.err != nil {
 		return nil
 	}
 
-	aIdx, ok := df.assetIndex[a.CompositeFigi]
-	if !ok {
+	aIdx, found := df.assetIndex[a.CompositeFigi]
+	if !found {
 		return nil
 	}
 
-	mIdx, ok := df.metricIndex(m)
-	if !ok {
+	mIdx, found := df.metricIndex(metric)
+	if !found {
 		return nil
 	}
 
@@ -360,34 +360,34 @@ func (df *DataFrame) Table() string {
 		return "(empty DataFrame)"
 	}
 
-	var sb strings.Builder
+	var builder strings.Builder
 
 	// Build header.
-	fmt.Fprintf(&sb, "%-20s", "Time")
+	fmt.Fprintf(&builder, "%-20s", "Time")
 
 	for _, a := range df.assets {
 		for _, m := range df.metrics {
-			fmt.Fprintf(&sb, " %15s", a.Ticker+"/"+string(m))
+			fmt.Fprintf(&builder, " %15s", a.Ticker+"/"+string(m))
 		}
 	}
 
-	sb.WriteString("\n")
+	builder.WriteString("\n")
 
 	// Build rows.
 	for tIdx, t := range df.times {
-		fmt.Fprintf(&sb, "%-20s", t.Format("2006-01-02"))
+		fmt.Fprintf(&builder, "%-20s", t.Format("2006-01-02"))
 
 		for aIdx := range df.assets {
 			for mIdx := range df.metrics {
 				off := df.colOffset(aIdx, mIdx) + tIdx
-				fmt.Fprintf(&sb, " %15.4f", df.data[off])
+				fmt.Fprintf(&builder, " %15.4f", df.data[off])
 			}
 		}
 
-		sb.WriteString("\n")
+		builder.WriteString("\n")
 	}
 
-	return sb.String()
+	return builder.String()
 }
 
 // -- Narrowing and filtering -------------------------------------------------
@@ -532,7 +532,7 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 // Filter returns a new DataFrame keeping only the timestamps for which fn
 // returns true. The function receives the timestamp and a single-row
 // DataFrame with all assets and metrics at that point.
-func (df *DataFrame) Filter(fn func(t time.Time, row *DataFrame) bool) *DataFrame {
+func (df *DataFrame) Filter(predicate func(t time.Time, row *DataFrame) bool) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
@@ -541,7 +541,7 @@ func (df *DataFrame) Filter(fn func(t time.Time, row *DataFrame) bool) *DataFram
 
 	for tIdx, t := range df.times {
 		row := df.At(t)
-		if fn(t, row) {
+		if predicate(t, row) {
 			indices = append(indices, tIdx)
 		}
 	}
@@ -641,7 +641,7 @@ func (df *DataFrame) RenameMetric(old, new Metric) *DataFrame {
 // Insert adds or overwrites a column in the DataFrame for the given asset
 // and metric. The length of values must equal Len(). Returns an error if
 // the values length does not match.
-func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) error {
+func (df *DataFrame) Insert(targetAsset asset.Asset, metric Metric, values []float64) error {
 	if df.err != nil {
 		return df.err
 	}
@@ -653,16 +653,16 @@ func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) error {
 	timeLen := len(df.times)
 
 	// Check if asset exists; if not, add it.
-	_, assetExists := df.assetIndex[a.CompositeFigi]
+	_, assetExists := df.assetIndex[targetAsset.CompositeFigi]
 	if !assetExists {
-		df.assetIndex[a.CompositeFigi] = len(df.assets)
-		df.assets = append(df.assets, a)
+		df.assetIndex[targetAsset.CompositeFigi] = len(df.assets)
+		df.assets = append(df.assets, targetAsset)
 	}
 
 	// Check if metric exists; if not, add it.
-	_, metricExists := df.metricIndex(m)
+	_, metricExists := df.metricIndex(metric)
 	if !metricExists {
-		df.metrics = append(df.metrics, m)
+		df.metrics = append(df.metrics, metric)
 	}
 
 	// Rebuild data slab if dimensions changed.
@@ -695,8 +695,8 @@ func (df *DataFrame) Insert(a asset.Asset, m Metric, values []float64) error {
 	}
 
 	// Write the values into the correct column.
-	aIdx := df.assetIndex[a.CompositeFigi]
-	mIdx, _ := df.metricIndex(m)
+	aIdx := df.assetIndex[targetAsset.CompositeFigi]
+	mIdx, _ := df.metricIndex(metric)
 	off := df.colOffset(aIdx, mIdx)
 	copy(df.data[off:off+timeLen], values)
 
@@ -724,33 +724,33 @@ func (df *DataFrame) findIntersection(other *DataFrame) ([]colPair, []asset.Asse
 
 	metricSeen := make(map[Metric]bool)
 
-	for aIdx, a := range df.assets {
-		otherAIdx, ok := other.assetIndex[a.CompositeFigi]
+	for aIdx, currentAsset := range df.assets {
+		otherAIdx, ok := other.assetIndex[currentAsset.CompositeFigi]
 		if !ok {
 			continue
 		}
 
-		for mIdx, m := range df.metrics {
-			otherMIdx, ok := other.metricIndex(m)
+		for mIdx, currentMetric := range df.metrics {
+			otherMIdx, ok := other.metricIndex(currentMetric)
 			if !ok {
 				continue
 			}
 
 			pairs = append(pairs, colPair{
-				a:        a,
-				m:        m,
+				a:        currentAsset,
+				m:        currentMetric,
 				selfOff:  df.colOffset(aIdx, mIdx),
 				otherOff: other.colOffset(otherAIdx, otherMIdx),
 			})
 
-			if !assetSeen[a.CompositeFigi] {
-				resAssets = append(resAssets, a)
-				assetSeen[a.CompositeFigi] = true
+			if !assetSeen[currentAsset.CompositeFigi] {
+				resAssets = append(resAssets, currentAsset)
+				assetSeen[currentAsset.CompositeFigi] = true
 			}
 
-			if !metricSeen[m] {
-				resMetrics = append(resMetrics, m)
-				metricSeen[m] = true
+			if !metricSeen[currentMetric] {
+				resMetrics = append(resMetrics, currentMetric)
+				metricSeen[currentMetric] = true
 			}
 		}
 	}
@@ -798,13 +798,13 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 	resMetricLen := len(resMetrics)
 	newData := make([]float64, len(resAssets)*resMetricLen*timeLen)
 
-	for _, p := range pairs {
-		raIdx := resIdx[p.a.CompositeFigi]
-		rmIdx := resMIdx[p.m]
+	for _, pair := range pairs {
+		raIdx := resIdx[pair.a.CompositeFigi]
+		rmIdx := resMIdx[pair.m]
 		dstOff := (raIdx*resMetricLen + rmIdx) * timeLen
 		dst := newData[dstOff : dstOff+timeLen]
-		s := df.data[p.selfOff : p.selfOff+timeLen]
-		t := other.data[p.otherOff : p.otherOff+timeLen]
+		s := df.data[pair.selfOff : pair.selfOff+timeLen]
+		t := other.data[pair.otherOff : pair.otherOff+timeLen]
 		apply(dst, s, t)
 	}
 
@@ -912,45 +912,45 @@ func (df *DataFrame) broadcastOp(other *DataFrame, metrics []Metric, apply func(
 // -- Scalar arithmetic -------------------------------------------------------
 
 // AddScalar adds a constant to every value in the DataFrame.
-func (df *DataFrame) AddScalar(f float64) *DataFrame {
+func (df *DataFrame) AddScalar(scalar float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
 	result := df.Copy()
-	floats.AddConst(f, result.data)
+	floats.AddConst(scalar, result.data)
 
 	return result
 }
 
 // SubScalar subtracts a constant from every value in the DataFrame.
-func (df *DataFrame) SubScalar(f float64) *DataFrame {
+func (df *DataFrame) SubScalar(scalar float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
-	return df.AddScalar(-f)
+	return df.AddScalar(-scalar)
 }
 
 // MulScalar multiplies every value in the DataFrame by a constant.
-func (df *DataFrame) MulScalar(f float64) *DataFrame {
+func (df *DataFrame) MulScalar(scalar float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
 	result := df.Copy()
-	floats.Scale(f, result.data)
+	floats.Scale(scalar, result.data)
 
 	return result
 }
 
 // DivScalar divides every value in the DataFrame by a constant.
-func (df *DataFrame) DivScalar(f float64) *DataFrame {
+func (df *DataFrame) DivScalar(scalar float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
-	return df.MulScalar(1.0 / f)
+	return df.MulScalar(1.0 / scalar)
 }
 
 // -- Aggregation across assets per timestamp ---------------------------------
@@ -1204,8 +1204,8 @@ func (df *DataFrame) Covariance(assets ...asset.Asset) *DataFrame {
 	return df.crossAssetCovariance(assets, lastTime)
 }
 
-func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) *DataFrame {
-	aIdx, ok := df.assetIndex[a.CompositeFigi]
+func (df *DataFrame) crossMetricCovariance(targetAsset asset.Asset, lastTime []time.Time) *DataFrame {
+	aIdx, ok := df.assetIndex[targetAsset.CompositeFigi]
 	if !ok {
 		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
@@ -1231,7 +1231,7 @@ func (df *DataFrame) crossMetricCovariance(a asset.Asset, lastTime []time.Time) 
 		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
-	return mustNewDataFrame(lastTime, []asset.Asset{a}, pairMetrics, df.freq, pairData)
+	return mustNewDataFrame(lastTime, []asset.Asset{targetAsset}, pairMetrics, df.freq, pairData)
 }
 
 func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.Time) *DataFrame {
@@ -1242,16 +1242,16 @@ func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.
 		pairData   []float64
 	)
 
-	for i := 0; i < len(assets); i++ {
-		aIdxI, okI := df.assetIndex[assets[i].CompositeFigi]
-		for j := i + 1; j < len(assets); j++ {
-			aIdxJ, okJ := df.assetIndex[assets[j].CompositeFigi]
+	for assetIdx := 0; assetIdx < len(assets); assetIdx++ {
+		aIdxI, okI := df.assetIndex[assets[assetIdx].CompositeFigi]
+		for innerIdx := assetIdx + 1; innerIdx < len(assets); innerIdx++ {
+			aIdxJ, okJ := df.assetIndex[assets[innerIdx].CompositeFigi]
 
 			if !okI || !okJ {
 				continue
 			}
 
-			pairAssets = append(pairAssets, CompositeAsset(assets[i], assets[j]))
+			pairAssets = append(pairAssets, CompositeAsset(assets[assetIdx], assets[innerIdx]))
 			for mIdx := 0; mIdx < metricLen; mIdx++ {
 				pairData = append(pairData, sampleCov(
 					df.colSlice(aIdxI, mIdx),
@@ -1271,39 +1271,39 @@ func (df *DataFrame) crossAssetCovariance(assets []asset.Asset, lastTime []time.
 	return mustNewDataFrame(lastTime, pairAssets, metrics, df.freq, pairData)
 }
 
-func sampleCov(x, y []float64) float64 {
-	n := len(x)
-	if len(y) < n {
-		n = len(y)
+func sampleCov(xValues, yValues []float64) float64 {
+	count := len(xValues)
+	if len(yValues) < count {
+		count = len(yValues)
 	}
 
-	if n < 2 {
+	if count < 2 {
 		return 0
 	}
 
-	mx := stat.Mean(x[:n], nil)
-	my := stat.Mean(y[:n], nil)
+	mx := stat.Mean(xValues[:count], nil)
+	my := stat.Mean(yValues[:count], nil)
 
 	sum := 0.0
-	for i := 0; i < n; i++ {
-		sum += (x[i] - mx) * (y[i] - my)
+	for idx := 0; idx < count; idx++ {
+		sum += (xValues[idx] - mx) * (yValues[idx] - my)
 	}
 
-	return sum / float64(n-1)
+	return sum / float64(count-1)
 }
 
 // -- Common transforms -------------------------------------------------------
 
 // Pct returns the percent change over n periods. If n is omitted it
 // defaults to 1.
-func (df *DataFrame) Pct(n ...int) *DataFrame {
+func (df *DataFrame) Pct(periods ...int) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
 	period := 1
-	if len(n) > 0 {
-		period = n[0]
+	if len(periods) > 0 {
+		period = periods[0]
 	}
 
 	return df.Apply(func(col []float64) []float64 {
@@ -1398,7 +1398,7 @@ func (df *DataFrame) CumMax() *DataFrame {
 
 // Shift shifts every column forward by n periods, filling leading values
 // with NaN. Negative n shifts backward.
-func (df *DataFrame) Shift(n int) *DataFrame {
+func (df *DataFrame) Shift(positions int) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
@@ -1410,12 +1410,12 @@ func (df *DataFrame) Shift(n int) *DataFrame {
 			out[i] = math.NaN()
 		}
 
-		if n >= 0 {
-			if n < len(col) {
-				copy(out[n:], col[:len(col)-n])
+		if positions >= 0 {
+			if positions < len(col) {
+				copy(out[positions:], col[:len(col)-positions])
 			}
 		} else {
-			abs := -n
+			abs := -positions
 			if abs < len(col) {
 				copy(out, col[abs:])
 			}
@@ -1462,12 +1462,12 @@ func periodChanged(prev, curr time.Time, freq Frequency) bool {
 // Window returns a DataFrame containing only timestamps within the
 // trailing window defined by p. When p is nil, returns the full DataFrame.
 // When the window exceeds the available data, returns the full DataFrame.
-func (df *DataFrame) Window(p *Period) *DataFrame {
+func (df *DataFrame) Window(period *Period) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
-	if p == nil {
+	if period == nil {
 		return df.Copy()
 	}
 
@@ -1475,7 +1475,7 @@ func (df *DataFrame) Window(p *Period) *DataFrame {
 		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
-	start := p.Before(df.End())
+	start := period.Before(df.End())
 	if !start.After(df.Start()) {
 		return df.Copy()
 	}
@@ -1494,7 +1494,7 @@ func (df *DataFrame) Rolling(n int) *RollingDataFrame {
 // Apply runs fn on each column and returns a new DataFrame with the
 // transformed values. The function receives a contiguous []float64 column
 // and must return a slice of the same length.
-func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
+func (df *DataFrame) Apply(transform func([]float64) []float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
@@ -1507,7 +1507,7 @@ func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
 	for aIdx := 0; aIdx < assetLen; aIdx++ {
 		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			col := df.colSlice(aIdx, mIdx)
-			transformed := fn(col)
+			transformed := transform(col)
 			dstOff := (aIdx*metricLen + mIdx) * timeLen
 			copy(newData[dstOff:dstOff+timeLen], transformed)
 		}
@@ -1534,7 +1534,7 @@ func (df *DataFrame) Apply(fn func([]float64) []float64) *DataFrame {
 //
 // AppendRow is the only DataFrame method that mutates in place. This is
 // safe because all read methods produce independent copies via make+copy.
-func (df *DataFrame) AppendRow(t time.Time, values []float64) error {
+func (df *DataFrame) AppendRow(timestamp time.Time, values []float64) error {
 	if df.err != nil {
 		return df.err
 	}
@@ -1544,9 +1544,9 @@ func (df *DataFrame) AppendRow(t time.Time, values []float64) error {
 		return fmt.Errorf("AppendRow: values length %d does not match column count %d", len(values), colCount)
 	}
 
-	if len(df.times) > 0 && !t.After(df.End()) {
+	if len(df.times) > 0 && !timestamp.After(df.End()) {
 		return fmt.Errorf("AppendRow: timestamp %s is not after current End() %s (must be chronological)",
-			t.Format(time.RFC3339), df.End().Format(time.RFC3339))
+			timestamp.Format(time.RFC3339), df.End().Format(time.RFC3339))
 	}
 
 	// The data slab is column-major: each column is contiguous.
@@ -1568,14 +1568,14 @@ func (df *DataFrame) AppendRow(t time.Time, values []float64) error {
 	}
 
 	df.data = newData
-	df.times = append(df.times, t)
+	df.times = append(df.times, timestamp)
 
 	return nil
 }
 
 // Reduce runs fn on each column, collapsing it to a single value. The
 // result is a single-row DataFrame with the same assets and metrics.
-func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
+func (df *DataFrame) Reduce(reducer func([]float64) float64) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
@@ -1588,7 +1588,7 @@ func (df *DataFrame) Reduce(fn func([]float64) float64) *DataFrame {
 		for mIdx := 0; mIdx < metricLen; mIdx++ {
 			col := df.colSlice(aIdx, mIdx)
 			dstOff := aIdx*metricLen + mIdx
-			newData[dstOff] = fn(col)
+			newData[dstOff] = reducer(col)
 		}
 	}
 
@@ -1622,6 +1622,7 @@ func (df *DataFrame) Annotate(dest Annotator) *DataFrame {
 
 	for _, timestamp := range times {
 		unixSeconds := timestamp.Unix()
+
 		for _, assetItem := range assets {
 			for _, metric := range metrics {
 				value := df.ValueAt(assetItem, metric, timestamp)

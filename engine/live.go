@@ -40,10 +40,12 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	if e.assetProvider == nil {
 		return nil, fmt.Errorf("engine: assetProvider is required for RunLive")
 	}
+
 	allAssets, err := e.assetProvider.Assets(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("engine: loading asset registry: %w", err)
 	}
+
 	for _, a := range allAssets {
 		e.assets[a.Ticker] = a
 	}
@@ -71,6 +73,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	if e.benchmark != (asset.Asset{}) {
 		acct.SetBenchmark(e.benchmark)
 	}
+
 	if e.riskFree != (asset.Asset{}) {
 		acct.SetRiskFree(e.riskFree)
 	}
@@ -80,10 +83,10 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 	// PHASE 2: GOROUTINE
 
-	ch := make(chan portfolio.Portfolio, 1)
+	portfolioCh := make(chan portfolio.Portfolio, 1)
 
 	go func() {
-		defer close(ch)
+		defer close(portfolioCh)
 
 		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
 		priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
@@ -116,22 +119,27 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 			// e. Collect held assets plus benchmark and risk-free for housekeeping fetch.
 			var heldAssets []asset.Asset
+
 			acct.Holdings(func(a asset.Asset, _ float64) {
 				heldAssets = append(heldAssets, a)
 			})
 
 			var housekeepAssets []asset.Asset
+
 			housekeepAssets = append(housekeepAssets, heldAssets...)
 			if e.benchmark != (asset.Asset{}) {
 				housekeepAssets = append(housekeepAssets, e.benchmark)
 			}
+
 			if e.riskFree != (asset.Asset{}) {
 				housekeepAssets = append(housekeepAssets, e.riskFree)
 			}
 
 			var housekeepDF *data.DataFrame
+
 			if len(housekeepAssets) > 0 {
 				var fetchErr error
+
 				housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
 				if fetchErr != nil {
 					zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("housekeeping fetch failed")
@@ -141,16 +149,17 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 			// f. Record dividends for held assets.
 			if housekeepDF != nil {
-				for _, a := range heldAssets {
-					qty := acct.Position(a)
+				for _, heldAsset := range heldAssets {
+					qty := acct.Position(heldAsset)
 					if qty <= 0 {
 						continue
 					}
-					divPerShare := housekeepDF.ValueAt(a, data.Dividend, e.currentDate)
+
+					divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, e.currentDate)
 					if !math.IsNaN(divPerShare) && divPerShare > 0 {
 						acct.Record(portfolio.Transaction{
 							Date:   e.currentDate,
-							Asset:  a,
+							Asset:  heldAsset,
 							Type:   portfolio.DividendTransaction,
 							Amount: divPerShare * qty,
 							Qty:    qty,
@@ -173,12 +182,15 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 			// i. Build price DataFrame for post-Compute holdings and call UpdatePrices.
 			var priceAssets []asset.Asset
+
 			acct.Holdings(func(a asset.Asset, _ float64) {
 				priceAssets = append(priceAssets, a)
 			})
+
 			if e.benchmark != (asset.Asset{}) {
 				priceAssets = append(priceAssets, e.benchmark)
 			}
+
 			if e.riskFree != (asset.Asset{}) {
 				priceAssets = append(priceAssets, e.riskFree)
 			}
@@ -194,11 +206,11 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 			// j. Non-blocking send of updated portfolio.
 			select {
-			case ch <- acct:
+			case portfolioCh <- acct:
 			default:
 			}
 		}
 	}()
 
-	return ch, nil
+	return portfolioCh, nil
 }

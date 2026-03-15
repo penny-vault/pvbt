@@ -36,7 +36,9 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("output", "", "Output file path (default: auto-generated)")
 	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
 
-	viper.BindPFlags(cmd.Flags())
+	if err := viper.BindPFlags(cmd.Flags()); err != nil {
+		log.Fatal().Err(err).Msg("failed to bind backtest flags")
+	}
 
 	registerStrategyFlags(cmd, strategy)
 
@@ -60,11 +62,16 @@ func defaultOutputPath(strategyName string, start, end time.Time, shortID string
 func runBacktest(strategy engine.Strategy) error {
 	ctx := log.Logger.WithContext(context.Background())
 
-	nyc, _ := time.LoadLocation("America/New_York")
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		return fmt.Errorf("load America/New_York timezone: %w", err)
+	}
+
 	start, err := time.ParseInLocation("2006-01-02", viper.GetString("start"), nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
+
 	end, err := time.ParseInLocation("2006-01-02", viper.GetString("end"), nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
@@ -110,20 +117,20 @@ func runBacktest(strategy engine.Strategy) error {
 	)
 	defer eng.Close()
 
-	p, err := eng.Backtest(ctx, start, end)
+	result, err := eng.Backtest(ctx, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
 	// Set metadata on the portfolio.
-	p.SetMetadata("run_id", fullID)
-	p.SetMetadata("strategy", strategy.Name())
-	p.SetMetadata("start", start.Format("2006-01-02"))
-	p.SetMetadata("end", end.Format("2006-01-02"))
+	result.SetMetadata("run_id", fullID)
+	result.SetMetadata("strategy", strategy.Name())
+	result.SetMetadata("start", start.Format("2006-01-02"))
+	result.SetMetadata("end", end.Format("2006-01-02"))
 
 	params := strategyParams(strategy)
 	for k, v := range params {
-		p.SetMetadata(fmt.Sprintf("param_%s", k), fmt.Sprintf("%v", v))
+		result.SetMetadata(fmt.Sprintf("param_%s", k), fmt.Sprintf("%v", v))
 	}
 
 	if err := acct.ToSQLite(outputPath); err != nil {
@@ -132,50 +139,58 @@ func runBacktest(strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	printSummary(p)
+	if err := printSummary(result); err != nil {
+		return fmt.Errorf("printing summary: %w", err)
+	}
 
 	return nil
 }
 
 func strategyParams(strategy engine.Strategy) map[string]any {
 	params := make(map[string]any)
-	v := reflect.ValueOf(strategy)
-	if v.Kind() == reflect.Ptr {
-		v = v.Elem()
+
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
 	}
-	t := v.Type()
-	if t.Kind() != reflect.Struct {
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
 		return params
 	}
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
+
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
 		if !field.IsExported() {
 			continue
 		}
+
 		name := field.Tag.Get("pvbt")
 		if name == "" {
 			name = strings.ToLower(field.Name)
 		}
-		params[name] = v.Field(i).Interface()
+
+		params[name] = val.Field(ii).Interface()
 	}
+
 	return params
 }
 
 func runBacktestWithTUI(strategy engine.Strategy) error {
 	m := newTUIModel()
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	program := tea.NewProgram(m, tea.WithAltScreen())
 
 	// redirect logs to TUI
-	w := newTUILogWriter(p)
+	w := newTUILogWriter(program)
 	log.Logger = zerolog.New(w).With().Timestamp().Logger()
 
 	// run backtest in background
 	go func() {
 		// simulate some progress for now since Engine.Run is a stub
-		p.Send(doneMsg{})
+		program.Send(doneMsg{})
 	}()
 
-	if _, err := p.Run(); err != nil {
+	if _, err := program.Run(); err != nil {
 		return fmt.Errorf("TUI error: %w", err)
 	}
 

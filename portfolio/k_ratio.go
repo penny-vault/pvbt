@@ -35,33 +35,39 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
-	n := len(col)
-	if n < 3 {
+
+	count := len(col)
+	if count < 3 {
 		return 0, nil
 	}
 
 	// Compute log(VAMI) where VAMI = 1000 * cumulative product of (1 + r_i).
-	logVAMI := make([]float64, n)
+	logVAMI := make([]float64, count)
+
 	cumProd := 1000.0
 	for i, ri := range col {
 		cumProd *= (1 + ri)
 		logVAMI[i] = math.Log(cumProd)
 	}
 
-	// OLS regression: y = logVAMI, x = [0, 1, ..., n-1].
-	nf := float64(n)
-	meanX := (nf - 1) / 2.0
+	// OLS regression: y = logVAMI, x = [0, 1, ..., count-1].
+	numPeriods := float64(count)
+	meanX := (numPeriods - 1) / 2.0
 	meanY := stat.Mean(logVAMI, nil)
 
 	sumXXdev := 0.0
 	sumXYdev := 0.0
-	for i := 0; i < n; i++ {
+
+	for i := 0; i < count; i++ {
 		dx := float64(i) - meanX
 		sumXXdev += dx * dx
 		sumXYdev += dx * (logVAMI[i] - meanY)
@@ -76,13 +82,14 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 
 	// Compute residuals and standard error of slope.
 	sumResidSq := 0.0
-	for i := 0; i < n; i++ {
+
+	for i := 0; i < count; i++ {
 		predicted := slope*float64(i) + intercept
 		resid := logVAMI[i] - predicted
 		sumResidSq += resid * resid
 	}
 
-	stderr := math.Sqrt(sumResidSq/(nf-2)) / math.Sqrt(sumXXdev)
+	stderr := math.Sqrt(sumResidSq/(numPeriods-2)) / math.Sqrt(sumXXdev)
 	if stderr == 0 {
 		return 0, nil
 	}

@@ -28,13 +28,13 @@ import (
 // Volatility computes the rolling standard deviation of returns over
 // the given period for each asset in the universe. Returns a single-row
 // DataFrame with one column per asset containing the volatility score.
-func Volatility(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
+func Volatility(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
 	metric := data.MetricClose
 	if len(metrics) > 0 {
 		metric = metrics[0]
 	}
 
-	df, err := u.Window(ctx, period, metric)
+	df, err := assetUniverse.Window(ctx, period, metric)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("Volatility: %w", err))
 	}
@@ -46,5 +46,6 @@ func Volatility(ctx context.Context, u universe.Universe, period portfolio.Perio
 	// Compute daily returns, drop leading NaN, then rolling std over all returns.
 	returns := df.Pct(1).Drop(math.NaN())
 	result := returns.Rolling(returns.Len()).Std().Last().RenameMetric(metric, VolatilitySignal)
+
 	return result
 }

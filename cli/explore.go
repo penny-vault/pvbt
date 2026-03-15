@@ -23,14 +23,19 @@ func RunPVBT() {
 	}
 
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
-	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+
+	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
+		log.Fatal().Err(err).Msg("failed to bind log-level flag")
+	}
 
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		level, err := zerolog.ParseLevel(viper.GetString("log-level"))
 		if err != nil {
 			level = zerolog.InfoLevel
 		}
+
 		zerolog.SetGlobalLevel(level)
+
 		log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
 			With().Timestamp().Logger()
 	}
@@ -56,18 +61,31 @@ PVDataProvider database and displays it as a table or graph.
   explore AAPL AdjClose --graph
   explore --list-metrics`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			if listMetrics, _ := cmd.Flags().GetBool("list-metrics"); listMetrics {
+			listMetrics, err := cmd.Flags().GetBool("list-metrics")
+			if err != nil {
+				return fmt.Errorf("reading list-metrics flag: %w", err)
+			}
+
+			if listMetrics {
 				return nil
 			}
+
 			if len(args) < 2 {
 				return fmt.Errorf("requires 2 arguments: <tickers> <metrics>")
 			}
+
 			return nil
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if listMetrics, _ := cmd.Flags().GetBool("list-metrics"); listMetrics {
+			listMetrics, err := cmd.Flags().GetBool("list-metrics")
+			if err != nil {
+				return fmt.Errorf("reading list-metrics flag: %w", err)
+			}
+
+			if listMetrics {
 				return runListMetrics()
 			}
+
 			return runExplore(args[0], args[1])
 		},
 	}
@@ -77,7 +95,9 @@ PVDataProvider database and displays it as a table or graph.
 	cmd.Flags().Bool("graph", false, "Show TUI graph instead of table")
 	cmd.Flags().Bool("list-metrics", false, "List all available metric names and exit")
 
-	viper.BindPFlags(cmd.Flags())
+	if err := viper.BindPFlags(cmd.Flags()); err != nil {
+		log.Fatal().Err(err).Msg("failed to bind explore flags")
+	}
 
 	return cmd
 }
@@ -87,6 +107,7 @@ func runListMetrics() error {
 	for _, name := range names {
 		fmt.Println(name)
 	}
+
 	return nil
 }
 
@@ -100,10 +121,12 @@ func runExplore(tickersArg, metricsArg string) error {
 	metrics := make([]data.Metric, 0, len(metricNames))
 	for _, name := range metricNames {
 		name = strings.TrimSpace(name)
+
 		m, ok := data.MetricByName(name)
 		if !ok {
 			return fmt.Errorf("unknown metric %q (use --list-metrics to see available names)", name)
 		}
+
 		metrics = append(metrics, m)
 	}
 
@@ -112,6 +135,7 @@ func runExplore(tickersArg, metricsArg string) error {
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
+
 	end, err := time.Parse("2006-01-02", viper.GetString("end"))
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
@@ -128,10 +152,12 @@ func runExplore(tickersArg, metricsArg string) error {
 	assets := make([]asset.Asset, 0, len(tickers))
 	for _, ticker := range tickers {
 		ticker = strings.TrimSpace(ticker)
+
 		a, err := provider.LookupAsset(ctx, ticker)
 		if err != nil {
 			return fmt.Errorf("lookup ticker %q: %w", ticker, err)
 		}
+
 		assets = append(assets, a)
 	}
 
@@ -166,5 +192,6 @@ func runExplore(tickersArg, metricsArg string) error {
 
 	fmt.Print(df.Table())
 	fmt.Printf("\n%d rows\n", df.Len())
+
 	return nil
 }

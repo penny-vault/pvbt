@@ -34,15 +34,19 @@ func (consecutiveLosses) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	maxStreak := 0
 	current := 0
+
 	for _, v := range col {
 		if v < 0 {
 			current++
@@ -57,7 +61,9 @@ func (consecutiveLosses) Compute(a *Account, window *Period) (float64, error) {
 	return float64(maxStreak), nil
 }
 
-func (consecutiveLosses) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (consecutiveLosses) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // ConsecutiveLosses is the longest streak of consecutive negative-return
 // periods. Important for assessing the psychological difficulty of

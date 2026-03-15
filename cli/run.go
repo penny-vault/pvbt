@@ -21,14 +21,19 @@ func Run(strategy engine.Strategy) {
 	}
 
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
-	viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level"))
+
+	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
+		log.Fatal().Err(err).Msg("failed to bind log-level flag")
+	}
 
 	rootCmd.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		level, err := zerolog.ParseLevel(viper.GetString("log-level"))
 		if err != nil {
 			level = zerolog.InfoLevel
 		}
+
 		zerolog.SetGlobalLevel(level)
+
 		log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
 			With().Timestamp().Logger()
 	}

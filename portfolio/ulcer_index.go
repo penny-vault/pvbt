@@ -34,6 +34,7 @@ func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
 	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
 
@@ -54,6 +55,7 @@ func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
 		if v > peak {
 			peak = v
 		}
+
 		dd := (v - peak) / peak * 100 // percentage scale
 		sumSq += dd * dd
 	}

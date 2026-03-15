@@ -342,7 +342,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 101, 102, 103, 104},
 				)
 				val, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically("<", 0.0))
 			})
 		})
@@ -354,7 +354,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
 				val, err := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically(">", 0.0))
 			})
 
@@ -364,7 +364,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					[]float64{100, 100.01, 100.02, 100.03, 100.04},
 				)
 				val, err := acct.PerformanceMetric(portfolio.Sortino).Value()
-			Expect(err).NotTo(HaveOccurred())
+				Expect(err).NotTo(HaveOccurred())
 				Expect(val).To(BeNumerically("<", 0.0))
 			})
 		})

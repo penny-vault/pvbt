@@ -35,28 +35,33 @@ func (sharpe) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
+
 	perfDF := pd.Window(window)
 	returns := perfDF.Pct().Drop(math.NaN())
+
 	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
 	if er.Len() == 0 {
 		return 0, nil
 	}
+
 	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 	if len(erCol) < 2 {
 		return 0, nil
 	}
 
-	sd := stat.StdDev(erCol, nil)
-	if sd == 0 || math.IsNaN(sd) {
+	stdDev := stat.StdDev(erCol, nil)
+	if stdDev == 0 || math.IsNaN(stdDev) {
 		return 0, nil
 	}
 
 	af := annualizationFactor(perfDF.Times())
-	return stat.Mean(erCol, nil) / sd * math.Sqrt(af), nil
+
+	return stat.Mean(erCol, nil) / stdDev * math.Sqrt(af), nil
 }
 
 func (sharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

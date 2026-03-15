@@ -29,8 +29,8 @@ type Descriptor interface {
 
 // StrategyDescription holds optional metadata about a strategy.
 type StrategyDescription struct {
-	ShortCode   string `json:"shortcode,omitempty"`
-	Description string `json:"description,omitempty"`
+	ShortCode   string    `json:"shortcode,omitempty"`
+	Description string    `json:"description,omitempty"`
 	Source      string    `json:"source,omitempty"`
 	Version     string    `json:"version,omitempty"`
 	VersionDate time.Time `json:"versionDate,omitzero"`
@@ -61,13 +61,13 @@ type StrategyInfo struct {
 
 // DescribeStrategy builds a StrategyInfo from the engine's state after Setup.
 // Call this after Backtest or RunLive initialization has completed Setup.
-func DescribeStrategy(e *Engine) StrategyInfo {
+func DescribeStrategy(eng *Engine) StrategyInfo {
 	info := StrategyInfo{
-		Name: e.strategy.Name(),
+		Name: eng.strategy.Name(),
 	}
 
 	// Pull from Descriptor if implemented.
-	if d, ok := e.strategy.(Descriptor); ok {
+	if d, ok := eng.strategy.(Descriptor); ok {
 		desc := d.Describe()
 		info.ShortCode = desc.ShortCode
 		info.Description = desc.Description
@@ -77,34 +77,37 @@ func DescribeStrategy(e *Engine) StrategyInfo {
 	}
 
 	// Engine state from Setup.
-	if e.schedule != nil {
-		info.Schedule = e.schedule.ScheduleString
+	if eng.schedule != nil {
+		info.Schedule = eng.schedule.ScheduleString
 	}
-	if e.benchmark != (asset.Asset{}) {
-		info.Benchmark = e.benchmark.Ticker
+
+	if eng.benchmark != (asset.Asset{}) {
+		info.Benchmark = eng.benchmark.Ticker
 	}
-	if e.riskFree != (asset.Asset{}) {
-		info.RiskFree = e.riskFree.Ticker
+
+	if eng.riskFree != (asset.Asset{}) {
+		info.RiskFree = eng.riskFree.Ticker
 	}
 
 	// Parameters and suggestions.
-	params := StrategyParameters(e.strategy)
+	params := StrategyParameters(eng.strategy)
 	info.Parameters = make([]ParameterInfo, len(params))
 	suggestions := make(map[string]map[string]string)
 
-	for i, p := range params {
+	for i, param := range params {
 		info.Parameters[i] = ParameterInfo{
-			Name:        p.Name,
-			Description: p.Description,
-			Type:        p.GoType.String(),
-			Default:     p.Default,
+			Name:        param.Name,
+			Description: param.Description,
+			Type:        param.GoType.String(),
+			Default:     param.Default,
 		}
 
-		for sugName, sugVal := range p.Suggestions {
+		for sugName, sugVal := range param.Suggestions {
 			if suggestions[sugName] == nil {
 				suggestions[sugName] = make(map[string]string)
 			}
-			suggestions[sugName][p.Name] = sugVal
+
+			suggestions[sugName][param.Name] = sugVal
 		}
 	}
 

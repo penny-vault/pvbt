@@ -24,10 +24,12 @@ func annualizationFactor(times []time.Time) float64 {
 	if len(times) < 2 {
 		return 252 // default daily
 	}
+
 	avgDays := times[len(times)-1].Sub(times[0]).Hours() / 24 / float64(len(times)-1)
 	if avgDays > 20 {
 		return 12 // monthly
 	}
+
 	return 252 // daily
 }
 
@@ -47,37 +49,44 @@ func roundTrips(txns []Transaction) ([]roundTrip, float64) {
 	}
 
 	openLots := make(map[string][]openLot) // keyed by CompositeFigi
-	var trips []roundTrip
-	var totalSellValue float64
 
-	for _, tx := range txns {
-		key := tx.Asset.CompositeFigi
-		switch tx.Type {
+	var (
+		trips          []roundTrip
+		totalSellValue float64
+	)
+
+	for _, txn := range txns {
+		key := txn.Asset.CompositeFigi
+		switch txn.Type {
 		case BuyTransaction:
 			openLots[key] = append(openLots[key], openLot{
-				date:  tx.Date,
-				qty:   tx.Qty,
-				price: tx.Price,
+				date:  txn.Date,
+				qty:   txn.Qty,
+				price: txn.Price,
 			})
 		case SellTransaction:
-			totalSellValue += tx.Price * tx.Qty
-			remaining := tx.Qty
+			totalSellValue += txn.Price * txn.Qty
+			remaining := txn.Qty
+
 			lots := openLots[key]
 			for len(lots) > 0 && remaining > 0 {
 				matched := lots[0].qty
 				if matched > remaining {
 					matched = remaining
 				}
-				pnl := (tx.Price - lots[0].price) * matched
-				days := tx.Date.Sub(lots[0].date).Hours() / 24.0
+
+				pnl := (txn.Price - lots[0].price) * matched
+				days := txn.Date.Sub(lots[0].date).Hours() / 24.0
 				trips = append(trips, roundTrip{pnl: pnl, holdDays: days})
 
 				lots[0].qty -= matched
 				remaining -= matched
+
 				if lots[0].qty == 0 {
 					lots = lots[1:]
 				}
 			}
+
 			openLots[key] = lots
 		}
 	}
@@ -97,45 +106,50 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 
 	lots := make(map[string][]lot) // keyed by CompositeFigi
 
-	for _, tx := range txns {
-		key := tx.Asset.CompositeFigi
-		switch tx.Type {
+	for _, txn := range txns {
+		key := txn.Asset.CompositeFigi
+		switch txn.Type {
 		case BuyTransaction:
 			lots[key] = append(lots[key], lot{
-				date:  tx.Date,
-				qty:   tx.Qty,
-				price: tx.Price,
+				date:  txn.Date,
+				qty:   txn.Qty,
+				price: txn.Price,
 			})
 		case SellTransaction:
-			remaining := tx.Qty
-			ll := lots[key]
-			i := 0
-			for i < len(ll) && remaining > 0 {
-				matched := ll[i].qty
+			remaining := txn.Qty
+			lotList := lots[key]
+
+			lotIdx := 0
+			for lotIdx < len(lotList) && remaining > 0 {
+				matched := lotList[lotIdx].qty
 				if matched > remaining {
 					matched = remaining
 				}
-				gain := (tx.Price - ll[i].price) * matched
-				holdingDays := tx.Date.Sub(ll[i].date).Hours() / 24
+
+				gain := (txn.Price - lotList[lotIdx].price) * matched
+
+				holdingDays := txn.Date.Sub(lotList[lotIdx].date).Hours() / 24
 				if holdingDays > 365 {
 					ltcg += gain
 				} else {
 					stcg += gain
 				}
-				if ll[i].qty <= remaining {
-					remaining -= ll[i].qty
-					i++
+
+				if lotList[lotIdx].qty <= remaining {
+					remaining -= lotList[lotIdx].qty
+					lotIdx++
 				} else {
-					ll[i].qty -= remaining
+					lotList[lotIdx].qty -= remaining
 					remaining = 0
 				}
 			}
-			lots[key] = ll[i:]
+
+			lots[key] = lotList[lotIdx:]
 		case DividendTransaction:
-			if tx.Qualified {
-				qualDiv += tx.Amount
+			if txn.Qualified {
+				qualDiv += txn.Amount
 			} else {
-				nonQualDiv += tx.Amount
+				nonQualDiv += txn.Amount
 			}
 		}
 	}

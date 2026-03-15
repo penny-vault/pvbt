@@ -104,27 +104,27 @@ const (
 	Deposits              Metric = "Deposits"
 	TaxLiabilities        Metric = "TaxLiabilities"
 
-	Equity                                Metric = "Equity"
-	EquityAvg                             Metric = "EquityAvg"
-	AccumulatedOtherComprehensiveIncome   Metric = "AccumulatedOtherComprehensiveIncome"
-	AccumulatedRetainedEarningsDeficit    Metric = "AccumulatedRetainedEarningsDeficit"
+	Equity                              Metric = "Equity"
+	EquityAvg                           Metric = "EquityAvg"
+	AccumulatedOtherComprehensiveIncome Metric = "AccumulatedOtherComprehensiveIncome"
+	AccumulatedRetainedEarningsDeficit  Metric = "AccumulatedRetainedEarningsDeficit"
 )
 
 // Cash flow metrics (fundamental table).
 const (
-	FreeCashFlow             Metric = "FreeCashFlow"
-	NetCashFlow              Metric = "NetCashFlow"
+	FreeCashFlow              Metric = "FreeCashFlow"
+	NetCashFlow               Metric = "NetCashFlow"
 	NetCashFlowFromOperations Metric = "NetCashFlowFromOperations"
 	NetCashFlowFromInvesting  Metric = "NetCashFlowFromInvesting"
 	NetCashFlowFromFinancing  Metric = "NetCashFlowFromFinancing"
-	NetCashFlowBusiness      Metric = "NetCashFlowBusiness"
-	NetCashFlowCommon        Metric = "NetCashFlowCommon"
-	NetCashFlowDebt          Metric = "NetCashFlowDebt"
-	NetCashFlowDividend      Metric = "NetCashFlowDividend"
-	NetCashFlowInvest        Metric = "NetCashFlowInvest"
-	NetCashFlowFx            Metric = "NetCashFlowFx"
-	CapitalExpenditure       Metric = "CapitalExpenditure"
-	DepreciationAmortization Metric = "DepreciationAmortization"
+	NetCashFlowBusiness       Metric = "NetCashFlowBusiness"
+	NetCashFlowCommon         Metric = "NetCashFlowCommon"
+	NetCashFlowDebt           Metric = "NetCashFlowDebt"
+	NetCashFlowDividend       Metric = "NetCashFlowDividend"
+	NetCashFlowInvest         Metric = "NetCashFlowInvest"
+	NetCashFlowFx             Metric = "NetCashFlowFx"
+	CapitalExpenditure        Metric = "CapitalExpenditure"
+	DepreciationAmortization  Metric = "DepreciationAmortization"
 )
 
 // Per-share and ratio metrics (fundamental table).
@@ -145,26 +145,26 @@ const (
 
 // Margin and return ratios (fundamental table).
 const (
-	GrossMargin    Metric = "GrossMargin"
-	EBITDAMargin   Metric = "EBITDAMargin"
-	ProfitMargin   Metric = "ProfitMargin"
-	ROA            Metric = "ROA"
-	ROE            Metric = "ROE"
-	ROIC           Metric = "ROIC"
-	ReturnOnSales  Metric = "ReturnOnSales"
-	AssetTurnover  Metric = "AssetTurnover"
-	CurrentRatio   Metric = "CurrentRatio"
-	DebtToEquity   Metric = "DebtToEquity"
-	DividendYield  Metric = "DividendYield"
-	PayoutRatio    Metric = "PayoutRatio"
+	GrossMargin   Metric = "GrossMargin"
+	EBITDAMargin  Metric = "EBITDAMargin"
+	ProfitMargin  Metric = "ProfitMargin"
+	ROA           Metric = "ROA"
+	ROE           Metric = "ROE"
+	ROIC          Metric = "ROIC"
+	ReturnOnSales Metric = "ReturnOnSales"
+	AssetTurnover Metric = "AssetTurnover"
+	CurrentRatio  Metric = "CurrentRatio"
+	DebtToEquity  Metric = "DebtToEquity"
+	DividendYield Metric = "DividendYield"
+	PayoutRatio   Metric = "PayoutRatio"
 )
 
 // Invested capital metrics (fundamental table).
 const (
-	InvestedCapital    Metric = "InvestedCapital"
-	InvestedCapitalAvg Metric = "InvestedCapitalAvg"
-	TangibleAssetValue Metric = "TangibleAssetValue"
-	WorkingCapital     Metric = "WorkingCapital"
+	InvestedCapital      Metric = "InvestedCapital"
+	InvestedCapitalAvg   Metric = "InvestedCapitalAvg"
+	TangibleAssetValue   Metric = "TangibleAssetValue"
+	WorkingCapital       Metric = "WorkingCapital"
 	MarketCapFundamental Metric = "MarketCapFundamental"
 )
 

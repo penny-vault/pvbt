@@ -32,16 +32,18 @@ func (tradeGainLossRatio) Description() string {
 func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
 	trips, _ := roundTrips(a.Transactions())
 
-	var wins, losses int
-	var sumWin, sumLoss float64
+	var (
+		wins, losses    int
+		sumWin, sumLoss float64
+	)
 
-	for _, rt := range trips {
-		if rt.pnl > 0 {
+	for _, roundTrip := range trips {
+		if roundTrip.pnl > 0 {
 			wins++
-			sumWin += rt.pnl
-		} else if rt.pnl < 0 {
+			sumWin += roundTrip.pnl
+		} else if roundTrip.pnl < 0 {
 			losses++
-			sumLoss += rt.pnl
+			sumLoss += roundTrip.pnl
 		}
 	}
 
@@ -55,7 +57,9 @@ func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
 	return avgWin / math.Abs(avgLoss), nil
 }
 
-func (tradeGainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (tradeGainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // TradeGainLossRatio is the average winning trade PnL divided by the average
 // losing trade PnL, computed from FIFO-matched round-trip trades.

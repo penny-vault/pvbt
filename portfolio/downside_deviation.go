@@ -35,20 +35,25 @@ func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
+
 	perfDF := pd.Window(window)
 	returns := perfDF.Pct().Drop(math.NaN())
+
 	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
 	if er.Len() == 0 {
 		return 0, nil
 	}
+
 	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Filter to only negative excess returns.
 	var neg []float64
+
 	for _, v := range erCol {
 		if v < 0 {
 			neg = append(neg, v)
@@ -60,6 +65,7 @@ func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
 	}
 
 	af := annualizationFactor(perfDF.Times())
+
 	return stat.StdDev(neg, nil) * math.Sqrt(af), nil
 }
 

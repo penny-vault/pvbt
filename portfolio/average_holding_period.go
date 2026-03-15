@@ -40,7 +40,9 @@ func (averageHoldingPeriod) Compute(a *Account, _ *Period) (float64, error) {
 	return sumHold / float64(len(trips)), nil
 }
 
-func (averageHoldingPeriod) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (averageHoldingPeriod) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+	return nil, nil
+}
 
 // AverageHoldingPeriod is the average number of days positions are held,
 // computed from FIFO-matched round-trip trades.

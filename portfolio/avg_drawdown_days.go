@@ -30,16 +30,19 @@ func (avgDrawdownDays) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-	if eq.Len() < 2 {
+
+	equity := pd.Window(window).Metrics(data.PortfolioEquity)
+	if equity.Len() < 2 {
 		return 0, nil
 	}
-	peak := eq.CumMax()
-	dd := eq.Sub(peak).Div(peak)
+
+	peak := equity.CumMax()
+	dd := equity.Sub(peak).Div(peak)
 	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Count drawdown episodes and their durations.
 	var durations []int
+
 	current := 0
 	for _, v := range ddCol {
 		if v < 0 {

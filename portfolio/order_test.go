@@ -31,15 +31,15 @@ import (
 // mockBroker records submitted orders and returns pre-configured fills.
 type mockBroker struct {
 	submitted    []broker.Order
-	fills        [][]broker.Fill              // one []Fill per Submit call, consumed in order
+	fills        [][]broker.Fill               // one []Fill per Submit call, consumed in order
 	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
-	defaultFill  *broker.Fill                 // when set, return a fill at this price/time with order qty
-	submitErr    error                        // when set, Submit returns this error immediately
+	defaultFill  *broker.Fill                  // when set, return a fill at this price/time with order qty
+	submitErr    error                         // when set, Submit returns this error immediately
 	callIdx      int
 }
 
 func (m *mockBroker) Connect(context.Context) error { return nil }
-func (m *mockBroker) Close() error                   { return nil }
+func (m *mockBroker) Close() error                  { return nil }
 func (m *mockBroker) Cancel(_ context.Context, _ string) error {
 	return nil
 }

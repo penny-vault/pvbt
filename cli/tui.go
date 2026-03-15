@@ -80,6 +80,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tickMsg:
 		m.equityDates = append(m.equityDates, msg.date)
 		m.equityValues = append(m.equityValues, msg.value)
+
 		m.portfolioValue = msg.value
 		if len(m.equityValues) > 1 && m.equityValues[0] != 0 {
 			m.totalReturn = (msg.value - m.equityValues[0]) / m.equityValues[0]
@@ -96,6 +97,7 @@ func (m tuiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.done = true
 		return m, tea.Quit
 	}
+
 	return m, nil
 }
 
@@ -105,6 +107,7 @@ func (m tuiModel) View() string {
 	}
 
 	metricsWidth := 28
+
 	chartWidth := m.width - metricsWidth - 3
 	if chartWidth < 20 {
 		chartWidth = 20
@@ -112,6 +115,7 @@ func (m tuiModel) View() string {
 
 	logHeight := 6
 	progressHeight := 1
+
 	chartHeight := m.height - logHeight - progressHeight - 4
 	if chartHeight < 5 {
 		chartHeight = 5
@@ -149,12 +153,13 @@ func (m tuiModel) renderChart(width, height int) string {
 
 	// simple text-based chart
 	minVal, maxVal := m.equityValues[0], m.equityValues[0]
-	for _, v := range m.equityValues {
-		if v < minVal {
-			minVal = v
+	for _, equity := range m.equityValues {
+		if equity < minVal {
+			minVal = equity
 		}
-		if v > maxVal {
-			maxVal = v
+
+		if equity > maxVal {
+			maxVal = equity
 		}
 	}
 
@@ -162,6 +167,7 @@ func (m tuiModel) renderChart(width, height int) string {
 	if chartH < 1 {
 		chartH = 1
 	}
+
 	chartW := width - 2
 	if chartW < 1 {
 		chartW = 1
@@ -182,6 +188,7 @@ func (m tuiModel) renderChart(width, height int) string {
 	for i := 0; i < len(m.equityValues); i += step {
 		points = append(points, m.equityValues[i])
 	}
+
 	if len(points) > chartW {
 		points = points[:chartW]
 	}
@@ -190,7 +197,9 @@ func (m tuiModel) renderChart(width, height int) string {
 	lines := make([]string, chartH)
 	for row := 0; row < chartH; row++ {
 		threshold := maxVal - (float64(row)/float64(chartH-1))*valRange
+
 		var sb strings.Builder
+
 		for _, p := range points {
 			if p >= threshold {
 				sb.WriteRune('\u2588')
@@ -198,10 +207,12 @@ func (m tuiModel) renderChart(width, height int) string {
 				sb.WriteRune(' ')
 			}
 		}
+
 		lines[row] = sb.String()
 	}
 
 	content := title + "\n" + strings.Join(lines, "\n")
+
 	return border.Render(content)
 }
 
@@ -255,6 +266,7 @@ func (m tuiModel) renderLogs(width, height int) string {
 	}
 
 	content := title + "\n" + strings.Join(visible, "\n")
+
 	return border.Render(content)
 }
 
@@ -264,16 +276,19 @@ func (m tuiModel) renderProgress(width int) string {
 	}
 
 	pct := float64(m.current) / float64(m.total)
+
 	barWidth := width - 20
 	if barWidth < 10 {
 		barWidth = 10
 	}
+
 	filled := int(pct * float64(barWidth))
 	if filled > barWidth {
 		filled = barWidth
 	}
 
 	bar := strings.Repeat("=", filled) + strings.Repeat("-", barWidth-filled)
+
 	return fmt.Sprintf(" %s  %3.0f%%  %d/%d", bar, pct*100, m.current, m.total)
 }
 
@@ -288,14 +303,15 @@ type tuiLevelWriter struct {
 	program *tea.Program
 }
 
-func (w *tuiLevelWriter) Write(p []byte) (n int, err error) {
-	msg := strings.TrimRight(string(p), "\n")
+func (w *tuiLevelWriter) Write(buf []byte) (n int, err error) {
+	msg := strings.TrimRight(string(buf), "\n")
 	if w.program != nil {
 		w.program.Send(logMsg(msg))
 	}
-	return len(p), nil
+
+	return len(buf), nil
 }
 
-func (w *tuiLevelWriter) WriteLevel(_ zerolog.Level, p []byte) (n int, err error) {
-	return w.Write(p)
+func (w *tuiLevelWriter) WriteLevel(_ zerolog.Level, buf []byte) (n int, err error) {
+	return w.Write(buf)
 }

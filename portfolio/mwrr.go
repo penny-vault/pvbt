@@ -35,13 +35,15 @@ func (mwrr) Description() string {
 // positive (investor receives). The final portfolio value is added as a
 // positive terminal cash flow. Newton-Raphson is used to find the rate r
 // such that sum(cf_i / (1+r)^(t_i/365)) = 0.
-func (mwrr) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (mwrr) Compute(acct *Account, window *Period) (float64, error) {
+	perfData := acct.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	equity := pd.Column(portfolioAsset, data.PortfolioEquity)
-	times := pd.Times()
+
+	equity := perfData.Column(portfolioAsset, data.PortfolioEquity)
+	times := perfData.Times()
+
 	if len(equity) < 2 {
 		return 0, nil
 	}
@@ -56,23 +58,25 @@ func (mwrr) Compute(a *Account, window *Period) (float64, error) {
 
 	startDate := times[0]
 
-	for _, tx := range a.Transactions() {
-		switch tx.Type {
+	for _, txn := range acct.Transactions() {
+		switch txn.Type {
 		case DepositTransaction:
 			// From investor perspective, deposits are outflows (negative).
-			d := tx.Date
+			d := txn.Date
 			if d.IsZero() {
 				d = startDate
 			}
-			flows = append(flows, cashFlow{date: d, amount: -tx.Amount})
+
+			flows = append(flows, cashFlow{date: d, amount: -txn.Amount})
 		case WithdrawalTransaction:
 			// Withdrawals have negative Amount in the tx log; from investor
 			// perspective they are inflows (positive), so negate again.
-			d := tx.Date
+			d := txn.Date
 			if d.IsZero() {
 				d = startDate
 			}
-			flows = append(flows, cashFlow{date: d, amount: -tx.Amount})
+
+			flows = append(flows, cashFlow{date: d, amount: -txn.Amount})
 		}
 	}
 
@@ -89,50 +93,57 @@ func (mwrr) Compute(a *Account, window *Period) (float64, error) {
 	flows = append(flows, cashFlow{date: endDate, amount: endValue})
 
 	// Reference date for day offsets.
-	t0 := flows[0].date
+	referenceDate := flows[0].date
 
-	// NPV(r) = sum(cf_i / (1+r)^(d_i/365))
-	npv := func(r float64) float64 {
+	// NPV(rate) = sum(cf_i / (1+rate)^(d_i/365))
+	npv := func(rate float64) float64 {
 		sum := 0.0
+
 		for _, cf := range flows {
-			days := cf.date.Sub(t0).Hours() / 24.0
-			sum += cf.amount / math.Pow(1+r, days/365.0)
+			days := cf.date.Sub(referenceDate).Hours() / 24.0
+			sum += cf.amount / math.Pow(1+rate, days/365.0)
 		}
+
 		return sum
 	}
 
-	// NPV'(r) = sum(-cf_i * (d_i/365) / (1+r)^(d_i/365 + 1))
-	npvDeriv := func(r float64) float64 {
+	// NPV'(rate) = sum(-cf_i * (d_i/365) / (1+rate)^(d_i/365 + 1))
+	npvDeriv := func(rate float64) float64 {
 		sum := 0.0
+
 		for _, cf := range flows {
-			days := cf.date.Sub(t0).Hours() / 24.0
+			days := cf.date.Sub(referenceDate).Hours() / 24.0
 			exp := days / 365.0
-			sum += -cf.amount * exp / math.Pow(1+r, exp+1)
+			sum += -cf.amount * exp / math.Pow(1+rate, exp+1)
 		}
+
 		return sum
 	}
 
 	// Newton-Raphson with initial guess of 10%.
-	r := 0.10
-	for i := 0; i < 100; i++ {
-		f := npv(r)
-		fp := npvDeriv(r)
+	guessRate := 0.10
+	for iter := 0; iter < 100; iter++ {
+		npvValue := npv(guessRate)
+
+		fp := npvDeriv(guessRate)
 		if math.Abs(fp) < 1e-15 {
 			break
 		}
-		rNew := r - f/fp
-		if math.Abs(rNew-r) < 1e-12 {
-			r = rNew
+
+		rNew := guessRate - npvValue/fp
+		if math.Abs(rNew-guessRate) < 1e-12 {
+			guessRate = rNew
 			break
 		}
-		r = rNew
+
+		guessRate = rNew
 	}
 
-	if math.IsNaN(r) || math.IsInf(r, 0) {
+	if math.IsNaN(guessRate) || math.IsInf(guessRate, 0) {
 		return 0, nil
 	}
 
-	return r, nil
+	return guessRate, nil
 }
 
 // ComputeSeries returns nil; MWRR is a single scalar metric.

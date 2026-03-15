@@ -73,17 +73,17 @@ func WithConfigFile(path string) PVDataOption {
 // If pool is nil the provider reads ~/.pvdata.toml (or the path set via
 // WithConfigFile) for the connection URL and creates its own pool.
 func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvider, error) {
-	o := pvdataOptions{
+	options := pvdataOptions{
 		dimension: "ARQ",
 	}
 	for _, fn := range opts {
-		fn(&o)
+		fn(&options)
 	}
 
 	ownsPool := false
 
 	if pool == nil {
-		cfgPath := o.configFile
+		cfgPath := options.configFile
 		if cfgPath == "" {
 			home, err := os.UserHomeDir()
 			if err != nil {
@@ -118,7 +118,7 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 	return &PVDataProvider{
 		pool:      pool,
 		ownsPool:  ownsPool,
-		dimension: o.dimension,
+		dimension: options.dimension,
 	}, nil
 }
 
@@ -140,17 +140,17 @@ func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.
 	}
 	defer conn.Release()
 
-	var a asset.Asset
+	var foundAsset asset.Asset
 
 	err = conn.QueryRow(ctx,
 		"SELECT ticker, composite_figi FROM assets WHERE ticker = $1 AND active = true LIMIT 1",
 		ticker,
-	).Scan(&a.Ticker, &a.CompositeFigi)
+	).Scan(&foundAsset.Ticker, &foundAsset.CompositeFigi)
 	if err != nil {
 		return asset.Asset{}, fmt.Errorf("pvdata: lookup asset %q: %w", ticker, err)
 	}
 
-	return a, nil
+	return foundAsset, nil
 }
 
 // Assets returns all known assets from the database.
@@ -189,13 +189,13 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	// group requested metrics by view
 	viewMetrics := make(map[string][]Metric)
 
-	for _, m := range req.Metrics {
-		v, ok := metricView[m]
+	for _, metric := range req.Metrics {
+		v, ok := metricView[metric]
 		if !ok {
 			continue
 		}
 
-		viewMetrics[v] = append(viewMetrics[v], m)
+		viewMetrics[v] = append(viewMetrics[v], metric)
 	}
 
 	// collect composite figis for the WHERE IN clause
@@ -217,13 +217,13 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	timeSet := make(map[int64]time.Time)
 
 	ensureCol := func(figi string, m Metric) map[int64]float64 {
-		k := colKey{figi, m}
-		if c, ok := colData[k]; ok {
+		columnKey := colKey{figi, m}
+		if c, ok := colData[columnKey]; ok {
 			return c
 		}
 
 		c := make(map[int64]float64)
-		colData[k] = c
+		colData[columnKey] = c
 
 		return c
 	}
@@ -281,10 +281,10 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		timeIdx[t.Unix()] = i
 	}
 
-	T := len(times)
+	numTimes := len(times)
 
 	// assemble the data slab
-	data := make([]float64, T*len(req.Assets)*len(req.Metrics))
+	data := make([]float64, numTimes*len(req.Assets)*len(req.Metrics))
 	for i := range data {
 		data[i] = math.NaN()
 	}
@@ -301,20 +301,20 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		aIdx[a.CompositeFigi] = i
 	}
 
-	M := len(req.Metrics)
+	numMetrics := len(req.Metrics)
 
-	for k, vals := range colData {
-		ai, ok := aIdx[k.figi]
-		if !ok {
+	for columnKey, vals := range colData {
+		assetIdx, found := aIdx[columnKey.figi]
+		if !found {
 			continue
 		}
 
-		mi, ok := mIdx[k.metric]
-		if !ok {
+		mi, found := mIdx[columnKey.metric]
+		if !found {
 			continue
 		}
 
-		colStart := (ai*M + mi) * T
+		colStart := (assetIdx*numMetrics + mi) * numTimes
 
 		for sec, v := range vals {
 			ti := timeIdx[sec]
@@ -452,13 +452,13 @@ func (p *PVDataProvider) fetchMetrics(
 
 	for rows.Next() {
 		var (
-			figi                         string
-			eventDate                    time.Time
-			marketCap, ev                int64
-			pe, pb, ps, evEbit, evEbitda float64
-			sp500                        bool
+			figi                                                         string
+			eventDate                                                    time.Time
+			marketCap, enterpriseValue                                   int64
+			priceToEarnings, priceToBook, priceToSales, evEbit, evEbitda float64
+			sp500                                                        bool
 		)
-		if err := rows.Scan(&figi, &eventDate, &marketCap, &ev, &pe, &pb, &ps, &evEbit, &evEbitda, &sp500); err != nil {
+		if err := rows.Scan(&figi, &eventDate, &marketCap, &enterpriseValue, &priceToEarnings, &priceToBook, &priceToSales, &evEbit, &evEbitda, &sp500); err != nil {
 			return fmt.Errorf("pvdata: scan metrics row: %w", err)
 		}
 
@@ -471,19 +471,19 @@ func (p *PVDataProvider) fetchMetrics(
 		}
 
 		if want[EnterpriseValue] {
-			ensureCol(figi, EnterpriseValue)[sec] = float64(ev)
+			ensureCol(figi, EnterpriseValue)[sec] = float64(enterpriseValue)
 		}
 
 		if want[PE] {
-			ensureCol(figi, PE)[sec] = pe
+			ensureCol(figi, PE)[sec] = priceToEarnings
 		}
 
 		if want[PB] {
-			ensureCol(figi, PB)[sec] = pb
+			ensureCol(figi, PB)[sec] = priceToBook
 		}
 
 		if want[PS] {
-			ensureCol(figi, PS)[sec] = ps
+			ensureCol(figi, PS)[sec] = priceToSales
 		}
 
 		if want[EVtoEBIT] {
@@ -522,14 +522,14 @@ func (p *PVDataProvider) fetchFundamentals(
 		metricOrder []Metric
 	)
 
-	for _, m := range metrics {
-		col, ok := metricColumn[m]
+	for _, metric := range metrics {
+		col, ok := metricColumn[metric]
 		if !ok {
 			continue
 		}
 
 		sqlCols = append(sqlCols, col)
-		metricOrder = append(metricOrder, m)
+		metricOrder = append(metricOrder, metric)
 	}
 
 	if len(sqlCols) == 0 {
@@ -584,7 +584,7 @@ func (p *PVDataProvider) fetchFundamentals(
 // RatedAssets returns the set of assets whose most-recent rating (on or before t)
 // from the named analyst matches filter. It returns nil, nil when filter has no
 // values to match.
-func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, t time.Time) ([]asset.Asset, error) {
+func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, asOfDate time.Time) ([]asset.Asset, error) {
 	if len(filter.Values) == 0 {
 		return nil, nil
 	}
@@ -603,7 +603,7 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 		     ORDER BY composite_figi, event_date DESC
 		 ) sub
 		 WHERE rating = ANY($3)`,
-		analyst, t, filter.Values,
+		analyst, asOfDate, filter.Values,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("pvdata: query rated assets: %w", err)
@@ -847,7 +847,11 @@ func metricSet(ms []Metric) map[Metric]bool {
 }
 
 // eodTimestamp converts a database date to the market close timestamp (16:00 Eastern).
-func eodTimestamp(t time.Time) time.Time {
-	nyc, _ := time.LoadLocation("America/New_York")
-	return time.Date(t.Year(), t.Month(), t.Day(), 16, 0, 0, 0, nyc)
+func eodTimestamp(timestamp time.Time) time.Time {
+	nyc, err := time.LoadLocation("America/New_York")
+	if err != nil {
+		panic(fmt.Sprintf("failed to load America/New_York timezone: %v", err))
+	}
+
+	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 16, 0, 0, 0, nyc)
 }

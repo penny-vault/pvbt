@@ -27,13 +27,13 @@ import (
 // Momentum computes the percent change over the given period for each
 // asset in the universe. Returns a single-row DataFrame with one column
 // per asset containing the momentum score.
-func Momentum(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
+func Momentum(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
 	metric := data.MetricClose
 	if len(metrics) > 0 {
 		metric = metrics[0]
 	}
 
-	df, err := u.Window(ctx, period, metric)
+	df, err := assetUniverse.Window(ctx, period, metric)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("Momentum: %w", err))
 	}
@@ -42,5 +42,5 @@ func Momentum(ctx context.Context, u universe.Universe, period portfolio.Period,
 		return data.WithErr(fmt.Errorf("Momentum: need at least 2 data points, got %d", df.Len()))
 	}
 
-	return df.Pct(df.Len() - 1).Last().RenameMetric(metric, MomentumSignal)
+	return df.Pct(df.Len()-1).Last().RenameMetric(metric, MomentumSignal)
 }

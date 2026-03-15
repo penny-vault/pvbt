@@ -197,7 +197,7 @@ var _ = Describe("MaxAboveZero", func() {
 			data.Daily,
 			[]float64{
 				10, -5, // SPY
-				5, -3,  // AAPL
+				5, -3, // AAPL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())

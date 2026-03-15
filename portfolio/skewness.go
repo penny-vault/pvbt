@@ -35,31 +35,35 @@ func (skewness) Compute(a *Account, window *Period) (float64, error) {
 	if pd == nil {
 		return 0, nil
 	}
+
 	eq := pd.Window(window).Metrics(data.PortfolioEquity)
+
 	r := eq.Pct().Drop(math.NaN())
 	if r.Len() == 0 {
 		return 0, nil
 	}
+
 	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
-	n := len(col)
-	if n < 3 {
+	numValues := len(col)
+	if numValues < 3 {
 		return 0, nil
 	}
 
-	s := stat.StdDev(col, nil)
-	if s == 0 {
+	stdDev := stat.StdDev(col, nil)
+	if stdDev == 0 {
 		return 0, nil
 	}
 
-	m := stat.Mean(col, nil)
+	meanVal := stat.Mean(col, nil)
 	sum := 0.0
+
 	for _, v := range col {
-		d := v - m
+		d := v - meanVal
 		sum += d * d * d
 	}
 
-	return sum / float64(n) / (s * s * s), nil
+	return sum / float64(numValues) / (stdDev * stdDev * stdDev), nil
 }
 
 func (skewness) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }

@@ -31,32 +31,36 @@ func (smartSharpe) Description() string {
 }
 
 func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+	perfData := a.PerfData()
+	if perfData == nil {
 		return 0, nil
 	}
-	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
+
+	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
-	perfDF := pd.Window(window)
+
+	perfDF := perfData.Window(window)
 	returns := perfDF.Pct().Drop(math.NaN())
+
 	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
 	if er.Len() == 0 {
 		return 0, nil
 	}
+
 	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
 	if len(erCol) < 2 {
 		return 0, nil
 	}
 
-	sd := stat.StdDev(erCol, nil)
-	if sd == 0 || math.IsNaN(sd) {
+	stdDev := stat.StdDev(erCol, nil)
+	if stdDev == 0 || math.IsNaN(stdDev) {
 		return 0, nil
 	}
 
 	af := annualizationFactor(perfDF.Times())
-	rawSharpe := stat.Mean(erCol, nil) / sd * math.Sqrt(af)
+	rawSharpe := stat.Mean(erCol, nil) / stdDev * math.Sqrt(af)
 
 	penalty := autocorrelationPenalty(erCol)
 	if penalty == 0 {
@@ -71,19 +75,20 @@ func (smartSharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) 
 // autocorrelationPenalty computes the Lo (2002) correction factor:
 // sqrt(1 + 2*sum(rho_k)) where rho_k is the autocorrelation at lag k.
 // Uses lags 1 through min(n/4, 6) to avoid noise from high-lag estimates.
-func autocorrelationPenalty(r []float64) float64 {
-	n := len(r)
-	if n < 4 {
+func autocorrelationPenalty(returns []float64) float64 {
+	count := len(returns)
+	if count < 4 {
 		return 1
 	}
 
-	m := stat.Mean(r, nil)
-	maxLag := min(n/4, 6)
+	meanReturn := stat.Mean(returns, nil)
+	maxLag := min(count/4, 6)
 
 	// Compute variance (denominator for autocorrelation).
 	var varSum float64
-	for _, v := range r {
-		d := v - m
+
+	for _, v := range returns {
+		d := v - meanReturn
 		varSum += d * d
 	}
 
@@ -93,11 +98,13 @@ func autocorrelationPenalty(r []float64) float64 {
 
 	// Sum autocorrelations at lags 1..maxLag.
 	var acSum float64
+
 	for lag := 1; lag <= maxLag; lag++ {
 		var covSum float64
-		for i := lag; i < n; i++ {
-			covSum += (r[i] - m) * (r[i-lag] - m)
+		for idx := lag; idx < count; idx++ {
+			covSum += (returns[idx] - meanReturn) * (returns[idx-lag] - meanReturn)
 		}
+
 		acSum += covSum / varSum
 	}
 

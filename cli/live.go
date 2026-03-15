@@ -24,7 +24,9 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 
 	registerStrategyFlags(cmd, strategy)
 
-	viper.BindPFlags(cmd.Flags())
+	if err := viper.BindPFlags(cmd.Flags()); err != nil {
+		log.Fatal().Err(err).Msg("failed to bind live flags")
+	}
 
 	return cmd
 }
@@ -59,7 +61,9 @@ func runLive(strategy engine.Strategy) error {
 	}
 
 	for p := range ch {
-		printSummary(p)
+		if err := printSummary(p); err != nil {
+			return fmt.Errorf("printing summary: %w", err)
+		}
 	}
 
 	return nil

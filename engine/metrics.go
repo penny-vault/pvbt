@@ -37,27 +37,28 @@ func standardWindows() []portfolio.Period {
 // computeMetrics computes all registered metrics on the account for
 // the given date across all standard windows plus since-inception.
 func computeMetrics(acct *portfolio.Account, date time.Time) {
-	for _, m := range acct.RegisteredMetrics() {
+	for _, metric := range acct.RegisteredMetrics() {
 		// Since inception (nil window).
-		val, err := m.Compute(acct, nil)
+		val, err := metric.Compute(acct, nil)
 		if err == nil {
 			acct.AppendMetric(portfolio.MetricRow{
 				Date:   date,
-				Name:   m.Name(),
+				Name:   metric.Name(),
 				Window: "since_inception",
 				Value:  val,
 			})
 		}
 
 		// Standard windows.
-		for _, w := range standardWindows() {
-			wCopy := w
-			val, err := m.Compute(acct, &wCopy)
+		for _, window := range standardWindows() {
+			wCopy := window
+
+			val, err := metric.Compute(acct, &wCopy)
 			if err == nil {
 				acct.AppendMetric(portfolio.MetricRow{
 					Date:   date,
-					Name:   m.Name(),
-					Window: windowLabel(w),
+					Name:   metric.Name(),
+					Window: windowLabel(window),
 					Value:  val,
 				})
 			}
@@ -66,14 +67,14 @@ func computeMetrics(acct *portfolio.Account, date time.Time) {
 }
 
 // windowLabel returns a human-readable label for a Period.
-func windowLabel(p portfolio.Period) string {
-	switch p.Unit {
+func windowLabel(period portfolio.Period) string {
+	switch period.Unit {
 	case portfolio.UnitYear:
-		return fmt.Sprintf("%dyr", p.N)
+		return fmt.Sprintf("%dyr", period.N)
 	case portfolio.UnitMonth:
-		return fmt.Sprintf("%dmo", p.N)
+		return fmt.Sprintf("%dmo", period.N)
 	case portfolio.UnitDay:
-		return fmt.Sprintf("%dd", p.N)
+		return fmt.Sprintf("%dd", period.N)
 	case portfolio.UnitYTD:
 		return "ytd"
 	case portfolio.UnitMTD:

@@ -15,8 +15,18 @@ linters:
   enable:
     - wsl_v5
     - zerologlint
+    - varnamelen
 
   settings:
+    errcheck:
+      check-blank: true
+    varnamelen:
+      min-name-length: 2
+      ignore-names:
+        - db
+        - df
+        - ii
+        - sb
     wsl_v5:
       allow-first-in-block: true
       allow-whole-block: false

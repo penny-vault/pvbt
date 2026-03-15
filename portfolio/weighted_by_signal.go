@@ -39,32 +39,38 @@ func WeightedBySignal(df *data.DataFrame, metric data.Metric) (PortfolioPlan, er
 
 	// Verify Selected column exists.
 	hasSelected := false
+
 	for _, m := range df.MetricList() {
 		if m == Selected {
 			hasSelected = true
 			break
 		}
 	}
+
 	if !hasSelected {
 		return nil, fmt.Errorf("WeightedBySignal: DataFrame missing %q column", Selected)
 	}
 
 	plan := make(PortfolioPlan, len(times))
 
-	for i, t := range times {
+	for timeIdx, timestamp := range times {
 		// Collect selected assets and their signal values.
-		var chosen []asset.Asset
-		var values []float64
+		var (
+			chosen []asset.Asset
+			values []float64
+		)
+
 		sum := 0.0
 
-		for _, a := range assets {
-			sel := df.ValueAt(a, Selected, t)
+		for _, currentAsset := range assets {
+			sel := df.ValueAt(currentAsset, Selected, timestamp)
 			if sel <= 0 || math.IsNaN(sel) {
 				continue
 			}
-			chosen = append(chosen, a)
 
-			v := df.ValueAt(a, metric, t)
+			chosen = append(chosen, currentAsset)
+
+			v := df.ValueAt(currentAsset, metric, timestamp)
 			if math.IsNaN(v) || v <= 0 {
 				values = append(values, 0)
 			} else {
@@ -78,19 +84,19 @@ func WeightedBySignal(df *data.DataFrame, metric data.Metric) (PortfolioPlan, er
 		if sum == 0 && len(chosen) > 0 {
 			// Fall back to equal weight among selected assets.
 			w := 1.0 / float64(len(chosen))
-			for _, a := range chosen {
-				members[a] = w
+			for _, currentAsset := range chosen {
+				members[currentAsset] = w
 			}
 		} else {
-			for j, a := range chosen {
+			for j, currentAsset := range chosen {
 				w := values[j] / sum
 				if w > 0 {
-					members[a] = w
+					members[currentAsset] = w
 				}
 			}
 		}
 
-		plan[i] = Allocation{Date: t, Members: members}
+		plan[timeIdx] = Allocation{Date: timestamp, Members: members}
 	}
 
 	return plan, nil

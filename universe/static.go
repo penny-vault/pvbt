@@ -42,6 +42,7 @@ func (u *StaticUniverse) Window(ctx context.Context, lookback portfolio.Period, 
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
 	}
+
 	return u.ds.Fetch(ctx, u.members, lookback, metrics)
 }
 
@@ -49,6 +50,7 @@ func (u *StaticUniverse) At(ctx context.Context, t time.Time, metrics ...data.Me
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
 	}
+
 	return u.ds.FetchAt(ctx, u.members, t, metrics)
 }
 
@@ -56,6 +58,7 @@ func (u *StaticUniverse) CurrentDate() time.Time {
 	if u.ds == nil {
 		return time.Time{}
 	}
+
 	return u.ds.CurrentDate()
 }
 
@@ -66,6 +69,7 @@ func NewStatic(tickers ...string) *StaticUniverse {
 	for i, t := range tickers {
 		members[i] = asset.Asset{Ticker: t}
 	}
+
 	return &StaticUniverse{members: members}
 }
 

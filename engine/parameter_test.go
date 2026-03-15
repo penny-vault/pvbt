@@ -41,8 +41,8 @@ type paramTestStrategy struct {
 	Label    string            `pvbt:"label" desc:"Display label" default:"hello"`
 }
 
-func (s *paramTestStrategy) Name() string                                                      { return "test" }
-func (s *paramTestStrategy) Setup(_ *engine.Engine)                                            {}
+func (s *paramTestStrategy) Name() string           { return "test" }
+func (s *paramTestStrategy) Setup(_ *engine.Engine) {}
 func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
 }

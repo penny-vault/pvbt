@@ -119,7 +119,7 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 // noScheduleStrategy omits calling e.Schedule in Setup.
 type noScheduleStrategy struct{}
 
-func (s *noScheduleStrategy) Name() string { return "noSchedule" }
+func (s *noScheduleStrategy) Name() string           { return "noSchedule" }
 func (s *noScheduleStrategy) Setup(_ *engine.Engine) {}
 func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil

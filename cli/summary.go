@@ -28,11 +28,26 @@ var (
 			MarginBottom(1)
 )
 
-func printSummary(acct portfolio.Portfolio) {
-	s, _ := acct.Summary()
-	r, _ := acct.RiskMetrics()
-	t, _ := acct.TradeMetrics()
-	w, _ := acct.WithdrawalMetrics()
+func printSummary(acct portfolio.Portfolio) error {
+	summary, err := acct.Summary()
+	if err != nil {
+		return fmt.Errorf("computing summary metrics: %w", err)
+	}
+
+	risk, err := acct.RiskMetrics()
+	if err != nil {
+		return fmt.Errorf("computing risk metrics: %w", err)
+	}
+
+	trade, err := acct.TradeMetrics()
+	if err != nil {
+		return fmt.Errorf("computing trade metrics: %w", err)
+	}
+
+	withdrawal, err := acct.WithdrawalMetrics()
+	if err != nil {
+		return fmt.Errorf("computing withdrawal metrics: %w", err)
+	}
 
 	var sb strings.Builder
 
@@ -41,52 +56,54 @@ func printSummary(acct portfolio.Portfolio) {
 
 	// Returns section
 	sb.WriteString(sectionStyle.Render(renderSection("Returns", []row{
-		{"TWRR", fmtPct(s.TWRR)},
-		{"MWRR", fmtPct(s.MWRR)},
-		{"Sharpe", fmtRatio(s.Sharpe)},
-		{"Sortino", fmtRatio(s.Sortino)},
-		{"Calmar", fmtRatio(s.Calmar)},
-		{"Max Drawdown", fmtPct(s.MaxDrawdown)},
-		{"Std Dev", fmtPct(s.StdDev)},
+		{"TWRR", fmtPct(summary.TWRR)},
+		{"MWRR", fmtPct(summary.MWRR)},
+		{"Sharpe", fmtRatio(summary.Sharpe)},
+		{"Sortino", fmtRatio(summary.Sortino)},
+		{"Calmar", fmtRatio(summary.Calmar)},
+		{"Max Drawdown", fmtPct(summary.MaxDrawdown)},
+		{"Std Dev", fmtPct(summary.StdDev)},
 	})))
 
 	// Risk section
 	sb.WriteString(sectionStyle.Render(renderSection("Risk", []row{
-		{"Beta", fmtRatio(r.Beta)},
-		{"Alpha", fmtPct(r.Alpha)},
-		{"Tracking Error", fmtPct(r.TrackingError)},
-		{"Downside Deviation", fmtPct(r.DownsideDeviation)},
-		{"Information Ratio", fmtRatio(r.InformationRatio)},
-		{"Treynor", fmtRatio(r.Treynor)},
-		{"Ulcer Index", fmtRatio(r.UlcerIndex)},
-		{"Excess Kurtosis", fmtRatio(r.ExcessKurtosis)},
-		{"Skewness", fmtRatio(r.Skewness)},
-		{"R-Squared", fmtRatio(r.RSquared)},
-		{"Value at Risk", fmtPct(r.ValueAtRisk)},
-		{"Upside Capture", fmtPct(r.UpsideCaptureRatio)},
-		{"Downside Capture", fmtPct(r.DownsideCaptureRatio)},
+		{"Beta", fmtRatio(risk.Beta)},
+		{"Alpha", fmtPct(risk.Alpha)},
+		{"Tracking Error", fmtPct(risk.TrackingError)},
+		{"Downside Deviation", fmtPct(risk.DownsideDeviation)},
+		{"Information Ratio", fmtRatio(risk.InformationRatio)},
+		{"Treynor", fmtRatio(risk.Treynor)},
+		{"Ulcer Index", fmtRatio(risk.UlcerIndex)},
+		{"Excess Kurtosis", fmtRatio(risk.ExcessKurtosis)},
+		{"Skewness", fmtRatio(risk.Skewness)},
+		{"R-Squared", fmtRatio(risk.RSquared)},
+		{"Value at Risk", fmtPct(risk.ValueAtRisk)},
+		{"Upside Capture", fmtPct(risk.UpsideCaptureRatio)},
+		{"Downside Capture", fmtPct(risk.DownsideCaptureRatio)},
 	})))
 
 	// Trading section
 	sb.WriteString(sectionStyle.Render(renderSection("Trading", []row{
-		{"Win Rate", fmtPct(t.WinRate)},
-		{"Average Win", fmtCurrency(t.AverageWin)},
-		{"Average Loss", fmtCurrency(t.AverageLoss)},
-		{"Profit Factor", fmtRatio(t.ProfitFactor)},
-		{"Avg Holding Period", fmt.Sprintf("%.0f days", t.AverageHoldingPeriod)},
-		{"Turnover", fmtPct(t.Turnover)},
-		{"Positive Periods", fmtPct(t.NPositivePeriods)},
-		{"Gain/Loss Ratio", fmtRatio(t.GainLossRatio)},
+		{"Win Rate", fmtPct(trade.WinRate)},
+		{"Average Win", fmtCurrency(trade.AverageWin)},
+		{"Average Loss", fmtCurrency(trade.AverageLoss)},
+		{"Profit Factor", fmtRatio(trade.ProfitFactor)},
+		{"Avg Holding Period", fmt.Sprintf("%.0f days", trade.AverageHoldingPeriod)},
+		{"Turnover", fmtPct(trade.Turnover)},
+		{"Positive Periods", fmtPct(trade.NPositivePeriods)},
+		{"Gain/Loss Ratio", fmtRatio(trade.GainLossRatio)},
 	})))
 
 	// Withdrawals section
 	sb.WriteString(sectionStyle.Render(renderSection("Withdrawals", []row{
-		{"Safe Withdrawal Rate", fmtPct(w.SafeWithdrawalRate)},
-		{"Perpetual Rate", fmtPct(w.PerpetualWithdrawalRate)},
-		{"Dynamic Rate", fmtPct(w.DynamicWithdrawalRate)},
+		{"Safe Withdrawal Rate", fmtPct(withdrawal.SafeWithdrawalRate)},
+		{"Perpetual Rate", fmtPct(withdrawal.PerpetualWithdrawalRate)},
+		{"Dynamic Rate", fmtPct(withdrawal.DynamicWithdrawalRate)},
 	})))
 
 	fmt.Fprint(os.Stdout, sb.String())
+
+	return nil
 }
 
 type row struct {
@@ -98,11 +115,13 @@ func renderSection(title string, rows []row) string {
 	var sb strings.Builder
 	sb.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("11")).Render(title))
 	sb.WriteString("\n")
+
 	for _, r := range rows {
 		sb.WriteString(labelStyle.Render(r.label))
 		sb.WriteString(valueStyle.Render(r.value))
 		sb.WriteString("\n")
 	}
+
 	return sb.String()
 }
 
@@ -110,6 +129,7 @@ func fmtPct(v float64) string {
 	if math.IsNaN(v) {
 		return "N/A"
 	}
+
 	return fmt.Sprintf("%.2f%%", v*100)
 }
 
@@ -121,5 +141,6 @@ func fmtRatio(v float64) string {
 	if math.IsNaN(v) {
 		return "N/A"
 	}
+
 	return fmt.Sprintf("%.3f", v)
 }

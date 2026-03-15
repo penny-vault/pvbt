@@ -31,7 +31,7 @@ type DownsampledDataFrame struct {
 	freq Frequency
 }
 
-func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame {
+func (d *DownsampledDataFrame) aggregate(reducer func([]float64) float64) *DataFrame {
 	if len(d.df.times) == 0 {
 		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
@@ -60,15 +60,15 @@ func (d *DownsampledDataFrame) aggregate(fn func([]float64) float64) *DataFrame 
 	newData := make([]float64, assetLen*metricLen*newTimeLen)
 	newTimes := make([]time.Time, newTimeLen)
 
-	for gIdx, g := range groups {
-		newTimes[gIdx] = d.df.times[g.end-1]
+	for gIdx, timeGroup := range groups {
+		newTimes[gIdx] = d.df.times[timeGroup.end-1]
 
 		for aIdx := 0; aIdx < assetLen; aIdx++ {
 			for mIdx := 0; mIdx < metricLen; mIdx++ {
 				srcOff := d.df.colOffset(aIdx, mIdx)
-				vals := d.df.data[srcOff+g.start : srcOff+g.end]
+				vals := d.df.data[srcOff+timeGroup.start : srcOff+timeGroup.end]
 				dstOff := (aIdx*metricLen + mIdx) * newTimeLen
-				newData[dstOff+gIdx] = fn(vals)
+				newData[dstOff+gIdx] = reducer(vals)
 			}
 		}
 	}
@@ -128,20 +128,20 @@ func (d *DownsampledDataFrame) Last() *DataFrame {
 // of each group.
 func (d *DownsampledDataFrame) Std() *DataFrame {
 	return d.aggregate(func(vals []float64) float64 {
-		n := len(vals)
-		if n < 2 {
+		count := len(vals)
+		if count < 2 {
 			return 0
 		}
 
-		m := stat.Mean(vals, nil)
+		mean := stat.Mean(vals, nil)
 		sum := 0.0
 
 		for _, v := range vals {
-			diff := v - m
+			diff := v - mean
 			sum += diff * diff
 		}
 
-		return math.Sqrt(sum / float64(n-1))
+		return math.Sqrt(sum / float64(count-1))
 	})
 }
 
@@ -149,19 +149,19 @@ func (d *DownsampledDataFrame) Std() *DataFrame {
 // of each group.
 func (d *DownsampledDataFrame) Variance() *DataFrame {
 	return d.aggregate(func(vals []float64) float64 {
-		n := len(vals)
-		if n < 2 {
+		count := len(vals)
+		if count < 2 {
 			return 0
 		}
 
-		m := stat.Mean(vals, nil)
+		mean := stat.Mean(vals, nil)
 		sum := 0.0
 
 		for _, v := range vals {
-			diff := v - m
+			diff := v - mean
 			sum += diff * diff
 		}
 
-		return sum / float64(n-1)
+		return sum / float64(count-1)
 	})
 }
