@@ -40,6 +40,7 @@ func Run(strategy engine.Strategy) {
 
 	rootCmd.AddCommand(newBacktestCmd(strategy))
 	rootCmd.AddCommand(newLiveCmd(strategy))
+	rootCmd.AddCommand(newSnapshotCmd(strategy))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
