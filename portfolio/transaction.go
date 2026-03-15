@@ -99,4 +99,9 @@ type Transaction struct {
 	// on whether the position was held for more than 60 days before
 	// the dividend date.
 	Qualified bool
+
+	// Justification is an optional explanation of why this trade was made.
+	// Set automatically from the Allocation's Justification field during
+	// RebalanceTo, or from the WithJustification OrderModifier during Order.
+	Justification string
 }
