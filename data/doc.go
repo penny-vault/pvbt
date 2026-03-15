@@ -85,6 +85,15 @@
 // [DataRequest] describes a batch of data to fetch. It specifies the assets,
 // metrics, time range, and [Frequency].
 //
+// # Time Zones
+//
+// Timestamps returned by a [BatchProvider] must use the same time zone as the
+// tradecron schedule driving the backtest. Market-aware tradecron directives
+// (@monthend, @open, etc.) produce America/New_York timestamps. If the
+// provider returns UTC timestamps instead, the engine's time-range filtering
+// will silently produce empty DataFrames and no trades will execute. See the
+// tradecron package documentation for details.
+//
 // # DataFrame
 //
 // [DataFrame] stores contiguous float64 data in column-major order. Each
