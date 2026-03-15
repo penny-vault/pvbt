@@ -27,8 +27,9 @@ import (
 // metrics or assets. Used for multi-provider routing.
 func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 	if len(frames) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil), nil
+		return mustNewDataFrame(nil, nil, nil, 0, nil), nil
 	}
+
 	if len(frames) == 1 {
 		return frames[0], nil
 	}
@@ -40,6 +41,7 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 			return nil, fmt.Errorf("MergeColumns: timestamp count mismatch: %d vs %d",
 				len(base.times), len(frames[i].times))
 		}
+
 		for j := range base.times {
 			if !base.times[j].Equal(frames[i].times[j]) {
 				return nil, fmt.Errorf("MergeColumns: timestamp mismatch at index %d", j)
@@ -49,6 +51,7 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 
 	// Start with a copy of the base, then insert columns from other frames.
 	result := base.Copy()
+
 	for i := 1; i < len(frames); i++ {
 		f := frames[i]
 		for _, a := range f.assets {
@@ -57,6 +60,7 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 				if col != nil {
 					colCopy := make([]float64, len(col))
 					copy(colCopy, col)
+
 					if err := result.Insert(a, m, colCopy); err != nil {
 						return nil, fmt.Errorf("MergeColumns: insert: %w", err)
 					}
@@ -64,6 +68,7 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 			}
 		}
 	}
+
 	return result, nil
 }
 
@@ -71,8 +76,9 @@ func MergeColumns(frames ...*DataFrame) (*DataFrame, error) {
 // different, non-overlapping time ranges. Timestamps must not overlap.
 func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 	if len(frames) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil), nil
+		return mustNewDataFrame(nil, nil, nil, 0, nil), nil
 	}
+
 	if len(frames) == 1 {
 		return frames[0], nil
 	}
@@ -84,9 +90,11 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 			nonEmpty = append(nonEmpty, f)
 		}
 	}
+
 	if len(nonEmpty) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil), nil
+		return mustNewDataFrame(nil, nil, nil, 0, nil), nil
 	}
+
 	if len(nonEmpty) == 1 {
 		return nonEmpty[0], nil
 	}
@@ -121,20 +129,24 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 	newData := make([]float64, len(assets)*len(metrics)*totalLen)
 
 	tOffset := 0
+
 	for _, f := range sorted {
 		fTimeLen := len(f.times)
+
 		for aIdx, a := range assets {
 			for mIdx, m := range metrics {
 				col := f.Column(a, m)
 				if col == nil {
 					continue
 				}
+
 				dstOff := (aIdx*len(metrics)+mIdx)*totalLen + tOffset
 				copy(newData[dstOff:dstOff+fTimeLen], col)
 			}
 		}
+
 		tOffset += fTimeLen
 	}
 
-	return NewDataFrame(allTimes, assets, metrics, newData)
+	return NewDataFrame(allTimes, assets, metrics, sorted[0].freq, newData)
 }

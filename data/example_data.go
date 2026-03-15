@@ -45,15 +45,18 @@ func ExampleData() (*TestProvider, AssetProvider) {
 	if err != nil {
 		panic("ExampleData: load America/New_York: " + err.Error())
 	}
+
 	start := time.Date(2024, time.January, 2, 16, 0, 0, 0, nyc)
 	end := time.Date(2024, time.June, 28, 16, 0, 0, 0, nyc)
 
 	var times []time.Time
+
 	for d := start; !d.After(end); d = d.AddDate(0, 0, 1) {
 		wd := d.Weekday()
 		if wd == time.Saturday || wd == time.Sunday {
 			continue
 		}
+
 		times = append(times, d)
 	}
 
@@ -85,7 +88,7 @@ func ExampleData() (*TestProvider, AssetProvider) {
 		}
 	}
 
-	frame, err := NewDataFrame(times, assets, metrics, vals)
+	frame, err := NewDataFrame(times, assets, metrics, Daily, vals)
 	if err != nil {
 		panic(fmt.Sprintf("ExampleData: %v", err))
 	}
@@ -112,5 +115,6 @@ func (p *exampleAssetProvider) LookupAsset(_ context.Context, ticker string) (as
 			return a, nil
 		}
 	}
+
 	return asset.Asset{}, fmt.Errorf("unknown ticker: %s", ticker)
 }

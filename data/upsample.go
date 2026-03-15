@@ -37,10 +37,12 @@ func (u *UpsampledDataFrame) generateTimes() []time.Time {
 
 	start := u.df.times[0]
 	end := u.df.times[len(u.df.times)-1]
+
 	var times []time.Time
 
 	for t := start; !t.After(end); {
 		times = append(times, t)
+
 		switch u.freq {
 		case Daily:
 			t = t.AddDate(0, 0, 1)
@@ -64,7 +66,7 @@ func (u *UpsampledDataFrame) generateTimes() []time.Time {
 // upsampled time axis.
 func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 	if len(u.df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newTimes := u.generateTimes()
@@ -83,6 +85,7 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 				for srcIdx < len(u.df.times)-1 && !u.df.times[srcIdx+1].After(t) {
 					srcIdx++
 				}
+
 				newData[dstOff+i] = srcCol[srcIdx]
 			}
 		}
@@ -90,16 +93,17 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 
 	assets := make([]asset.Asset, assetLen)
 	copy(assets, u.df.assets)
+
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, newData)
+	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
 }
 
 // BackFill uses the next known value to fill gaps in the upsampled time axis.
 func (u *UpsampledDataFrame) BackFill() *DataFrame {
 	if len(u.df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newTimes := u.generateTimes()
@@ -118,6 +122,7 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx].Before(t) {
 					srcIdx++
 				}
+
 				newData[dstOff+i] = srcCol[srcIdx]
 			}
 		}
@@ -125,17 +130,18 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 
 	assets := make([]asset.Asset, assetLen)
 	copy(assets, u.df.assets)
+
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, newData)
+	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
 }
 
 // Interpolate linearly interpolates between known values to fill gaps
 // in the upsampled time axis.
 func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 	if len(u.df.times) == 0 {
-		return mustNewDataFrame(nil, nil, nil, nil)
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	newTimes := u.generateTimes()
@@ -172,8 +178,9 @@ func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 
 	assets := make([]asset.Asset, assetLen)
 	copy(assets, u.df.assets)
+
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, newData)
+	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
 }

@@ -81,6 +81,7 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 	}
 
 	ownsPool := false
+
 	if pool == nil {
 		cfgPath := o.configFile
 		if cfgPath == "" {
@@ -88,6 +89,7 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 			if err != nil {
 				return nil, fmt.Errorf("pvdata: determine home directory: %w", err)
 			}
+
 			cfgPath = filepath.Join(home, ".pvdata.toml")
 		}
 
@@ -109,6 +111,7 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 		if err != nil {
 			return nil, fmt.Errorf("pvdata: connect to database: %w", err)
 		}
+
 		ownsPool = true
 	}
 
@@ -125,6 +128,7 @@ func (p *PVDataProvider) Provides() []Metric {
 	for m := range metricView {
 		metrics = append(metrics, m)
 	}
+
 	return metrics
 }
 
@@ -137,6 +141,7 @@ func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.
 	defer conn.Release()
 
 	var a asset.Asset
+
 	err = conn.QueryRow(ctx,
 		"SELECT ticker, composite_figi FROM assets WHERE ticker = $1 AND active = true LIMIT 1",
 		ticker,
@@ -158,13 +163,16 @@ func (p *PVDataProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 	defer rows.Close()
 
 	var assets []asset.Asset
+
 	for rows.Next() {
 		var a asset.Asset
 		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
 			return nil, fmt.Errorf("scan asset: %w", err)
 		}
+
 		assets = append(assets, a)
 	}
+
 	return assets, rows.Err()
 }
 
@@ -180,11 +188,13 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 
 	// group requested metrics by view
 	viewMetrics := make(map[string][]Metric)
+
 	for _, m := range req.Metrics {
 		v, ok := metricView[m]
 		if !ok {
 			continue
 		}
+
 		viewMetrics[v] = append(viewMetrics[v], m)
 	}
 
@@ -202,6 +212,7 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		figi   string
 		metric Metric
 	}
+
 	colData := make(map[colKey]map[int64]float64)
 	timeSet := make(map[int64]time.Time)
 
@@ -210,8 +221,10 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		if c, ok := colData[k]; ok {
 			return c
 		}
+
 		c := make(map[int64]float64)
 		colData[k] = c
+
 		return c
 	}
 
@@ -227,11 +240,13 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 			return nil, err
 		}
 	}
+
 	if metrics, ok := viewMetrics["metrics"]; ok {
 		if err := p.fetchMetrics(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
 			return nil, err
 		}
 	}
+
 	if metrics, ok := viewMetrics["fundamentals"]; ok {
 		if err := p.fetchFundamentals(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
 			return nil, err
@@ -243,6 +258,7 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	for _, t := range timeSet {
 		times = append(times, t)
 	}
+
 	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
 
 	log.Debug().
@@ -251,10 +267,11 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		Msg("PVDataProvider.Fetch time axis")
 
 	if len(times) == 0 {
-		df, err := NewDataFrame(nil, nil, nil, nil)
+		df, err := NewDataFrame(nil, nil, nil, req.Frequency, nil)
 		if err != nil {
 			return nil, fmt.Errorf("creating empty DataFrame: %w", err)
 		}
+
 		return df, nil
 	}
 
@@ -285,26 +302,31 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	}
 
 	M := len(req.Metrics)
+
 	for k, vals := range colData {
 		ai, ok := aIdx[k.figi]
 		if !ok {
 			continue
 		}
+
 		mi, ok := mIdx[k.metric]
 		if !ok {
 			continue
 		}
+
 		colStart := (ai*M + mi) * T
+
 		for sec, v := range vals {
 			ti := timeIdx[sec]
 			data[colStart+ti] = v
 		}
 	}
 
-	df, err := NewDataFrame(times, req.Assets, req.Metrics, data)
+	df, err := NewDataFrame(times, req.Assets, req.Metrics, req.Frequency, data)
 	if err != nil {
 		return nil, fmt.Errorf("building DataFrame: %w", err)
 	}
+
 	return df, nil
 }
 
@@ -313,6 +335,7 @@ func (p *PVDataProvider) Close() error {
 	if p.ownsPool && p.pool != nil {
 		p.pool.Close()
 	}
+
 	return nil
 }
 
@@ -350,12 +373,13 @@ func (p *PVDataProvider) fetchEod(
 	rowCount := 0
 	for rows.Next() {
 		rowCount++
+
 		var (
-			figi                                 string
-			eventDate                            time.Time
-			open, high, low, close, adjClose     float64
-			volume                               float64
-			dividend, splitFactor                 float64
+			figi                             string
+			eventDate                        time.Time
+			open, high, low, close, adjClose float64
+			volume                           float64
+			dividend, splitFactor            float64
 		)
 		if err := rows.Scan(&figi, &eventDate, &open, &high, &low, &close, &adjClose, &volume, &dividend, &splitFactor); err != nil {
 			return fmt.Errorf("pvdata: scan eod row: %w", err)
@@ -368,24 +392,31 @@ func (p *PVDataProvider) fetchEod(
 		if want[MetricOpen] {
 			ensureCol(figi, MetricOpen)[sec] = open
 		}
+
 		if want[MetricHigh] {
 			ensureCol(figi, MetricHigh)[sec] = high
 		}
+
 		if want[MetricLow] {
 			ensureCol(figi, MetricLow)[sec] = low
 		}
+
 		if want[MetricClose] {
 			ensureCol(figi, MetricClose)[sec] = close
 		}
+
 		if want[AdjClose] {
 			ensureCol(figi, AdjClose)[sec] = adjClose
 		}
+
 		if want[Volume] {
 			ensureCol(figi, Volume)[sec] = volume
 		}
+
 		if want[Dividend] {
 			ensureCol(figi, Dividend)[sec] = dividend
 		}
+
 		if want[SplitFactor] {
 			ensureCol(figi, SplitFactor)[sec] = splitFactor
 		}
@@ -438,29 +469,37 @@ func (p *PVDataProvider) fetchMetrics(
 		if want[MarketCap] {
 			ensureCol(figi, MarketCap)[sec] = float64(marketCap)
 		}
+
 		if want[EnterpriseValue] {
 			ensureCol(figi, EnterpriseValue)[sec] = float64(ev)
 		}
+
 		if want[PE] {
 			ensureCol(figi, PE)[sec] = pe
 		}
+
 		if want[PB] {
 			ensureCol(figi, PB)[sec] = pb
 		}
+
 		if want[PS] {
 			ensureCol(figi, PS)[sec] = ps
 		}
+
 		if want[EVtoEBIT] {
 			ensureCol(figi, EVtoEBIT)[sec] = evEbit
 		}
+
 		if want[EVtoEBITDA] {
 			ensureCol(figi, EVtoEBITDA)[sec] = evEbitda
 		}
+
 		if want[SP500] {
 			v := 0.0
 			if sp500 {
 				v = 1.0
 			}
+
 			ensureCol(figi, SP500)[sec] = v
 		}
 	}
@@ -478,13 +517,17 @@ func (p *PVDataProvider) fetchFundamentals(
 	timeSet map[int64]time.Time,
 ) error {
 	// build the list of SQL columns we need
-	var sqlCols []string
-	var metricOrder []Metric
+	var (
+		sqlCols     []string
+		metricOrder []Metric
+	)
+
 	for _, m := range metrics {
 		col, ok := metricColumn[m]
 		if !ok {
 			continue
 		}
+
 		sqlCols = append(sqlCols, col)
 		metricOrder = append(metricOrder, m)
 	}
@@ -508,12 +551,15 @@ func (p *PVDataProvider) fetchFundamentals(
 	defer rows.Close()
 
 	for rows.Next() {
-		var figi string
-		var eventDate time.Time
+		var (
+			figi      string
+			eventDate time.Time
+		)
 
 		vals := make([]any, len(sqlCols)+2)
 		vals[0] = &figi
 		vals[1] = &eventDate
+
 		floatVals := make([]float64, len(sqlCols))
 		for i := range sqlCols {
 			vals[i+2] = &floatVals[i]
@@ -565,13 +611,16 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	defer rows.Close()
 
 	var assets []asset.Asset
+
 	for rows.Next() {
 		var a asset.Asset
 		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
 			return nil, fmt.Errorf("pvdata: scan rated asset: %w", err)
 		}
+
 		assets = append(assets, a)
 	}
+
 	return assets, rows.Err()
 }
 
@@ -622,75 +671,75 @@ var metricView = map[Metric]string{
 	NetLossIncomeDiscontinuedOperations: "fundamentals",
 	NetIncomeToNonControllingInterests:  "fundamentals",
 	PreferredDividendsImpact:            "fundamentals",
-	TotalAssets:                          "fundamentals",
-	CurrentAssets:                        "fundamentals",
-	AssetsNonCurrent:                     "fundamentals",
-	AverageAssets:                        "fundamentals",
-	CashAndEquivalents:                   "fundamentals",
-	Inventory:                            "fundamentals",
-	Receivables:                          "fundamentals",
-	Investments:                          "fundamentals",
-	InvestmentsCurrent:                   "fundamentals",
-	InvestmentsNonCur:                    "fundamentals",
-	Intangibles:                          "fundamentals",
-	PPENet:                               "fundamentals",
-	TaxAssets:                            "fundamentals",
-	TotalLiabilities:                     "fundamentals",
-	CurrentLiabilities:                   "fundamentals",
+	TotalAssets:                         "fundamentals",
+	CurrentAssets:                       "fundamentals",
+	AssetsNonCurrent:                    "fundamentals",
+	AverageAssets:                       "fundamentals",
+	CashAndEquivalents:                  "fundamentals",
+	Inventory:                           "fundamentals",
+	Receivables:                         "fundamentals",
+	Investments:                         "fundamentals",
+	InvestmentsCurrent:                  "fundamentals",
+	InvestmentsNonCur:                   "fundamentals",
+	Intangibles:                         "fundamentals",
+	PPENet:                              "fundamentals",
+	TaxAssets:                           "fundamentals",
+	TotalLiabilities:                    "fundamentals",
+	CurrentLiabilities:                  "fundamentals",
 	LiabilitiesNonCurrent:               "fundamentals",
-	TotalDebt:                            "fundamentals",
-	DebtCurrent:                          "fundamentals",
-	DebtNonCurrent:                       "fundamentals",
-	Payables:                             "fundamentals",
-	DeferredRevenue:                      "fundamentals",
-	Deposits:                             "fundamentals",
-	TaxLiabilities:                       "fundamentals",
-	Equity:                               "fundamentals",
-	EquityAvg:                            "fundamentals",
-	AccumulatedOtherComprehensiveIncome:  "fundamentals",
-	AccumulatedRetainedEarningsDeficit:   "fundamentals",
-	FreeCashFlow:                         "fundamentals",
-	NetCashFlow:                          "fundamentals",
-	NetCashFlowFromOperations:            "fundamentals",
-	NetCashFlowFromInvesting:             "fundamentals",
-	NetCashFlowFromFinancing:             "fundamentals",
-	NetCashFlowBusiness:                  "fundamentals",
-	NetCashFlowCommon:                    "fundamentals",
-	NetCashFlowDebt:                      "fundamentals",
-	NetCashFlowDividend:                  "fundamentals",
-	NetCashFlowInvest:                    "fundamentals",
-	NetCashFlowFx:                        "fundamentals",
-	CapitalExpenditure:                   "fundamentals",
-	DepreciationAmortization:             "fundamentals",
-	BookValue:                            "fundamentals",
-	FreeCashFlowPerShare:                 "fundamentals",
-	SalesPerShare:                        "fundamentals",
-	TangibleAssetsBookValuePerShare:      "fundamentals",
-	ShareFactor:                          "fundamentals",
-	SharesBasic:                          "fundamentals",
-	WeightedAverageShares:                "fundamentals",
-	WeightedAverageSharesDiluted:         "fundamentals",
-	FundamentalPrice:                     "fundamentals",
-	PE1:                                  "fundamentals",
-	PS1:                                  "fundamentals",
-	FxUSD:                                "fundamentals",
-	GrossMargin:                          "fundamentals",
-	EBITDAMargin:                         "fundamentals",
-	ProfitMargin:                         "fundamentals",
-	ROA:                                  "fundamentals",
-	ROE:                                  "fundamentals",
-	ROIC:                                 "fundamentals",
-	ReturnOnSales:                        "fundamentals",
-	AssetTurnover:                        "fundamentals",
-	CurrentRatio:                         "fundamentals",
-	DebtToEquity:                         "fundamentals",
-	DividendYield:                        "fundamentals",
-	PayoutRatio:                          "fundamentals",
-	InvestedCapital:                      "fundamentals",
-	InvestedCapitalAvg:                   "fundamentals",
-	TangibleAssetValue:                   "fundamentals",
-	WorkingCapital:                       "fundamentals",
-	MarketCapFundamental:                 "fundamentals",
+	TotalDebt:                           "fundamentals",
+	DebtCurrent:                         "fundamentals",
+	DebtNonCurrent:                      "fundamentals",
+	Payables:                            "fundamentals",
+	DeferredRevenue:                     "fundamentals",
+	Deposits:                            "fundamentals",
+	TaxLiabilities:                      "fundamentals",
+	Equity:                              "fundamentals",
+	EquityAvg:                           "fundamentals",
+	AccumulatedOtherComprehensiveIncome: "fundamentals",
+	AccumulatedRetainedEarningsDeficit:  "fundamentals",
+	FreeCashFlow:                        "fundamentals",
+	NetCashFlow:                         "fundamentals",
+	NetCashFlowFromOperations:           "fundamentals",
+	NetCashFlowFromInvesting:            "fundamentals",
+	NetCashFlowFromFinancing:            "fundamentals",
+	NetCashFlowBusiness:                 "fundamentals",
+	NetCashFlowCommon:                   "fundamentals",
+	NetCashFlowDebt:                     "fundamentals",
+	NetCashFlowDividend:                 "fundamentals",
+	NetCashFlowInvest:                   "fundamentals",
+	NetCashFlowFx:                       "fundamentals",
+	CapitalExpenditure:                  "fundamentals",
+	DepreciationAmortization:            "fundamentals",
+	BookValue:                           "fundamentals",
+	FreeCashFlowPerShare:                "fundamentals",
+	SalesPerShare:                       "fundamentals",
+	TangibleAssetsBookValuePerShare:     "fundamentals",
+	ShareFactor:                         "fundamentals",
+	SharesBasic:                         "fundamentals",
+	WeightedAverageShares:               "fundamentals",
+	WeightedAverageSharesDiluted:        "fundamentals",
+	FundamentalPrice:                    "fundamentals",
+	PE1:                                 "fundamentals",
+	PS1:                                 "fundamentals",
+	FxUSD:                               "fundamentals",
+	GrossMargin:                         "fundamentals",
+	EBITDAMargin:                        "fundamentals",
+	ProfitMargin:                        "fundamentals",
+	ROA:                                 "fundamentals",
+	ROE:                                 "fundamentals",
+	ROIC:                                "fundamentals",
+	ReturnOnSales:                       "fundamentals",
+	AssetTurnover:                       "fundamentals",
+	CurrentRatio:                        "fundamentals",
+	DebtToEquity:                        "fundamentals",
+	DividendYield:                       "fundamentals",
+	PayoutRatio:                         "fundamentals",
+	InvestedCapital:                     "fundamentals",
+	InvestedCapitalAvg:                  "fundamentals",
+	TangibleAssetValue:                  "fundamentals",
+	WorkingCapital:                      "fundamentals",
+	MarketCapFundamental:                "fundamentals",
 }
 
 // metricColumn maps fundamental Metrics to their SQL column names.
@@ -717,75 +766,75 @@ var metricColumn = map[Metric]string{
 	NetLossIncomeDiscontinuedOperations: "net_loss_income_discontinued_operations",
 	NetIncomeToNonControllingInterests:  "net_income_to_non_controlling_interests",
 	PreferredDividendsImpact:            "preferred_dividends_income_statement_impact",
-	TotalAssets:                          "total_assets",
-	CurrentAssets:                        "current_assets",
-	AssetsNonCurrent:                     "assets_non_current",
-	AverageAssets:                        "average_assets",
-	CashAndEquivalents:                   "cash_and_equivalents",
-	Inventory:                            "inventory",
-	Receivables:                          "receivables",
-	Investments:                          "investments",
-	InvestmentsCurrent:                   "investments_current",
-	InvestmentsNonCur:                    "investments_non_current",
-	Intangibles:                          "intangibles",
-	PPENet:                               "property_plant_and_equipment_net",
-	TaxAssets:                            "tax_assets",
-	TotalLiabilities:                     "total_liabilities",
-	CurrentLiabilities:                   "current_liabilities",
+	TotalAssets:                         "total_assets",
+	CurrentAssets:                       "current_assets",
+	AssetsNonCurrent:                    "assets_non_current",
+	AverageAssets:                       "average_assets",
+	CashAndEquivalents:                  "cash_and_equivalents",
+	Inventory:                           "inventory",
+	Receivables:                         "receivables",
+	Investments:                         "investments",
+	InvestmentsCurrent:                  "investments_current",
+	InvestmentsNonCur:                   "investments_non_current",
+	Intangibles:                         "intangibles",
+	PPENet:                              "property_plant_and_equipment_net",
+	TaxAssets:                           "tax_assets",
+	TotalLiabilities:                    "total_liabilities",
+	CurrentLiabilities:                  "current_liabilities",
 	LiabilitiesNonCurrent:               "liabilities_non_current",
-	TotalDebt:                            "total_debt",
-	DebtCurrent:                          "debt_current",
-	DebtNonCurrent:                       "debt_non_current",
-	Payables:                             "payables",
-	DeferredRevenue:                      "deferred_revenue",
-	Deposits:                             "deposits",
-	TaxLiabilities:                       "tax_liabilities",
-	Equity:                               "equity",
-	EquityAvg:                            "equity_avg",
-	AccumulatedOtherComprehensiveIncome:  "accumulated_other_comprehensive_income",
-	AccumulatedRetainedEarningsDeficit:   "accumulated_retained_earnings_deficit",
-	FreeCashFlow:                         "free_cash_flow",
-	NetCashFlow:                          "net_cash_flow",
-	NetCashFlowFromOperations:            "net_cash_flow_from_operations",
-	NetCashFlowFromInvesting:             "net_cash_flow_from_investing",
-	NetCashFlowFromFinancing:             "net_cash_flow_from_financing",
-	NetCashFlowBusiness:                  "net_cash_flow_business",
-	NetCashFlowCommon:                    "net_cash_flow_common",
-	NetCashFlowDebt:                      "net_cash_flow_debt",
-	NetCashFlowDividend:                  "net_cash_flow_dividend",
-	NetCashFlowInvest:                    "net_cash_flow_invest",
-	NetCashFlowFx:                        "net_cash_flow_fx",
-	CapitalExpenditure:                   "capital_expenditure",
-	DepreciationAmortization:             "depreciation_amortization_and_accretion",
-	BookValue:                            "book_value_per_share",
-	FreeCashFlowPerShare:                 "free_cash_flow_per_share",
-	SalesPerShare:                        "sales_per_share",
-	TangibleAssetsBookValuePerShare:      "tangible_assets_book_value_per_share",
-	ShareFactor:                          "share_factor",
-	SharesBasic:                          "shares_basic",
-	WeightedAverageShares:                "weighted_average_shares",
-	WeightedAverageSharesDiluted:         "weighted_average_shares_diluted",
-	FundamentalPrice:                     "price",
-	PE1:                                  "pe1",
-	PS1:                                  "ps1",
-	FxUSD:                                "fx_usd",
-	GrossMargin:                          "gross_margin",
-	EBITDAMargin:                         "ebitda_margin",
-	ProfitMargin:                         "profit_margin",
-	ROA:                                  "roa",
-	ROE:                                  "roe",
-	ROIC:                                 "roic",
-	ReturnOnSales:                        "return_on_sales",
-	AssetTurnover:                        "asset_turnover",
-	CurrentRatio:                         "current_ratio",
-	DebtToEquity:                         "debt_to_equity_ratio",
-	DividendYield:                        "dividend_yield",
-	PayoutRatio:                          "payout_ratio",
-	InvestedCapital:                      "invested_capital",
-	InvestedCapitalAvg:                   "invested_capital_average",
-	TangibleAssetValue:                   "tangible_asset_value",
-	WorkingCapital:                       "working_capital",
-	MarketCapFundamental:                 "market_capitalization",
+	TotalDebt:                           "total_debt",
+	DebtCurrent:                         "debt_current",
+	DebtNonCurrent:                      "debt_non_current",
+	Payables:                            "payables",
+	DeferredRevenue:                     "deferred_revenue",
+	Deposits:                            "deposits",
+	TaxLiabilities:                      "tax_liabilities",
+	Equity:                              "equity",
+	EquityAvg:                           "equity_avg",
+	AccumulatedOtherComprehensiveIncome: "accumulated_other_comprehensive_income",
+	AccumulatedRetainedEarningsDeficit:  "accumulated_retained_earnings_deficit",
+	FreeCashFlow:                        "free_cash_flow",
+	NetCashFlow:                         "net_cash_flow",
+	NetCashFlowFromOperations:           "net_cash_flow_from_operations",
+	NetCashFlowFromInvesting:            "net_cash_flow_from_investing",
+	NetCashFlowFromFinancing:            "net_cash_flow_from_financing",
+	NetCashFlowBusiness:                 "net_cash_flow_business",
+	NetCashFlowCommon:                   "net_cash_flow_common",
+	NetCashFlowDebt:                     "net_cash_flow_debt",
+	NetCashFlowDividend:                 "net_cash_flow_dividend",
+	NetCashFlowInvest:                   "net_cash_flow_invest",
+	NetCashFlowFx:                       "net_cash_flow_fx",
+	CapitalExpenditure:                  "capital_expenditure",
+	DepreciationAmortization:            "depreciation_amortization_and_accretion",
+	BookValue:                           "book_value_per_share",
+	FreeCashFlowPerShare:                "free_cash_flow_per_share",
+	SalesPerShare:                       "sales_per_share",
+	TangibleAssetsBookValuePerShare:     "tangible_assets_book_value_per_share",
+	ShareFactor:                         "share_factor",
+	SharesBasic:                         "shares_basic",
+	WeightedAverageShares:               "weighted_average_shares",
+	WeightedAverageSharesDiluted:        "weighted_average_shares_diluted",
+	FundamentalPrice:                    "price",
+	PE1:                                 "pe1",
+	PS1:                                 "ps1",
+	FxUSD:                               "fx_usd",
+	GrossMargin:                         "gross_margin",
+	EBITDAMargin:                        "ebitda_margin",
+	ProfitMargin:                        "profit_margin",
+	ROA:                                 "roa",
+	ROE:                                 "roe",
+	ROIC:                                "roic",
+	ReturnOnSales:                       "return_on_sales",
+	AssetTurnover:                       "asset_turnover",
+	CurrentRatio:                        "current_ratio",
+	DebtToEquity:                        "debt_to_equity_ratio",
+	DividendYield:                       "dividend_yield",
+	PayoutRatio:                         "payout_ratio",
+	InvestedCapital:                     "invested_capital",
+	InvestedCapitalAvg:                  "invested_capital_average",
+	TangibleAssetValue:                  "tangible_asset_value",
+	WorkingCapital:                      "working_capital",
+	MarketCapFundamental:                "market_capitalization",
 }
 
 func metricSet(ms []Metric) map[Metric]bool {
@@ -793,6 +842,7 @@ func metricSet(ms []Metric) map[Metric]bool {
 	for _, m := range ms {
 		s[m] = true
 	}
+
 	return s
 }
 

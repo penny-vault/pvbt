@@ -47,3 +47,23 @@ func (f Frequency) String() string {
 		return fmt.Sprintf("Frequency(%d)", int(f))
 	}
 }
+
+// ParseFrequency converts a string back to a Frequency constant.
+func ParseFrequency(s string) (Frequency, error) {
+	switch s {
+	case "Tick":
+		return Tick, nil
+	case "Daily":
+		return Daily, nil
+	case "Weekly":
+		return Weekly, nil
+	case "Monthly":
+		return Monthly, nil
+	case "Quarterly":
+		return Quarterly, nil
+	case "Yearly":
+		return Yearly, nil
+	default:
+		return 0, fmt.Errorf("unknown frequency: %q", s)
+	}
+}
