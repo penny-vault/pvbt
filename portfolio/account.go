@@ -737,7 +737,15 @@ func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
 
 // Annotate records a key-value annotation for the given timestamp.
+// If an entry with the same timestamp and key already exists, its
+// value is overwritten (last-write-wins).
 func (a *Account) Annotate(timestamp int64, key, value string) {
+	for idx := range a.annotations {
+		if a.annotations[idx].Timestamp == timestamp && a.annotations[idx].Key == key {
+			a.annotations[idx].Value = value
+			return
+		}
+	}
 	a.annotations = append(a.annotations, Annotation{
 		Timestamp: timestamp,
 		Key:       key,

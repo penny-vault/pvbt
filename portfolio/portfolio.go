@@ -122,7 +122,8 @@ type Portfolio interface {
 	// Annotate records a key-value annotation for the given timestamp.
 	// Call this during Compute to capture intermediate computations
 	// that explain why the strategy made its decisions. Multiple calls
-	// accumulate entries.
+	// accumulate entries. If the same (timestamp, key) pair already
+	// exists, the value is overwritten (last-write-wins).
 	Annotate(timestamp int64, key, value string)
 
 	// Annotations returns the full annotation log in the order entries
