@@ -507,3 +507,64 @@ var _ universe.DataSource = (*Engine)(nil)
 
 // Compile-time check that Engine implements broker.PriceProvider.
 var _ broker.PriceProvider = (*Engine)(nil)
+
+// ForwardFillTo extends a DataFrame by copying the last row's values forward
+// to the target date, spaced according to the DataFrame's frequency. Returns
+// the original DataFrame unchanged if it already covers the target date.
+// Returns an error for Tick frequency since it has no regular interval.
+func ForwardFillTo(df *data.DataFrame, targetDate time.Time) (*data.DataFrame, error) {
+	if df.Len() == 0 {
+		return df, nil
+	}
+
+	if !df.End().Before(targetDate) {
+		return df, nil
+	}
+
+	freq := df.Frequency()
+	if freq == data.Tick {
+		return nil, fmt.Errorf("cannot forward-fill tick-frequency data: no regular interval")
+	}
+
+	// Extract the last row's values.
+	assets := df.AssetList()
+	metrics := df.MetricList()
+	lastRow := make([]float64, len(assets)*len(metrics))
+	for assetIdx, currentAsset := range assets {
+		for metricIdx, metric := range metrics {
+			lastRow[assetIdx*len(metrics)+metricIdx] = df.Value(currentAsset, metric)
+		}
+	}
+
+	// Generate fill timestamps and append rows.
+	cursor := df.End()
+	for {
+		cursor = nextTimestamp(cursor, freq)
+		if cursor.After(targetDate) {
+			break
+		}
+		if err := df.AppendRow(cursor, lastRow); err != nil {
+			return nil, fmt.Errorf("forward-fill append at %v: %w", cursor, err)
+		}
+	}
+
+	return df, nil
+}
+
+// nextTimestamp advances a timestamp by one frequency step.
+func nextTimestamp(current time.Time, freq data.Frequency) time.Time {
+	switch freq {
+	case data.Daily:
+		return current.AddDate(0, 0, 1)
+	case data.Weekly:
+		return current.AddDate(0, 0, 7)
+	case data.Monthly:
+		return current.AddDate(0, 1, 0)
+	case data.Quarterly:
+		return current.AddDate(0, 3, 0)
+	case data.Yearly:
+		return current.AddDate(1, 0, 0)
+	default:
+		return current.AddDate(0, 0, 1)
+	}
+}
