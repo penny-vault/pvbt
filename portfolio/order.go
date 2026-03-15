@@ -102,3 +102,12 @@ func (goodTilDateModifier) orderModifier() {}
 
 // GoodTilDate keeps the order open until a specified date.
 func GoodTilDate(t time.Time) OrderModifier { return goodTilDateModifier{date: t} }
+
+type justificationModifier struct{ reason string }
+
+func (justificationModifier) orderModifier() {}
+
+// WithJustification attaches an explanation to the resulting transaction.
+func WithJustification(reason string) OrderModifier {
+	return justificationModifier{reason: reason}
+}

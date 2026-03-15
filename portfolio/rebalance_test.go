@@ -29,6 +29,16 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
+func filterTransactions(txns []portfolio.Transaction, txType portfolio.TransactionType) []portfolio.Transaction {
+	var result []portfolio.Transaction
+	for _, tx := range txns {
+		if tx.Type == txType {
+			result = append(result, tx)
+		}
+	}
+	return result
+}
+
 var _ = Describe("RebalanceTo", func() {
 	var (
 		spy  asset.Asset
@@ -225,6 +235,65 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(acct.Cash()).To(Equal(100_000.0))
 	})
 
+	It("copies Allocation.Justification onto generated transactions", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy: {{Price: 500.0, Qty: 100, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
+			Date:          t1,
+			Members:       map[asset.Asset]float64{spy: 1.0},
+			Justification: "momentum crossover signal",
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		txns := acct.Transactions()
+		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		Expect(buyTxns).NotTo(BeEmpty())
+		Expect(buyTxns[0].Justification).To(Equal("momentum crossover signal"))
+	})
+
+	It("leaves Justification empty when Allocation has no justification", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy: {{Price: 500.0, Qty: 100, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
+			Date:    t1,
+			Members: map[asset.Asset]float64{spy: 1.0},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		txns := acct.Transactions()
+		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		Expect(buyTxns).NotTo(BeEmpty())
+		Expect(buyTxns[0].Justification).To(BeEmpty())
+	})
+
 	It("processes multiple variadic allocations", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
@@ -269,5 +338,39 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(mb.submitted[1].Asset).To(Equal(spy))
 		Expect(mb.submitted[2].Side).To(Equal(broker.Buy))
 		Expect(mb.submitted[2].Asset).To(Equal(aapl))
+	})
+})
+
+var _ = Describe("Order WithJustification", func() {
+	It("attaches justification to the resulting transaction", func() {
+		spyAsset := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		tradeDate := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+		fillTime := time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)
+
+		df, err := data.NewDataFrame(
+			[]time.Time{tradeDate},
+			[]asset.Asset{spyAsset},
+			[]data.Metric{data.MetricClose},
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := &mockBroker{}
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spyAsset: {{Price: 500.0, Qty: 10, FilledAt: fillTime}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		err = acct.Order(context.Background(), spyAsset, portfolio.Buy, 10,
+			portfolio.WithJustification("price below 200-day MA"),
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		txns := acct.Transactions()
+		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		Expect(buyTxns).NotTo(BeEmpty())
+		Expect(buyTxns[0].Justification).To(Equal("price below 200-day MA"))
 	})
 })
