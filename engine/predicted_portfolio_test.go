@@ -26,7 +26,7 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
-	pflio "github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
 )
 
@@ -47,7 +47,7 @@ func (s *predictStrategy) Setup(eng *engine.Engine) {
 	s.spy = eng.Asset("SPY")
 }
 
-func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, portfolio pflio.Portfolio) error {
+func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
 	df, err := eng.FetchAt(ctx, []asset.Asset{s.spy}, eng.CurrentDate(), []data.Metric{data.MetricClose})
 	if err != nil {
 		return err
@@ -58,14 +58,17 @@ func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, portf
 		return nil
 	}
 
-	portfolio.Annotate(eng.CurrentDate().Unix(), "action", "buy SPY")
+	fund.Annotate(eng.CurrentDate().Unix(), "action", "buy SPY")
 
-	return portfolio.RebalanceTo(ctx, pflio.Allocation{
+	return fund.RebalanceTo(ctx, portfolio.Allocation{
 		Date:          eng.CurrentDate(),
 		Members:       map[asset.Asset]float64{s.spy: 1.0},
 		Justification: "always buy SPY",
 	})
 }
+
+// Ensure predictStrategy satisfies the Strategy interface.
+var _ engine.Strategy = (*predictStrategy)(nil)
 
 var _ = Describe("PredictedPortfolio", func() {
 	var (
@@ -110,7 +113,7 @@ var _ = Describe("PredictedPortfolio", func() {
 		transactions := predictedPortfolio.Transactions()
 		hasBuy := false
 		for _, tx := range transactions {
-			if tx.Type == pflio.BuyTransaction {
+			if tx.Type == portfolio.BuyTransaction {
 				hasBuy = true
 				break
 			}
@@ -193,7 +196,7 @@ var _ = Describe("PredictedPortfolio", func() {
 
 		transactions := predictedPortfolio.Transactions()
 		for _, tx := range transactions {
-			if tx.Type == pflio.BuyTransaction {
+			if tx.Type == portfolio.BuyTransaction {
 				Expect(tx.Justification).To(Equal("always buy SPY"), "buy transactions should have justification")
 			}
 		}
