@@ -201,10 +201,16 @@
 //
 // # Annotations
 //
+// Annotations are step-level key-value entries that capture intermediate
+// computations (momentum scores, signal values, factor exposures) for
+// debugging and analysis. They differ from justifications, which are
+// human-readable sentences attached to transactions explaining why a trade
+// was made.
+//
 // [DataFrame.Annotate] pushes every non-NaN cell as a key-value annotation to
 // an [Annotator] destination. Keys are formatted as "TICKER/Metric" and values
 // are the float formatted as a string. This allows a strategy to annotate its
-// reasoning with a single call:
+// intermediate computations with a single call:
 //
 //	momentumDF.Annotate(portfolio)
 //

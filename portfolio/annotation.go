@@ -15,8 +15,12 @@
 
 package portfolio
 
-// Annotation is a single key-value entry recorded by a strategy to explain
-// its reasoning at a point in time.
+// Annotation is a single key-value entry that captures an intermediate
+// computation at a point in time. Unlike a justification (a human-readable
+// sentence on a [Transaction] explaining why a trade was made), an annotation
+// records a raw value -- a momentum score, signal strength, or bond fraction
+// -- that helps you debug or understand what the strategy computed at each
+// step.
 type Annotation struct {
 	Timestamp int64
 	Key       string
