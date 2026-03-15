@@ -219,6 +219,34 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(count).To(Equal(1))
 		})
 	})
+
+	Describe("nil provider handling", func() {
+		It("returns empty slice for IndexMembers when no IndexProvider", func() {
+			var err error
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				AssetProvider: &stubAssetProvider{},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			nyc, _ := time.LoadLocation("America/New_York")
+			result, err := recorder.IndexMembers(ctx, "SP500", time.Date(2024, 1, 2, 16, 0, 0, 0, nyc))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNil())
+		})
+
+		It("returns empty slice for RatedAssets when no RatingProvider", func() {
+			var err error
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				AssetProvider: &stubAssetProvider{},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			nyc, _ := time.LoadLocation("America/New_York")
+			result, err := recorder.RatedAssets(ctx, "morningstar", data.RatingEq(5), time.Date(2024, 1, 2, 16, 0, 0, 0, nyc))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNil())
+		})
+	})
 })
 
 // -- stubs --
