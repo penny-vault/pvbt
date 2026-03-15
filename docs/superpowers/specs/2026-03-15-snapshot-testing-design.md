@@ -70,7 +70,7 @@ The snapshot database mirrors pv-data's table structure so the recording and rep
 | composite_figi | TEXT | FK assets(composite_figi)                     |
 | event_date     | TEXT |                                               |
 | dimension      | TEXT |                                               |
-| (all ~80 fundamental columns) | REAL | Same columns as pv-data fundamentals view |
+| (fundamental columns) | REAL | Column names derived from `metricColumn` map in `pvdata_provider.go` |
 | | | PK (composite_figi, event_date, dimension) |
 
 **`ratings`** -- RatingProvider recorded call results
@@ -115,9 +115,13 @@ type SnapshotRecorderConfig struct {
 func NewSnapshotRecorder(path string, cfg SnapshotRecorderConfig) (*SnapshotRecorder, error)
 ```
 
-The `SnapshotRecorder` implements `BatchProvider`, `AssetProvider`, `IndexProvider`, and `RatingProvider` by delegating to the inner providers and writing results to SQLite. The CLI passes the recorder to the engine as all four provider types.
+`SnapshotRecorder` directly implements `BatchProvider` (which embeds `DataProvider`), `AssetProvider`, `IndexProvider`, and `RatingProvider`. Each method delegates to the corresponding inner provider, records the result, then returns it. The CLI registers the recorder with the engine via `WithDataProvider(recorder)` and `WithAssetProvider(recorder)`. The engine discovers `IndexProvider` and `RatingProvider` through type assertion on the registered data provider -- no separate registration is needed.
 
-Internally, four unexported wrapper types handle the per-interface recording logic:
+When an optional provider (IndexProvider or RatingProvider) is nil in the config, the corresponding methods return an empty result rather than an error. This is safe because the engine only calls these methods when the strategy uses index universes or rating filters.
+
+Note: `PVDataProvider` does not currently implement `IndexProvider`. The `index_members` table will only contain data when the strategy binary provides a real `IndexProvider` implementation. If none is provided, the table remains empty and the snapshot provider's `IndexMembers` returns an empty slice.
+
+Internally, the recording logic for each interface is organized into unexported helper methods (not separate types) on `SnapshotRecorder`:
 
 - `recordingBatchProvider` -- on `Fetch`, delegates to the inner provider, then writes the returned DataFrame rows into `eod`, `metrics`, and/or `fundamentals` using the `metricView` mapping to route rows to the correct table. Deduplicates on primary key (upsert).
 - `recordingAssetProvider` -- on `Assets()` and `LookupAsset()`, records results to the `assets` table. Deduplicates on `composite_figi`.
@@ -128,7 +132,7 @@ Internally, four unexported wrapper types handle the per-interface recording log
 
 ### SnapshotProvider
 
-An exported type in the `data` package that reads a snapshot `.db` file and implements all four provider interfaces.
+An exported type in the `data` package that reads a snapshot `.db` file and implements `BatchProvider`, `AssetProvider`, `IndexProvider`, and `RatingProvider`. Like `SnapshotRecorder`, the engine discovers IndexProvider and RatingProvider through type assertion when `SnapshotProvider` is registered via `WithDataProvider`.
 
 ```go
 type SnapshotProvider struct {
@@ -140,7 +144,7 @@ func NewSnapshotProvider(path string) (*SnapshotProvider, error)
 
 Interface implementations:
 
-- **`Provides()`** -- inspects the snapshot to determine which metrics are present (checks which tables have rows) and returns those metrics.
+- **`Provides()`** -- inspects the snapshot to determine which tables have rows, then returns all Metric constants that map to those tables via the `metricView` map. For example, if the `eod` table has rows, all eight EOD metrics are returned. This avoids per-column introspection.
 - **`Fetch(ctx, req)`** -- queries `eod`, `metrics`, and/or `fundamentals` filtered by requested assets, metrics, and date range. Assembles a DataFrame using the same column-major layout as `PVDataProvider`.
 - **`Assets(ctx)`** -- returns all rows from `assets`.
 - **`LookupAsset(ctx, ticker)`** -- queries `assets WHERE ticker = ?`.
@@ -158,8 +162,8 @@ A new `snapshot` subcommand added to the strategy binary via `cli.Run()`, alongs
 **Execution flow:**
 
 1. Apply strategy flags (same as `backtest`)
-2. Create `PVDataProvider` and any other real providers
-3. Create `SnapshotRecorder` wrapping the real providers
+2. Create `PVDataProvider` (and any other real providers the strategy binary registers)
+3. Create `SnapshotRecorder` wrapping the available providers (IndexProvider and RatingProvider may be nil)
 4. Build the engine with the recorder as all provider types
 5. Run the backtest
 6. Call `recorder.Close()`
