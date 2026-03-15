@@ -165,6 +165,23 @@ func (e *Engine) RatedUniverse(analyst string, filter data.RatingFilter) univers
 	panic(fmt.Sprintf("engine: no provider implements RatingProvider (needed for analyst %q)", analyst))
 }
 
+// IndexUniverse creates a universe whose membership is determined by index
+// composition (e.g. S&P 500, Nasdaq 100). The engine finds an IndexProvider
+// from its registered providers, creates the universe, and wires it with the
+// engine's data source.
+func (e *Engine) IndexUniverse(indexName string) universe.Universe {
+	for _, p := range e.providers {
+		if ip, ok := p.(data.IndexProvider); ok {
+			u := universe.NewIndex(ip, indexName)
+			u.SetDataSource(e)
+
+			return u
+		}
+	}
+
+	panic(fmt.Sprintf("engine: no provider implements IndexProvider (needed for index %q)", indexName))
+}
+
 // CurrentDate returns the current simulation date.
 func (e *Engine) CurrentDate() time.Time {
 	return e.currentDate
