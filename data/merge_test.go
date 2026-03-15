@@ -13,177 +13,134 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package data
+package data_test
 
 import (
-	"testing"
 	"time"
 
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
-func TestMergeColumns(t *testing.T) {
-	times := []time.Time{
-		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
-	}
+var _ = Describe("Merge", func() {
+	var (
+		a1 asset.Asset
+		a2 asset.Asset
+	)
 
-	a1 := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "IBM"}
-	a2 := asset.Asset{CompositeFigi: "BBG000BVPV84", Ticker: "AMZN"}
-
-	// Frame 1: Close metric for both assets.
-	df1, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricClose}, Daily, []float64{
-		100, 101, 102, // a1 Close
-		200, 201, 202, // a2 Close
+	BeforeEach(func() {
+		a1 = asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "IBM"}
+		a2 = asset.Asset{CompositeFigi: "BBG000BVPV84", Ticker: "AMZN"}
 	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df1: %v", err)
-	}
 
-	// Frame 2: Open metric for both assets.
-	df2, err := NewDataFrame(times, []asset.Asset{a1, a2}, []Metric{MetricOpen}, Daily, []float64{
-		99, 100, 101, // a1 Open
-		199, 200, 201, // a2 Open
+	Describe("MergeColumns", func() {
+		It("merges frames with different metrics for the same assets and times", func() {
+			times := []time.Time{
+				time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			}
+
+			df1, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricClose}, data.Daily, []float64{
+				100, 101, 102, // a1 Close
+				200, 201, 202, // a2 Close
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			df2, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricOpen}, data.Daily, []float64{
+				99, 100, 101, // a1 Open
+				199, 200, 201, // a2 Open
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			merged, err := data.MergeColumns(df1, df2)
+			Expect(err).NotTo(HaveOccurred())
+
+			closeCol := merged.Column(a1, data.MetricClose)
+			Expect(closeCol).NotTo(BeNil())
+			Expect(closeCol).To(Equal([]float64{100, 101, 102}))
+
+			openCol := merged.Column(a1, data.MetricOpen)
+			Expect(openCol).NotTo(BeNil())
+			Expect(openCol).To(Equal([]float64{99, 100, 101}))
+
+			closeCol2 := merged.Column(a2, data.MetricClose)
+			Expect(closeCol2).NotTo(BeNil())
+			Expect(closeCol2).To(Equal([]float64{200, 201, 202}))
+
+			openCol2 := merged.Column(a2, data.MetricOpen)
+			Expect(openCol2).NotTo(BeNil())
+			Expect(openCol2).To(Equal([]float64{199, 200, 201}))
+		})
+
+		It("returns an empty frame when called with no arguments", func() {
+			merged, err := data.MergeColumns()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(merged.Len()).To(Equal(0))
+		})
 	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df2: %v", err)
-	}
 
-	merged, err := MergeColumns(df1, df2)
-	if err != nil {
-		t.Fatalf("MergeColumns: %v", err)
-	}
+	Describe("MergeTimes", func() {
+		It("concatenates frames with non-overlapping time ranges", func() {
+			times1 := []time.Time{
+				time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			}
+			times2 := []time.Time{
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+			}
 
-	// Verify merged DataFrame has both metrics.
-	closeCol := merged.Column(a1, MetricClose)
-	if closeCol == nil {
-		t.Fatal("expected Close column for a1, got nil")
-	}
-	if closeCol[0] != 100 || closeCol[1] != 101 || closeCol[2] != 102 {
-		t.Errorf("a1 Close = %v, want [100 101 102]", closeCol)
-	}
+			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
+				100, 101,
+			})
+			Expect(err).NotTo(HaveOccurred())
 
-	openCol := merged.Column(a1, MetricOpen)
-	if openCol == nil {
-		t.Fatal("expected Open column for a1, got nil")
-	}
-	if openCol[0] != 99 || openCol[1] != 100 || openCol[2] != 101 {
-		t.Errorf("a1 Open = %v, want [99 100 101]", openCol)
-	}
+			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
+				102, 103,
+			})
+			Expect(err).NotTo(HaveOccurred())
 
-	closeCol2 := merged.Column(a2, MetricClose)
-	if closeCol2 == nil {
-		t.Fatal("expected Close column for a2, got nil")
-	}
-	if closeCol2[0] != 200 || closeCol2[1] != 201 || closeCol2[2] != 202 {
-		t.Errorf("a2 Close = %v, want [200 201 202]", closeCol2)
-	}
+			merged, err := data.MergeTimes(df1, df2)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(merged.Len()).To(Equal(4))
 
-	openCol2 := merged.Column(a2, MetricOpen)
-	if openCol2 == nil {
-		t.Fatal("expected Open column for a2, got nil")
-	}
-	if openCol2[0] != 199 || openCol2[1] != 200 || openCol2[2] != 201 {
-		t.Errorf("a2 Open = %v, want [199 200 201]", openCol2)
-	}
-}
+			col := merged.Column(a1, data.MetricClose)
+			Expect(col).NotTo(BeNil())
+			Expect(col).To(Equal([]float64{100, 101, 102, 103}))
 
-func TestMergeColumnsEmpty(t *testing.T) {
-	merged, err := MergeColumns()
-	if err != nil {
-		t.Fatalf("MergeColumns empty: %v", err)
-	}
-	if merged.Len() != 0 {
-		t.Errorf("expected Len()=0, got %d", merged.Len())
-	}
-}
+			mergedTimes := merged.Times()
+			expectedTimes := append(times1, times2...)
+			for idx, tm := range expectedTimes {
+				Expect(mergedTimes[idx].Equal(tm)).To(BeTrue(), "time[%d] mismatch", idx)
+			}
+		})
 
-func TestMergeTimes(t *testing.T) {
-	a1 := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "IBM"}
+		It("returns an error for overlapping time ranges", func() {
+			times1 := []time.Time{
+				time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			}
+			times2 := []time.Time{
+				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			}
 
-	times1 := []time.Time{
-		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
-	}
-	times2 := []time.Time{
-		time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
-	}
+			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
+				100, 101,
+			})
+			Expect(err).NotTo(HaveOccurred())
 
-	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
-		100, 101,
+			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
+				101, 102,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = data.MergeTimes(df1, df2)
+			Expect(err).To(HaveOccurred())
+		})
 	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df1: %v", err)
-	}
-
-	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
-		102, 103,
-	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df2: %v", err)
-	}
-
-	merged, err := MergeTimes(df1, df2)
-	if err != nil {
-		t.Fatalf("MergeTimes: %v", err)
-	}
-
-	if merged.Len() != 4 {
-		t.Fatalf("expected Len()=4, got %d", merged.Len())
-	}
-
-	col := merged.Column(a1, MetricClose)
-	if col == nil {
-		t.Fatal("expected Close column, got nil")
-	}
-
-	want := []float64{100, 101, 102, 103}
-	for i, v := range want {
-		if col[i] != v {
-			t.Errorf("col[%d] = %v, want %v", i, col[i], v)
-		}
-	}
-
-	// Verify timestamps are in order.
-	mergedTimes := merged.Times()
-	expectedTimes := append(times1, times2...)
-	for i, tm := range expectedTimes {
-		if !mergedTimes[i].Equal(tm) {
-			t.Errorf("time[%d] = %v, want %v", i, mergedTimes[i], tm)
-		}
-	}
-}
-
-func TestMergeTimesOverlap(t *testing.T) {
-	a1 := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "IBM"}
-
-	times1 := []time.Time{
-		time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
-	}
-	times2 := []time.Time{
-		time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
-		time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
-	}
-
-	df1, err := NewDataFrame(times1, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
-		100, 101,
-	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df1: %v", err)
-	}
-
-	df2, err := NewDataFrame(times2, []asset.Asset{a1}, []Metric{MetricClose}, Daily, []float64{
-		101, 102,
-	})
-	if err != nil {
-		t.Fatalf("NewDataFrame df2: %v", err)
-	}
-
-	_, err = MergeTimes(df1, df2)
-	if err == nil {
-		t.Fatal("expected error for overlapping time ranges, got nil")
-	}
-}
+})
