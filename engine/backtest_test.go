@@ -125,6 +125,23 @@ func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ port
 	return nil
 }
 
+// failingStrategy always returns an error from Compute.
+type failingStrategy struct{}
+
+func (s *failingStrategy) Name() string { return "failing" }
+
+func (s *failingStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("failingStrategy.Setup: tradecron.New: %v", err))
+	}
+	eng.Schedule(tc)
+}
+
+func (s *failingStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return fmt.Errorf("simulated compute failure")
+}
+
 // makeDailyTestData creates a DataFrame with daily prices for the given assets
 // and metrics, covering nDays starting at start. Timestamps are set to 16:00
 // UTC to match tradecron "0 16 * * 1-5" schedule dates.
@@ -283,6 +300,26 @@ var _ = Describe("Backtest", func() {
 
 			_, err := eng.Backtest(context.Background(), start, end)
 			Expect(err).To(HaveOccurred())
+		})
+
+		It("halts when strategy Compute returns an error", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &failingStrategy{}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(10_000),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("simulated compute failure"))
 		})
 	})
 })
