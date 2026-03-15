@@ -164,7 +164,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 
 		// 16. Call strategy.Compute.
-		e.strategy.Compute(stepCtx, e, acct)
+		if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+			return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
+				e.strategy.Name(), date, err)
+		}
 
 		// 17. Build price DataFrame for all assets seen this step (including any
 		// newly acquired positions from Compute).
