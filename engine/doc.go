@@ -156,32 +156,6 @@
 // the equity curve, every trade via Transactions, individual metrics via
 // PerformanceMetric, and convenient bundles like Summary and RiskMetrics.
 //
-// # Predicted Portfolio
-//
-// [Engine.PredictedPortfolio] shows what a strategy would buy on the next
-// scheduled trade date using currently available data. This is useful for
-// strategies that trade infrequently (e.g., monthly) where users want to
-// see what trades are coming before the actual trade date.
-//
-// The method clones the current portfolio, advances the engine's date to the
-// next scheduled trade date, forward-fills any data gaps (copying the last
-// available prices forward day-by-day), and runs the strategy's Compute
-// against the shadow copy. The strategy is completely unaware it is a
-// prediction run.
-//
-// Call it after a backtest or during live operation:
-//
-//	predicted, err := eng.PredictedPortfolio(ctx)
-//	if err != nil {
-//	    log.Fatal(err)
-//	}
-//	for _, tx := range predicted.Transactions() {
-//	    fmt.Printf("%s %s %.0f shares\n", tx.Type, tx.Asset.Ticker, tx.Qty)
-//	}
-//
-// The returned portfolio includes annotations, justifications, and all
-// other portfolio state produced by the prediction run.
-//
 // # Configuration
 //
 // Strategy parameters are defined as exported struct fields with struct tags.
