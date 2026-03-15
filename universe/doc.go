@@ -71,13 +71,6 @@
 //	df, err := u.Window(ctx, portfolio.Months(6), data.Close, data.Volume)
 //	row, err := u.At(ctx, today, data.Close)
 //
-// # Strategies as Assets
-//
-// A strategy's equity curve can be included in another strategy's universe
-// using the strategy: ticker prefix. This enables composite strategies that
-// allocate across sub-strategies. Note: this is a planned feature and is not
-// yet implemented.
-//
 // # Membership and Time
 //
 // Universe membership is resolved at each computation step, not at setup time.
