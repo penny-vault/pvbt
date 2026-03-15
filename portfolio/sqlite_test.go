@@ -238,6 +238,36 @@ var _ = Describe("SQLite", func() {
 			Expect(txns[1].Justification).To(Equal("momentum crossover"))
 			Expect(txns[2].Justification).To(BeEmpty())
 		})
+
+		It("round-trips perfData frequency", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+
+			acct := portfolio.New(
+				portfolio.WithCash(10000, time.Time{}),
+				portfolio.WithBenchmark(spy),
+			)
+
+			priceTime := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			priceDF, err := data.NewDataFrame(
+				[]time.Time{priceTime},
+				[]asset.Asset{spy},
+				[]data.Metric{data.MetricClose, data.AdjClose},
+				data.Daily,
+				[]float64{500, 500},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdatePrices(priceDF)
+
+			path := filepath.Join(tmpDir, "freq.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			perfData := restored.PerfData()
+			Expect(perfData).NotTo(BeNil())
+			Expect(perfData.Frequency()).To(Equal(data.Daily))
+		})
 	})
 
 	Describe("empty portfolio round-trip", func() {
