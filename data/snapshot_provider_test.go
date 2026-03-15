@@ -226,4 +226,71 @@ var _ = Describe("SnapshotProvider", func() {
 			Expect(result[0].Ticker).To(Equal("SPY"))
 		})
 	})
+
+	Describe("round-trip", func() {
+		It("record then replay produces identical data", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			tlt := asset.Asset{CompositeFigi: "BBG000BHTK15", Ticker: "TLT"}
+			assets := []asset.Asset{spy, tlt}
+			metrics := []data.Metric{data.MetricClose, data.AdjClose}
+
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			times := []time.Time{
+				time.Date(2024, 1, 2, 16, 0, 0, 0, nyc),
+				time.Date(2024, 1, 3, 16, 0, 0, 0, nyc),
+				time.Date(2024, 1, 4, 16, 0, 0, 0, nyc),
+			}
+
+			// 2 assets * 2 metrics * 3 times = 12 values
+			values := []float64{
+				100.0, 101.0, 102.0, // SPY close
+				99.0, 100.0, 101.0, // SPY adj_close
+				50.0, 51.0, 52.0, // TLT close
+				49.0, 50.0, 51.0, // TLT adj_close
+			}
+
+			originalDF, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)
+			Expect(err).NotTo(HaveOccurred())
+
+			stub := data.NewTestProvider(metrics, originalDF)
+			recorder, err := data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			req := data.DataRequest{
+				Assets: assets, Metrics: metrics,
+				Start: times[0], End: times[2], Frequency: data.Daily,
+			}
+
+			_, err = recorder.Fetch(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(recorder.Close()).To(Succeed())
+
+			// Replay.
+			snap, err := data.NewSnapshotProvider(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer snap.Close()
+
+			replayedDF, err := snap.Fetch(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(replayedDF).NotTo(BeNil())
+
+			// Compare all values element-by-element.
+			for _, assetItem := range assets {
+				for _, metric := range metrics {
+					original := originalDF.Column(assetItem, metric)
+					replayed := replayedDF.Column(assetItem, metric)
+					Expect(len(replayed)).To(Equal(len(original)))
+					for idx := range original {
+						Expect(replayed[idx]).To(BeNumerically("~", original[idx], 0.001),
+							"mismatch at %s/%s index %d", assetItem.Ticker, metric, idx)
+					}
+				}
+			}
+		})
+	})
 })
