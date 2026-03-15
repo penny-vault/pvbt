@@ -164,7 +164,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			if err := a.submitAndRecord(ctx, o.asset, Sell, order); err != nil {
+			if err := a.submitAndRecord(ctx, o.asset, Sell, order, alloc.Justification); err != nil {
 				return fmt.Errorf("RebalanceTo: sell %s: %w", o.asset.Ticker, err)
 			}
 		}
@@ -193,7 +193,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			if err := a.submitAndRecord(ctx, o.asset, Buy, order); err != nil {
+			if err := a.submitAndRecord(ctx, o.asset, Buy, order, alloc.Justification); err != nil {
 				return fmt.Errorf("RebalanceTo: buy %s: %w", o.asset.Ticker, err)
 			}
 		}
@@ -219,6 +219,7 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 
 	// Apply modifiers.
 	var hasLimit, hasStop bool
+	var justification string
 
 	for _, mod := range mods {
 		switch m := mod.(type) {
@@ -243,6 +244,8 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 		case goodTilDateModifier:
 			order.TimeInForce = broker.GTD
 			order.GTDDate = m.date
+		case justificationModifier:
+			justification = m.reason
 		}
 	}
 
@@ -255,12 +258,12 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 		order.OrderType = broker.Stop
 	}
 
-	return a.submitAndRecord(ctx, ast, side, order)
+	return a.submitAndRecord(ctx, ast, side, order, justification)
 }
 
 // submitAndRecord sends an order to the broker and records each fill
 // as a transaction. Used by both Order and RebalanceTo.
-func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Side, order broker.Order) error {
+func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Side, order broker.Order, justification string) error {
 	fills, err := a.broker.Submit(ctx, order)
 	if err != nil {
 		return fmt.Errorf("order %s (qty=%.2f, amount=%.2f): %w", ast.Ticker, order.Qty, order.Amount, err)
@@ -282,12 +285,13 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 		}
 
 		a.Record(Transaction{
-			Date:   fill.FilledAt,
-			Asset:  ast,
-			Type:   txType,
-			Qty:    fill.Qty,
-			Price:  fill.Price,
-			Amount: amount,
+			Date:          fill.FilledAt,
+			Asset:         ast,
+			Type:          txType,
+			Qty:           fill.Qty,
+			Price:         fill.Price,
+			Amount:        amount,
+			Justification: justification,
 		})
 	}
 
