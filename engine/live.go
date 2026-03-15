@@ -166,7 +166,10 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 			}
 
 			// h. Call strategy.Compute.
-			e.strategy.Compute(stepCtx, e, acct)
+			if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+				zerolog.Ctx(stepCtx).Error().Err(err).Msg("strategy compute failed")
+				continue
+			}
 
 			// i. Build price DataFrame for post-Compute holdings and call UpdatePrices.
 			var priceAssets []asset.Asset
