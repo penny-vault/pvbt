@@ -73,7 +73,7 @@
 //		e.RiskFreeAsset(e.Asset("DGS3MO"))
 //	}
 //
-//	func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
 //		mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
 //		mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
 //		mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
@@ -82,15 +82,15 @@
 //		momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
 //		if err := momentum.Err(); err != nil {
 //			log.Error().Err(err).Msg("signal computation failed")
-//			return
+//			return err
 //		}
 //
 //		// Pick the risk-on asset with the highest positive momentum.
 //		// If none are positive, fall back to the risk-off asset (TLT).
-//		riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+//		riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
 //		if err != nil {
 //			log.Error().Err(err).Msg("risk-off data fetch failed")
-//			return
+//			return err
 //		}
 //		portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 //
@@ -98,9 +98,10 @@
 //		plan, err := portfolio.EqualWeight(momentum)
 //		if err != nil {
 //			log.Error().Err(err).Msg("EqualWeight failed")
-//			return
+//			return err
 //		}
-//		p.RebalanceTo(ctx, plan...)
+//		portfolio.RebalanceTo(ctx, plan...)
+//		return nil
 //	}
 //
 //	func main() {
@@ -209,9 +210,10 @@
 // Strategies use zerolog for structured logging. The logger is carried on
 // the context passed to Compute. Use zerolog.Ctx(ctx) to retrieve it:
 //
-//	func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
 //		log := zerolog.Ctx(ctx)
 //		log.Info().Str("strategy", s.Name()).Msg("computing")
+//		return nil
 //	}
 //
 // The engine attaches a pre-configured logger to the context before calling

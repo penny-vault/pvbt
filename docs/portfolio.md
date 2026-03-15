@@ -161,18 +161,19 @@ p.Order(ctx, asset, Buy, 200, OnTheOpen)
 A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments:
 
 ```go
-func (s *MyStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
     // Core allocation
     plan, err := portfolio.EqualWeight(selected)
     if err != nil {
-        return
+        return err
     }
-    p.RebalanceTo(ctx, plan...)
+    portfolio.RebalanceTo(ctx, plan...)
 
     // Tactical overlay
     if vix.Value(spy, data.MetricClose) > 30 {
-        p.Order(ctx, spy, Buy, 100, Limit(150.00))
+        portfolio.Order(ctx, spy, Buy, 100, Limit(150.00))
     }
+    return nil
 }
 ```
 
@@ -467,15 +468,16 @@ val := p.PerformanceMetric(MyMetric).Window(Years(3)).Value()
 While performance metrics are most commonly examined after a backtest completes, they are available during computation. A strategy might use them to adjust its behavior:
 
 ```go
-func (s *Adaptive) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    dd, err := p.PerformanceMetric(MaxDrawdown).Value()
+func (s *Adaptive) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+    dd, err := portfolio.PerformanceMetric(MaxDrawdown).Value()
     if err == nil && dd > 0.15 {
         // drawdown exceeds 15%, reduce exposure
-        return
+        return nil
     }
 
     // normal allocation logic
     // ...
+    return nil
 }
 ```
 
@@ -575,7 +577,7 @@ Run the factor strategy through the engine to get its equity curve, then convert
 // Define a low-volatility factor as a strategy
 type LowVolFactor struct{}
 
-func (s *LowVolFactor) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *LowVolFactor) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
     vol := signal.Volatility(ctx, s.Universe, portfolio.Months(3))
 
     // Long the least volatile stocks
@@ -584,8 +586,9 @@ func (s *LowVolFactor) Compute(ctx context.Context, e *engine.Engine, p portfoli
     // Short the most volatile stocks
     shortPlan, _ := portfolio.EqualWeight(highVol)
 
-    p.RebalanceTo(ctx, longPlan...)
-    p.RebalanceTo(ctx, shortPlan...)
+    portfolio.RebalanceTo(ctx, longPlan...)
+    portfolio.RebalanceTo(ctx, shortPlan...)
+    return nil
 }
 
 // Run the factor strategy
