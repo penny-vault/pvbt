@@ -217,7 +217,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 	// getValue returns the value for a metric, or nil if the metric was
 	// not requested or the value is NaN. This ensures unrequested metrics
 	// are stored as NULL rather than zero.
-	type nullableFloat = interface{}
+	type nullableFloat = any
 
 	for assetIdx, a := range df.assets {
 		for timeIdx, timestamp := range df.times {
@@ -257,7 +257,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 	return nil
 }
 
-func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, metrics []Metric) error {
+func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) error {
 	numTimes := len(df.times)
 	numMetrics := len(df.metrics)
 
@@ -270,7 +270,7 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, metrics []Me
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format(time.RFC3339)
 
-			getValue := func(metric Metric) interface{} {
+			getValue := func(metric Metric) any {
 				mi, ok := mIdx[metric]
 				if !ok {
 					return nil
@@ -347,7 +347,7 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format(time.RFC3339)
 
-			args := make([]interface{}, 3+len(colMetrics))
+			args := make([]any, 3+len(colMetrics))
 			args[0] = a.CompositeFigi
 			args[1] = dateStr
 			args[2] = "ARQ" // default dimension
