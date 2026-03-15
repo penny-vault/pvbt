@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-03-14
+
 ### Added
 
 - Backtest and live-trade strategies against historical or real-time market
@@ -21,3 +23,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Preview upcoming trades before the next scheduled trade date
 - Annotate portfolio decisions with justifications for audit trails
 - Save and reload complete backtest results between sessions
+
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/penny-vault/pvbt/releases/tag/v0.1.0
