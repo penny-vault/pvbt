@@ -43,7 +43,9 @@ type paramTestStrategy struct {
 
 func (s *paramTestStrategy) Name() string                                                      { return "test" }
 func (s *paramTestStrategy) Setup(_ *engine.Engine)                                            {}
-func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) {}
+func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 
 func findParam(params []engine.Parameter, name string) *engine.Parameter {
 	for idx := range params {

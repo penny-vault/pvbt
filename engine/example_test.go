@@ -28,13 +28,14 @@ func (s *BuyAndHold) Setup(e *engine.Engine) {
 	e.SetBenchmark(e.Asset("SPY"))
 }
 
-func (s *BuyAndHold) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *BuyAndHold) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
 	if s.bought {
-		return
+		return nil
 	}
 	spy := e.Asset("SPY")
 	p.Order(ctx, spy, portfolio.Buy, 20)
 	s.bought = true
+	return nil
 }
 
 // This example runs a buy-and-hold backtest with synthetic data from
@@ -80,23 +81,24 @@ func (s *MomentumStrategy) Setup(e *engine.Engine) {
 	e.SetBenchmark(e.Asset("SPY"))
 }
 
-func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
 	mom := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3), data.MetricClose)
 	if err := mom.Err(); err != nil {
-		return
+		return nil
 	}
 
 	riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
 	if err != nil {
-		return
+		return nil
 	}
 
 	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(mom)
 	plan, err := portfolio.EqualWeight(mom)
 	if err != nil {
-		return
+		return nil
 	}
 	p.RebalanceTo(ctx, plan...)
+	return nil
 }
 
 // This example runs a momentum rotation strategy with synthetic data.

@@ -36,7 +36,9 @@ type testStrategy struct {
 
 func (s *testStrategy) Name() string                                                       { return "test" }
 func (s *testStrategy) Setup(e *engine.Engine)                                              {}
-func (s *testStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {}
+func (s *testStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
 
 var _ = Describe("runID", func() {
 	It("returns a full UUID and a 5-char prefix", func() {
