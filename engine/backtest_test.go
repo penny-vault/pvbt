@@ -155,7 +155,7 @@ func makeDailyTestData(start time.Time, nDays int, testAssets []asset.Asset, met
 	for i := range vals {
 		vals[i] = 100.0 + float64(i)
 	}
-	df, err := data.NewDataFrame(times, testAssets, metrics, vals)
+	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
 	Expect(err).NotTo(HaveOccurred())
 	return df
 }

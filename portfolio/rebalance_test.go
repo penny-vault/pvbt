@@ -62,6 +62,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -107,6 +108,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -159,6 +161,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, goog},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500, 1000},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -240,6 +243,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -270,6 +274,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -299,6 +304,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500, 200},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -351,6 +357,7 @@ var _ = Describe("Order WithJustification", func() {
 			[]time.Time{tradeDate},
 			[]asset.Asset{spyAsset},
 			[]data.Metric{data.MetricClose},
+			data.Daily,
 			[]float64{500},
 		)
 		Expect(err).NotTo(HaveOccurred())

@@ -36,7 +36,7 @@ type testRatingProvider struct {
 func (p *testRatingProvider) Provides() []data.Metric { return p.metrics }
 func (p *testRatingProvider) Close() error            { return nil }
 func (p *testRatingProvider) Fetch(_ context.Context, _ data.DataRequest) (*data.DataFrame, error) {
-	df, err := data.NewDataFrame(nil, nil, nil, nil)
+	df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 	return df, err
 }
 func (p *testRatingProvider) RatedAssets(_ context.Context, _ string, _ data.RatingFilter, t time.Time) ([]asset.Asset, error) {

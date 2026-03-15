@@ -66,7 +66,7 @@ var _ = Describe("Static Universe", func() {
 		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
 		goog = asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
 		now = time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-		emptyDF, _ = data.NewDataFrame(nil, nil, nil, nil)
+		emptyDF, _ = data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 	})
 
 	Describe("Window", func() {
