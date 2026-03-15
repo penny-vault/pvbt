@@ -598,6 +598,46 @@ var _ = Describe("Account", func() {
 	})
 })
 
+var _ = Describe("Account.Clone", func() {
+	It("preserves holdings, cash, metadata, and annotations", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+
+		acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+		acct.SetMetadata("strategy", "adm")
+		acct.Annotate(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC).Unix(), "signal", "0.5")
+
+		acct.Record(portfolio.Transaction{
+			Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+			Asset:  spy,
+			Type:   portfolio.BuyTransaction,
+			Qty:    100,
+			Price:  500,
+			Amount: -50_000,
+		})
+
+		clone := acct.Clone()
+
+		Expect(clone.Cash()).To(Equal(acct.Cash()))
+		Expect(clone.Position(spy)).To(Equal(acct.Position(spy)))
+		Expect(clone.GetMetadata("strategy")).To(Equal("adm"))
+		Expect(clone.Annotations()).To(HaveLen(1))
+	})
+
+	It("isolates clone mutations from original", func() {
+		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+		acct.SetMetadata("key", "original")
+		acct.Annotate(100, "signal", "0.5")
+
+		clone := acct.Clone()
+
+		clone.SetMetadata("key", "mutated")
+		clone.Annotate(200, "other", "1.0")
+
+		Expect(acct.GetMetadata("key")).To(Equal("original"))
+		Expect(acct.Annotations()).To(HaveLen(1))
+	})
+})
+
 var _ = Describe("TransactionType", func() {
 	It("returns correct string for each type", func() {
 		Expect(portfolio.BuyTransaction.String()).To(Equal("Buy"))

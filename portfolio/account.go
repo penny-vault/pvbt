@@ -761,3 +761,55 @@ func (a *Account) Annotate(timestamp int64, key, value string) {
 func (a *Account) Annotations() []Annotation {
 	return a.annotations
 }
+
+// Clone returns a deep copy of the Account suitable for prediction runs.
+// Holdings, metadata, and annotations are independent copies. PerfData is
+// deep-copied via DataFrame.Copy. Transactions and tax lots are shallow-copied
+// (the clone gets its own slice header but shares the underlying elements,
+// which is safe since appending to the clone's slice does not affect the
+// original).
+func (acct *Account) Clone() *Account {
+	holdings := make(map[asset.Asset]float64, len(acct.holdings))
+	for held, qty := range acct.holdings {
+		holdings[held] = qty
+	}
+
+	metadata := make(map[string]string, len(acct.metadata))
+	for key, val := range acct.metadata {
+		metadata[key] = val
+	}
+
+	annotations := make([]Annotation, len(acct.annotations))
+	copy(annotations, acct.annotations)
+
+	transactions := make([]Transaction, len(acct.transactions))
+	copy(transactions, acct.transactions)
+
+	taxLots := make(map[asset.Asset][]TaxLot, len(acct.taxLots))
+	for held, lots := range acct.taxLots {
+		lotsCopy := make([]TaxLot, len(lots))
+		copy(lotsCopy, lots)
+		taxLots[held] = lotsCopy
+	}
+
+	clone := &Account{
+		cash:              acct.cash,
+		holdings:          holdings,
+		transactions:      transactions,
+		broker:            acct.broker,
+		prices:            acct.prices,
+		benchmark:         acct.benchmark,
+		riskFree:          acct.riskFree,
+		taxLots:           taxLots,
+		metadata:          metadata,
+		metrics:           acct.metrics,
+		registeredMetrics: acct.registeredMetrics,
+		annotations:       annotations,
+	}
+
+	if acct.perfData != nil {
+		clone.perfData = acct.perfData.Copy()
+	}
+
+	return clone
+}
