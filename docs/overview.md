@@ -255,27 +255,6 @@ Two principles shaped the API.
 
 **The same code should work in a backtest and in production.** A strategy that runs against 20 years of historical data should deploy to a live trading system without modification. The API never exposes whether you're in a simulation or operating in real time.
 
-## Predicted portfolio
-
-Strategies that trade infrequently (e.g., monthly) leave users wondering what the next trade will be. `PredictedPortfolio` runs the strategy's Compute against a shadow copy of the portfolio using the next scheduled trade date, showing what trades would occur with current prices:
-
-```go
-predicted, err := eng.PredictedPortfolio(ctx)
-if err != nil {
-    log.Fatal(err)
-}
-
-for _, tx := range predicted.Transactions() {
-    fmt.Printf("%s %s %.0f shares\n", tx.Type, tx.Asset.Ticker, tx.Qty)
-}
-```
-
-The engine clones the current portfolio, advances the date to the next scheduled trade, and forward-fills any data gaps by copying the last available prices forward day-by-day. The strategy is completely unaware it is a prediction run -- it sees data and computes as usual.
-
-The returned portfolio includes transactions, annotations, and justifications from the prediction run. The original portfolio is not mutated.
-
-Call it after a backtest completes or during live operation. It works with any schedule frequency -- daily, weekly, monthly, or custom tradecron expressions.
-
 ## What comes next
 
 The rest of the documentation walks through each concept in detail:
