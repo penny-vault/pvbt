@@ -1,15 +1,21 @@
 # pvbt
 
-pvbt is Penny Vault's backtesting engine. It lets you write investment strategies that read like their plain-English descriptions, then run them against 20 years of history or deploy them to production -- same code, no changes.
+[![CI](https://github.com/penny-vault/pvbt/actions/workflows/ci.yml/badge.svg)](https://github.com/penny-vault/pvbt/actions/workflows/ci.yml)
+[![Go](https://img.shields.io/badge/Go-1.25.6-00ADD8?logo=go)](https://go.dev/)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
+Every quantitative strategy begins as a simple idea -- buy momentum, hedge with bonds, rebalance monthly. Then the infrastructure arrives: data pipelines, date alignment, survivorship bias, split adjustments, slippage models. Before long the idea is buried under ten thousand lines of plumbing.
+
+pvbt inverts that ratio. You write the thirty lines that express your thesis; the engine supplies the ten thousand underneath. The same strategy code backtests against two decades of history or trades live tomorrow.
 
 ## Highlights
 
-- **Strategy code reads like prose.** Express ideas in terms of metrics, DataFrames, and portfolio operations -- not loops, arrays, and index math.
-- **Backtest and production use the same code.** The API never exposes whether you're in a simulation or trading live.
-- **Optimized data loading.** The engine discovers data requirements and batches requests across providers automatically.
-- **DataFrame-centric.** All time-series operations go through DataFrame -- column-major storage, gonum-compatible, SIMD-friendly.
-- **Rich performance measurement.** Sharpe, Sortino, Calmar, Alpha, Beta, drawdowns, tax impact, withdrawal rates, and dozens more.
-- **Survivorship-bias-free universes.** Index-based universes like the S&P 500 resolve historically, so you never accidentally trade a stock that didn't exist yet.
+- **No data plumbing.** Fetch through universes; the engine discovers your requirements, routes requests to providers, and caches results. You never write a loader.
+- **Survivorship-bias-free universes.** Index membership resolves historically -- the S&P 500 on January 3, 2008 returns exactly the stocks in the index that day, not today's composition.
+- **60+ performance metrics, including taxes.** Sharpe, Sortino, Calmar, drawdowns, and dozens more -- plus long- and short-term capital gains, qualified dividends, and safe withdrawal rates.
+- **Market-aware scheduling.** Write `@monthend` instead of manual last-trading-day logic. Tradecron knows holidays, half-days, and market hours.
+- **DataFrames that compose.** Chain `df.Pct(1).Rolling(20).Mean()` with automatic error propagation. Columns are contiguous `[]float64`, directly compatible with gonum.
+- **One codebase, backtest to production.** The API never exposes whether you are in a simulation or trading live.
 
 ## Quick Example
 
@@ -55,11 +61,11 @@ The engine handles data loading, order execution, commission/slippage, and perfo
 
 ## Installation
 
+Requires Go 1.25.6 or later.
+
 ```sh
 go get github.com/penny-vault/pvbt
 ```
-
-Requires Go 1.25.6 or later.
 
 ## How It Works
 
@@ -69,7 +75,7 @@ A strategy implements three methods:
 |--------|---------|
 | `Name()` | Returns the strategy's short identifier |
 | `Setup(eng *Engine)` | Optional initialization after fields are populated |
-| `Compute(ctx context.Context, eng *Engine, p portfolio.Portfolio) error` | Runs at each scheduled step to make allocation decisions |
+| `Compute(ctx, eng, p)` | Runs at each scheduled step to make allocation decisions |
 
 The engine runs in three phases:
 
@@ -77,25 +83,7 @@ The engine runs in three phases:
 2. **Computation** -- steps through time according to the schedule, calling `Compute` at each step.
 3. **Results** -- the returned portfolio provides access to the transaction log and performance metrics over its full history.
 
-## Key Concepts
-
-**Metrics** are externally-sourced measurements -- Price, Volume, MarketCap, EarningsPerShare, Unemployment, etc. Data providers supply metrics; the engine routes requests to the right provider.
-
-**DataFrames** are the primary type for working with time-series data. They store values indexed by time, asset, and metric with operations for filtering, arithmetic, transforms, rolling windows, and more. Columns are contiguous `[]float64` slices, directly compatible with gonum.
-
-**Signals** are computations derived from metrics -- momentum, risk-adjusted returns, moving average crossovers. They receive a DataFrame and return computed values.
-
-**Universes** define the investable space -- from explicit ticker lists to historically-accurate index membership.
-
-**Portfolios** turn allocation decisions into trades. Use `RebalanceTo` for declarative allocation or `Order` for individual trades. Risk controls are configured by the operator, not the strategy author. Attach a broker for live execution or leave it off for backtesting -- the strategy code is the same either way.
-
-**Scheduling** uses tradecron, a cron dialect that understands trading calendars, market holidays, and trading hours.
-
-**Configuration** is defined in a TOML file alongside the strategy code, making strategies user-configurable without touching Go.
-
 ## Documentation
-
-Detailed documentation for each concept:
 
 - [Overview](docs/overview.md) -- full walkthrough of the example strategy
 - [Engine](docs/engine.md) -- configuration, strategy interface, data access, trade preview
