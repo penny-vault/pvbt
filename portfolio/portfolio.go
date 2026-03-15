@@ -118,6 +118,16 @@ type Portfolio interface {
 	// GetMetadata retrieves a metadata value by key. Returns empty
 	// string if the key has not been set.
 	GetMetadata(key string) string
+
+	// Annotate records a key-value annotation for the given timestamp.
+	// Call this during Compute to capture intermediate computations
+	// that explain why the strategy made its decisions. Multiple calls
+	// accumulate entries.
+	Annotate(timestamp int64, key, value string)
+
+	// Annotations returns the full annotation log in the order entries
+	// were recorded.
+	Annotations() []Annotation
 }
 
 // PortfolioManager is the interface the engine uses to manage the

@@ -42,18 +42,19 @@ type Option func(*Account)
 // *Account (giving access to both interfaces): it passes it as Portfolio
 // to strategy Compute calls, and calls Record/SetBroker directly.
 type Account struct {
-	cash            float64
-	holdings        map[asset.Asset]float64
-	transactions    []Transaction
-	broker          broker.Broker
-	prices          *data.DataFrame
-	perfData        *data.DataFrame
-	benchmark       asset.Asset
-	riskFree        asset.Asset
-	taxLots            map[asset.Asset][]TaxLot
-	metadata           map[string]string
-	metrics            []MetricRow
-	registeredMetrics  []PerformanceMetric
+	cash              float64
+	holdings          map[asset.Asset]float64
+	transactions      []Transaction
+	broker            broker.Broker
+	prices            *data.DataFrame
+	perfData          *data.DataFrame
+	benchmark         asset.Asset
+	riskFree          asset.Asset
+	taxLots           map[asset.Asset][]TaxLot
+	metadata          map[string]string
+	metrics           []MetricRow
+	registeredMetrics []PerformanceMetric
+	annotations       []Annotation
 }
 
 // New creates an Account with the given options.
@@ -173,6 +174,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 		postSellValue := a.Value()
 
 		var buys []pendingOrder
+
 		for ast, weight := range alloc.Members {
 			targetDollars := weight * postSellValue
 			currentDollars := a.PositionValue(ast)
@@ -196,6 +198,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 			}
 		}
 	}
+
 	return nil
 }
 func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty float64, mods ...OrderModifier) error {
@@ -216,6 +219,7 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 
 	// Apply modifiers.
 	var hasLimit, hasStop bool
+
 	for _, mod := range mods {
 		switch m := mod.(type) {
 		case limitModifier:
@@ -263,8 +267,11 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 	}
 
 	for _, fill := range fills {
-		var txType TransactionType
-		var amount float64
+		var (
+			txType TransactionType
+			amount float64
+		)
+
 		switch side {
 		case Buy:
 			txType = BuyTransaction
@@ -283,6 +290,7 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 			Amount: amount,
 		})
 	}
+
 	return nil
 }
 
@@ -303,6 +311,7 @@ func (a *Account) Value() float64 {
 			}
 		}
 	}
+
 	return total
 }
 
@@ -318,10 +327,12 @@ func (a *Account) PositionValue(ast asset.Asset) float64 {
 	if qty == 0 || a.prices == nil {
 		return 0
 	}
+
 	v := a.prices.Value(ast, data.MetricClose)
 	if math.IsNaN(v) {
 		return 0
 	}
+
 	return qty * v
 }
 
@@ -344,7 +355,9 @@ func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery 
 
 func (a *Account) Summary() (Summary, error) {
 	var errs []error
+
 	s := Summary{}
+
 	var err error
 
 	s.TWRR, err = a.PerformanceMetric(TWRR).Value()
@@ -387,7 +400,9 @@ func (a *Account) Summary() (Summary, error) {
 
 func (a *Account) RiskMetrics() (RiskMetrics, error) {
 	var errs []error
+
 	r := RiskMetrics{}
+
 	var err error
 
 	r.Beta, err = a.PerformanceMetric(Beta).Value()
@@ -460,7 +475,9 @@ func (a *Account) RiskMetrics() (RiskMetrics, error) {
 
 func (a *Account) TaxMetrics() (TaxMetrics, error) {
 	var errs []error
+
 	t := TaxMetrics{}
+
 	var err error
 
 	t.LTCG, err = a.PerformanceMetric(LTCGMetric).Value()
@@ -503,7 +520,9 @@ func (a *Account) TaxMetrics() (TaxMetrics, error) {
 
 func (a *Account) TradeMetrics() (TradeMetrics, error) {
 	var errs []error
+
 	t := TradeMetrics{}
+
 	var err error
 
 	t.WinRate, err = a.PerformanceMetric(WinRate).Value()
@@ -551,7 +570,9 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 
 func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
 	var errs []error
+
 	w := WithdrawalMetrics{}
+
 	var err error
 
 	w.SafeWithdrawalRate, err = a.PerformanceMetric(SafeWithdrawalRate).Value()
@@ -596,6 +617,7 @@ func (a *Account) Record(tx Transaction) {
 		a.holdings[tx.Asset] -= tx.Qty
 		remaining := tx.Qty
 		lots := a.taxLots[tx.Asset]
+
 		i := 0
 		for i < len(lots) && remaining > 0 {
 			if lots[i].Qty <= remaining {
@@ -606,6 +628,7 @@ func (a *Account) Record(tx Transaction) {
 				remaining = 0
 			}
 		}
+
 		a.taxLots[tx.Asset] = lots[i:]
 		if a.holdings[tx.Asset] == 0 {
 			delete(a.holdings, tx.Asset)
@@ -613,6 +636,7 @@ func (a *Account) Record(tx Transaction) {
 		}
 	}
 }
+
 // isDividendQualified checks whether the earliest FIFO tax lot for the
 // asset was held for more than 60 days before the dividend date. This
 // is a simplified version of the IRS 121-day window rule, appropriate
@@ -624,6 +648,7 @@ func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
 	}
 
 	holdingDays := divDate.Sub(lots[0].Date).Hours() / 24
+
 	return holdingDays > 60
 }
 
@@ -646,18 +671,22 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 	}
 
 	var benchVal, rfVal float64
+
 	if a.benchmark != (asset.Asset{}) {
 		v := df.Value(a.benchmark, data.AdjClose)
 		if math.IsNaN(v) || v == 0 {
 			v = df.Value(a.benchmark, data.MetricClose)
 		}
+
 		benchVal = v
 	}
+
 	if a.riskFree != (asset.Asset{}) {
 		v := df.Value(a.riskFree, data.AdjClose)
 		if math.IsNaN(v) || v == 0 {
 			v = df.Value(a.riskFree, data.MetricClose)
 		}
+
 		rfVal = v
 	}
 
@@ -665,11 +694,13 @@ func (a *Account) UpdatePrices(df *data.DataFrame) {
 		t := []time.Time{df.End()}
 		assets := []asset.Asset{portfolioAsset}
 		metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
+
 		row, err := data.NewDataFrame(t, assets, metrics, []float64{total, benchVal, rfVal})
 		if err != nil {
 			log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
 			return
 		}
+
 		a.perfData = row
 	} else {
 		if err := a.perfData.AppendRow(df.End(), []float64{total, benchVal, rfVal}); err != nil {
@@ -700,3 +731,18 @@ func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
 // SetRiskFree sets the risk-free asset after construction.
 func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
+
+// Annotate records a key-value annotation for the given timestamp.
+func (a *Account) Annotate(timestamp int64, key, value string) {
+	a.annotations = append(a.annotations, Annotation{
+		Timestamp: timestamp,
+		Key:       key,
+		Value:     value,
+	})
+}
+
+// Annotations returns the full annotation log in the order entries
+// were recorded.
+func (a *Account) Annotations() []Annotation {
+	return a.annotations
+}
