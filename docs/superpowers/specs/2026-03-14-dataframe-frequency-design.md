@@ -60,9 +60,9 @@ func (df *DataFrame) Frequency() Frequency { return df.freq }
 
 ## WithErr
 
-`WithErr` creates a DataFrame with only an error. Its frequency is zero-valued
-(undefined), which is acceptable since the DataFrame cannot be used for anything
-other than error propagation.
+`WithErr` creates a DataFrame with only an error. Its frequency will be `Tick`
+(the zero value of `Frequency`). This is acceptable since the DataFrame cannot
+be used for anything other than error propagation.
 
 ## Propagation through derived DataFrames
 
@@ -76,6 +76,10 @@ helper covers the majority. Methods that produce derived DataFrames include:
 - Aggregation: `Mean`, `Sum`, `Max`, `Min`, `Variance`, `Std`, `Covariance`,
   `MaxAcrossAssets`, `MinAcrossAssets`, `IdxMaxAcrossAssets`
 - Transforms: `Pct`, `Diff`, `Log`, `CumSum`, `CumMax`, `Shift`
+- Merge: `MergeColumns` and `MergeTimes` (in `data/merge.go`) create new
+  DataFrames. When merging, all input DataFrames must have the same frequency.
+  If they differ, return an error. Empty DataFrames (from `mustNewDataFrame`
+  with nil args) use the frequency of the non-empty operand.
 - Other: `Copy`, `RenameMetric`, `AppendRow`, `Insert`, `Window`
 - Resampling: `Downsample` and `Upsample` produce wrapper types
   (`DownsampledDataFrame`, `UpsampledDataFrame`) that eventually create
@@ -114,8 +118,13 @@ metadata table (alongside `schema_version`, `cash`, etc.). Store the string
 representation of the Frequency constant. Read it back in `FromSQLite` and
 pass it to `NewDataFrame` when reconstructing perfData.
 
+A `ParseFrequency(string) (Frequency, error)` function must be added to
+`data/frequency.go` to convert the stored string back to a `Frequency`
+constant (the inverse of `Frequency.String()`).
+
 Note: This does NOT require a schema version bump. The frequency is stored
-in the existing metadata table as a key-value pair.
+in the existing metadata table as a key-value pair. If the key is missing
+(loading a v3 database created before this change), default to `Daily`.
 
 ## Files Changed
 
@@ -128,9 +137,14 @@ in the existing metadata table as a key-value pair.
   `aggregate` method
 - `data/upsample.go` -- pass target `u.freq` to `mustNewDataFrame` in
   `ForwardFill`, `BackFill`, and `Interpolate` methods
+- `data/merge.go` -- update `MergeColumns` and `MergeTimes` to propagate
+  frequency through `mustNewDataFrame` and `NewDataFrame` calls
+- `data/frequency.go` -- add `ParseFrequency(string) (Frequency, error)`
 - `data/pvdata_provider.go` -- pass `req.Frequency` to `NewDataFrame`
 - `data/test_provider.go` -- accept or default frequency, pass to `NewDataFrame`
-- `data/example_data.go` -- pass `Daily` to `NewDataFrame` (if this file exists)
+- `data/example_data.go` -- pass `Daily` to `NewDataFrame`
+- `signal/earnings_yield.go` -- pass appropriate frequency to `NewDataFrame`
+- `engine/engine.go` -- update `NewDataFrame` calls with frequency
 - `portfolio/account.go` -- pass `Daily` when constructing perfData
 - `portfolio/sqlite.go` -- persist and restore frequency via metadata table
 
@@ -140,13 +154,22 @@ Every test file that calls `NewDataFrame` must be updated with the new
 parameter. Key files:
 
 - `data/data_frame_test.go`
-- `data/data_suite_test.go` (if it has helpers)
+- `data/merge_test.go`
+- `data/rolling_data_frame_test.go`
+- `data/test_provider_test.go`
 - `portfolio/rebalance_test.go`
 - `portfolio/sqlite_test.go`
 - `portfolio/annotation_test.go`
+- `portfolio/testutil_test.go`
+- `portfolio/trade_metrics_test.go`
+- `portfolio/weighting_test.go`
+- `portfolio/selector_test.go`
+- `portfolio/account_test.go`
 - `engine/backtest_test.go`
 - `engine/fetch_test.go`
 - `engine/example_test.go`
+- `engine/simulated_broker_test.go`
+- `engine/rated_universe_test.go`
 - `signal/` test files
 - `universe/` test files
 
