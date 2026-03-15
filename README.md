@@ -36,11 +36,11 @@ type ADM struct {
 
 func (s *ADM) Name() string { return "adm" }
 
-func (s *ADM) Setup(e *engine.Engine, config engine.Config) {
+func (s *ADM) Setup(e *engine.Engine) {
 	e.RiskFreeAsset(e.Asset("DGS3MO"))
 }
 
-func (s *ADM) Compute(ctx context.Context, p portfolio.Portfolio) {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
 	mom1 := signal.Momentum(df, 1)
 	mom3 := signal.Momentum(df, 3)
 	mom6 := signal.Momentum(df, 6)
@@ -49,7 +49,8 @@ func (s *ADM) Compute(ctx context.Context, p portfolio.Portfolio) {
 	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 
 	plan, _ := portfolio.EqualWeight(momentum)
-	p.RebalanceTo(plan...)
+	portfolio.RebalanceTo(plan...)
+	return nil
 }
 
 func main() {
@@ -87,8 +88,8 @@ A strategy implements three methods:
 | Method | Purpose |
 |--------|---------|
 | `Name()` | Returns the strategy's short identifier |
-| `Setup(e *Engine, config Config)` | Optional initialization after fields are populated |
-| `Compute(ctx context.Context, p Portfolio)` | Runs at each scheduled step to make allocation decisions |
+| `Setup(e *Engine)` | Optional initialization after fields are populated |
+| `Compute(ctx context.Context, eng *Engine, portfolio Portfolio) error` | Runs at each scheduled step to make allocation decisions |
 
 The engine runs in three phases:
 

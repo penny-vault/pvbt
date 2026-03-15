@@ -77,13 +77,14 @@ Index universes cache membership in memory. The first call to `Assets(t)` for a 
 The primary use of a universe is to get a DataFrame for its assets. The engine resolves `u.Assets(t)` into a `DataRequest`, fetches the data from providers, and hands the strategy a DataFrame. From there, the strategy operates on the DataFrame:
 
 ```go
-func (s *ADM) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
     mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     // ...
+    return nil
 }
 ```
 

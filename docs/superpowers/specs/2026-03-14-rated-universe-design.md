@@ -166,9 +166,10 @@ func (s *MDEP) Setup(e *engine.Engine) {
     // ...
 }
 
-func (s *MDEP) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) {
-    df, err := s.zacksUniverse.At(ctx, e.CurrentDate(), data.MarketCap)
+func (s *MDEP) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+    df, err := s.zacksUniverse.At(ctx, eng.CurrentDate(), data.MarketCap)
     // sort by MarketCap, take top N, equal-weight, rebalance
+    return nil
 }
 ```
 
