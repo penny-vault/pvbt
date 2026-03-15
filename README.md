@@ -23,51 +23,64 @@ import (
 	"log"
 	"time"
 
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/signal"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 )
 
 type ADM struct {
-	riskOn  universe.Universe
-	riskOff universe.Universe
+	RiskOn  universe.Universe `pvbt:"riskOn"  desc:"equity universe" default:"SPY,GLD,VWO"`
+	RiskOff universe.Universe `pvbt:"riskOff" desc:"safe-haven"      default:"TLT"`
 }
 
 func (s *ADM) Name() string { return "adm" }
 
-func (s *ADM) Setup(e *engine.Engine) {
-	e.RiskFreeAsset(e.Asset("DGS3MO"))
+func (s *ADM) Setup(eng *engine.Engine) {
+	tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
+	eng.Schedule(tc)
+	eng.RiskFreeAsset(eng.Asset("DGS3MO"))
+	eng.SetBenchmark(eng.Asset("SPY"))
 }
 
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
-	mom1 := signal.Momentum(df, 1)
-	mom3 := signal.Momentum(df, 3)
-	mom6 := signal.Momentum(df, 6)
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portfolio) error {
+	mom := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3), data.MetricClose)
+	if err := mom.Err(); err != nil {
+		return nil
+	}
 
-	momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
-	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+	riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+	if err != nil {
+		return nil
+	}
 
-	plan, _ := portfolio.EqualWeight(momentum)
-	portfolio.RebalanceTo(plan...)
+	portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(mom)
+	plan, err := portfolio.EqualWeight(mom)
+	if err != nil {
+		return nil
+	}
+	p.RebalanceTo(ctx, plan...)
 	return nil
 }
 
 func main() {
-	acct := portfolio.New(portfolio.WithCash(10_000))
-	e := engine.New(&ADM{})
-	defer e.Close()
+	eng := engine.New(&ADM{},
+		engine.WithInitialDeposit(10_000),
+	)
+	defer eng.Close()
 
 	ctx := context.Background()
 	start := time.Date(2005, time.January, 1, 0, 0, 0, 0, time.UTC)
 	end := time.Date(2025, time.January, 1, 0, 0, 0, 0, time.UTC)
 
-	acct, err := e.Run(ctx, acct, start, end)
+	result, err := eng.Backtest(ctx, start, end)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	_ = acct
+	log.Printf("Final value: $%.2f\n", result.Value())
 }
 ```
 
@@ -88,8 +101,8 @@ A strategy implements three methods:
 | Method | Purpose |
 |--------|---------|
 | `Name()` | Returns the strategy's short identifier |
-| `Setup(e *Engine)` | Optional initialization after fields are populated |
-| `Compute(ctx context.Context, eng *Engine, portfolio Portfolio) error` | Runs at each scheduled step to make allocation decisions |
+| `Setup(eng *Engine)` | Optional initialization after fields are populated |
+| `Compute(ctx context.Context, eng *Engine, p portfolio.Portfolio) error` | Runs at each scheduled step to make allocation decisions |
 
 The engine runs in three phases:
 
@@ -105,7 +118,7 @@ The engine runs in three phases:
 
 **Signals** are computations derived from metrics -- momentum, risk-adjusted returns, moving average crossovers. They receive a DataFrame and return computed values.
 
-**Universes** define the investable space -- from explicit ticker lists to historically-accurate index membership. Strategies can even include other strategies as assets via the `strategy:` prefix.
+**Universes** define the investable space -- from explicit ticker lists to historically-accurate index membership.
 
 **Portfolios** turn allocation decisions into trades. Use `RebalanceTo` for declarative allocation or `Order` for individual trades. Risk controls are configured by the operator, not the strategy author. Attach a broker for live execution or leave it off for backtesting -- the strategy code is the same either way.
 
@@ -118,7 +131,7 @@ The engine runs in three phases:
 Detailed documentation for each concept:
 
 - [Overview](docs/overview.md) -- full walkthrough of the example strategy
-- [Universes](docs/universes.md) -- asset groups, index tracking, strategy composition
+- [Universes](docs/universes.md) -- asset groups, index tracking, historical membership
 - [Data](docs/data.md) -- metrics, data providers, DataFrames, signals
 - [Portfolio](docs/portfolio.md) -- construction, order types, performance measurement
 - [Broker](docs/broker.md) -- broker interface for live trading

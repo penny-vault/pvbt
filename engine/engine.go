@@ -558,6 +558,7 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 	savedDate := e.currentDate
 	e.predicting = true
 	e.currentDate = predictedDate
+
 	defer func() {
 		e.currentDate = savedDate
 		e.predicting = false
@@ -602,6 +603,7 @@ func ForwardFillTo(df *data.DataFrame, targetDate time.Time) (*data.DataFrame, e
 	// Extract the last row's values.
 	assets := df.AssetList()
 	metrics := df.MetricList()
+
 	lastRow := make([]float64, len(assets)*len(metrics))
 	for assetIdx, currentAsset := range assets {
 		for metricIdx, metric := range metrics {
@@ -616,6 +618,7 @@ func ForwardFillTo(df *data.DataFrame, targetDate time.Time) (*data.DataFrame, e
 		if cursor.After(targetDate) {
 			break
 		}
+
 		if err := df.AppendRow(cursor, lastRow); err != nil {
 			return nil, fmt.Errorf("forward-fill append at %v: %w", cursor, err)
 		}
