@@ -913,12 +913,11 @@ var _ = Describe("RiskMetrics", func() {
 		Expect(rm.RSquared).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
-	It("Treynor equals (TWRR - rf_return) / beta ~ 0.0995", func() {
-		// TWRR = 0.10, approximate risk-free return over 5 days ~ 0.0005,
-		// Beta = 1.0, so Treynor ~ 0.0995.
+	It("Treynor = 0 for short backtests (< 30 days)", func() {
+		// 6 data points spanning ~7 calendar days: too short to annualize.
 		rm, err := buildRiskAcct().RiskMetrics()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rm.Treynor).To(BeNumerically("~", 0.0995, 1e-3))
+		Expect(rm.Treynor).To(Equal(0.0))
 	})
 
 	It("computes correct DownsideDeviation for known equity curve", func() {

@@ -140,11 +140,11 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(BeNumerically("~", 6.7617494219373295, 1e-8))
 		})
 
-		It("Treynor = (portfolioReturn - rfReturn) / beta", func() {
-			// treynor = (0.10 - 0.0005) / 1.027594 = 0.096828134886292
+		It("Treynor = 0 for short backtests (< 30 days)", func() {
+			// 6 data points spanning ~7 calendar days: too short to annualize.
 			v, err := a.PerformanceMetric(portfolio.Treynor).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.096828134886292, 1e-10))
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("RSquared = corr(pR,bR)^2", func() {
@@ -210,13 +210,10 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(BeNumerically("~", 0.0, 1e-10))
 		})
 
-		It("Treynor = (0.09 - 0.0005) / 1.0", func() {
-			// portfolioReturn = 1090/1000 - 1 = 0.09
-			// riskFreeReturn  = 100.05/100 - 1 = 0.0005
-			// beta = 1.0
+		It("Treynor = 0 for short backtests (< 30 days)", func() {
 			v, err := a.PerformanceMetric(portfolio.Treynor).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.0895, 1e-10))
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("RSquared = 1.0", func() {

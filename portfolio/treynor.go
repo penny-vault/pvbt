@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type treynor struct{}
 
@@ -45,8 +49,18 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	portfolioReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
-	riskFreeReturn := (rfWinCol[len(rfWinCol)-1] / rfWinCol[0]) - 1
+	// Compute time span in years; return 0 for very short backtests.
+	times := perfDF.Times()
+	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
+	if calendarDays < 30 {
+		return 0, nil
+	}
+
+	years := calendarDays / 365.25
+
+	// Annualize returns using CAGR.
+	cagrPortfolio := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1/years) - 1
+	cagrRiskFree := math.Pow(rfWinCol[len(rfWinCol)-1]/rfWinCol[0], 1/years) - 1
 
 	betaValue, err := Beta.Compute(acct, window)
 	if err != nil {
@@ -57,7 +71,7 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	return (portfolioReturn - riskFreeReturn) / betaValue, nil
+	return (cagrPortfolio - cagrRiskFree) / betaValue, nil
 }
 
 func (treynor) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
