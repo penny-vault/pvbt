@@ -1140,10 +1140,9 @@ var _ = Describe("Window", func() {
 	It("Window(Months(1)) produces correct TWRR for the windowed slice", func() {
 		acct, equityCurve, _, times := buildLongAccountWithPrices()
 
-		// Months(1) window: snaps to the 1st of the last month.
+		// Months(1) window: goes back 1 month from last date.
 		last := times[len(times)-1]
-		cutoff := time.Date(last.Year(), last.Month(), 1,
-			last.Hour(), last.Minute(), last.Second(), last.Nanosecond(), last.Location())
+		cutoff := last.AddDate(0, -1, 0)
 		startIdx := 0
 		for i, t := range times {
 			if !t.Before(cutoff) {

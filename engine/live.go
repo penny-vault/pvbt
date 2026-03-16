@@ -85,6 +85,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 		e.riskFreeResolved = true
 		e.riskFreeAssetDGS = dgs3mo
 	}
+
 	e.riskFreeCumulative = 0
 
 	// 7. Initialize data cache.
@@ -240,11 +241,14 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 					}
 				}
 			}
+
 			acct.SetRiskFreeValue(e.riskFreeCumulative)
 
 			if len(priceAssets) > 0 {
-				var priceDF *data.DataFrame
-				var fetchErr error
+				var (
+					priceDF  *data.DataFrame
+					fetchErr error
+				)
 
 				for attempt := range 18 {
 					priceDF, fetchErr = e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
@@ -271,8 +275,10 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			} else {
 				// No assets to price -- record cash-only portfolio value.
-				cashDF, _ := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
-				acct.UpdatePrices(cashDF)
+				cashDF, cashErr := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
+				if cashErr == nil {
+					acct.UpdatePrices(cashDF)
+				}
 			}
 
 			// j. Non-blocking send of updated portfolio.

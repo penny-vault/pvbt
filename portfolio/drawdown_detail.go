@@ -77,6 +77,7 @@ func (a *Account) DrawdownDetails(topN int) ([]DrawdownDetail, error) {
 		} else {
 			// In a drawdown.
 			inDrawdown = true
+
 			if equity[idx] < troughVal {
 				troughVal = equity[idx]
 				troughIdx = idx

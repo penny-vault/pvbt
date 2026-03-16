@@ -82,6 +82,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		e.riskFreeResolved = true
 		e.riskFreeAssetDGS = dgs3mo
 	}
+
 	e.riskFreeCumulative = 0
 
 	// 7. Initialize data cache.
@@ -237,6 +238,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				}
 			}
 		}
+
 		acct.SetRiskFreeValue(e.riskFreeCumulative)
 
 		if len(priceAssets) > 0 {
@@ -249,7 +251,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			acct.UpdatePrices(priceDF)
 		} else {
 			// No assets to price -- record cash-only portfolio value.
-			cashDF, _ := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
+			cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
+			if cashErr != nil {
+				return nil, fmt.Errorf("engine: cash-only DataFrame on %v: %w", date, cashErr)
+			}
+
 			acct.UpdatePrices(cashDF)
 		}
 

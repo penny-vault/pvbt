@@ -39,7 +39,7 @@ type Engine struct {
 	providers     []data.DataProvider
 	assetProvider data.AssetProvider
 	schedule      *tradecron.TradeCron
-	benchmark asset.Asset
+	benchmark     asset.Asset
 
 	// Risk-free rate (DGS3MO) state.
 	riskFreeResolved   bool

@@ -51,6 +51,7 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 
 	// Compute time span in years; return 0 for very short backtests.
 	times := perfDF.Times()
+
 	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
 	if calendarDays < 30 {
 		return 0, nil

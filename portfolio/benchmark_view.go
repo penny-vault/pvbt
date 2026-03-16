@@ -42,6 +42,7 @@ func (a *Account) benchmarkView() (*Account, error) {
 
 	// Normalise: scale benchmark so it starts at the same value as equity.
 	scale := eqCol[0] / bmCol[0]
+
 	normalized := make([]float64, len(bmCol))
 	for idx, val := range bmCol {
 		normalized[idx] = val * scale

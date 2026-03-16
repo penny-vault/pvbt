@@ -82,6 +82,7 @@ func withdrawalSustainable(
 	// Check final criterion.
 	totalYears := times[len(times)-1].Sub(times[0]).Hours() / 24 / 365.25
 	inflationFactor := math.Pow(1+defaultInflationRate, totalYears)
+
 	return criterion(startBalance, balance, inflationFactor)
 }
 

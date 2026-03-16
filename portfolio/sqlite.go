@@ -235,6 +235,7 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 	if _, err := stmt.Exec("risk_free_ticker", "DGS3MO"); err != nil {
 		return fmt.Errorf("insert risk_free_ticker: %w", err)
 	}
+
 	if _, err := stmt.Exec("risk_free_figi", ""); err != nil {
 		return fmt.Errorf("insert risk_free_figi: %w", err)
 	}

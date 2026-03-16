@@ -50,6 +50,7 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, err
 	}
 
 	bestRate := 0.0
+
 	for rateBps := 1; rateBps <= 200; rateBps++ {
 		rate := float64(rateBps) / 1000.0
 		if withdrawalSustainable(equity, times, rate, false, criterion) {
