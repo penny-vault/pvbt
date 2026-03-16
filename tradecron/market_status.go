@@ -28,6 +28,14 @@ var (
 	nycOnce sync.Once
 )
 
+// HolidaysInitialized returns true if SetMarketHolidays has been called.
+func HolidaysInitialized() bool {
+	holidayLocker.RLock()
+	defer holidayLocker.RUnlock()
+
+	return holidays != nil
+}
+
 // requireHolidays panics if SetMarketHolidays has not been called. This
 // catches misconfigured commands that forget to load the holiday calendar,
 // which would silently treat every day as a trading day.

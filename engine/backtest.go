@@ -48,6 +48,32 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		e.assets[a.Ticker] = a
 	}
 
+	// 1b. Load market holidays from the first provider that supports it.
+	for _, provider := range e.providers {
+		if hp, ok := provider.(data.HolidayProvider); ok {
+			holidays, err := hp.FetchMarketHolidays(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("engine: loading market holidays: %w", err)
+			}
+
+			tradecron.SetMarketHolidays(holidays)
+
+			break
+		}
+	}
+
+	// Also check if the asset provider is a holiday provider.
+	if hp, ok := e.assetProvider.(data.HolidayProvider); ok {
+		if !tradecron.HolidaysInitialized() {
+			holidays, err := hp.FetchMarketHolidays(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("engine: loading market holidays: %w", err)
+			}
+
+			tradecron.SetMarketHolidays(holidays)
+		}
+	}
+
 	// 2. Hydrate strategy fields from default tags.
 	if err := hydrateFields(e, e.strategy); err != nil {
 		return nil, fmt.Errorf("engine: %w", err)

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // DataProvider is the base interface for all data providers. A provider
@@ -65,4 +66,11 @@ type StreamProvider interface {
 // StreamProvider.
 type IndexProvider interface {
 	IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error)
+}
+
+// HolidayProvider supplies market holiday data. Providers that have
+// access to a holiday calendar (database, snapshot file) implement this
+// so the engine can initialize tradecron automatically during Backtest.
+type HolidayProvider interface {
+	FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error)
 }
