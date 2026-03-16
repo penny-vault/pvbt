@@ -121,21 +121,23 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(BeNumerically("~", 0.007530346650199, 1e-10))
 		})
 
-		It("TrackingError = stddev(activeReturns) * sqrt(252)", func() {
+		It("TrackingError = stddev(activeReturns) * sqrt(AF)", func() {
 			// stddev(activeR) = 0.004541503086922
-			// TE = 0.004541503... * sqrt(252) = 0.072094126478561
+			// AF = 5 / (7/365.25) = 260.89
+			// TE = 0.004541503... * sqrt(AF) = 0.07335516666914621
 			v, err := a.PerformanceMetric(portfolio.TrackingError).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.072094126478561, 1e-10))
+			Expect(v).To(BeNumerically("~", 0.07335516666914621, 1e-10))
 		})
 
-		It("InformationRatio = mean(activeR)/stddev(activeR) * sqrt(252)", func() {
+		It("InformationRatio = mean(activeR)/stddev(activeR) * sqrt(AF)", func() {
 			// mean(activeR)   = 0.001901199064065
 			// stddev(activeR) = 0.004541503086922
-			// IR = (0.001901.../0.004541...) * sqrt(252) = 6.645508969261543
+			// AF = 260.89
+			// IR = (0.001901.../0.004541...) * sqrt(AF) = 6.7617494219373295
 			v, err := a.PerformanceMetric(portfolio.InformationRatio).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 6.645508969261543, 1e-8))
+			Expect(v).To(BeNumerically("~", 6.7617494219373295, 1e-8))
 		})
 
 		It("Treynor = (portfolioReturn - rfReturn) / beta", func() {

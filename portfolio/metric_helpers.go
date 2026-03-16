@@ -17,20 +17,22 @@ package portfolio
 
 import "time"
 
-// annualizationFactor estimates the number of periods per year from timestamps.
-// If the average gap between timestamps exceeds 20 calendar days, it assumes
-// monthly data (factor 12); otherwise it assumes daily (factor 252).
+// annualizationFactor computes the number of observation periods per year
+// from the actual timestamps. This avoids hardcoding 252 or 12 and correctly
+// handles any schedule frequency, market closures, and holidays.
 func annualizationFactor(times []time.Time) float64 {
 	if len(times) < 2 {
-		return 252 // default daily
+		return 1
 	}
 
-	avgDays := times[len(times)-1].Sub(times[0]).Hours() / 24 / float64(len(times)-1)
-	if avgDays > 20 {
-		return 12 // monthly
+	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
+	if calendarDays <= 0 {
+		return 1
 	}
 
-	return 252 // daily
+	years := calendarDays / 365.25
+
+	return float64(len(times)-1) / years
 }
 
 // roundTrip represents a completed buy-sell pair matched via FIFO.

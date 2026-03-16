@@ -112,10 +112,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			//         = 0.11012 / 5 = 0.02202...
 			// variance(r) = sum((r[i]-mean)^2) / 4  (N-1 = 4)
 			// stddev(r) ~ 0.08438
-			// StdDev = stddev(r) * sqrt(252) ~ 1.33942
+			// AF = 5 / (7/365.25) = 260.89 (6 timestamps, 7 calendar days)
+			// StdDev = stddev(r) * sqrt(AF) ~ 1.3629
 			val, err := acct.PerformanceMetric(portfolio.StdDev).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(BeNumerically("~", 1.3394, 1e-3))
+			Expect(val).To(BeNumerically("~", 1.3629, 1e-3))
 		})
 
 		It("returns the return series from ComputeSeries", func() {
@@ -181,10 +182,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			// mean(neg) = (-0.06677 + -0.05835) / 2 ~ -0.06256
 			// variance(neg) = ((neg[0]-mean)^2 + (neg[1]-mean)^2) / 1
 			// stddev(neg) ~ 0.005951
-			// DownsideDeviation = stddev(neg) * sqrt(252) ~ 0.09445
+			// AF = 260.89
+			// DownsideDeviation = stddev(neg) * sqrt(AF) ~ 0.09610
 			val, err := acct.PerformanceMetric(portfolio.DownsideDeviation).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(BeNumerically("~", 0.09445, 1e-3))
+			Expect(val).To(BeNumerically("~", 0.09610, 1e-3))
 		})
 	})
 
@@ -197,10 +199,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 
 			// mean(er) ~ 0.02440
 			// stddev(er) ~ 0.08438 (same as stddev(r) approximately)
-			// Sharpe = mean(er)/stddev(er) * sqrt(252) ~ 4.1249
+			// AF = 260.89
+			// Sharpe = mean(er)/stddev(er) * sqrt(AF) ~ 4.197
 			val, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(BeNumerically("~", 4.1249, 1e-2))
+			Expect(val).To(BeNumerically("~", 4.197, 1e-2))
 		})
 	})
 
@@ -213,10 +216,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 
 			// mean(er) ~ 0.02193
 			// downside_deviation = sqrt(sum(min(er_i,0)^2) / N) ~ 0.03965
-			// Sortino = mean(er)/dd * sqrt(252) ~ 8.778
+			// AF = 260.89
+			// Sortino = mean(er)/dd * sqrt(AF) ~ 8.930
 			val, err := acct.PerformanceMetric(portfolio.Sortino).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(BeNumerically("~", 8.778, 0.01))
+			Expect(val).To(BeNumerically("~", 8.930, 0.01))
 		})
 	})
 

@@ -762,7 +762,9 @@ var _ = Describe("Summary", func() {
 	eqRet := helperReturns(equity)
 	rfRet := helperReturns(bilPrices)
 	er := helperExcessReturns(eqRet, rfRet)
-	af := 252.0 // annualization factor: daily data
+	// daySeq(2025-01-02, 6) = Jan 2,3,6,7,8,9 -> 7 calendar days, 5 returns
+	// AF = 5 / (7/365.25) = 260.89
+	af := 5.0 / (7.0 / 365.25)
 
 	It("computes correct TWRR for known equity curve", func() {
 		// TWRR = 550/500 - 1 = 0.10
@@ -891,7 +893,8 @@ var _ = Describe("RiskMetrics", func() {
 	eqRet := helperReturns(equity)
 	rfRet := helperReturns(bilPrices)
 	er := helperExcessReturns(eqRet, rfRet)
-	af := 252.0
+	// daySeq(2025-01-02, 6) = Jan 2,3,6,7,8,9 -> 7 calendar days, 5 returns
+	af := 5.0 / (7.0 / 365.25)
 
 	It("Beta equals 1.0 when portfolio tracks benchmark exactly", func() {
 		rm, err := buildRiskAcct().RiskMetrics()
@@ -1200,11 +1203,15 @@ var _ = Describe("Window", func() {
 		}
 		windowedEq := equityCurve[startIdx:]
 		windowedRf := bilPrices[startIdx:]
+		windowedTimes := times[startIdx:]
 
 		wRet := helperReturns(windowedEq)
 		wRfRet := helperReturns(windowedRf)
 		wER := helperExcessReturns(wRet, wRfRet)
-		expectedSharpe := helperMean(wER) / helperStddev(wER) * math.Sqrt(252)
+		// AF computed from actual windowed timestamps.
+		calDays := windowedTimes[len(windowedTimes)-1].Sub(windowedTimes[0]).Hours() / 24
+		windowAF := float64(len(windowedTimes)-1) / (calDays / 365.25)
+		expectedSharpe := helperMean(wER) / helperStddev(wER) * math.Sqrt(windowAF)
 
 		windowedSharpe, err := acct.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Days(10)).Value()
 		Expect(err).NotTo(HaveOccurred())
