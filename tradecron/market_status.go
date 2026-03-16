@@ -28,6 +28,15 @@ var (
 	nycOnce sync.Once
 )
 
+// requireHolidays panics if SetMarketHolidays has not been called. This
+// catches misconfigured commands that forget to load the holiday calendar,
+// which would silently treat every day as a trading day.
+func requireHolidays() {
+	if holidays == nil {
+		panic("tradecron: market holidays not initialized -- call SetMarketHolidays before using market calendar functions")
+	}
+}
+
 // MarketHoliday describes a single market holiday or early-close day.
 type MarketHoliday struct {
 	Date       time.Time
@@ -64,6 +73,8 @@ func (ms *MarketStatus) EarlyClose(t time.Time) int {
 	holidayLocker.RLock()
 	defer holidayLocker.RUnlock()
 
+	requireHolidays()
+
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
 	if marketClose, ok := holidays[d.Unix()]; ok {
 		return marketClose
@@ -76,6 +87,8 @@ func (ms *MarketStatus) EarlyClose(t time.Time) int {
 func (ms *MarketStatus) IsMarketHoliday(t time.Time) bool {
 	holidayLocker.RLock()
 	defer holidayLocker.RUnlock()
+
+	requireHolidays()
 
 	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
 

@@ -9,6 +9,7 @@ import (
 	"github.com/penny-vault/pvbt/engine"
 	backtestReport "github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/report/terminal"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -45,6 +46,15 @@ func runLive(strategy engine.Strategy) error {
 	if err != nil {
 		return fmt.Errorf("create data provider: %w", err)
 	}
+
+	holidays, err := provider.FetchMarketHolidays(ctx)
+	if err != nil {
+		return fmt.Errorf("load market holidays: %w", err)
+	}
+
+	tradecron.SetMarketHolidays(holidays)
+
+	log.Info().Int("holidays", len(holidays)).Msg("loaded market holidays")
 
 	eng := engine.New(strategy,
 		engine.WithDataProvider(provider),

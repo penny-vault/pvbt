@@ -10,6 +10,7 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 
@@ -101,6 +102,16 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 	if err != nil {
 		return fmt.Errorf("create data provider: %w", err)
 	}
+
+	holidays, err := provider.FetchMarketHolidays(ctx)
+	if err != nil {
+		provider.Close()
+		return fmt.Errorf("load market holidays: %w", err)
+	}
+
+	tradecron.SetMarketHolidays(holidays)
+
+	log.Info().Int("holidays", len(holidays)).Msg("loaded market holidays")
 
 	recorder, err := data.NewSnapshotRecorder(outputPath, data.SnapshotRecorderConfig{
 		BatchProvider: provider,
