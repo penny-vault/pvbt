@@ -125,15 +125,6 @@ func (e *Engine) SetBenchmark(a asset.Asset) {
 	e.benchmark = a
 }
 
-// RiskFreeAsset is deprecated. The engine automatically uses DGS3MO as the
-// risk-free rate for all performance metrics. This method logs a warning
-// and has no effect. It will be removed in a future version.
-func (e *Engine) RiskFreeAsset(a asset.Asset) {
-	zerolog.Ctx(context.Background()).Warn().
-		Str("ticker", a.Ticker).
-		Msg("RiskFreeAsset is deprecated; engine uses DGS3MO automatically")
-}
-
 // Asset looks up an asset by ticker from the pre-loaded registry.
 // Panics if the ticker cannot be resolved.
 func (e *Engine) Asset(ticker string) asset.Asset {

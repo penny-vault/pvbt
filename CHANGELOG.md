@@ -17,6 +17,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support index-based universes so strategies can filter by index membership
 - Add ForwardPE, PEG, PriceToCashFlow, and Beta metrics
 
+### Changed
+
+- Use DGS3MO (3-month Treasury yield) as the system risk-free rate for all
+  performance metrics; the rate is no longer strategy-configurable
+- Compute annualization factor from actual observation frequency instead of
+  hardcoding 252 or 12
+- Record daily equity on every trading day regardless of strategy schedule
+- Compute Jensen's alpha from mean periodic excess returns instead of total
+  cumulative returns
+- Annualize Treynor ratio using CAGR instead of total returns
+- Compute withdrawal rates (Safe, Perpetual, Dynamic) from the actual return
+  path instead of Monte Carlo bootstrap simulation
+
+### Removed
+
+- `engine.RiskFreeAsset()` -- the engine now uses DGS3MO automatically
+
 ### Fixed
 
 - Load market holidays from the database so backtests skip non-trading days like Good Friday
