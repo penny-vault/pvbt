@@ -127,14 +127,20 @@ func runExplore(cmd *cobra.Command, tickersArg, metricsArg string) error {
 	}
 
 	// parse dates
-	startStr, _ := cmd.Flags().GetString("start")
+	startStr, err := cmd.Flags().GetString("start")
+	if err != nil {
+		return err
+	}
 
 	start, err := time.Parse("2006-01-02", startStr)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	endStr, _ := cmd.Flags().GetString("end")
+	endStr, err := cmd.Flags().GetString("end")
+	if err != nil {
+		return err
+	}
 
 	end, err := time.Parse("2006-01-02", endStr)
 	if err != nil {
@@ -186,7 +192,11 @@ func runExplore(cmd *cobra.Command, tickersArg, metricsArg string) error {
 		return nil
 	}
 
-	showGraph, _ := cmd.Flags().GetBool("graph")
+	showGraph, err := cmd.Flags().GetBool("graph")
+	if err != nil {
+		return err
+	}
+
 	if showGraph {
 		return runExploreGraph(df)
 	}

@@ -1548,8 +1548,8 @@ var _ = Describe("Window", func() {
 	It("trims to last 2 months", func() {
 		w := data.Months(2)
 		result := df.Window(&w)
-		// End is 2025-05-01, Before = 2025-03-01, so includes Mar, Apr, May
-		Expect(result.Len()).To(Equal(3))
+		// End is 2025-05-01; Months(2) gives Apr and May = 2 rows
+		Expect(result.Len()).To(Equal(2))
 	})
 
 	It("returns full DataFrame when window exceeds data", func() {

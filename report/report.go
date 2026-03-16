@@ -96,16 +96,16 @@ type AnnualReturns struct {
 // Risk holds paired (strategy, benchmark) risk metrics.
 // Each [2]float64 is {Strategy, Benchmark}.
 type Risk struct {
-	MaxDrawdown        [2]float64
-	Volatility         [2]float64
-	DownsideDeviation  [2]float64
-	Sharpe             [2]float64
-	Sortino            [2]float64
-	Calmar             [2]float64
-	UlcerIndex         [2]float64
-	ValueAtRisk        [2]float64
-	Skewness           [2]float64
-	ExcessKurtosis     [2]float64
+	MaxDrawdown       [2]float64
+	Volatility        [2]float64
+	DownsideDeviation [2]float64
+	Sharpe            [2]float64
+	Sortino           [2]float64
+	Calmar            [2]float64
+	UlcerIndex        [2]float64
+	ValueAtRisk       [2]float64
+	Skewness          [2]float64
+	ExcessKurtosis    [2]float64
 }
 
 // RiskVsBenchmark holds relative-risk metrics that only make sense when
@@ -204,6 +204,7 @@ func Build(acct portfolio.Portfolio, info engine.StrategyInfo, meta RunMeta) (Re
 	// Early exit when there is insufficient data for a full report.
 	if perfData == nil || perfData.Len() < 2 {
 		warnings = append(warnings, "insufficient data for full report")
+
 		return Report{
 			Header:       header,
 			HasBenchmark: hasBenchmark,
@@ -264,6 +265,7 @@ func buildEquityCurve(perfData *data.DataFrame, initialCash float64) EquityCurve
 	var benchNorm []float64
 	if len(benchmarkRaw) > 0 && benchmarkRaw[0] != 0 {
 		benchNorm = make([]float64, len(benchmarkRaw))
+
 		scale := initialCash / benchmarkRaw[0]
 		for idx, val := range benchmarkRaw {
 			benchNorm[idx] = val * scale

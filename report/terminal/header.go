@@ -42,6 +42,7 @@ func renderHeader(builder *strings.Builder, header report.Header) {
 	stratText := subHeaderStyle.Render("  " + stratLabel)
 
 	benchText := ""
+
 	if header.Benchmark != "" {
 		benchLabel := fmt.Sprintf("Benchmark: %s", header.Benchmark)
 		benchText = subHeaderStyle.Render(benchLabel)

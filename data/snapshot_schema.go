@@ -88,12 +88,14 @@ func CreateSnapshotSchema(db *sql.DB) error {
 // alphabetically for deterministic DDL output.
 func buildFundamentalColumns() string {
 	seen := make(map[string]bool)
+
 	var cols []string
 
 	for _, colName := range metricColumn {
 		if seen[colName] {
 			continue
 		}
+
 		seen[colName] = true
 		cols = append(cols, colName)
 	}

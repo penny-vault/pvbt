@@ -61,11 +61,13 @@ func (p *SnapshotProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 	defer rows.Close()
 
 	var assets []asset.Asset
+
 	for rows.Next() {
 		var a asset.Asset
 		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
 			return nil, fmt.Errorf("snapshot provider: scan asset: %w", err)
 		}
+
 		assets = append(assets, a)
 	}
 
@@ -73,21 +75,23 @@ func (p *SnapshotProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 }
 
 func (p *SnapshotProvider) LookupAsset(ctx context.Context, ticker string) (asset.Asset, error) {
-	var a asset.Asset
+	var foundAsset asset.Asset
+
 	err := p.db.QueryRowContext(ctx,
 		"SELECT composite_figi, ticker FROM assets WHERE ticker = ? LIMIT 1", ticker,
-	).Scan(&a.CompositeFigi, &a.Ticker)
+	).Scan(&foundAsset.CompositeFigi, &foundAsset.Ticker)
 	if err != nil {
 		return asset.Asset{}, fmt.Errorf("snapshot provider: lookup asset %q: %w", ticker, err)
 	}
 
-	return a, nil
+	return foundAsset, nil
 }
 
 // -- BatchProvider --
 
 func (p *SnapshotProvider) Provides() []Metric {
 	tables := []string{"eod", "metrics", "fundamentals"}
+
 	var result []Metric
 
 	for _, table := range tables {
@@ -112,11 +116,13 @@ func (p *SnapshotProvider) Provides() []Metric {
 func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame, error) {
 	// Group requested metrics by view.
 	viewMetrics := make(map[string][]Metric)
+
 	for _, metric := range req.Metrics {
 		view, ok := metricView[metric]
 		if !ok {
 			continue
 		}
+
 		viewMetrics[view] = append(viewMetrics[view], metric)
 	}
 
@@ -138,8 +144,10 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFra
 		if c, ok := colData[key]; ok {
 			return c
 		}
+
 		c := make(map[int64]float64)
 		colData[key] = c
+
 		return c
 	}
 
@@ -169,6 +177,7 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFra
 	for _, t := range timeSet {
 		times = append(times, t)
 	}
+
 	sort.Slice(times, func(i, j int) bool { return times[i].Before(times[j]) })
 
 	if len(times) == 0 {
@@ -203,11 +212,14 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFra
 		if !ok {
 			continue
 		}
+
 		mi, ok := mIdx[key.metric]
 		if !ok {
 			continue
 		}
+
 		colStart := (ai*numMetrics + mi) * numTimes
+
 		for sec, val := range vals {
 			ti := timeIdx[sec]
 			slab[colStart+ti] = val
@@ -226,11 +238,13 @@ func (p *SnapshotProvider) fetchEod(
 	timeSet map[int64]time.Time,
 ) error {
 	placeholders := make([]string, len(figis))
+
 	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
 	}
+
 	args[len(figis)] = startStr
 	args[len(figis)+1] = endStr
 
@@ -268,6 +282,7 @@ func (p *SnapshotProvider) fetchEod(
 		)
 
 		scanArgs := make([]any, 0, 2+len(columns))
+
 		scanArgs = append(scanArgs, &figi, &dateStr)
 		for idx := range columns {
 			scanArgs = append(scanArgs, &vals[idx])
@@ -277,18 +292,19 @@ func (p *SnapshotProvider) fetchEod(
 			return fmt.Errorf("snapshot provider: scan eod: %w", err)
 		}
 
-		t, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := time.Parse(time.RFC3339, dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse eod date: %w", err)
 		}
 
-		sec := t.Unix()
-		timeSet[sec] = t
+		sec := parsedTime.Unix()
+		timeSet[sec] = parsedTime
 
 		for idx, col := range columns {
 			if !want[col.metric] {
 				continue
 			}
+
 			if vals[idx].Valid {
 				ensureCol(figi, col.metric)[sec] = vals[idx].Float64
 			}
@@ -307,11 +323,13 @@ func (p *SnapshotProvider) fetchMetrics(
 	timeSet map[int64]time.Time,
 ) error {
 	placeholders := make([]string, len(figis))
+
 	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
 	}
+
 	args[len(figis)] = startStr
 	args[len(figis)+1] = endStr
 
@@ -370,18 +388,19 @@ func (p *SnapshotProvider) fetchMetrics(
 			return fmt.Errorf("snapshot provider: scan metrics: %w", err)
 		}
 
-		t, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := time.Parse(time.RFC3339, dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse metrics date: %w", err)
 		}
 
-		sec := t.Unix()
-		timeSet[sec] = t
+		sec := parsedTime.Unix()
+		timeSet[sec] = parsedTime
 
 		for idx, col := range columns {
 			if !want[col.metric] {
 				continue
 			}
+
 			if col.intCol {
 				if intVals[idx].Valid {
 					ensureCol(figi, col.metric)[sec] = float64(intVals[idx].Int64)
@@ -405,14 +424,17 @@ func (p *SnapshotProvider) fetchFundamentals(
 	ensureCol func(string, Metric) map[int64]float64,
 	timeSet map[int64]time.Time,
 ) error {
-	var sqlCols []string
-	var metricOrder []Metric
+	var (
+		sqlCols     []string
+		metricOrder []Metric
+	)
 
 	for _, metric := range metrics {
 		col, ok := metricColumn[metric]
 		if !ok {
 			continue
 		}
+
 		sqlCols = append(sqlCols, col)
 		metricOrder = append(metricOrder, metric)
 	}
@@ -422,11 +444,13 @@ func (p *SnapshotProvider) fetchFundamentals(
 	}
 
 	placeholders := make([]string, len(figis))
+
 	args := make([]any, len(figis)+2)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
 	}
+
 	args[len(figis)] = startStr
 	args[len(figis)+1] = endStr
 
@@ -467,13 +491,13 @@ func (p *SnapshotProvider) fetchFundamentals(
 			return fmt.Errorf("snapshot provider: scan fundamentals: %w", err)
 		}
 
-		t, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := time.Parse(time.RFC3339, dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse fundamentals date: %w", err)
 		}
 
-		sec := t.Unix()
-		timeSet[sec] = t
+		sec := parsedTime.Unix()
+		timeSet[sec] = parsedTime
 
 		for idx, metric := range metricOrder {
 			if floatVals[idx].Valid {
@@ -487,8 +511,8 @@ func (p *SnapshotProvider) fetchFundamentals(
 
 // -- IndexProvider --
 
-func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error) {
-	dateStr := t.Format(time.RFC3339)
+func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
+	dateStr := forDate.Format(time.RFC3339)
 
 	rows, err := p.db.QueryContext(ctx,
 		"SELECT composite_figi, ticker FROM index_members WHERE index_name = ? AND event_date = ?",
@@ -500,11 +524,13 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, t tim
 	defer rows.Close()
 
 	var members []asset.Asset
+
 	for rows.Next() {
 		var a asset.Asset
 		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
 			return nil, fmt.Errorf("snapshot provider: scan index member: %w", err)
 		}
+
 		members = append(members, a)
 	}
 
@@ -513,13 +539,13 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, t tim
 
 // -- RatingProvider --
 
-func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, t time.Time) ([]asset.Asset, error) {
+func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, forDate time.Time) ([]asset.Asset, error) {
 	filterJSON, err := json.Marshal(filter.Values)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot provider: marshal filter: %w", err)
 	}
 
-	dateStr := t.Format(time.RFC3339)
+	dateStr := forDate.Format(time.RFC3339)
 
 	rows, err := p.db.QueryContext(ctx,
 		"SELECT composite_figi, ticker FROM ratings WHERE analyst = ? AND filter_values = ? AND event_date = ?",
@@ -531,11 +557,13 @@ func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filt
 	defer rows.Close()
 
 	var assets []asset.Asset
+
 	for rows.Next() {
 		var a asset.Asset
 		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
 			return nil, fmt.Errorf("snapshot provider: scan rated asset: %w", err)
 		}
+
 		assets = append(assets, a)
 	}
 

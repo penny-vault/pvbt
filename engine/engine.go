@@ -188,16 +188,7 @@ func (e *Engine) CurrentDate() time.Time {
 
 // periodToTime returns base minus the given period.
 func periodToTime(base time.Time, period portfolio.Period) time.Time {
-	switch period.Unit {
-	case portfolio.UnitDay:
-		return base.AddDate(0, 0, -period.N)
-	case portfolio.UnitMonth:
-		return base.AddDate(0, -period.N, 0)
-	case portfolio.UnitYear:
-		return base.AddDate(-period.N, 0, 0)
-	default:
-		return base
-	}
+	return period.Before(base)
 }
 
 // buildProviderRouting populates e.metricProvider by iterating e.providers

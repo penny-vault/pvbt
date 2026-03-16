@@ -110,7 +110,7 @@ func (r *SnapshotRecorder) recordAssets(assets []asset.Asset) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO assets (composite_figi, ticker) VALUES (?, ?)")
 	if err != nil {
@@ -168,11 +168,13 @@ func (r *SnapshotRecorder) recordDataFrame(df *DataFrame, requestedMetrics []Met
 
 	// Group requested metrics by view.
 	viewMetrics := make(map[string][]Metric)
+
 	for _, metric := range requestedMetrics {
 		view, ok := metricView[metric]
 		if !ok {
 			continue
 		}
+
 		viewMetrics[view] = append(viewMetrics[view], metric)
 	}
 
@@ -180,7 +182,7 @@ func (r *SnapshotRecorder) recordDataFrame(df *DataFrame, requestedMetrics []Met
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	if metrics, ok := viewMetrics["eod"]; ok {
 		if err := r.recordEod(tx, df, metrics); err != nil {
@@ -219,7 +221,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 	// are stored as NULL rather than zero.
 	type nullableFloat = any
 
-	for assetIdx, a := range df.assets {
+	for assetIdx, currentAsset := range df.assets {
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format(time.RFC3339)
 
@@ -227,15 +229,19 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 				if !want[metric] {
 					return nil
 				}
+
 				mi, ok := mIdx[metric]
 				if !ok {
 					return nil
 				}
+
 				colStart := (assetIdx*numMetrics + mi) * numTimes
+
 				val := df.data[colStart+timeIdx]
 				if math.IsNaN(val) {
 					return nil
 				}
+
 				return val
 			}
 
@@ -243,7 +249,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 				`INSERT OR REPLACE INTO eod
 				 (composite_figi, event_date, open, high, low, close, adj_close, volume, dividend, split_factor)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				a.CompositeFigi, dateStr,
+				currentAsset.CompositeFigi, dateStr,
 				getValue(MetricOpen), getValue(MetricHigh), getValue(MetricLow),
 				getValue(MetricClose), getValue(AdjClose), getValue(Volume),
 				getValue(Dividend), getValue(SplitFactor),
@@ -266,7 +272,7 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 		mIdx[metric] = idx
 	}
 
-	for assetIdx, a := range df.assets {
+	for assetIdx, currentAsset := range df.assets {
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format(time.RFC3339)
 
@@ -275,11 +281,14 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 				if !ok {
 					return nil
 				}
+
 				colStart := (assetIdx*numMetrics + mi) * numTimes
+
 				val := df.data[colStart+timeIdx]
 				if math.IsNaN(val) {
 					return nil
 				}
+
 				return val
 			}
 
@@ -287,7 +296,7 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 				`INSERT OR REPLACE INTO metrics
 				 (composite_figi, event_date, market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda, pe_forward, peg, price_to_cash_flow, beta)
 				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-				a.CompositeFigi, dateStr,
+				currentAsset.CompositeFigi, dateStr,
 				getValue(MarketCap), getValue(EnterpriseValue),
 				getValue(PE), getValue(PB), getValue(PS),
 				getValue(EVtoEBIT), getValue(EVtoEBITDA),
@@ -313,14 +322,17 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 	}
 
 	// Build sorted column list from the metrics we have data for.
-	var colNames []string
-	var colMetrics []Metric
+	var (
+		colNames   []string
+		colMetrics []Metric
+	)
 
 	for _, metric := range metrics {
 		colName, ok := metricColumn[metric]
 		if !ok {
 			continue
 		}
+
 		colNames = append(colNames, colName)
 		colMetrics = append(colMetrics, metric)
 	}
@@ -332,6 +344,7 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 	placeholders := make([]string, 3+len(colNames))
 	placeholders[0] = "?"
 	placeholders[1] = "?"
+
 	placeholders[2] = "?"
 	for idx := range colNames {
 		placeholders[3+idx] = "?"
@@ -358,7 +371,9 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 					args[3+idx] = nil
 					continue
 				}
+
 				colStart := (assetIdx*numDFMetrics + mi) * numTimes
+
 				val := df.data[colStart+timeIdx]
 				if math.IsNaN(val) {
 					args[3+idx] = nil
@@ -379,12 +394,12 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 // -- IndexProvider --
 
 // IndexMembers delegates to the inner IndexProvider and records the results.
-func (r *SnapshotRecorder) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error) {
+func (r *SnapshotRecorder) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
 	if r.indexProvider == nil {
 		return nil, nil
 	}
 
-	members, err := r.indexProvider.IndexMembers(ctx, index, t)
+	members, err := r.indexProvider.IndexMembers(ctx, index, forDate)
 	if err != nil {
 		return nil, err
 	}
@@ -393,19 +408,19 @@ func (r *SnapshotRecorder) IndexMembers(ctx context.Context, index string, t tim
 		return nil, fmt.Errorf("snapshot recorder: record index member assets: %w", err)
 	}
 
-	if err := r.recordIndexMembers(index, t, members); err != nil {
+	if err := r.recordIndexMembers(index, forDate, members); err != nil {
 		return nil, fmt.Errorf("snapshot recorder: record index members: %w", err)
 	}
 
 	return members, nil
 }
 
-func (r *SnapshotRecorder) recordIndexMembers(index string, t time.Time, members []asset.Asset) error {
+func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, members []asset.Asset) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO index_members (index_name, event_date, composite_figi, ticker) VALUES (?, ?, ?, ?)")
 	if err != nil {
@@ -413,7 +428,7 @@ func (r *SnapshotRecorder) recordIndexMembers(index string, t time.Time, members
 	}
 	defer stmt.Close()
 
-	dateStr := t.Format(time.RFC3339)
+	dateStr := forDate.Format(time.RFC3339)
 	for _, a := range members {
 		if _, err := stmt.Exec(index, dateStr, a.CompositeFigi, a.Ticker); err != nil {
 			return err
@@ -426,12 +441,12 @@ func (r *SnapshotRecorder) recordIndexMembers(index string, t time.Time, members
 // -- RatingProvider --
 
 // RatedAssets delegates to the inner RatingProvider and records the results.
-func (r *SnapshotRecorder) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, t time.Time) ([]asset.Asset, error) {
+func (r *SnapshotRecorder) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, forDate time.Time) ([]asset.Asset, error) {
 	if r.ratingProvider == nil {
 		return nil, nil
 	}
 
-	assets, err := r.ratingProvider.RatedAssets(ctx, analyst, filter, t)
+	assets, err := r.ratingProvider.RatedAssets(ctx, analyst, filter, forDate)
 	if err != nil {
 		return nil, err
 	}
@@ -440,14 +455,14 @@ func (r *SnapshotRecorder) RatedAssets(ctx context.Context, analyst string, filt
 		return nil, fmt.Errorf("snapshot recorder: record rated assets: %w", err)
 	}
 
-	if err := r.recordRatedAssets(analyst, filter, t, assets); err != nil {
+	if err := r.recordRatedAssets(analyst, filter, forDate, assets); err != nil {
 		return nil, fmt.Errorf("snapshot recorder: record ratings: %w", err)
 	}
 
 	return assets, nil
 }
 
-func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter, t time.Time, assets []asset.Asset) error {
+func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter, forDate time.Time, assets []asset.Asset) error {
 	filterJSON, err := json.Marshal(filter.Values)
 	if err != nil {
 		return fmt.Errorf("marshal filter values: %w", err)
@@ -457,7 +472,7 @@ func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO ratings (analyst, filter_values, event_date, composite_figi, ticker) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
@@ -465,7 +480,7 @@ func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter
 	}
 	defer stmt.Close()
 
-	dateStr := t.Format(time.RFC3339)
+	dateStr := forDate.Format(time.RFC3339)
 	for _, a := range assets {
 		if _, err := stmt.Exec(analyst, string(filterJSON), dateStr, a.CompositeFigi, a.Ticker); err != nil {
 			return err

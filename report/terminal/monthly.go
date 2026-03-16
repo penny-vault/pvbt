@@ -35,8 +35,10 @@ func renderMonthlyReturns(builder *strings.Builder, monthly report.MonthlyReturn
 	builder.WriteString(sectionTitleStyle.Render("Monthly Returns"))
 	builder.WriteString("\n")
 
-	const monthCol = 7
-	const yearLabelCol = 6
+	const (
+		monthCol     = 7
+		yearLabelCol = 6
+	)
 
 	// Header row.
 	header := padRight("", yearLabelCol)

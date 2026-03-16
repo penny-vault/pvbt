@@ -61,7 +61,13 @@ func (p Period) Before(ref time.Time) time.Time {
 	case UnitDay:
 		return ref.AddDate(0, 0, -p.N)
 	case UnitMonth:
-		return ref.AddDate(0, -p.N, 0)
+		// Snap to the 1st of ref's month, then go back N-1 months.
+		// This guarantees the window always starts at a month boundary
+		// so that a monthly downsample yields exactly N rows.
+		first := time.Date(ref.Year(), ref.Month(), 1,
+			ref.Hour(), ref.Minute(), ref.Second(), ref.Nanosecond(), ref.Location())
+
+		return first.AddDate(0, -(p.N - 1), 0)
 	case UnitYear:
 		return ref.AddDate(-p.N, 0, 0)
 	case UnitYTD:

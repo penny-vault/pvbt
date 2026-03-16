@@ -54,23 +54,36 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("load America/New_York timezone: %w", err)
 	}
 
-	startStr, _ := cmd.Flags().GetString("start")
+	startStr, err := cmd.Flags().GetString("start")
+	if err != nil {
+		return err
+	}
 
 	start, err := time.ParseInLocation("2006-01-02", startStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	endStr, _ := cmd.Flags().GetString("end")
+	endStr, err := cmd.Flags().GetString("end")
+	if err != nil {
+		return err
+	}
 
 	end, err := time.ParseInLocation("2006-01-02", endStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
 
-	cash, _ := cmd.Flags().GetFloat64("cash")
+	cash, err := cmd.Flags().GetFloat64("cash")
+	if err != nil {
+		return err
+	}
 
-	outputPath, _ := cmd.Flags().GetString("output")
+	outputPath, err := cmd.Flags().GetString("output")
+	if err != nil {
+		return err
+	}
+
 	if outputPath == "" {
 		outputPath = defaultSnapshotPath(strategy.Name(), start, end)
 	}
@@ -122,6 +135,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		// directly -- no need to also close the engine.
 		recorder.Close()
 		provider.Close()
+
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
@@ -150,6 +164,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 			log.Warn().Err(err).Str("table", table).Msg("could not count rows")
 			continue
 		}
+
 		if count > 0 {
 			log.Info().Str("table", table).Int("rows", count).Msg("snapshot table")
 		}

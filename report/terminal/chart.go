@@ -41,6 +41,7 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 	if len(curve.StrategyValues) == 0 {
 		builder.WriteString(dimStyle.Render("  No equity data available."))
 		builder.WriteString("\n")
+
 		return
 	}
 
@@ -54,6 +55,7 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 				if val < minVal {
 					minVal = val
 				}
+
 				if val > maxVal {
 					maxVal = val
 				}
@@ -109,6 +111,7 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 			if cartY < 0 {
 				cartY = 0
 			}
+
 			if cartY >= chartHeight {
 				cartY = chartHeight - 1
 			}

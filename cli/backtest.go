@@ -66,24 +66,38 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("load America/New_York timezone: %w", err)
 	}
 
-	startStr, _ := cmd.Flags().GetString("start")
+	startStr, err := cmd.Flags().GetString("start")
+	if err != nil {
+		return err
+	}
 
 	start, err := time.ParseInLocation("2006-01-02", startStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid start date: %w", err)
 	}
 
-	endStr, _ := cmd.Flags().GetString("end")
+	endStr, err := cmd.Flags().GetString("end")
+	if err != nil {
+		return err
+	}
 
 	end, err := time.ParseInLocation("2006-01-02", endStr, nyc)
 	if err != nil {
 		return fmt.Errorf("invalid end date: %w", err)
 	}
 
-	cash, _ := cmd.Flags().GetFloat64("cash")
+	cash, err := cmd.Flags().GetFloat64("cash")
+	if err != nil {
+		return err
+	}
+
 	fullID, shortID := runID()
 
-	outputPath, _ := cmd.Flags().GetString("output")
+	outputPath, err := cmd.Flags().GetString("output")
+	if err != nil {
+		return err
+	}
+
 	if outputPath == "" {
 		outputPath = defaultOutputPath(strategy.Name(), start, end, shortID)
 	}
@@ -99,7 +113,11 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	applyStrategyFlags(strategy)
 
-	useTUI, _ := cmd.Flags().GetBool("tui")
+	useTUI, err := cmd.Flags().GetBool("tui")
+	if err != nil {
+		return err
+	}
+
 	if useTUI {
 		return runBacktestWithTUI(strategy)
 	}

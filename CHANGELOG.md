@@ -39,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Load market holidays from the database so backtests skip non-trading days like Good Friday
 - Honor --start, --end, and other CLI flags on the backtest, snapshot, and explore subcommands
 - Fire @monthend, @weekend, and @close schedules on early-close days at the actual close time instead of skipping the day
+- Snap Months(N) lookback to month boundaries so monthly downsample always yields exactly N rows
 
 ## [0.1.0] - 2026-03-14
 

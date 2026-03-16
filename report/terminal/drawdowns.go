@@ -33,10 +33,12 @@ func renderDrawdowns(builder *strings.Builder, drawdowns report.Drawdowns) {
 	builder.WriteString("\n")
 
 	// Column widths.
-	const numCol = 4
-	const dateCol = 12
-	const depthCol = 10
-	const durCol = 12
+	const (
+		numCol   = 4
+		dateCol  = 12
+		depthCol = 10
+		durCol   = 12
+	)
 
 	// Header.
 	header := padRight(tableHeaderStyle.Render("#"), numCol) +

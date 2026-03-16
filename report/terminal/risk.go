@@ -27,8 +27,10 @@ func renderRisk(builder *strings.Builder, risk report.Risk, hasBenchmark bool) {
 	builder.WriteString("\n")
 
 	// Column widths.
-	const nameCol = 22
-	const valCol = 14
+	const (
+		nameCol = 22
+		valCol  = 14
+	)
 
 	// Header.
 	header := padRight(labelStyle.Render(""), nameCol) +
@@ -74,8 +76,10 @@ func renderRiskVsBenchmark(builder *strings.Builder, rvb report.RiskVsBenchmark)
 	builder.WriteString(sectionTitleStyle.Render("Risk vs Benchmark"))
 	builder.WriteString("\n")
 
-	const labelCol = 20
-	const valCol = 14
+	const (
+		labelCol = 20
+		valCol   = 14
+	)
 
 	type gridEntry struct {
 		label string

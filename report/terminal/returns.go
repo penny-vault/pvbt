@@ -61,6 +61,7 @@ func renderTrailingReturns(builder *strings.Builder, trailing report.TrailingRet
 
 		// Diff row.
 		diffRow := padRight(labelStyle.Render("+/-"), colWidth)
+
 		for idx := range trailing.Strategy {
 			diff := trailing.Strategy[idx] - trailing.Benchmark[idx]
 			if math.IsNaN(trailing.Strategy[idx]) || math.IsNaN(trailing.Benchmark[idx]) {
@@ -110,6 +111,7 @@ func renderAnnualReturns(builder *strings.Builder, annual report.AnnualReturns, 
 
 		// Diff row.
 		diffRow := padRight(labelStyle.Render("+/-"), colWidth)
+
 		for idx := range annual.Strategy {
 			diff := math.NaN()
 			if idx < len(annual.Benchmark) {

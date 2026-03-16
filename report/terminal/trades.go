@@ -30,8 +30,10 @@ func renderTrades(builder *strings.Builder, trades report.Trades) {
 	builder.WriteString("\n")
 
 	// Summary stats in 2-column layout.
-	const summaryLabel = 20
-	const summaryVal = 14
+	const (
+		summaryLabel = 20
+		summaryVal   = 14
+	)
 
 	type statPair struct {
 		leftLabel  string
@@ -83,12 +85,14 @@ func renderTrades(builder *strings.Builder, trades report.Trades) {
 	builder.WriteString("\n")
 
 	// Column widths for trade table.
-	const dateCol = 12
-	const actionCol = 8
-	const tickerCol = 8
-	const sharesCol = 10
-	const priceCol = 12
-	const amountCol = 14
+	const (
+		dateCol   = 12
+		actionCol = 8
+		tickerCol = 8
+		sharesCol = 10
+		priceCol  = 12
+		amountCol = 14
+	)
 
 	// Header.
 	header := padRight(tableHeaderStyle.Render("Date"), dateCol) +
@@ -118,9 +122,10 @@ func renderTrades(builder *strings.Builder, trades report.Trades) {
 		trade := trades.Trades[idx]
 
 		actionStyled := valueStyle.Render(trade.Action)
-		if trade.Action == "BUY" {
+		switch trade.Action {
+		case "BUY":
 			actionStyled = positiveStyle.Render(trade.Action)
-		} else if trade.Action == "SELL" {
+		case "SELL":
 			actionStyled = negativeStyle.Render(trade.Action)
 		}
 
