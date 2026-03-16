@@ -25,33 +25,33 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Monokai-inspired adaptive color palette
+// GitHub-inspired adaptive color palette
 // ---------------------------------------------------------------------------
 
 var (
-	// Foreground / emphasis -- Monokai warm white on dark, near-black on light.
-	colorFg = lipgloss.AdaptiveColor{Dark: "#F8F8F2", Light: "#272822"}
+	// Foreground / emphasis -- GitHub Dark fg on dark, GitHub Light fg on light.
+	colorFg = lipgloss.AdaptiveColor{Dark: "#E6EDF3", Light: "#1F2328"}
 
-	// Muted text -- Monokai comment gray on dark, medium gray on light.
-	colorMuted = lipgloss.AdaptiveColor{Dark: "#75715E", Light: "#6E7066"}
+	// Muted text -- GitHub secondary text.
+	colorMuted = lipgloss.AdaptiveColor{Dark: "#8B949E", Light: "#656D76"}
 
-	// Accent / headings -- Monokai cyan on dark, deeper teal on light.
-	colorAccent = lipgloss.AdaptiveColor{Dark: "#66D9EF", Light: "#0087AF"}
+	// Accent / headings -- GitHub blue.
+	colorAccent = lipgloss.AdaptiveColor{Dark: "#58A6FF", Light: "#0969DA"}
 
-	// Positive values -- Monokai green on dark, darker green on light.
-	colorPositive = lipgloss.AdaptiveColor{Dark: "#A6E22E", Light: "#4E9A06"}
+	// Positive values -- GitHub green.
+	colorPositive = lipgloss.AdaptiveColor{Dark: "#3FB950", Light: "#1A7F37"}
 
-	// Negative values -- Monokai pink on dark, deeper red on light.
-	colorNegative = lipgloss.AdaptiveColor{Dark: "#F92672", Light: "#CC0000"}
+	// Negative values -- GitHub red.
+	colorNegative = lipgloss.AdaptiveColor{Dark: "#F85149", Light: "#CF222E"}
 
-	// Dim / disabled -- darker gray on dark, lighter gray on light.
-	colorDim = lipgloss.AdaptiveColor{Dark: "#49483E", Light: "#B0B0B0"}
+	// Dim / disabled -- GitHub muted border/bg.
+	colorDim = lipgloss.AdaptiveColor{Dark: "#484F58", Light: "#B0B8C1"}
 
-	// Chart: strategy line -- Monokai purple on dark, deeper purple on light.
-	ColorStrategy = lipgloss.AdaptiveColor{Dark: "#AE81FF", Light: "#6C3DAF"}
+	// Chart: strategy line -- GitHub purple.
+	ColorStrategy = lipgloss.AdaptiveColor{Dark: "#BC8CFF", Light: "#8250DF"}
 
-	// Chart: benchmark line -- Monokai orange on dark, deeper orange on light.
-	ColorBenchmark = lipgloss.AdaptiveColor{Dark: "#FD971F", Light: "#C4700A"}
+	// Chart: benchmark line -- GitHub orange.
+	ColorBenchmark = lipgloss.AdaptiveColor{Dark: "#D29922", Light: "#9A6700"}
 )
 
 // ---------------------------------------------------------------------------
