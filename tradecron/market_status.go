@@ -69,13 +69,13 @@ func SetMarketHolidays(items []MarketHoliday) {
 }
 
 // EarlyClose returns close time of an early close market day, e.g. 1300
-func (ms *MarketStatus) EarlyClose(t time.Time) int {
+func (ms *MarketStatus) EarlyClose(checkTime time.Time) int {
 	holidayLocker.RLock()
 	defer holidayLocker.RUnlock()
 
 	requireHolidays()
 
-	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
+	d := time.Date(checkTime.Year(), checkTime.Month(), checkTime.Day(), 0, 0, 0, 0, ms.tz)
 	if marketClose, ok := holidays[d.Unix()]; ok {
 		return marketClose
 	}
@@ -84,13 +84,13 @@ func (ms *MarketStatus) EarlyClose(t time.Time) int {
 }
 
 // IsMarketHoliday returns true if the specified date is a market holiday
-func (ms *MarketStatus) IsMarketHoliday(t time.Time) bool {
+func (ms *MarketStatus) IsMarketHoliday(checkTime time.Time) bool {
 	holidayLocker.RLock()
 	defer holidayLocker.RUnlock()
 
 	requireHolidays()
 
-	d := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, ms.tz)
+	d := time.Date(checkTime.Year(), checkTime.Month(), checkTime.Day(), 0, 0, 0, 0, ms.tz)
 
 	marketHoliday, isHoliday := holidays[d.Unix()]
 	if marketHoliday != 0 {
@@ -126,12 +126,12 @@ func (ms *MarketStatus) IsMarketOpen(checkTime time.Time) bool {
 
 // IsMarketDay returns true if the specified date is a valid trading day
 // (i.e. not a market holiday or weekend)
-func (ms *MarketStatus) IsMarketDay(t time.Time) bool {
-	if t.Weekday() == time.Saturday || t.Weekday() == time.Sunday {
+func (ms *MarketStatus) IsMarketDay(checkTime time.Time) bool {
+	if checkTime.Weekday() == time.Saturday || checkTime.Weekday() == time.Sunday {
 		return false
 	}
 
-	isHoliday := ms.IsMarketHoliday(t)
+	isHoliday := ms.IsMarketHoliday(checkTime)
 
 	return !isHoliday
 }
