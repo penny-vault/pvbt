@@ -143,6 +143,22 @@ func (e *Engine) Asset(ticker string) asset.Asset {
 	panic(fmt.Sprintf("engine: unknown asset ticker %q", ticker))
 }
 
+// findHolidayProvider returns the first registered provider that implements
+// HolidayProvider, or nil if none do.
+func (e *Engine) findHolidayProvider() data.HolidayProvider {
+	for _, provider := range e.providers {
+		if hp, ok := provider.(data.HolidayProvider); ok {
+			return hp
+		}
+	}
+
+	if hp, ok := e.assetProvider.(data.HolidayProvider); ok {
+		return hp
+	}
+
+	return nil
+}
+
 // Universe creates a static universe wired to this engine for data fetching.
 func (e *Engine) Universe(assets ...asset.Asset) universe.Universe {
 	return universe.NewStaticWithSource(assets, e)

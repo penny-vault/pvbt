@@ -19,10 +19,11 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ BatchProvider  = (*SnapshotProvider)(nil)
-	_ AssetProvider  = (*SnapshotProvider)(nil)
-	_ IndexProvider  = (*SnapshotProvider)(nil)
-	_ RatingProvider = (*SnapshotProvider)(nil)
+	_ BatchProvider   = (*SnapshotProvider)(nil)
+	_ AssetProvider   = (*SnapshotProvider)(nil)
+	_ IndexProvider   = (*SnapshotProvider)(nil)
+	_ RatingProvider  = (*SnapshotProvider)(nil)
+	_ HolidayProvider = (*SnapshotProvider)(nil)
 )
 
 // SnapshotProvider replays data from a snapshot SQLite database.
@@ -52,6 +53,39 @@ func (p *SnapshotProvider) Close() error {
 	return p.db.Close()
 }
 
+// snapshotDateFormat is the canonical format for dates in snapshot databases.
+const snapshotDateFormat = "2006-01-02"
+
+// snapshotLocation is the timezone used when parsing date-only strings from
+// snapshot databases. The PV data provider returns timestamps at 4pm Eastern
+// (market close). Parsing snapshot dates in the same timezone ensures
+// downstream timestamp matching works correctly.
+var snapshotLocation = mustLoadLocation("America/New_York")
+
+func mustLoadLocation(name string) *time.Location {
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		panic("snapshot provider: load timezone " + name + ": " + err.Error())
+	}
+
+	return loc
+}
+
+// parseSnapshotDate parses a date string from the snapshot database.
+// Date-only strings are parsed at 4pm Eastern (market close) to match
+// the timestamps produced by the PV data provider. Legacy RFC3339
+// strings are parsed as-is for backward compatibility.
+func parseSnapshotDate(dateStr string) (time.Time, error) {
+	parsed, err := time.ParseInLocation(snapshotDateFormat, dateStr, snapshotLocation)
+	if err == nil {
+		// Set to 4pm Eastern (market close) to match PV provider timestamps.
+		return time.Date(parsed.Year(), parsed.Month(), parsed.Day(),
+			16, 0, 0, 0, snapshotLocation), nil
+	}
+
+	return time.Parse(time.RFC3339, dateStr)
+}
+
 // FetchMarketHolidays loads market holidays from the snapshot database.
 func (p *SnapshotProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error) {
 	rows, err := p.db.QueryContext(ctx, "SELECT event_date, early_close, close_time FROM market_holidays ORDER BY event_date")
@@ -73,7 +107,7 @@ func (p *SnapshotProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron
 			return nil, fmt.Errorf("snapshot provider: scan market holiday: %w", err)
 		}
 
-		parsedDate, err := time.Parse(time.RFC3339, dateStr)
+		parsedDate, err := parseSnapshotDate(dateStr)
 		if err != nil {
 			return nil, fmt.Errorf("snapshot provider: parse holiday date: %w", err)
 		}
@@ -188,8 +222,8 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFra
 		return c
 	}
 
-	startStr := req.Start.Format(time.RFC3339)
-	endStr := req.End.Format(time.RFC3339)
+	startStr := req.Start.Format("2006-01-02")
+	endStr := req.End.Format("2006-01-02")
 
 	if metrics, ok := viewMetrics["eod"]; ok {
 		if err := p.fetchEod(ctx, figis, startStr, endStr, metrics, ensureCol, timeSet); err != nil {
@@ -288,7 +322,7 @@ func (p *SnapshotProvider) fetchEod(
 	query := fmt.Sprintf(
 		`SELECT composite_figi, event_date, open, high, low, close, adj_close, volume, dividend, split_factor
 		 FROM eod
-		 WHERE composite_figi IN (%s) AND event_date BETWEEN ? AND ?
+		 WHERE composite_figi IN (%s) AND substr(event_date, 1, 10) BETWEEN ? AND ?
 		 ORDER BY event_date`,
 		strings.Join(placeholders, ","),
 	)
@@ -329,7 +363,7 @@ func (p *SnapshotProvider) fetchEod(
 			return fmt.Errorf("snapshot provider: scan eod: %w", err)
 		}
 
-		parsedTime, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := parseSnapshotDate(dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse eod date: %w", err)
 		}
@@ -375,7 +409,7 @@ func (p *SnapshotProvider) fetchMetrics(
 		        market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda,
 		        pe_forward, peg, price_to_cash_flow, beta
 		 FROM metrics
-		 WHERE composite_figi IN (%s) AND event_date BETWEEN ? AND ?
+		 WHERE composite_figi IN (%s) AND substr(event_date, 1, 10) BETWEEN ? AND ?
 		 ORDER BY event_date`,
 		strings.Join(placeholders, ","),
 	)
@@ -425,7 +459,7 @@ func (p *SnapshotProvider) fetchMetrics(
 			return fmt.Errorf("snapshot provider: scan metrics: %w", err)
 		}
 
-		parsedTime, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := parseSnapshotDate(dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse metrics date: %w", err)
 		}
@@ -497,7 +531,7 @@ func (p *SnapshotProvider) fetchFundamentals(
 	query := fmt.Sprintf(
 		`SELECT composite_figi, event_date, %s
 		 FROM fundamentals
-		 WHERE composite_figi IN (%s) AND event_date BETWEEN ? AND ? AND dimension = ?
+		 WHERE composite_figi IN (%s) AND substr(event_date, 1, 10) BETWEEN ? AND ? AND dimension = ?
 		 ORDER BY event_date`,
 		strings.Join(sqlCols, ", "),
 		strings.Join(placeholders, ","),
@@ -528,7 +562,7 @@ func (p *SnapshotProvider) fetchFundamentals(
 			return fmt.Errorf("snapshot provider: scan fundamentals: %w", err)
 		}
 
-		parsedTime, err := time.Parse(time.RFC3339, dateStr)
+		parsedTime, err := parseSnapshotDate(dateStr)
 		if err != nil {
 			return fmt.Errorf("snapshot provider: parse fundamentals date: %w", err)
 		}
@@ -549,7 +583,7 @@ func (p *SnapshotProvider) fetchFundamentals(
 // -- IndexProvider --
 
 func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
-	dateStr := forDate.Format(time.RFC3339)
+	dateStr := forDate.Format("2006-01-02")
 
 	rows, err := p.db.QueryContext(ctx,
 		"SELECT composite_figi, ticker FROM index_members WHERE index_name = ? AND event_date = ?",
@@ -582,7 +616,7 @@ func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filt
 		return nil, fmt.Errorf("snapshot provider: marshal filter: %w", err)
 	}
 
-	dateStr := forDate.Format(time.RFC3339)
+	dateStr := forDate.Format("2006-01-02")
 
 	rows, err := p.db.QueryContext(ctx,
 		"SELECT composite_figi, ticker FROM ratings WHERE analyst = ? AND filter_values = ? AND event_date = ?",

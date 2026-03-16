@@ -17,10 +17,11 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ BatchProvider  = (*SnapshotRecorder)(nil)
-	_ AssetProvider  = (*SnapshotRecorder)(nil)
-	_ IndexProvider  = (*SnapshotRecorder)(nil)
-	_ RatingProvider = (*SnapshotRecorder)(nil)
+	_ BatchProvider   = (*SnapshotRecorder)(nil)
+	_ AssetProvider   = (*SnapshotRecorder)(nil)
+	_ IndexProvider   = (*SnapshotRecorder)(nil)
+	_ RatingProvider  = (*SnapshotRecorder)(nil)
+	_ HolidayProvider = (*SnapshotRecorder)(nil)
 )
 
 // SnapshotRecorderConfig holds the providers to wrap.
@@ -68,8 +69,36 @@ func (r *SnapshotRecorder) Close() error {
 	return r.db.Close()
 }
 
-// RecordMarketHolidays writes the market holiday calendar to the snapshot.
-func (r *SnapshotRecorder) RecordMarketHolidays(holidays []tradecron.MarketHoliday) error {
+// FetchMarketHolidays delegates to the underlying provider and records the
+// holidays in the snapshot database.
+func (r *SnapshotRecorder) FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error) {
+	// Find a HolidayProvider among the wrapped providers.
+	var hp HolidayProvider
+
+	if provider, ok := r.batchProvider.(HolidayProvider); ok {
+		hp = provider
+	} else if provider, ok := r.assetProvider.(HolidayProvider); ok {
+		hp = provider
+	}
+
+	if hp == nil {
+		return nil, nil
+	}
+
+	holidays, err := hp.FetchMarketHolidays(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.recordMarketHolidays(holidays); err != nil {
+		return nil, fmt.Errorf("snapshot recorder: record market holidays: %w", err)
+	}
+
+	return holidays, nil
+}
+
+// recordMarketHolidays writes the market holiday calendar to the snapshot.
+func (r *SnapshotRecorder) recordMarketHolidays(holidays []tradecron.MarketHoliday) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -88,7 +117,7 @@ func (r *SnapshotRecorder) RecordMarketHolidays(holidays []tradecron.MarketHolid
 			earlyClose = 1
 		}
 
-		dateStr := holiday.Date.Format(time.RFC3339)
+		dateStr := holiday.Date.Format("2006-01-02")
 		if _, err := stmt.Exec(dateStr, earlyClose, holiday.CloseTime); err != nil {
 			return err
 		}
@@ -253,7 +282,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 
 	for assetIdx, currentAsset := range df.assets {
 		for timeIdx, timestamp := range df.times {
-			dateStr := timestamp.Format(time.RFC3339)
+			dateStr := timestamp.Format("2006-01-02")
 
 			getValue := func(metric Metric) nullableFloat {
 				if !want[metric] {
@@ -276,9 +305,18 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 			}
 
 			_, err := tx.Exec(
-				`INSERT OR REPLACE INTO eod
+				`INSERT INTO eod
 				 (composite_figi, event_date, open, high, low, close, adj_close, volume, dividend, split_factor)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 ON CONFLICT(composite_figi, event_date) DO UPDATE SET
+				   open         = COALESCE(excluded.open, open),
+				   high         = COALESCE(excluded.high, high),
+				   low          = COALESCE(excluded.low, low),
+				   close        = COALESCE(excluded.close, close),
+				   adj_close    = COALESCE(excluded.adj_close, adj_close),
+				   volume       = COALESCE(excluded.volume, volume),
+				   dividend     = COALESCE(excluded.dividend, dividend),
+				   split_factor = COALESCE(excluded.split_factor, split_factor)`,
 				currentAsset.CompositeFigi, dateStr,
 				getValue(MetricOpen), getValue(MetricHigh), getValue(MetricLow),
 				getValue(MetricClose), getValue(AdjClose), getValue(Volume),
@@ -304,7 +342,7 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 
 	for assetIdx, currentAsset := range df.assets {
 		for timeIdx, timestamp := range df.times {
-			dateStr := timestamp.Format(time.RFC3339)
+			dateStr := timestamp.Format("2006-01-02")
 
 			getValue := func(metric Metric) any {
 				mi, ok := mIdx[metric]
@@ -323,9 +361,21 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 			}
 
 			_, err := tx.Exec(
-				`INSERT OR REPLACE INTO metrics
+				`INSERT INTO metrics
 				 (composite_figi, event_date, market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda, pe_forward, peg, price_to_cash_flow, beta)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 ON CONFLICT(composite_figi, event_date) DO UPDATE SET
+				   market_cap        = COALESCE(excluded.market_cap, market_cap),
+				   ev                = COALESCE(excluded.ev, ev),
+				   pe                = COALESCE(excluded.pe, pe),
+				   pb                = COALESCE(excluded.pb, pb),
+				   ps                = COALESCE(excluded.ps, ps),
+				   ev_ebit           = COALESCE(excluded.ev_ebit, ev_ebit),
+				   ev_ebitda         = COALESCE(excluded.ev_ebitda, ev_ebitda),
+				   pe_forward        = COALESCE(excluded.pe_forward, pe_forward),
+				   peg               = COALESCE(excluded.peg, peg),
+				   price_to_cash_flow = COALESCE(excluded.price_to_cash_flow, price_to_cash_flow),
+				   beta              = COALESCE(excluded.beta, beta)`,
 				currentAsset.CompositeFigi, dateStr,
 				getValue(MarketCap), getValue(EnterpriseValue),
 				getValue(PE), getValue(PB), getValue(PS),
@@ -380,15 +430,22 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		placeholders[3+idx] = "?"
 	}
 
+	// Build ON CONFLICT clause for upsert.
+	upsertCols := make([]string, len(colNames))
+	for idx, col := range colNames {
+		upsertCols[idx] = fmt.Sprintf("%s = COALESCE(excluded.%s, %s)", col, col, col)
+	}
+
 	query := fmt.Sprintf(
-		"INSERT OR REPLACE INTO fundamentals (composite_figi, event_date, dimension, %s) VALUES (%s)",
+		"INSERT INTO fundamentals (composite_figi, event_date, dimension, %s) VALUES (%s) ON CONFLICT(composite_figi, event_date, dimension) DO UPDATE SET %s",
 		strings.Join(colNames, ", "),
 		strings.Join(placeholders, ", "),
+		strings.Join(upsertCols, ", "),
 	)
 
 	for assetIdx, a := range df.assets {
 		for timeIdx, timestamp := range df.times {
-			dateStr := timestamp.Format(time.RFC3339)
+			dateStr := timestamp.Format("2006-01-02")
 
 			args := make([]any, 3+len(colMetrics))
 			args[0] = a.CompositeFigi
@@ -458,7 +515,7 @@ func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, m
 	}
 	defer stmt.Close()
 
-	dateStr := forDate.Format(time.RFC3339)
+	dateStr := forDate.Format("2006-01-02")
 	for _, a := range members {
 		if _, err := stmt.Exec(index, dateStr, a.CompositeFigi, a.Ticker); err != nil {
 			return err
@@ -510,7 +567,7 @@ func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter
 	}
 	defer stmt.Close()
 
-	dateStr := forDate.Format(time.RFC3339)
+	dateStr := forDate.Format("2006-01-02")
 	for _, a := range assets {
 		if _, err := stmt.Exec(analyst, string(filterJSON), dateStr, a.CompositeFigi, a.Ticker); err != nil {
 			return err
