@@ -167,7 +167,7 @@ func TestRenderFullReport(t *testing.T) {
 
 	// Verify key sections appear in the output.
 	for _, section := range []string{
-		"Equity Curve",
+		"Performance",
 		"Trailing Returns",
 		"Annual Returns",
 		"Risk Metrics",

@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -162,6 +163,30 @@ func fmtDays(val float64) string {
 	}
 
 	return valueStyle.Render(fmt.Sprintf("%.0f days", val))
+}
+
+// fmtElapsed formats a duration as a human-friendly string: "1.2s", "2m 30s", "1h 5m".
+func fmtElapsed(d time.Duration) string {
+	switch {
+	case d < time.Second:
+		return fmt.Sprintf("%dms", d.Milliseconds())
+	case d < time.Minute:
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	case d < time.Hour:
+		minutes := int(d.Minutes())
+		seconds := int(d.Seconds()) % 60
+		if seconds == 0 {
+			return fmt.Sprintf("%dm", minutes)
+		}
+		return fmt.Sprintf("%dm %ds", minutes, seconds)
+	default:
+		hours := int(d.Hours())
+		minutes := int(d.Minutes()) % 60
+		if minutes == 0 {
+			return fmt.Sprintf("%dh", hours)
+		}
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	}
 }
 
 // padRight right-pads a string to the given width, accounting for ANSI escape

@@ -35,7 +35,7 @@ const (
 
 // renderEquityCurve draws a line chart of the equity curve.
 func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBenchmark bool) {
-	builder.WriteString(sectionTitleStyle.Render("Equity Curve"))
+	builder.WriteString(sectionTitleStyle.Render("Performance"))
 	builder.WriteString("\n")
 
 	if len(curve.StrategyValues) == 0 {

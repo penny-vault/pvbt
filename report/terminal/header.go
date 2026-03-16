@@ -56,9 +56,8 @@ func renderHeader(builder *strings.Builder, header report.Header) {
 	initialText := labelStyle.Render("  Initial: ") + fmtCurrencyLarge(header.InitialCash)
 	finalText := labelStyle.Render("Final: ") + fmtCurrencyLarge(header.FinalValue)
 
-	elapsedStr := header.Elapsed.Round(100 * 1e6).String() // e.g. "1.2s"
 	elapsedText := labelStyle.Render("Elapsed: ") +
-		valueStyle.Render(fmt.Sprintf("%s (%d steps)", elapsedStr, header.Steps))
+		valueStyle.Render(fmt.Sprintf("%s (%d steps)", fmtElapsed(header.Elapsed), header.Steps))
 
 	// Space the three parts across the line.
 	gap1 := reportWidth/3 - lipgloss.Width(initialText)
