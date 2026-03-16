@@ -71,4 +71,6 @@ func (ulcerIndex) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 // on a 0-100 percentage scale. Higher values indicate more painful
 // drawdown experiences. Returns 0 when fewer than 14 data points
 // are available.
+func (ulcerIndex) BenchmarkTargetable() {}
+
 var UlcerIndex PerformanceMetric = ulcerIndex{}

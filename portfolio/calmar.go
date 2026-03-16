@@ -72,4 +72,6 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 func (calmar) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
 
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
+func (calmar) BenchmarkTargetable() {}
+
 var Calmar PerformanceMetric = calmar{}

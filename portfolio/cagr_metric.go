@@ -57,4 +57,6 @@ func (cagrMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) {
 // CAGR is the Compound Annual Growth Rate -- the annualized return
 // that accounts for compounding. It is the standard way to compare
 // returns across different time horizons.
+func (cagrMetric) BenchmarkTargetable() {}
+
 var CAGR PerformanceMetric = cagrMetric{}

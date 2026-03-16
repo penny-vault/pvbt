@@ -60,4 +60,6 @@ func (valueAtRisk) ComputeSeries(a *Account, window *Period) ([]float64, error) 
 // horizon at a specified confidence level (e.g., 95%). A VaR of 5%
 // at 95% confidence means there is a 5% chance the portfolio loses
 // more than 5% in the period.
+func (valueAtRisk) BenchmarkTargetable() {}
+
 var ValueAtRisk PerformanceMetric = valueAtRisk{}
