@@ -89,7 +89,7 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 	xAxisRow := chartHeight - 1
 
 	// Resample and draw a series.
-	drawSeries := func(values []float64, color lipgloss.Color) {
+	drawSeries := func(values []float64, color lipgloss.TerminalColor) {
 		numPoints := len(values)
 		seqY := make([]int, chartWidth)
 		hasData := make([]bool, chartWidth)
@@ -138,16 +138,16 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 
 	// Draw benchmark first (behind strategy).
 	if hasBenchmark && len(curve.BenchmarkValues) > 0 {
-		drawSeries(curve.BenchmarkValues, lipgloss.Color("10"))
+		drawSeries(curve.BenchmarkValues, ColorBenchmark)
 	}
 
-	drawSeries(curve.StrategyValues, lipgloss.Color("12"))
+	drawSeries(curve.StrategyValues, ColorStrategy)
 
 	// Get canvas view and add Y-axis labels.
 	canvasView := chart.View()
 	canvasLines := strings.Split(canvasView, "\n")
 
-	gridStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	gridStyle := lipgloss.NewStyle().Foreground(colorMuted)
 
 	// Determine grid rows (top, bottom, and a few in between).
 	gridInterval := chartHeight / 4
@@ -192,11 +192,11 @@ func renderEquityCurve(builder *strings.Builder, curve report.EquityCurve, hasBe
 	builder.WriteString("\n")
 
 	// Legend.
-	stratLegend := lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render("--") + " Strategy"
+	stratLegend := lipgloss.NewStyle().Foreground(ColorStrategy).Render("--") + " Strategy"
 	legend := "  " + stratLegend
 
 	if hasBenchmark && len(curve.BenchmarkValues) > 0 {
-		benchLegend := lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Render("--") + " Benchmark"
+		benchLegend := lipgloss.NewStyle().Foreground(ColorBenchmark).Render("--") + " Benchmark"
 		legend += "    " + benchLegend
 	}
 

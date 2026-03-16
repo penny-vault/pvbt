@@ -24,24 +24,54 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// Monokai-inspired adaptive color palette
+// ---------------------------------------------------------------------------
+
+var (
+	// Foreground / emphasis -- Monokai warm white on dark, near-black on light.
+	colorFg = lipgloss.AdaptiveColor{Dark: "#F8F8F2", Light: "#272822"}
+
+	// Muted text -- Monokai comment gray on dark, medium gray on light.
+	colorMuted = lipgloss.AdaptiveColor{Dark: "#75715E", Light: "#6E7066"}
+
+	// Accent / headings -- Monokai cyan on dark, deeper teal on light.
+	colorAccent = lipgloss.AdaptiveColor{Dark: "#66D9EF", Light: "#0087AF"}
+
+	// Positive values -- Monokai green on dark, darker green on light.
+	colorPositive = lipgloss.AdaptiveColor{Dark: "#A6E22E", Light: "#4E9A06"}
+
+	// Negative values -- Monokai pink on dark, deeper red on light.
+	colorNegative = lipgloss.AdaptiveColor{Dark: "#F92672", Light: "#CC0000"}
+
+	// Dim / disabled -- darker gray on dark, lighter gray on light.
+	colorDim = lipgloss.AdaptiveColor{Dark: "#49483E", Light: "#B0B0B0"}
+
+	// Chart: strategy line -- Monokai purple on dark, deeper purple on light.
+	ColorStrategy = lipgloss.AdaptiveColor{Dark: "#AE81FF", Light: "#6C3DAF"}
+
+	// Chart: benchmark line -- Monokai orange on dark, deeper orange on light.
+	ColorBenchmark = lipgloss.AdaptiveColor{Dark: "#FD971F", Light: "#C4700A"}
+)
+
+// ---------------------------------------------------------------------------
 // Shared lipgloss styles
 // ---------------------------------------------------------------------------
 
 var (
-	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15"))
-	subHeaderStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
+	headerStyle    = lipgloss.NewStyle().Bold(true).Foreground(colorFg)
+	subHeaderStyle = lipgloss.NewStyle().Foreground(colorMuted)
 
-	sectionTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12")).MarginTop(1)
+	sectionTitleStyle = lipgloss.NewStyle().Bold(true).Foreground(colorAccent).MarginTop(1)
 
-	labelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	valueStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("15")).Bold(true)
+	labelStyle = lipgloss.NewStyle().Foreground(colorMuted)
+	valueStyle = lipgloss.NewStyle().Foreground(colorFg).Bold(true)
 
-	positiveStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("10"))
-	negativeStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	positiveStyle = lipgloss.NewStyle().Foreground(colorPositive)
+	negativeStyle = lipgloss.NewStyle().Foreground(colorNegative)
 
-	dimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
+	dimStyle = lipgloss.NewStyle().Foreground(colorDim)
 
-	tableHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("12"))
+	tableHeaderStyle = lipgloss.NewStyle().Bold(true).Foreground(colorAccent)
 )
 
 // ---------------------------------------------------------------------------
