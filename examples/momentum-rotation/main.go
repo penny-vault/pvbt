@@ -31,7 +31,6 @@ func (s *MomentumRotation) Setup(eng *engine.Engine) {
 
 	eng.Schedule(tc)
 	eng.SetBenchmark(eng.Asset("SPY"))
-	eng.RiskFreeAsset(eng.Asset("SHV"))
 }
 
 func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {

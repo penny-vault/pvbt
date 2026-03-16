@@ -42,7 +42,6 @@ func (s *descriptorStrategy) Setup(eng *engine.Engine) {
 	}
 	eng.Schedule(tc)
 	eng.SetBenchmark(asset.Asset{Ticker: "SPY"})
-	eng.RiskFreeAsset(asset.Asset{Ticker: "SHV"})
 }
 func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
@@ -89,7 +88,7 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(info.Version).To(Equal("1.0.0"))
 			Expect(info.Schedule).To(Equal("0 16 * * 1-5"))
 			Expect(info.Benchmark).To(Equal("SPY"))
-			Expect(info.RiskFree).To(Equal("SHV"))
+			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Parameters).To(HaveLen(2))
 			Expect(info.Suggestions).To(HaveLen(2))
 			Expect(info.Suggestions["Classic"]["tickers"]).To(Equal("VFINX,PRIDX"))
@@ -123,7 +122,7 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(info.ShortCode).To(BeEmpty())
 			Expect(info.Description).To(BeEmpty())
 			Expect(info.Benchmark).To(BeEmpty())
-			Expect(info.RiskFree).To(BeEmpty())
+			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Suggestions).To(BeNil())
 			Expect(info.Parameters).To(HaveLen(1))
 			Expect(info.Parameters[0].Name).To(Equal("window"))

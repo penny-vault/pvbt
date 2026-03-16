@@ -15,7 +15,10 @@
 
 package portfolio
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // annualizationFactor computes the number of observation periods per year
 // from the actual timestamps. This avoids hardcoding 252 or 12 and correctly
@@ -33,6 +36,28 @@ func annualizationFactor(times []time.Time) float64 {
 	years := calendarDays / 365.25
 
 	return float64(len(times)-1) / years
+}
+
+// YieldToCumulative converts an annualized yield percentage to the next
+// value in a cumulative price-equivalent series. For example, a yield of
+// 5.25 (meaning 5.25% annual) produces a daily return of
+// (1 + 0.0525)^(1/252) - 1, and the cumulative series grows by that factor.
+//
+// Pass prevCumulative=0 on the first call; it returns 100.0 as the
+// starting value. On subsequent calls, it returns
+// prevCumulative * (1 + dailyReturn).
+func YieldToCumulative(annualYieldPct, prevCumulative float64) float64 {
+	if prevCumulative == 0 {
+		return 100.0
+	}
+
+	if annualYieldPct <= 0 {
+		return prevCumulative
+	}
+
+	dailyReturn := math.Pow(1+annualYieldPct/100, 1.0/252) - 1
+
+	return prevCumulative * (1 + dailyReturn)
 }
 
 // roundTrip represents a completed buy-sell pair matched via FIFO.

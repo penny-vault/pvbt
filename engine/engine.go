@@ -39,8 +39,12 @@ type Engine struct {
 	providers     []data.DataProvider
 	assetProvider data.AssetProvider
 	schedule      *tradecron.TradeCron
-	riskFree      asset.Asset
-	benchmark     asset.Asset
+	benchmark asset.Asset
+
+	// Risk-free rate (DGS3MO) state.
+	riskFreeResolved   bool
+	riskFreeAssetDGS   asset.Asset
+	riskFreeCumulative float64
 
 	// configuration (set via options, used during init)
 	cacheMaxBytes  int64
@@ -121,9 +125,13 @@ func (e *Engine) SetBenchmark(a asset.Asset) {
 	e.benchmark = a
 }
 
-// RiskFreeAsset sets the risk-free asset. Called by the strategy during Setup.
+// RiskFreeAsset is deprecated. The engine automatically uses DGS3MO as the
+// risk-free rate for all performance metrics. This method logs a warning
+// and has no effect. It will be removed in a future version.
 func (e *Engine) RiskFreeAsset(a asset.Asset) {
-	e.riskFree = a
+	zerolog.Ctx(context.Background()).Warn().
+		Str("ticker", a.Ticker).
+		Msg("RiskFreeAsset is deprecated; engine uses DGS3MO automatically")
 }
 
 // Asset looks up an asset by ticker from the pre-loaded registry.

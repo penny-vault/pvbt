@@ -74,9 +74,15 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
-	if e.riskFree != (asset.Asset{}) {
-		acct.SetRiskFree(e.riskFree)
+	// Resolve DGS3MO as the system risk-free rate.
+	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
+	if rfErr != nil {
+		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")
+	} else {
+		e.riskFreeResolved = true
+		e.riskFreeAssetDGS = dgs3mo
 	}
+	e.riskFreeCumulative = 0
 
 	// 7. Initialize data cache.
 	e.cache = newDataCache(e.cacheMaxBytes)
@@ -160,10 +166,6 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			housekeepAssets = append(housekeepAssets, e.benchmark)
 		}
 
-		if e.riskFree != (asset.Asset{}) {
-			housekeepAssets = append(housekeepAssets, e.riskFree)
-		}
-
 		var housekeepDF *data.DataFrame
 
 		if len(housekeepAssets) > 0 {
@@ -223,9 +225,19 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			priceAssets = append(priceAssets, e.benchmark)
 		}
 
-		if e.riskFree != (asset.Asset{}) {
-			priceAssets = append(priceAssets, e.riskFree)
+		// Convert DGS3MO yield to cumulative risk-free value.
+		if e.riskFreeResolved {
+			rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, date, []data.Metric{data.MetricClose})
+			if rfFetchErr == nil {
+				yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
+				if !math.IsNaN(yield) && yield > 0 {
+					e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
+				} else if e.riskFreeCumulative == 0 {
+					e.riskFreeCumulative = 100.0
+				}
+			}
 		}
+		acct.SetRiskFreeValue(e.riskFreeCumulative)
 
 		if len(priceAssets) > 0 {
 			priceDF, err := e.FetchAt(stepCtx, priceAssets, date, priceMetrics)
