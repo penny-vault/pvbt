@@ -15,13 +15,11 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 	var (
 		spy asset.Asset
 		bm  asset.Asset
-		bil asset.Asset
 	)
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 		bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	})
 
 	// cashAccount builds a cash-only account whose equity curve matches the
@@ -34,7 +32,6 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 		a := portfolio.New(
 			portfolio.WithCash(equityVals[0], time.Time{}),
 			portfolio.WithBenchmark(bm),
-			portfolio.WithRiskFree(bil),
 		)
 
 		for i := range equityVals {
@@ -55,10 +52,11 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				}
 			}
 
+			a.SetRiskFreeValue(100)
 			df := buildDF(dates[i],
-				[]asset.Asset{spy, bm, bil},
-				[]float64{100, benchVals[i], 100},
-				[]float64{100, benchVals[i], 100},
+				[]asset.Asset{spy, bm},
+				[]float64{100, benchVals[i]},
+				[]float64{100, benchVals[i]},
 			)
 			a.UpdatePrices(df)
 		}

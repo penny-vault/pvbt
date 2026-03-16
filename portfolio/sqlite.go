@@ -231,15 +231,12 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 		}
 	}
 
-	// Risk-free identity.
-	if a.riskFree != (asset.Asset{}) {
-		if _, err := stmt.Exec("risk_free_ticker", a.riskFree.Ticker); err != nil {
-			return fmt.Errorf("insert risk_free_ticker: %w", err)
-		}
-
-		if _, err := stmt.Exec("risk_free_figi", a.riskFree.CompositeFigi); err != nil {
-			return fmt.Errorf("insert risk_free_figi: %w", err)
-		}
+	// Risk-free identity (always DGS3MO).
+	if _, err := stmt.Exec("risk_free_ticker", "DGS3MO"); err != nil {
+		return fmt.Errorf("insert risk_free_ticker: %w", err)
+	}
+	if _, err := stmt.Exec("risk_free_figi", ""); err != nil {
+		return fmt.Errorf("insert risk_free_figi: %w", err)
 	}
 
 	// User metadata.
@@ -481,13 +478,6 @@ func FromSQLite(path string) (*Account, error) {
 		acct.benchmark = asset.Asset{
 			Ticker:        ticker,
 			CompositeFigi: acct.metadata["benchmark_figi"],
-		}
-	}
-
-	if ticker, ok := acct.metadata["risk_free_ticker"]; ok {
-		acct.riskFree = asset.Asset{
-			Ticker:        ticker,
-			CompositeFigi: acct.metadata["risk_free_figi"],
 		}
 	}
 

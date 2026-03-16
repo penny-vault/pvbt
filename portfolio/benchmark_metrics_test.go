@@ -15,12 +15,10 @@ import (
 // timestamps produced by daySeq.
 func benchAcct(eqCurve, bmPrices, rfPrices []float64) *portfolio.Account {
 	bm := asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-	bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
 	a := portfolio.New(
 		portfolio.WithCash(eqCurve[0], time.Time{}),
 		portfolio.WithBenchmark(bm),
-		portfolio.WithRiskFree(bil),
 	)
 
 	dates := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), len(eqCurve))
@@ -43,10 +41,11 @@ func benchAcct(eqCurve, bmPrices, rfPrices []float64) *portfolio.Account {
 			}
 		}
 
+		a.SetRiskFreeValue(rfPrices[i])
 		df := buildDF(dates[i],
-			[]asset.Asset{bm, bil},
-			[]float64{bmPrices[i], rfPrices[i]},
-			[]float64{bmPrices[i], rfPrices[i]},
+			[]asset.Asset{bm},
+			[]float64{bmPrices[i]},
+			[]float64{bmPrices[i]},
 		)
 		a.UpdatePrices(df)
 	}
