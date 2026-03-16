@@ -22,7 +22,7 @@ type dynamicWithdrawalRate struct{}
 func (dynamicWithdrawalRate) Name() string { return "DynamicWithdrawalRate" }
 
 func (dynamicWithdrawalRate) Description() string {
-	return "A withdrawal rate that adjusts based on current portfolio value rather than initial value. Increases withdrawals when the portfolio grows and decreases them during drawdowns, providing a balance between income and capital preservation."
+	return "A withdrawal rate that adjusts based on current portfolio value over the actual return path. Increases withdrawals when the portfolio grows and decreases them during drawdowns, providing a balance between income and capital preservation."
 }
 
 func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
@@ -31,23 +31,35 @@ func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
-	if len(equity) < 12 {
+	windowed := pd.Window(window)
+	equity := windowed.Column(portfolioAsset, data.PortfolioEquity)
+	times := windowed.Times()
+
+	if len(equity) < 2 || len(times) < 2 {
 		return 0, nil
 	}
 
-	monthly := monthlyReturnsFromEquity(equity)
-	if len(monthly) == 0 {
+	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
+	if calendarDays < 365 {
 		return 0, nil
 	}
 
-	// Dynamic withdrawal: balance must never reach zero, but withdrawal
-	// adapts downward when portfolio drops.
-	criterion := func(rate, startBalance, endBalance float64) bool {
-		return true // survival is checked in-loop
+	// Dynamic: survival checked in-loop; withdrawal adapts downward.
+	criterion := func(startBalance, endBalance, inflationFactor float64) bool {
+		return true
 	}
 
-	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, true), nil
+	bestRate := 0.0
+	for rateBps := 1; rateBps <= 200; rateBps++ {
+		rate := float64(rateBps) / 1000.0
+		if withdrawalSustainable(equity, times, rate, true, criterion) {
+			bestRate = rate
+		} else {
+			break
+		}
+	}
+
+	return bestRate, nil
 }
 
 func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {

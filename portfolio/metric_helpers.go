@@ -20,6 +20,71 @@ import (
 	"time"
 )
 
+// defaultInflationRate is the assumed annual inflation rate for withdrawal
+// metric calculations.
+const defaultInflationRate = 0.03
+
+// withdrawalSustainable tests whether a given annual withdrawal rate is
+// sustainable over the actual return path represented by the equity curve.
+//
+// Parameters:
+//   - equity: daily equity curve (absolute values)
+//   - times: corresponding timestamps
+//   - rate: annual withdrawal rate as a fraction (e.g. 0.04 for 4%)
+//   - dynamic: if true, each year's withdrawal is min(inflated initial, balance*rate)
+//   - criterion: checks final balance for success (called only if portfolio survived)
+func withdrawalSustainable(
+	equity []float64,
+	times []time.Time,
+	rate float64,
+	dynamic bool,
+	criterion func(startBalance, endBalance, inflationFactor float64) bool,
+) bool {
+	if len(equity) < 2 || len(times) < 2 {
+		return false
+	}
+
+	startBalance := equity[0]
+	balance := startBalance
+	startDate := times[0]
+	yearBoundary := startDate.AddDate(1, 0, 0)
+	yearsElapsed := 0
+
+	for dayIdx := 1; dayIdx < len(equity); dayIdx++ {
+		// Apply daily return.
+		if equity[dayIdx-1] > 0 {
+			dailyReturn := (equity[dayIdx] - equity[dayIdx-1]) / equity[dayIdx-1]
+			balance *= (1 + dailyReturn)
+		}
+
+		// Check for year boundary.
+		if !times[dayIdx].Before(yearBoundary) {
+			yearsElapsed++
+			inflationFactor := math.Pow(1+defaultInflationRate, float64(yearsElapsed))
+			withdrawal := rate * startBalance * inflationFactor
+
+			if dynamic {
+				currentRateWithdrawal := balance * rate
+				if currentRateWithdrawal < withdrawal {
+					withdrawal = currentRateWithdrawal
+				}
+			}
+
+			balance -= withdrawal
+			if balance <= 0 {
+				return false
+			}
+
+			yearBoundary = startDate.AddDate(yearsElapsed+1, 0, 0)
+		}
+	}
+
+	// Check final criterion.
+	totalYears := times[len(times)-1].Sub(times[0]).Hours() / 24 / 365.25
+	inflationFactor := math.Pow(1+defaultInflationRate, totalYears)
+	return criterion(startBalance, balance, inflationFactor)
+}
+
 // annualizationFactor computes the number of observation periods per year
 // from the actual timestamps. This avoids hardcoding 252 or 12 and correctly
 // handles any schedule frequency, market closures, and holidays.
