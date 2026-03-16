@@ -54,6 +54,7 @@ func (a *Account) MonthlyReturns(metric data.Metric) ([]int, [][]float64, error)
 			for col := range row {
 				row[col] = math.NaN()
 			}
+
 			yearRows[year] = row
 		}
 
@@ -64,6 +65,7 @@ func (a *Account) MonthlyReturns(metric data.Metric) ([]int, [][]float64, error)
 			yearRows[year][month] = math.NaN()
 		} else {
 			prev := values[idx-1]
+
 			curr := values[idx]
 			if prev != 0 {
 				yearRows[year][month] = (curr - prev) / prev
@@ -78,6 +80,7 @@ func (a *Account) MonthlyReturns(metric data.Metric) ([]int, [][]float64, error)
 	for year := range yearRows {
 		years = append(years, year)
 	}
+
 	sort.Ints(years)
 
 	grid := make([][]float64, len(years))

@@ -124,14 +124,12 @@ func buildAccountFromEquity(equityValues []float64) *portfolio.Account {
 // risk-free (BIL) prices, needed for metrics that use excess returns.
 func buildAccountWithRF(spyPrices, bilPrices []float64) *portfolio.Account {
 	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-	bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	n := len(spyPrices)
 	times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
 
 	acct := portfolio.New(
 		portfolio.WithCash(5*spyPrices[0], time.Time{}),
 		portfolio.WithBenchmark(spy),
-		portfolio.WithRiskFree(bil),
 	)
 
 	acct.Record(portfolio.Transaction{
@@ -144,10 +142,11 @@ func buildAccountWithRF(spyPrices, bilPrices []float64) *portfolio.Account {
 	})
 
 	for i := range n {
+		acct.SetRiskFreeValue(bilPrices[i])
 		df := buildDF(times[i],
-			[]asset.Asset{spy, bil},
-			[]float64{spyPrices[i], bilPrices[i]},
-			[]float64{spyPrices[i], bilPrices[i]},
+			[]asset.Asset{spy},
+			[]float64{spyPrices[i]},
+			[]float64{spyPrices[i]},
 		)
 		acct.UpdatePrices(df)
 	}

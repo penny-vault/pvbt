@@ -35,6 +35,7 @@ func (a *Account) AnnualReturns(metric data.Metric) ([]int, []float64, error) {
 	if len(fullValues) == 0 {
 		return nil, nil, nil
 	}
+
 	firstValue := fullValues[0]
 
 	// Downsample to yearly end-of-year values.

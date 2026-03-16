@@ -39,8 +39,12 @@ type Engine struct {
 	providers     []data.DataProvider
 	assetProvider data.AssetProvider
 	schedule      *tradecron.TradeCron
-	riskFree      asset.Asset
 	benchmark     asset.Asset
+
+	// Risk-free rate (DGS3MO) state.
+	riskFreeResolved   bool
+	riskFreeAssetDGS   asset.Asset
+	riskFreeCumulative float64
 
 	// configuration (set via options, used during init)
 	cacheMaxBytes  int64
@@ -119,11 +123,6 @@ func (e *Engine) Schedule(s *tradecron.TradeCron) {
 // SetBenchmark sets the benchmark asset. Called by the strategy during Setup.
 func (e *Engine) SetBenchmark(a asset.Asset) {
 	e.benchmark = a
-}
-
-// RiskFreeAsset sets the risk-free asset. Called by the strategy during Setup.
-func (e *Engine) RiskFreeAsset(a asset.Asset) {
-	e.riskFree = a
 }
 
 // Asset looks up an asset by ticker from the pre-loaded registry.

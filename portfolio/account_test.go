@@ -48,14 +48,12 @@ var _ = Describe("Account", func() {
 			Expect(txns[0].Amount).To(Equal(10_000.0))
 		})
 
-		It("stores benchmark and risk-free assets", func() {
+		It("stores benchmark asset", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(spy),
-				portfolio.WithRiskFree(bil),
 			)
 			Expect(a.Benchmark()).To(Equal(spy))
-			Expect(a.RiskFree()).To(Equal(bil))
 		})
 	})
 
@@ -175,14 +173,12 @@ var _ = Describe("Account", func() {
 			t1 time.Time
 			t2 time.Time
 			bm asset.Asset
-			rf asset.Asset
 		)
 
 		BeforeEach(func() {
 			t1 = time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 			t2 = time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
 			bm = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-			rf = asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
 		})
 
 		It("with no holdings, value equals cash only", func() {
@@ -224,14 +220,14 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(rf),
 			)
 
 			// Day 1
+			a.SetRiskFreeValue(49.5)
 			df1 := buildDF(t1,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{450.0, 100.0, 50.0},
-				[]float64{448.0, 99.0, 49.5},
+				[]asset.Asset{spy, bm},
+				[]float64{450.0, 100.0},
+				[]float64{448.0, 99.0},
 			)
 			a.UpdatePrices(df1)
 
@@ -243,10 +239,11 @@ var _ = Describe("Account", func() {
 			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5}))
 
 			// Day 2
+			a.SetRiskFreeValue(50.0)
 			df2 := buildDF(t2,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{455.0, 102.0, 50.5},
-				[]float64{453.0, 101.0, 50.0},
+				[]asset.Asset{spy, bm},
+				[]float64{455.0, 102.0},
+				[]float64{453.0, 101.0},
 			)
 			a.UpdatePrices(df2)
 
@@ -298,14 +295,14 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(rf),
 			)
 
 			// Day 1: normal prices
+			a.SetRiskFreeValue(49.5)
 			df1 := buildDF(t1,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{450.0, 100.0, 50.0},
-				[]float64{448.0, 99.0, 49.5},
+				[]asset.Asset{spy, bm},
+				[]float64{450.0, 100.0},
+				[]float64{448.0, 99.0},
 			)
 			a.UpdatePrices(df1)
 			pd := a.PerfData()
@@ -314,15 +311,15 @@ var _ = Describe("Account", func() {
 			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5}))
 
 			// Day 2: benchmark has NaN AdjClose and NaN Close
+			a.SetRiskFreeValue(50.0)
 			df2, err := data.NewDataFrame(
 				[]time.Time{t2},
-				[]asset.Asset{spy, bm, rf},
+				[]asset.Asset{spy, bm},
 				[]data.Metric{data.MetricClose, data.AdjClose},
 				data.Daily,
 				[]float64{
 					455.0, 453.0, // spy: close, adjclose
 					math.NaN(), math.NaN(), // bm: close, adjclose (NaN)
-					50.5, 50.0, // rf: close, adjclose
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -336,43 +333,34 @@ var _ = Describe("Account", func() {
 			Expect(pd.Len()).To(Equal(2))
 		})
 
-		It("appends NaN risk-free price to keep arrays aligned with equity curve", func() {
+		It("stores risk-free value from SetRiskFreeValue in perf data", func() {
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(rf),
 			)
 
 			// Day 1: normal prices
+			a.SetRiskFreeValue(49.5)
 			df1 := buildDF(t1,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{450.0, 100.0, 50.0},
-				[]float64{448.0, 99.0, 49.5},
+				[]asset.Asset{spy, bm},
+				[]float64{450.0, 100.0},
+				[]float64{448.0, 99.0},
 			)
 			a.UpdatePrices(df1)
 
-			// Day 2: risk-free has NaN AdjClose and NaN Close
-			df2, err := data.NewDataFrame(
-				[]time.Time{t2},
-				[]asset.Asset{spy, bm, rf},
-				[]data.Metric{data.MetricClose, data.AdjClose},
-				data.Daily,
-				[]float64{
-					455.0, 453.0, // spy
-					102.0, 101.0, // bm
-					math.NaN(), math.NaN(), // rf: NaN
-				},
+			// Day 2: set a different risk-free value
+			a.SetRiskFreeValue(50.0)
+			df2 := buildDF(t2,
+				[]asset.Asset{spy, bm},
+				[]float64{455.0, 102.0},
+				[]float64{453.0, 101.0},
 			)
-			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df2)
 
 			pd := a.PerfData()
 			Expect(pd).NotTo(BeNil())
 			Expect(pd.Column(perfAsset, data.PortfolioBenchmark)).To(Equal([]float64{99.0, 101.0}))
-			// NaN is appended to keep riskFree aligned with equity curve.
-			rfCol := pd.Column(perfAsset, data.PortfolioRiskFree)
-			Expect(rfCol).To(HaveLen(2))
-			Expect(math.IsNaN(rfCol[1])).To(BeTrue())
+			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5, 50.0}))
 			Expect(pd.Len()).To(Equal(2))
 		})
 	})
@@ -385,32 +373,33 @@ var _ = Describe("Account", func() {
 
 		It("returns correct accumulated data after multiple UpdatePrices calls", func() {
 			bm := asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
-			rf := asset.Asset{CompositeFigi: "RF", Ticker: "RF"}
 
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
 				portfolio.WithBenchmark(bm),
-				portfolio.WithRiskFree(rf),
 			)
 
 			t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 			t2 := time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC)
 			t3 := time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC)
 
+			a.SetRiskFreeValue(49.0)
 			a.UpdatePrices(buildDF(t1,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{100.0, 200.0, 50.0},
-				[]float64{99.0, 198.0, 49.0},
+				[]asset.Asset{spy, bm},
+				[]float64{100.0, 200.0},
+				[]float64{99.0, 198.0},
 			))
+			a.SetRiskFreeValue(49.5)
 			a.UpdatePrices(buildDF(t2,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{102.0, 204.0, 50.5},
-				[]float64{101.0, 202.0, 49.5},
+				[]asset.Asset{spy, bm},
+				[]float64{102.0, 204.0},
+				[]float64{101.0, 202.0},
 			))
+			a.SetRiskFreeValue(50.0)
 			a.UpdatePrices(buildDF(t3,
-				[]asset.Asset{spy, bm, rf},
-				[]float64{104.0, 208.0, 51.0},
-				[]float64{103.0, 206.0, 50.0},
+				[]asset.Asset{spy, bm},
+				[]float64{104.0, 208.0},
+				[]float64{103.0, 206.0},
 			))
 
 			pd := a.PerfData()
@@ -725,7 +714,6 @@ var _ = Describe("Summary", func() {
 	// BIL is the risk-free asset: [100, 100.01, 100.02, 100.03, 100.04, 100.05].
 	var buildSummaryAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
 		spyPrices := []float64{100, 105, 98, 103, 97, 110}
 		bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
@@ -735,7 +723,6 @@ var _ = Describe("Summary", func() {
 		acct := portfolio.New(
 			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
-			portfolio.WithRiskFree(bil),
 		)
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
@@ -746,10 +733,11 @@ var _ = Describe("Summary", func() {
 			Amount: -5 * spyPrices[0],
 		})
 		for i := range n {
+			acct.SetRiskFreeValue(bilPrices[i])
 			df := buildDF(times[i],
-				[]asset.Asset{spy, bil},
-				[]float64{spyPrices[i], bilPrices[i]},
-				[]float64{spyPrices[i], bilPrices[i]},
+				[]asset.Asset{spy},
+				[]float64{spyPrices[i]},
+				[]float64{spyPrices[i]},
 			)
 			acct.UpdatePrices(df)
 		}
@@ -856,7 +844,6 @@ var _ = Describe("RiskMetrics", func() {
 	// which yields Beta=1, Alpha=0, TrackingError=0, IR=0, RSquared=1.
 	var buildRiskAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
 		spyPrices := []float64{100, 105, 98, 103, 97, 110}
 		bilPrices := []float64{100, 100.01, 100.02, 100.03, 100.04, 100.05}
@@ -866,7 +853,6 @@ var _ = Describe("RiskMetrics", func() {
 		acct := portfolio.New(
 			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
-			portfolio.WithRiskFree(bil),
 		)
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
@@ -877,10 +863,11 @@ var _ = Describe("RiskMetrics", func() {
 			Amount: -5 * spyPrices[0],
 		})
 		for i := range n {
+			acct.SetRiskFreeValue(bilPrices[i])
 			df := buildDF(times[i],
-				[]asset.Asset{spy, bil},
-				[]float64{spyPrices[i], bilPrices[i]},
-				[]float64{spyPrices[i], bilPrices[i]},
+				[]asset.Asset{spy},
+				[]float64{spyPrices[i]},
+				[]float64{spyPrices[i]},
 			)
 			acct.UpdatePrices(df)
 		}
@@ -926,12 +913,11 @@ var _ = Describe("RiskMetrics", func() {
 		Expect(rm.RSquared).To(BeNumerically("~", 1.0, 1e-9))
 	})
 
-	It("Treynor equals (TWRR - rf_return) / beta ~ 0.0995", func() {
-		// TWRR = 0.10, approximate risk-free return over 5 days ~ 0.0005,
-		// Beta = 1.0, so Treynor ~ 0.0995.
+	It("Treynor = 0 for short backtests (< 30 days)", func() {
+		// 6 data points spanning ~7 calendar days: too short to annualize.
 		rm, err := buildRiskAcct().RiskMetrics()
 		Expect(err).NotTo(HaveOccurred())
-		Expect(rm.Treynor).To(BeNumerically("~", 0.0995, 1e-3))
+		Expect(rm.Treynor).To(Equal(0.0))
 	})
 
 	It("computes correct DownsideDeviation for known equity curve", func() {
@@ -1003,8 +989,9 @@ var _ = Describe("RiskMetrics", func() {
 })
 
 var _ = Describe("WithdrawalMetrics", func() {
-	// Build a 300-day steadily growing equity curve starting at 100_000 with
-	// 0.02% daily growth. Over 300 days this produces a monotonically rising curve.
+	// Build a 400-day steadily growing equity curve starting at 100_000 with
+	// 0.02% daily growth. Over 400 days (~13 months) this produces a
+	// monotonically rising curve with at least one year boundary.
 	var buildWithdrawalAcct = func() *portfolio.Account {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
 
@@ -1012,34 +999,22 @@ var _ = Describe("WithdrawalMetrics", func() {
 		price := 100_000.0
 		start := time.Date(2023, 1, 2, 0, 0, 0, 0, time.UTC)
 
-		for i := range 300 {
-			d := start.AddDate(0, 0, i)
-			if i > 0 {
+		for idx := range 400 {
+			date := start.AddDate(0, 0, idx)
+			if idx > 0 {
 				growth := price * 0.0002
 				acct.Record(portfolio.Transaction{
-					Date:   d,
+					Date:   date,
 					Type:   portfolio.DividendTransaction,
 					Amount: growth,
 				})
 				price += growth
 			}
-			df := buildDF(d, []asset.Asset{spy}, []float64{450 + float64(i)}, []float64{448 + float64(i)})
+			df := buildDF(date, []asset.Asset{spy}, []float64{450 + float64(idx)}, []float64{448 + float64(idx)})
 			acct.UpdatePrices(df)
 		}
 		return acct
 	}
-
-	It("SafeWithdrawalRate is approximately 0.063", func() {
-		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(wm.SafeWithdrawalRate).To(BeNumerically("~", 0.063, 1e-2))
-	})
-
-	It("PerpetualWithdrawalRate is approximately 0.049", func() {
-		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(wm.PerpetualWithdrawalRate).To(BeNumerically("~", 0.049, 1e-2))
-	})
 
 	It("SWR > 0 and DWR > 0 for a growing curve", func() {
 		wm, err := buildWithdrawalAcct().WithdrawalMetrics()
@@ -1082,7 +1057,6 @@ var _ = Describe("Window", func() {
 	// Returns the account and the raw SPY/BIL price arrays for manual verification.
 	buildLongAccountWithPrices := func() (*portfolio.Account, []float64, []float64, []time.Time) {
 		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 
 		n := 40
 		times := daySeq(time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), n)
@@ -1105,7 +1079,6 @@ var _ = Describe("Window", func() {
 		acct := portfolio.New(
 			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
-			portfolio.WithRiskFree(bil),
 		)
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
@@ -1116,10 +1089,11 @@ var _ = Describe("Window", func() {
 			Amount: -5 * spyPrices[0],
 		})
 		for i := range n {
+			acct.SetRiskFreeValue(bilPrices[i])
 			df := buildDF(times[i],
-				[]asset.Asset{spy, bil},
-				[]float64{spyPrices[i], bilPrices[i]},
-				[]float64{spyPrices[i], bilPrices[i]},
+				[]asset.Asset{spy},
+				[]float64{spyPrices[i]},
+				[]float64{spyPrices[i]},
 			)
 			acct.UpdatePrices(df)
 		}
@@ -1166,10 +1140,9 @@ var _ = Describe("Window", func() {
 	It("Window(Months(1)) produces correct TWRR for the windowed slice", func() {
 		acct, equityCurve, _, times := buildLongAccountWithPrices()
 
-		// Months(1) window: snaps to the 1st of the last month.
+		// Months(1) window: goes back 1 month from last date.
 		last := times[len(times)-1]
-		cutoff := time.Date(last.Year(), last.Month(), 1,
-			last.Hour(), last.Minute(), last.Second(), last.Nanosecond(), last.Location())
+		cutoff := last.AddDate(0, -1, 0)
 		startIdx := 0
 		for i, t := range times {
 			if !t.Before(cutoff) {

@@ -22,7 +22,7 @@ type perpetualWithdrawalRate struct{}
 func (perpetualWithdrawalRate) Name() string { return "PerpetualWithdrawalRate" }
 
 func (perpetualWithdrawalRate) Description() string {
-	return "The withdrawal rate that preserves the real (inflation-adjusted) value of the portfolio indefinitely. More conservative than SafeWithdrawalRate as it aims to maintain purchasing power."
+	return "The withdrawal rate that preserves the real (inflation-adjusted) value of the portfolio over the actual return path. More conservative than SafeWithdrawalRate as it aims to maintain purchasing power."
 }
 
 func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
@@ -31,22 +31,36 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, err
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Column(portfolioAsset, data.PortfolioEquity)
-	if len(equity) < 12 {
+	windowed := pd.Window(window)
+	equity := windowed.Column(portfolioAsset, data.PortfolioEquity)
+	times := windowed.Times()
+
+	if len(equity) < 2 || len(times) < 2 {
 		return 0, nil
 	}
 
-	monthly := monthlyReturnsFromEquity(equity)
-	if len(monthly) == 0 {
+	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
+	if calendarDays < 365 {
 		return 0, nil
 	}
 
-	// Perpetual withdrawal: ending balance must be >= starting balance.
-	criterion := func(rate, startBalance, endBalance float64) bool {
-		return endBalance >= startBalance
+	// Perpetual: ending balance must preserve inflation-adjusted purchasing power.
+	criterion := func(startBalance, endBalance, inflationFactor float64) bool {
+		return endBalance >= startBalance*inflationFactor
 	}
 
-	return withdrawalSimulation(monthly, 30, 500, 0.95, criterion, false), nil
+	bestRate := 0.0
+
+	for rateBps := 1; rateBps <= 200; rateBps++ {
+		rate := float64(rateBps) / 1000.0
+		if withdrawalSustainable(equity, times, rate, false, criterion) {
+			bestRate = rate
+		} else {
+			break
+		}
+	}
+
+	return bestRate, nil
 }
 
 func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
@@ -55,6 +69,5 @@ func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]floa
 
 // PerpetualWithdrawalRate is the maximum constant annual withdrawal
 // rate where the ending balance equals or exceeds the inflation-
-// adjusted starting balance. This ensures the portfolio maintains
-// its real purchasing power indefinitely.
+// adjusted starting balance over the actual backtest period.
 var PerpetualWithdrawalRate PerformanceMetric = perpetualWithdrawalRate{}

@@ -18,8 +18,8 @@ package portfolio
 import "errors"
 
 var (
-	ErrNoRiskFreeRate       = errors.New("risk-free rate not configured")
-	ErrNoBenchmark          = errors.New("benchmark not configured")
+	ErrNoRiskFreeRate        = errors.New("risk-free rate not configured")
+	ErrNoBenchmark           = errors.New("benchmark not configured")
 	ErrBenchmarkNotSupported = errors.New("metric does not support benchmark targeting")
 )
 

@@ -85,9 +85,7 @@ func DescribeStrategy(eng *Engine) StrategyInfo {
 		info.Benchmark = eng.benchmark.Ticker
 	}
 
-	if eng.riskFree != (asset.Asset{}) {
-		info.RiskFree = eng.riskFree.Ticker
-	}
+	info.RiskFree = "DGS3MO"
 
 	// Parameters and suggestions.
 	params := StrategyParameters(eng.strategy)

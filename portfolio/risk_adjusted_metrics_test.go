@@ -26,14 +26,10 @@ import (
 )
 
 var _ = Describe("Risk-Adjusted Metrics", func() {
-	var (
-		spy asset.Asset
-		bil asset.Asset
-	)
+	var spy asset.Asset
 
 	BeforeEach(func() {
 		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-		bil = asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
 	})
 
 	// buildAccount creates an account with the given SPY and BIL price series.
@@ -46,7 +42,6 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		acct := portfolio.New(
 			portfolio.WithCash(5*spyPrices[0], time.Time{}),
 			portfolio.WithBenchmark(spy),
-			portfolio.WithRiskFree(bil),
 		)
 
 		acct.Record(portfolio.Transaction{
@@ -59,10 +54,11 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		})
 
 		for i := range n {
+			acct.SetRiskFreeValue(bilPrices[i])
 			df := buildDF(times[i],
-				[]asset.Asset{spy, bil},
-				[]float64{spyPrices[i], bilPrices[i]},
-				[]float64{spyPrices[i], bilPrices[i]},
+				[]asset.Asset{spy},
+				[]float64{spyPrices[i]},
+				[]float64{spyPrices[i]},
 			)
 			acct.UpdatePrices(df)
 		}

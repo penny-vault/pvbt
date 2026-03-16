@@ -77,9 +77,16 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 		acct.SetBenchmark(e.benchmark)
 	}
 
-	if e.riskFree != (asset.Asset{}) {
-		acct.SetRiskFree(e.riskFree)
+	// Resolve DGS3MO as the system risk-free rate.
+	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
+	if rfErr != nil {
+		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")
+	} else {
+		e.riskFreeResolved = true
+		e.riskFreeAssetDGS = dgs3mo
 	}
+
+	e.riskFreeCumulative = 0
 
 	// 7. Initialize data cache.
 	e.cache = newDataCache(e.cacheMaxBytes)
@@ -163,10 +170,6 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				housekeepAssets = append(housekeepAssets, e.benchmark)
 			}
 
-			if e.riskFree != (asset.Asset{}) {
-				housekeepAssets = append(housekeepAssets, e.riskFree)
-			}
-
 			var housekeepDF *data.DataFrame
 
 			if len(housekeepAssets) > 0 {
@@ -226,13 +229,26 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				priceAssets = append(priceAssets, e.benchmark)
 			}
 
-			if e.riskFree != (asset.Asset{}) {
-				priceAssets = append(priceAssets, e.riskFree)
+			// Convert DGS3MO yield to cumulative risk-free value.
+			if e.riskFreeResolved {
+				rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, e.currentDate, []data.Metric{data.MetricClose})
+				if rfFetchErr == nil {
+					yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
+					if !math.IsNaN(yield) && yield > 0 {
+						e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
+					} else if e.riskFreeCumulative == 0 {
+						e.riskFreeCumulative = 100.0
+					}
+				}
 			}
 
+			acct.SetRiskFreeValue(e.riskFreeCumulative)
+
 			if len(priceAssets) > 0 {
-				var priceDF *data.DataFrame
-				var fetchErr error
+				var (
+					priceDF  *data.DataFrame
+					fetchErr error
+				)
 
 				for attempt := range 18 {
 					priceDF, fetchErr = e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
@@ -259,8 +275,10 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			} else {
 				// No assets to price -- record cash-only portfolio value.
-				cashDF, _ := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
-				acct.UpdatePrices(cashDF)
+				cashDF, cashErr := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
+				if cashErr == nil {
+					acct.UpdatePrices(cashDF)
+				}
 			}
 
 			// j. Non-blocking send of updated portfolio.

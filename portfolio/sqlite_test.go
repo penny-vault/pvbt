@@ -31,12 +31,10 @@ var _ = Describe("SQLite", func() {
 	Describe("round-trip", func() {
 		It("writes and reads back a populated account", func() {
 			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
-			bil := asset.Asset{Ticker: "BIL", CompositeFigi: "BBG000BIL001"}
 
 			acct := portfolio.New(
 				portfolio.WithCash(10000, time.Time{}),
 				portfolio.WithBenchmark(spy),
-				portfolio.WithRiskFree(bil),
 			)
 
 			acct.SetMetadata("strategy", "momentum")
@@ -54,18 +52,20 @@ var _ = Describe("SQLite", func() {
 			})
 
 			// Update prices to build equity curve.
+			acct.SetRiskFreeValue(91.50)
 			df0 := buildDF(t0,
-				[]asset.Asset{spy, bil},
-				[]float64{450.0, 91.50},
-				[]float64{450.0, 91.50},
+				[]asset.Asset{spy},
+				[]float64{450.0},
+				[]float64{450.0},
 			)
 			acct.UpdatePrices(df0)
 
 			t1 := time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
+			acct.SetRiskFreeValue(91.55)
 			df1 := buildDF(t1,
-				[]asset.Asset{spy, bil},
-				[]float64{455.0, 91.55},
-				[]float64{455.0, 91.55},
+				[]asset.Asset{spy},
+				[]float64{455.0},
+				[]float64{455.0},
 			)
 			acct.UpdatePrices(df1)
 
@@ -157,9 +157,8 @@ var _ = Describe("SQLite", func() {
 			Expect(resPD.Column(perfA, data.PortfolioBenchmark)).To(Equal(origPD.Column(perfA, data.PortfolioBenchmark)))
 			Expect(resPD.Column(perfA, data.PortfolioRiskFree)).To(Equal(origPD.Column(perfA, data.PortfolioRiskFree)))
 
-			// Verify benchmark and risk-free identity.
+			// Verify benchmark identity.
 			Expect(restored.Benchmark()).To(Equal(acct.Benchmark()))
-			Expect(restored.RiskFree()).To(Equal(acct.RiskFree()))
 
 			// Verify metadata.
 			Expect(restored.GetMetadata("strategy")).To(Equal("momentum"))

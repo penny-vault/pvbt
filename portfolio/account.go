@@ -49,7 +49,7 @@ type Account struct {
 	prices            *data.DataFrame
 	perfData          *data.DataFrame
 	benchmark         asset.Asset
-	riskFree          asset.Asset
+	riskFreeValue     float64
 	taxLots           map[asset.Asset][]TaxLot
 	metadata          map[string]string
 	metrics           []MetricRow
@@ -104,21 +104,9 @@ func WithBenchmark(b asset.Asset) Option {
 	}
 }
 
-// WithRiskFree returns an Option that stores the risk-free asset.
-func WithRiskFree(rf asset.Asset) Option {
-	return func(a *Account) {
-		a.riskFree = rf
-	}
-}
-
 // Benchmark returns the benchmark asset.
 func (a *Account) Benchmark() asset.Asset {
 	return a.benchmark
-}
-
-// RiskFree returns the risk-free asset.
-func (a *Account) RiskFree() asset.Asset {
-	return a.riskFree
 }
 
 // --- Portfolio interface ---
@@ -687,14 +675,7 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		benchVal = v
 	}
 
-	if a.riskFree != (asset.Asset{}) {
-		v := priceData.Value(a.riskFree, data.AdjClose)
-		if math.IsNaN(v) || v == 0 {
-			v = priceData.Value(a.riskFree, data.MetricClose)
-		}
-
-		rfVal = v
-	}
+	rfVal = a.riskFreeValue
 
 	if a.perfData == nil {
 		timestamps := []time.Time{priceData.End()}
@@ -735,8 +716,12 @@ func (a *Account) HasBroker() bool { return a.broker != nil }
 // SetBenchmark sets the benchmark asset after construction.
 func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
-// SetRiskFree sets the risk-free asset after construction.
-func (a *Account) SetRiskFree(rf asset.Asset) { a.riskFree = rf }
+// SetRiskFreeValue sets the risk-free cumulative value for the next
+// UpdatePrices call. The engine calls this with a yield-derived
+// cumulative series; test code can pass price-like values directly.
+func (a *Account) SetRiskFreeValue(v float64) {
+	a.riskFreeValue = v
+}
 
 // Annotate records a key-value annotation for the given timestamp.
 // If an entry with the same timestamp and key already exists, its
@@ -799,7 +784,7 @@ func (acct *Account) Clone() *Account {
 		broker:            acct.broker,
 		prices:            acct.prices,
 		benchmark:         acct.benchmark,
-		riskFree:          acct.riskFree,
+		riskFreeValue:     acct.riskFreeValue,
 		taxLots:           taxLots,
 		metadata:          metadata,
 		metrics:           acct.metrics,

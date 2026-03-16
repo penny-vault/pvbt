@@ -70,7 +70,8 @@
 //		tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
 //		e.Schedule(tc)
 //		e.SetBenchmark(e.Asset("VFINX"))
-//		e.RiskFreeAsset(e.Asset("DGS3MO"))
+//		// The engine automatically uses DGS3MO (3-Month Treasury yield) as the
+//		// risk-free rate for all performance metrics.
 //	}
 //
 //	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
