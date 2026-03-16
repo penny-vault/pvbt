@@ -71,4 +71,6 @@ func (skewness) ComputeSeries(a *Account, window *Period) ([]float64, error) { r
 // Skewness measures the asymmetry of the return distribution.
 // Negative skew means the left tail is longer (more large losses
 // than large gains). Positive skew means the right tail is longer.
+func (skewness) BenchmarkTargetable() {}
+
 var Skewness PerformanceMetric = skewness{}

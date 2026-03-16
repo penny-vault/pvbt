@@ -18,9 +18,19 @@ package portfolio
 import "errors"
 
 var (
-	ErrNoRiskFreeRate = errors.New("risk-free rate not configured")
-	ErrNoBenchmark    = errors.New("benchmark not configured")
+	ErrNoRiskFreeRate       = errors.New("risk-free rate not configured")
+	ErrNoBenchmark          = errors.New("benchmark not configured")
+	ErrBenchmarkNotSupported = errors.New("metric does not support benchmark targeting")
 )
+
+// BenchmarkTargetable is a marker interface for metrics that can be
+// computed against a benchmark equity curve. Metrics that embed both
+// portfolio and benchmark data (Beta, Alpha, etc.) or that rely on
+// transaction history (WinRate, etc.) should NOT implement this.
+type BenchmarkTargetable interface {
+	PerformanceMetric
+	BenchmarkTargetable()
+}
 
 // PerformanceMetric is implemented by each metric type (Sharpe, Beta,
 // etc.). Each implementation lives in its own file with an unexported
@@ -52,9 +62,10 @@ type PerformanceMetric interface {
 // and an optional window, then executes the computation on Value() or
 // Series().
 type PerformanceMetricQuery struct {
-	account *Account
-	metric  PerformanceMetric
-	window  *Period
+	account   *Account
+	metric    PerformanceMetric
+	window    *Period
+	benchmark bool
 }
 
 // Window sets the lookback period for the metric computation.
@@ -63,12 +74,44 @@ func (q PerformanceMetricQuery) Window(p Period) PerformanceMetricQuery {
 	return q
 }
 
+// Benchmark tells the query to compute the metric against the benchmark
+// equity curve instead of the portfolio equity curve.
+func (q PerformanceMetricQuery) Benchmark() PerformanceMetricQuery {
+	q.benchmark = true
+	return q
+}
+
 // Value computes and returns a single scalar value for the metric.
 func (q PerformanceMetricQuery) Value() (float64, error) {
-	return q.metric.Compute(q.account, q.window)
+	account, err := q.resolveAccount()
+	if err != nil {
+		return 0, err
+	}
+
+	return q.metric.Compute(account, q.window)
 }
 
 // Series computes and returns a rolling time series for the metric.
 func (q PerformanceMetricQuery) Series() ([]float64, error) {
-	return q.metric.ComputeSeries(q.account, q.window)
+	account, err := q.resolveAccount()
+	if err != nil {
+		return nil, err
+	}
+
+	return q.metric.ComputeSeries(account, q.window)
+}
+
+// resolveAccount returns the account to compute against. When the
+// benchmark flag is set it verifies the metric supports benchmark
+// targeting, then returns a view account with the benchmark equity curve.
+func (q PerformanceMetricQuery) resolveAccount() (*Account, error) {
+	if !q.benchmark {
+		return q.account, nil
+	}
+
+	if _, ok := q.metric.(BenchmarkTargetable); !ok {
+		return nil, ErrBenchmarkNotSupported
+	}
+
+	return q.account.benchmarkView()
 }

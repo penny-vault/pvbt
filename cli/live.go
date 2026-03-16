@@ -3,9 +3,12 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	backtestReport "github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -60,9 +63,18 @@ func runLive(strategy engine.Strategy) error {
 		return fmt.Errorf("live mode failed: %w", err)
 	}
 
+	info := engine.DescribeStrategy(eng)
+
 	for p := range ch {
-		if err := printSummary(p); err != nil {
-			return fmt.Errorf("printing summary: %w", err)
+		rpt, buildErr := backtestReport.Build(p, info, backtestReport.RunMeta{
+			InitialCash: cash,
+		})
+		if buildErr != nil {
+			log.Warn().Err(buildErr).Msg("some report metrics failed")
+		}
+
+		if renderErr := terminal.Render(rpt, os.Stdout); renderErr != nil {
+			return fmt.Errorf("rendering report: %w", renderErr)
 		}
 	}
 

@@ -79,4 +79,6 @@ func (sortino) ComputeSeries(a *Account, window *Period) ([]float64, error) { re
 
 // Sortino is the Sortino ratio: like Sharpe but uses downside deviation
 // instead of total standard deviation, penalizing only negative volatility.
+func (sortino) BenchmarkTargetable() {}
+
 var Sortino PerformanceMetric = sortino{}
