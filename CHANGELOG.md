@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Display rich backtest report with equity curve, trailing/annual/monthly returns, risk metrics, drawdowns, and trade log
+- Target a benchmark for performance metrics via the `.Benchmark()` query builder method
+- Compute MonthlyReturns, AnnualReturns, and DrawdownDetails from an account
+- Render terminal report using lipgloss and ntcharts
 - Capture backtest data access into portable SQLite snapshots for reproducible offline testing
 - Support index-based universes so strategies can filter by index membership
 - Add ForwardPE, PEG, PriceToCashFlow, and Beta metrics

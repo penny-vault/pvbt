@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -12,6 +13,8 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	backtestReport "github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -127,10 +130,14 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	)
 	defer eng.Close()
 
+	startTime := time.Now()
+
 	result, err := eng.Backtest(ctx, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
+
+	elapsed := time.Since(startTime)
 
 	// Set metadata on the portfolio.
 	result.SetMetadata("run_id", fullID)
@@ -149,8 +156,24 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	if err := printSummary(result); err != nil {
-		return fmt.Errorf("printing summary: %w", err)
+	info := engine.DescribeStrategy(eng)
+
+	steps := 0
+	if result.PerfData() != nil {
+		steps = result.PerfData().Len()
+	}
+
+	rpt, err := backtestReport.Build(result, info, backtestReport.RunMeta{
+		Elapsed:     elapsed,
+		Steps:       steps,
+		InitialCash: cash,
+	})
+	if err != nil {
+		log.Warn().Err(err).Msg("some report metrics failed")
+	}
+
+	if err := terminal.Render(rpt, os.Stdout); err != nil {
+		return fmt.Errorf("rendering report: %w", err)
 	}
 
 	return nil
