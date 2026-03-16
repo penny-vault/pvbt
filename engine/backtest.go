@@ -24,6 +24,7 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog"
 )
 
@@ -86,14 +87,37 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// PHASE 2: DATE ENUMERATION
 
-	// 9. Walk tradecron.Next() from start until past end.
-	// Subtract one nanosecond so that a date exactly equal to start is included.
-	var dates []time.Time
+	// 9. Create a daily schedule for equity recording on every trading day.
+	dailySchedule, dailyErr := tradecron.New("@close * * *", tradecron.RegularHours)
+	if dailyErr != nil {
+		return nil, fmt.Errorf("engine: creating daily equity schedule: %w", dailyErr)
+	}
 
+	// Collect strategy dates by calendar date for matching.
+	strategyCalDates := make(map[string]bool)
 	cur := e.schedule.Next(start.Add(-time.Nanosecond))
+
 	for !cur.After(end) {
-		dates = append(dates, cur)
+		strategyCalDates[cur.Format("2006-01-02")] = true
 		cur = e.schedule.Next(cur.Add(time.Nanosecond))
+	}
+
+	// Walk all trading days via the daily schedule.
+	type backtestStep struct {
+		date       time.Time
+		isStrategy bool
+	}
+
+	var steps []backtestStep
+
+	cur = dailySchedule.Next(start.Add(-time.Nanosecond))
+	for !cur.After(end) {
+		calKey := cur.Format("2006-01-02")
+		steps = append(steps, backtestStep{
+			date:       cur,
+			isStrategy: strategyCalDates[calKey],
+		})
+		cur = dailySchedule.Next(cur.Add(time.Nanosecond))
 	}
 
 	// PHASE 3: STEP LOOP
@@ -101,11 +125,13 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
 
-	for dateIdx, date := range dates {
+	for stepIdx, step := range steps {
 		// 10. Check context cancellation.
 		if err := ctx.Err(); err != nil {
 			return acct, err
 		}
+
+		date := step.date
 
 		// 11. Set current date.
 		e.currentDate = date
@@ -114,8 +140,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		stepLogger := zerolog.Ctx(ctx).With().
 			Str("strategy", e.strategy.Name()).
 			Time("date", date).
-			Int("step", dateIdx+1).
-			Int("total", len(dates)).
+			Int("step", stepIdx+1).
+			Int("total", len(steps)).
+			Bool("strategy_day", step.isStrategy).
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
@@ -170,18 +197,21 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			}
 		}
 
-		// 15. Update simulated broker with price provider and date.
-		if sb, ok := e.broker.(*SimulatedBroker); ok {
-			sb.SetPriceProvider(e, date)
+		// 15-16. Run strategy only on strategy-schedule dates.
+		if step.isStrategy {
+			// 15. Update simulated broker with price provider and date.
+			if sb, ok := e.broker.(*SimulatedBroker); ok {
+				sb.SetPriceProvider(e, date)
+			}
+
+			// 16. Call strategy.Compute.
+			if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+				return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
+					e.strategy.Name(), date, err)
+			}
 		}
 
-		// 16. Call strategy.Compute.
-		if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
-			return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
-				e.strategy.Name(), date, err)
-		}
-
-		// 17. Build price DataFrame for all assets seen this step (including any
+		// 17. Build price DataFrame for all held assets (including any
 		// newly acquired positions from Compute).
 		var priceAssets []asset.Asset
 
@@ -203,12 +233,18 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				return nil, fmt.Errorf("engine: price fetch on %v: %w", date, err)
 			}
 
-			// 18. Call acct.UpdatePrices.
+			// 18. Record equity.
 			acct.UpdatePrices(priceDF)
+		} else {
+			// No assets to price -- record cash-only portfolio value.
+			cashDF, _ := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
+			acct.UpdatePrices(cashDF)
 		}
 
-		// 18b. Compute registered metrics across all standard windows.
-		computeMetrics(acct, date)
+		// 18b. Compute registered metrics only on strategy dates.
+		if step.isStrategy {
+			computeMetrics(acct, date)
+		}
 
 		// 19. Evict old cache data.
 		e.cache.evictBefore(date)

@@ -116,6 +116,39 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 	return nil
 }
 
+// monthlyStrategy trades once per month at month-end but the engine
+// should still record daily equity values.
+type monthlyStrategy struct {
+	assets []asset.Asset
+}
+
+func (s *monthlyStrategy) Name() string { return "monthlyStrategy" }
+
+func (s *monthlyStrategy) Setup(eng *engine.Engine) {
+	tc, err := tradecron.New("@close @monthend", tradecron.RegularHours)
+	if err != nil {
+		panic(fmt.Sprintf("monthlyStrategy.Setup: %v", err))
+	}
+	eng.Schedule(tc)
+}
+
+func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
+	if len(s.assets) == 0 {
+		return nil
+	}
+	priceDF, err := eng.FetchAt(ctx, s.assets, eng.CurrentDate(), []data.Metric{data.MetricClose})
+	if err != nil || priceDF == nil {
+		return nil
+	}
+	// Buy 1 share of each asset on first compute if not already held.
+	for _, target := range s.assets {
+		if fund.Position(target) == 0 {
+			fund.Order(ctx, target, portfolio.Buy, 1)
+		}
+	}
+	return nil
+}
+
 // noScheduleStrategy omits calling e.Schedule in Setup.
 type noScheduleStrategy struct{}
 
@@ -275,6 +308,34 @@ var _ = Describe("Backtest", func() {
 			perfA := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
 			Expect(restored.PerfData().Column(perfA, data.PortfolioEquity)).To(Equal(acct.PerfData().Column(perfA, data.PortfolioEquity)))
 			Expect(restored.Metrics()).To(Equal(acct.Metrics()))
+		})
+	})
+
+	Context("daily equity recording", func() {
+		It("records equity every trading day even for a monthly strategy", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &monthlyStrategy{assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+
+			// A monthly strategy over ~2 months would only have ~2 strategy dates.
+			// But daily equity recording should give us ~40+ trading days of data.
+			perfA := asset.Asset{CompositeFigi: "_PORTFOLIO_", Ticker: "_PORTFOLIO_"}
+			equityCol := fund.PerfData().Column(perfA, data.PortfolioEquity)
+			Expect(len(equityCol)).To(BeNumerically(">=", 30),
+				"expected daily equity data, got %d points", len(equityCol))
 		})
 	})
 
