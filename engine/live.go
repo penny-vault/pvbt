@@ -24,6 +24,7 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/rs/zerolog"
 )
 
@@ -90,16 +91,44 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	go func() {
 		defer close(portfolioCh)
 
+		dailySchedule, dailyErr := tradecron.New("@close * * *", tradecron.RegularHours)
+		if dailyErr != nil {
+			zerolog.Ctx(ctx).Error().Err(dailyErr).Msg("failed to create daily equity schedule")
+			return
+		}
+
 		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
 		priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
 		step := 0
 
 		for {
-			// a. Compute next scheduled time.
-			nextTime := e.schedule.Next(time.Now())
+			// a. Compute next fire time for both schedules.
+			now := time.Now()
+			nextStrategy := e.schedule.Next(now)
+			nextDaily := dailySchedule.Next(now)
+
+			// Pick whichever fires sooner.
+			nextTime := nextDaily
+			isStrategy := false
+
+			if !nextStrategy.After(nextDaily) {
+				nextTime = nextStrategy
+				isStrategy = true
+			}
+
+			// If both fall on the same calendar day, treat as a strategy day
+			// and use the later timestamp for equity recording.
+			if nextStrategy.Format("2006-01-02") == nextDaily.Format("2006-01-02") {
+				isStrategy = true
+
+				if nextDaily.After(nextStrategy) {
+					nextTime = nextDaily
+				}
+			}
+
 			wait := time.Until(nextTime)
 
-			// b. Wait for next scheduled time or context cancellation.
+			// b. Wait for next fire time or context cancellation.
 			select {
 			case <-time.After(wait):
 			case <-ctx.Done():
@@ -116,6 +145,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				Str("strategy", e.strategy.Name()).
 				Time("date", e.currentDate).
 				Int("step", step).
+				Bool("strategy_day", isStrategy).
 				Logger()
 			stepCtx := stepLogger.WithContext(ctx)
 
@@ -145,7 +175,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
 				if fetchErr != nil {
 					zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("housekeeping fetch failed")
-					continue // skip this step, try again at next scheduled time
+					continue
 				}
 			}
 
@@ -171,18 +201,21 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			}
 
-			// g. Update simulated broker with price provider if applicable.
-			if sb, ok := e.broker.(*SimulatedBroker); ok {
-				sb.SetPriceProvider(e, e.currentDate)
+			// g-h. Run strategy only on strategy-schedule days.
+			if isStrategy {
+				if sb, ok := e.broker.(*SimulatedBroker); ok {
+					sb.SetPriceProvider(e, e.currentDate)
+				}
+
+				if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("strategy compute failed")
+					continue
+				}
 			}
 
-			// h. Call strategy.Compute.
-			if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
-				zerolog.Ctx(stepCtx).Error().Err(err).Msg("strategy compute failed")
-				continue
-			}
-
-			// i. Build price DataFrame for post-Compute holdings and call UpdatePrices.
+			// i. Mark-to-market: fetch prices and record equity.
+			// Retry up to 18 times with 1-hour waits for delayed prices
+			// (mutual fund NAVs may not be available until 1-3 AM next day).
 			var priceAssets []asset.Asset
 
 			acct.Holdings(func(a asset.Asset, _ float64) {
@@ -198,12 +231,36 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 			}
 
 			if len(priceAssets) > 0 {
-				priceDF, fetchErr := e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
+				var priceDF *data.DataFrame
+				var fetchErr error
+
+				for attempt := range 18 {
+					priceDF, fetchErr = e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
+					if fetchErr == nil {
+						break
+					}
+
+					zerolog.Ctx(stepCtx).Warn().
+						Err(fetchErr).
+						Int("attempt", attempt+1).
+						Msg("price fetch failed, retrying in 1 hour")
+
+					select {
+					case <-time.After(time.Hour):
+					case <-ctx.Done():
+						return
+					}
+				}
+
 				if fetchErr != nil {
-					zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("price fetch failed")
+					zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("price fetch failed after retries")
 				} else {
 					acct.UpdatePrices(priceDF)
 				}
+			} else {
+				// No assets to price -- record cash-only portfolio value.
+				cashDF, _ := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
+				acct.UpdatePrices(cashDF)
 			}
 
 			// j. Non-blocking send of updated portfolio.
