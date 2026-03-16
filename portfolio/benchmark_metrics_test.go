@@ -113,12 +113,13 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(BeNumerically("~", 1.027593892176544, 1e-10))
 		})
 
-		It("Alpha = portfolioReturn - (rfReturn + beta*(bmReturn - rfReturn))", func() {
-			// alpha = 0.10 - (0.0005 + 1.027594*(0.09 - 0.0005))
-			//       = 0.007530346650199
+		It("Alpha = (mean(R_p-R_f) - beta*mean(R_m-R_f)) * AF", func() {
+			// alpha_per_period = mean(R_p-R_f) - beta*mean(R_m-R_f)
+			// AF = 5 / (7/365.25) = 260.89
+			// alpha_annualized = 0.3672
 			v, err := a.PerformanceMetric(portfolio.Alpha).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.007530346650199, 1e-10))
+			Expect(v).To(BeNumerically("~", 0.3671987732916029, 1e-10))
 		})
 
 		It("TrackingError = stddev(activeReturns) * sqrt(AF)", func() {
@@ -315,13 +316,14 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(Equal(0.0))
 		})
 
-		It("Alpha = portfolioReturn - rfReturn when beta=0", func() {
-			// portfolioReturn = 1400/1000 - 1 = 0.4
-			// rfReturn = 100.04/100 - 1 = 0.0004
-			// beta = 0 -> alpha = 0.4 - (0.0004 + 0*(0 - 0.0004)) = 0.3996
+		It("Alpha = mean(R_p-R_f) * AF when beta=0", func() {
+			// beta = 0, so alpha = mean(R_p - R_f) * AF
+			// 5 points, 4 returns, daySeq Jan 2,3,6,7,8 -> 6 calendar days
+			// AF = 4 / (6/365.25) = 243.5
+			// alpha = 21.353
 			v, err := a.PerformanceMetric(portfolio.Alpha).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.3996, 1e-10))
+			Expect(v).To(BeNumerically("~", 21.35285353509785, 1e-10))
 		})
 	})
 
@@ -350,11 +352,11 @@ var _ = Describe("Benchmark Metrics", func() {
 			Expect(v).To(Equal(0.0))
 		})
 
-		It("Alpha = portfolioReturn - rfReturn", func() {
-			// alpha = 0.1 - (0.0005 + 0*(0.09-0.0005)) = 0.0995
+		It("Alpha = 0 (insufficient data for regression)", func() {
+			// Only 1 return from 2 data points -- need at least 2 returns.
 			v, err := a.PerformanceMetric(portfolio.Alpha).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(v).To(BeNumerically("~", 0.0995, 1e-10))
+			Expect(v).To(Equal(0.0))
 		})
 
 		It("TrackingError = 0 (single return, stddev=0)", func() {

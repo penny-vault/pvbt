@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/stat"
+)
 
 type alpha struct{}
 
@@ -42,25 +47,40 @@ func (alpha) Compute(acct *Account, window *Period) (float64, error) {
 	}
 
 	perfDF := pd.Window(window)
-	eq := perfDF.Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
-	bmWinCol := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
-	rfWinCol := perfDF.Column(portfolioAsset, data.PortfolioRiskFree)
+	returns := perfDF.Pct().Drop(math.NaN())
 
-	if len(eqCol) < 2 || len(bmWinCol) < 2 || len(rfWinCol) < 2 {
+	if returns.Len() < 2 {
 		return 0, nil
 	}
 
-	portfolioReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
-	benchmarkReturn := (bmWinCol[len(bmWinCol)-1] / bmWinCol[0]) - 1
-	riskFreeReturn := (rfWinCol[len(rfWinCol)-1] / rfWinCol[0]) - 1
+	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
+	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	rCol := returns.Column(portfolioAsset, data.PortfolioRiskFree)
 
-	b, err := Beta.Compute(acct, window)
+	if len(pCol) < 2 || len(bCol) < 2 || len(rCol) < 2 {
+		return 0, nil
+	}
+
+	// Compute mean excess returns.
+	excessPortfolio := make([]float64, len(pCol))
+	excessBenchmark := make([]float64, len(bCol))
+
+	for idx := range pCol {
+		excessPortfolio[idx] = pCol[idx] - rCol[idx]
+		excessBenchmark[idx] = bCol[idx] - rCol[idx]
+	}
+
+	meanExcessPortfolio := stat.Mean(excessPortfolio, nil)
+	meanExcessBenchmark := stat.Mean(excessBenchmark, nil)
+
+	betaVal, err := Beta.Compute(acct, window)
 	if err != nil {
 		return 0, err
 	}
 
-	return portfolioReturn - (riskFreeReturn + b*(benchmarkReturn-riskFreeReturn)), nil
+	af := annualizationFactor(perfDF.Times())
+
+	return (meanExcessPortfolio - betaVal*meanExcessBenchmark) * af, nil
 }
 
 func (alpha) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
