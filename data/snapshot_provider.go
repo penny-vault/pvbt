@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/tradecron"
 
 	_ "modernc.org/sqlite"
 )
@@ -49,6 +50,42 @@ func NewSnapshotProvider(path string) (*SnapshotProvider, error) {
 // Close closes the database connection.
 func (p *SnapshotProvider) Close() error {
 	return p.db.Close()
+}
+
+// FetchMarketHolidays loads market holidays from the snapshot database.
+func (p *SnapshotProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error) {
+	rows, err := p.db.QueryContext(ctx, "SELECT event_date, early_close, close_time FROM market_holidays ORDER BY event_date")
+	if err != nil {
+		return nil, fmt.Errorf("snapshot provider: query market holidays: %w", err)
+	}
+	defer rows.Close()
+
+	var holidays []tradecron.MarketHoliday
+
+	for rows.Next() {
+		var (
+			dateStr    string
+			earlyClose int
+			closeTime  int
+		)
+
+		if err := rows.Scan(&dateStr, &earlyClose, &closeTime); err != nil {
+			return nil, fmt.Errorf("snapshot provider: scan market holiday: %w", err)
+		}
+
+		parsedDate, err := time.Parse(time.RFC3339, dateStr)
+		if err != nil {
+			return nil, fmt.Errorf("snapshot provider: parse holiday date: %w", err)
+		}
+
+		holidays = append(holidays, tradecron.MarketHoliday{
+			Date:       parsedDate,
+			EarlyClose: earlyClose != 0,
+			CloseTime:  closeTime,
+		})
+	}
+
+	return holidays, rows.Err()
 }
 
 // -- AssetProvider --

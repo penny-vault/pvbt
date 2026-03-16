@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/tradecron"
 
 	_ "modernc.org/sqlite"
 )
@@ -65,6 +66,35 @@ func NewSnapshotRecorder(path string, cfg SnapshotRecorderConfig) (*SnapshotReco
 // Close closes the underlying SQLite database.
 func (r *SnapshotRecorder) Close() error {
 	return r.db.Close()
+}
+
+// RecordMarketHolidays writes the market holiday calendar to the snapshot.
+func (r *SnapshotRecorder) RecordMarketHolidays(holidays []tradecron.MarketHoliday) error {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	stmt, err := tx.Prepare("INSERT OR IGNORE INTO market_holidays (event_date, early_close, close_time) VALUES (?, ?, ?)")
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, holiday := range holidays {
+		earlyClose := 0
+		if holiday.EarlyClose {
+			earlyClose = 1
+		}
+
+		dateStr := holiday.Date.Format(time.RFC3339)
+		if _, err := stmt.Exec(dateStr, earlyClose, holiday.CloseTime); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // -- AssetProvider --

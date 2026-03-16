@@ -72,6 +72,12 @@ func CreateSnapshotSchema(db *sql.DB) error {
 			ticker TEXT NOT NULL,
 			PRIMARY KEY (index_name, event_date, composite_figi)
 		)`,
+
+		`CREATE TABLE IF NOT EXISTS market_holidays (
+			event_date TEXT NOT NULL PRIMARY KEY,
+			early_close INTEGER NOT NULL DEFAULT 0,
+			close_time INTEGER NOT NULL DEFAULT 0
+		)`,
 	}
 
 	for _, stmt := range statements {

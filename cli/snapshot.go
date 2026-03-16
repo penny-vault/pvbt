@@ -124,6 +124,13 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create snapshot recorder: %w", err)
 	}
 
+	if err := recorder.RecordMarketHolidays(holidays); err != nil {
+		recorder.Close()
+		provider.Close()
+
+		return fmt.Errorf("record market holidays: %w", err)
+	}
+
 	acct := portfolio.New(
 		portfolio.WithCash(cash, start),
 		portfolio.WithAllMetrics(),
@@ -168,7 +175,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 	}
 	defer summaryDB.Close()
 
-	tables := []string{"assets", "eod", "metrics", "fundamentals", "ratings", "index_members"}
+	tables := []string{"assets", "eod", "metrics", "fundamentals", "ratings", "index_members", "market_holidays"}
 	for _, table := range tables {
 		var count int
 		if err := summaryDB.QueryRow("SELECT count(*) FROM " + table).Scan(&count); err != nil {
