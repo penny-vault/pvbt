@@ -127,11 +127,41 @@ func (df *DataFrame) colOffset(aIdx, mIdx int) int {
 }
 
 func (df *DataFrame) timeIndex(t time.Time) (int, bool) {
+	if df.freq >= Daily {
+		return df.timeIndexByDate(t)
+	}
+
 	i := sort.Search(len(df.times), func(i int) bool {
 		return !df.times[i].Before(t)
 	})
 	if i < len(df.times) && df.times[i].Equal(t) {
 		return i, true
+	}
+
+	return 0, false
+}
+
+// timeIndexByDate finds the index whose calendar date matches t,
+// ignoring the time-of-day component. Daily data has no meaningful
+// time -- the stored hour is an artifact of eodTimestamp.
+func (df *DataFrame) timeIndexByDate(t time.Time) (int, bool) {
+	tY, tM, tD := t.Date()
+	i := sort.Search(len(df.times), func(i int) bool {
+		sY, sM, sD := df.times[i].Date()
+		// Compare year, then month, then day.
+		if sY != tY {
+			return sY > tY
+		}
+		if sM != tM {
+			return sM > tM
+		}
+		return sD >= tD
+	})
+	if i < len(df.times) {
+		sY, sM, sD := df.times[i].Date()
+		if sY == tY && sM == tM && sD == tD {
+			return i, true
+		}
 	}
 
 	return 0, false
@@ -482,18 +512,24 @@ func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
 }
 
 // Between returns a new DataFrame containing only timestamps within the
-// inclusive range [start, end].
+// inclusive range [start, end]. For daily-or-coarser data the comparison
+// uses calendar dates only, ignoring the time-of-day component.
 func (df *DataFrame) Between(start, end time.Time) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
 	}
 
+	before, after := timeBefore, timeAfter
+	if df.freq >= Daily {
+		before, after = dateBefore, dateAfter
+	}
+
 	startIdx := sort.Search(len(df.times), func(i int) bool {
-		return !df.times[i].Before(start)
+		return !before(df.times[i], start)
 	})
 
 	endIdx := sort.Search(len(df.times), func(i int) bool {
-		return df.times[i].After(end)
+		return after(df.times[i], end)
 	})
 
 	if startIdx >= endIdx {
@@ -501,6 +537,27 @@ func (df *DataFrame) Between(start, end time.Time) *DataFrame {
 	}
 
 	return df.sliceByTimeIndices(startIdx, endIdx)
+}
+
+func timeBefore(a, b time.Time) bool { return a.Before(b) }
+func timeAfter(a, b time.Time) bool  { return a.After(b) }
+
+// dateBefore reports whether a's calendar date is strictly before b's.
+func dateBefore(a, b time.Time) bool {
+	aY, aM, aD := a.Date()
+	bY, bM, bD := b.Date()
+	if aY != bY {
+		return aY < bY
+	}
+	if aM != bM {
+		return aM < bM
+	}
+	return aD < bD
+}
+
+// dateAfter reports whether a's calendar date is strictly after b's.
+func dateAfter(a, b time.Time) bool {
+	return dateBefore(b, a)
 }
 
 func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {

@@ -275,6 +275,21 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 		checkDate = tc.Schedule.Next(checkDate)
 		marketOpen = tc.marketStatus.IsMarketOpen(checkDate)
 
+		// On early-close days the cron schedule produces the regular close
+		// time (e.g. 16:00) which falls after the shortened session end.
+		// When the time flag is @close, snap to the actual close time so
+		// the schedule reflects real market hours.
+		if !marketOpen && tc.TimeFlag == AtClose && tc.marketStatus.IsMarketDay(checkDate) {
+			if earlyClose := tc.marketStatus.EarlyClose(checkDate); earlyClose != 0 {
+				snapped := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(),
+					earlyClose/100, earlyClose%100, 0, 0, tc.marketStatus.tz)
+				if snapped.After(forDate) {
+					checkDate = snapped
+					marketOpen = true
+				}
+			}
+		}
+
 		if actualIters > maxIters {
 			log.Panic().Str("TimeSpec", tc.TimeSpec).Msg("tradecron schedule appears to be in an infinite loop")
 		}
