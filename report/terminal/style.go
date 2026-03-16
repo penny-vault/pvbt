@@ -166,25 +166,29 @@ func fmtDays(val float64) string {
 }
 
 // fmtElapsed formats a duration as a human-friendly string: "1.2s", "2m 30s", "1h 5m".
-func fmtElapsed(d time.Duration) string {
+func fmtElapsed(elapsed time.Duration) string {
 	switch {
-	case d < time.Second:
-		return fmt.Sprintf("%dms", d.Milliseconds())
-	case d < time.Minute:
-		return fmt.Sprintf("%.1fs", d.Seconds())
-	case d < time.Hour:
-		minutes := int(d.Minutes())
-		seconds := int(d.Seconds()) % 60
+	case elapsed < time.Second:
+		return fmt.Sprintf("%dms", elapsed.Milliseconds())
+	case elapsed < time.Minute:
+		return fmt.Sprintf("%.1fs", elapsed.Seconds())
+	case elapsed < time.Hour:
+		minutes := int(elapsed.Minutes())
+
+		seconds := int(elapsed.Seconds()) % 60
 		if seconds == 0 {
 			return fmt.Sprintf("%dm", minutes)
 		}
+
 		return fmt.Sprintf("%dm %ds", minutes, seconds)
 	default:
-		hours := int(d.Hours())
-		minutes := int(d.Minutes()) % 60
+		hours := int(elapsed.Hours())
+
+		minutes := int(elapsed.Minutes()) % 60
 		if minutes == 0 {
 			return fmt.Sprintf("%dh", hours)
 		}
+
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
 }
