@@ -75,7 +75,8 @@ func renderTrailingReturns(builder *strings.Builder, trailing report.TrailingRet
 	}
 }
 
-// renderAnnualReturns writes the annual returns table.
+// renderAnnualReturns writes the annual returns table with years as rows
+// so that it remains readable regardless of how many years are present.
 func renderAnnualReturns(builder *strings.Builder, annual report.AnnualReturns, hasBenchmark bool) {
 	if len(annual.Years) == 0 {
 		return
@@ -84,46 +85,44 @@ func renderAnnualReturns(builder *strings.Builder, annual report.AnnualReturns, 
 	builder.WriteString(sectionTitleStyle.Render("Annual Returns"))
 	builder.WriteString("\n")
 
-	// Header row with years.
+	// Column header row.
 	header := padRight(labelStyle.Render(""), colWidth)
-	for _, year := range annual.Years {
-		header += padLeft(tableHeaderStyle.Render(fmt.Sprintf("%d", year)), colWidth)
+	header += padLeft(tableHeaderStyle.Render("Strategy"), colWidth)
+
+	if hasBenchmark && len(annual.Benchmark) > 0 {
+		header += padLeft(tableHeaderStyle.Render("Benchmark"), colWidth)
+		header += padLeft(tableHeaderStyle.Render("+/-"), colWidth)
 	}
 
 	builder.WriteString("  " + header + "\n")
 
-	// Strategy row.
-	stratRow := padRight(labelStyle.Render("Strategy"), colWidth)
-	for _, val := range annual.Strategy {
-		stratRow += padLeft(fmtPct(val), colWidth)
-	}
+	// One row per year.
+	for idx, year := range annual.Years {
+		row := padRight(tableHeaderStyle.Render(fmt.Sprintf("%d", year)), colWidth)
 
-	builder.WriteString("  " + stratRow + "\n")
-
-	// Benchmark row.
-	if hasBenchmark && len(annual.Benchmark) > 0 {
-		benchRow := padRight(labelStyle.Render("Benchmark"), colWidth)
-		for _, val := range annual.Benchmark {
-			benchRow += padLeft(fmtPct(val), colWidth)
+		stratVal := math.NaN()
+		if idx < len(annual.Strategy) {
+			stratVal = annual.Strategy[idx]
 		}
 
-		builder.WriteString("  " + benchRow + "\n")
+		row += padLeft(fmtPct(stratVal), colWidth)
 
-		// Diff row.
-		diffRow := padRight(labelStyle.Render("+/-"), colWidth)
-
-		for idx := range annual.Strategy {
-			diff := math.NaN()
+		if hasBenchmark && len(annual.Benchmark) > 0 {
+			benchVal := math.NaN()
 			if idx < len(annual.Benchmark) {
-				diff = annual.Strategy[idx] - annual.Benchmark[idx]
-				if math.IsNaN(annual.Strategy[idx]) || math.IsNaN(annual.Benchmark[idx]) {
-					diff = math.NaN()
-				}
+				benchVal = annual.Benchmark[idx]
 			}
 
-			diffRow += padLeft(fmtPctDiff(diff), colWidth)
+			row += padLeft(fmtPct(benchVal), colWidth)
+
+			diff := math.NaN()
+			if !math.IsNaN(stratVal) && !math.IsNaN(benchVal) {
+				diff = stratVal - benchVal
+			}
+
+			row += padLeft(fmtPctDiff(diff), colWidth)
 		}
 
-		builder.WriteString("  " + diffRow + "\n")
+		builder.WriteString("  " + row + "\n")
 	}
 }

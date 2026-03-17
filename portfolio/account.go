@@ -650,11 +650,11 @@ func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
 // portfolio value, and appends it to the perfData DataFrame. It also tracks
 // benchmark and risk-free price series when those assets are configured.
 func (a *Account) UpdatePrices(priceData *data.DataFrame) {
-	a.prices = priceData
-
 	if priceData.Len() == 0 {
 		return
 	}
+
+	a.prices = priceData
 
 	total := a.cash
 	for ast, qty := range a.holdings {

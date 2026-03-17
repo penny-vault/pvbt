@@ -363,6 +363,31 @@ var _ = Describe("Account", func() {
 			Expect(pd.Column(perfAsset, data.PortfolioRiskFree)).To(Equal([]float64{49.5, 50.0}))
 			Expect(pd.Len()).To(Equal(2))
 		})
+
+		It("preserves prices when UpdatePrices receives an empty DataFrame", func() {
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			a.Record(portfolio.Transaction{
+				Date:   t1,
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  300.0,
+				Amount: -3_000.0,
+			})
+			// cash = 7000, 10 shares SPY
+
+			df1 := buildDF(t1, []asset.Asset{spy}, []float64{450.0}, []float64{448.0})
+			a.UpdatePrices(df1)
+			Expect(a.Value()).To(Equal(11_500.0)) // 7000 + 10*450
+
+			// Pass an empty DataFrame (simulates missing data on the last step).
+			emptyDF, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+			Expect(err).NotTo(HaveOccurred())
+			a.UpdatePrices(emptyDF)
+
+			// Value must still reflect the last known prices, not drop to cash-only.
+			Expect(a.Value()).To(Equal(11_500.0))
+		})
 	})
 
 	Describe("PerfData before any UpdatePrices", func() {

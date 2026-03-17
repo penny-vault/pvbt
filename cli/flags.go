@@ -7,10 +7,13 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/universe"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
+
+var universeType = reflect.TypeOf((*universe.Universe)(nil)).Elem()
 
 // registerStrategyFlags inspects the strategy struct's exported fields
 // and registers a cobra flag for each one. The flag name comes from
@@ -42,6 +45,20 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 		desc := field.Tag.Get("desc")
 		defaultStr := field.Tag.Get("default")
 		fieldValue := val.Field(ii)
+
+		// Handle universe.Universe interface fields as comma-separated ticker strings.
+		if field.Type.Implements(universeType) {
+			def := defaultStr
+			cmd.Flags().String(name, def, desc)
+
+			if f := cmd.Flags().Lookup(name); f != nil {
+				if err := viper.BindPFlag(name, f); err != nil {
+					log.Fatal().Err(err).Str("flag", name).Msg("failed to bind strategy flag")
+				}
+			}
+
+			continue
+		}
 
 		switch field.Type.Kind() {
 		case reflect.Float64:
@@ -129,6 +146,25 @@ func applyStrategyFlags(strategy engine.Strategy) {
 
 		flagValue := val.Field(ii)
 		if !flagValue.CanSet() {
+			continue
+		}
+
+		// Universe fields are stored as comma-separated tickers. Create a
+		// StaticUniverse without a data source; the engine's hydrateFields
+		// will re-wire it with the proper data source later.
+		if field.Type.Implements(universeType) {
+			raw := viper.GetString(name)
+			if raw == "" {
+				continue
+			}
+
+			tickers := strings.Split(raw, ",")
+			for idx := range tickers {
+				tickers[idx] = strings.TrimSpace(tickers[idx])
+			}
+
+			flagValue.Set(reflect.ValueOf(universe.NewStatic(tickers...)))
+
 			continue
 		}
 

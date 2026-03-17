@@ -63,6 +63,22 @@ func hydrateFields(eng *Engine, target interface{}) error {
 			continue
 		}
 
+		// For universe fields that were pre-set (e.g. by CLI flags), re-wire
+		// with the engine's data source so data fetching works.
+		if field.Type.Implements(universeType) && !fieldValue.IsZero() {
+			existing := fieldValue.Interface().(universe.Universe)
+			existingAssets := existing.Assets(time.Time{})
+
+			assets := make([]asset.Asset, len(existingAssets))
+			for j, a := range existingAssets {
+				assets[j] = eng.Asset(a.Ticker)
+			}
+
+			fieldValue.Set(reflect.ValueOf(eng.Universe(assets...)))
+
+			continue
+		}
+
 		// Skip non-zero fields (caller may have pre-set them).
 		if !fieldValue.IsZero() {
 			continue

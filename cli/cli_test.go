@@ -27,6 +27,7 @@ import (
 
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/universe"
 )
 
 type testStrategy struct {
@@ -34,9 +35,20 @@ type testStrategy struct {
 	Threshold float64 `pvbt:"threshold" desc:"signal threshold" default:"0.5"`
 }
 
+type universeStrategy struct {
+	RiskOn  universe.Universe `pvbt:"risk-on" desc:"equity universe" default:"SPY,GLD"`
+	RiskOff universe.Universe `pvbt:"risk-off" desc:"safe-haven" default:"TLT"`
+}
+
 func (s *testStrategy) Name() string           { return "test" }
 func (s *testStrategy) Setup(e *engine.Engine) {}
 func (s *testStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
+
+func (s *universeStrategy) Name() string           { return "universeTest" }
+func (s *universeStrategy) Setup(e *engine.Engine) {}
+func (s *universeStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
 }
 
@@ -134,5 +146,76 @@ var _ = Describe("applyStrategyFlags", func() {
 
 		Expect(strategy.Lookback).To(Equal(120))
 		Expect(strategy.Threshold).To(BeNumerically("~", 0.75, 1e-10))
+	})
+})
+
+var _ = Describe("registerStrategyFlags with universe fields", func() {
+	It("registers string flags for universe.Universe fields", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &universeStrategy{}
+
+		registerStrategyFlags(cmd, strategy)
+
+		riskOnFlag := cmd.Flags().Lookup("risk-on")
+		Expect(riskOnFlag).NotTo(BeNil())
+		Expect(riskOnFlag.DefValue).To(Equal("SPY,GLD"))
+		Expect(riskOnFlag.Usage).To(Equal("equity universe"))
+
+		riskOffFlag := cmd.Flags().Lookup("risk-off")
+		Expect(riskOffFlag).NotTo(BeNil())
+		Expect(riskOffFlag.DefValue).To(Equal("TLT"))
+		Expect(riskOffFlag.Usage).To(Equal("safe-haven"))
+	})
+})
+
+var _ = Describe("applyStrategyFlags with universe fields", func() {
+	It("creates a StaticUniverse from comma-separated tickers", func() {
+		strategy := &universeStrategy{}
+
+		viper.Reset()
+		viper.Set("risk-on", "VOO,SCZ,GLD")
+		viper.Set("risk-off", "TLT")
+
+		applyStrategyFlags(strategy)
+
+		Expect(strategy.RiskOn).NotTo(BeNil())
+		members := strategy.RiskOn.Assets(time.Time{})
+		Expect(members).To(HaveLen(3))
+		Expect(members[0].Ticker).To(Equal("VOO"))
+		Expect(members[1].Ticker).To(Equal("SCZ"))
+		Expect(members[2].Ticker).To(Equal("GLD"))
+
+		Expect(strategy.RiskOff).NotTo(BeNil())
+		offMembers := strategy.RiskOff.Assets(time.Time{})
+		Expect(offMembers).To(HaveLen(1))
+		Expect(offMembers[0].Ticker).To(Equal("TLT"))
+	})
+
+	It("trims whitespace around tickers", func() {
+		strategy := &universeStrategy{}
+
+		viper.Reset()
+		viper.Set("risk-on", " SPY , GLD ")
+		viper.Set("risk-off", "TLT")
+
+		applyStrategyFlags(strategy)
+
+		members := strategy.RiskOn.Assets(time.Time{})
+		Expect(members).To(HaveLen(2))
+		Expect(members[0].Ticker).To(Equal("SPY"))
+		Expect(members[1].Ticker).To(Equal("GLD"))
+	})
+
+	It("skips universe fields when viper value is empty", func() {
+		strategy := &universeStrategy{}
+
+		viper.Reset()
+		viper.Set("risk-on", "")
+		viper.Set("risk-off", "")
+
+		applyStrategyFlags(strategy)
+
+		Expect(strategy.RiskOn).To(BeNil())
+		Expect(strategy.RiskOff).To(BeNil())
 	})
 })

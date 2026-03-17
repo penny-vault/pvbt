@@ -75,6 +75,37 @@ var _ = Describe("Hydration", func() {
 		assetProvider = &mockAssetProvider{assets: []asset.Asset{aapl, goog}}
 	})
 
+	It("re-wires pre-set universe fields with the engine data source", func() {
+		metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		df := makeDailyTestData(dataStart, 90, []asset.Asset{aapl, goog}, metrics)
+		provider := data.NewTestProvider(metrics, df)
+
+		// Simulate what CLI applyStrategyFlags does: set the universe field
+		// to a StaticUniverse without a data source.
+		strategy := &hydrateStrategy{
+			UniverseVal: universe.NewStatic("AAPL", "GOOG"),
+		}
+		eng := engine.New(strategy,
+			engine.WithDataProvider(provider),
+			engine.WithAssetProvider(assetProvider),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+		end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
+
+		_, err := eng.Backtest(context.Background(), start, end)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The engine should have re-wired the universe with a data source.
+		// Verify by checking the assets are resolved (have CompositeFigi).
+		members := strategy.UniverseVal.Assets(time.Now())
+		Expect(members).To(HaveLen(2))
+		Expect(members[0].CompositeFigi).To(Equal("FIGI-AAPL"))
+		Expect(members[1].CompositeFigi).To(Equal("FIGI-GOOG"))
+	})
+
 	It("populates default-tagged fields before Compute runs", func() {
 		metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
 		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
