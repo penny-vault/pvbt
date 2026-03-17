@@ -9,7 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Display rich backtest report with performance chart, trailing/annual/monthly returns, risk metrics, drawdowns, and trade log
+- Display rich backtest report with performance chart, recent returns, annualized returns, annual/monthly returns, risk metrics, drawdowns, and trade log
+- Show recent returns (1D, 1W, 1M, WTD, MTD, YTD) and annualized returns (1Y, 3Y, 5Y, 10Y, Since Inception) in the terminal report
+- Upper-case ticker symbols provided via CLI flags
 - Target a benchmark for performance metrics via the `.Benchmark()` query builder method
 - Compute MonthlyReturns, AnnualReturns, and DrawdownDetails from an account
 - Render terminal report using lipgloss and ntcharts
@@ -42,6 +44,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Honor --start, --end, and other CLI flags on the backtest, snapshot, and explore subcommands
 - Fire @monthend, @weekend, and @close schedules on early-close days at the actual close time instead of skipping the day
 - Snap Months(N) lookback to month boundaries so monthly downsample always yields exactly N rows
+- Apply CLI flag overrides for strategy universe fields instead of silently using defaults
 
 ## [0.1.0] - 2026-03-14
 
