@@ -323,7 +323,9 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 	if e.riskFreeResolved && len(e.riskFreeTimes) > 0 && assembled.Len() > 0 {
 		rfSlice := e.sliceRiskFree(assembled.Times())
 		if rfSlice != nil {
-			_ = assembled.SetRiskFreeRates(rfSlice)
+			if err := assembled.SetRiskFreeRates(rfSlice); err != nil {
+				return nil, fmt.Errorf("engine: set risk-free rates on assembled frame: %w", err)
+			}
 		}
 	}
 
@@ -358,7 +360,9 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 	if e.riskFreeResolved && len(e.riskFreeTimes) > 0 && result.Len() > 0 {
 		rfSlice := e.sliceRiskFree(result.Times())
 		if rfSlice != nil {
-			_ = result.SetRiskFreeRates(rfSlice)
+			if err := result.SetRiskFreeRates(rfSlice); err != nil {
+				return nil, fmt.Errorf("engine: set risk-free rates on result frame: %w", err)
+			}
 		}
 	}
 
@@ -376,10 +380,10 @@ func (e *Engine) sliceRiskFree(timestamps []time.Time) []float64 {
 
 	result := make([]float64, len(timestamps))
 
-	for i, t := range timestamps {
+	for tsIdx, t := range timestamps {
 		key := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 		if idx, ok := e.riskFreeIndex[key]; ok {
-			result[i] = e.riskFreeValues[idx]
+			result[tsIdx] = e.riskFreeValues[idx]
 		} else {
 			// Forward-fill: binary search for the most recent prior date.
 			searchKey := key
@@ -387,10 +391,11 @@ func (e *Engine) sliceRiskFree(timestamps []time.Time) []float64 {
 				rfDate := e.riskFreeTimes[j]
 				return rfDate.After(searchKey)
 			}) - 1
+
 			if bestIdx >= 0 {
-				result[i] = e.riskFreeValues[bestIdx]
+				result[tsIdx] = e.riskFreeValues[bestIdx]
 			} else {
-				result[i] = math.NaN()
+				result[tsIdx] = math.NaN()
 			}
 		}
 	}

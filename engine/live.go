@@ -93,6 +93,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	if e.riskFreeResolved {
 		lookbackStart := time.Now().AddDate(-5, 0, 0)
 		rfDF, rfFetchErr := e.fetchRange(ctx, []asset.Asset{e.riskFreeAssetDGS}, []data.Metric{data.MetricClose}, lookbackStart, time.Now())
+
 		if rfFetchErr == nil && rfDF.Len() > 0 {
 			rfCol := rfDF.Column(e.riskFreeAssetDGS, data.MetricClose)
 			e.riskFreeTimes = make([]time.Time, rfDF.Len())
@@ -264,10 +265,12 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 				e.riskFreeTimes = append(e.riskFreeTimes, e.currentDate)
 				e.riskFreeValues = append(e.riskFreeValues, e.riskFreeCumulative)
+
 				rfKey := time.Date(e.currentDate.Year(), e.currentDate.Month(), e.currentDate.Day(), 0, 0, 0, 0, time.UTC)
 				if e.riskFreeIndex == nil {
 					e.riskFreeIndex = make(map[time.Time]int)
 				}
+
 				e.riskFreeIndex[rfKey] = len(e.riskFreeValues) - 1
 			}
 

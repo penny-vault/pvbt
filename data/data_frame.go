@@ -85,7 +85,9 @@ func (df *DataFrame) SetRiskFreeRates(rates []float64) error {
 	if len(rates) != len(df.times) {
 		return fmt.Errorf("SetRiskFreeRates: length %d does not match time axis length %d", len(rates), len(df.times))
 	}
+
 	df.riskFreeRates = rates
+
 	return nil
 }
 
@@ -376,6 +378,7 @@ func (df *DataFrame) At(t time.Time) *DataFrame {
 	if df.riskFreeRates != nil {
 		result.riskFreeRates = []float64{df.riskFreeRates[tIdx]}
 	}
+
 	return result
 }
 
@@ -417,6 +420,7 @@ func (df *DataFrame) Copy() *DataFrame {
 		copy(rfCopy, df.riskFreeRates)
 		result.riskFreeRates = rfCopy
 	}
+
 	return result
 }
 
@@ -631,6 +635,7 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 	if df.riskFreeRates != nil {
 		result.riskFreeRates = df.riskFreeRates[startIdx:endIdx]
 	}
+
 	return result
 }
 
@@ -689,11 +694,13 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 	result := mustNewDataFrame(times, assets, metrics, df.freq, newData)
 	if df.riskFreeRates != nil {
 		rfSlice := make([]float64, newTimeLen)
-		for i, idx := range indices {
-			rfSlice[i] = df.riskFreeRates[idx]
+		for tsIdx, idx := range indices {
+			rfSlice[tsIdx] = df.riskFreeRates[idx]
 		}
+
 		result.riskFreeRates = rfSlice
 	}
+
 	return result
 }
 
@@ -1457,21 +1464,21 @@ func (df *DataFrame) RiskAdjustedPct(periods ...int) *DataFrame {
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
 
-		for i := 0; i < period && i < len(col); i++ {
-			out[i] = math.NaN()
+		for tsIdx := 0; tsIdx < period && tsIdx < len(col); tsIdx++ {
+			out[tsIdx] = math.NaN()
 		}
 
-		for i := period; i < len(col); i++ {
-			pctChange := (col[i] - col[i-period]) / col[i-period]
+		for tsIdx := period; tsIdx < len(col); tsIdx++ {
+			pctChange := (col[tsIdx] - col[tsIdx-period]) / col[tsIdx-period]
 
 			var rfChange float64
-			if rf[i-period] == 0 {
+			if rf[tsIdx-period] == 0 {
 				rfChange = math.NaN()
 			} else {
-				rfChange = (rf[i] - rf[i-period]) / rf[i-period]
+				rfChange = (rf[tsIdx] - rf[tsIdx-period]) / rf[tsIdx-period]
 			}
 
-			out[i] = pctChange - rfChange
+			out[tsIdx] = pctChange - rfChange
 		}
 
 		return out

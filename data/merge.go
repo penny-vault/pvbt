@@ -155,18 +155,23 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 
 	// Concatenate risk-free rates if all frames have them.
 	allHaveRF := true
+
 	for _, f := range sorted {
 		if f.RiskFreeRates() == nil {
 			allHaveRF = false
 			break
 		}
 	}
+
 	if allHaveRF {
 		rfConcat := make([]float64, 0, totalLen)
 		for _, f := range sorted {
 			rfConcat = append(rfConcat, f.RiskFreeRates()...)
 		}
-		_ = result.SetRiskFreeRates(rfConcat)
+
+		if err := result.SetRiskFreeRates(rfConcat); err != nil {
+			return nil, fmt.Errorf("concat: set risk-free rates: %w", err)
+		}
 	}
 
 	return result, nil
