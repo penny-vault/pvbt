@@ -372,7 +372,11 @@ func (df *DataFrame) At(t time.Time) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	result := mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	if df.riskFreeRates != nil {
+		result.riskFreeRates = []float64{df.riskFreeRates[tIdx]}
+	}
+	return result
 }
 
 // Last returns a single-row DataFrame containing the most recent timestamp.
@@ -678,7 +682,15 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	result := mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	if df.riskFreeRates != nil {
+		rfSlice := make([]float64, newTimeLen)
+		for i, idx := range indices {
+			rfSlice[i] = df.riskFreeRates[idx]
+		}
+		result.riskFreeRates = rfSlice
+	}
+	return result
 }
 
 // Drop removes all timestamps where any value equals val (e.g. NaN).
@@ -1710,6 +1722,7 @@ func (df *DataFrame) AppendRow(timestamp time.Time, values []float64) error {
 
 	df.data = newData
 	df.times = append(df.times, timestamp)
+	df.riskFreeRates = nil
 
 	return nil
 }
