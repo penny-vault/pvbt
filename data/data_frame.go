@@ -407,7 +407,13 @@ func (df *DataFrame) Copy() *DataFrame {
 	metrics := make([]Metric, len(df.metrics))
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	result := mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	if df.riskFreeRates != nil {
+		rfCopy := make([]float64, len(df.riskFreeRates))
+		copy(rfCopy, df.riskFreeRates)
+		result.riskFreeRates = rfCopy
+	}
+	return result
 }
 
 // Table returns an ASCII table representation of the DataFrame for
@@ -494,7 +500,7 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, matched, metrics, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, matched, metrics, df.freq, newData))
 }
 
 // Metrics returns a new DataFrame containing only the specified metrics.
@@ -539,7 +545,7 @@ func (df *DataFrame) Metrics(metrics ...Metric) *DataFrame {
 	assetsCopy := make([]asset.Asset, assetLen)
 	copy(assetsCopy, df.assets)
 
-	return mustNewDataFrame(times, assetsCopy, matched, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, assetsCopy, matched, df.freq, newData))
 }
 
 // Between returns a new DataFrame containing only timestamps within the
@@ -902,7 +908,7 @@ func (df *DataFrame) elemWiseOp(other *DataFrame, apply func(dst, s, t []float64
 	times := make([]time.Time, timeLen)
 	copy(times, df.times)
 
-	return mustNewDataFrame(times, resAssets, resMetrics, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, resAssets, resMetrics, df.freq, newData))
 }
 
 // Add returns a new DataFrame with element-wise addition of two DataFrames
@@ -1084,7 +1090,7 @@ func (df *DataFrame) MaxAcrossAssets() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData))
 }
 
 // MinAcrossAssets returns a new DataFrame with the minimum value across all
@@ -1125,7 +1131,7 @@ func (df *DataFrame) MinAcrossAssets() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData))
 }
 
 // IdxMaxAcrossAssets returns, for each timestamp, the asset that holds the
@@ -1657,7 +1663,7 @@ func (df *DataFrame) Apply(transform func([]float64) []float64) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	return df.propagateAux(mustNewDataFrame(times, assets, metrics, df.freq, newData))
 }
 
 // AppendRow appends a single timestamp and its column values to the
