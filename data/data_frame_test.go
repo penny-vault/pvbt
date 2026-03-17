@@ -1604,6 +1604,181 @@ var _ = Describe("DataFrame", func() {
 				Expect(df.Column(aapl, data.Price)[0]).To(Equal(orig))
 			})
 		})
+
+		Describe("propagation", func() {
+			It("propagates through Apply-based methods (Pct, MulScalar chain)", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Pct().MulScalar(100)
+				Expect(result.RiskFreeRates()).To(Equal(rates))
+			})
+
+			It("propagates through Assets narrowing", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Assets(aapl)
+				Expect(result.RiskFreeRates()).To(Equal(rates))
+			})
+
+			It("propagates through Metrics narrowing", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Metrics(data.Price)
+				Expect(result.RiskFreeRates()).To(Equal(rates))
+			})
+
+			It("propagates through elemWiseOp (Add without metrics)", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Add(df)
+				Expect(result.RiskFreeRates()).To(Equal(rates))
+			})
+
+			It("deep-copies risk-free rates through Copy", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				copied := df.Copy()
+				Expect(copied.RiskFreeRates()).To(Equal(rates))
+
+				// Mutating the copy's rates must not affect the original.
+				copied.RiskFreeRates()[0] = 999.0
+				Expect(df.RiskFreeRates()[0]).To(Equal(100.0))
+			})
+
+			It("propagates through MaxAcrossAssets", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.MaxAcrossAssets()
+				Expect(result.RiskFreeRates()).To(Equal(rates))
+			})
+
+			It("slices risk-free rates through Between", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Between(times[1], times[3])
+				Expect(result.RiskFreeRates()).To(Equal([]float64{100.02, 100.04, 100.06}))
+			})
+
+			It("slices risk-free rates through Filter", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Filter(func(t time.Time, _ *data.DataFrame) bool {
+					return t.Equal(times[0]) || t.Equal(times[4])
+				})
+				Expect(result.RiskFreeRates()).To(Equal([]float64{100.0, 100.08}))
+			})
+
+			It("slices risk-free rates through Drop", func() {
+				vals := []float64{math.NaN(), 101, 102, 103, 104}
+				ndf, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
+				Expect(err).NotTo(HaveOccurred())
+
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(ndf.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := ndf.Drop(math.NaN())
+				Expect(result.Len()).To(Equal(4))
+				Expect(result.RiskFreeRates()).To(Equal([]float64{100.02, 100.04, 100.06, 100.08}))
+			})
+
+			It("slices risk-free rates for At (single row)", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.At(times[2])
+				Expect(result.RiskFreeRates()).To(Equal([]float64{100.04}))
+			})
+
+			It("AppendRow invalidates risk-free rates", func() {
+				singleAsset, err := data.NewDataFrame(
+					times[:2],
+					[]asset.Asset{aapl},
+					[]data.Metric{data.Price},
+					data.Daily,
+					[]float64{100, 101},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(singleAsset.SetRiskFreeRates([]float64{100.0, 100.02})).To(Succeed())
+
+				newTime := times[2]
+				Expect(singleAsset.AppendRow(newTime, []float64{102})).To(Succeed())
+				Expect(singleAsset.RiskFreeRates()).To(BeNil())
+			})
+
+			It("does not propagate through Mean aggregation", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Mean()
+				Expect(result.RiskFreeRates()).To(BeNil())
+			})
+
+			It("does not propagate through Reduce aggregation", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.Reduce(func(col []float64) float64 { return col[0] })
+				Expect(result.RiskFreeRates()).To(BeNil())
+			})
+
+			It("MergeTimes concatenates risk-free rates", func() {
+				df1, err := data.NewDataFrame(
+					times[:2],
+					[]asset.Asset{aapl},
+					[]data.Metric{data.Price},
+					data.Daily,
+					[]float64{100, 101},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(df1.SetRiskFreeRates([]float64{100.0, 100.02})).To(Succeed())
+
+				df2, err := data.NewDataFrame(
+					times[2:4],
+					[]asset.Asset{aapl},
+					[]data.Metric{data.Price},
+					data.Daily,
+					[]float64{102, 103},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(df2.SetRiskFreeRates([]float64{100.04, 100.06})).To(Succeed())
+
+				merged, err := data.MergeTimes(df1, df2)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(merged.RiskFreeRates()).To(Equal([]float64{100.0, 100.02, 100.04, 100.06}))
+			})
+
+			It("MergeTimes without risk-free rates returns nil rates", func() {
+				df1, err := data.NewDataFrame(
+					times[:2],
+					[]asset.Asset{aapl},
+					[]data.Metric{data.Price},
+					data.Daily,
+					[]float64{100, 101},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				df2, err := data.NewDataFrame(
+					times[2:4],
+					[]asset.Asset{aapl},
+					[]data.Metric{data.Price},
+					data.Daily,
+					[]float64{102, 103},
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				merged, err := data.MergeTimes(df1, df2)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(merged.RiskFreeRates()).To(BeNil())
+			})
+		})
 	})
 })
 

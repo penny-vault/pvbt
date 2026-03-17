@@ -627,7 +627,11 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, df.metrics)
 
-	return mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	result := mustNewDataFrame(times, assets, metrics, df.freq, newData)
+	if df.riskFreeRates != nil {
+		result.riskFreeRates = df.riskFreeRates[startIdx:endIdx]
+	}
+	return result
 }
 
 // Filter returns a new DataFrame keeping only the timestamps for which fn

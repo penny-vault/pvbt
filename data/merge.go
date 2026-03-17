@@ -148,5 +148,26 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 		tOffset += fTimeLen
 	}
 
-	return NewDataFrame(allTimes, assets, metrics, sorted[0].freq, newData)
+	result, err := NewDataFrame(allTimes, assets, metrics, sorted[0].freq, newData)
+	if err != nil {
+		return nil, err
+	}
+
+	// Concatenate risk-free rates if all frames have them.
+	allHaveRF := true
+	for _, f := range sorted {
+		if f.RiskFreeRates() == nil {
+			allHaveRF = false
+			break
+		}
+	}
+	if allHaveRF {
+		rfConcat := make([]float64, 0, totalLen)
+		for _, f := range sorted {
+			rfConcat = append(rfConcat, f.RiskFreeRates()...)
+		}
+		_ = result.SetRiskFreeRates(rfConcat)
+	}
+
+	return result, nil
 }
