@@ -646,7 +646,13 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 	shadowBroker.SetPriceProvider(e, predictedDate)
 
 	// Run Compute.
-	if err := e.strategy.Compute(ctx, e, clone); err != nil {
+	computeLogger := zerolog.Ctx(ctx).With().
+		Str("strategy", e.strategy.Name()).
+		Time("date", predictedDate).
+		Logger()
+	computeCtx := computeLogger.WithContext(ctx)
+
+	if err := e.strategy.Compute(computeCtx, e, clone); err != nil {
 		return nil, fmt.Errorf("engine: PredictedPortfolio compute on %v: %w",
 			predictedDate, err)
 	}
