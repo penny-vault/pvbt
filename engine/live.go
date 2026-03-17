@@ -89,7 +89,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 		e.riskFreeAssetDGS = dgs3mo
 	}
 
-	// Pre-compute the cumulative risk-free series with a 5-year lookback.
+	// Pre-fetch the raw risk-free yield series with a 5-year lookback.
 	if e.riskFreeResolved {
 		lookbackStart := time.Now().AddDate(-5, 0, 0)
 		rfDF, rfFetchErr := e.fetchRange(ctx, []asset.Asset{e.riskFreeAssetDGS}, []data.Metric{data.MetricClose}, lookbackStart, time.Now())
@@ -99,14 +99,11 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 			e.riskFreeTimes = make([]time.Time, rfDF.Len())
 			copy(e.riskFreeTimes, rfDF.Times())
 			e.riskFreeValues = make([]float64, rfDF.Len())
+			copy(e.riskFreeValues, rfCol)
 			e.riskFreeIndex = make(map[time.Time]int, rfDF.Len())
 
-			cumulative := 0.0
-			for i, yield := range rfCol {
-				cumulative = portfolio.YieldToCumulative(yield, cumulative)
-				e.riskFreeValues[i] = cumulative
-				t := e.riskFreeTimes[i]
-				e.riskFreeIndex[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)] = i
+			for idx, t := range e.riskFreeTimes {
+				e.riskFreeIndex[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)] = idx
 			}
 		}
 	}
@@ -261,17 +258,18 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 					} else if e.riskFreeCumulative == 0 {
 						e.riskFreeCumulative = 100.0
 					}
+
+					// Append the raw yield for RiskAdjustedPct.
+					e.riskFreeTimes = append(e.riskFreeTimes, e.currentDate)
+					e.riskFreeValues = append(e.riskFreeValues, yield)
+
+					rfKey := time.Date(e.currentDate.Year(), e.currentDate.Month(), e.currentDate.Day(), 0, 0, 0, 0, time.UTC)
+					if e.riskFreeIndex == nil {
+						e.riskFreeIndex = make(map[time.Time]int)
+					}
+
+					e.riskFreeIndex[rfKey] = len(e.riskFreeValues) - 1
 				}
-
-				e.riskFreeTimes = append(e.riskFreeTimes, e.currentDate)
-				e.riskFreeValues = append(e.riskFreeValues, e.riskFreeCumulative)
-
-				rfKey := time.Date(e.currentDate.Year(), e.currentDate.Month(), e.currentDate.Day(), 0, 0, 0, 0, time.UTC)
-				if e.riskFreeIndex == nil {
-					e.riskFreeIndex = make(map[time.Time]int)
-				}
-
-				e.riskFreeIndex[rfKey] = len(e.riskFreeValues) - 1
 			}
 
 			acct.SetRiskFreeValue(e.riskFreeCumulative)

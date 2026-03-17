@@ -48,6 +48,25 @@ func (f Frequency) String() string {
 	}
 }
 
+// PeriodsPerYear returns the approximate number of periods per year for this
+// frequency. Used to convert annualized rates to per-period rates.
+func (f Frequency) PeriodsPerYear() float64 {
+	switch f {
+	case Daily:
+		return 252
+	case Weekly:
+		return 52
+	case Monthly:
+		return 12
+	case Quarterly:
+		return 4
+	case Yearly:
+		return 1
+	default:
+		return 252 // default to daily
+	}
+}
+
 // ParseFrequency converts a string back to a Frequency constant.
 func ParseFrequency(freqStr string) (Frequency, error) {
 	switch freqStr {

@@ -98,22 +98,22 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		e.riskFreeAssetDGS = dgs3mo
 	}
 
-	// Pre-compute the full cumulative risk-free series for the backtest range.
+	// Pre-fetch the raw risk-free yield series extending before the backtest
+	// start so strategies with lookback windows have risk-free data available.
 	if e.riskFreeResolved {
-		rfDF, rfFetchErr := e.fetchRange(ctx, []asset.Asset{e.riskFreeAssetDGS}, []data.Metric{data.MetricClose}, start, end)
+		rfStart := start.AddDate(-2, 0, 0)
+
+		rfDF, rfFetchErr := e.fetchRange(ctx, []asset.Asset{e.riskFreeAssetDGS}, []data.Metric{data.MetricClose}, rfStart, end)
 		if rfFetchErr == nil && rfDF.Len() > 0 {
 			rfCol := rfDF.Column(e.riskFreeAssetDGS, data.MetricClose)
 			e.riskFreeTimes = make([]time.Time, rfDF.Len())
 			copy(e.riskFreeTimes, rfDF.Times())
 			e.riskFreeValues = make([]float64, rfDF.Len())
+			copy(e.riskFreeValues, rfCol)
 			e.riskFreeIndex = make(map[time.Time]int, rfDF.Len())
 
-			cumulative := 0.0
-			for i, yield := range rfCol {
-				cumulative = portfolio.YieldToCumulative(yield, cumulative)
-				e.riskFreeValues[i] = cumulative
-				t := e.riskFreeTimes[i]
-				e.riskFreeIndex[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)] = i
+			for idx, t := range e.riskFreeTimes {
+				e.riskFreeIndex[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)] = idx
 			}
 		}
 	}

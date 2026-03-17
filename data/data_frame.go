@@ -61,8 +61,9 @@ type DataFrame struct {
 	// freq holds the data resolution of this DataFrame.
 	freq Frequency
 
-	// riskFreeRates holds cumulative risk-free values aligned with times.
-	// Shared by pointer across same-time-axis transformations.
+	// riskFreeRates holds raw annualized risk-free yields (e.g. DGS3MO)
+	// aligned with times. Used by RiskAdjustedPct to subtract the
+	// risk-free return. Shared by pointer across same-time-axis transformations.
 	riskFreeRates []float64
 }
 
@@ -79,7 +80,7 @@ func WithErr(err error) *DataFrame {
 	return &DataFrame{err: err}
 }
 
-// SetRiskFreeRates attaches cumulative risk-free rate values to the DataFrame.
+// SetRiskFreeRates attaches raw annualized risk-free yields to the DataFrame.
 // Returns an error if len(rates) != df.Len().
 func (df *DataFrame) SetRiskFreeRates(rates []float64) error {
 	if len(rates) != len(df.times) {
@@ -1460,6 +1461,7 @@ func (df *DataFrame) RiskAdjustedPct(periods ...int) *DataFrame {
 	}
 
 	rf := df.riskFreeRates
+	periodsPerYear := df.freq.PeriodsPerYear()
 
 	return df.Apply(func(col []float64) []float64 {
 		out := make([]float64, len(col))
@@ -1471,14 +1473,14 @@ func (df *DataFrame) RiskAdjustedPct(periods ...int) *DataFrame {
 		for tsIdx := period; tsIdx < len(col); tsIdx++ {
 			pctChange := (col[tsIdx] - col[tsIdx-period]) / col[tsIdx-period]
 
-			var rfChange float64
-			if rf[tsIdx-period] == 0 {
-				rfChange = math.NaN()
-			} else {
-				rfChange = (rf[tsIdx] - rf[tsIdx-period]) / rf[tsIdx-period]
+			// Sum the raw annualized yields over the n-period window,
+			// then convert from annualized percent to per-period decimal.
+			rfSum := 0.0
+			for windowIdx := tsIdx - period + 1; windowIdx <= tsIdx; windowIdx++ {
+				rfSum += rf[windowIdx]
 			}
 
-			out[tsIdx] = pctChange - rfChange
+			out[tsIdx] = pctChange - rfSum/periodsPerYear/100.0
 		}
 
 		return out
