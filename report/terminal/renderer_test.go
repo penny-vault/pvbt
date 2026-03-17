@@ -75,6 +75,7 @@ func TestRenderFullReport(t *testing.T) {
 			BenchmarkValues: []float64{100000, 110000},
 		},
 		RecentReturns: report.ReturnTable{
+			AsOf:      time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 			Periods:   []string{"1D", "1W", "1M", "WTD", "MTD", "YTD"},
 			Strategy:  []float64{0.001, 0.005, 0.01, 0.008, 0.009, 0.10},
 			Benchmark: []float64{0.0005, 0.003, 0.005, 0.004, 0.005, 0.08},
@@ -174,7 +175,7 @@ func TestRenderFullReport(t *testing.T) {
 	// Verify key sections appear in the output.
 	for _, section := range []string{
 		"Performance",
-		"Recent Returns",
+		"Recent Returns (as of 2025-01-01)",
 		"Returns",
 		"Annual Returns",
 		"Risk Metrics",

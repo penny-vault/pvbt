@@ -26,7 +26,12 @@ import (
 const colWidth = 16
 
 func renderRecentReturns(builder *strings.Builder, table report.ReturnTable, hasBenchmark bool) {
-	renderReturnTable("Recent Returns", builder, table, hasBenchmark)
+	title := "Recent Returns"
+	if !table.AsOf.IsZero() {
+		title = fmt.Sprintf("Recent Returns (as of %s)", table.AsOf.Format("2006-01-02"))
+	}
+
+	renderReturnTable(title, builder, table, hasBenchmark)
 }
 
 func renderReturns(builder *strings.Builder, table report.ReturnTable, hasBenchmark bool) {

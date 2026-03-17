@@ -82,6 +82,7 @@ type EquityCurve struct {
 
 // ReturnTable holds return figures for named periods.
 type ReturnTable struct {
+	AsOf      time.Time
 	Periods   []string
 	Strategy  []float64
 	Benchmark []float64
@@ -306,10 +307,16 @@ func buildRecentReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[
 		{"YTD", ytd},
 	}
 
+	pd := acct.PerfData()
+
 	result := ReturnTable{
 		Periods:   make([]string, len(defs)),
 		Strategy:  make([]float64, len(defs)),
 		Benchmark: make([]float64, len(defs)),
+	}
+
+	if pd != nil && pd.Len() > 0 {
+		result.AsOf = pd.End()
 	}
 
 	for idx, def := range defs {
@@ -358,6 +365,7 @@ func buildReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]strin
 	}
 
 	result := ReturnTable{
+		AsOf:      backtestEnd,
 		Periods:   make([]string, len(defs)),
 		Strategy:  make([]float64, len(defs)),
 		Benchmark: make([]float64, len(defs)),
