@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-03-17
+
 ### Added
 
 - Display rich backtest report with performance chart, recent returns, annualized returns, annual/monthly returns, risk metrics, drawdowns, and trade log
