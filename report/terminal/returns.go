@@ -23,48 +23,51 @@ import (
 	"github.com/penny-vault/pvbt/report"
 )
 
-const colWidth = 12
+const colWidth = 16
 
-// renderTrailingReturns writes the trailing returns table.
-func renderTrailingReturns(builder *strings.Builder, trailing report.TrailingReturns, hasBenchmark bool) {
-	if len(trailing.Periods) == 0 {
+func renderRecentReturns(builder *strings.Builder, table report.ReturnTable, hasBenchmark bool) {
+	renderReturnTable("Recent Returns", builder, table, hasBenchmark)
+}
+
+func renderReturns(builder *strings.Builder, table report.ReturnTable, hasBenchmark bool) {
+	renderReturnTable("Returns", builder, table, hasBenchmark)
+}
+
+func renderReturnTable(title string, builder *strings.Builder, table report.ReturnTable, hasBenchmark bool) {
+	if len(table.Periods) == 0 {
 		return
 	}
 
-	builder.WriteString(sectionTitleStyle.Render("Trailing Returns"))
+	builder.WriteString(sectionTitleStyle.Render(title))
 	builder.WriteString("\n")
 
-	// Header row.
 	header := padRight(labelStyle.Render(""), colWidth)
-	for _, period := range trailing.Periods {
+	for _, period := range table.Periods {
 		header += padLeft(tableHeaderStyle.Render(period), colWidth)
 	}
 
 	builder.WriteString("  " + header + "\n")
 
-	// Strategy row.
 	stratRow := padRight(labelStyle.Render("Strategy"), colWidth)
-	for _, val := range trailing.Strategy {
+	for _, val := range table.Strategy {
 		stratRow += padLeft(fmtPct(val), colWidth)
 	}
 
 	builder.WriteString("  " + stratRow + "\n")
 
-	// Benchmark row (if present).
 	if hasBenchmark {
 		benchRow := padRight(labelStyle.Render("Benchmark"), colWidth)
-		for _, val := range trailing.Benchmark {
+		for _, val := range table.Benchmark {
 			benchRow += padLeft(fmtPct(val), colWidth)
 		}
 
 		builder.WriteString("  " + benchRow + "\n")
 
-		// Diff row.
 		diffRow := padRight(labelStyle.Render("+/-"), colWidth)
 
-		for idx := range trailing.Strategy {
-			diff := trailing.Strategy[idx] - trailing.Benchmark[idx]
-			if math.IsNaN(trailing.Strategy[idx]) || math.IsNaN(trailing.Benchmark[idx]) {
+		for idx := range table.Strategy {
+			diff := table.Strategy[idx] - table.Benchmark[idx]
+			if math.IsNaN(table.Strategy[idx]) || math.IsNaN(table.Benchmark[idx]) {
 				diff = math.NaN()
 			}
 

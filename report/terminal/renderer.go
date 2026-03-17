@@ -41,7 +41,8 @@ func Render(rpt report.Report, writer io.Writer) error {
 
 	// Full report sections.
 	renderEquityCurve(&builder, rpt.EquityCurve, rpt.HasBenchmark)
-	renderTrailingReturns(&builder, rpt.TrailingReturns, rpt.HasBenchmark)
+	renderRecentReturns(&builder, rpt.RecentReturns, rpt.HasBenchmark)
+	renderReturns(&builder, rpt.Returns, rpt.HasBenchmark)
 	renderAnnualReturns(&builder, rpt.AnnualReturns, rpt.HasBenchmark)
 	renderRisk(&builder, rpt.Risk, rpt.HasBenchmark)
 

@@ -42,7 +42,8 @@ type Report struct {
 	Header          Header
 	HasBenchmark    bool
 	EquityCurve     EquityCurve
-	TrailingReturns TrailingReturns
+	RecentReturns   ReturnTable
+	Returns         ReturnTable
 	AnnualReturns   AnnualReturns
 	Risk            Risk
 	RiskVsBenchmark RiskVsBenchmark
@@ -79,9 +80,9 @@ type EquityCurve struct {
 	BenchmarkValues []float64 // normalized to InitialCash
 }
 
-// TrailingReturns holds trailing return figures for named periods.
-type TrailingReturns struct {
-	Periods   []string // "1M","3M","6M","YTD","1Y","Since Inception"
+// ReturnTable holds return figures for named periods.
+type ReturnTable struct {
+	Periods   []string
 	Strategy  []float64
 	Benchmark []float64
 }
@@ -220,8 +221,8 @@ func Build(acct portfolio.Portfolio, info engine.StrategyInfo, meta RunMeta) (Re
 	// Equity curve.
 	report.EquityCurve = buildEquityCurve(perfData, meta.InitialCash)
 
-	// Trailing returns.
-	report.TrailingReturns = buildTrailingReturns(acct, hasBenchmark, &warnings)
+	// Trailing returns -- buildTrailingReturns will be replaced in a follow-up.
+	_ = buildTrailingReturns(acct, hasBenchmark, &warnings)
 
 	// Annual returns.
 	report.AnnualReturns = buildAnnualReturns(acct, hasBenchmark, &warnings)
@@ -282,7 +283,7 @@ func buildEquityCurve(perfData *data.DataFrame, initialCash float64) EquityCurve
 	}
 }
 
-func buildTrailingReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) TrailingReturns {
+func buildTrailingReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
 	type trailingDef struct {
 		label  string
 		window *portfolio.Period
@@ -303,7 +304,7 @@ func buildTrailingReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings 
 		{"Since Inception", nil},
 	}
 
-	result := TrailingReturns{
+	result := ReturnTable{
 		Periods:   make([]string, len(defs)),
 		Strategy:  make([]float64, len(defs)),
 		Benchmark: make([]float64, len(defs)),

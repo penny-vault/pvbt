@@ -17,6 +17,7 @@ package terminal_test
 
 import (
 	"bytes"
+	"math"
 	"testing"
 	"time"
 
@@ -73,10 +74,15 @@ func TestRenderFullReport(t *testing.T) {
 			StrategyValues:  []float64{100000, 120000},
 			BenchmarkValues: []float64{100000, 110000},
 		},
-		TrailingReturns: report.TrailingReturns{
-			Periods:   []string{"1M", "3M", "6M", "YTD", "1Y", "Since Inception"},
-			Strategy:  []float64{0.01, 0.03, 0.06, 0.10, 0.20, 0.20},
-			Benchmark: []float64{0.005, 0.02, 0.04, 0.08, 0.10, 0.10},
+		RecentReturns: report.ReturnTable{
+			Periods:   []string{"1D", "1W", "1M", "WTD", "MTD", "YTD"},
+			Strategy:  []float64{0.001, 0.005, 0.01, 0.008, 0.009, 0.10},
+			Benchmark: []float64{0.0005, 0.003, 0.005, 0.004, 0.005, 0.08},
+		},
+		Returns: report.ReturnTable{
+			Periods:   []string{"1Y", "3Y", "5Y", "10Y", "Since Inception"},
+			Strategy:  []float64{0.20, math.NaN(), math.NaN(), math.NaN(), 0.20},
+			Benchmark: []float64{0.10, math.NaN(), math.NaN(), math.NaN(), 0.10},
 		},
 		AnnualReturns: report.AnnualReturns{
 			Years:     []int{2024},
@@ -168,7 +174,8 @@ func TestRenderFullReport(t *testing.T) {
 	// Verify key sections appear in the output.
 	for _, section := range []string{
 		"Performance",
-		"Trailing Returns",
+		"Recent Returns",
+		"Returns",
 		"Annual Returns",
 		"Risk Metrics",
 		"Risk vs Benchmark",
