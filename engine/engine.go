@@ -45,6 +45,9 @@ type Engine struct {
 	riskFreeResolved   bool
 	riskFreeAssetDGS   asset.Asset
 	riskFreeCumulative float64
+	riskFreeTimes      []time.Time
+	riskFreeValues     []float64
+	riskFreeIndex      map[time.Time]int // date -> index into riskFreeValues, built once during init
 
 	// configuration (set via options, used during init)
 	cacheMaxBytes  int64
@@ -346,6 +349,39 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 	}
 
 	return result, nil
+}
+
+// sliceRiskFree returns the cumulative risk-free values for the given
+// timestamps. Returns nil if no risk-free series is available or if
+// timestamps fall outside the precomputed range. Uses the pre-built
+// riskFreeIndex for O(1) lookups with binary-search forward-fill fallback.
+func (e *Engine) sliceRiskFree(timestamps []time.Time) []float64 {
+	if len(e.riskFreeTimes) == 0 || len(timestamps) == 0 {
+		return nil
+	}
+
+	result := make([]float64, len(timestamps))
+
+	for i, t := range timestamps {
+		key := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+		if idx, ok := e.riskFreeIndex[key]; ok {
+			result[i] = e.riskFreeValues[idx]
+		} else {
+			// Forward-fill: binary search for the most recent prior date.
+			searchKey := key
+			bestIdx := sort.Search(len(e.riskFreeTimes), func(j int) bool {
+				rfDate := e.riskFreeTimes[j]
+				return rfDate.After(searchKey)
+			}) - 1
+			if bestIdx >= 0 {
+				result[i] = e.riskFreeValues[bestIdx]
+			} else {
+				result[i] = math.NaN()
+			}
+		}
+	}
+
+	return result
 }
 
 // fetchRange is the shared implementation for Fetch and FetchAt.

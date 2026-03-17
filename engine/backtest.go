@@ -86,6 +86,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
+	e.cache = newDataCache(e.cacheMaxBytes)
+
 	// Resolve DGS3MO as the system risk-free rate.
 	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
 	if rfErr != nil {
@@ -95,10 +98,27 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		e.riskFreeAssetDGS = dgs3mo
 	}
 
-	e.riskFreeCumulative = 0
+	// Pre-compute the full cumulative risk-free series for the backtest range.
+	if e.riskFreeResolved {
+		rfDF, rfFetchErr := e.fetchRange(ctx, []asset.Asset{e.riskFreeAssetDGS}, []data.Metric{data.MetricClose}, start, end)
+		if rfFetchErr == nil && rfDF.Len() > 0 {
+			rfCol := rfDF.Column(e.riskFreeAssetDGS, data.MetricClose)
+			e.riskFreeTimes = make([]time.Time, rfDF.Len())
+			copy(e.riskFreeTimes, rfDF.Times())
+			e.riskFreeValues = make([]float64, rfDF.Len())
+			e.riskFreeIndex = make(map[time.Time]int, rfDF.Len())
 
-	// 7. Initialize data cache.
-	e.cache = newDataCache(e.cacheMaxBytes)
+			cumulative := 0.0
+			for i, yield := range rfCol {
+				cumulative = portfolio.YieldToCumulative(yield, cumulative)
+				e.riskFreeValues[i] = cumulative
+				t := e.riskFreeTimes[i]
+				e.riskFreeIndex[time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)] = i
+			}
+		}
+	}
+
+	e.riskFreeCumulative = 0
 
 	// 8. Store start/end on engine.
 	e.start = start
