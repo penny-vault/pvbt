@@ -79,7 +79,19 @@ func (d *DownsampledDataFrame) aggregate(reducer func([]float64) float64) *DataF
 	metrics := make([]Metric, metricLen)
 	copy(metrics, d.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, d.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, d.freq, newData)
+
+	if d.df.riskFreeRates != nil {
+		rfRates := make([]float64, newTimeLen)
+		for gIdx, timeGroup := range groups {
+			// Use the last cumulative risk-free value in each period.
+			rfRates[gIdx] = d.df.riskFreeRates[timeGroup.end-1]
+		}
+
+		result.riskFreeRates = rfRates
+	}
+
+	return result
 }
 
 // Mean returns a DataFrame with the mean of each group.

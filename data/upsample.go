@@ -97,7 +97,24 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+
+	if u.df.riskFreeRates != nil {
+		rfRates := make([]float64, len(newTimes))
+		rfSrcIdx := 0
+
+		for idx, timestamp := range newTimes {
+			for rfSrcIdx < len(u.df.times)-1 && !u.df.times[rfSrcIdx+1].After(timestamp) {
+				rfSrcIdx++
+			}
+
+			rfRates[idx] = u.df.riskFreeRates[rfSrcIdx]
+		}
+
+		result.riskFreeRates = rfRates
+	}
+
+	return result
 }
 
 // BackFill uses the next known value to fill gaps in the upsampled time axis.
@@ -134,7 +151,24 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+
+	if u.df.riskFreeRates != nil {
+		rfRates := make([]float64, len(newTimes))
+		rfSrcIdx := 0
+
+		for idx, timestamp := range newTimes {
+			for rfSrcIdx < len(u.df.times)-1 && u.df.times[rfSrcIdx].Before(timestamp) {
+				rfSrcIdx++
+			}
+
+			rfRates[idx] = u.df.riskFreeRates[rfSrcIdx]
+		}
+
+		result.riskFreeRates = rfRates
+	}
+
+	return result
 }
 
 // Interpolate linearly interpolates between known values to fill gaps
@@ -182,5 +216,31 @@ func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	return mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+
+	if u.df.riskFreeRates != nil {
+		rfRates := make([]float64, len(newTimes))
+		rfSrcIdx := 0
+
+		for idx, timestamp := range newTimes {
+			for rfSrcIdx < len(u.df.times)-1 && u.df.times[rfSrcIdx+1].Before(timestamp) {
+				rfSrcIdx++
+			}
+
+			if rfSrcIdx >= len(u.df.times)-1 || timestamp.Equal(u.df.times[rfSrcIdx]) {
+				rfRates[idx] = u.df.riskFreeRates[rfSrcIdx]
+			} else {
+				t0 := u.df.times[rfSrcIdx]
+				t1 := u.df.times[rfSrcIdx+1]
+				v0 := u.df.riskFreeRates[rfSrcIdx]
+				v1 := u.df.riskFreeRates[rfSrcIdx+1]
+				frac := float64(timestamp.Sub(t0)) / float64(t1.Sub(t0))
+				rfRates[idx] = v0 + frac*(v1-v0)
+			}
+		}
+
+		result.riskFreeRates = rfRates
+	}
+
+	return result
 }

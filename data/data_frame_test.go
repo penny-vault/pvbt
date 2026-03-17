@@ -1755,6 +1755,67 @@ var _ = Describe("DataFrame", func() {
 				Expect(merged.RiskFreeRates()).To(Equal([]float64{100.0, 100.02, 100.04, 100.06}))
 			})
 
+			It("Downsample preserves risk-free rates (last value per group)", func() {
+				// 10 daily values, downsampled to weekly (2 groups: 7 + 3)
+				base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+				dsTimes := make([]time.Time, 10)
+				dsVals := make([]float64, 10)
+				dsRates := make([]float64, 10)
+
+				for idx := range dsTimes {
+					dsTimes[idx] = base.AddDate(0, 0, idx)
+					dsVals[idx] = float64(idx + 1)
+					dsRates[idx] = 100.0 + float64(idx)*0.02
+				}
+
+				dsDF, err := data.NewDataFrame(dsTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, dsVals)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(dsDF.SetRiskFreeRates(dsRates)).To(Succeed())
+
+				result := dsDF.Downsample(data.Weekly).Last()
+				Expect(result.Len()).To(Equal(2))
+				// Last RF value of week 1 (index 6) and week 2 (index 9)
+				Expect(result.RiskFreeRates()).To(Equal([]float64{dsRates[6], dsRates[9]}))
+			})
+
+			It("Upsample ForwardFill preserves risk-free rates", func() {
+				usTimes := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+				}
+				usVals := []float64{100, 300}
+				usRates := []float64{100.0, 100.04}
+
+				usDF, err := data.NewDataFrame(usTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, usVals)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(usDF.SetRiskFreeRates(usRates)).To(Succeed())
+
+				result := usDF.Upsample(data.Daily).ForwardFill()
+				Expect(result.Len()).To(Equal(3))
+				// Jan 1 -> 100.0, Jan 2 (filled) -> 100.0, Jan 3 -> 100.04
+				Expect(result.RiskFreeRates()).To(Equal([]float64{100.0, 100.0, 100.04}))
+			})
+
+			It("Upsample Interpolate interpolates risk-free rates", func() {
+				usTimes := []time.Time{
+					time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+				}
+				usVals := []float64{100, 300}
+				usRates := []float64{100.0, 100.04}
+
+				usDF, err := data.NewDataFrame(usTimes, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, usVals)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(usDF.SetRiskFreeRates(usRates)).To(Succeed())
+
+				result := usDF.Upsample(data.Daily).Interpolate()
+				Expect(result.Len()).To(Equal(3))
+				// Jan 1 -> 100.0, Jan 2 (interpolated) -> 100.02, Jan 3 -> 100.04
+				Expect(result.RiskFreeRates()[0]).To(BeNumerically("~", 100.0, 1e-10))
+				Expect(result.RiskFreeRates()[1]).To(BeNumerically("~", 100.02, 1e-10))
+				Expect(result.RiskFreeRates()[2]).To(BeNumerically("~", 100.04, 1e-10))
+			})
+
 			It("MergeTimes without risk-free rates returns nil rates", func() {
 				df1, err := data.NewDataFrame(
 					times[:2],
