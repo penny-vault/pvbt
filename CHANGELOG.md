@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Capture backtest data access into portable SQLite snapshots for reproducible offline testing
 - Support index-based universes so strategies can filter by index membership
 - Add ForwardPE, PEG, PriceToCashFlow, and Beta metrics
+- Add `RiskAdjustedPct(n)` to DataFrame for computing percent change minus the risk-free return over the same period
+- Attach cumulative risk-free rate series to DataFrames returned by engine Fetch and FetchAt
 
 ### Changed
 

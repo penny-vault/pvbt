@@ -249,6 +249,8 @@ df.IdxMaxAcrossAssets()             // which asset has the max (returns []asset.
 ```go
 df.Pct()                            // percent change, 1-period default
 df.Pct(5)                           // 5-period percent change
+df.RiskAdjustedPct()                // percent change minus risk-free return, 1-period
+df.RiskAdjustedPct(5)               // 5-period risk-adjusted percent change
 df.Diff()                           // first difference
 df.Log()                            // natural logarithm
 df.CumSum()                         // cumulative sum
@@ -329,7 +331,12 @@ DataFrame operations return new DataFrames, so they chain naturally:
 ```go
 // 20-day rolling average of 5-period percent change for AAPL price
 result := df.Assets(aapl).Metrics(data.Price).Pct(5).Rolling(20).Mean()
+
+// Risk-adjusted momentum as a percentage
+momentum := prices.RiskAdjustedPct(1).MulScalar(100)
 ```
+
+`RiskAdjustedPct` subtracts the risk-free return over the same period from each column's percent change. The engine automatically attaches cumulative risk-free rate data (DGS3MO) to DataFrames returned by `Fetch`/`FetchAt` when a risk-free asset is configured. If no risk-free data is attached, `RiskAdjustedPct` sets an error on the returned DataFrame.
 
 ## Signals
 

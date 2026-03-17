@@ -211,7 +211,7 @@ eng.SetBenchmark(eng.Asset("SPY"))
 eng.RiskFreeAsset(eng.Asset("SHV"))
 ```
 
-The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio. The risk-free asset is used for Sharpe and Treynor ratios.
+The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio. The risk-free asset is used for Sharpe, Treynor, and `RiskAdjustedPct`. When a risk-free asset is configured, the engine pre-computes a cumulative risk-free series and attaches it to all DataFrames returned by `Fetch` and `FetchAt`, enabling `df.RiskAdjustedPct(n)` to subtract the risk-free return automatically.
 
 ### Asset lookup
 
@@ -346,6 +346,8 @@ normalized := df.Div(priceDF, data.MetricClose)
 ```go
 df.Pct()                // single-period percent change
 df.Pct(n)               // n-period percent change: (current - n ago) / n ago
+df.RiskAdjustedPct()    // percent change minus risk-free return
+df.RiskAdjustedPct(n)   // n-period risk-adjusted percent change
 df.Diff()               // first difference: current - previous
 df.Log()                // natural logarithm
 df.CumSum()             // cumulative sum
