@@ -221,8 +221,9 @@ func Build(acct portfolio.Portfolio, info engine.StrategyInfo, meta RunMeta) (Re
 	// Equity curve.
 	report.EquityCurve = buildEquityCurve(perfData, meta.InitialCash)
 
-	// Trailing returns -- buildTrailingReturns will be replaced in a follow-up.
-	_ = buildTrailingReturns(acct, hasBenchmark, &warnings)
+	// Returns.
+	report.RecentReturns = buildRecentReturns(acct, hasBenchmark, &warnings)
+	report.Returns = buildReturns(acct, hasBenchmark, &warnings)
 
 	// Annual returns.
 	report.AnnualReturns = buildAnnualReturns(acct, hasBenchmark, &warnings)
@@ -283,25 +284,77 @@ func buildEquityCurve(perfData *data.DataFrame, initialCash float64) EquityCurve
 	}
 }
 
-func buildTrailingReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
-	type trailingDef struct {
+func buildRecentReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
+	oneDay := portfolio.Days(1)
+	oneWeek := portfolio.Days(7)
+	oneMonth := portfolio.Months(1)
+	wtd := portfolio.WTD()
+	mtd := portfolio.MTD()
+	ytd := portfolio.YTD()
+
+	type periodDef struct {
 		label  string
-		window *portfolio.Period
+		window portfolio.Period
 	}
 
-	oneMonth := portfolio.Months(1)
-	threeMonths := portfolio.Months(3)
-	sixMonths := portfolio.Months(6)
-	ytd := portfolio.YTD()
-	oneYear := portfolio.Years(1)
+	defs := []periodDef{
+		{"1D", oneDay},
+		{"1W", oneWeek},
+		{"1M", oneMonth},
+		{"WTD", wtd},
+		{"MTD", mtd},
+		{"YTD", ytd},
+	}
 
-	defs := []trailingDef{
-		{"1M", &oneMonth},
-		{"3M", &threeMonths},
-		{"6M", &sixMonths},
-		{"YTD", &ytd},
-		{"1Y", &oneYear},
-		{"Since Inception", nil},
+	result := ReturnTable{
+		Periods:   make([]string, len(defs)),
+		Strategy:  make([]float64, len(defs)),
+		Benchmark: make([]float64, len(defs)),
+	}
+
+	for idx, def := range defs {
+		result.Periods[idx] = def.label
+		result.Strategy[idx] = metricValWindow(acct, portfolio.TWRR, def.window, warnings)
+
+		if hasBenchmark {
+			result.Benchmark[idx] = metricValBenchmarkWindow(acct, portfolio.TWRR, def.window, warnings)
+		} else {
+			result.Benchmark[idx] = math.NaN()
+		}
+	}
+
+	return result
+}
+
+func buildReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
+	perfData := acct.PerfData()
+
+	var backtestStart, backtestEnd time.Time
+
+	if perfData != nil && perfData.Len() > 0 {
+		backtestStart = perfData.Start()
+		backtestEnd = perfData.End()
+	}
+
+	backtestYears := backtestEnd.Sub(backtestStart).Hours() / 24 / 365.25
+
+	type periodDef struct {
+		label        string
+		window       *portfolio.Period
+		nominalYears float64
+	}
+
+	oneYear := portfolio.Years(1)
+	threeYears := portfolio.Years(3)
+	fiveYears := portfolio.Years(5)
+	tenYears := portfolio.Years(10)
+
+	defs := []periodDef{
+		{"1Y", &oneYear, 1},
+		{"3Y", &threeYears, 3},
+		{"5Y", &fiveYears, 5},
+		{"10Y", &tenYears, 10},
+		{"Since Inception", nil, 0},
 	}
 
 	result := ReturnTable{
@@ -313,20 +366,49 @@ func buildTrailingReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings 
 	for idx, def := range defs {
 		result.Periods[idx] = def.label
 
+		// N/A detection: check if the backtest covers the requested period.
 		if def.window != nil {
-			result.Strategy[idx] = metricValWindow(acct, portfolio.TWRR, *def.window, warnings)
+			windowStart := def.window.Before(backtestEnd)
+			if windowStart.Before(backtestStart) {
+				result.Strategy[idx] = math.NaN()
+				result.Benchmark[idx] = math.NaN()
+
+				continue
+			}
+		}
+
+		// Compute TWRR.
+		var stratTWRR, benchTWRR float64
+
+		if def.window != nil {
+			stratTWRR = metricValWindow(acct, portfolio.TWRR, *def.window, warnings)
 		} else {
-			result.Strategy[idx] = metricVal(acct, portfolio.TWRR, warnings)
+			stratTWRR = metricVal(acct, portfolio.TWRR, warnings)
 		}
 
 		if hasBenchmark {
 			if def.window != nil {
-				result.Benchmark[idx] = metricValBenchmarkWindow(acct, portfolio.TWRR, *def.window, warnings)
+				benchTWRR = metricValBenchmarkWindow(acct, portfolio.TWRR, *def.window, warnings)
 			} else {
-				result.Benchmark[idx] = metricValBenchmark(acct, portfolio.TWRR, warnings)
+				benchTWRR = metricValBenchmark(acct, portfolio.TWRR, warnings)
 			}
 		} else {
-			result.Benchmark[idx] = math.NaN()
+			benchTWRR = math.NaN()
+		}
+
+		// Annualize.
+		years := def.nominalYears
+		if years == 0 {
+			years = backtestYears
+		}
+
+		// For backtests shorter than 1 year, Since Inception shows raw TWRR.
+		if def.window == nil && backtestYears < 1.0 {
+			result.Strategy[idx] = stratTWRR
+			result.Benchmark[idx] = benchTWRR
+		} else {
+			result.Strategy[idx] = annualizeTWRR(stratTWRR, years)
+			result.Benchmark[idx] = annualizeTWRR(benchTWRR, years)
 		}
 	}
 
@@ -549,4 +631,13 @@ func metricValBenchmarkWindow(acct portfolio.Portfolio, metric portfolio.Perform
 	}
 
 	return val
+}
+
+// annualizeTWRR converts a cumulative TWRR to an annualized rate.
+func annualizeTWRR(twrr float64, years float64) float64 {
+	if math.IsNaN(twrr) || years <= 0 {
+		return math.NaN()
+	}
+
+	return math.Pow(1+twrr, 1.0/years) - 1
 }
