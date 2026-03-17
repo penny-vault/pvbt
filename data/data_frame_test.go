@@ -1539,6 +1539,71 @@ var _ = Describe("DataFrame", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(fresh.RiskFreeRates()).To(BeNil())
 		})
+
+		Describe("RiskAdjustedPct", func() {
+			It("computes 1-period risk-adjusted percent change by default", func() {
+				// prices: 100, 101, 102, 103, 104 (AAPL Price column)
+				// rf cumulative: 100, 100.02, 100.04, 100.06, 100.08
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.RiskAdjustedPct()
+				col := result.Column(aapl, data.Price)
+				Expect(math.IsNaN(col[0])).To(BeTrue())
+				// pct = (101-100)/100 = 0.01, rf = (100.02-100)/100 = 0.0002
+				Expect(col[1]).To(BeNumerically("~", 0.01-0.0002, 1e-10))
+			})
+
+			It("computes 3-period risk-adjusted percent change", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.RiskAdjustedPct(3)
+				col := result.Column(aapl, data.Price)
+				for i := 0; i < 3; i++ {
+					Expect(math.IsNaN(col[i])).To(BeTrue())
+				}
+				// pct = (103-100)/100 = 0.03, rf = (100.06-100)/100 = 0.0006
+				Expect(col[3]).To(BeNumerically("~", 0.03-0.0006, 1e-10))
+			})
+
+			It("returns error when no risk-free rates attached", func() {
+				fresh, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+				Expect(err).NotTo(HaveOccurred())
+				result := fresh.RiskAdjustedPct()
+				Expect(result.Err()).To(HaveOccurred())
+				Expect(result.Err().Error()).To(ContainSubstring("no risk-free rates"))
+			})
+
+			It("produces all NaN when period >= length", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.RiskAdjustedPct(500)
+				col := result.Column(aapl, data.Price)
+				for _, val := range col {
+					Expect(math.IsNaN(val)).To(BeTrue())
+				}
+			})
+
+			It("produces NaN when risk-free denominator is zero", func() {
+				rates := []float64{0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+
+				result := df.RiskAdjustedPct()
+				col := result.Column(aapl, data.Price)
+				// rf[0] == 0, so rf change at index 1 is NaN, so output is NaN
+				Expect(math.IsNaN(col[1])).To(BeTrue())
+			})
+
+			It("does not modify original", func() {
+				rates := []float64{100.0, 100.02, 100.04, 100.06, 100.08}
+				Expect(df.SetRiskFreeRates(rates)).To(Succeed())
+				orig := df.Column(aapl, data.Price)[0]
+				_ = df.RiskAdjustedPct()
+				Expect(df.Column(aapl, data.Price)[0]).To(Equal(orig))
+			})
+		})
 	})
 })
 

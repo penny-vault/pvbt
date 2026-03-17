@@ -16,6 +16,7 @@
 package data
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -1405,6 +1406,50 @@ func (df *DataFrame) Pct(periods ...int) *DataFrame {
 
 		for i := period; i < len(col); i++ {
 			out[i] = (col[i] - col[i-period]) / col[i-period]
+		}
+
+		return out
+	})
+}
+
+// RiskAdjustedPct returns the risk-adjusted percent change over n periods.
+// It subtracts the risk-free return over the same period from each column's
+// percent change. If no risk-free rates are attached, sets an error on the
+// returned DataFrame. Default period is 1.
+func (df *DataFrame) RiskAdjustedPct(periods ...int) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	if df.riskFreeRates == nil {
+		return WithErr(errors.New("RiskAdjustedPct: no risk-free rates attached"))
+	}
+
+	period := 1
+	if len(periods) > 0 {
+		period = periods[0]
+	}
+
+	rf := df.riskFreeRates
+
+	return df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+
+		for i := 0; i < period && i < len(col); i++ {
+			out[i] = math.NaN()
+		}
+
+		for i := period; i < len(col); i++ {
+			pctChange := (col[i] - col[i-period]) / col[i-period]
+
+			var rfChange float64
+			if rf[i-period] == 0 {
+				rfChange = math.NaN()
+			} else {
+				rfChange = (rf[i] - rf[i-period]) / rf[i-period]
+			}
+
+			out[i] = pctChange - rfChange
 		}
 
 		return out
