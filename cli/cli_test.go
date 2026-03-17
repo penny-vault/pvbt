@@ -23,7 +23,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -50,6 +49,29 @@ func (s *universeStrategy) Name() string           { return "universeTest" }
 func (s *universeStrategy) Setup(e *engine.Engine) {}
 func (s *universeStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
+}
+
+// buildTestCmd creates a root + subcommand tree that mirrors cli.Run,
+// wiring registerStrategyFlags and applyStrategyFlags through cobra
+// the same way the real backtest/live/snapshot commands do.
+func buildTestCmd(strategy engine.Strategy, runBody func()) (*cobra.Command, *cobra.Command) {
+	rootCmd := &cobra.Command{Use: "test-strategy"}
+	subCmd := &cobra.Command{
+		Use: "backtest",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			applyStrategyFlags(cmd, strategy)
+			if runBody != nil {
+				runBody()
+			}
+
+			return nil
+		},
+	}
+
+	registerStrategyFlags(subCmd, strategy)
+	rootCmd.AddCommand(subCmd)
+
+	return rootCmd, subCmd
 }
 
 var _ = Describe("runID", func() {
@@ -134,15 +156,12 @@ var _ = Describe("registerStrategyFlags", func() {
 })
 
 var _ = Describe("applyStrategyFlags", func() {
-	It("sets struct fields from viper values", func() {
+	It("sets struct fields from parsed cobra flags", func() {
 		strategy := &testStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
 
-		// Reset viper to avoid pollution between tests.
-		viper.Reset()
-		viper.Set("lookback", 120)
-		viper.Set("threshold", 0.75)
-
-		applyStrategyFlags(strategy)
+		rootCmd.SetArgs([]string{"backtest", "--lookback", "120", "--threshold", "0.75"})
+		Expect(rootCmd.Execute()).To(Succeed())
 
 		Expect(strategy.Lookback).To(Equal(120))
 		Expect(strategy.Threshold).To(BeNumerically("~", 0.75, 1e-10))
@@ -169,14 +188,12 @@ var _ = Describe("registerStrategyFlags with universe fields", func() {
 })
 
 var _ = Describe("applyStrategyFlags with universe fields", func() {
-	It("creates a StaticUniverse from comma-separated tickers", func() {
+	It("creates a StaticUniverse from user-provided flags", func() {
 		strategy := &universeStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
 
-		viper.Reset()
-		viper.Set("risk-on", "VOO,SCZ,GLD")
-		viper.Set("risk-off", "TLT")
-
-		applyStrategyFlags(strategy)
+		rootCmd.SetArgs([]string{"backtest", "--risk-on", "VOO,SCZ,GLD", "--risk-off", "AGG"})
+		Expect(rootCmd.Execute()).To(Succeed())
 
 		Expect(strategy.RiskOn).NotTo(BeNil())
 		members := strategy.RiskOn.Assets(time.Time{})
@@ -188,17 +205,15 @@ var _ = Describe("applyStrategyFlags with universe fields", func() {
 		Expect(strategy.RiskOff).NotTo(BeNil())
 		offMembers := strategy.RiskOff.Assets(time.Time{})
 		Expect(offMembers).To(HaveLen(1))
-		Expect(offMembers[0].Ticker).To(Equal("TLT"))
+		Expect(offMembers[0].Ticker).To(Equal("AGG"))
 	})
 
-	It("trims whitespace around tickers", func() {
+	It("trims whitespace and upper-cases tickers", func() {
 		strategy := &universeStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
 
-		viper.Reset()
-		viper.Set("risk-on", " SPY , GLD ")
-		viper.Set("risk-off", "TLT")
-
-		applyStrategyFlags(strategy)
+		rootCmd.SetArgs([]string{"backtest", "--risk-on", " spy , gld "})
+		Expect(rootCmd.Execute()).To(Succeed())
 
 		members := strategy.RiskOn.Assets(time.Time{})
 		Expect(members).To(HaveLen(2))
@@ -206,16 +221,85 @@ var _ = Describe("applyStrategyFlags with universe fields", func() {
 		Expect(members[1].Ticker).To(Equal("GLD"))
 	})
 
-	It("skips universe fields when viper value is empty", func() {
+	It("uses default tickers when flag is not provided", func() {
+		strategy := &universeStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.RiskOn).NotTo(BeNil())
+		members := strategy.RiskOn.Assets(time.Time{})
+		Expect(members).To(HaveLen(2))
+		Expect(members[0].Ticker).To(Equal("SPY"))
+		Expect(members[1].Ticker).To(Equal("GLD"))
+	})
+
+	It("does not silently fall back to defaults when user provides flags", func() {
+		strategy := &universeStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest", "--risk-on", "AAPL,MSFT,GOOG", "--risk-off", "BND"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		members := strategy.RiskOn.Assets(time.Time{})
+		tickers := make([]string, len(members))
+		for idx, member := range members {
+			tickers[idx] = member.Ticker
+		}
+
+		Expect(tickers).NotTo(ContainElement("SPY"), "still using default ticker SPY")
+		Expect(tickers).NotTo(ContainElement("GLD"), "still using default ticker GLD")
+		Expect(tickers).To(Equal([]string{"AAPL", "MSFT", "GOOG"}))
+
+		offMembers := strategy.RiskOff.Assets(time.Time{})
+		Expect(offMembers[0].Ticker).NotTo(Equal("TLT"), "still using default ticker TLT")
+		Expect(offMembers[0].Ticker).To(Equal("BND"))
+	})
+
+	It("reads from the correct subcommand when multiple subcommands exist", func() {
 		strategy := &universeStrategy{}
 
-		viper.Reset()
-		viper.Set("risk-on", "")
-		viper.Set("risk-off", "")
+		// Mirror cli.Run: register strategy flags on multiple subcommands.
+		rootCmd := &cobra.Command{Use: "test-strategy"}
 
-		applyStrategyFlags(strategy)
+		backtestCmd := &cobra.Command{
+			Use: "backtest",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				applyStrategyFlags(cmd, strategy)
+				return nil
+			},
+		}
 
-		Expect(strategy.RiskOn).To(BeNil())
-		Expect(strategy.RiskOff).To(BeNil())
+		liveCmd := &cobra.Command{
+			Use:  "live",
+			RunE: func(cmd *cobra.Command, args []string) error { return nil },
+		}
+
+		snapshotCmd := &cobra.Command{
+			Use:  "snapshot",
+			RunE: func(cmd *cobra.Command, args []string) error { return nil },
+		}
+
+		registerStrategyFlags(backtestCmd, strategy)
+		registerStrategyFlags(liveCmd, strategy)
+		registerStrategyFlags(snapshotCmd, strategy)
+
+		rootCmd.AddCommand(backtestCmd)
+		rootCmd.AddCommand(liveCmd)
+		rootCmd.AddCommand(snapshotCmd)
+
+		rootCmd.SetArgs([]string{"backtest", "--risk-on", "VOO,SCZ", "--risk-off", "AGG"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.RiskOn).NotTo(BeNil(), "RiskOn is nil after backtest with overrides")
+		members := strategy.RiskOn.Assets(time.Time{})
+		Expect(members).To(HaveLen(2))
+		Expect(members[0].Ticker).To(Equal("VOO"))
+		Expect(members[1].Ticker).To(Equal("SCZ"))
+
+		Expect(strategy.RiskOff).NotTo(BeNil())
+		offMembers := strategy.RiskOff.Assets(time.Time{})
+		Expect(offMembers[0].Ticker).To(Equal("AGG"))
 	})
 })

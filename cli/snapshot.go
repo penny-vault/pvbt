@@ -95,7 +95,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		Str("output", outputPath).
 		Msg("starting snapshot capture")
 
-	applyStrategyFlags(strategy)
+	applyStrategyFlags(cmd, strategy)
 
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {

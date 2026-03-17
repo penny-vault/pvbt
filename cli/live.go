@@ -11,7 +11,6 @@ import (
 	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func newLiveCmd(strategy engine.Strategy) *cobra.Command {
@@ -19,7 +18,7 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 		Use:   "live",
 		Short: "Run the strategy in live mode",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLive(strategy)
+			return runLive(cmd, strategy)
 		},
 	}
 
@@ -27,19 +26,18 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 
 	registerStrategyFlags(cmd, strategy)
 
-	if err := viper.BindPFlags(cmd.Flags()); err != nil {
-		log.Fatal().Err(err).Msg("failed to bind live flags")
-	}
-
 	return cmd
 }
 
-func runLive(strategy engine.Strategy) error {
+func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 	ctx := context.Background()
 
-	cash := viper.GetFloat64("cash")
+	cash, err := cmd.Flags().GetFloat64("cash")
+	if err != nil {
+		return err
+	}
 
-	applyStrategyFlags(strategy)
+	applyStrategyFlags(cmd, strategy)
 
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {

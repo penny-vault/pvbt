@@ -10,10 +10,12 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
-var universeType = reflect.TypeOf((*universe.Universe)(nil)).Elem()
+var (
+	universeType = reflect.TypeOf((*universe.Universe)(nil)).Elem()
+	durationType = reflect.TypeOf(time.Duration(0))
+)
 
 // registerStrategyFlags inspects the strategy struct's exported fields
 // and registers a cobra flag for each one. The flag name comes from
@@ -46,22 +48,22 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 		defaultStr := field.Tag.Get("default")
 		fieldValue := val.Field(ii)
 
-		// Handle universe.Universe interface fields as comma-separated ticker strings.
-		if field.Type.Implements(universeType) {
-			def := defaultStr
-			cmd.Flags().String(name, def, desc)
+		switch {
+		case field.Type.Implements(universeType):
+			cmd.Flags().String(name, defaultStr, desc)
 
-			if f := cmd.Flags().Lookup(name); f != nil {
-				if err := viper.BindPFlag(name, f); err != nil {
-					log.Fatal().Err(err).Str("flag", name).Msg("failed to bind strategy flag")
+		case field.Type == durationType:
+			def := time.Duration(fieldValue.Int())
+
+			if defaultStr != "" {
+				if parsed, err := time.ParseDuration(defaultStr); err == nil {
+					def = parsed
 				}
 			}
 
-			continue
-		}
+			cmd.Flags().Duration(name, def, desc)
 
-		switch field.Type.Kind() {
-		case reflect.Float64:
+		case field.Type.Kind() == reflect.Float64:
 			def := fieldValue.Float()
 
 			if defaultStr != "" {
@@ -71,14 +73,16 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			}
 
 			cmd.Flags().Float64(name, def, desc)
-		case reflect.String:
+
+		case field.Type.Kind() == reflect.String:
 			def := fieldValue.String()
 			if defaultStr != "" {
 				def = defaultStr
 			}
 
 			cmd.Flags().String(name, def, desc)
-		case reflect.Bool:
+
+		case field.Type.Kind() == reflect.Bool:
 			def := fieldValue.Bool()
 
 			if defaultStr != "" {
@@ -88,7 +92,8 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			}
 
 			cmd.Flags().Bool(name, def, desc)
-		case reflect.Int:
+
+		case field.Type.Kind() == reflect.Int:
 			def := int(fieldValue.Int())
 
 			if defaultStr != "" {
@@ -98,31 +103,19 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			}
 
 			cmd.Flags().Int(name, def, desc)
+
 		default:
-			if field.Type == reflect.TypeOf(time.Duration(0)) {
-				def := time.Duration(fieldValue.Int())
-
-				if defaultStr != "" {
-					if parsed, err := time.ParseDuration(defaultStr); err == nil {
-						def = parsed
-					}
-				}
-
-				cmd.Flags().Duration(name, def, desc)
-			}
-		}
-
-		if f := cmd.Flags().Lookup(name); f != nil {
-			if err := viper.BindPFlag(name, f); err != nil {
-				log.Fatal().Err(err).Str("flag", name).Msg("failed to bind strategy flag")
-			}
+			log.Warn().
+				Str("field", field.Name).
+				Str("type", field.Type.String()).
+				Msg("strategy field type not supported for CLI flags")
 		}
 	}
 }
 
-// applyStrategyFlags reads flag values from viper and sets them on the
-// strategy struct's fields via reflection.
-func applyStrategyFlags(strategy engine.Strategy) {
+// applyStrategyFlags reads flag values from the command's parsed flags
+// and sets them on the strategy struct's fields via reflection.
+func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 	val := reflect.ValueOf(strategy)
 	if val.Kind() == reflect.Ptr {
 		val = val.Elem()
@@ -144,43 +137,58 @@ func applyStrategyFlags(strategy engine.Strategy) {
 			name = toKebabCase(field.Name)
 		}
 
-		flagValue := val.Field(ii)
-		if !flagValue.CanSet() {
+		fieldValue := val.Field(ii)
+		if !fieldValue.CanSet() {
 			continue
 		}
 
-		// Universe fields are stored as comma-separated tickers. Create a
-		// StaticUniverse without a data source; the engine's hydrateFields
-		// will re-wire it with the proper data source later.
-		if field.Type.Implements(universeType) {
-			raw := viper.GetString(name)
+		flag := cmd.Flags().Lookup(name)
+		if flag == nil {
+			continue
+		}
+
+		switch {
+		case field.Type.Implements(universeType):
+			raw := flag.Value.String()
 			if raw == "" {
 				continue
 			}
 
 			tickers := strings.Split(raw, ",")
 			for idx := range tickers {
-				tickers[idx] = strings.TrimSpace(tickers[idx])
+				tickers[idx] = strings.ToUpper(strings.TrimSpace(tickers[idx]))
 			}
 
-			flagValue.Set(reflect.ValueOf(universe.NewStatic(tickers...)))
+			fieldValue.Set(reflect.ValueOf(universe.NewStatic(tickers...)))
 
-			continue
-		}
-
-		switch field.Type.Kind() {
-		case reflect.Float64:
-			flagValue.SetFloat(viper.GetFloat64(name))
-		case reflect.String:
-			flagValue.SetString(viper.GetString(name))
-		case reflect.Bool:
-			flagValue.SetBool(viper.GetBool(name))
-		case reflect.Int:
-			if field.Type == reflect.TypeOf(time.Duration(0)) {
-				flagValue.SetInt(int64(viper.GetDuration(name)))
-			} else {
-				flagValue.SetInt(int64(viper.GetInt(name)))
+		case field.Type == durationType:
+			if parsed, err := time.ParseDuration(flag.Value.String()); err == nil {
+				fieldValue.SetInt(int64(parsed))
 			}
+
+		case field.Type.Kind() == reflect.Float64:
+			if parsed, err := strconv.ParseFloat(flag.Value.String(), 64); err == nil {
+				fieldValue.SetFloat(parsed)
+			}
+
+		case field.Type.Kind() == reflect.String:
+			fieldValue.SetString(flag.Value.String())
+
+		case field.Type.Kind() == reflect.Bool:
+			if parsed, err := strconv.ParseBool(flag.Value.String()); err == nil {
+				fieldValue.SetBool(parsed)
+			}
+
+		case field.Type.Kind() == reflect.Int:
+			if parsed, err := strconv.Atoi(flag.Value.String()); err == nil {
+				fieldValue.SetInt(int64(parsed))
+			}
+
+		default:
+			log.Warn().
+				Str("field", field.Name).
+				Str("type", field.Type.String()).
+				Msg("strategy field type not supported by applyStrategyFlags")
 		}
 	}
 }

@@ -110,7 +110,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		Str("run_id", fullID).
 		Msg("starting backtest")
 
-	applyStrategyFlags(strategy)
+	applyStrategyFlags(cmd, strategy)
 
 	useTUI, err := cmd.Flags().GetBool("tui")
 	if err != nil {
