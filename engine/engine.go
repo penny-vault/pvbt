@@ -320,6 +320,13 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		assembled = filled
 	}
 
+	if e.riskFreeResolved && len(e.riskFreeTimes) > 0 && assembled.Len() > 0 {
+		rfSlice := e.sliceRiskFree(assembled.Times())
+		if rfSlice != nil {
+			_ = assembled.SetRiskFreeRates(rfSlice)
+		}
+	}
+
 	return assembled, nil
 }
 
@@ -346,6 +353,13 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 		}
 
 		result = filled
+	}
+
+	if e.riskFreeResolved && len(e.riskFreeTimes) > 0 && result.Len() > 0 {
+		rfSlice := e.sliceRiskFree(result.Times())
+		if rfSlice != nil {
+			_ = result.SetRiskFreeRates(rfSlice)
+		}
 	}
 
 	return result, nil
