@@ -1519,6 +1519,27 @@ var _ = Describe("DataFrame", func() {
 			Expect(result.Err()).To(HaveOccurred())
 		})
 	})
+
+	Describe("RiskFreeRates", func() {
+		It("SetRiskFreeRates attaches rates and RiskFreeRates returns them", func() {
+			rates := []float64{100.0, 100.01, 100.02, 100.03, 100.04}
+			err := df.SetRiskFreeRates(rates)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(df.RiskFreeRates()).To(Equal(rates))
+		})
+
+		It("SetRiskFreeRates returns error on length mismatch", func() {
+			err := df.SetRiskFreeRates([]float64{1.0, 2.0})
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("length"))
+		})
+
+		It("RiskFreeRates returns nil when not set", func() {
+			fresh, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, []float64{1, 2, 3, 4, 5})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fresh.RiskFreeRates()).To(BeNil())
+		})
+	})
 })
 
 var _ = Describe("Window", func() {

@@ -59,6 +59,10 @@ type DataFrame struct {
 
 	// freq holds the data resolution of this DataFrame.
 	freq Frequency
+
+	// riskFreeRates holds cumulative risk-free values aligned with times.
+	// Shared by pointer across same-time-axis transformations.
+	riskFreeRates []float64
 }
 
 // Err returns the first error encountered during chained operations.
@@ -72,6 +76,29 @@ func (df *DataFrame) Frequency() Frequency { return df.freq }
 // Exported so that packages like signal can create error DataFrames.
 func WithErr(err error) *DataFrame {
 	return &DataFrame{err: err}
+}
+
+// SetRiskFreeRates attaches cumulative risk-free rate values to the DataFrame.
+// Returns an error if len(rates) != df.Len().
+func (df *DataFrame) SetRiskFreeRates(rates []float64) error {
+	if len(rates) != len(df.times) {
+		return fmt.Errorf("SetRiskFreeRates: length %d does not match time axis length %d", len(rates), len(df.times))
+	}
+	df.riskFreeRates = rates
+	return nil
+}
+
+// RiskFreeRates returns the attached cumulative risk-free rate values, or nil
+// if none have been set.
+func (df *DataFrame) RiskFreeRates() []float64 {
+	return df.riskFreeRates
+}
+
+// propagateAux copies auxiliary fields (e.g. risk-free rates) from the
+// receiver to the target DataFrame. Returns target for chaining.
+func (df *DataFrame) propagateAux(target *DataFrame) *DataFrame {
+	target.riskFreeRates = df.riskFreeRates
+	return target
 }
 
 // NewDataFrame constructs a DataFrame from the given dimensions and data.
