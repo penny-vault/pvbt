@@ -43,9 +43,9 @@ func Search(ctx context.Context, opts SearchOptions) ([]Listing, error)
 1. Create `~/.pvbt/cache/` with `os.MkdirAll` if it does not exist.
 2. Check `~/.pvbt/cache/discover.json`. If present, under 1 hour old, and `ForceRefresh` is false, return cached results.
 3. Otherwise, call GitHub Search API with `topic:pvbt-strategy` (paginated, up to 100 results per page, capped at 1000 results per GitHub API limit).
-4. For each repo, strip `pvbt-strategy` from its topics. Remaining topics become categories.
-5. Authentication: check `GITHUB_TOKEN` env var, then try `gh auth token` subprocess, then fall back to unauthenticated (60 req/hr).
-6. Write results and timestamp to cache file.
+4. For each repo, strip `pvbt-strategy` from its topics. Remaining topics become categories (used as-is from GitHub, which are already lowercase and hyphenated).
+5. Authentication: check `GITHUB_TOKEN` env var, then try `gh auth token` subprocess (with a 2-second timeout to avoid hanging if `gh` is misconfigured), then fall back to unauthenticated (60 req/hr).
+6. Write results to a temp file, then rename to `discover.json` atomically (avoids corrupted cache on interrupted writes). Include a timestamp in the cached data.
 7. Return the listing list.
 
 Log cache hits at debug level, API calls at info level, and errors at error level via zerolog.
@@ -77,7 +77,7 @@ func Remove(shortCode string) error
 3. `cd ~/.pvbt/lib/<repo-name>/module/ && go build -o ../bin/<repo-name> .`
 4. Run the binary with the `describe` subcommand to extract `Descriptor` output as JSON. The binary calls `strategy.(Descriptor).Describe()` directly on the strategy struct -- no engine initialization required.
 5. If the binary does not implement the `Descriptor` interface and the `describe` subcommand fails, the install fails with error: "strategy does not implement Descriptor interface -- cannot determine short-code." Clean up the partially installed directory.
-6. If the short-code from `describe` collides with an already-installed strategy, fail with error naming both repos. Clean up the partially installed directory.
+6. If the short-code from `describe` collides with an already-installed strategy from a different repo, fail with error naming both repos. Clean up the partially installed directory. Short-code collision checking skips the strategy being replaced during re-install (same repo).
 7. Write `index.json` in the strategy directory. Schema is a serialized `InstalledStrategy` struct (see JSON tags above).
 8. Return the installed strategy info.
 
@@ -158,9 +158,9 @@ Delegates to `library.Remove()`. Prints confirmation on success.
 
 The root cobra command handles unknown subcommands using cobra's `ValidArgsFunction` and the root command's `Args` handler. This ensures registered subcommands (`discover`, `list`, `remove`, `explore`) are routed normally by cobra. Only when no registered subcommand matches does the dispatch logic fire:
 
-1. The root command's `RunE` receives the unmatched args.
+1. If `len(args) == 0`, call `cmd.Help()` and return (preserves default help behavior).
 2. Call `library.Lookup(args[0])` to find the binary path.
-3. If found, `syscall.Exec` the binary with the remaining args (replacing the pvbt process).
+3. If found, `syscall.Exec` the binary with the remaining args (replacing the pvbt process). Note: `syscall.Exec` is Unix-only; if Windows support is added later, this would need to change to `os/exec.Command` with signal forwarding.
 4. If not found, return the standard "unknown command" error.
 
 Example: `pvbt momentum-rotation backtest --start 2020-01-01` execs `~/.pvbt/lib/momentum-rotation/bin/momentum-rotation backtest --start 2020-01-01`.
@@ -168,6 +168,8 @@ Example: `pvbt momentum-rotation backtest --start 2020-01-01` execs `~/.pvbt/lib
 ### `describe` Subcommand
 
 Add a `describe` subcommand to `cli.Run()` (alongside the existing `backtest`, `live`, and `snapshot` subcommands). When invoked, it calls `strategy.(Descriptor).Describe()` directly on the strategy struct without initializing the engine, emits the `StrategyDescription` as JSON to stdout, and exits. If the strategy does not implement `Descriptor`, it exits with a non-zero status and an error message to stderr.
+
+The emitted JSON contains the fields from `StrategyDescription`: `ShortCode`, `Description`, `Source`, `Version`, `VersionDate`. Note that this deliberately excludes the richer `StrategyInfo` data (parameters, schedule, benchmark) which requires engine initialization. The library only needs short-code, description, and version at install time, so this tradeoff is acceptable.
 
 This is how the library extracts short-code and metadata during install.
 
