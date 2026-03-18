@@ -2,6 +2,7 @@
 
 **Issue:** [#31 - CLI strategy discovery via pvbt-strategy topic](https://github.com/penny-vault/pvbt/issues/31)
 **Date:** 2026-03-18
+**Platform scope:** macOS and Linux only.
 
 ## Overview
 
@@ -14,6 +15,7 @@ Extend pvbt with the ability to discover community strategies published as Go mo
 | `pvbt discover` | Launch TUI for browsing and installing strategies from GitHub |
 | `pvbt discover --refresh` | Force refresh of cached discovery results |
 | `pvbt list` | Text table of installed strategies (short-code, version, source repo) |
+| `pvbt remove <short-code>` | Remove an installed strategy |
 | `pvbt <short-code> [subcommand] [flags]` | Dispatch to an installed strategy binary |
 
 ## New Packages
@@ -23,7 +25,7 @@ Extend pvbt with the ability to discover community strategies published as Go mo
 GitHub API client responsible for discovering strategies.
 
 ```go
-type Strategy struct {
+type Listing struct {
     Name        string   // repo name
     Owner       string   // GitHub org/user
     Description string   // repo description
@@ -33,17 +35,20 @@ type Strategy struct {
     UpdatedAt   time.Time
 }
 
-func Search(ctx context.Context, opts SearchOptions) ([]Strategy, error)
+func Search(ctx context.Context, opts SearchOptions) ([]Listing, error)
 ```
 
 **Behavior:**
 
-1. Check `~/.pvbt/cache/discover.json`. If present, under 1 hour old, and `ForceRefresh` is false, return cached results.
-2. Otherwise, call GitHub Search API with `topic:pvbt-strategy` (paginated, up to 100 results per page).
-3. For each repo, strip `pvbt-strategy` from its topics. Remaining topics become categories.
-4. Authentication: check `GITHUB_TOKEN` env var, then try `gh auth token` subprocess, then fall back to unauthenticated (60 req/hr).
-5. Write results and timestamp to cache file.
-6. Return the strategy list.
+1. Create `~/.pvbt/cache/` with `os.MkdirAll` if it does not exist.
+2. Check `~/.pvbt/cache/discover.json`. If present, under 1 hour old, and `ForceRefresh` is false, return cached results.
+3. Otherwise, call GitHub Search API with `topic:pvbt-strategy` (paginated, up to 100 results per page, capped at 1000 results per GitHub API limit).
+4. For each repo, strip `pvbt-strategy` from its topics. Remaining topics become categories.
+5. Authentication: check `GITHUB_TOKEN` env var, then try `gh auth token` subprocess, then fall back to unauthenticated (60 req/hr).
+6. Write results and timestamp to cache file.
+7. Return the listing list.
+
+Log cache hits at debug level, API calls at info level, and errors at error level via zerolog.
 
 ### `library/`
 
@@ -51,12 +56,12 @@ Local strategy management: download, build, index, and lookup.
 
 ```go
 type InstalledStrategy struct {
-    ShortCode   string
-    RepoOwner   string
-    RepoName    string
-    Version     string    // go module version or commit hash
-    BinPath     string    // path to compiled binary
-    InstalledAt time.Time
+    ShortCode   string    `json:"short_code"`
+    RepoOwner   string    `json:"repo_owner"`
+    RepoName    string    `json:"repo_name"`
+    Version     string    `json:"version"`      // from Descriptor output
+    BinPath     string    `json:"bin_path"`
+    InstalledAt time.Time `json:"installed_at"`
 }
 
 func Install(ctx context.Context, cloneURL string) (*InstalledStrategy, error)
@@ -67,16 +72,24 @@ func Remove(shortCode string) error
 
 **Install flow:**
 
-1. `go mod download` the module into `~/.pvbt/lib/<repo-name>/module/`.
-2. Build the binary into `~/.pvbt/lib/<repo-name>/bin/`.
-3. Run the binary with `--describe` to extract `Descriptor` output (short-code, description, version) as JSON.
-4. If the binary does not respond to `--describe`, the install fails with error: "strategy does not implement Descriptor interface -- cannot determine short-code."
-5. Write an `index.json` in the strategy directory recording the `InstalledStrategy` metadata.
-6. Return the installed strategy info.
+1. Create `~/.pvbt/lib/<repo-name>/` with `os.MkdirAll` if it does not exist.
+2. `git clone <cloneURL> ~/.pvbt/lib/<repo-name>/module/`.
+3. `cd ~/.pvbt/lib/<repo-name>/module/ && go build -o ../bin/<repo-name> .`
+4. Run the binary with the `describe` subcommand to extract `Descriptor` output as JSON. The binary calls `strategy.(Descriptor).Describe()` directly on the strategy struct -- no engine initialization required.
+5. If the binary does not implement the `Descriptor` interface and the `describe` subcommand fails, the install fails with error: "strategy does not implement Descriptor interface -- cannot determine short-code." Clean up the partially installed directory.
+6. If the short-code from `describe` collides with an already-installed strategy, fail with error naming both repos. Clean up the partially installed directory.
+7. Write `index.json` in the strategy directory. Schema is a serialized `InstalledStrategy` struct (see JSON tags above).
+8. Return the installed strategy info.
+
+**Re-install behavior:** Installing a strategy that is already installed (same repo) replaces it. This is the update mechanism for v1 -- there is no separate update command.
 
 **Lookup flow:**
 
 Scan `~/.pvbt/lib/*/index.json` files to find the matching short-code, return the binary path.
+
+**Toolchain requirements:** Both `git` and `go` must be on PATH. Checked at install time, not at browse time.
+
+Log installs at info level, lookups at debug level, and errors at error level via zerolog.
 
 ## Local Storage Layout
 
@@ -86,9 +99,11 @@ Scan `~/.pvbt/lib/*/index.json` files to find the matching short-code, return th
     discover.json            # cached GitHub search results + timestamp
   lib/
     momentum-rotation/
+      index.json             # serialized InstalledStrategy
       bin/momentum-rotation  # compiled binary
-      module/                # Go module source
+      module/                # git clone of strategy source
     adaptive-allocation/
+      index.json
       bin/adaptive-allocation
       module/
 ```
@@ -135,26 +150,32 @@ Strategy Discovery                          [q] quit  [/] filter  [enter] instal
 
 Simple text table output of installed strategies: short-code, version, source repo.
 
+### `cli/remove.go` -- Remove Installed Strategy
+
+Delegates to `library.Remove()`. Prints confirmation on success.
+
 ### Short-code Dispatch
 
-The root cobra command intercepts unknown subcommands:
+The root cobra command handles unknown subcommands using cobra's `ValidArgsFunction` and the root command's `Args` handler. This ensures registered subcommands (`discover`, `list`, `remove`, `explore`) are routed normally by cobra. Only when no registered subcommand matches does the dispatch logic fire:
 
-1. Add a `RunE` on the root command that catches unrecognized args.
+1. The root command's `RunE` receives the unmatched args.
 2. Call `library.Lookup(args[0])` to find the binary path.
 3. If found, `syscall.Exec` the binary with the remaining args (replacing the pvbt process).
-4. If not found, fall through to the normal "unknown command" error.
+4. If not found, return the standard "unknown command" error.
 
 Example: `pvbt momentum-rotation backtest --start 2020-01-01` execs `~/.pvbt/lib/momentum-rotation/bin/momentum-rotation backtest --start 2020-01-01`.
 
-### `--describe` Flag
+### `describe` Subcommand
 
-Add a `--describe` flag to `cli.Run()` so that any strategy built with pvbt emits its `Descriptor` output as JSON and exits. This is how the library extracts short-code and metadata during install.
+Add a `describe` subcommand to `cli.Run()` (alongside the existing `backtest`, `live`, and `snapshot` subcommands). When invoked, it calls `strategy.(Descriptor).Describe()` directly on the strategy struct without initializing the engine, emits the `StrategyDescription` as JSON to stdout, and exits. If the strategy does not implement `Descriptor`, it exits with a non-zero status and an error message to stderr.
+
+This is how the library extracts short-code and metadata during install.
 
 ## Error Handling
 
 **Build failures:** Report the error in the TUI inline next to the strategy. Do not abort the batch -- continue installing other selected strategies.
 
-**Missing Descriptor:** Install fails with error: "strategy does not implement Descriptor interface -- cannot determine short-code." No fallback, no silent degradation.
+**Missing Descriptor:** Install fails with error: "strategy does not implement Descriptor interface -- cannot determine short-code." No fallback, no silent degradation. Partially installed files are cleaned up.
 
 **Short-code collisions:** If two strategies declare the same short-code, the second install fails with a clear error naming both repos. User must remove one before installing the other.
 
@@ -162,7 +183,7 @@ Add a `--describe` flag to `cli.Run()` so that any strategy built with pvbt emit
 - If GitHub API is unreachable and cache exists (even stale), use the stale cache with a warning: "showing cached results from X ago."
 - If no cache exists, show the error in the TUI.
 
-**Go toolchain requirement:** If `go` is not on PATH, show an error at install time, not at browse time. Users should still be able to browse available strategies.
+**Toolchain requirements:** If `git` or `go` is not on PATH, show an error at install time, not at browse time. Users should still be able to browse available strategies.
 
 ## Testing Strategy
 
@@ -174,6 +195,8 @@ Add a `--describe` flag to `cli.Run()` so that any strategy built with pvbt emit
 **Library:**
 - Unit tests for index read/write, lookup, short-code collision detection.
 - Integration test that installs a test strategy module from a local path (avoids network dependency).
+- Test re-install overwrites existing installation.
+- Test cleanup on failed install (missing Descriptor, collision).
 
 **TUI:**
 - Unit tests for the bubbletea model: state transitions, key handling, selection logic.
@@ -181,4 +204,4 @@ Add a `--describe` flag to `cli.Run()` so that any strategy built with pvbt emit
 
 **Dispatch:**
 - Test that unknown subcommands route through library lookup.
-- Test that known subcommands (discover, list, backtest) are not intercepted.
+- Test that known subcommands (discover, list, remove, explore) are not intercepted.
