@@ -42,6 +42,11 @@
 // asset qualifies, optional fallback assets are inserted and marked as
 // selected.
 //
+// [TopN] selects the N assets with the highest values in a given metric
+// column at each timestep. [BottomN] selects the N assets with the lowest
+// values. Both exclude NaN values from ranking and select fewer than N
+// assets when not enough valid values exist.
+//
 // # Weighting
 //
 // [EqualWeight] builds a [PortfolioPlan] by assigning equal weights to all

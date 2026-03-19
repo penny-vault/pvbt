@@ -290,6 +290,12 @@ const (
 	Unemployment Metric = "Unemployment"
 )
 
+// Computed aggregate metrics.
+const (
+	// Count is the metric used by CountWhere to store per-timestep counts.
+	Count Metric = "Count"
+)
+
 // Portfolio performance tracking metrics.
 const (
 	// PortfolioEquity is the total equity value of the portfolio at each time step.

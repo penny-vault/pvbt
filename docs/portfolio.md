@@ -51,10 +51,34 @@ type Selector interface {
 }
 ```
 
-For example, `MaxAboveZero` picks the asset with the highest value above zero in a given metric column at each timestep, falling back to a provided DataFrame of assets if nothing qualifies:
+Built-in selectors:
+
+| Selector | Description |
+|----------|-------------|
+| `MaxAboveZero(metric, fallbackDF)` | Picks the single asset with the highest positive value. Falls back to `fallbackDF` assets if nothing qualifies. Pass `nil` for no fallback. |
+| `TopN(n, metric)` | Picks the N assets with the highest values. NaN values are excluded. Selects fewer than N if not enough valid assets exist. |
+| `BottomN(n, metric)` | Picks the N assets with the lowest values. Same NaN and availability behavior as TopN. |
 
 ```go
+// single best asset with risk-off fallback
 portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
+
+// top 3 assets by momentum score
+portfolio.TopN(3, data.MetricClose).Select(momentum)
+
+// bottom 2 assets by valuation (cheapest)
+portfolio.BottomN(2, data.PE).Select(valuations)
+```
+
+## CountWhere
+
+`CountWhere` counts how many assets match a predicate for a given metric at each timestep. It returns a single-asset DataFrame (Ticker `"COUNT"`) with a `Count` metric:
+
+```go
+// count how many canary assets have non-positive or missing momentum
+badCanary := protectiveMom.CountWhere(data.AdjClose, func(v float64) bool {
+    return math.IsNaN(v) || v <= 0
+})
 ```
 
 ## Weighting

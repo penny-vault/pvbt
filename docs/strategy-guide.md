@@ -411,8 +411,22 @@ The pipeline is: **select** which assets to hold, then **weight** them into an a
 **Selection** -- A `Selector` marks chosen assets by inserting a `Selected` column into the DataFrame:
 
 ```go
-// Pick the asset with the highest positive value; fall back to fallbackDF if none positive.
+// Pick the single best asset; fall back to fallbackDF if none positive.
 portfolio.MaxAboveZero(data.MetricClose, fallbackDF).Select(df)
+
+// Pick the top 3 assets by momentum score.
+portfolio.TopN(3, data.MetricClose).Select(df)
+
+// Pick the 2 cheapest assets by P/E ratio.
+portfolio.BottomN(2, data.PE).Select(df)
+```
+
+`CountWhere` counts how many assets match a condition at each timestep, useful for canary-style signals:
+
+```go
+badCanary := df.CountWhere(data.AdjClose, func(v float64) bool {
+    return math.IsNaN(v) || v <= 0
+})
 ```
 
 **Weighting** -- Converts a DataFrame with selected assets into a `PortfolioPlan`:

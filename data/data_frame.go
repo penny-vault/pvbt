@@ -1158,6 +1158,44 @@ func (df *DataFrame) MinAcrossAssets() *DataFrame {
 	return df.propagateAux(mustNewDataFrame(times, []asset.Asset{synth}, metrics, df.freq, newData))
 }
 
+// CountWhere returns a new single-asset DataFrame with one metric (Count)
+// whose value at each timestep is the number of assets where the predicate
+// returns true for the given metric. The synthetic asset has Ticker "COUNT".
+func (df *DataFrame) CountWhere(metric Metric, predicate func(float64) bool) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	mIdx, found := df.metricIndex(metric)
+	if !found {
+		return WithErr(fmt.Errorf("CountWhere: metric %q not found", metric))
+	}
+
+	timeLen := len(df.times)
+	assetLen := len(df.assets)
+	newData := make([]float64, timeLen)
+
+	for tIdx := 0; tIdx < timeLen; tIdx++ {
+		count := 0.0
+
+		for aIdx := 0; aIdx < assetLen; aIdx++ {
+			v := df.data[df.colOffset(aIdx, mIdx)+tIdx]
+			if predicate(v) {
+				count++
+			}
+		}
+
+		newData[tIdx] = count
+	}
+
+	times := make([]time.Time, timeLen)
+	copy(times, df.times)
+
+	synth := asset.Asset{Ticker: "COUNT"}
+
+	return df.propagateAux(mustNewDataFrame(times, []asset.Asset{synth}, []Metric{Count}, df.freq, newData))
+}
+
 // IdxMaxAcrossAssets returns, for each timestamp, the asset that holds the
 // maximum value for the first metric across all assets.
 func (df *DataFrame) IdxMaxAcrossAssets() []asset.Asset {

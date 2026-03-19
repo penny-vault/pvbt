@@ -728,6 +728,70 @@ var _ = Describe("DataFrame", func() {
 		})
 	})
 
+	Describe("CountWhere", func() {
+		It("counts assets matching predicate at each timestep", func() {
+			// AAPL prices: 100, 101, 102, 103, 104
+			// GOOG prices: 200, 202, 204, 206, 208
+			result := df.CountWhere(data.Price, func(v float64) bool {
+				return v > 150
+			})
+
+			synth := asset.Asset{Ticker: "COUNT"}
+			col := result.Column(synth, data.Count)
+			// Only GOOG > 150 at every timestep
+			Expect(col).To(Equal([]float64{1, 1, 1, 1, 1}))
+		})
+
+		It("counts all assets when all match", func() {
+			result := df.CountWhere(data.Price, func(v float64) bool {
+				return v > 0
+			})
+
+			synth := asset.Asset{Ticker: "COUNT"}
+			col := result.Column(synth, data.Count)
+			Expect(col).To(Equal([]float64{2, 2, 2, 2, 2}))
+		})
+
+		It("returns zero when no assets match", func() {
+			result := df.CountWhere(data.Price, func(v float64) bool {
+				return v > 1000
+			})
+
+			synth := asset.Asset{Ticker: "COUNT"}
+			col := result.Column(synth, data.Count)
+			Expect(col).To(Equal([]float64{0, 0, 0, 0, 0}))
+		})
+
+		It("handles NaN values in predicate", func() {
+			vals := []float64{
+				math.NaN(), 5, 10, // AAPL
+				3, math.NaN(), 7,  // GOOG
+			}
+			nanTimes := times[:3]
+			nanDF, err := data.NewDataFrame(nanTimes, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, data.Daily, vals)
+			Expect(err).NotTo(HaveOccurred())
+
+			result := nanDF.CountWhere(data.Price, func(v float64) bool {
+				return math.IsNaN(v) || v <= 0
+			})
+
+			synth := asset.Asset{Ticker: "COUNT"}
+			col := result.Column(synth, data.Count)
+			// t0: AAPL=NaN(match), GOOG=3(no) => 1
+			// t1: AAPL=5(no), GOOG=NaN(match) => 1
+			// t2: AAPL=10(no), GOOG=7(no) => 0
+			Expect(col).To(Equal([]float64{1, 1, 0}))
+		})
+
+		It("returns error DataFrame when metric not found", func() {
+			result := df.CountWhere("nonexistent", func(v float64) bool {
+				return true
+			})
+
+			Expect(result.Err()).To(HaveOccurred())
+		})
+	})
+
 	Describe("Transforms", func() {
 		It("Pct computes 1-period percent change by default", func() {
 			result := df.Pct()

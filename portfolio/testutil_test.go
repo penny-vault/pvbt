@@ -14,6 +14,8 @@ import (
 var _ portfolio.Portfolio = (*portfolio.Account)(nil)
 var _ portfolio.PortfolioManager = (*portfolio.Account)(nil)
 var _ portfolio.Selector = portfolio.MaxAboveZero(data.MetricClose, nil)
+var _ portfolio.Selector = portfolio.TopN(1, data.MetricClose)
+var _ portfolio.Selector = portfolio.BottomN(1, data.MetricClose)
 
 // buildDF builds a single-timestamp DataFrame with MetricClose and AdjClose
 // for the given assets. closes and adjCloses must have the same length as assets.
