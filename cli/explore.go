@@ -41,6 +41,7 @@ func RunPVBT() {
 	}
 
 	rootCmd.AddCommand(newExploreCmd())
+	rootCmd.AddCommand(newListCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
