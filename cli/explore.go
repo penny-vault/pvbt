@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/library"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -45,6 +47,18 @@ func RunPVBT() {
 	rootCmd.AddCommand(newRemoveCmd())
 
 	if err := rootCmd.Execute(); err != nil {
+		// Check if the first arg is an installed strategy short-code.
+		// This fires only when cobra found no matching subcommand.
+		if len(os.Args) > 1 {
+			installed, lookupErr := library.Lookup(library.DefaultLibDir(), os.Args[1])
+			if lookupErr == nil {
+				argv := append([]string{installed.BinPath}, os.Args[2:]...)
+				if execErr := syscall.Exec(installed.BinPath, argv, os.Environ()); execErr != nil {
+					fmt.Fprintf(os.Stderr, "exec %s: %v\n", installed.BinPath, execErr)
+				}
+			}
+		}
+
 		os.Exit(1)
 	}
 }
