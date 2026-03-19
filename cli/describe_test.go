@@ -47,6 +47,7 @@ var _ = Describe("newDescribeCmd", func() {
 			outputBuf := new(bytes.Buffer)
 			cmd.SetOut(outputBuf)
 			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs([]string{})
 
 			Expect(cmd.Execute()).To(Succeed())
 
@@ -65,6 +66,7 @@ var _ = Describe("newDescribeCmd", func() {
 
 			cmd.SetOut(new(bytes.Buffer))
 			cmd.SetErr(new(bytes.Buffer))
+			cmd.SetArgs([]string{})
 
 			err := cmd.Execute()
 			Expect(err).To(HaveOccurred())
