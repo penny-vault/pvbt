@@ -26,6 +26,7 @@ func newDescribeCmd(strategy engine.Strategy) *cobra.Command {
 			}
 
 			fmt.Fprintln(cmd.OutOrStdout(), string(data))
+
 			return nil
 		},
 	}
