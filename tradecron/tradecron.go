@@ -232,9 +232,25 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 	case AtWeekEnd:
 		checkDate = tc.marketStatus.NextLastTradingDayOfWeek(forDate)
 
-		firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
-		if nextDate.After(firstTradingDay) {
-			checkDate = tc.marketStatus.NextLastTradingDayOfWeek(nextDate)
+		scheduledWeekEnd := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+
+		if tc.TimeFlag == AtClose {
+			if earlyClose := tc.marketStatus.EarlyClose(checkDate); earlyClose != 0 {
+				scheduledWeekEnd = time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(),
+					earlyClose/100, earlyClose%100, 0, 0, tc.marketStatus.tz)
+			}
+		}
+
+		if !forDate.Before(scheduledWeekEnd) {
+			// Advance past the weekend to the next week's Monday,
+			// then find the last trading day of that new week.
+			daysToMonday := (8 - int(checkDate.Weekday())) % 7
+			if daysToMonday == 0 {
+				daysToMonday = 7
+			}
+
+			nextWeek := checkDate.AddDate(0, 0, daysToMonday)
+			checkDate = tc.marketStatus.NextLastTradingDayOfWeek(nextWeek)
 		}
 	case AtMonthBegin:
 		lastMonth := time.Date(forDate.Year(), forDate.Month(), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1)
@@ -254,9 +270,23 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 	case AtMonthEnd:
 		checkDate = tc.marketStatus.NextLastTradingDayOfMonth(forDate)
 
-		firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
-		if nextDate.After(firstTradingDay) {
-			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(nextDate)
+		scheduledTime := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+
+		// On early-close days, the cron schedule produces the regular
+		// close time (e.g. 16:00) but the real close is earlier (e.g.
+		// 13:00). Use the actual close time for the comparison so that
+		// forDate at or after the early close correctly advances to the
+		// next month.
+		if tc.TimeFlag == AtClose {
+			if earlyClose := tc.marketStatus.EarlyClose(checkDate); earlyClose != 0 {
+				scheduledTime = time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(),
+					earlyClose/100, earlyClose%100, 0, 0, tc.marketStatus.tz)
+			}
+		}
+
+		if !forDate.Before(scheduledTime) {
+			nextMonth := time.Date(checkDate.Year(), checkDate.Month()+1, 1, 0, 0, 0, 0, tc.marketStatus.tz)
+			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(nextMonth)
 		}
 	default:
 		checkDate = forDate

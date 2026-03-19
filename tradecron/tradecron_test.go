@@ -49,6 +49,20 @@ var _ = Describe("TradeCron", func() {
 				Expect(got).To(Equal(want))
 			})
 
+			It("advances to the next month after firing at the early close time", func() {
+				tc, err := tradecron.New("@monthend", tradecron.RegularHours)
+				Expect(err).NotTo(HaveOccurred())
+
+				// After firing at the early close on Nov 29, next should be
+				// the last trading day of December, not Dec 2.
+				forDate := time.Date(2024, time.November, 29, 13, 0, 0, 0, nyc)
+				got := tc.Next(forDate)
+
+				// Dec 31, 2024 is a Tuesday, normal trading day.
+				want := time.Date(2024, time.December, 31, 16, 0, 0, 0, nyc)
+				Expect(got).To(Equal(want))
+			})
+
 			It("reports the early-close day as a trade day for @monthend", func() {
 				tc, err := tradecron.New("@monthend", tradecron.RegularHours)
 				Expect(err).NotTo(HaveOccurred())
@@ -138,6 +152,19 @@ var _ = Describe("TradeCron", func() {
 				got := tc.Next(forDate)
 
 				want := time.Date(2024, time.March, 29, 13, 0, 0, 0, nyc)
+				Expect(got).To(Equal(want))
+			})
+
+			It("advances to the next week after firing at the early close time", func() {
+				tc, err := tradecron.New("@weekend", tradecron.RegularHours)
+				Expect(err).NotTo(HaveOccurred())
+
+				// After firing at the early close on Friday March 29,
+				// next should be Friday April 5, not Monday April 1.
+				forDate := time.Date(2024, time.March, 29, 13, 0, 0, 0, nyc)
+				got := tc.Next(forDate)
+
+				want := time.Date(2024, time.April, 5, 16, 0, 0, 0, nyc)
 				Expect(got).To(Equal(want))
 			})
 		})
