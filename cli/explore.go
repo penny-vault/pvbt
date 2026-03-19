@@ -45,6 +45,7 @@ func RunPVBT() {
 	rootCmd.AddCommand(newExploreCmd())
 	rootCmd.AddCommand(newListCmd())
 	rootCmd.AddCommand(newRemoveCmd())
+	rootCmd.AddCommand(newDiscoverCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		// Check if the first arg is an installed strategy short-code.
