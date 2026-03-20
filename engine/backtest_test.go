@@ -30,6 +30,7 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/risk"
 )
 
 // mockAssetProvider implements data.AssetProvider for tests.
@@ -170,6 +171,26 @@ func (s *autoScheduleStrategy) Describe() engine.StrategyDescription {
 		Schedule:  "0 16 * * 1-5",
 		Benchmark: "SPY",
 	}
+}
+
+// riskTestStrategy requests 100% in a single asset so risk middleware can cap it.
+type riskTestStrategy struct {
+	target asset.Asset
+}
+
+func (s *riskTestStrategy) Name() string           { return "risk-test" }
+func (s *riskTestStrategy) Setup(_ *engine.Engine)  {}
+func (s *riskTestStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule:  "@monthend",
+		Benchmark: "SPY",
+	}
+}
+func (s *riskTestStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	return batch.RebalanceTo(ctx, portfolio.Allocation{
+		Date:    eng.CurrentDate(),
+		Members: map[asset.Asset]float64{s.target: 1.0},
+	})
 }
 
 // failingStrategy always returns an error from Compute.
@@ -415,6 +436,72 @@ var _ = Describe("Backtest", func() {
 			_, err := eng.Backtest(context.Background(), start, end)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("simulated compute failure"))
+		})
+	})
+
+	Context("risk middleware", func() {
+		It("caps position size when MaxPositionSize is configured", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			allAssets := append(testAssets, spy)
+			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, allAssets, allMetrics)
+			provider := data.NewTestProvider(allMetrics, df)
+
+			acct := portfolio.New(
+				portfolio.WithCash(100_000, time.Time{}),
+			)
+			acct.Use(risk.MaxPositionSize(0.25))
+
+			strategy := &riskTestStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(&mockAssetProvider{assets: allAssets}),
+				engine.WithAccount(acct),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// Verify annotations from risk middleware exist.
+			annotations := acct.Annotations()
+			found := false
+			for _, ann := range annotations {
+				if ann.Key == "risk:max-position-size" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected risk:max-position-size annotation")
+
+			// Verify the final SPY position is capped at ~25%.
+			spyPos := fund.Position(spy)
+			totalValue := fund.Value()
+			if spyPos > 0 && totalValue > 0 {
+				lastDate := fund.PerfData().Times()[len(fund.PerfData().Times())-1]
+				spyPrice := df.ValueAt(spy, data.MetricClose, lastDate)
+				if !math.IsNaN(spyPrice) && spyPrice > 0 {
+					spyWeight := (spyPos * spyPrice) / totalValue
+					Expect(spyWeight).To(BeNumerically("<=", 0.30),
+						"final SPY weight %.2f exceeded cap", spyWeight)
+				}
+			}
+
+			// Verify that sell transactions exist (middleware reduced the position).
+			txns := fund.Transactions()
+			hasSell := false
+			for _, tx := range txns {
+				if tx.Type == portfolio.SellTransaction {
+					hasSell = true
+					break
+				}
+			}
+			Expect(hasSell).To(BeTrue(), "expected sell transactions from risk middleware")
 		})
 	})
 })
