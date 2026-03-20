@@ -117,6 +117,7 @@ func solveRiskParity(covMatrix []float64, numAssets int) ([]float64, bool) {
 
 	bestWeights := make([]float64, numAssets)
 	copy(bestWeights, weights)
+
 	bestError := math.Inf(1)
 
 	for range riskParityMaxIter {
@@ -143,6 +144,7 @@ func solveRiskParity(covMatrix []float64, numAssets int) ([]float64, bool) {
 		// Track best solution.
 		if maxErr < bestError {
 			bestError = maxErr
+
 			copy(bestWeights, weights)
 		}
 

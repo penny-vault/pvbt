@@ -88,6 +88,7 @@ func defaultLookback(lookback data.Period) data.Period {
 // propagates that NaN through stat.Mean.
 func nanSafeStd(df *data.DataFrame, currentAsset asset.Asset, metric data.Metric) float64 {
 	times := df.Times()
+
 	var values []float64
 
 	for _, timestamp := range times {
@@ -105,9 +106,11 @@ func nanSafeStd(df *data.DataFrame, currentAsset asset.Asset, metric data.Metric
 	for _, val := range values {
 		mean += val
 	}
+
 	mean /= float64(len(values))
 
 	sumSq := 0.0
+
 	for _, val := range values {
 		diff := val - mean
 		sumSq += diff * diff
