@@ -16,6 +16,7 @@
 package data_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -26,6 +27,16 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
+
+type mockFrameDataSource struct{}
+
+func (m *mockFrameDataSource) Fetch(_ context.Context, _ []asset.Asset, _ data.Period, _ []data.Metric) (*data.DataFrame, error) {
+	return nil, nil
+}
+func (m *mockFrameDataSource) FetchAt(_ context.Context, _ []asset.Asset, _ time.Time, _ []data.Metric) (*data.DataFrame, error) {
+	return nil, nil
+}
+func (m *mockFrameDataSource) CurrentDate() time.Time { return time.Time{} }
 
 var _ = Describe("DataFrame", func() {
 	var (
@@ -2342,5 +2353,22 @@ var _ = Describe("ParseFrequency", func() {
 	It("returns error for unknown frequency string", func() {
 		_, err := data.ParseFrequency("bogus")
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("DataFrame DataSource", func() {
+	It("returns nil source by default", func() {
+		df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Source()).To(BeNil())
+	})
+
+	It("returns the source after SetSource", func() {
+		df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		mock := &mockFrameDataSource{}
+		df.SetSource(mock)
+		Expect(df.Source()).To(Equal(mock))
 	})
 })

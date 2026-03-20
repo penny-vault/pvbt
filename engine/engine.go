@@ -328,6 +328,8 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 		}
 	}
 
+	assembled.SetSource(e)
+
 	return assembled, nil
 }
 
@@ -364,6 +366,8 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 			}
 		}
 	}
+
+	result.SetSource(e)
 
 	return result, nil
 }

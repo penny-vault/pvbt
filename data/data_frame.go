@@ -65,6 +65,10 @@ type DataFrame struct {
 	// aligned with times. Used by RiskAdjustedPct to subtract the
 	// risk-free return. Shared by pointer across same-time-axis transformations.
 	riskFreeRates []float64
+
+	// source is the DataSource that populated this DataFrame. Weighting
+	// functions and other consumers use it to fetch additional data on demand.
+	source DataSource
 }
 
 // Err returns the first error encountered during chained operations.
@@ -72,6 +76,12 @@ func (df *DataFrame) Err() error { return df.err }
 
 // Frequency returns the data resolution of this DataFrame.
 func (df *DataFrame) Frequency() Frequency { return df.freq }
+
+// Source returns the DataSource that populated this DataFrame, or nil.
+func (df *DataFrame) Source() DataSource { return df.source }
+
+// SetSource sets the DataSource on this DataFrame.
+func (df *DataFrame) SetSource(ds DataSource) { df.source = ds }
 
 // WithErr returns a zero-value DataFrame carrying the given error.
 // All accessor methods (Len, AssetList, etc.) return safe defaults on this form.
