@@ -45,8 +45,16 @@ The backtest proceeds in four phases:
 
 1. **Initialization** -- loads assets, hydrates strategy fields from struct tags, builds the provider routing table, calls `strategy.Setup`, validates the schedule, checks warmup data availability (see [Warmup](#warmup)), and creates the portfolio account.
 2. **Date enumeration** -- walks the tradecron schedule from start to end to build the list of trading dates.
-3. **Step loop** -- for each trading date: fetches housekeeping data (dividends), records dividend income, updates the broker's price provider, calls `strategy.Compute`, fetches post-Compute prices, updates the equity curve, and computes performance metrics.
+3. **Step loop** -- iterates every engine date (see [Steps and frames](#steps-and-frames) below). At each step: drains the broker fill channel, records dividends, and updates the equity curve. On frames (dates matching the trading schedule), the engine also cancels open orders, creates a fresh batch, calls `strategy.Compute`, runs the batch through middleware, and submits the resulting orders to the broker.
 4. **Return** -- returns the portfolio with the full transaction log, equity curve, and computed metrics.
+
+## Steps and frames
+
+The engine uses two levels of iteration:
+
+- **Step** -- every engine iteration (typically every trading day). At each step the engine drains broker fills, records dividends, and updates the equity curve and performance metrics.
+- **Frame** -- a step where the trading schedule fires. At a frame the engine cancels open orders, creates a `Batch`, calls `strategy.Compute`, executes the batch through the middleware chain, and submits orders to the broker.
+- **Batch** -- the container for a single frame's orders and annotations. Created fresh at the start of each frame and discarded after submission. Strategy code writes to the batch; middleware transforms it.
 
 ## Live trading
 
@@ -71,7 +79,7 @@ Strategies implement three methods:
 type Strategy interface {
     Name() string
     Setup(eng *Engine)
-    Compute(ctx context.Context, eng *Engine, portfolio portfolio.Portfolio) error
+    Compute(ctx context.Context, eng *Engine, portfolio portfolio.Portfolio, batch *portfolio.Batch) error
 }
 ```
 
@@ -94,7 +102,7 @@ func (s *ADM) Setup(eng *engine.Engine) {
 }
 ```
 
-**Compute** runs at each scheduled trading date. It receives the engine (for data access) and the portfolio (for trading). Return an error to halt the backtest or signal a problem in live trading.
+**Compute** runs at each scheduled trading date. It receives the engine (for data access), the portfolio (read-only, for inspecting holdings and performance), and a batch (for accumulating orders and annotations). Return an error to halt the backtest or signal a problem in live trading.
 
 ## Engine methods for strategy authors
 

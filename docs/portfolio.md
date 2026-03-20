@@ -2,7 +2,7 @@
 
 The portfolio is where strategy decisions become trades. It has two responsibilities: construction -- turning allocation decisions into orders -- and measurement -- computing performance metrics over the portfolio's history.
 
-Strategy code interacts with the portfolio through the `Portfolio` interface -- it calls `RebalanceTo`, `Order`, reads state, and inspects the transaction log. The engine uses a separate `PortfolioManager` interface to inject external events like dividends and fees. Both interfaces are implemented by the concrete `Account` type.
+The `Portfolio` interface is read-only. Strategies inspect holdings, cash, and performance through it, but all trading happens through the `Batch`. The engine creates a fresh batch for each frame, passes it to `Compute`, runs it through the middleware chain, and submits the resulting orders to the broker. The engine uses a separate `PortfolioManager` interface to inject external events like dividends and fees. Both `Portfolio` and `PortfolioManager` are implemented by the concrete `Account` type.
 
 ```go
 eng := engine.New(&MyStrategy{},
@@ -104,7 +104,7 @@ There are two ways to express allocation decisions, and they can be mixed freely
 
 ### Declarative: RebalanceTo
 
-The most common approach. The strategy computes a selection and weighting, then tells the portfolio to match it:
+The most common approach. The strategy computes a selection and weighting, then tells the batch to match it:
 
 ```go
 portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
@@ -112,10 +112,10 @@ plan, err := portfolio.EqualWeight(momentum)
 if err != nil {
     // handle error
 }
-p.RebalanceTo(ctx, plan...)
+batch.RebalanceTo(ctx, plan...)
 ```
 
-`RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The engine diffs current holdings against each target and generates the necessary buy/sell orders. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
+`RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The batch diffs current holdings against each target and accumulates the necessary buy/sell orders. After `Compute` returns, the engine runs the batch through middleware and submits the final orders to the broker.
 
 A more involved example -- weight selected assets by market cap:
 
@@ -125,16 +125,16 @@ plan, err := portfolio.WeightedBySignal(momentum, data.MarketCap)
 if err != nil {
     // handle error
 }
-p.RebalanceTo(ctx, plan...)
+batch.RebalanceTo(ctx, plan...)
 ```
 
 ### Imperative: Order
 
-When a strategy needs more control, it can place individual orders:
+When a strategy needs more control, it can place individual orders through the batch:
 
 ```go
-p.Order(ctx, asset, Buy, 100)
-p.Order(ctx, asset, Sell, 50)
+batch.Order(ctx, asset, Buy, 100)
+batch.Order(ctx, asset, Sell, 50)
 ```
 
 Order behavior is controlled by optional modifiers passed as variadic arguments. Modifiers fall into two categories: order type (price conditions) and time in force (lifetime).
@@ -146,19 +146,19 @@ A plain `Order` with no modifiers is a **market order**, filled at the next avai
 **Limit** sets a maximum buy price or minimum sell price:
 
 ```go
-p.Order(ctx, asset, Buy, 100, Limit(150.00))
+batch.Order(ctx, asset, Buy, 100, Limit(150.00))
 ```
 
 **Stop** (stop loss) triggers a market order when the price reaches a threshold:
 
 ```go
-p.Order(ctx, asset, Sell, 100, Stop(140.00))
+batch.Order(ctx, asset, Sell, 100, Stop(140.00))
 ```
 
 Combining `Stop` and `Limit` creates a **stop-limit order** -- the order activates at the stop price, then fills only at the limit price or better:
 
 ```go
-p.Order(ctx, asset, Sell, 100, Stop(140.00), Limit(135.00))
+batch.Order(ctx, asset, Sell, 100, Stop(140.00), Limit(135.00))
 ```
 
 #### Time in force
@@ -180,39 +180,39 @@ Time in force controls how long the order stays active. The default is `DayOrder
 **WithJustification** attaches an explanation to the resulting transaction:
 
 ```go
-p.Order(ctx, asset, Buy, 100, WithJustification("momentum crossover signal"))
+batch.Order(ctx, asset, Buy, 100, WithJustification("momentum crossover signal"))
 ```
 
 Order type, time in force, and annotation modifiers can be combined freely:
 
 ```go
-p.Order(ctx, asset, Buy, 100, Limit(150.00), GoodTilCancel)
-p.Order(ctx, asset, Sell, 50, Stop(140.00), FillOrKill)
-p.Order(ctx, asset, Buy, 200, OnTheOpen, WithJustification("rebalance after earnings"))
+batch.Order(ctx, asset, Buy, 100, Limit(150.00), GoodTilCancel)
+batch.Order(ctx, asset, Sell, 50, Stop(140.00), FillOrKill)
+batch.Order(ctx, asset, Buy, 200, OnTheOpen, WithJustification("rebalance after earnings"))
 ```
 
 ### Mixing approaches
 
-A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments:
+A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments, all on the same batch:
 
 ```go
-func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     // Core allocation
     plan, err := portfolio.EqualWeight(selected)
     if err != nil {
         return err
     }
-    portfolio.RebalanceTo(ctx, plan...)
+    batch.RebalanceTo(ctx, plan...)
 
     // Tactical overlay
     if vix.Value(spy, data.MetricClose) > 30 {
-        portfolio.Order(ctx, spy, Buy, 100, Limit(150.00))
+        batch.Order(ctx, spy, Buy, 100, Limit(150.00))
     }
     return nil
 }
 ```
 
-Both paths go through the same execution pipeline. Both are subject to the same risk controls.
+Both paths accumulate orders in the same batch. After `Compute` returns, middleware processes the full batch before any order reaches the broker.
 
 ## Reading portfolio state
 
@@ -310,38 +310,38 @@ plan := portfolio.PortfolioPlan{
         Justification: "momentum crossover signal",
     },
 }
-p.RebalanceTo(ctx, plan...)
+batch.RebalanceTo(ctx, plan...)
 ```
 
 Or pass `WithJustification` as an order modifier:
 
 ```go
-p.Order(ctx, asset, Buy, 100, WithJustification("price below 200-day MA"))
+batch.Order(ctx, asset, Buy, 100, WithJustification("price below 200-day MA"))
 ```
 
 Justifications are stored on the `Transaction` and persisted in the SQLite output.
 
 ### Annotations
 
-Call `Annotate` during `Compute` to record a key-value entry at the current timestep:
+Call `Annotate` on the batch during `Compute` to record a key-value entry. The engine timestamps each annotation with the current frame date:
 
 ```go
-portfolio.Annotate(eng.CurrentDate().Unix(), "bond_fraction", "0.3")
-portfolio.Annotate(eng.CurrentDate().Unix(), "signal_strength", "high")
+batch.Annotate("bond_fraction", "0.3")
+batch.Annotate("signal_strength", "high")
 ```
 
 To annotate an entire DataFrame at once, use `DataFrame.Annotate`. It decomposes every non-NaN cell into a "TICKER/Metric" keyed entry:
 
 ```go
-momentumDF.Annotate(portfolio)
+momentumDF.Annotate(batch)
 // produces entries like "SPY/Momentum" = "0.87", "EFA/Momentum" = "0.42"
 ```
 
-The `Annotation` struct stores a Unix-seconds timestamp, a key, and a string value:
+The `Annotation` struct stores a timestamp, a key, and a string value:
 
 ```go
 type Annotation struct {
-    Timestamp int64
+    Timestamp time.Time
     Key       string
     Value     string
 }
@@ -349,13 +349,54 @@ type Annotation struct {
 
 Annotations are append-only and persisted in the SQLite output. Read them with `portfolio.Annotations()`.
 
-## Risk controls
+## Middleware
 
-Risk controls constrain what the portfolio can do. They are configured by the operator — the person running the backtest or the live system — not by the strategy author. This is a deliberate separation: the strategy expresses intent, and the risk layer enforces limits.
+Middleware sits between the strategy and the broker. After `Compute` writes orders into a batch, the engine runs the batch through each registered middleware in order. Middleware can inspect, modify, remove, or add orders, and it annotates the batch to explain its changes.
 
-Risk controls apply uniformly to all operations, whether they come from `RebalanceTo` or `Order`. If a strategy tries to allocate 50% to a single stock but the operator has set a 10% position limit, the portfolio will cap the position and distribute the excess according to its rules.
+```go
+type Middleware interface {
+    Process(ctx context.Context, batch *Batch) error
+}
+```
 
-The specifics of risk control configuration are outside the strategy API. Strategy authors should write their logic without worrying about position limits, turnover constraints, or other guardrails — those are someone else's responsibility.
+Register middleware on the account with `Use`:
+
+```go
+acct := portfolio.New(
+    portfolio.WithCash(100000, startDate),
+)
+acct.Use(
+    risk.MaxPositionSize(0.25),
+    risk.DrawdownCircuitBreaker(0.15),
+)
+```
+
+Middleware executes as an ordered chain: each middleware receives the batch output of the previous one. The final batch is submitted to the broker. Excess allocation from capped positions goes to cash.
+
+### Built-in risk middleware
+
+The `risk` package provides four middleware implementations:
+
+| Middleware | Description |
+|------------|-------------|
+| `MaxPositionSize(limit)` | Caps any single position at `limit` (0.0-1.0) of total portfolio value. Injects sell orders to reduce overweight positions; excess goes to cash. |
+| `DrawdownCircuitBreaker(threshold)` | Force-liquidates all equity positions when drawdown from peak exceeds `threshold` (e.g., 0.15 for 15%). Removes all buy orders and sells everything. |
+| `MaxPositionCount(n)` | Limits concurrent positions to `n`. When projected holdings exceed the limit, the smallest positions by dollar value are sold first. |
+| `VolatilityScaler(dataSource, lookback)` | Scales position sizes inversely to trailing realized volatility over `lookback` trading days. Higher-volatility assets receive smaller allocations. Requires a `DataSource` (the engine satisfies this interface). |
+
+### Convenience profiles
+
+For common configurations, the `risk` package provides pre-built middleware chains:
+
+```go
+risk.Conservative(eng)  // 20% max position, 10% drawdown breaker, vol scaling (60 day)
+risk.Moderate()         // 25% max position, 15% drawdown breaker
+risk.Aggressive()       // 35% max position, 25% drawdown breaker
+```
+
+### Risk controls and strategy separation
+
+Risk controls are configured by the operator -- the person running the backtest or the live system -- not by the strategy author. The strategy expresses intent through the batch, and middleware enforces limits. Strategy authors should write their logic without worrying about position limits or other guardrails.
 
 ## Performance measurement
 
@@ -569,8 +610,8 @@ val := p.PerformanceMetric(MyMetric).Window(Years(3)).Value()
 While performance metrics are most commonly examined after a backtest completes, they are available during computation. A strategy might use them to adjust its behavior:
 
 ```go
-func (s *Adaptive) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
-    dd, err := portfolio.PerformanceMetric(MaxDrawdown).Value()
+func (s *Adaptive) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    dd, err := port.PerformanceMetric(MaxDrawdown).Value()
     if err == nil && dd > 0.15 {
         // drawdown exceeds 15%, reduce exposure
         return nil
@@ -605,6 +646,6 @@ eng := engine.New(&MyStrategy{},
 )
 ```
 
-Strategy code never knows or cares which broker is attached -- it calls `RebalanceTo` and `Order` the same way in both cases. The portfolio translates its internal order representation into `broker.Order` values and submits them. Large orders may be filled in multiple lots at different prices, producing one transaction per fill.
+Strategy code never knows or cares which broker is attached -- it writes to the batch the same way in both cases. After middleware processing, the engine submits each order via `broker.Submit`. Submit is non-blocking; fills arrive asynchronously through the `broker.Fills()` channel. The engine drains the fill channel at every step and records transactions.
 
 See [Broker](broker.md) for the full broker interface and supported order types.
