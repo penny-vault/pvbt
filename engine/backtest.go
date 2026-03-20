@@ -115,6 +115,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	if warmupErr != nil {
 		return nil, warmupErr
 	}
+
 	start = adjustedStart
 
 	// 6. Create and configure account.

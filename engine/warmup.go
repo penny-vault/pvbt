@@ -34,6 +34,7 @@ func walkBackTradingDays(from time.Time, days int) (time.Time, error) {
 	// Estimate calendar days needed. Start with 2x multiplier to account
 	// for weekends and holidays. Retry with doubled offset up to 3 times.
 	multiplier := 2
+
 	const maxAttempts = 3
 
 	for attempt := range maxAttempts {
@@ -42,6 +43,7 @@ func walkBackTradingDays(from time.Time, days int) (time.Time, error) {
 
 		// Walk forward from estimated start, collecting trading days.
 		var tradingDays []time.Time
+
 		cur := daily.Next(estimatedStart.Add(-time.Nanosecond))
 
 		for !cur.After(from) {
@@ -146,14 +148,17 @@ func (e *Engine) checkWarmupData(ctx context.Context, assets []asset.Asset, warm
 	}
 
 	var insufficient []asset.Asset
+
 	for _, assetItem := range assets {
 		col := df.Column(assetItem, data.MetricClose)
 		nonNaN := 0
+
 		for _, val := range col {
 			if !math.IsNaN(val) {
 				nonNaN++
 			}
 		}
+
 		if nonNaN < e.warmup {
 			insufficient = append(insufficient, assetItem)
 		}
@@ -171,14 +176,17 @@ func (e *Engine) formatWarmupShortfall(ctx context.Context, assets []asset.Asset
 	}
 
 	var details []string
+
 	for _, assetItem := range assets {
 		col := df.Column(assetItem, data.MetricClose)
 		nonNaN := 0
+
 		for _, val := range col {
 			if !math.IsNaN(val) {
 				nonNaN++
 			}
 		}
+
 		shortBy := e.warmup - nonNaN
 		if shortBy > 0 {
 			details = append(details, fmt.Sprintf("%s (short by %d days)", assetItem.Ticker, shortBy))
@@ -193,15 +201,18 @@ func (e *Engine) formatWarmupShortfall(ctx context.Context, assets []asset.Asset
 // the benchmark if set. Returns a deduplicated slice.
 func collectStrategyAssets(strategy any, benchmark asset.Asset) []asset.Asset {
 	seen := make(map[string]bool)
+
 	var result []asset.Asset
 
 	addAsset := func(assetToAdd asset.Asset) {
 		if assetToAdd == (asset.Asset{}) || assetToAdd.CompositeFigi == "" {
 			return
 		}
+
 		if seen[assetToAdd.CompositeFigi] {
 			return
 		}
+
 		seen[assetToAdd.CompositeFigi] = true
 		result = append(result, assetToAdd)
 	}
