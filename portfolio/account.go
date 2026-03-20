@@ -253,39 +253,47 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 
 // submitAndRecord sends an order to the broker and records each fill
 // as a transaction. Used by both Order and RebalanceTo.
+//
+// After Submit returns, any fills already in the broker's channel are
+// drained immediately (non-blocking). This is a temporary bridge until
+// Task 4 introduces the full DrainFills/ExecuteBatch infrastructure.
 func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Side, order broker.Order, justification string) error {
-	fills, err := a.broker.Submit(ctx, order)
-	if err != nil {
+	if err := a.broker.Submit(ctx, order); err != nil {
 		return fmt.Errorf("order %s (qty=%.2f, amount=%.2f): %w", ast.Ticker, order.Qty, order.Amount, err)
 	}
 
-	for _, fill := range fills {
-		var (
-			txType TransactionType
-			amount float64
-		)
+	fillCh := a.broker.Fills()
 
-		switch side {
-		case Buy:
-			txType = BuyTransaction
-			amount = -(fill.Price * fill.Qty)
-		case Sell:
-			txType = SellTransaction
-			amount = fill.Price * fill.Qty
+	for {
+		select {
+		case fill := <-fillCh:
+			var (
+				txType TransactionType
+				amount float64
+			)
+
+			switch side {
+			case Buy:
+				txType = BuyTransaction
+				amount = -(fill.Price * fill.Qty)
+			case Sell:
+				txType = SellTransaction
+				amount = fill.Price * fill.Qty
+			}
+
+			a.Record(Transaction{
+				Date:          fill.FilledAt,
+				Asset:         ast,
+				Type:          txType,
+				Qty:           fill.Qty,
+				Price:         fill.Price,
+				Amount:        amount,
+				Justification: justification,
+			})
+		default:
+			return nil
 		}
-
-		a.Record(Transaction{
-			Date:          fill.FilledAt,
-			Asset:         ast,
-			Type:          txType,
-			Qty:           fill.Qty,
-			Price:         fill.Price,
-			Amount:        amount,
-			Justification: justification,
-		})
 	}
-
-	return nil
 }
 
 // Cash returns the current cash balance.

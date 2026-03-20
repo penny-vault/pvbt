@@ -28,14 +28,22 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// mockBroker records submitted orders and returns pre-configured fills.
+const mockFillChannelSize = 256
+
+// mockBroker records submitted orders and delivers pre-configured fills
+// through a channel, matching the broker.Broker interface.
 type mockBroker struct {
 	submitted    []broker.Order
 	fills        [][]broker.Fill               // one []Fill per Submit call, consumed in order
 	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
-	defaultFill  *broker.Fill                  // when set, return a fill at this price/time with order qty
+	defaultFill  *broker.Fill                  // when set, deliver a fill at this price/time with order qty
 	submitErr    error                         // when set, Submit returns this error immediately
 	callIdx      int
+	fillCh       chan broker.Fill
+}
+
+func newMockBroker() *mockBroker {
+	return &mockBroker{fillCh: make(chan broker.Fill, mockFillChannelSize)}
 }
 
 func (m *mockBroker) Connect(context.Context) error { return nil }
@@ -43,8 +51,8 @@ func (m *mockBroker) Close() error                  { return nil }
 func (m *mockBroker) Cancel(_ context.Context, _ string) error {
 	return nil
 }
-func (m *mockBroker) Replace(_ context.Context, _ string, _ broker.Order) ([]broker.Fill, error) {
-	return nil, nil
+func (m *mockBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
+	return nil
 }
 func (m *mockBroker) Orders(_ context.Context) ([]broker.Order, error)       { return nil, nil }
 func (m *mockBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
@@ -52,28 +60,38 @@ func (m *mockBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
 
-func (m *mockBroker) Submit(_ context.Context, order broker.Order) ([]broker.Fill, error) {
+func (m *mockBroker) Fills() <-chan broker.Fill {
+	return m.fillCh
+}
+
+func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 	m.submitted = append(m.submitted, order)
 	if m.submitErr != nil {
-		return nil, m.submitErr
+		return m.submitErr
 	}
 	if fills, ok := m.fillsByAsset[order.Asset]; ok {
-		return fills, nil
+		for _, fill := range fills {
+			m.fillCh <- fill
+		}
+		return nil
 	}
 	if m.callIdx < len(m.fills) {
-		f := m.fills[m.callIdx]
+		for _, fill := range m.fills[m.callIdx] {
+			m.fillCh <- fill
+		}
 		m.callIdx++
-		return f, nil
+		return nil
 	}
 	if m.defaultFill != nil {
-		return []broker.Fill{{
+		m.fillCh <- broker.Fill{
 			Price:    m.defaultFill.Price,
 			Qty:      order.Qty,
 			FilledAt: m.defaultFill.FilledAt,
-		}}, nil
+		}
+		return nil
 	}
 	Fail(fmt.Sprintf("mockBroker: unexpected Submit call #%d for %s with no configured fill", m.callIdx, order.Asset.Ticker))
-	return nil, nil
+	return nil
 }
 
 var _ broker.Broker = (*mockBroker)(nil)
@@ -87,9 +105,8 @@ var _ = Describe("Order", func() {
 
 	BeforeEach(func() {
 		testAsset = asset.Asset{CompositeFigi: "TEST001", Ticker: "TEST"}
-		mb = &mockBroker{
-			defaultFill: &broker.Fill{Price: 100.0, FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)},
-		}
+		mb = newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: time.Date(2025, 1, 15, 10, 0, 0, 0, time.UTC)}
 		acct = portfolio.New(portfolio.WithCash(10_000, time.Time{}), portfolio.WithBroker(mb))
 	})
 

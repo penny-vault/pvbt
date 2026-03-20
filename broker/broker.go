@@ -36,17 +36,20 @@ type Broker interface {
 	// Close tears down the broker session and releases resources.
 	Close() error
 
-	// Submit sends an order to the brokerage and returns one or more fill
-	// reports. Large orders may be filled in multiple lots at different
-	// prices.
-	Submit(ctx context.Context, order Order) ([]Fill, error)
+	// Submit sends an order to the brokerage. Fills are delivered
+	// asynchronously through the channel returned by Fills.
+	Submit(ctx context.Context, order Order) error
+
+	// Fills returns a receive-only channel on which fill reports are
+	// delivered after each Submit call.
+	Fills() <-chan Fill
 
 	// Cancel requests cancellation of an open order by ID.
 	Cancel(ctx context.Context, orderID string) error
 
 	// Replace cancels an existing order and submits a replacement atomically
-	// (cancel-replace). Returns one or more fills for the replacement order.
-	Replace(ctx context.Context, orderID string, order Order) ([]Fill, error)
+	// (cancel-replace).
+	Replace(ctx context.Context, orderID string, order Order) error
 
 	// Orders returns all orders for the current trading day.
 	Orders(ctx context.Context) ([]Order, error)

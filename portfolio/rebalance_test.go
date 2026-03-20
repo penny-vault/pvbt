@@ -69,7 +69,7 @@ var _ = Describe("RebalanceTo", func() {
 
 		// Configure mock broker to fill at correct prices (keyed by asset
 		// so map iteration order doesn't matter).
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
 			spy:  {{Price: 500.0, Qty: 120, FilledAt: fill}},
 			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
@@ -114,10 +114,9 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		// Seed the account: buy 200 SPY at $500 with enough cash.
-		mbSetup := &mockBroker{
-			fills: [][]broker.Fill{
-				{{Price: 500.0, Qty: 200, FilledAt: fill}},
-			},
+		mbSetup := newMockBroker()
+		mbSetup.fills = [][]broker.Fill{
+			{{Price: 500.0, Qty: 200, FilledAt: fill}},
 		}
 		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mbSetup))
 		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 200)).To(Succeed())
@@ -127,7 +126,7 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(acct.Value()).To(Equal(100_000.0))
 
 		// Swap broker for rebalance tracking.
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		// Sells happen first, then buys.
 		// Sell 100 SPY (200 held, target = floor(0.5*100000/500) = 100, diff = -100)
 		// Buy 250 AAPL (0 held, target = floor(0.5*100000/200) = 250, diff = +250)
@@ -166,10 +165,9 @@ var _ = Describe("RebalanceTo", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		mbSetup := &mockBroker{
-			fills: [][]broker.Fill{
-				{{Price: 500.0, Qty: 100, FilledAt: fill}},
-			},
+		mbSetup := newMockBroker()
+		mbSetup.fills = [][]broker.Fill{
+			{{Price: 500.0, Qty: 100, FilledAt: fill}},
 		}
 		acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}), portfolio.WithBroker(mbSetup))
 		Expect(acct.Order(context.Background(), spy, portfolio.Buy, 100)).To(Succeed())
@@ -178,7 +176,7 @@ var _ = Describe("RebalanceTo", func() {
 		acct.UpdatePrices(df)
 		Expect(acct.Value()).To(Equal(50_000.0))
 
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		// Sell all SPY first, then buy GOOG.
 		// target GOOG = floor(1.0 * 50000 / 1000) = 50
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
@@ -207,9 +205,8 @@ var _ = Describe("RebalanceTo", func() {
 	})
 
 	It("returns an error when broker rejects an order", func() {
-		mb := &mockBroker{
-			submitErr: fmt.Errorf("no price for SPY"),
-		}
+		mb := newMockBroker()
+		mb.submitErr = fmt.Errorf("no price for SPY")
 		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 
 		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
@@ -225,7 +222,7 @@ var _ = Describe("RebalanceTo", func() {
 	})
 
 	It("is a no-op when allocation has empty Members and no holdings", func() {
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
 
 		err := acct.RebalanceTo(context.Background(), portfolio.Allocation{
@@ -248,7 +245,7 @@ var _ = Describe("RebalanceTo", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
 			spy: {{Price: 500.0, Qty: 100, FilledAt: fill}},
 		}
@@ -279,7 +276,7 @@ var _ = Describe("RebalanceTo", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
 			spy: {{Price: 500.0, Qty: 100, FilledAt: fill}},
 		}
@@ -309,7 +306,7 @@ var _ = Describe("RebalanceTo", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
 			spy:  {{Price: 500.0, Qty: 120, FilledAt: fill}},
 			aapl: {{Price: 200.0, Qty: 200, FilledAt: fill}},
@@ -362,7 +359,7 @@ var _ = Describe("Order WithJustification", func() {
 		)
 		Expect(err).NotTo(HaveOccurred())
 
-		mb := &mockBroker{}
+		mb := newMockBroker()
 		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
 			spyAsset: {{Price: 500.0, Qty: 10, FilledAt: fillTime}},
 		}

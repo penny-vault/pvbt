@@ -61,8 +61,8 @@ var _ = Describe("Account", func() {
 		It("replaces the broker on the account", func() {
 			// The mockBroker type is defined in order_test.go and is
 			// available in the portfolio_test package.
-			mb1 := &mockBroker{}
-			mb2 := &mockBroker{}
+			mb1 := newMockBroker()
+			mb2 := newMockBroker()
 
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
