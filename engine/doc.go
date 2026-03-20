@@ -54,7 +54,6 @@
 //		"github.com/penny-vault/pvbt/engine"
 //		"github.com/penny-vault/pvbt/portfolio"
 //		"github.com/penny-vault/pvbt/signal"
-//		"github.com/penny-vault/pvbt/tradecron"
 //		"github.com/penny-vault/pvbt/universe"
 //		"github.com/rs/zerolog/log"
 //	)
@@ -66,12 +65,13 @@
 //
 //	func (s *ADM) Name() string { return "adm" }
 //
-//	func (s *ADM) Setup(e *engine.Engine) {
-//		tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-//		e.Schedule(tc)
-//		e.SetBenchmark(e.Asset("VFINX"))
-//		// The engine automatically uses DGS3MO (3-Month Treasury yield) as the
-//		// risk-free rate for all performance metrics.
+//	func (s *ADM) Setup(_ *engine.Engine) {}
+//
+//	func (s *ADM) Describe() engine.StrategyDescription {
+//		return engine.StrategyDescription{
+//			Schedule:  "@monthend",
+//			Benchmark: "VFINX",
+//		}
 //	}
 //
 //	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {

@@ -30,7 +30,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // mockAssetProvider implements data.AssetProvider for tests.
@@ -58,12 +57,10 @@ type backtestStrategy struct {
 
 func (s *backtestStrategy) Name() string { return "backtestStrategy" }
 
-func (s *backtestStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("backtestStrategy.Setup: tradecron.New: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *backtestStrategy) Setup(_ *engine.Engine) {}
+
+func (s *backtestStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
@@ -124,12 +121,10 @@ type monthlyStrategy struct {
 
 func (s *monthlyStrategy) Name() string { return "monthlyStrategy" }
 
-func (s *monthlyStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("@close @monthend", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("monthlyStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *monthlyStrategy) Setup(_ *engine.Engine) {}
+
+func (s *monthlyStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "@close @monthend"}
 }
 
 func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
@@ -182,12 +177,10 @@ type failingStrategy struct{}
 
 func (s *failingStrategy) Name() string { return "failing" }
 
-func (s *failingStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("failingStrategy.Setup: tradecron.New: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *failingStrategy) Setup(_ *engine.Engine) {}
+
+func (s *failingStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *failingStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {

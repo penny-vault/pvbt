@@ -26,7 +26,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // liveStrategy is a minimal strategy that sets a schedule and does nothing in Compute.
@@ -34,12 +33,10 @@ type liveStrategy struct{}
 
 func (s *liveStrategy) Name() string { return "liveStrategy" }
 
-func (s *liveStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic("liveStrategy.Setup: " + err.Error())
-	}
-	eng.Schedule(tc)
+func (s *liveStrategy) Setup(_ *engine.Engine) {}
+
+func (s *liveStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {

@@ -17,7 +17,6 @@ package engine_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +26,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // predictStrategy always rebalances to 100% SPY.
@@ -39,12 +37,11 @@ type predictStrategy struct {
 func (s *predictStrategy) Name() string { return "predict-test" }
 
 func (s *predictStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New(s.schedule, tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("predictStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
 	s.spy = eng.Asset("SPY")
+}
+
+func (s *predictStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: s.schedule}
 }
 
 func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {

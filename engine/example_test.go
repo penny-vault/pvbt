@@ -9,7 +9,6 @@ import (
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/signal"
-	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 )
 
@@ -22,10 +21,10 @@ type BuyAndHold struct {
 
 func (s *BuyAndHold) Name() string { return "buy-and-hold" }
 
-func (s *BuyAndHold) Setup(e *engine.Engine) {
-	tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-	e.Schedule(tc)
-	e.SetBenchmark(e.Asset("SPY"))
+func (s *BuyAndHold) Setup(_ *engine.Engine) {}
+
+func (s *BuyAndHold) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "@monthend", Benchmark: "SPY"}
 }
 
 func (s *BuyAndHold) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
@@ -75,10 +74,10 @@ type MomentumStrategy struct {
 
 func (s *MomentumStrategy) Name() string { return "momentum" }
 
-func (s *MomentumStrategy) Setup(e *engine.Engine) {
-	tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-	e.Schedule(tc)
-	e.SetBenchmark(e.Asset("SPY"))
+func (s *MomentumStrategy) Setup(_ *engine.Engine) {}
+
+func (s *MomentumStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "@monthend", Benchmark: "SPY"}
 }
 
 func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
