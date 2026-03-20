@@ -1,11 +1,15 @@
 package engine
 
 import (
+	"context"
 	"fmt"
+	"math"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 )
@@ -55,6 +59,133 @@ func walkBackTradingDays(from time.Time, days int) (time.Time, error) {
 
 	return time.Time{}, fmt.Errorf("walkBackTradingDays: could not find %d trading days before %s after %d attempts",
 		days, from.Format("2006-01-02"), maxAttempts)
+}
+
+// validateWarmup checks that all strategy assets have sufficient data
+// in the warmup window. It returns the (possibly adjusted) start date.
+func (e *Engine) validateWarmup(ctx context.Context, start, end time.Time) (time.Time, error) {
+	// Extract warmup from Describe() if available.
+	if desc, ok := e.strategy.(Descriptor); ok {
+		e.warmup = desc.Describe().Warmup
+	}
+
+	if e.warmup == 0 {
+		return start, nil
+	}
+
+	if e.warmup < 0 {
+		return time.Time{}, fmt.Errorf("engine: negative warmup value %d", e.warmup)
+	}
+
+	// Resolve start to the first scheduled trading date.
+	firstTradeDate := e.schedule.Next(start.Add(-time.Nanosecond))
+
+	// Collect assets to validate.
+	strategyAssets := collectStrategyAssets(e.strategy, e.benchmark)
+	if len(strategyAssets) == 0 {
+		return start, nil
+	}
+
+	// Check warmup data availability.
+	warmupStart, err := walkBackTradingDays(firstTradeDate, e.warmup)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("engine: computing warmup start: %w", err)
+	}
+
+	insufficientAssets, checkErr := e.checkWarmupData(ctx, strategyAssets, warmupStart, firstTradeDate)
+	if checkErr != nil {
+		return time.Time{}, fmt.Errorf("engine: checking warmup data: %w", checkErr)
+	}
+
+	if len(insufficientAssets) == 0 {
+		return start, nil
+	}
+
+	// Handle insufficient data based on mode.
+	if e.dateRangeMode == DateRangeModeStrict {
+		return time.Time{}, fmt.Errorf("engine: %s", e.formatWarmupShortfall(ctx, insufficientAssets, warmupStart, firstTradeDate))
+	}
+
+	// Permissive mode: scan forward to find a valid start date.
+	daily, dailyErr := tradecron.New("@close * * *", tradecron.RegularHours)
+	if dailyErr != nil {
+		return time.Time{}, fmt.Errorf("engine: creating daily schedule for permissive scan: %w", dailyErr)
+	}
+
+	candidate := daily.Next(firstTradeDate.Add(time.Nanosecond))
+	for !candidate.After(end) {
+		candidateWarmupStart, walkErr := walkBackTradingDays(candidate, e.warmup)
+		if walkErr != nil {
+			return time.Time{}, fmt.Errorf("engine: computing warmup start for candidate %s: %w",
+				candidate.Format("2006-01-02"), walkErr)
+		}
+
+		insufficientAssets, checkErr = e.checkWarmupData(ctx, insufficientAssets, candidateWarmupStart, candidate)
+		if checkErr != nil {
+			return time.Time{}, fmt.Errorf("engine: checking warmup data at %s: %w",
+				candidate.Format("2006-01-02"), checkErr)
+		}
+
+		if len(insufficientAssets) == 0 {
+			return candidate, nil
+		}
+
+		candidate = daily.Next(candidate.Add(time.Nanosecond))
+	}
+
+	return time.Time{}, fmt.Errorf("engine: no valid start date with sufficient warmup data before %s",
+		end.Format("2006-01-02"))
+}
+
+// checkWarmupData fetches MetricClose over the warmup window and returns
+// assets that have fewer than e.warmup non-NaN values.
+func (e *Engine) checkWarmupData(ctx context.Context, assets []asset.Asset, warmupStart, tradeStart time.Time) ([]asset.Asset, error) {
+	df, err := e.fetchRange(ctx, assets, []data.Metric{data.MetricClose}, warmupStart, tradeStart)
+	if err != nil {
+		return nil, err
+	}
+
+	var insufficient []asset.Asset
+	for _, assetItem := range assets {
+		col := df.Column(assetItem, data.MetricClose)
+		nonNaN := 0
+		for _, val := range col {
+			if !math.IsNaN(val) {
+				nonNaN++
+			}
+		}
+		if nonNaN < e.warmup {
+			insufficient = append(insufficient, assetItem)
+		}
+	}
+
+	return insufficient, nil
+}
+
+// formatWarmupShortfall builds an error message listing each asset and
+// how many trading days it is short by.
+func (e *Engine) formatWarmupShortfall(ctx context.Context, assets []asset.Asset, warmupStart, tradeStart time.Time) string {
+	df, err := e.fetchRange(ctx, assets, []data.Metric{data.MetricClose}, warmupStart, tradeStart)
+	if err != nil {
+		return fmt.Sprintf("assets with insufficient warmup data (fetch error: %v)", err)
+	}
+
+	var details []string
+	for _, assetItem := range assets {
+		col := df.Column(assetItem, data.MetricClose)
+		nonNaN := 0
+		for _, val := range col {
+			if !math.IsNaN(val) {
+				nonNaN++
+			}
+		}
+		shortBy := e.warmup - nonNaN
+		if shortBy > 0 {
+			details = append(details, fmt.Sprintf("%s (short by %d days)", assetItem.Ticker, shortBy))
+		}
+	}
+
+	return fmt.Sprintf("insufficient warmup data: %s", strings.Join(details, ", "))
 }
 
 // collectStrategyAssets reflects over the strategy struct to find all

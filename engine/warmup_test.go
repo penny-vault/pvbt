@@ -1,15 +1,39 @@
 package engine_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/universe"
 )
+
+// warmupStrategy is a test strategy that declares warmup via Describe().
+type warmupStrategy struct {
+	assets     []asset.Asset
+	warmupDays int
+}
+
+func (s *warmupStrategy) Name() string { return "warmupStrategy" }
+
+func (s *warmupStrategy) Setup(_ *engine.Engine) {}
+
+func (s *warmupStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
+
+func (s *warmupStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule: "0 16 * * 1-5",
+		Warmup:   s.warmupDays,
+	}
+}
 
 var _ = Describe("walkBackTradingDays", func() {
 	It("returns the same date for 0 days", func() {
@@ -111,5 +135,153 @@ var _ = Describe("collectStrategyAssets", func() {
 		strategy := &testStrategy{}
 		assets := engine.CollectStrategyAssetsForTest(strategy, asset.Asset{})
 		Expect(assets).To(BeEmpty())
+	})
+})
+
+var _ = Describe("validateWarmup", func() {
+	var (
+		aapl          asset.Asset
+		msft          asset.Asset
+		testAssets    []asset.Asset
+		assetProvider *mockAssetProvider
+		metrics       []data.Metric
+	)
+
+	BeforeEach(func() {
+		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
+		testAssets = []asset.Asset{aapl, msft}
+		assetProvider = &mockAssetProvider{assets: testAssets}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+	})
+
+	Context("warmup is 0", func() {
+		It("returns the original start date unchanged", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: 0, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+		})
+	})
+
+	Context("strict mode", func() {
+		It("succeeds when warmup data is available", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: 14, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+		})
+
+		It("errors when warmup data is insufficient", func() {
+			dataStart := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 60, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: 14, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("warmup"))
+		})
+	})
+
+	Context("permissive mode", func() {
+		It("adjusts start date forward when warmup data is partial", func() {
+			dataStart := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 200, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: 5, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+				engine.WithDateRangeMode(engine.DateRangeModePermissive),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+		})
+
+		It("errors when no valid start date exists before end", func() {
+			dataStart := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 10, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: 100, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+				engine.WithDateRangeMode(engine.DateRangeModePermissive),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 15, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("warmup"))
+		})
+	})
+
+	Context("negative warmup", func() {
+		It("errors during backtest initialization", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &warmupStrategy{warmupDays: -5, assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("negative"))
+		})
 	})
 })
