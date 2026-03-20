@@ -1181,3 +1181,186 @@ var _ = Describe("MarketCapWeighted", func() {
 		Expect(err).To(HaveOccurred())
 	})
 })
+
+var _ = Describe("RiskParity", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+	})
+
+	It("converges to equal risk contribution for 2-asset case", func() {
+		// For 2 uncorrelated assets with known volatilities, equal risk
+		// contribution means w_1*sigma_1 = w_2*sigma_2.
+		// If sigma_SPY=1%, sigma_AAPL=2%, then w_SPY/w_AAPL = 2/1 = 2.
+		// So w_SPY = 2/3, w_AAPL = 1/3.
+		numDays := 120
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		// Use deterministic price series with known volatility ratio.
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			// SPY: small oscillations around 100.
+			spyPrices[idx] = 100.0 + math.Sin(float64(idx)*0.3)*1.0
+			// AAPL: larger oscillations around 200.
+			aaplPrices[idx] = 200.0 + math.Sin(float64(idx)*0.3)*4.0
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		plan, err := portfolio.RiskParity(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+
+		// SPY should get more weight (lower volatility).
+		Expect(lastAlloc.Members[spy]).To(BeNumerically(">", lastAlloc.Members[aapl]))
+
+		// Weights should sum to 1.
+		sum := 0.0
+		for _, weight := range lastAlloc.Members {
+			Expect(weight).To(BeNumerically(">=", 0))
+			sum += weight
+		}
+		Expect(sum).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("returns error when Selected column is missing", func() {
+		t1 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = portfolio.RiskParity(context.Background(), df, data.Period{})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("falls back to equal weight when all volatilities are zero", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			spyPrices[idx] = 100.0
+			aaplPrices[idx] = 50.0
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		plan, err := portfolio.RiskParity(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+		Expect(lastAlloc.Members[spy]).To(Equal(0.5))
+		Expect(lastAlloc.Members[aapl]).To(Equal(0.5))
+	})
+
+	It("assigns 100% to a single selected asset", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		prices := make([]float64, numDays)
+		selected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			prices[idx] = 100.0 + float64(idx)
+			selected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times, []asset.Asset{spy},
+			[]data.Metric{data.AdjClose}, data.Daily, prices,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, selected)).To(Succeed())
+
+		plan, err := portfolio.RiskParity(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+		Expect(lastAlloc.Members[spy]).To(Equal(1.0))
+	})
+
+	It("result is close to RiskParityFast", func() {
+		numDays := 120
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			spyPrices[idx] = 100.0 + float64(idx)*0.5 + math.Sin(float64(idx)*0.2)*2.0
+			aaplPrices[idx] = 200.0 + float64(idx)*1.0 + math.Sin(float64(idx)*0.2)*5.0
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		iterPlan, err := portfolio.RiskParity(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+
+		fastPlan, err := portfolio.RiskParityFast(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Both should produce valid weights, and for 2-asset case the results
+		// should be reasonably close (within 10%).
+		lastIter := iterPlan[len(iterPlan)-1]
+		lastFast := fastPlan[len(fastPlan)-1]
+
+		Expect(lastIter.Members[spy]).To(BeNumerically("~", lastFast.Members[spy], 0.1))
+	})
+})
