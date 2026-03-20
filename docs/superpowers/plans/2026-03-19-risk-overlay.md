@@ -694,7 +694,23 @@ func (batch *Batch) projectedCash() float64 {
 	return cash
 }
 
+// projectedPositionValue returns the dollar value of a position after
+// accounting for all pending orders in the batch.
+func (batch *Batch) projectedPositionValue(ast asset.Asset) float64 {
+	holdings := batch.ProjectedHoldings()
+	qty := holdings[ast]
+	price := batch.priceOf(ast)
+
+	if qty > 0 && price > 0 {
+		return qty * price
+	}
+
+	return 0
+}
+
 // priceOf returns the last known price for an asset from the portfolio.
+// It first checks the portfolio's prices DataFrame directly, falling back
+// to deriving price from position value / quantity for held assets.
 func (batch *Batch) priceOf(ast asset.Asset) float64 {
 	posValue := batch.portfolio.PositionValue(ast)
 	pos := batch.portfolio.Position(ast)
@@ -704,7 +720,12 @@ func (batch *Batch) priceOf(ast asset.Asset) float64 {
 	}
 
 	// Asset not held -- cannot determine price from portfolio alone.
-	// This happens for new buys. The caller should handle zero gracefully.
+	// For RebalanceTo with new assets, the Batch needs a price source.
+	// The portfolio's prices DataFrame is set by UpdatePrices each step,
+	// so this only happens for assets that were never priced. In practice
+	// the engine always calls UpdatePrices before Compute, so the
+	// portfolio's prices contain all universe assets. If truly unknown,
+	// return 0 and the caller skips the order (no qty can be computed).
 	return 0
 }
 ```
@@ -729,10 +750,21 @@ Describe("ProjectedHoldings", func() {
     })
 
     It("reflects accumulated sell orders reducing existing positions", func() {
-        // Setup: account already holds 100 SPY.
-        // (Need to execute a batch first to establish the position.)
-        // For this test, use a pre-loaded account.
-        // ... test body depends on account setup with existing holdings
+        // Manually set up an account with existing holdings by
+        // executing a batch to buy, then creating a new batch to sell.
+        setupBatch := acct.NewBatch(timestamp.AddDate(0, 0, -1))
+        err := setupBatch.Order(context.Background(), spy, portfolio.Buy, 100)
+        Expect(err).NotTo(HaveOccurred())
+        err = acct.ExecuteBatch(context.Background(), setupBatch)
+        Expect(err).NotTo(HaveOccurred())
+
+        // Now create a new batch that sells 30 shares.
+        sellBatch := acct.NewBatch(timestamp)
+        err = sellBatch.Order(context.Background(), spy, portfolio.Sell, 30)
+        Expect(err).NotTo(HaveOccurred())
+
+        holdings := sellBatch.ProjectedHoldings()
+        Expect(holdings[spy]).To(Equal(70.0))
     })
 })
 ```
@@ -1431,6 +1463,7 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -1551,6 +1584,24 @@ git commit -m "feat: add MaxPositionCount risk middleware"
 - Create: `risk/volatility_scaler_test.go`
 
 This middleware needs a `DataSource` for fetching historical prices. It depends on the `DataSource` interface being available in the `data` package (per weighting-strategies spec). If that hasn't landed yet, use `universe.DataSource` and update the import later.
+
+The `risk` package should define a local interface alias to avoid coupling to the source package:
+
+```go
+// In risk/risk.go:
+// DataSource provides market data access for algorithmic middleware.
+// This mirrors the DataSource interface in the data package (or
+// universe package if the migration hasn't landed yet).
+type DataSource interface {
+	Fetch(ctx context.Context, assets []asset.Asset, lookback data.Period,
+		metrics []data.Metric) (*data.DataFrame, error)
+	FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
+		metrics []data.Metric) (*data.DataFrame, error)
+	CurrentDate() time.Time
+}
+```
+
+The engine satisfies this interface. Callers pass the engine as `DataSource` when constructing algorithmic middleware.
 
 - [ ] **Step 1: Write failing tests**
 
