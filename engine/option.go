@@ -70,11 +70,28 @@ func WithPortfolioSnapshot(snap portfolio.PortfolioSnapshot) Option {
 	}
 }
 
+// WithBenchmarkTicker sets the benchmark asset by ticker. This is resolved
+// to an asset during engine initialization and takes priority over any
+// benchmark suggested by the strategy's Describe() method.
+func WithBenchmarkTicker(ticker string) Option {
+	return func(e *Engine) {
+		e.benchmarkTicker = ticker
+	}
+}
+
 // WithAccount sets a pre-configured portfolio Account for the engine
 // to use. When set, this takes priority over WithInitialDeposit,
 // WithPortfolioSnapshot, and WithBroker.
 func WithAccount(acct *portfolio.Account) Option {
 	return func(e *Engine) {
 		e.account = acct
+	}
+}
+
+// WithDateRangeMode sets how the engine handles date ranges when warmup
+// data is insufficient. Default is DateRangeModeStrict.
+func WithDateRangeMode(mode DateRangeMode) Option {
+	return func(e *Engine) {
+		e.dateRangeMode = mode
 	}
 }

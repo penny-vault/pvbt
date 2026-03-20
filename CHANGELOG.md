@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The engine validates historical data coverage before a backtest begins. Strategies declare how many trading days of warmup data they need; in strict mode the engine rejects the run if any asset falls short, and in permissive mode it shifts the start date forward until all assets have enough history.
+- Show strategy name, schedule, parameters, and presets in a readable table when running `describe`; pass `--json` to get machine-readable output
+- Select a named parameter preset with `--preset` on backtest, live, and snapshot (e.g. `--preset Classic`); explicit flags still override preset values
+- Set the benchmark from the command line with `--benchmark` on backtest, live, and snapshot (e.g. `--benchmark SPY`)
+
+### Changed
+
+- **Breaking:** `engine.DescribeStrategy` now takes a `Strategy` instead of `*Engine`
+- **Breaking:** Declare schedule in `Describe()` instead of calling `eng.Schedule()` in Setup
+- Benchmark is now a runner concern set via `--benchmark` flag or suggested by strategies in `Describe()`; strategies should no longer call `eng.SetBenchmark()` directly
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

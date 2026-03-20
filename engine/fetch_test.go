@@ -17,7 +17,6 @@ package engine_test
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +26,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // fetchStrategy captures data fetched during Compute for test assertions.
@@ -41,12 +39,10 @@ type fetchStrategy struct {
 
 func (s *fetchStrategy) Name() string { return "fetchStrategy" }
 
-func (s *fetchStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("fetchStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *fetchStrategy) Setup(_ *engine.Engine) {}
+
+func (s *fetchStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
@@ -64,12 +60,10 @@ type fetchAtStrategy struct {
 
 func (s *fetchAtStrategy) Name() string { return "fetchAtStrategy" }
 
-func (s *fetchAtStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("fetchAtStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *fetchAtStrategy) Setup(_ *engine.Engine) {}
+
+func (s *fetchAtStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
@@ -88,12 +82,10 @@ type doubleFetchStrategy struct {
 
 func (s *doubleFetchStrategy) Name() string { return "doubleFetchStrategy" }
 
-func (s *doubleFetchStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("doubleFetchStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *doubleFetchStrategy) Setup(_ *engine.Engine) {}
+
+func (s *doubleFetchStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *doubleFetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
@@ -113,12 +105,10 @@ type fetchThenFetchAtStrategy struct {
 
 func (s *fetchThenFetchAtStrategy) Name() string { return "fetchThenFetchAtStrategy" }
 
-func (s *fetchThenFetchAtStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("fetchThenFetchAtStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *fetchThenFetchAtStrategy) Setup(_ *engine.Engine) {}
+
+func (s *fetchThenFetchAtStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
@@ -139,12 +129,10 @@ type futureFetchAtStrategy struct {
 
 func (s *futureFetchAtStrategy) Name() string { return "futureFetchAtStrategy" }
 
-func (s *futureFetchAtStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("futureFetchAtStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *futureFetchAtStrategy) Setup(_ *engine.Engine) {}
+
+func (s *futureFetchAtStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {

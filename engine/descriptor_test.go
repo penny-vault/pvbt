@@ -22,10 +22,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // descriptorStrategy implements both Strategy and Descriptor.
@@ -35,14 +33,7 @@ type descriptorStrategy struct {
 }
 
 func (s *descriptorStrategy) Name() string { return "DescriptorTest" }
-func (s *descriptorStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(err)
-	}
-	eng.Schedule(tc)
-	eng.SetBenchmark(asset.Asset{Ticker: "SPY"})
-}
+func (s *descriptorStrategy) Setup(_ *engine.Engine) {}
 func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
 }
@@ -52,6 +43,9 @@ func (s *descriptorStrategy) Describe() engine.StrategyDescription {
 		Description: "A test strategy with descriptor",
 		Source:      "unit test",
 		Version:     "1.0.0",
+		Schedule:    "0 16 * * 1-5",
+		Benchmark:   "SPY",
+		Warmup:      14,
 	}
 }
 
@@ -61,13 +55,7 @@ type plainStrategy struct {
 }
 
 func (s *plainStrategy) Name() string { return "PlainTest" }
-func (s *plainStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(err)
-	}
-	eng.Schedule(tc)
-}
+func (s *plainStrategy) Setup(_ *engine.Engine) {}
 func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
 	return nil
 }
@@ -76,10 +64,7 @@ var _ = Describe("DescribeStrategy", func() {
 	Context("with a Descriptor implementation", func() {
 		It("populates all fields from the descriptor and strategy", func() {
 			strategy := &descriptorStrategy{}
-			eng := engine.New(strategy)
-			strategy.Setup(eng)
-
-			info := engine.DescribeStrategy(eng)
+			info := engine.DescribeStrategy(strategy)
 
 			Expect(info.Name).To(Equal("DescriptorTest"))
 			Expect(info.ShortCode).To(Equal("dt"))
@@ -88,6 +73,7 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(info.Version).To(Equal("1.0.0"))
 			Expect(info.Schedule).To(Equal("0 16 * * 1-5"))
 			Expect(info.Benchmark).To(Equal("SPY"))
+			Expect(info.Warmup).To(Equal(14))
 			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Parameters).To(HaveLen(2))
 			Expect(info.Suggestions).To(HaveLen(2))
@@ -96,9 +82,7 @@ var _ = Describe("DescribeStrategy", func() {
 
 		It("round-trips through JSON", func() {
 			strategy := &descriptorStrategy{}
-			eng := engine.New(strategy)
-			strategy.Setup(eng)
-			info := engine.DescribeStrategy(eng)
+			info := engine.DescribeStrategy(strategy)
 
 			encoded, err := json.Marshal(info)
 			Expect(err).NotTo(HaveOccurred())
@@ -108,20 +92,43 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(decoded.Name).To(Equal(info.Name))
 			Expect(decoded.ShortCode).To(Equal(info.ShortCode))
 		})
+
+		It("includes warmup in JSON output", func() {
+			strategy := &descriptorStrategy{}
+			info := engine.DescribeStrategy(strategy)
+			encoded, err := json.Marshal(info)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(encoded)).To(ContainSubstring(`"warmup":14`))
+		})
+	})
+
+	It("serializes Schedule and Benchmark fields", func() {
+		desc := engine.StrategyDescription{
+			ShortCode:   "test",
+			Description: "test strategy",
+			Schedule:    "@monthend",
+			Benchmark:   "SPY",
+		}
+
+		data, err := json.Marshal(desc)
+		Expect(err).NotTo(HaveOccurred())
+
+		var parsed map[string]interface{}
+		Expect(json.Unmarshal(data, &parsed)).To(Succeed())
+		Expect(parsed["schedule"]).To(Equal("@monthend"))
+		Expect(parsed["benchmark"]).To(Equal("SPY"))
 	})
 
 	Context("without a Descriptor implementation", func() {
 		It("uses defaults for missing descriptor fields", func() {
 			strategy := &plainStrategy{}
-			eng := engine.New(strategy)
-			strategy.Setup(eng)
-
-			info := engine.DescribeStrategy(eng)
+			info := engine.DescribeStrategy(strategy)
 
 			Expect(info.Name).To(Equal("PlainTest"))
 			Expect(info.ShortCode).To(BeEmpty())
-			Expect(info.Description).To(BeEmpty())
+			Expect(info.Schedule).To(BeEmpty())
 			Expect(info.Benchmark).To(BeEmpty())
+			Expect(info.Warmup).To(Equal(0))
 			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Suggestions).To(BeNil())
 			Expect(info.Parameters).To(HaveLen(1))
@@ -131,9 +138,7 @@ var _ = Describe("DescribeStrategy", func() {
 
 		It("omits empty fields in JSON", func() {
 			strategy := &plainStrategy{}
-			eng := engine.New(strategy)
-			strategy.Setup(eng)
-			info := engine.DescribeStrategy(eng)
+			info := engine.DescribeStrategy(strategy)
 
 			encoded, err := json.Marshal(info)
 			Expect(err).NotTo(HaveOccurred())

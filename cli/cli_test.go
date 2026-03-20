@@ -59,6 +59,9 @@ func buildTestCmd(strategy engine.Strategy, runBody func()) (*cobra.Command, *co
 	subCmd := &cobra.Command{
 		Use: "backtest",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := applyPreset(cmd, strategy); err != nil {
+				return err
+			}
 			applyStrategyFlags(cmd, strategy)
 			if runBody != nil {
 				runBody()
@@ -69,6 +72,7 @@ func buildTestCmd(strategy engine.Strategy, runBody func()) (*cobra.Command, *co
 	}
 
 	registerStrategyFlags(subCmd, strategy)
+	subCmd.Flags().String("preset", "", "Apply a named parameter preset")
 	rootCmd.AddCommand(subCmd)
 
 	return rootCmd, subCmd
@@ -301,5 +305,50 @@ var _ = Describe("applyStrategyFlags with universe fields", func() {
 		Expect(strategy.RiskOff).NotTo(BeNil())
 		offMembers := strategy.RiskOff.Assets(time.Time{})
 		Expect(offMembers[0].Ticker).To(Equal("AGG"))
+	})
+})
+
+type presetStrategy struct {
+	RiskOn  string `pvbt:"riskOn"  desc:"equities"   default:"VOO" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
+	RiskOff string `pvbt:"riskOff" desc:"safe haven" default:"TLT" suggest:"Classic=VUSTX|Modern=SHY"`
+}
+
+func (s *presetStrategy) Name() string           { return "presetTest" }
+func (s *presetStrategy) Setup(_ *engine.Engine)  {}
+func (s *presetStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
+
+var _ = Describe("applyPreset", func() {
+	It("sets flag defaults from the named preset", func() {
+		strategy := &presetStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest", "--preset", "Classic"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.RiskOn).To(Equal("VFINX,PRIDX"))
+		Expect(strategy.RiskOff).To(Equal("VUSTX"))
+	})
+
+	It("allows explicit flags to override preset values", func() {
+		strategy := &presetStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest", "--preset", "Classic", "--riskOff", "BND"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.RiskOn).To(Equal("VFINX,PRIDX"))
+		Expect(strategy.RiskOff).To(Equal("BND"))
+	})
+
+	It("returns an error for unknown preset name", func() {
+		strategy := &presetStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest", "--preset", "DoesNotExist"})
+		err := rootCmd.Execute()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("unknown preset"))
 	})
 })

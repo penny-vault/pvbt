@@ -73,10 +73,50 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// 4. Call strategy.Setup.
 	e.strategy.Setup(e)
 
+	// 4b. If Setup did not set schedule/benchmark, try Describe().
+	if desc, ok := e.strategy.(Descriptor); ok {
+		description := desc.Describe()
+
+		if e.schedule == nil && description.Schedule != "" {
+			tc, tcErr := tradecron.New(description.Schedule, tradecron.RegularHours)
+			if tcErr != nil {
+				return nil, fmt.Errorf("engine: parsing schedule from Describe(): %w", tcErr)
+			}
+
+			e.schedule = tc
+		}
+
+		if e.benchmark == (asset.Asset{}) && description.Benchmark != "" {
+			e.benchmark = e.assets[description.Benchmark]
+			if e.benchmark == (asset.Asset{}) {
+				e.benchmark = asset.Asset{Ticker: description.Benchmark}
+			}
+		}
+	}
+
+	// 4c. CLI benchmark override (WithBenchmarkTicker) takes priority.
+	if e.benchmarkTicker != "" {
+		e.benchmark = e.assets[e.benchmarkTicker]
+		if e.benchmark == (asset.Asset{}) {
+			e.benchmark = asset.Asset{Ticker: e.benchmarkTicker}
+		}
+	}
+
 	// 5. Validate: error if schedule is nil.
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
 	}
+
+	// 5b. Initialize data cache early so validateWarmup can use fetchRange.
+	e.cache = newDataCache(e.cacheMaxBytes)
+
+	// 5c. Validate warmup data availability; may adjust start in permissive mode.
+	adjustedStart, warmupErr := e.validateWarmup(ctx, start, end)
+	if warmupErr != nil {
+		return nil, warmupErr
+	}
+
+	start = adjustedStart
 
 	// 6. Create and configure account.
 	acct := e.createAccount(start)
@@ -86,10 +126,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
-	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
-	e.cache = newDataCache(e.cacheMaxBytes)
-
-	// Resolve DGS3MO as the system risk-free rate.
+	// 7. Resolve DGS3MO as the system risk-free rate.
 	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
 	if rfErr != nil {
 		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")

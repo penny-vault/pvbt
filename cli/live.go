@@ -25,6 +25,8 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 
 	registerStrategyFlags(cmd, strategy)
+	cmd.Flags().String("preset", "", "Apply a named parameter preset")
+	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 
 	return cmd
 }
@@ -37,6 +39,10 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return err
 	}
 
+	if err := applyPreset(cmd, strategy); err != nil {
+		return err
+	}
+
 	applyStrategyFlags(cmd, strategy)
 
 	provider, err := data.NewPVDataProvider(nil)
@@ -44,11 +50,22 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
-	eng := engine.New(strategy,
+	engineOpts := []engine.Option{
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithInitialDeposit(cash),
-	)
+	}
+
+	benchmarkTicker, err := cmd.Flags().GetString("benchmark")
+	if err != nil {
+		return err
+	}
+
+	if benchmarkTicker != "" {
+		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
+	}
+
+	eng := engine.New(strategy, engineOpts...)
 	defer eng.Close()
 
 	log.Info().
@@ -61,7 +78,7 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("live mode failed: %w", err)
 	}
 
-	info := engine.DescribeStrategy(eng)
+	info := engine.DescribeStrategy(strategy)
 
 	for p := range ch {
 		rpt, buildErr := backtestReport.Build(p, info, backtestReport.RunMeta{

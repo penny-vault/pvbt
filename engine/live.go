@@ -64,6 +64,35 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 	// 4. Call strategy.Setup.
 	e.strategy.Setup(e)
 
+	// 4b. If Setup did not set schedule/benchmark, try Describe().
+	if desc, ok := e.strategy.(Descriptor); ok {
+		description := desc.Describe()
+
+		if e.schedule == nil && description.Schedule != "" {
+			tc, tcErr := tradecron.New(description.Schedule, tradecron.RegularHours)
+			if tcErr != nil {
+				return nil, fmt.Errorf("engine: parsing schedule from Describe(): %w", tcErr)
+			}
+
+			e.schedule = tc
+		}
+
+		if e.benchmark == (asset.Asset{}) && description.Benchmark != "" {
+			e.benchmark = e.assets[description.Benchmark]
+			if e.benchmark == (asset.Asset{}) {
+				e.benchmark = asset.Asset{Ticker: description.Benchmark}
+			}
+		}
+	}
+
+	// 4c. CLI benchmark override (WithBenchmarkTicker) takes priority.
+	if e.benchmarkTicker != "" {
+		e.benchmark = e.assets[e.benchmarkTicker]
+		if e.benchmark == (asset.Asset{}) {
+			e.benchmark = asset.Asset{Ticker: e.benchmarkTicker}
+		}
+	}
+
 	// 5. Validate.
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())

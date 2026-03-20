@@ -29,11 +29,13 @@ type ADM struct {
 
 func (s *ADM) Name() string { return "adm" }
 
-func (s *ADM) Setup(eng *engine.Engine) {
-	tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-	eng.Schedule(tc)
-	eng.RiskFreeAsset(eng.Asset("DGS3MO"))
-	eng.SetBenchmark(eng.Asset("SPY"))
+func (s *ADM) Setup(_ *engine.Engine) {}
+
+func (s *ADM) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule:  "@monthend",
+		Benchmark: "SPY",
+	}
 }
 
 func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portfolio) error {

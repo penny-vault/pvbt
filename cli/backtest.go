@@ -39,6 +39,8 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
 
 	registerStrategyFlags(cmd, strategy)
+	cmd.Flags().String("preset", "", "Apply a named parameter preset")
+	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 
 	return cmd
 }
@@ -110,6 +112,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		Str("run_id", fullID).
 		Msg("starting backtest")
 
+	if err := applyPreset(cmd, strategy); err != nil {
+		return err
+	}
+
 	applyStrategyFlags(cmd, strategy)
 
 	useTUI, err := cmd.Flags().GetBool("tui")
@@ -131,11 +137,22 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		portfolio.WithAllMetrics(),
 	)
 
-	eng := engine.New(strategy,
+	engineOpts := []engine.Option{
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithAccount(acct),
-	)
+	}
+
+	benchmarkTicker, err := cmd.Flags().GetString("benchmark")
+	if err != nil {
+		return err
+	}
+
+	if benchmarkTicker != "" {
+		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
+	}
+
+	eng := engine.New(strategy, engineOpts...)
 	defer eng.Close()
 
 	startTime := time.Now()
@@ -164,7 +181,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	info := engine.DescribeStrategy(eng)
+	info := engine.DescribeStrategy(strategy)
 
 	steps := 0
 	if result.PerfData() != nil {

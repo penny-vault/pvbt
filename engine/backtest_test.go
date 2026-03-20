@@ -30,7 +30,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 )
 
 // mockAssetProvider implements data.AssetProvider for tests.
@@ -58,12 +57,10 @@ type backtestStrategy struct {
 
 func (s *backtestStrategy) Name() string { return "backtestStrategy" }
 
-func (s *backtestStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("backtestStrategy.Setup: tradecron.New: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *backtestStrategy) Setup(_ *engine.Engine) {}
+
+func (s *backtestStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
@@ -124,12 +121,10 @@ type monthlyStrategy struct {
 
 func (s *monthlyStrategy) Name() string { return "monthlyStrategy" }
 
-func (s *monthlyStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("@close @monthend", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("monthlyStrategy.Setup: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *monthlyStrategy) Setup(_ *engine.Engine) {}
+
+func (s *monthlyStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "@close @monthend"}
 }
 
 func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
@@ -158,17 +153,34 @@ func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ port
 	return nil
 }
 
+// autoScheduleStrategy declares its schedule via Describe() instead of Setup.
+type autoScheduleStrategy struct {
+	Window int `pvbt:"window" desc:"window" default:"5"`
+}
+
+func (s *autoScheduleStrategy) Name() string { return "autoSchedule" }
+func (s *autoScheduleStrategy) Setup(_ *engine.Engine) {
+	// Intentionally empty -- schedule comes from Describe().
+}
+func (s *autoScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+	return nil
+}
+func (s *autoScheduleStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule:  "0 16 * * 1-5",
+		Benchmark: "SPY",
+	}
+}
+
 // failingStrategy always returns an error from Compute.
 type failingStrategy struct{}
 
 func (s *failingStrategy) Name() string { return "failing" }
 
-func (s *failingStrategy) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("0 16 * * 1-5", tradecron.RegularHours)
-	if err != nil {
-		panic(fmt.Sprintf("failingStrategy.Setup: tradecron.New: %v", err))
-	}
-	eng.Schedule(tc)
+func (s *failingStrategy) Setup(_ *engine.Engine) {}
+
+func (s *failingStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
 func (s *failingStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
@@ -350,6 +362,28 @@ var _ = Describe("Backtest", func() {
 			_, err := eng.Backtest(context.Background(), start, end)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("schedule"))
+		})
+
+		It("auto-reads schedule and benchmark from Describe()", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			allAssets := append(testAssets, spy)
+			df := makeDailyTestData(dataStart, 400, allAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &autoScheduleStrategy{}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(&mockAssetProvider{assets: allAssets}),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
 		})
 
 		It("returns an error when no asset provider is configured", func() {

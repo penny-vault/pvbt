@@ -54,7 +54,6 @@
 //		"github.com/penny-vault/pvbt/engine"
 //		"github.com/penny-vault/pvbt/portfolio"
 //		"github.com/penny-vault/pvbt/signal"
-//		"github.com/penny-vault/pvbt/tradecron"
 //		"github.com/penny-vault/pvbt/universe"
 //		"github.com/rs/zerolog/log"
 //	)
@@ -66,12 +65,13 @@
 //
 //	func (s *ADM) Name() string { return "adm" }
 //
-//	func (s *ADM) Setup(e *engine.Engine) {
-//		tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-//		e.Schedule(tc)
-//		e.SetBenchmark(e.Asset("VFINX"))
-//		// The engine automatically uses DGS3MO (3-Month Treasury yield) as the
-//		// risk-free rate for all performance metrics.
+//	func (s *ADM) Setup(_ *engine.Engine) {}
+//
+//	func (s *ADM) Describe() engine.StrategyDescription {
+//		return engine.StrategyDescription{
+//			Schedule:  "@monthend",
+//			Benchmark: "VFINX",
+//		}
 //	}
 //
 //	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
@@ -221,16 +221,18 @@
 // # Metadata
 //
 // Strategies can optionally implement the [Descriptor] interface to provide
-// additional metadata such as a shortcode, description, source URL, and
-// version via the [StrategyDescription] struct.
+// additional metadata such as a shortcode, description, source URL, version,
+// schedule, and benchmark via the [StrategyDescription] struct. When Schedule
+// and Benchmark are declared in Describe(), the engine reads them during
+// initialization and the strategy does not need to call [Engine.Schedule] or
+// [Engine.SetBenchmark] in Setup. The imperative methods still work and
+// override values from Describe().
 //
-// [DescribeStrategy] produces a [StrategyInfo] struct that serializes to
-// JSON. It collects name and description from the strategy, schedule and
-// benchmark and risk-free asset from the engine, parameters from struct
-// tags, and suggestions grouped by preset name. Call [DescribeStrategy]
-// after the engine has run Setup (i.e. after [Engine.Backtest] or RunLive
-// initialization). Before Setup, schedule, benchmark, and risk-free fields
-// will be empty.
+// [DescribeStrategy] takes a [Strategy] (not an engine) and produces a
+// [StrategyInfo] struct that serializes to JSON. It collects name and
+// description from the strategy, schedule and benchmark from Describe(),
+// parameters from struct tags, and suggestions grouped by preset name.
+// It does not require an engine or Setup to have run.
 //
 // # Logging
 //

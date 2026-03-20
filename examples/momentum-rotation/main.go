@@ -10,7 +10,6 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
 	"github.com/rs/zerolog"
 )
@@ -23,15 +22,7 @@ type MomentumRotation struct {
 
 func (s *MomentumRotation) Name() string { return "momentum-rotation" }
 
-func (s *MomentumRotation) Setup(eng *engine.Engine) {
-	tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
-	if err != nil {
-		panic(err)
-	}
-
-	eng.Schedule(tc)
-	eng.SetBenchmark(eng.Asset("SPY"))
-}
+func (s *MomentumRotation) Setup(_ *engine.Engine) {}
 
 func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
 	log := zerolog.Ctx(ctx)
@@ -78,6 +69,8 @@ func (s *MomentumRotation) Describe() engine.StrategyDescription {
 		ShortCode:   "momrot",
 		Description: "Rotates into the asset with the highest trailing return.",
 		Version:     "0.1.0",
+		Schedule:    "@monthend",
+		Benchmark:   "SPY",
 	}
 }
 
