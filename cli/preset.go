@@ -29,6 +29,7 @@ func applyPreset(cmd *cobra.Command, strategy engine.Strategy) error {
 			if suggestions[sugName] == nil {
 				suggestions[sugName] = make(map[string]string)
 			}
+
 			suggestions[sugName][param.Name] = sugVal
 		}
 	}
@@ -39,7 +40,9 @@ func applyPreset(cmd *cobra.Command, strategy engine.Strategy) error {
 		for name := range suggestions {
 			available = append(available, name)
 		}
+
 		sort.Strings(available)
+
 		return fmt.Errorf("unknown preset %q (available: %v)", presetName, available)
 	}
 
