@@ -34,6 +34,8 @@ type StrategyDescription struct {
 	Source      string    `json:"source,omitempty"`
 	Version     string    `json:"version,omitempty"`
 	VersionDate time.Time `json:"versionDate,omitzero"`
+	Schedule    string    `json:"schedule,omitempty"`
+	Benchmark   string    `json:"benchmark,omitempty"`
 }
 
 // ParameterInfo is the JSON-serializable form of a Parameter.

@@ -110,6 +110,23 @@ var _ = Describe("DescribeStrategy", func() {
 		})
 	})
 
+	It("serializes Schedule and Benchmark fields", func() {
+		desc := engine.StrategyDescription{
+			ShortCode:   "test",
+			Description: "test strategy",
+			Schedule:    "@monthend",
+			Benchmark:   "SPY",
+		}
+
+		data, err := json.Marshal(desc)
+		Expect(err).NotTo(HaveOccurred())
+
+		var parsed map[string]interface{}
+		Expect(json.Unmarshal(data, &parsed)).To(Succeed())
+		Expect(parsed["schedule"]).To(Equal("@monthend"))
+		Expect(parsed["benchmark"]).To(Equal("SPY"))
+	})
+
 	Context("without a Descriptor implementation", func() {
 		It("uses defaults for missing descriptor fields", func() {
 			strategy := &plainStrategy{}
