@@ -28,8 +28,8 @@ import (
 // Batch accumulates orders and annotations produced during a single engine
 // frame. Rather than executing trades immediately, a Batch buffers them so
 // that middleware layers can inspect or modify the full set before any order
-// reaches the broker. Task 4 will add ExecuteBatch to drain the batch and
-// apply its orders to the Account.
+// reaches the broker. Account.ExecuteBatch drains the batch through the
+// middleware chain and submits the final orders.
 type Batch struct {
 	// Timestamp is the frame's trading date.
 	Timestamp time.Time
