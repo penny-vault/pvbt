@@ -36,7 +36,7 @@ func (a *Account) RegisteredMetrics() []PerformanceMetric {
 // WithSummaryMetrics registers the summary metric group.
 func WithSummaryMetrics() Option {
 	return func(acct *Account) {
-		for _, metric := range []PerformanceMetric{TWRR, MWRR, Sharpe, Sortino, Calmar, MaxDrawdown, StdDev} {
+		for _, metric := range []PerformanceMetric{TWRR, MWRR, Sharpe, Sortino, Calmar, KellerRatio, MaxDrawdown, StdDev} {
 			WithMetric(metric)(acct)
 		}
 	}
@@ -99,7 +99,7 @@ func WithAllMetrics() Option {
 
 		for _, metric := range []PerformanceMetric{
 			CAGR, ActiveReturn, SmartSharpe, SmartSortino,
-			ProbabilisticSharpe, KRatio, KellerRatio, KellyCriterion,
+			ProbabilisticSharpe, KRatio, KellyCriterion,
 			OmegaRatio, GainToPainRatio, CVaR, TailRatio, RecoveryFactor,
 			Exposure, ConsecutiveWins, ConsecutiveLosses,
 			AvgDrawdown, AvgDrawdownDays, GainLossRatio,

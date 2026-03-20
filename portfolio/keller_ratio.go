@@ -26,7 +26,7 @@ type kellerRatio struct{}
 func (kellerRatio) Name() string { return "KellerRatio" }
 
 func (kellerRatio) Description() string {
-	return "Combines return and risk into a single measure using the formula (CAGR * (1 + CAGR)) / max_drawdown. Rewards high compound growth while penalizing drawdowns. Higher values indicate better risk-adjusted compound returns."
+	return "Risk-adjusted return that penalizes drawdowns non-linearly: K = R * (1 - D/(1-D)), where R is total return and D is maximum drawdown. When R < 0 or D > 50% the ratio is 0. Small drawdowns have limited impact; as drawdowns approach 50% the penalty grows sharply, making this useful for evaluating tactical allocation strategies."
 }
 
 func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
