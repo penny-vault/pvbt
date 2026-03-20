@@ -87,3 +87,11 @@ func WithAccount(acct *portfolio.Account) Option {
 		e.account = acct
 	}
 }
+
+// WithDateRangeMode sets how the engine handles date ranges when warmup
+// data is insufficient. Default is DateRangeModeStrict.
+func WithDateRangeMode(mode DateRangeMode) Option {
+	return func(e *Engine) {
+		e.dateRangeMode = mode
+	}
+}

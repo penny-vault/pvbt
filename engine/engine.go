@@ -54,6 +54,8 @@ type Engine struct {
 	initialDeposit  float64
 	broker          broker.Broker
 	snapshot        portfolio.PortfolioSnapshot
+	dateRangeMode   DateRangeMode
+	warmup          int
 	benchmarkTicker string
 
 	account *portfolio.Account
