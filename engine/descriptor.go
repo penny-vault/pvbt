@@ -34,6 +34,7 @@ type StrategyDescription struct {
 	VersionDate time.Time `json:"versionDate,omitzero"`
 	Schedule    string    `json:"schedule,omitempty"`
 	Benchmark   string    `json:"benchmark,omitempty"`
+	Warmup      int       `json:"warmup,omitempty"`
 }
 
 // ParameterInfo is the JSON-serializable form of a Parameter.
@@ -55,6 +56,7 @@ type StrategyInfo struct {
 	Schedule    string                       `json:"schedule,omitempty"`
 	Benchmark   string                       `json:"benchmark,omitempty"`
 	RiskFree    string                       `json:"riskFree,omitempty"`
+	Warmup      int                          `json:"warmup,omitempty"`
 	Parameters  []ParameterInfo              `json:"parameters"`
 	Suggestions map[string]map[string]string `json:"suggestions,omitempty"`
 }
@@ -74,6 +76,7 @@ func DescribeStrategy(strategy Strategy) StrategyInfo {
 		info.VersionDate = description.VersionDate
 		info.Schedule = description.Schedule
 		info.Benchmark = description.Benchmark
+		info.Warmup = description.Warmup
 	}
 
 	info.RiskFree = "DGS3MO"

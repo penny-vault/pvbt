@@ -45,6 +45,7 @@ func (s *descriptorStrategy) Describe() engine.StrategyDescription {
 		Version:     "1.0.0",
 		Schedule:    "0 16 * * 1-5",
 		Benchmark:   "SPY",
+		Warmup:      14,
 	}
 }
 
@@ -72,6 +73,7 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(info.Version).To(Equal("1.0.0"))
 			Expect(info.Schedule).To(Equal("0 16 * * 1-5"))
 			Expect(info.Benchmark).To(Equal("SPY"))
+			Expect(info.Warmup).To(Equal(14))
 			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Parameters).To(HaveLen(2))
 			Expect(info.Suggestions).To(HaveLen(2))
@@ -89,6 +91,14 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(json.Unmarshal(encoded, &decoded)).To(Succeed())
 			Expect(decoded.Name).To(Equal(info.Name))
 			Expect(decoded.ShortCode).To(Equal(info.ShortCode))
+		})
+
+		It("includes warmup in JSON output", func() {
+			strategy := &descriptorStrategy{}
+			info := engine.DescribeStrategy(strategy)
+			encoded, err := json.Marshal(info)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(encoded)).To(ContainSubstring(`"warmup":14`))
 		})
 	})
 
@@ -118,6 +128,7 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(info.ShortCode).To(BeEmpty())
 			Expect(info.Schedule).To(BeEmpty())
 			Expect(info.Benchmark).To(BeEmpty())
+			Expect(info.Warmup).To(Equal(0))
 			Expect(info.RiskFree).To(Equal("DGS3MO"))
 			Expect(info.Suggestions).To(BeNil())
 			Expect(info.Parameters).To(HaveLen(1))
