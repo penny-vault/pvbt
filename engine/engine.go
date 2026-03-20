@@ -277,7 +277,7 @@ func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, m
 	return data.MergeColumns(frames...)
 }
 
-// Fetch implements universe.DataSource.
+// Fetch implements data.DataSource.
 func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
 	log := zerolog.Ctx(ctx)
 
@@ -331,7 +331,7 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 	return assembled, nil
 }
 
-// FetchAt implements universe.DataSource.
+// FetchAt implements data.DataSource.
 func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp time.Time, metrics []data.Metric) (*data.DataFrame, error) {
 	if !e.predicting && !e.currentDate.IsZero() && timestamp.After(e.currentDate) {
 		return nil, fmt.Errorf("FetchAt: requested future date %s (current simulation date is %s)",
@@ -659,8 +659,8 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 	return clone, nil
 }
 
-// Compile-time check that Engine implements universe.DataSource.
-var _ universe.DataSource = (*Engine)(nil)
+// Compile-time check that Engine implements data.DataSource.
+var _ data.DataSource = (*Engine)(nil)
 
 // Compile-time check that Engine implements broker.PriceProvider.
 var _ broker.PriceProvider = (*Engine)(nil)

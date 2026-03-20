@@ -7,10 +7,9 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/universe"
 )
 
-// mockDataSource implements universe.DataSource for signal tests.
+// mockDataSource implements data.DataSource for signal tests.
 type mockDataSource struct {
 	currentDate time.Time
 	fetchResult *data.DataFrame
@@ -27,7 +26,7 @@ func (m *mockDataSource) FetchAt(_ context.Context, _ []asset.Asset, _ time.Time
 func (m *mockDataSource) CurrentDate() time.Time { return m.currentDate }
 
 // Compile-time check.
-var _ universe.DataSource = (*mockDataSource)(nil)
+var _ data.DataSource = (*mockDataSource)(nil)
 
 // errorDataSource always returns an error.
 type errorDataSource struct {
@@ -45,4 +44,4 @@ func (e *errorDataSource) FetchAt(_ context.Context, _ []asset.Asset, _ time.Tim
 func (e *errorDataSource) CurrentDate() time.Time { return time.Time{} }
 
 // Compile-time check.
-var _ universe.DataSource = (*errorDataSource)(nil)
+var _ data.DataSource = (*errorDataSource)(nil)
