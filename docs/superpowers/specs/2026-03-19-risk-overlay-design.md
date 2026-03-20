@@ -148,7 +148,10 @@ scaler's output.
 
 ### 5. PortfolioManager changes
 
-`PortfolioManager` gains batch lifecycle methods:
+`PortfolioManager` gains batch lifecycle methods. `Use()` also lives on
+`PortfolioManager` so the engine can configure middleware through the
+interface. The concrete `Account` type implements both `Portfolio` and
+`PortfolioManager`, as it does today.
 
 ```go
 type PortfolioManager interface {
@@ -156,6 +159,7 @@ type PortfolioManager interface {
     UpdatePrices(df *data.DataFrame)
     SetBroker(b broker.Broker)
 
+    Use(middleware ...Middleware)
     NewBatch(timestamp time.Time) *Batch
     ExecuteBatch(ctx context.Context, batch *Batch) error
     DrainFills(ctx context.Context) error
@@ -163,6 +167,7 @@ type PortfolioManager interface {
 }
 ```
 
+- `Use()` appends middleware to the ordered chain.
 - `NewBatch()` creates a batch with a reference to the portfolio.
 - `ExecuteBatch()` runs the middleware chain over the batch, then submits each
   final order to the broker. After all orders are submitted, it drains the
@@ -188,6 +193,12 @@ type Strategy interface {
 }
 ```
 
+The `portfolio` argument and the batch's internal portfolio reference are the
+same `Account` instance. The engine passes `acct` as the `Portfolio` and
+creates the batch via `acct.NewBatch(timestamp)`, which stores a reference
+back to the same account. This ensures `batch.ProjectedHoldings()` reads from
+the same state the strategy sees through `portfolio`.
+
 ### 7. Broker changes: non-blocking submit and fill channel
 
 `Submit()` becomes fire-and-forget. All fills -- whether immediate or
@@ -206,6 +217,10 @@ type Broker interface {
     Fills() <-chan Fill
 }
 ```
+
+Both `Submit()` and `Replace()` change from returning `([]Fill, error)` to
+returning `error`. All fills from any source -- `Submit`, `Replace`, or
+asynchronous brokerage events -- arrive through the `Fills()` channel.
 
 The simulated broker writes fills to the channel immediately on `Submit()`.
 A live broker writes fills as the brokerage reports them asynchronously.
@@ -246,16 +261,14 @@ schedule). The ordering within each iteration:
 **Algorithmic:**
 
 - `VolatilityScaler(ds DataSource, lookback int)` -- scale position sizes
-  inversely to trailing realized volatility.
+  inversely to trailing realized volatility. `lookback` is in trading days.
 
 **Convenience profiles:**
 
-- `Conservative(ds DataSource)` -- tight limits (e.g., 20% max position,
-  10% drawdown breaker, volatility scaling)
-- `Moderate(ds DataSource)` -- balanced limits (e.g., 25% max position,
-  15% drawdown breaker)
-- `Aggressive(ds DataSource)` -- loose limits (e.g., 35% max position,
-  25% drawdown breaker)
+- `Conservative(ds DataSource)` -- 20% max position, 10% drawdown breaker,
+  volatility scaling with 60 trading day lookback
+- `Moderate(ds DataSource)` -- 25% max position, 15% drawdown breaker
+- `Aggressive(ds DataSource)` -- 35% max position, 25% drawdown breaker
 
 Algorithmic middleware and profiles that need market data receive the existing
 `DataSource` interface at construction time. `DataSource` provides
@@ -287,4 +300,4 @@ portfolio's annotation log.
 | Fill delivery | Buffered channel on broker | Non-blocking, works for both simulated and live brokers, any strategy frequency |
 | Open order lifecycle | Cancelled at start of each frame | Each frame starts clean; strategy re-proposes if it still wants a limit order |
 | Portfolio mutability | Only through batch execution | Prevents strategies from bypassing middleware |
-| Annotation timestamps | `time.Time` on Batch, aligned with existing `Annotation` type | Current `Annotate()` uses `int64` timestamps; migrate to `time.Time` for consistency with `Batch.Timestamp` |
+| Annotation timestamps | `time.Time` on Batch, aligned with existing `Annotation` type | Current `Annotate()` uses `int64` timestamps; migrate to `time.Time` for consistency with `Batch.Timestamp`. This migration is in scope for this work. |
