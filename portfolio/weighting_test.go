@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -712,5 +713,186 @@ var _ = Describe("collectSelected", func() {
 		chosen := portfolio.CollectSelected(df, t1)
 		Expect(chosen).To(HaveLen(1))
 		Expect(chosen[0]).To(Equal(spy))
+	})
+})
+
+var _ = Describe("InverseVolatility", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+	})
+
+	It("weights inversely proportional to volatility", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			spyPrices[idx] = 100.0 + float64(idx%2)*0.1
+			if idx%2 == 0 {
+				aaplPrices[idx] = 100.0
+			} else {
+				aaplPrices[idx] = 110.0
+			}
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		plan, err := portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+		Expect(lastAlloc.Members[spy]).To(BeNumerically(">", lastAlloc.Members[aapl]))
+	})
+
+	It("returns error when Selected column is missing", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)},
+			[]asset.Asset{spy},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("assigns 100% to a single selected asset", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		prices := make([]float64, numDays)
+		selected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			prices[idx] = 100.0 + float64(idx)
+			selected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times, []asset.Asset{spy},
+			[]data.Metric{data.AdjClose}, data.Daily, prices,
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, selected)).To(Succeed())
+
+		plan, err := portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+		Expect(lastAlloc.Members[spy]).To(Equal(1.0))
+	})
+
+	It("falls back to equal weight when all volatilities are zero", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			spyPrices[idx] = 100.0
+			aaplPrices[idx] = 50.0
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		plan, err := portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		lastAlloc := plan[len(plan)-1]
+		Expect(lastAlloc.Members[spy]).To(Equal(0.5))
+		Expect(lastAlloc.Members[aapl]).To(Equal(0.5))
+	})
+
+	It("normalizes weights to sum to 1.0", func() {
+		numDays := 62
+		times := make([]time.Time, numDays)
+		spyPrices := make([]float64, numDays)
+		aaplPrices := make([]float64, numDays)
+		spySelected := make([]float64, numDays)
+		aaplSelected := make([]float64, numDays)
+
+		for idx := range numDays {
+			times[idx] = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC).AddDate(0, 0, idx)
+			spyPrices[idx] = 100.0 + float64(idx)*0.5
+			aaplPrices[idx] = 200.0 + float64(idx)*2.0
+			spySelected[idx] = 1
+			aaplSelected[idx] = 1
+		}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			append(spyPrices, aaplPrices...),
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, aaplSelected)).To(Succeed())
+
+		plan, err := portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).NotTo(BeEmpty())
+
+		for _, alloc := range plan {
+			sum := 0.0
+			for _, weight := range alloc.Members {
+				sum += weight
+			}
+			Expect(sum).To(BeNumerically("~", 1.0, 1e-9))
+		}
+	})
+
+	It("returns error when source is nil and data is insufficient", func() {
+		times := []time.Time{time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)}
+		df, err := data.NewDataFrame(
+			times, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+
+		_, err = portfolio.InverseVolatility(context.Background(), df, data.Period{})
+		Expect(err).To(HaveOccurred())
 	})
 })
