@@ -16,6 +16,7 @@
 package data_test
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"time"
@@ -26,6 +27,16 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
+
+type mockFrameDataSource struct{}
+
+func (m *mockFrameDataSource) Fetch(_ context.Context, _ []asset.Asset, _ data.Period, _ []data.Metric) (*data.DataFrame, error) {
+	return nil, nil
+}
+func (m *mockFrameDataSource) FetchAt(_ context.Context, _ []asset.Asset, _ time.Time, _ []data.Metric) (*data.DataFrame, error) {
+	return nil, nil
+}
+func (m *mockFrameDataSource) CurrentDate() time.Time { return time.Time{} }
 
 var _ = Describe("DataFrame", func() {
 	var (
@@ -2342,5 +2353,107 @@ var _ = Describe("ParseFrequency", func() {
 	It("returns error for unknown frequency string", func() {
 		_, err := data.ParseFrequency("bogus")
 		Expect(err).To(HaveOccurred())
+	})
+})
+
+var _ = Describe("DataFrame DataSource", func() {
+	It("returns nil source by default", func() {
+		df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Source()).To(BeNil())
+	})
+
+	It("returns the source after SetSource", func() {
+		df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+		Expect(err).NotTo(HaveOccurred())
+
+		mock := &mockFrameDataSource{}
+		df.SetSource(mock)
+		Expect(df.Source()).To(Equal(mock))
+	})
+})
+
+var _ = Describe("Correlation", func() {
+	It("computes Pearson correlation between two assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		// Perfectly correlated: both increase linearly.
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 2, 3, 4, 10, 20, 30, 40},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("returns -1 for perfectly negatively correlated assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 2, 3, 4, 40, 30, 20, 10},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", -1.0, 1e-9))
+	})
+
+	It("returns 0 for uncorrelated assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		// Orthogonal: sine and cosine phase-shifted by 90 degrees have zero correlation.
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 0, -1, 0, 0, 1, 0, -1},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", 0.0, 0.1))
 	})
 })

@@ -124,19 +124,19 @@ eng := engine.New(&ADM{},
 
 ### DataSource interface
 
-The `universe.DataSource` interface decouples data fetching from the engine, preventing circular dependencies between the engine and universe packages:
+The `data.DataSource` interface decouples data fetching from the engine, preventing circular dependencies between the engine and other packages:
 
 ```go
 type DataSource interface {
-    Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period,
-        metrics []data.Metric) (*data.DataFrame, error)
+    Fetch(ctx context.Context, assets []asset.Asset, lookback Period,
+        metrics []Metric) (*DataFrame, error)
     FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
-        metrics []data.Metric) (*data.DataFrame, error)
+        metrics []Metric) (*DataFrame, error)
     CurrentDate() time.Time
 }
 ```
 
-The engine implements `DataSource`. Universes hold a `DataSource` reference rather than a direct engine reference, so they can fetch data without knowing about the engine type.
+The engine implements `DataSource`. Every DataFrame created by the engine carries a reference to it via `Source()`, so downstream consumers like weighting functions can fetch additional data on demand. Universes also hold a `DataSource` reference for the same purpose. A backward-compatible type alias `universe.DataSource` is provided.
 
 ### Index providers
 
@@ -232,6 +232,7 @@ df.Min()                            // min of each column over time
 df.Variance()                       // sample variance of each column
 df.Std()                            // sample standard deviation of each column
 df.Covariance()                     // covariance matrix
+df.Correlation()                    // Pearson correlation matrix
 ```
 
 ### Aggregation across assets

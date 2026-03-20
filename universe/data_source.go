@@ -15,29 +15,8 @@
 
 package universe
 
-import (
-	"context"
-	"time"
+import "github.com/penny-vault/pvbt/data"
 
-	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/portfolio"
-)
-
-// DataSource provides data fetching capabilities to universe implementations.
-// The engine implements this interface; universes hold a reference to it.
-// This breaks the circular dependency between engine and universe.
-type DataSource interface {
-	// Fetch returns a DataFrame covering [currentDate - lookback, currentDate]
-	// for the given assets and metrics.
-	Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period,
-		metrics []data.Metric) (*data.DataFrame, error)
-
-	// FetchAt returns a single-row DataFrame at the given time for the given
-	// assets and metrics.
-	FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
-		metrics []data.Metric) (*data.DataFrame, error)
-
-	// CurrentDate returns the current simulation date.
-	CurrentDate() time.Time
-}
+// DataSource is an alias for data.DataSource, kept for backward compatibility
+// within the universe package.
+type DataSource = data.DataSource

@@ -89,6 +89,10 @@ Weighting functions take a filtered DataFrame and produce a `PortfolioPlan` with
 |----------|-------------|
 | `EqualWeight(df)` | Assigns equal weights to all assets where `Selected > 0` (3 selected = 1/3 each). Returns `(PortfolioPlan, error)`. |
 | `WeightedBySignal(df, metric)` | Weights selected assets proportionally to a metric column, normalized to sum to 1.0. Returns `(PortfolioPlan, error)`. |
+| `InverseVolatility(ctx, df, lookback)` | Weights inversely proportional to trailing volatility. Lower-volatility assets receive larger weights. Pass `data.Period{}` for the default 60-day lookback. |
+| `MarketCapWeighted(ctx, df)` | Weights proportionally to market capitalization. Fetches MarketCap via the DataFrame's DataSource if not already present. |
+| `RiskParityFast(ctx, df, lookback)` | Single-pass approximation of equal risk contribution. Adjusts inverse-volatility weights by marginal risk contribution from the covariance matrix. |
+| `RiskParity(ctx, df, lookback)` | Iterative optimization for equal risk contribution. Each asset contributes equally to total portfolio risk. Returns best result after up to 1000 iterations. |
 
 ```go
 // equal weight among selected assets
@@ -96,6 +100,18 @@ plan, err := portfolio.EqualWeight(momentum)
 
 // weight selected assets by market cap
 plan, err := portfolio.WeightedBySignal(momentum, data.MarketCap)
+
+// inverse volatility weighting with default 60-day lookback
+plan, err := portfolio.InverseVolatility(ctx, df, data.Period{})
+
+// market-cap weighted
+plan, err := portfolio.MarketCapWeighted(ctx, df)
+
+// risk parity (fast approximation)
+plan, err := portfolio.RiskParityFast(ctx, df, data.Days(90))
+
+// risk parity (iterative, exact)
+plan, err := portfolio.RiskParity(ctx, df, data.Period{})
 ```
 
 ## Construction

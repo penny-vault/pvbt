@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - The engine validates historical data coverage before a backtest begins. Strategies declare how many trading days of warmup data they need; in strict mode the engine rejects the run if any asset falls short, and in permissive mode it shifts the start date forward until all assets have enough history.
+- Strategies can weight portfolios by inverse volatility, market capitalization, or risk parity (both a fast single-pass approximation and a full iterative solver) in addition to the existing equal-weight and signal-based methods
+- DataFrames expose a `Correlation` method for computing Pearson correlation between asset pairs, complementing the existing `Covariance` and `Std` methods
+- DataFrames carry a reference to the engine that created them so weighting functions can fetch additional data (e.g., market cap or extended price history) on demand
 - Show strategy name, schedule, parameters, and presets in a readable table when running `describe`; pass `--json` to get machine-readable output
 - Select a named parameter preset with `--preset` on backtest, live, and snapshot (e.g. `--preset Classic`); explicit flags still override preset values
 - Set the benchmark from the command line with `--benchmark` on backtest, live, and snapshot (e.g. `--benchmark SPY`)
