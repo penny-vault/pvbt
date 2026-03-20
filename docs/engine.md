@@ -26,6 +26,7 @@ defer eng.Close()
 | `WithCacheMaxBytes(n int64)` | Maximum memory for the data cache. Defaults to 512MB. |
 | `WithPortfolioSnapshot(snap)` | Restore portfolio from a previous run's snapshot. |
 | `WithAccount(acct *portfolio.Account)` | Use a pre-configured Account (overrides deposit, snapshot, and broker). |
+| `WithDateRangeMode(mode DateRangeMode)` | How to handle insufficient warmup data: `DateRangeModeStrict` (default) errors, `DateRangeModePermissive` adjusts the start date forward. |
 
 ## Running a backtest
 
@@ -42,7 +43,7 @@ fmt.Printf("Sharpe: %.2f\n", summary.Sharpe)
 
 The backtest proceeds in four phases:
 
-1. **Initialization** -- loads assets, hydrates strategy fields from struct tags, builds the provider routing table, calls `strategy.Setup`, validates the schedule, and creates the portfolio account.
+1. **Initialization** -- loads assets, hydrates strategy fields from struct tags, builds the provider routing table, calls `strategy.Setup`, validates the schedule, checks warmup data availability (see [Warmup](#warmup)), and creates the portfolio account.
 2. **Date enumeration** -- walks the tradecron schedule from start to end to build the list of trading dates.
 3. **Step loop** -- for each trading date: fetches housekeeping data (dividends), records dividend income, updates the broker's price provider, calls `strategy.Compute`, fetches post-Compute prices, updates the equity curve, and computes performance metrics.
 4. **Return** -- returns the portfolio with the full transaction log, equity curve, and computed metrics.
@@ -181,11 +182,32 @@ func (s *ADM) Describe() engine.StrategyDescription {
         Version:     "1.0",
         Schedule:    "@monthend",
         Benchmark:   "SPY",
+        Warmup:      126, // need 126 trading days of data before first compute
     }
 }
 ```
 
 Call `engine.DescribeStrategy(strategy)` to get a `StrategyInfo` struct containing the strategy name, schedule, benchmark, parameters, and any preset suggestions. This does not require an engine or Setup to have run. The result is JSON-serializable for CLI and UI use.
+
+## Warmup
+
+Strategies that compute indicators over historical windows (e.g., a 200-day moving average) need data before the first compute date. The `Warmup` field on `StrategyDescription` declares how many trading days of prior data the strategy requires:
+
+```go
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule: "@monthend",
+        Warmup:   126, // 6 months of trading days
+    }
+}
+```
+
+During backtest initialization the engine checks that every asset in the strategy's universes and asset fields has at least `Warmup` non-NaN close prices in the window before the first scheduled trade date. The behavior depends on `DateRangeMode`:
+
+- **Strict (default)** -- the engine returns an error listing which assets are short and by how many days.
+- **Permissive** -- the engine shifts the start date forward one trading day at a time until all assets have enough data. If no valid start date exists before the end date, it returns an error.
+
+A warmup of 0 (the default) skips the check entirely.
 
 ## Resource cleanup
 

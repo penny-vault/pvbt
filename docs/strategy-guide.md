@@ -49,6 +49,7 @@ func (s *MomentumRotation) Describe() engine.StrategyDescription {
     return engine.StrategyDescription{
         Schedule:  "@monthend",
         Benchmark: "SPY",
+        Warmup:    126, // need 6 months of data before first compute
     }
 }
 
@@ -199,6 +200,21 @@ Common schedule expressions:
 | `0 10 * * *` | Every trading day at 10:00 AM ET |
 
 The format is standard 5-field cron (`minute hour day-of-month month day-of-week`) with market-aware extensions. `@open` and `@close` replace the minute/hour fields. `@monthend`, `@monthbegin`, `@weekbegin`, and `@weekend` replace the day-of-month field. All times are Eastern.
+
+### Warmup
+
+If your strategy needs historical data before its first compute date (e.g., to calculate a moving average), declare the number of trading days in `Describe()`:
+
+```go
+func (s *MyStrategy) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule: "@monthend",
+        Warmup:   252, // need 1 year of data before first trade
+    }
+}
+```
+
+The engine validates that all assets in your universes and asset fields have enough data covering the warmup window. In strict mode (the default) the backtest fails immediately if any asset is short. In permissive mode (`engine.WithDateRangeMode(engine.DateRangeModePermissive)`) the engine shifts the start date forward until all assets have sufficient history.
 
 ### Benchmark and risk-free assets
 
@@ -546,6 +562,7 @@ func (s *MomentumRotation) Describe() engine.StrategyDescription {
         ShortCode:   "momrot",
         Description: "Rotates into the asset with the highest trailing return.",
         Version:     "0.1.0",
+        Warmup:      126,
     }
 }
 ```
@@ -685,6 +702,7 @@ eng := engine.New(strategy,
     engine.WithAccount(acct),               // pre-configured account
     engine.WithCacheMaxBytes(1 << 30),      // 1 GB data cache
     engine.WithBroker(myBroker),            // custom broker for live trading
+    engine.WithDateRangeMode(engine.DateRangeModePermissive), // adjust start if warmup data is missing
 )
 ```
 
