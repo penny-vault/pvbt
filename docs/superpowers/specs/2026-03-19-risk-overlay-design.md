@@ -224,7 +224,11 @@ asynchronous brokerage events -- arrive through the `Fills()` channel.
 
 The simulated broker writes fills to the channel immediately on `Submit()`.
 A live broker writes fills as the brokerage reports them asynchronously.
-The channel is buffered so the broker never blocks on a slow consumer.
+The channel is created by the broker implementation with a fixed buffer size
+(1024 fills). If the buffer fills because the consumer has not drained it,
+the broker blocks on send. This is acceptable: a backed-up fill channel
+indicates the engine is not keeping up, and blocking is safer than dropping
+fills silently.
 
 ### 8. Engine loop
 
@@ -262,6 +266,11 @@ schedule). The ordering within each iteration:
 
 - `VolatilityScaler(ds DataSource, lookback int)` -- scale position sizes
   inversely to trailing realized volatility. `lookback` is in trading days.
+  Each position's weight is scaled by `(1/vol_i) / sum(1/vol_j)` where
+  `vol_i` is the annualized realized volatility of asset `i` over the
+  lookback window. This produces an inverse-volatility-weighted portfolio
+  where lower-volatility assets receive larger allocations. If volatility
+  data is unavailable for an asset, its weight is unchanged.
 
 **Convenience profiles:**
 
@@ -270,11 +279,13 @@ schedule). The ordering within each iteration:
 - `Moderate(ds DataSource)` -- 25% max position, 15% drawdown breaker
 - `Aggressive(ds DataSource)` -- 35% max position, 25% drawdown breaker
 
-Algorithmic middleware and profiles that need market data receive the existing
-`DataSource` interface at construction time. `DataSource` provides
-`Fetch()`, `FetchAt()`, and `CurrentDate()` -- the same data access that
-strategies use through the engine. Declarative constraints that only need
-portfolio state take simple parameters.
+Algorithmic middleware and profiles that need market data receive a
+`DataSource` interface at construction time. This is the same `DataSource`
+interface used by strategies -- currently in the `universe` package but
+moving to the `data` package per the weighting-strategies design spec.
+This work depends on that move landing first. `DataSource` provides
+`Fetch()`, `FetchAt()`, and `CurrentDate()`. Declarative constraints that
+only need portfolio state take simple parameters.
 
 ### 10. Annotation conventions for risk middleware
 
