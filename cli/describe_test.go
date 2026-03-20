@@ -20,7 +20,7 @@ type descriptorTestStrategy struct {
 
 func (s *descriptorTestStrategy) Name() string           { return "DescriptorCLITest" }
 func (s *descriptorTestStrategy) Setup(_ *engine.Engine)  {}
-func (s *descriptorTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *descriptorTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 func (s *descriptorTestStrategy) Describe() engine.StrategyDescription {
@@ -39,7 +39,7 @@ type nonDescriptorTestStrategy struct{}
 
 func (s *nonDescriptorTestStrategy) Name() string           { return "NonDescriptorCLITest" }
 func (s *nonDescriptorTestStrategy) Setup(_ *engine.Engine)  {}
-func (s *nonDescriptorTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *nonDescriptorTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 

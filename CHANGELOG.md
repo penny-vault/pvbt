@@ -16,12 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Show strategy name, schedule, parameters, and presets in a readable table when running `describe`; pass `--json` to get machine-readable output
 - Select a named parameter preset with `--preset` on backtest, live, and snapshot (e.g. `--preset Classic`); explicit flags still override preset values
 - Set the benchmark from the command line with `--benchmark` on backtest, live, and snapshot (e.g. `--benchmark SPY`)
+- A portfolio middleware system intercepts and modifies orders between strategy execution and the broker, enabling risk management, slippage modeling, and other post-allocation processing without changing strategy code
+- Built-in risk middleware enforces position size caps (`risk.MaxPositionSize`), drawdown circuit breakers (`risk.DrawdownCircuitBreaker`), position count limits (`risk.MaxPositionCount`), and inverse-volatility position scaling (`risk.VolatilityScaler`); pre-built profiles (`risk.Conservative`, `risk.Moderate`, `risk.Aggressive`) bundle common configurations
 
 ### Changed
 
 - **Breaking:** `engine.DescribeStrategy` now takes a `Strategy` instead of `*Engine`
 - **Breaking:** Declare schedule in `Describe()` instead of calling `eng.Schedule()` in Setup
 - Benchmark is now a runner concern set via `--benchmark` flag or suggested by strategies in `Describe()`; strategies should no longer call `eng.SetBenchmark()` directly
+- **Breaking:** `Strategy.Compute` receives a `*portfolio.Batch` parameter; strategies write orders and annotations to the batch instead of calling methods on the portfolio directly
+- **Breaking:** The `Portfolio` interface is now read-only; `RebalanceTo`, `Order`, and `Annotate` move to the `Batch` type, preventing strategies from bypassing middleware
+- **Breaking:** `Annotation.Timestamp` changes from `int64` (Unix seconds) to `time.Time`; the `data.Annotator` interface and all call sites are updated accordingly
+- **Breaking:** The broker delivers fills through a buffered channel (`Fills()`) instead of returning them from `Submit` and `Replace`, enabling non-blocking order execution for both backtesting and live trading
 
 ## [0.2.0] - 2026-03-17
 

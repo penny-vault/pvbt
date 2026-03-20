@@ -13,13 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package data
+package risk_test
 
-import "time"
+import (
+	"testing"
 
-// Annotator receives key-value annotations. Portfolio satisfies this
-// interface, allowing DataFrame.Annotate to push entries without
-// depending on the portfolio package.
-type Annotator interface {
-	Annotate(timestamp time.Time, key, value string)
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+func TestRisk(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecs(t, "Risk Suite")
 }

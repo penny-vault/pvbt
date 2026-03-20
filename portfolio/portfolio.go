@@ -17,36 +17,25 @@ package portfolio
 
 import (
 	"context"
+	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
-// Portfolio is the interface that strategy code receives during Compute.
-// It provides allocation decisions (RebalanceTo, Order) and read access
-// to portfolio state (Cash, Value, Positions, Transactions). Strategy
-// code cannot directly modify the transaction log -- only RebalanceTo
-// and Order produce trade transactions.
+// Ensure Account implements both interfaces at compile time.
+var (
+	_ Portfolio        = (*Account)(nil)
+	_ PortfolioManager = (*Account)(nil)
+)
+
+// Portfolio is the read-only interface that strategy code and middleware
+// receive during execution. It provides query access to portfolio state
+// (Cash, Value, Positions, Transactions, metrics, metadata, annotations)
+// but no mutation methods. Orders are placed through a Batch, which the
+// engine submits via PortfolioManager.ExecuteBatch.
 type Portfolio interface {
-	// RebalanceTo adjusts the portfolio to match the given allocations.
-	// Pass a single Allocation for an immediate rebalance, or spread a
-	// PortfolioPlan to apply a series of rebalances in date order. The
-	// engine diffs current holdings against each target and generates
-	// the necessary buy/sell orders. Each resulting trade appends a
-	// BuyTransaction or SellTransaction to the transaction log. Any
-	// commissions produce a FeeTransaction.
-	RebalanceTo(ctx context.Context, alloc ...Allocation) error
-
-	// Order places an individual order for a specific asset. This is
-	// the imperative counterpart to RebalanceTo, used when a strategy
-	// needs fine-grained control over individual trades. Optional
-	// modifiers (Limit, Stop, GoodTilCancel, FillOrKill, etc.) adjust
-	// order behavior. Each fill appends a BuyTransaction or
-	// SellTransaction to the transaction log. Any commissions produce
-	// a FeeTransaction.
-	Order(ctx context.Context, a asset.Asset, side Side, qty float64, mods ...OrderModifier) error
-
 	// Cash returns the current cash balance available in the portfolio.
 	Cash() float64
 
@@ -69,6 +58,12 @@ type Portfolio interface {
 	// order. The log contains every event that changed the portfolio:
 	// trades, dividends, fees, deposits, and withdrawals.
 	Transactions() []Transaction
+
+	// Prices returns the most-recent price DataFrame supplied to
+	// UpdatePrices. This includes prices for all assets that were in
+	// the last price update, not just currently-held positions. Returns
+	// nil if UpdatePrices has not yet been called.
+	Prices() *data.DataFrame
 
 	// PerfData returns the accumulated performance DataFrame containing
 	// equity curve, benchmark, and risk-free price series. Returns nil
@@ -119,13 +114,6 @@ type Portfolio interface {
 	// string if the key has not been set.
 	GetMetadata(key string) string
 
-	// Annotate records a key-value annotation for the given timestamp.
-	// Call this during Compute to capture intermediate computations
-	// that explain why the strategy made its decisions. Multiple calls
-	// accumulate entries. If the same (timestamp, key) pair already
-	// exists, the value is overwritten (last-write-wins).
-	Annotate(timestamp int64, key, value string)
-
 	// Annotations returns the full annotation log in the order entries
 	// were recorded.
 	Annotations() []Annotation
@@ -162,4 +150,26 @@ type PortfolioManager interface {
 	// is always required -- for backtesting the engine provides a
 	// simulated broker, for live trading a real one.
 	SetBroker(b broker.Broker)
+
+	// Use appends one or more middleware to the processing chain.
+	// Middleware run in order during ExecuteBatch, before any orders
+	// are submitted to the broker.
+	Use(middleware ...Middleware)
+
+	// NewBatch creates an empty Batch for the given timestamp, bound
+	// to this portfolio for position and price queries.
+	NewBatch(timestamp time.Time) *Batch
+
+	// ExecuteBatch runs the middleware chain on the batch, records
+	// annotations, assigns order IDs, submits orders to the broker,
+	// and drains immediate fills.
+	ExecuteBatch(ctx context.Context, batch *Batch) error
+
+	// DrainFills drains any pending fills from the broker's fill
+	// channel and records them as transactions.
+	DrainFills(ctx context.Context) error
+
+	// CancelOpenOrders cancels all open or submitted orders and
+	// removes them from the pending-orders tracker.
+	CancelOpenOrders(ctx context.Context) error
 }

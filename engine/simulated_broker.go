@@ -25,16 +25,21 @@ import (
 	"github.com/penny-vault/pvbt/data"
 )
 
+const fillChannelSize = 1024
+
 // SimulatedBroker fills all orders at the close price for backtesting.
 // The engine sets a PriceProvider and date before each Compute step.
 type SimulatedBroker struct {
 	prices broker.PriceProvider
 	date   time.Time
+	fills  chan broker.Fill
 }
 
 // NewSimulatedBroker creates a SimulatedBroker with no price provider set.
 func NewSimulatedBroker() *SimulatedBroker {
-	return &SimulatedBroker{}
+	return &SimulatedBroker{
+		fills: make(chan broker.Fill, fillChannelSize),
+	}
 }
 
 // SetPriceProvider updates the price provider and simulation date.
@@ -46,19 +51,24 @@ func (b *SimulatedBroker) SetPriceProvider(p broker.PriceProvider, date time.Tim
 func (b *SimulatedBroker) Connect(_ context.Context) error { return nil }
 func (b *SimulatedBroker) Close() error                    { return nil }
 
-func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) ([]broker.Fill, error) {
+// Fills returns the receive-only channel on which fill reports are delivered.
+func (b *SimulatedBroker) Fills() <-chan broker.Fill {
+	return b.fills
+}
+
+func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error {
 	if b.prices == nil {
-		return nil, fmt.Errorf("simulated broker: no price provider set")
+		return fmt.Errorf("simulated broker: no price provider set")
 	}
 
 	df, err := b.prices.Prices(ctx, order.Asset)
 	if err != nil {
-		return nil, fmt.Errorf("simulated broker: fetching price for %s: %w", order.Asset.Ticker, err)
+		return fmt.Errorf("simulated broker: fetching price for %s: %w", order.Asset.Ticker, err)
 	}
 
 	price := df.Value(order.Asset, data.MetricClose)
 	if math.IsNaN(price) || price == 0 {
-		return nil, fmt.Errorf("simulated broker: no price for %s (%s)",
+		return fmt.Errorf("simulated broker: no price for %s (%s)",
 			order.Asset.Ticker, order.Asset.CompositeFigi)
 	}
 
@@ -68,23 +78,25 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) ([]bro
 	}
 
 	if qty == 0 {
-		return nil, nil
+		return nil
 	}
 
-	return []broker.Fill{{
+	b.fills <- broker.Fill{
 		OrderID:  order.ID,
 		Price:    price,
 		Qty:      qty,
 		FilledAt: b.date,
-	}}, nil
+	}
+
+	return nil
 }
 
 func (b *SimulatedBroker) Cancel(_ context.Context, _ string) error {
 	return fmt.Errorf("simulated broker: cancel not supported")
 }
 
-func (b *SimulatedBroker) Replace(_ context.Context, _ string, _ broker.Order) ([]broker.Fill, error) {
-	return nil, fmt.Errorf("simulated broker: replace not supported")
+func (b *SimulatedBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
+	return fmt.Errorf("simulated broker: replace not supported")
 }
 
 func (b *SimulatedBroker) Orders(_ context.Context) ([]broker.Order, error) { return nil, nil }

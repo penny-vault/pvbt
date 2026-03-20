@@ -183,8 +183,8 @@ var _ = Describe("SQLite", func() {
 		It("round-trips annotations", func() {
 			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
-			ts1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC).Unix()
-			ts2 := time.Date(2024, 2, 15, 16, 0, 0, 0, time.UTC).Unix()
+			ts1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			ts2 := time.Date(2024, 2, 15, 16, 0, 0, 0, time.UTC)
 			acct.Annotate(ts1, "SPY/Momentum", "0.87")
 			acct.Annotate(ts1, "bond_fraction", "0.3")
 			acct.Annotate(ts2, "SPY/Momentum", "0.92")

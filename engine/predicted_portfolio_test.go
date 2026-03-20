@@ -44,7 +44,7 @@ func (s *predictStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: s.schedule}
 }
 
-func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
+func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
 	df, err := eng.FetchAt(ctx, []asset.Asset{s.spy}, eng.CurrentDate(), []data.Metric{data.MetricClose})
 	if err != nil {
 		return err
@@ -55,9 +55,9 @@ func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 		return nil
 	}
 
-	fund.Annotate(eng.CurrentDate().Unix(), "action", "buy SPY")
+	batch.Annotate("action", "buy SPY")
 
-	return fund.RebalanceTo(ctx, portfolio.Allocation{
+	return batch.RebalanceTo(ctx, portfolio.Allocation{
 		Date:          eng.CurrentDate(),
 		Members:       map[asset.Asset]float64{s.spy: 1.0},
 		Justification: "always buy SPY",

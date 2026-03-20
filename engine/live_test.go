@@ -39,7 +39,7 @@ func (s *liveStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *liveStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 

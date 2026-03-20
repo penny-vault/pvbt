@@ -13,13 +13,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package data
+package portfolio
 
-import "time"
+import "context"
 
-// Annotator receives key-value annotations. Portfolio satisfies this
-// interface, allowing DataFrame.Annotate to push entries without
-// depending on the portfolio package.
-type Annotator interface {
-	Annotate(timestamp time.Time, key, value string)
+// Middleware processes a batch of proposed orders before execution.
+// Each middleware in the chain receives the output of the previous one.
+// Middleware can remove, modify, or add orders, and annotate the batch
+// to explain its changes.
+type Middleware interface {
+	Process(ctx context.Context, batch *Batch) error
 }

@@ -61,8 +61,8 @@ var _ = Describe("Account", func() {
 		It("replaces the broker on the account", func() {
 			// The mockBroker type is defined in order_test.go and is
 			// available in the portfolio_test package.
-			mb1 := &mockBroker{}
-			mb2 := &mockBroker{}
+			mb1 := newMockBroker()
+			mb2 := newMockBroker()
 
 			a := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
@@ -618,7 +618,7 @@ var _ = Describe("Account.Clone", func() {
 
 		acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
 		acct.SetMetadata("strategy", "adm")
-		acct.Annotate(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC).Unix(), "signal", "0.5")
+		acct.Annotate(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), "signal", "0.5")
 
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
@@ -640,12 +640,12 @@ var _ = Describe("Account.Clone", func() {
 	It("isolates clone mutations from original", func() {
 		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 		acct.SetMetadata("key", "original")
-		acct.Annotate(100, "signal", "0.5")
+		acct.Annotate(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), "signal", "0.5")
 
 		clone := acct.Clone()
 
 		clone.SetMetadata("key", "mutated")
-		clone.Annotate(200, "other", "1.0")
+		clone.Annotate(time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC), "other", "1.0")
 
 		Expect(acct.GetMetadata("key")).To(Equal("original"))
 		Expect(acct.Annotations()).To(HaveLen(1))

@@ -655,8 +655,14 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 		Logger()
 	computeCtx := computeLogger.WithContext(ctx)
 
-	if err := e.strategy.Compute(computeCtx, e, clone); err != nil {
+	batch := clone.NewBatch(predictedDate)
+	if err := e.strategy.Compute(computeCtx, e, clone, batch); err != nil {
 		return nil, fmt.Errorf("engine: PredictedPortfolio compute on %v: %w",
+			predictedDate, err)
+	}
+
+	if err := clone.ExecuteBatch(computeCtx, batch); err != nil {
+		return nil, fmt.Errorf("engine: PredictedPortfolio execute batch on %v: %w",
 			predictedDate, err)
 	}
 

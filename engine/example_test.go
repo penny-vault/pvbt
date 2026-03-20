@@ -27,12 +27,12 @@ func (s *BuyAndHold) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "@monthend", Benchmark: "SPY"}
 }
 
-func (s *BuyAndHold) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
+func (s *BuyAndHold) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio, batch *portfolio.Batch) error {
 	if s.bought {
 		return nil
 	}
 	spy := e.Asset("SPY")
-	p.Order(ctx, spy, portfolio.Buy, 20)
+	batch.Order(ctx, spy, portfolio.Buy, 20)
 	s.bought = true
 	return nil
 }
@@ -80,7 +80,7 @@ func (s *MomentumStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "@monthend", Benchmark: "SPY"}
 }
 
-func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio) error {
+func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio, batch *portfolio.Batch) error {
 	mom := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3), data.MetricClose)
 	if err := mom.Err(); err != nil {
 		return nil
@@ -96,7 +96,7 @@ func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p port
 	if err != nil {
 		return nil
 	}
-	p.RebalanceTo(ctx, plan...)
+	batch.RebalanceTo(ctx, plan...)
 	return nil
 }
 

@@ -10,13 +10,13 @@ A strategy is a Go struct that implements three methods:
 type Strategy interface {
     Name() string
     Setup(eng *engine.Engine)
-    Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error
+    Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio, batch *portfolio.Batch) error
 }
 ```
 
 - **Name** returns the strategy name. Used in logging and CLI output.
 - **Setup** runs once at startup. Configure the trading schedule, benchmark, and risk-free asset here.
-- **Compute** runs at each scheduled date. Fetch data, compute signals, and place trades.
+- **Compute** runs at each scheduled date. Fetch data, compute signals, and write orders and annotations to the `batch`. The portfolio is read-only -- use it to inspect holdings and performance, but place all trades through the batch.
 
 Here is a complete strategy that rotates into whichever asset has the highest trailing momentum:
 
@@ -53,7 +53,7 @@ func (s *MomentumRotation) Describe() engine.StrategyDescription {
     }
 }
 
-func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
+func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     log := zerolog.Ctx(ctx)
 
     // Fetch close prices for the lookback period.
@@ -88,7 +88,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
     }
 
     // Execute the rebalance.
-    if err := port.RebalanceTo(ctx, plan...); err != nil {
+    if err := batch.RebalanceTo(ctx, plan...); err != nil {
         log.Error().Err(err).Msg("rebalance failed")
     }
 
@@ -408,14 +408,14 @@ fmt.Println(df.Table())     // ASCII table of the DataFrame
 
 ### Declarative: RebalanceTo
 
-The typical approach. Provide target weights and the engine generates the necessary trades:
+The typical approach. Provide target weights and the batch generates the necessary orders:
 
 ```go
 plan, err := portfolio.EqualWeight(selectedDF)
 if err != nil {
     return err
 }
-port.RebalanceTo(ctx, plan...)
+batch.RebalanceTo(ctx, plan...)
 ```
 
 The pipeline is: **select** which assets to hold, then **weight** them into an allocation, then **execute** the rebalance.
@@ -447,10 +447,10 @@ badCanary := df.CountWhere(data.AdjClose, func(v float64) bool {
 plan, err := portfolio.EqualWeight(df)   // equal weight among selected assets
 ```
 
-**Execution** -- `RebalanceTo` diffs current holdings against the target and generates buy/sell orders:
+**Execution** -- `RebalanceTo` diffs current holdings against the target and accumulates buy/sell orders in the batch:
 
 ```go
-port.RebalanceTo(ctx, plan...)
+batch.RebalanceTo(ctx, plan...)
 ```
 
 An `Allocation` has target weights that sum to 1.0 and an optional justification:
@@ -469,13 +469,13 @@ For fine-grained control over individual trades:
 
 ```go
 // Market buy 100 shares of SPY.
-port.Order(ctx, spy, portfolio.Buy, 100)
+batch.Order(ctx, spy, portfolio.Buy, 100)
 
 // Limit sell 50 shares of TLT at $95.
-port.Order(ctx, tlt, portfolio.Sell, 50, portfolio.Limit(95.0))
+batch.Order(ctx, tlt, portfolio.Sell, 50, portfolio.Limit(95.0))
 
 // Stop loss at $380.
-port.Order(ctx, spy, portfolio.Sell, 100, portfolio.Stop(380.0))
+batch.Order(ctx, spy, portfolio.Sell, 100, portfolio.Stop(380.0))
 ```
 
 Available order modifiers:
@@ -513,8 +513,8 @@ port.Transactions()         // full trade log
 Record why your strategy made its decisions. Annotations are stored in the output and useful for debugging:
 
 ```go
-port.Annotate(eng.CurrentDate().Unix(), "signal", fmt.Sprintf("%.4f", momentumScore))
-port.Annotate(eng.CurrentDate().Unix(), "action", "rotating to SPY")
+batch.Annotate("signal", fmt.Sprintf("%.4f", momentumScore))
+batch.Annotate("action", "rotating to SPY")
 ```
 
 ## Performance metrics
@@ -713,7 +713,7 @@ For backtesting the CLI handles all of this. You only need engine options when w
 Return `nil` from `Compute` to continue the backtest. Return an error to halt it:
 
 ```go
-func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
+func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     df, err := s.Assets.Window(ctx, data.Months(6), data.MetricClose)
     if err != nil {
         // Log and skip this date. The backtest continues.

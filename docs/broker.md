@@ -10,9 +10,10 @@ When a portfolio has an associated broker, order execution is delegated to the b
 type Broker interface {
     Connect(ctx context.Context) error
     Close() error
-    Submit(ctx context.Context, order Order) ([]Fill, error)
+    Submit(ctx context.Context, order Order) error
+    Fills() <-chan Fill
     Cancel(ctx context.Context, orderID string) error
-    Replace(ctx context.Context, orderID string, order Order) ([]Fill, error)
+    Replace(ctx context.Context, orderID string, order Order) error
     Orders(ctx context.Context) ([]Order, error)
     Positions(ctx context.Context) ([]Position, error)
     Balance(ctx context.Context) (Balance, error)
@@ -28,9 +29,10 @@ All trading and query methods now accept a `context.Context` for cancellation an
 
 ### Trading
 
-- **Submit** sends an order to the brokerage and returns one or more fill reports. Large orders may be filled in multiple lots at different prices.
+- **Submit** sends an order to the brokerage. It returns only an error -- fills are delivered asynchronously through the `Fills` channel.
+- **Fills** returns a receive-only channel (`<-chan Fill`) on which fill reports arrive after each `Submit` call. The engine drains this channel at every step.
 - **Cancel** requests cancellation of an open order by ID.
-- **Replace** performs an atomic cancel-replace: cancels an existing order and submits a replacement in one operation. Returns one or more fills for the replacement order.
+- **Replace** performs an atomic cancel-replace: cancels an existing order and submits a replacement in one operation.
 
 ### Queries
 
@@ -44,19 +46,22 @@ An `Order` describes what to trade, how to price it, and how long it should rema
 
 ```go
 type Order struct {
-    ID          string
-    Asset       asset.Asset
-    Side        Side
-    Status      OrderStatus
-    Qty         float64
-    Amount      float64
-    OrderType   OrderType
-    TimeInForce TimeInForce
-    LimitPrice  float64
-    StopPrice   float64
-    GTDDate     time.Time
+    ID            string
+    Asset         asset.Asset
+    Side          Side
+    Status        OrderStatus
+    Qty           float64
+    Amount        float64
+    OrderType     OrderType
+    TimeInForce   TimeInForce
+    LimitPrice    float64
+    StopPrice     float64
+    GTDDate       time.Time
+    Justification string
 }
 ```
+
+`Justification` is an optional human-readable explanation carried from the strategy through middleware to the fill. It is set by `WithJustification` on the portfolio order API and copied onto resulting transactions.
 
 `Side` is defined in the broker package (not imported from portfolio) to keep the dependency direction clean.
 
@@ -171,7 +176,7 @@ eng := engine.New(&MyStrategy{},
 )
 ```
 
-The portfolio translates its modifier-based orders (`Limit(150.00)`, `GoodTilCancel`, etc.) into `broker.Order` values with concrete `OrderType` and `TimeInForce` fields before calling `Submit`. Strategy code is never aware of the broker.
+The batch translates its modifier-based orders (`Limit(150.00)`, `GoodTilCancel`, etc.) into `broker.Order` values with concrete `OrderType` and `TimeInForce` fields. After middleware processing, the engine calls `Submit` for each order. Strategy code is never aware of the broker.
 
 ## PriceProvider
 
@@ -187,7 +192,7 @@ type PriceProvider interface {
 
 ### SimulatedBroker
 
-The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each computation step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). The simulated broker does not support `Cancel` or `Replace` operations.
+The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). Fills are delivered through the `Fills()` channel, consistent with the async interface used by live brokers. The simulated broker does not support `Cancel` or `Replace` operations.
 
 ### Future implementations
 

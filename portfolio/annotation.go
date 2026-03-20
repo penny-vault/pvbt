@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "time"
+
 // Annotation is a single key-value entry that captures an intermediate
 // computation at a point in time. Unlike a justification (a human-readable
 // sentence on a [Transaction] explaining why a trade was made), an annotation
@@ -22,7 +24,7 @@ package portfolio
 // -- that helps you debug or understand what the strategy computed at each
 // step.
 type Annotation struct {
-	Timestamp int64
+	Timestamp time.Time
 	Key       string
 	Value     string
 }

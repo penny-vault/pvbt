@@ -72,7 +72,7 @@ var _ = Describe("SimulatedBroker", func() {
 				date:   date,
 			}, date)
 
-			fills, err := simBroker.Submit(context.Background(), broker.Order{
+			err := simBroker.Submit(context.Background(), broker.Order{
 				Asset:     aapl,
 				Side:      broker.Buy,
 				Qty:       100,
@@ -80,10 +80,35 @@ var _ = Describe("SimulatedBroker", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(fills).To(HaveLen(1))
-			Expect(fills[0].Price).To(Equal(150.0))
-			Expect(fills[0].Qty).To(Equal(100.0))
-			Expect(fills[0].FilledAt).To(Equal(date))
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Price).To(Equal(150.0))
+			Expect(fill.Qty).To(Equal(100.0))
+			Expect(fill.FilledAt).To(Equal(date))
+		})
+
+		It("delivers fills through the Fills channel", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 200.0},
+				date:   date,
+			}, date)
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       50,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Price).To(Equal(200.0))
+			Expect(fill.Qty).To(Equal(50.0))
+			Expect(fill.FilledAt).To(Equal(date))
 		})
 
 		It("returns an error for an asset with no price", func() {
@@ -94,7 +119,7 @@ var _ = Describe("SimulatedBroker", func() {
 				date:   date,
 			}, date)
 
-			_, err := simBroker.Submit(context.Background(), broker.Order{
+			err := simBroker.Submit(context.Background(), broker.Order{
 				Asset:     unknown,
 				Side:      broker.Buy,
 				Qty:       100,

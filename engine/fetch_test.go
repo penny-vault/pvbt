@@ -45,7 +45,7 @@ func (s *fetchStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
+func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	s.fetched, s.fetchErr = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
 	return nil
 }
@@ -66,7 +66,7 @@ func (s *fetchAtStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
+func (s *fetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, eng.CurrentDate(), s.metrics)
 	return nil
 }
@@ -88,7 +88,7 @@ func (s *doubleFetchStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *doubleFetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
+func (s *doubleFetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	s.fetched1, s.fetchErr1 = eng.Fetch(ctx, s.assets1, s.lookback, s.metrics)
 	s.fetched2, s.fetchErr2 = eng.Fetch(ctx, s.assets2, s.lookback, s.metrics)
 	return nil
@@ -111,7 +111,7 @@ func (s *fetchThenFetchAtStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
+func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	// First call populates the cache.
 	_, _ = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
 	// Second call should hit the cache.
@@ -135,7 +135,7 @@ func (s *futureFetchAtStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio) error {
+func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	futureDate := eng.CurrentDate().AddDate(0, 0, 30)
 	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, futureDate, s.metrics)
 	return nil

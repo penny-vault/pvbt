@@ -25,7 +25,7 @@ func (s *warmupStrategy) Name() string { return "warmupStrategy" }
 
 func (s *warmupStrategy) Setup(_ *engine.Engine) {}
 
-func (s *warmupStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *warmupStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 
