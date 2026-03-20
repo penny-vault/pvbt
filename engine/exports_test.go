@@ -3,6 +3,7 @@ package engine
 import (
 	"time"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -71,3 +72,6 @@ func EvictBeforeForTest(cache *dataCache, t time.Time) {
 
 // WalkBackTradingDaysForTest exposes walkBackTradingDays.
 var WalkBackTradingDaysForTest = walkBackTradingDays
+
+// CollectStrategyAssetsForTest exposes collectStrategyAssets.
+var CollectStrategyAssetsForTest func(strategy any, benchmark asset.Asset) []asset.Asset = collectStrategyAssets

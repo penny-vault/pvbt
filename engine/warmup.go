@@ -2,9 +2,12 @@ package engine
 
 import (
 	"fmt"
+	"reflect"
 	"time"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/tradecron"
+	"github.com/penny-vault/pvbt/universe"
 )
 
 // walkBackTradingDays finds the trading date that is `days` trading days
@@ -52,4 +55,65 @@ func walkBackTradingDays(from time.Time, days int) (time.Time, error) {
 
 	return time.Time{}, fmt.Errorf("walkBackTradingDays: could not find %d trading days before %s after %d attempts",
 		days, from.Format("2006-01-02"), maxAttempts)
+}
+
+// collectStrategyAssets reflects over the strategy struct to find all
+// asset.Asset and static universe.Universe fields. It also includes
+// the benchmark if set. Returns a deduplicated slice.
+func collectStrategyAssets(strategy any, benchmark asset.Asset) []asset.Asset {
+	seen := make(map[string]bool)
+	var result []asset.Asset
+
+	addAsset := func(assetToAdd asset.Asset) {
+		if assetToAdd == (asset.Asset{}) || assetToAdd.CompositeFigi == "" {
+			return
+		}
+		if seen[assetToAdd.CompositeFigi] {
+			return
+		}
+		seen[assetToAdd.CompositeFigi] = true
+		result = append(result, assetToAdd)
+	}
+
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		addAsset(benchmark)
+		return result
+	}
+
+	targetType := val.Type()
+
+	for fieldIdx := 0; fieldIdx < targetType.NumField(); fieldIdx++ {
+		field := targetType.Field(fieldIdx)
+		if !field.IsExported() {
+			continue
+		}
+
+		fieldValue := val.Field(fieldIdx)
+
+		// Check for asset.Asset fields.
+		if field.Type == assetType {
+			addAsset(fieldValue.Interface().(asset.Asset))
+			continue
+		}
+
+		// Check for universe.Universe fields (interface).
+		if field.Type.Implements(universeType) && !fieldValue.IsNil() {
+			universeVal := fieldValue.Interface().(universe.Universe)
+			// Only extract assets from static universes.
+			if _, isStatic := universeVal.(*universe.StaticUniverse); isStatic {
+				for _, member := range universeVal.Assets(time.Time{}) {
+					addAsset(member)
+				}
+			}
+		}
+	}
+
+	addAsset(benchmark)
+
+	return result
 }
