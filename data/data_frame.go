@@ -1461,6 +1461,135 @@ func sampleCov(xValues, yValues []float64) float64 {
 	return sum / float64(count-1)
 }
 
+// Correlation computes Pearson correlation between columns.
+//   - 1 asset: cross-metric correlation. Returns composite metric keys.
+//   - 2+ assets: per-metric correlation for all unique pairs. Returns composite asset keys.
+func (df *DataFrame) Correlation(assets ...asset.Asset) *DataFrame {
+	if df.err != nil {
+		return WithErr(df.err)
+	}
+
+	if len(assets) == 0 {
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
+	}
+
+	var lastTime []time.Time
+	if len(df.times) > 0 {
+		lastTime = []time.Time{df.times[len(df.times)-1]}
+	}
+
+	if len(assets) == 1 {
+		return df.crossMetricCorrelation(assets[0], lastTime)
+	}
+
+	return df.crossAssetCorrelation(assets, lastTime)
+}
+
+func (df *DataFrame) crossMetricCorrelation(targetAsset asset.Asset, lastTime []time.Time) *DataFrame {
+	aIdx, ok := df.assetIndex[targetAsset.CompositeFigi]
+	if !ok {
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
+	}
+
+	metricLen := len(df.metrics)
+
+	var (
+		pairMetrics []Metric
+		pairData    []float64
+	)
+
+	for outerIdx := 0; outerIdx < metricLen; outerIdx++ {
+		for innerIdx := outerIdx + 1; innerIdx < metricLen; innerIdx++ {
+			pairMetrics = append(pairMetrics, CompositeMetric(df.metrics[outerIdx], df.metrics[innerIdx]))
+			pairData = append(pairData, pearsonCorr(
+				df.colSlice(aIdx, outerIdx),
+				df.colSlice(aIdx, innerIdx),
+			))
+		}
+	}
+
+	if len(pairMetrics) == 0 {
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
+	}
+
+	return mustNewDataFrame(lastTime, []asset.Asset{targetAsset}, pairMetrics, df.freq, pairData)
+}
+
+func (df *DataFrame) crossAssetCorrelation(assets []asset.Asset, lastTime []time.Time) *DataFrame {
+	metricLen := len(df.metrics)
+
+	var (
+		pairAssets []asset.Asset
+		pairData   []float64
+	)
+
+	for assetIdx := 0; assetIdx < len(assets); assetIdx++ {
+		aIdxI, okI := df.assetIndex[assets[assetIdx].CompositeFigi]
+		for innerIdx := assetIdx + 1; innerIdx < len(assets); innerIdx++ {
+			aIdxJ, okJ := df.assetIndex[assets[innerIdx].CompositeFigi]
+
+			if !okI || !okJ {
+				continue
+			}
+
+			pairAssets = append(pairAssets, CompositeAsset(assets[assetIdx], assets[innerIdx]))
+			for mIdx := 0; mIdx < metricLen; mIdx++ {
+				pairData = append(pairData, pearsonCorr(
+					df.colSlice(aIdxI, mIdx),
+					df.colSlice(aIdxJ, mIdx),
+				))
+			}
+		}
+	}
+
+	if len(pairAssets) == 0 {
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
+	}
+
+	metrics := make([]Metric, metricLen)
+	copy(metrics, df.metrics)
+
+	return mustNewDataFrame(lastTime, pairAssets, metrics, df.freq, pairData)
+}
+
+func pearsonCorr(xValues, yValues []float64) float64 {
+	count := len(xValues)
+	if len(yValues) < count {
+		count = len(yValues)
+	}
+
+	if count < 2 {
+		return 0
+	}
+
+	cov := sampleCov(xValues[:count], yValues[:count])
+	stdX := sampleStd(xValues[:count])
+	stdY := sampleStd(yValues[:count])
+
+	if stdX == 0 || stdY == 0 {
+		return 0
+	}
+
+	return cov / (stdX * stdY)
+}
+
+func sampleStd(values []float64) float64 {
+	count := len(values)
+	if count < 2 {
+		return 0
+	}
+
+	mean := stat.Mean(values, nil)
+	sumSq := 0.0
+
+	for _, val := range values {
+		diff := val - mean
+		sumSq += diff * diff
+	}
+
+	return math.Sqrt(sumSq / float64(count-1))
+}
+
 // -- Common transforms -------------------------------------------------------
 
 // Pct returns the percent change over n periods. If n is omitted it

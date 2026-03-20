@@ -2372,3 +2372,88 @@ var _ = Describe("DataFrame DataSource", func() {
 		Expect(df.Source()).To(Equal(mock))
 	})
 })
+
+var _ = Describe("Correlation", func() {
+	It("computes Pearson correlation between two assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		// Perfectly correlated: both increase linearly.
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 2, 3, 4, 10, 20, 30, 40},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("returns -1 for perfectly negatively correlated assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 2, 3, 4, 40, 30, 20, 10},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", -1.0, 1e-9))
+	})
+
+	It("returns 0 for uncorrelated assets", func() {
+		times := []time.Time{
+			time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
+		}
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		// Orthogonal: sine and cosine phase-shifted by 90 degrees have zero correlation.
+		df, err := data.NewDataFrame(
+			times,
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.AdjClose},
+			data.Daily,
+			[]float64{1, 0, -1, 0, 0, 1, 0, -1},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		result := df.Correlation(spy, aapl)
+		Expect(result.Err()).NotTo(HaveOccurred())
+
+		composite := data.CompositeAsset(spy, aapl)
+		corr := result.ValueAt(composite, data.AdjClose, result.Times()[0])
+		Expect(corr).To(BeNumerically("~", 0.0, 0.1))
+	})
+})
