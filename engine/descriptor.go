@@ -17,8 +17,6 @@ package engine
 
 import (
 	"time"
-
-	"github.com/penny-vault/pvbt/asset"
 )
 
 // Descriptor is an optional interface strategies can implement to provide
@@ -61,41 +59,31 @@ type StrategyInfo struct {
 	Suggestions map[string]map[string]string `json:"suggestions,omitempty"`
 }
 
-// DescribeStrategy builds a StrategyInfo from the engine's state after Setup.
-// Call this after Backtest or RunLive initialization has completed Setup.
-func DescribeStrategy(eng *Engine) StrategyInfo {
+// DescribeStrategy builds a StrategyInfo from the strategy's metadata.
+func DescribeStrategy(strategy Strategy) StrategyInfo {
 	info := StrategyInfo{
-		Name: eng.strategy.Name(),
+		Name: strategy.Name(),
 	}
 
-	// Pull from Descriptor if implemented.
-	if d, ok := eng.strategy.(Descriptor); ok {
-		desc := d.Describe()
-		info.ShortCode = desc.ShortCode
-		info.Description = desc.Description
-		info.Source = desc.Source
-		info.Version = desc.Version
-		info.VersionDate = desc.VersionDate
-	}
-
-	// Engine state from Setup.
-	if eng.schedule != nil {
-		info.Schedule = eng.schedule.ScheduleString
-	}
-
-	if eng.benchmark != (asset.Asset{}) {
-		info.Benchmark = eng.benchmark.Ticker
+	if desc, ok := strategy.(Descriptor); ok {
+		description := desc.Describe()
+		info.ShortCode = description.ShortCode
+		info.Description = description.Description
+		info.Source = description.Source
+		info.Version = description.Version
+		info.VersionDate = description.VersionDate
+		info.Schedule = description.Schedule
+		info.Benchmark = description.Benchmark
 	}
 
 	info.RiskFree = "DGS3MO"
 
-	// Parameters and suggestions.
-	params := StrategyParameters(eng.strategy)
+	params := StrategyParameters(strategy)
 	info.Parameters = make([]ParameterInfo, len(params))
 	suggestions := make(map[string]map[string]string)
 
-	for i, param := range params {
-		info.Parameters[i] = ParameterInfo{
+	for idx, param := range params {
+		info.Parameters[idx] = ParameterInfo{
 			Name:        param.Name,
 			Description: param.Description,
 			Type:        param.GoType.String(),
