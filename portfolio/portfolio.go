@@ -71,6 +71,12 @@ type Portfolio interface {
 	// trades, dividends, fees, deposits, and withdrawals.
 	Transactions() []Transaction
 
+	// Prices returns the most-recent price DataFrame supplied to
+	// UpdatePrices. This includes prices for all assets that were in
+	// the last price update, not just currently-held positions. Returns
+	// nil if UpdatePrices has not yet been called.
+	Prices() *data.DataFrame
+
 	// PerfData returns the accumulated performance DataFrame containing
 	// equity curve, benchmark, and risk-free price series. Returns nil
 	// if no prices have been recorded yet.
