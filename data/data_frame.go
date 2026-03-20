@@ -1826,13 +1826,11 @@ func (df *DataFrame) Annotate(dest Annotator) *DataFrame {
 	metrics := df.MetricList()
 
 	for _, timestamp := range times {
-		unixSeconds := timestamp.Unix()
-
 		for _, assetItem := range assets {
 			for _, metric := range metrics {
 				value := df.ValueAt(assetItem, metric, timestamp)
 				if !math.IsNaN(value) {
-					dest.Annotate(unixSeconds, assetItem.Ticker+"/"+string(metric), strconv.FormatFloat(value, 'f', -1, 64))
+					dest.Annotate(timestamp, assetItem.Ticker+"/"+string(metric), strconv.FormatFloat(value, 'f', -1, 64))
 				}
 			}
 		}

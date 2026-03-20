@@ -726,9 +726,9 @@ func (a *Account) SetRiskFreeValue(v float64) {
 // Annotate records a key-value annotation for the given timestamp.
 // If an entry with the same timestamp and key already exists, its
 // value is overwritten (last-write-wins).
-func (a *Account) Annotate(timestamp int64, key, value string) {
+func (a *Account) Annotate(timestamp time.Time, key, value string) {
 	for idx := range a.annotations {
-		if a.annotations[idx].Timestamp == timestamp && a.annotations[idx].Key == key {
+		if a.annotations[idx].Timestamp.Equal(timestamp) && a.annotations[idx].Key == key {
 			a.annotations[idx].Value = value
 			return
 		}

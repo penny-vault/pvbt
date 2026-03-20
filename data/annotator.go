@@ -15,9 +15,11 @@
 
 package data
 
+import "time"
+
 // Annotator receives key-value annotations. Portfolio satisfies this
 // interface, allowing DataFrame.Annotate to push entries without
 // depending on the portfolio package.
 type Annotator interface {
-	Annotate(timestamp int64, key, value string)
+	Annotate(timestamp time.Time, key, value string)
 }

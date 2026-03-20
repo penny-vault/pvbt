@@ -2178,15 +2178,15 @@ var _ = Describe("AppendRow", func() {
 
 type mockAnnotator struct {
 	entries []struct {
-		timestamp int64
+		timestamp time.Time
 		key       string
 		value     string
 	}
 }
 
-func (mockAnn *mockAnnotator) Annotate(timestamp int64, key, value string) {
+func (mockAnn *mockAnnotator) Annotate(timestamp time.Time, key, value string) {
 	mockAnn.entries = append(mockAnn.entries, struct {
-		timestamp int64
+		timestamp time.Time
 		key       string
 		value     string
 	}{timestamp, key, value})
@@ -2215,7 +2215,7 @@ var _ = Describe("DataFrame.Annotate", func() {
 
 		keys := make(map[string]string)
 		for _, entry := range dest.entries {
-			Expect(entry.timestamp).To(Equal(t1.Unix()))
+			Expect(entry.timestamp).To(Equal(t1))
 			keys[entry.key] = entry.value
 		}
 

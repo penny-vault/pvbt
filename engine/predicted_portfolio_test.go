@@ -55,7 +55,7 @@ func (s *predictStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 		return nil
 	}
 
-	fund.Annotate(eng.CurrentDate().Unix(), "action", "buy SPY")
+	fund.Annotate(eng.CurrentDate(), "action", "buy SPY")
 
 	return fund.RebalanceTo(ctx, portfolio.Allocation{
 		Date:          eng.CurrentDate(),

@@ -407,7 +407,7 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 	defer stmt.Close()
 
 	for _, ann := range a.annotations {
-		if _, err := stmt.Exec(ann.Timestamp, ann.Key, ann.Value); err != nil {
+		if _, err := stmt.Exec(ann.Timestamp.Unix(), ann.Key, ann.Value); err != nil {
 			return fmt.Errorf("insert annotation: %w", err)
 		}
 	}
@@ -423,11 +423,15 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 	defer rows.Close()
 
 	for rows.Next() {
+		var unixSecs int64
+
 		var ann Annotation
-		if err := rows.Scan(&ann.Timestamp, &ann.Key, &ann.Value); err != nil {
+
+		if err := rows.Scan(&unixSecs, &ann.Key, &ann.Value); err != nil {
 			return fmt.Errorf("scan annotation: %w", err)
 		}
 
+		ann.Timestamp = time.Unix(unixSecs, 0).UTC()
 		a.annotations = append(a.annotations, ann)
 	}
 

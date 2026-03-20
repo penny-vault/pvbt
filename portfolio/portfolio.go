@@ -17,6 +17,7 @@ package portfolio
 
 import (
 	"context"
+	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
@@ -124,7 +125,7 @@ type Portfolio interface {
 	// that explain why the strategy made its decisions. Multiple calls
 	// accumulate entries. If the same (timestamp, key) pair already
 	// exists, the value is overwritten (last-write-wins).
-	Annotate(timestamp int64, key, value string)
+	Annotate(timestamp time.Time, key, value string)
 
 	// Annotations returns the full annotation log in the order entries
 	// were recorded.

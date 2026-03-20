@@ -13,7 +13,7 @@ var _ = Describe("Annotations", func() {
 	It("records and returns annotations in order", func() {
 		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
-		ts := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC).Unix()
+		ts := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
 		acct.Annotate(ts, "SPY/Momentum", "0.87")
 		acct.Annotate(ts, "bond_fraction", "0.3")
 
@@ -34,7 +34,7 @@ var _ = Describe("Annotations", func() {
 	It("overwrites value when same timestamp and key are annotated again", func() {
 		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 
-		ts := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC).Unix()
+		ts := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
 		acct.Annotate(ts, "SPY/Momentum", "0.87")
 		acct.Annotate(ts, "bond_fraction", "0.3")
 		acct.Annotate(ts, "SPY/Momentum", "0.92") // overwrite
