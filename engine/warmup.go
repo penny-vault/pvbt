@@ -218,7 +218,7 @@ func collectStrategyAssets(strategy any, benchmark asset.Asset) []asset.Asset {
 	}
 
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
