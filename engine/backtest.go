@@ -107,6 +107,16 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
 	}
 
+	// 5b. Initialize data cache early so validateWarmup can use fetchRange.
+	e.cache = newDataCache(e.cacheMaxBytes)
+
+	// 5c. Validate warmup data availability; may adjust start in permissive mode.
+	adjustedStart, warmupErr := e.validateWarmup(ctx, start, end)
+	if warmupErr != nil {
+		return nil, warmupErr
+	}
+	start = adjustedStart
+
 	// 6. Create and configure account.
 	acct := e.createAccount(start)
 
@@ -115,10 +125,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
-	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
-	e.cache = newDataCache(e.cacheMaxBytes)
-
-	// Resolve DGS3MO as the system risk-free rate.
+	// 7. Resolve DGS3MO as the system risk-free rate.
 	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
 	if rfErr != nil {
 		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")

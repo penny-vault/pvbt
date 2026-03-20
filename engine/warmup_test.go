@@ -15,8 +15,9 @@ import (
 )
 
 // warmupStrategy is a test strategy that declares warmup via Describe().
+// Universe is exported so collectStrategyAssets can reflect on it.
 type warmupStrategy struct {
-	assets     []asset.Asset
+	Universe   universe.Universe
 	warmupDays int
 }
 
@@ -161,7 +162,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: 0, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: 0, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
@@ -183,7 +184,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: 14, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: 14, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
@@ -203,7 +204,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 60, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: 14, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: 14, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
@@ -225,7 +226,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 200, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: 5, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: 5, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
@@ -246,7 +247,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 10, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: 100, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: 100, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
@@ -269,7 +270,7 @@ var _ = Describe("validateWarmup", func() {
 			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
 			provider := data.NewTestProvider(metrics, df)
 
-			strategy := &warmupStrategy{warmupDays: -5, assets: testAssets}
+			strategy := &warmupStrategy{warmupDays: -5, Universe: universe.NewStaticWithSource(testAssets, nil)}
 			eng := engine.New(strategy,
 				engine.WithDataProvider(provider),
 				engine.WithAssetProvider(assetProvider),
