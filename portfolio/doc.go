@@ -60,6 +60,28 @@
 // timestep, equal weight is assigned among the selected assets as a
 // fallback.
 //
+// [InverseVolatility] weights each selected asset inversely proportional to
+// its trailing volatility over a configurable lookback window (default 60
+// calendar days). Assets with lower volatility receive larger weights. Falls
+// back to equal weight when all volatilities are zero.
+//
+// [MarketCapWeighted] weights each selected asset proportionally to its
+// market capitalization. If the MarketCap metric is not present in the
+// DataFrame, it is fetched automatically via the DataFrame's DataSource.
+// Falls back to equal weight when all market caps are zero or NaN.
+//
+// [RiskParityFast] approximates equal risk contribution using a single-pass
+// adjustment: it starts with inverse volatility weights and divides each
+// weight by its marginal risk contribution from the covariance matrix, then
+// normalizes. This produces better risk balance than pure inverse volatility
+// when assets are correlated, but does not guarantee exact equal risk
+// contribution.
+//
+// [RiskParity] finds weights where each asset contributes equally to total
+// portfolio risk using iterative multiplicative optimization. It runs up to
+// 1000 iterations and returns the best result found, logging a warning if
+// convergence is not reached.
+//
 // # Construction
 //
 // Two approaches are available for turning decisions into trades:
