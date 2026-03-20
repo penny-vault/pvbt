@@ -896,3 +896,143 @@ var _ = Describe("InverseVolatility", func() {
 		Expect(err).To(HaveOccurred())
 	})
 })
+
+var _ = Describe("MarketCapWeighted", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+		t1   time.Time
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		t1 = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("weights proportionally to market cap", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{300, 100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(0.75))
+		Expect(plan[0].Members[aapl]).To(Equal(0.25))
+	})
+
+	It("returns error when Selected column is missing", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{300},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("falls back to equal weight when all market caps are zero", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{0, 0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("falls back to equal weight when all market caps are NaN", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{math.NaN(), math.NaN()},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(0.5))
+		Expect(plan[0].Members[aapl]).To(Equal(0.5))
+	})
+
+	It("assigns 100% to a single asset", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+		Expect(plan[0].Members[spy]).To(Equal(1.0))
+	})
+
+	It("normalizes weights to sum to 1.0", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MarketCap},
+			data.Daily,
+			[]float64{200, 800},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{1})).To(Succeed())
+
+		plan, err := portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(plan).To(HaveLen(1))
+
+		sum := 0.0
+		for _, weight := range plan[0].Members {
+			sum += weight
+		}
+		Expect(sum).To(BeNumerically("~", 1.0, 1e-9))
+	})
+
+	It("returns error when source is nil and MarketCap is missing", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{100},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+
+		_, err = portfolio.MarketCapWeighted(context.Background(), df)
+		Expect(err).To(HaveOccurred())
+	})
+})
