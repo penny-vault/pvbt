@@ -68,3 +68,6 @@ func PutForTest(cache *dataCache, key colCacheKey, entry *colCacheEntry) {
 func EvictBeforeForTest(cache *dataCache, t time.Time) {
 	cache.evictBefore(t)
 }
+
+// WalkBackTradingDaysForTest exposes walkBackTradingDays.
+var WalkBackTradingDaysForTest = walkBackTradingDays
