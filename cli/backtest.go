@@ -164,7 +164,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	info := engine.DescribeStrategy(eng)
+	info := engine.DescribeStrategy(strategy)
 
 	steps := 0
 	if result.PerfData() != nil {

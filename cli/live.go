@@ -61,7 +61,7 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("live mode failed: %w", err)
 	}
 
-	info := engine.DescribeStrategy(eng)
+	info := engine.DescribeStrategy(strategy)
 
 	for p := range ch {
 		rpt, buildErr := backtestReport.Build(p, info, backtestReport.RunMeta{
