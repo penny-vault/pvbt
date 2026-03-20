@@ -24,7 +24,7 @@ func (s *MomentumRotation) Name() string { return "momentum-rotation" }
 
 func (s *MomentumRotation) Setup(_ *engine.Engine) {}
 
-func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
+func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
 	log := zerolog.Ctx(ctx)
 
 	// Fetch close prices for the lookback period.
@@ -57,7 +57,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
 		return nil
 	}
 
-	if err := port.RebalanceTo(ctx, plan...); err != nil {
+	if err := batch.RebalanceTo(ctx, plan...); err != nil {
 		log.Error().Err(err).Msg("rebalance failed")
 	}
 

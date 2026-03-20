@@ -252,14 +252,36 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			}
 
+			// f2. Drain fills from previous step.
+			if acct.HasBroker() {
+				if err := acct.DrainFills(stepCtx); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("drain fills failed")
+					continue
+				}
+			}
+
 			// g-h. Run strategy only on strategy-schedule days.
 			if isStrategy {
 				if sb, ok := e.broker.(*SimulatedBroker); ok {
 					sb.SetPriceProvider(e, e.currentDate)
 				}
 
-				if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+				// Cancel open orders from previous frame.
+				if err := acct.CancelOpenOrders(stepCtx); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("cancel open orders failed")
+					continue
+				}
+
+				// Create batch and run strategy.
+				batch := acct.NewBatch(e.currentDate)
+				if err := e.strategy.Compute(stepCtx, e, acct, batch); err != nil {
 					zerolog.Ctx(stepCtx).Error().Err(err).Msg("strategy compute failed")
+					continue
+				}
+
+				// Execute batch through middleware chain.
+				if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("execute batch failed")
 					continue
 				}
 			}

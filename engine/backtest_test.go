@@ -63,7 +63,7 @@ func (s *backtestStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
+func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
 	if len(s.assets) == 0 {
 		return nil
 	}
@@ -91,7 +91,7 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 			}
 		}
 		if !inTarget && qty > 0 {
-			fund.Order(ctx, held, portfolio.Sell, qty)
+			batch.Order(ctx, held, portfolio.Sell, qty)
 		}
 	})
 
@@ -105,9 +105,9 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 		currentShares := fund.Position(target)
 		diff := targetShares - currentShares
 		if diff > 0 {
-			fund.Order(ctx, target, portfolio.Buy, diff)
+			batch.Order(ctx, target, portfolio.Buy, diff)
 		} else if diff < 0 {
-			fund.Order(ctx, target, portfolio.Sell, -diff)
+			batch.Order(ctx, target, portfolio.Sell, -diff)
 		}
 	}
 	return nil
@@ -127,7 +127,7 @@ func (s *monthlyStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "@close @monthend"}
 }
 
-func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio) error {
+func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
 	if len(s.assets) == 0 {
 		return nil
 	}
@@ -138,7 +138,7 @@ func (s *monthlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 	// Buy 1 share of each asset on first compute if not already held.
 	for _, target := range s.assets {
 		if fund.Position(target) == 0 {
-			fund.Order(ctx, target, portfolio.Buy, 1)
+			batch.Order(ctx, target, portfolio.Buy, 1)
 		}
 	}
 	return nil
@@ -149,7 +149,7 @@ type noScheduleStrategy struct{}
 
 func (s *noScheduleStrategy) Name() string           { return "noSchedule" }
 func (s *noScheduleStrategy) Setup(_ *engine.Engine) {}
-func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *noScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 
@@ -162,7 +162,7 @@ func (s *autoScheduleStrategy) Name() string { return "autoSchedule" }
 func (s *autoScheduleStrategy) Setup(_ *engine.Engine) {
 	// Intentionally empty -- schedule comes from Describe().
 }
-func (s *autoScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *autoScheduleStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 func (s *autoScheduleStrategy) Describe() engine.StrategyDescription {
@@ -183,7 +183,7 @@ func (s *failingStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *failingStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *failingStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return fmt.Errorf("simulated compute failure")
 }
 

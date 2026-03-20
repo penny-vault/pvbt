@@ -84,17 +84,18 @@ const (
 // When Qty is 0 and Amount > 0, the broker treats it as a dollar-amount
 // order and computes the share quantity from the current market price.
 type Order struct {
-	ID          string
-	Asset       asset.Asset
-	Side        Side
-	Status      OrderStatus
-	Qty         float64
-	Amount      float64
-	OrderType   OrderType
-	TimeInForce TimeInForce
-	LimitPrice  float64
-	StopPrice   float64
-	GTDDate     time.Time
+	ID            string
+	Asset         asset.Asset
+	Side          Side
+	Status        OrderStatus
+	Qty           float64
+	Amount        float64
+	OrderType     OrderType
+	TimeInForce   TimeInForce
+	LimitPrice    float64
+	StopPrice     float64
+	GTDDate       time.Time
+	Justification string
 }
 
 // OrderType identifies the price behavior of an order.

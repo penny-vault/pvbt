@@ -25,5 +25,5 @@ import (
 type Strategy interface {
 	Name() string
 	Setup(eng *Engine)
-	Compute(ctx context.Context, eng *Engine, portfolio portfolio.Portfolio) error
+	Compute(ctx context.Context, eng *Engine, portfolio portfolio.Portfolio, batch *portfolio.Batch) error
 }

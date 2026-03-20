@@ -34,7 +34,7 @@ type descriptorStrategy struct {
 
 func (s *descriptorStrategy) Name() string { return "DescriptorTest" }
 func (s *descriptorStrategy) Setup(_ *engine.Engine) {}
-func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 func (s *descriptorStrategy) Describe() engine.StrategyDescription {
@@ -56,7 +56,7 @@ type plainStrategy struct {
 
 func (s *plainStrategy) Name() string { return "PlainTest" }
 func (s *plainStrategy) Setup(_ *engine.Engine) {}
-func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 

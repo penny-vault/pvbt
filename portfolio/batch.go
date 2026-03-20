@@ -111,10 +111,7 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 			order.TimeInForce = broker.GTD
 			order.GTDDate = modifier.date
 		case justificationModifier:
-			// justification modifiers are not stored in broker.Order; they
-			// are used by Account.submitAndRecord. For the batch we discard
-			// them here -- if needed in the future a justification field can
-			// be added to broker.Order.
+			order.Justification = modifier.reason
 		}
 	}
 
@@ -169,12 +166,13 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 
 		for _, sell := range sells {
 			order := broker.Order{
-				Asset:       sell.asset,
-				Side:        broker.Sell,
-				Qty:         sell.qty,
-				Amount:      sell.amount,
-				OrderType:   broker.Market,
-				TimeInForce: broker.Day,
+				Asset:         sell.asset,
+				Side:          broker.Sell,
+				Qty:           sell.qty,
+				Amount:        sell.amount,
+				OrderType:     broker.Market,
+				TimeInForce:   broker.Day,
+				Justification: alloc.Justification,
 			}
 			b.Orders = append(b.Orders, order)
 		}
@@ -196,11 +194,12 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 
 		for _, buy := range buys {
 			order := broker.Order{
-				Asset:       buy.asset,
-				Side:        broker.Buy,
-				Amount:      buy.amount,
-				OrderType:   broker.Market,
-				TimeInForce: broker.Day,
+				Asset:         buy.asset,
+				Side:          broker.Buy,
+				Amount:        buy.amount,
+				OrderType:     broker.Market,
+				TimeInForce:   broker.Day,
+				Justification: alloc.Justification,
 			}
 			b.Orders = append(b.Orders, order)
 		}

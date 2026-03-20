@@ -849,12 +849,13 @@ func (a *Account) drainFillsFromChannel() {
 			}
 
 			a.Record(Transaction{
-				Date:   fill.FilledAt,
-				Asset:  order.Asset,
-				Type:   txType,
-				Qty:    fill.Qty,
-				Price:  fill.Price,
-				Amount: amount,
+				Date:          fill.FilledAt,
+				Asset:         order.Asset,
+				Type:          txType,
+				Qty:           fill.Qty,
+				Price:         fill.Price,
+				Amount:        amount,
+				Justification: order.Justification,
 			})
 
 			delete(a.pendingOrders, fill.OrderID)

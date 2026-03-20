@@ -269,6 +269,13 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			}
 		}
 
+		// 14b. Drain fills from previous step.
+		if acct.HasBroker() {
+			if err := acct.DrainFills(stepCtx); err != nil {
+				return nil, fmt.Errorf("engine: drain fills on %v: %w", date, err)
+			}
+		}
+
 		// 15-16. Run strategy only on strategy-schedule dates.
 		if step.isStrategy {
 			// 15. Update simulated broker with price provider and date.
@@ -276,10 +283,21 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				sb.SetPriceProvider(e, date)
 			}
 
-			// 16. Call strategy.Compute.
-			if err := e.strategy.Compute(stepCtx, e, acct); err != nil {
+			// Cancel open orders from previous frame.
+			if err := acct.CancelOpenOrders(stepCtx); err != nil {
+				return nil, fmt.Errorf("engine: cancel open orders on %v: %w", date, err)
+			}
+
+			// 16. Create batch and run strategy.
+			batch := acct.NewBatch(date)
+			if err := e.strategy.Compute(stepCtx, e, acct, batch); err != nil {
 				return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
 					e.strategy.Name(), date, err)
+			}
+
+			// Execute batch through middleware chain.
+			if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
+				return nil, fmt.Errorf("engine: execute batch on %v: %w", date, err)
 			}
 		}
 

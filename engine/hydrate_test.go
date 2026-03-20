@@ -53,7 +53,7 @@ func (s *hydrateStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
 
-func (s *hydrateStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *hydrateStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	s.computeCalled = true
 	return nil
 }

@@ -43,7 +43,7 @@ type paramTestStrategy struct {
 
 func (s *paramTestStrategy) Name() string           { return "test" }
 func (s *paramTestStrategy) Setup(_ *engine.Engine) {}
-func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *paramTestStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 

@@ -41,13 +41,13 @@ type universeStrategy struct {
 
 func (s *testStrategy) Name() string           { return "test" }
 func (s *testStrategy) Setup(e *engine.Engine) {}
-func (s *testStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *testStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 
 func (s *universeStrategy) Name() string           { return "universeTest" }
 func (s *universeStrategy) Setup(e *engine.Engine) {}
-func (s *universeStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *universeStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 
@@ -315,7 +315,7 @@ type presetStrategy struct {
 
 func (s *presetStrategy) Name() string           { return "presetTest" }
 func (s *presetStrategy) Setup(_ *engine.Engine)  {}
-func (s *presetStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio) error {
+func (s *presetStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
 
