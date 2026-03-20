@@ -93,9 +93,13 @@ type Portfolio interface {
 }
 ```
 
-The portfolio can only be mutated through batch execution. This prevents
-strategy code (or any other caller) from bypassing middleware and directly
-altering portfolio state.
+`SetMetadata()` remains on `Portfolio` because metadata is run-level
+configuration (strategy name, parameters, run ID) set during `Setup()`, not
+trade-level activity that should flow through middleware.
+
+The portfolio's trade state (holdings, cash, positions) can only be mutated
+through batch execution. This prevents strategy code from bypassing middleware
+and directly altering portfolio state.
 
 ### 3. Middleware interface
 
@@ -119,6 +123,10 @@ A middleware can:
 
 When a middleware reduces exposure, excess goes to cash. Middleware never
 amplifies exposure or redistributes to other positions.
+
+If a middleware returns an error, `ExecuteBatch` aborts -- no further
+middleware runs and no orders are submitted. The batch is discarded and the
+error propagates to the engine.
 
 ### 4. Middleware registration and chain execution
 
@@ -157,7 +165,11 @@ type PortfolioManager interface {
 
 - `NewBatch()` creates a batch with a reference to the portfolio.
 - `ExecuteBatch()` runs the middleware chain over the batch, then submits each
-  final order to the broker and records resulting fills as transactions.
+  final order to the broker. After all orders are submitted, it drains the
+  broker's fill channel to record any immediate fills as transactions. For the
+  simulated broker, all fills arrive immediately so this captures everything.
+  For a live broker, some fills may arrive later and will be picked up by
+  `DrainFills()` at the next step.
 - `DrainFills()` reads all available fills from the broker's fill channel and
   records them as transactions.
 - `CancelOpenOrders()` cancels any orders still open at the broker from a
@@ -215,10 +227,10 @@ schedule). The ordering within each iteration:
 4. Cancel any unfilled orders from the previous frame
 5. Create a new batch: `batch := acct.NewBatch(timestamp)`
 6. Run `strategy.Compute(ctx, eng, acct, batch)`
-7. Run middleware chain: `acct.ExecuteBatch(ctx, batch)`
+7. Run middleware chain and submit: `acct.ExecuteBatch(ctx, batch)`
    - Each middleware in order calls `Process(ctx, batch)`
    - Final orders submitted to broker
-   - Fills recorded as transactions
+   - Drain fill channel to record immediate fills as transactions
 
 ### 9. Built-in risk middleware
 
@@ -245,9 +257,11 @@ schedule). The ordering within each iteration:
 - `Aggressive(ds DataSource)` -- loose limits (e.g., 35% max position,
   25% drawdown breaker)
 
-Algorithmic middleware and profiles that need market data receive a
-`DataSource` interface at construction time. Declarative constraints that
-only need portfolio state take simple parameters.
+Algorithmic middleware and profiles that need market data receive the existing
+`DataSource` interface at construction time. `DataSource` provides
+`Fetch()`, `FetchAt()`, and `CurrentDate()` -- the same data access that
+strategies use through the engine. Declarative constraints that only need
+portfolio state take simple parameters.
 
 ### 10. Annotation conventions for risk middleware
 
@@ -273,3 +287,4 @@ portfolio's annotation log.
 | Fill delivery | Buffered channel on broker | Non-blocking, works for both simulated and live brokers, any strategy frequency |
 | Open order lifecycle | Cancelled at start of each frame | Each frame starts clean; strategy re-proposes if it still wants a limit order |
 | Portfolio mutability | Only through batch execution | Prevents strategies from bypassing middleware |
+| Annotation timestamps | `time.Time` on Batch, aligned with existing `Annotation` type | Current `Annotate()` uses `int64` timestamps; migrate to `time.Time` for consistency with `Batch.Timestamp` |
