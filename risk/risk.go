@@ -17,3 +17,21 @@
 // management. Each middleware processes a Batch of proposed orders,
 // potentially modifying them to enforce risk constraints.
 package risk
+
+import (
+	"context"
+	"time"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+)
+
+// DataSource provides market data access for algorithmic middleware.
+// The engine satisfies this interface.
+type DataSource interface {
+	Fetch(ctx context.Context, assets []asset.Asset, lookback data.Period,
+		metrics []data.Metric) (*data.DataFrame, error)
+	FetchAt(ctx context.Context, assets []asset.Asset, t time.Time,
+		metrics []data.Metric) (*data.DataFrame, error)
+	CurrentDate() time.Time
+}
