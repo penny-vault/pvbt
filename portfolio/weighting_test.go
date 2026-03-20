@@ -666,3 +666,51 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 		Expect(plan[0].Members[spy]).To(Equal(1.0))
 	})
 })
+
+var _ = Describe("collectSelected", func() {
+	var (
+		spy  asset.Asset
+		aapl asset.Asset
+		t1   time.Time
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		aapl = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		t1 = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("collects assets with Selected > 0", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{0})).To(Succeed())
+
+		chosen := portfolio.CollectSelected(df, t1)
+		Expect(chosen).To(HaveLen(1))
+		Expect(chosen[0]).To(Equal(spy))
+	})
+
+	It("skips NaN values", func() {
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{100, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
+		Expect(df.Insert(aapl, portfolio.Selected, []float64{math.NaN()})).To(Succeed())
+
+		chosen := portfolio.CollectSelected(df, t1)
+		Expect(chosen).To(HaveLen(1))
+		Expect(chosen[0]).To(Equal(spy))
+	})
+})
