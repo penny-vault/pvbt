@@ -52,11 +52,28 @@ The CLI uses the `pvbt` and `desc` tags to register cobra flags automatically. W
 
 ## Metadata
 
-Strategy metadata like name, description, and schedule are part of the Go code rather than configuration:
+Strategy metadata like name, description, and schedule are part of the Go code rather than configuration. The preferred approach is to declare schedule and benchmark in `Describe()`:
 
 ```go
 func (s *ADM) Name() string { return "adm" }
 
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        ShortCode:   "adm",
+        Description: "A market timing strategy using momentum scores.",
+        Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
+        Version:     "1.1.0",
+        Schedule:    "@monthend",
+        Benchmark:   "SPY",
+    }
+}
+```
+
+The engine reads `Schedule` and `Benchmark` from `Describe()` during initialization. If declared there, the strategy does not need to call `eng.Schedule()` or `eng.SetBenchmark()` in `Setup`.
+
+The imperative approach still works for backward compatibility or for cases where the schedule/benchmark depends on runtime state:
+
+```go
 func (s *ADM) Setup(e *engine.Engine) {
     tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
     e.Schedule(tc)
@@ -65,27 +82,14 @@ func (s *ADM) Setup(e *engine.Engine) {
 }
 ```
 
-The schedule, benchmark, and risk-free asset are set in `Setup`. The strategy name comes from the `Name()` method.
-
-Strategies can optionally implement the `Descriptor` interface to provide additional metadata (shortcode, description, source URL, version):
-
-```go
-func (s *ADM) Describe() engine.StrategyDescription {
-    return engine.StrategyDescription{
-        ShortCode:   "adm",
-        Description: "A market timing strategy using momentum scores.",
-        Source:      "https://engineeredportfolio.com/2018/05/02/accelerating-dual-momentum-investing/",
-        Version:     "1.1.0",
-    }
-}
-```
+Values set in `Setup` override those from `Describe()`.
 
 ## Serialization
 
-`engine.DescribeStrategy` produces a `StrategyInfo` struct that serializes to JSON. It collects everything: name and description from the strategy, schedule/benchmark/risk-free from the engine, parameters from struct tags, and suggestions grouped by preset name.
+`engine.DescribeStrategy` produces a `StrategyInfo` struct that serializes to JSON. It takes a `Strategy` (not an engine) and does not require `Setup` to have run. It collects name and description from the strategy, schedule and benchmark from `Describe()`, and parameters and suggestions from struct tags.
 
 ```go
-info := engine.DescribeStrategy(eng)
+info := engine.DescribeStrategy(strategy)
 data, _ := json.MarshalIndent(info, "", "  ")
 ```
 
@@ -99,8 +103,7 @@ This produces:
   "source": "https://engineeredportfolio.com/...",
   "version": "1.1.0",
   "schedule": "@monthend",
-  "benchmark": "VFINX",
-  "riskFree": "DGS3MO",
+  "benchmark": "SPY",
   "parameters": [
     {"name": "riskOn", "description": "ETFs to invest in", "type": "universe.Universe", "default": "VOO,SCZ"},
     {"name": "riskOff", "description": "Out-of-market asset", "type": "universe.Universe", "default": "TLT"},
@@ -113,4 +116,19 @@ This produces:
 }
 ```
 
-Call `DescribeStrategy` after the engine has run `Setup` (i.e., after `Backtest` or `RunLive` initialization). Before Setup, schedule/benchmark/risk-free fields will be empty.
+## CLI flags
+
+The `describe` command prints human-readable output by default. Pass `--json` for JSON output:
+
+```
+pvbt adm describe          # human-readable table
+pvbt adm describe --json   # JSON output
+```
+
+The `--preset` flag applies a named parameter preset to backtest, live, or snapshot runs:
+
+```
+pvbt adm backtest --preset Classic
+```
+
+This populates strategy fields from the matching `suggest` tag values before running.

@@ -76,9 +76,15 @@ type Strategy interface {
 
 **Name** returns a short identifier (e.g., `"adm"`, `"momentum-rotation"`).
 
-**Setup** runs once after the engine populates strategy fields from their struct tags. Use it to set the schedule, benchmark, and risk-free asset:
+**Setup** runs once after the engine populates strategy fields from their struct tags. If the strategy declares `Schedule` and `Benchmark` in `Describe()`, Setup only needs to handle other initialization. Otherwise, use Setup to set them imperatively:
 
 ```go
+// Declarative approach (preferred): schedule and benchmark come from Describe().
+func (s *ADM) Setup(eng *engine.Engine) {
+    eng.RiskFreeAsset(eng.Asset("DGS3MO"))
+}
+
+// Imperative approach: still works, and overrides values from Describe().
 func (s *ADM) Setup(eng *engine.Engine) {
     tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
     eng.Schedule(tc)
@@ -164,7 +170,7 @@ Call it after a backtest completes or during live operation. It works with any s
 
 ## Strategy metadata
 
-Strategies can optionally implement the `Descriptor` interface to provide metadata:
+Strategies can optionally implement the `Descriptor` interface to provide metadata. The `Schedule` and `Benchmark` fields let the strategy declare these values declaratively, so they do not need to be set in `Setup`:
 
 ```go
 func (s *ADM) Describe() engine.StrategyDescription {
@@ -173,11 +179,13 @@ func (s *ADM) Describe() engine.StrategyDescription {
         Description: "Accelerating Dual Momentum",
         Source:      "https://example.com/adm",
         Version:     "1.0",
+        Schedule:    "@monthend",
+        Benchmark:   "SPY",
     }
 }
 ```
 
-Call `engine.DescribeStrategy(eng)` after initialization to get a `StrategyInfo` struct containing the strategy name, schedule, benchmark, parameters, and any preset suggestions. This is JSON-serializable for CLI and UI use.
+Call `engine.DescribeStrategy(strategy)` to get a `StrategyInfo` struct containing the strategy name, schedule, benchmark, parameters, and any preset suggestions. This does not require an engine or Setup to have run. The result is JSON-serializable for CLI and UI use.
 
 ## Resource cleanup
 
