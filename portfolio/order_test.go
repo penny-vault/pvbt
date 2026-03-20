@@ -38,8 +38,11 @@ type mockBroker struct {
 	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
 	defaultFill  *broker.Fill                  // when set, deliver a fill at this price/time with order qty
 	submitErr    error                         // when set, Submit returns this error immediately
+	submitFn     func(order broker.Order) error      // optional hook for Submit (bypasses default logic)
 	callIdx      int
 	fillCh       chan broker.Fill
+	cancelFn     func(orderID string) error          // optional hook for Cancel
+	ordersFn     func() ([]broker.Order, error)      // optional hook for Orders
 }
 
 func newMockBroker() *mockBroker {
@@ -48,13 +51,21 @@ func newMockBroker() *mockBroker {
 
 func (m *mockBroker) Connect(context.Context) error { return nil }
 func (m *mockBroker) Close() error                  { return nil }
-func (m *mockBroker) Cancel(_ context.Context, _ string) error {
+func (m *mockBroker) Cancel(_ context.Context, orderID string) error {
+	if m.cancelFn != nil {
+		return m.cancelFn(orderID)
+	}
 	return nil
 }
 func (m *mockBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
 	return nil
 }
-func (m *mockBroker) Orders(_ context.Context) ([]broker.Order, error)       { return nil, nil }
+func (m *mockBroker) Orders(_ context.Context) ([]broker.Order, error) {
+	if m.ordersFn != nil {
+		return m.ordersFn()
+	}
+	return nil, nil
+}
 func (m *mockBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
 func (m *mockBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
@@ -68,6 +79,9 @@ func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 	m.submitted = append(m.submitted, order)
 	if m.submitErr != nil {
 		return m.submitErr
+	}
+	if m.submitFn != nil {
+		return m.submitFn(order)
 	}
 	if fills, ok := m.fillsByAsset[order.Asset]; ok {
 		for _, fill := range fills {

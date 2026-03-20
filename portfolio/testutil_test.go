@@ -11,8 +11,6 @@ import (
 )
 
 // Compile-time interface checks.
-var _ portfolio.Portfolio = (*portfolio.Account)(nil)
-var _ portfolio.PortfolioManager = (*portfolio.Account)(nil)
 var _ portfolio.Selector = portfolio.MaxAboveZero(data.MetricClose, nil)
 var _ portfolio.Selector = portfolio.TopN(1, data.MetricClose)
 var _ portfolio.Selector = portfolio.BottomN(1, data.MetricClose)

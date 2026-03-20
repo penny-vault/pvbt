@@ -55,14 +55,17 @@ type Account struct {
 	metrics           []MetricRow
 	registeredMetrics []PerformanceMetric
 	annotations       []Annotation
+	middleware        []Middleware
+	pendingOrders     map[string]broker.Order
 }
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
 	acct := &Account{
-		holdings: make(map[asset.Asset]float64),
-		taxLots:  make(map[asset.Asset][]TaxLot),
-		metadata: make(map[string]string),
+		holdings:      make(map[asset.Asset]float64),
+		taxLots:       make(map[asset.Asset][]TaxLot),
+		metadata:      make(map[string]string),
+		pendingOrders: make(map[string]broker.Order),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -755,6 +758,137 @@ func (a *Account) Annotations() []Annotation {
 	return a.annotations
 }
 
+// Use appends one or more middleware to the processing chain.
+func (a *Account) Use(middleware ...Middleware) {
+	a.middleware = append(a.middleware, middleware...)
+}
+
+// NewBatch creates an empty Batch for the given timestamp, bound to this
+// account for position and price queries.
+func (a *Account) NewBatch(timestamp time.Time) *Batch {
+	return NewBatch(timestamp, a)
+}
+
+// ExecuteBatch runs the middleware chain, records annotations, assigns
+// order IDs, submits orders to the broker, and drains immediate fills.
+func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
+	// 1. Run middleware chain.
+	for _, mw := range a.middleware {
+		if err := mw.Process(ctx, batch); err != nil {
+			return err
+		}
+	}
+
+	// 2. Record annotations.
+	for key, value := range batch.Annotations {
+		a.Annotate(batch.Timestamp, key, value)
+	}
+
+	// 3. Only submit if there are orders and a broker is set.
+	if len(batch.Orders) > 0 && a.broker == nil {
+		return fmt.Errorf("execute batch: no broker set")
+	}
+
+	// 4. Assign IDs, track, and submit orders.
+	for idx := range batch.Orders {
+		order := &batch.Orders[idx]
+		if order.ID == "" {
+			order.ID = fmt.Sprintf("batch-%d-%d", batch.Timestamp.UnixNano(), idx)
+		}
+
+		a.pendingOrders[order.ID] = *order
+
+		if err := a.broker.Submit(ctx, *order); err != nil {
+			return fmt.Errorf("execute batch: submit %s: %w", order.Asset.Ticker, err)
+		}
+	}
+
+	// 5. Drain immediate fills.
+	a.drainFillsFromChannel()
+
+	return nil
+}
+
+// DrainFills drains any pending fills from the broker's fill channel
+// and records them as transactions.
+func (a *Account) DrainFills(_ context.Context) error {
+	a.drainFillsFromChannel()
+	return nil
+}
+
+// drainFillsFromChannel reads all available fills from the broker's
+// fill channel (non-blocking) and records each as a transaction.
+func (a *Account) drainFillsFromChannel() {
+	if a.broker == nil {
+		return
+	}
+
+	fillCh := a.broker.Fills()
+
+	for {
+		select {
+		case fill := <-fillCh:
+			order, ok := a.pendingOrders[fill.OrderID]
+			if !ok {
+				log.Warn().Str("orderID", fill.OrderID).Msg("received fill for unknown order")
+				continue
+			}
+
+			var (
+				txType TransactionType
+				amount float64
+			)
+
+			switch order.Side {
+			case broker.Buy:
+				txType = BuyTransaction
+				amount = -(fill.Price * fill.Qty)
+			case broker.Sell:
+				txType = SellTransaction
+				amount = fill.Price * fill.Qty
+			}
+
+			a.Record(Transaction{
+				Date:   fill.FilledAt,
+				Asset:  order.Asset,
+				Type:   txType,
+				Qty:    fill.Qty,
+				Price:  fill.Price,
+				Amount: amount,
+			})
+
+			delete(a.pendingOrders, fill.OrderID)
+		default:
+			return
+		}
+	}
+}
+
+// CancelOpenOrders cancels all open or submitted orders and removes
+// them from the pending-orders tracker.
+func (a *Account) CancelOpenOrders(ctx context.Context) error {
+	if a.broker == nil {
+		return nil
+	}
+
+	orders, err := a.broker.Orders(ctx)
+	if err != nil {
+		return fmt.Errorf("cancel open orders: %w", err)
+	}
+
+	for _, order := range orders {
+		if order.Status == broker.OrderOpen || order.Status == broker.OrderSubmitted {
+			if cancelErr := a.broker.Cancel(ctx, order.ID); cancelErr != nil {
+				return fmt.Errorf("cancel order %s: %w", order.ID, cancelErr)
+			}
+
+			delete(a.pendingOrders, order.ID)
+		}
+	}
+
+	return nil
+}
+
 // Clone returns a deep copy of the Account suitable for prediction runs.
 // Holdings, metadata, and annotations are independent copies. PerfData is
 // deep-copied via DataFrame.Copy. Transactions and tax lots are shallow-copied
@@ -785,6 +919,11 @@ func (acct *Account) Clone() *Account {
 		taxLots[held] = lotsCopy
 	}
 
+	pendingOrders := make(map[string]broker.Order, len(acct.pendingOrders))
+	for orderID, order := range acct.pendingOrders {
+		pendingOrders[orderID] = order
+	}
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -798,6 +937,8 @@ func (acct *Account) Clone() *Account {
 		metrics:           acct.metrics,
 		registeredMetrics: acct.registeredMetrics,
 		annotations:       annotations,
+		middleware:        acct.middleware,
+		pendingOrders:     pendingOrders,
 	}
 
 	if acct.perfData != nil {

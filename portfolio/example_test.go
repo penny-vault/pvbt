@@ -9,12 +9,12 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// This example shows the declarative rebalancing workflow:
-// select assets, weight them, and rebalance the portfolio.
+// This example shows the declarative rebalancing workflow using a Batch:
+// select assets, weight them, and add orders to the batch for execution.
 func Example_rebalance() {
-	// In a real strategy, p comes from the Compute method argument
+	// In a real strategy, batch comes from the engine's NewBatch call
 	// and df comes from a signal computation on a universe.
-	var p portfolio.Portfolio
+	var batch *portfolio.Batch
 	var df *data.DataFrame
 	var riskOffDF *data.DataFrame
 
@@ -31,33 +31,33 @@ func Example_rebalance() {
 		return
 	}
 
-	// Rebalance: the portfolio diffs current holdings against the
-	// target and generates the necessary trades.
-	if err := p.RebalanceTo(ctx, plan...); err != nil {
+	// RebalanceTo on the batch computes the orders needed to reach
+	// the target allocation without executing them.
+	if err := batch.RebalanceTo(ctx, plan...); err != nil {
 		fmt.Println(err)
 	}
 }
 
-// This example shows imperative order placement with modifiers.
+// This example shows imperative order placement with modifiers on a Batch.
 func Example_orderModifiers() {
-	var p portfolio.Portfolio
+	var batch *portfolio.Batch
 	ctx := context.Background()
 	spy := asset.Asset{Ticker: "SPY"}
 
 	// Market order (default, no modifiers).
-	p.Order(ctx, spy, portfolio.Buy, 100)
+	batch.Order(ctx, spy, portfolio.Buy, 100)
 
 	// Limit order: buy at $450 or lower.
-	p.Order(ctx, spy, portfolio.Buy, 100, portfolio.Limit(450.00))
+	batch.Order(ctx, spy, portfolio.Buy, 100, portfolio.Limit(450.00))
 
 	// Stop-limit order: trigger at $440, fill at $435 or better.
-	p.Order(ctx, spy, portfolio.Sell, 50,
+	batch.Order(ctx, spy, portfolio.Sell, 50,
 		portfolio.Stop(440.00),
 		portfolio.Limit(435.00),
 	)
 
 	// Good-til-cancelled limit order.
-	p.Order(ctx, spy, portfolio.Buy, 200,
+	batch.Order(ctx, spy, portfolio.Buy, 200,
 		portfolio.Limit(420.00),
 		portfolio.GoodTilCancel,
 	)
