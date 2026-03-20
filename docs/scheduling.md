@@ -52,7 +52,7 @@ The schedule is set during Setup, but a strategy can modify it during computatio
 ## Example
 
 ```go
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
@@ -61,7 +61,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfol
     riskOffDF, _ := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
     portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
     plan, _ := portfolio.EqualWeight(momentum)
-    portfolio.RebalanceTo(ctx, plan...)
+    batch.RebalanceTo(ctx, plan...)
     return nil
 }
 ```

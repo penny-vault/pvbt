@@ -50,7 +50,7 @@ func (s *ADM) Setup(e *engine.Engine) {
     e.RiskFreeAsset(e.Asset("DGS3MO"))
 }
 
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
@@ -77,7 +77,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfol
         log.Error().Err(err).Msg("EqualWeight failed")
         return err
     }
-    portfolio.RebalanceTo(ctx, plan...)
+    batch.RebalanceTo(ctx, plan...)
     return nil
 }
 
@@ -140,7 +140,7 @@ Setup is also where a strategy would register universes it creates itself (e.g.,
 ### Compute
 
 ```go
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
     mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
@@ -167,12 +167,12 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfol
         log.Error().Err(err).Msg("EqualWeight failed")
         return err
     }
-    portfolio.RebalanceTo(ctx, plan...)
+    batch.RebalanceTo(ctx, plan...)
     return nil
 }
 ```
 
-Compute runs at each scheduled step -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for data fetching via `e.Fetch` and `e.FetchAt`), and the **portfolio** (the strategy's holdings, exposed as the `Portfolio` interface).
+Compute runs at each scheduled frame -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for data fetching via `e.Fetch` and `e.FetchAt`), the **portfolio** (read-only access to holdings and performance metrics), and the **batch** (where the strategy writes its orders and annotations).
 
 The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
 
@@ -237,7 +237,7 @@ After the final step, the portfolio contains the full transaction log and can co
 Strategies use [zerolog](https://github.com/rs/zerolog) for structured logging. The logger is carried on the context passed to `Compute`:
 
 ```go
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     log := zerolog.Ctx(ctx)
 
     log.Info().Str("strategy", s.Name()).Msg("computing")
