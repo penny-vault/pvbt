@@ -43,15 +43,13 @@ type MomentumRotation struct {
 
 func (s *MomentumRotation) Name() string { return "momentum-rotation" }
 
-func (s *MomentumRotation) Setup(eng *engine.Engine) {
-    tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
-    if err != nil {
-        panic(err)
-    }
+func (s *MomentumRotation) Setup(_ *engine.Engine) {}
 
-    eng.Schedule(tc)
-    eng.SetBenchmark(eng.Asset("SPY"))
-    eng.RiskFreeAsset(eng.Asset("SHV"))
+func (s *MomentumRotation) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:  "@monthend",
+        Benchmark: "SPY",
+    }
 }
 
 func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio) error {
@@ -178,15 +176,13 @@ See [Testing with snapshots](#testing-with-snapshots) for how to use the snapsho
 
 ### Trading schedule
 
-The schedule determines when `Compute` is called. Use tradecron expressions:
+The schedule determines when `Compute` is called. Declare it in `Describe()` using a tradecron expression:
 
 ```go
-func (s *MyStrategy) Setup(eng *engine.Engine) {
-    tc, err := tradecron.New("@monthend", tradecron.MarketHours{Open: 930, Close: 1600})
-    if err != nil {
-        panic(err)
+func (s *MyStrategy) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule: "@monthend",
     }
-    eng.Schedule(tc)
 }
 ```
 

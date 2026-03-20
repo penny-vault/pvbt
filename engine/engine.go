@@ -118,13 +118,9 @@ func (e *Engine) createAccount(start time.Time) *portfolio.Account {
 	return portfolio.New(opts...)
 }
 
-// Schedule sets the trading schedule for the engine. Called by the
-// strategy during Setup.
-func (e *Engine) Schedule(s *tradecron.TradeCron) {
-	e.schedule = s
-}
-
-// SetBenchmark sets the benchmark asset. Called by the strategy during Setup.
+// SetBenchmark sets the benchmark asset for performance comparison.
+// Typically called by the runner (CLI) rather than the strategy itself.
+// Strategies should suggest a benchmark via Describe() instead.
 func (e *Engine) SetBenchmark(a asset.Asset) {
 	e.benchmark = a
 }

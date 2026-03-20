@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** `engine.DescribeStrategy` now takes a `Strategy` instead of `*Engine`
-- Declare schedule in `Describe()` instead of calling `eng.Schedule()` in Setup; the imperative method still works but is deprecated
+- **Breaking:** Declare schedule in `Describe()` instead of calling `eng.Schedule()` in Setup
 - Benchmark is now a runner concern set via `--benchmark` flag or suggested by strategies in `Describe()`; strategies should no longer call `eng.SetBenchmark()` directly
 
 ## [0.2.0] - 2026-03-17
