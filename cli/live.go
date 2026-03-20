@@ -26,6 +26,7 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
+	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 
 	return cmd
 }
@@ -49,11 +50,22 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
-	eng := engine.New(strategy,
+	engineOpts := []engine.Option{
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithInitialDeposit(cash),
-	)
+	}
+
+	benchmarkTicker, err := cmd.Flags().GetString("benchmark")
+	if err != nil {
+		return err
+	}
+
+	if benchmarkTicker != "" {
+		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
+	}
+
+	eng := engine.New(strategy, engineOpts...)
 	defer eng.Close()
 
 	log.Info().

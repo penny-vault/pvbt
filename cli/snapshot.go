@@ -35,6 +35,7 @@ func newSnapshotCmd(strategy engine.Strategy) *cobra.Command {
 
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
+	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 
 	return cmd
 }
@@ -124,11 +125,22 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		portfolio.WithAllMetrics(),
 	)
 
-	eng := engine.New(strategy,
+	engineOpts := []engine.Option{
 		engine.WithDataProvider(recorder),
 		engine.WithAssetProvider(recorder),
 		engine.WithAccount(acct),
-	)
+	}
+
+	benchmarkTicker, err := cmd.Flags().GetString("benchmark")
+	if err != nil {
+		return err
+	}
+
+	if benchmarkTicker != "" {
+		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
+	}
+
+	eng := engine.New(strategy, engineOpts...)
 
 	// Do NOT defer eng.Close() here -- the engine would close the recorder
 	// (its registered provider), causing a double-close when we also close

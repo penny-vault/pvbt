@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Show strategy name, schedule, parameters, and presets in a readable table when running `describe`; pass `--json` to get machine-readable output
+- Select a named parameter preset with `--preset` on backtest, live, and snapshot (e.g. `--preset Classic`); explicit flags still override preset values
+- Set the benchmark from the command line with `--benchmark` on backtest, live, and snapshot (e.g. `--benchmark SPY`)
+
+### Changed
+
+- **Breaking:** `engine.DescribeStrategy` now takes a `Strategy` instead of `*Engine`
+- Declare schedule in `Describe()` instead of calling `eng.Schedule()` in Setup; the imperative method still works but is deprecated
+- Benchmark is now a runner concern set via `--benchmark` flag or suggested by strategies in `Describe()`; strategies should no longer call `eng.SetBenchmark()` directly
+
 ## [0.2.0] - 2026-03-17
 
 ### Added

@@ -50,10 +50,11 @@ type Engine struct {
 	riskFreeIndex      map[time.Time]int // date -> index into riskFreeValues, built once during init
 
 	// configuration (set via options, used during init)
-	cacheMaxBytes  int64
-	initialDeposit float64
-	broker         broker.Broker
-	snapshot       portfolio.PortfolioSnapshot
+	cacheMaxBytes   int64
+	initialDeposit  float64
+	broker          broker.Broker
+	snapshot        portfolio.PortfolioSnapshot
+	benchmarkTicker string
 
 	account *portfolio.Account
 

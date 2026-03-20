@@ -94,6 +94,14 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 	}
 
+	// 4c. CLI benchmark override (WithBenchmarkTicker) takes priority.
+	if e.benchmarkTicker != "" {
+		e.benchmark = e.assets[e.benchmarkTicker]
+		if e.benchmark == (asset.Asset{}) {
+			e.benchmark = asset.Asset{Ticker: e.benchmarkTicker}
+		}
+	}
+
 	// 5. Validate: error if schedule is nil.
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())
