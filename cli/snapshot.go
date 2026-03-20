@@ -34,6 +34,7 @@ func newSnapshotCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("output", "", "Snapshot output path (default: pv-data-snapshot-{strategy}-{start}-{end}.db)")
 
 	registerStrategyFlags(cmd, strategy)
+	cmd.Flags().String("preset", "", "Apply a named parameter preset")
 
 	return cmd
 }
@@ -94,6 +95,10 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		Time("end", end).
 		Str("output", outputPath).
 		Msg("starting snapshot capture")
+
+	if err := applyPreset(cmd, strategy); err != nil {
+		return err
+	}
 
 	applyStrategyFlags(cmd, strategy)
 

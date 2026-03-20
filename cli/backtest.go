@@ -39,6 +39,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
 
 	registerStrategyFlags(cmd, strategy)
+	cmd.Flags().String("preset", "", "Apply a named parameter preset")
 
 	return cmd
 }
@@ -109,6 +110,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		Str("output", outputPath).
 		Str("run_id", fullID).
 		Msg("starting backtest")
+
+	if err := applyPreset(cmd, strategy); err != nil {
+		return err
+	}
 
 	applyStrategyFlags(cmd, strategy)
 

@@ -25,6 +25,7 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 
 	registerStrategyFlags(cmd, strategy)
+	cmd.Flags().String("preset", "", "Apply a named parameter preset")
 
 	return cmd
 }
@@ -34,6 +35,10 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	cash, err := cmd.Flags().GetFloat64("cash")
 	if err != nil {
+		return err
+	}
+
+	if err := applyPreset(cmd, strategy); err != nil {
 		return err
 	}
 
