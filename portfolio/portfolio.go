@@ -117,6 +117,11 @@ type Portfolio interface {
 	// Annotations returns the full annotation log in the order entries
 	// were recorded.
 	Annotations() []Annotation
+
+	// TradeDetails returns all completed round-trip trades with per-trade
+	// MFE and MAE excursion data. Strategies may use this during Compute()
+	// to adapt behavior based on past trade quality.
+	TradeDetails() []TradeDetail
 }
 
 // PortfolioManager is the interface the engine uses to manage the
@@ -164,6 +169,11 @@ type PortfolioManager interface {
 	// annotations, assigns order IDs, submits orders to the broker,
 	// and drains immediate fills.
 	ExecuteBatch(ctx context.Context, batch *Batch) error
+
+	// UpdateExcursions reads daily High and Low prices from the DataFrame
+	// and updates the running extremes for each open position. Called by
+	// the engine after UpdatePrices at each step.
+	UpdateExcursions(df *data.DataFrame)
 
 	// DrainFills drains any pending fills from the broker's fill
 	// channel and records them as transactions.

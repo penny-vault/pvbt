@@ -27,7 +27,7 @@ func (averageLoss) Description() string {
 }
 
 func (averageLoss) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 
 	var (
 		losses  int

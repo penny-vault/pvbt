@@ -57,6 +57,8 @@ type Account struct {
 	annotations       []Annotation
 	middleware        []Middleware
 	pendingOrders     map[string]broker.Order
+	excursions        map[asset.Asset]ExcursionRecord
+	tradeDetails      []TradeDetail
 }
 
 // New creates an Account with the given options.
@@ -66,6 +68,7 @@ func New(opts ...Option) *Account {
 		taxLots:       make(map[asset.Asset][]TaxLot),
 		metadata:      make(map[string]string),
 		pendingOrders: make(map[string]broker.Order),
+		excursions:    make(map[asset.Asset]ExcursionRecord),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -584,6 +587,36 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 		errs = append(errs, err)
 	}
 
+	tradeMetrics.AverageMFE, err = a.PerformanceMetric(AverageMFE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.AverageMAE, err = a.PerformanceMetric(AverageMAE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.MedianMFE, err = a.PerformanceMetric(MedianMFE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.MedianMAE, err = a.PerformanceMetric(MedianMAE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.EdgeRatio, err = a.PerformanceMetric(EdgeRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.TradeCaptureRatio, err = a.PerformanceMetric(TradeCaptureRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return tradeMetrics, errors.Join(errs...)
 }
 
@@ -632,8 +665,49 @@ func (a *Account) Record(txn Transaction) {
 			Qty:   txn.Qty,
 			Price: txn.Price,
 		})
+
+		if _, exists := a.excursions[txn.Asset]; !exists {
+			a.excursions[txn.Asset] = ExcursionRecord{
+				EntryPrice: txn.Price,
+				HighPrice:  txn.Price,
+				LowPrice:   txn.Price,
+			}
+		}
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
+
+		// Produce TradeDetail entries from excursion data.
+		if excursion, hasExcursion := a.excursions[txn.Asset]; hasExcursion {
+			mfe := (excursion.HighPrice - excursion.EntryPrice) / excursion.EntryPrice
+			mae := (excursion.LowPrice - excursion.EntryPrice) / excursion.EntryPrice
+
+			// Match against tax lots FIFO to get entry dates and per-lot qty.
+			tdRemaining := txn.Qty
+
+			tdLots := a.taxLots[txn.Asset]
+			for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
+				matched := tdLots[tdLotIdx].Qty
+				if matched > tdRemaining {
+					matched = tdRemaining
+				}
+
+				a.tradeDetails = append(a.tradeDetails, TradeDetail{
+					Asset:      txn.Asset,
+					EntryDate:  tdLots[tdLotIdx].Date,
+					ExitDate:   txn.Date,
+					EntryPrice: tdLots[tdLotIdx].Price,
+					ExitPrice:  txn.Price,
+					Qty:        matched,
+					PnL:        (txn.Price - tdLots[tdLotIdx].Price) * matched,
+					HoldDays:   txn.Date.Sub(tdLots[tdLotIdx].Date).Hours() / 24.0,
+					MFE:        mfe,
+					MAE:        mae,
+				})
+
+				tdRemaining -= matched
+			}
+		}
+
 		remaining := txn.Qty
 		lots := a.taxLots[txn.Asset]
 
@@ -652,6 +726,7 @@ func (a *Account) Record(txn Transaction) {
 		if a.holdings[txn.Asset] == 0 {
 			delete(a.holdings, txn.Asset)
 			delete(a.taxLots, txn.Asset)
+			delete(a.excursions, txn.Asset)
 		}
 	}
 }
@@ -728,6 +803,13 @@ func (a *Account) PerfData() *data.DataFrame { return a.perfData }
 
 // TaxLots returns the current tax lot positions keyed by asset.
 func (a *Account) TaxLots() map[asset.Asset][]TaxLot { return a.taxLots }
+
+// Excursions returns the current excursion records keyed by asset.
+func (a *Account) Excursions() map[asset.Asset]ExcursionRecord { return a.excursions }
+
+// TradeDetails returns all completed round-trip trades with per-trade
+// MFE and MAE excursion data.
+func (a *Account) TradeDetails() []TradeDetail { return a.tradeDetails }
 
 // Prices returns the most recent price DataFrame, or nil if no prices
 // have been recorded yet.
@@ -939,6 +1021,14 @@ func (acct *Account) Clone() *Account {
 		pendingOrders[orderID] = order
 	}
 
+	excursions := make(map[asset.Asset]ExcursionRecord, len(acct.excursions))
+	for held, rec := range acct.excursions {
+		excursions[held] = rec
+	}
+
+	tradeDetailsCopy := make([]TradeDetail, len(acct.tradeDetails))
+	copy(tradeDetailsCopy, acct.tradeDetails)
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -954,6 +1044,8 @@ func (acct *Account) Clone() *Account {
 		annotations:       annotations,
 		middleware:        acct.middleware,
 		pendingOrders:     pendingOrders,
+		excursions:        excursions,
+		tradeDetails:      tradeDetailsCopy,
 	}
 
 	if acct.perfData != nil {

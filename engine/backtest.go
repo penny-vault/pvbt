@@ -436,7 +436,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 // rate logic (DGS3MO yield to cumulative conversion) only runs when benchmark
 // is non-zero, matching the behavior of the parent account.
 func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
-	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	var priceAssets []asset.Asset
 
@@ -470,6 +470,7 @@ func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Acco
 		}
 
 		acct.UpdatePrices(priceDF)
+		acct.UpdateExcursions(priceDF)
 	} else {
 		// No assets to price -- record cash-only portfolio value.
 		cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
@@ -478,6 +479,7 @@ func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Acco
 		}
 
 		acct.UpdatePrices(cashDF)
+		acct.UpdateExcursions(cashDF)
 	}
 
 	return nil

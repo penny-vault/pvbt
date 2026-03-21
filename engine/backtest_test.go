@@ -193,6 +193,36 @@ func (s *riskTestStrategy) Compute(ctx context.Context, eng *engine.Engine, _ po
 	})
 }
 
+// buyThenSellStrategy buys on the first Compute call and sells on the second.
+// This produces a single round-trip trade for verifying MFE/MAE excursion tracking.
+type buyThenSellStrategy struct {
+	target    asset.Asset
+	callCount int
+}
+
+func (s *buyThenSellStrategy) Name() string { return "buyThenSell" }
+
+func (s *buyThenSellStrategy) Setup(_ *engine.Engine) {}
+
+func (s *buyThenSellStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *buyThenSellStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
+	s.callCount++
+	if s.callCount == 1 {
+		// Buy 10 shares on first call.
+		batch.Order(ctx, s.target, portfolio.Buy, 10)
+	} else if s.callCount == 2 {
+		// Sell all shares on second call.
+		qty := fund.Position(s.target)
+		if qty > 0 {
+			batch.Order(ctx, s.target, portfolio.Sell, qty)
+		}
+	}
+	return nil
+}
+
 // failingStrategy always returns an error from Compute.
 type failingStrategy struct{}
 
@@ -240,7 +270,7 @@ var _ = Describe("Backtest", func() {
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
 		testAssets = []asset.Asset{aapl, msft}
 		assetProvider = &mockAssetProvider{assets: testAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
 	})
 
 	Context("end to end", func() {
@@ -439,11 +469,86 @@ var _ = Describe("Backtest", func() {
 		})
 	})
 
+	Context("MFE/MAE excursion tracking", func() {
+		It("populates MFE and MAE on TradeDetails after a round-trip trade", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-XYZ", Ticker: "XYZ"}
+			excursionAssets := []asset.Asset{testStock}
+			excursionProvider := &mockAssetProvider{assets: excursionAssets}
+
+			// Build a DataFrame with Close, AdjClose, Dividend, High, Low
+			// for 30 trading days starting 2024-01-01.
+			// The strategy runs on weekdays via "0 16 * * 1-5".
+			// Day 0 (Mon Jan 1):  Close=100, High=105, Low=95
+			// Day 1 (Tue Jan 2):  Close=102, High=110, Low=92  <-- buy happens here (first strategy date)
+			// Day 2 (Wed Jan 3):  Close=103, High=112, Low=93
+			// Day 3 (Thu Jan 4):  Close=101, High=106, Low=88  <-- low dip
+			// Day 4 (Fri Jan 5):  Close=104, High=115, Low=96  <-- sell happens here (second strategy date)
+			//
+			// Entry price = Close on day 1 = 102
+			// High over holding period (days 2-4): max(112, 106, 115) = 115
+			// Low over holding period (days 2-4):  min(93, 88, 96) = 88
+			// MFE = (115 - 102) / 102 > 0
+			// MAE = (88 - 102) / 102 < 0
+
+			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			nDays := 30
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// 1 asset x 5 metrics x 30 days = 150 values
+			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)]
+			vals := make([]float64, nDays*len(excursionAssets)*len(excursionMetrics))
+
+			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				vals[0*nDays+dayIdx] = 100.0 + float64(dayIdx) // Close: 100, 101, 102, ...
+				vals[1*nDays+dayIdx] = 100.0 + float64(dayIdx) // AdjClose: same as Close
+				vals[2*nDays+dayIdx] = 0.0                     // Dividend: 0
+				vals[3*nDays+dayIdx] = 105.0 + float64(dayIdx) // High: 105, 106, 107, ...
+				vals[4*nDays+dayIdx] = 95.0                    // Low: 95 baseline
+			}
+
+			// Override specific days for controlled excursion values.
+			// Day 3 (index 3): low dip to 88
+			vals[4*nDays+3] = 88.0
+			// Day 4 (index 4): high spike to 115
+			vals[3*nDays+4] = 115.0
+
+			excursionDF, dfErr := data.NewDataFrame(times, excursionAssets, excursionMetrics, data.Daily, vals)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			excursionDataProvider := data.NewTestProvider(excursionMetrics, excursionDF)
+
+			strategy := &buyThenSellStrategy{target: testStock}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(excursionDataProvider),
+				engine.WithAssetProvider(excursionProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			details := fund.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].MFE).To(BeNumerically(">", 0))
+			Expect(details[0].MAE).To(BeNumerically("<", 0))
+		})
+	})
+
 	Context("risk middleware", func() {
 		It("caps position size when MaxPositionSize is configured", func() {
 			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
 			allAssets := append(testAssets, spy)
-			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeDailyTestData(dataStart, 400, allAssets, allMetrics)
