@@ -1,6 +1,10 @@
 package tastytrade
 
-import "context"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/broker"
+)
 
 // APIClientForTestType is an exported alias so the _test package can name the type.
 type APIClientForTestType = apiClient
@@ -62,4 +66,27 @@ func (client *apiClient) GetQuote(ctx context.Context, symbol string) (float64, 
 // AccountID returns the client's account ID for test assertions.
 func (client *apiClient) AccountID() string {
 	return client.accountID
+}
+
+// --- Fill streamer test exports ---
+
+// FillStreamerForTestType is an exported alias so the _test package can name the type.
+type FillStreamerForTestType = fillStreamer
+
+// FillEvent is an exported alias for fillEvent, used in tests.
+type FillEvent = fillEvent
+
+// NewFillStreamerForTest creates a fillStreamer for testing.
+func NewFillStreamerForTest(client *apiClient, fills chan broker.Fill, wsURL string) *fillStreamer {
+	return newFillStreamer(client, fills, wsURL)
+}
+
+// ConnectStreamer exposes connect for testing.
+func (streamer *fillStreamer) ConnectStreamer(ctx context.Context) error {
+	return streamer.connect(ctx)
+}
+
+// CloseStreamer exposes close for testing.
+func (streamer *fillStreamer) CloseStreamer() error {
+	return streamer.close()
 }
