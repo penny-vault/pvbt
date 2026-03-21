@@ -618,7 +618,8 @@ func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataF
 // PredictedPortfolio runs the strategy's Compute against a shadow copy of the
 // current portfolio using the next scheduled trade date. Data is forward-filled
 // from the last available date to the predicted date. The strategy is unaware
-// it is a prediction run.
+// it is a prediction run. Child strategy accounts are also cloned so that
+// ChildAllocations returns correct weights during the prediction run.
 func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, error) {
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: PredictedPortfolio requires a schedule")
@@ -638,7 +639,36 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 	shadowBroker := NewSimulatedBroker()
 	clone.SetBroker(shadowBroker)
 
-	// Save and restore engine state.
+	// Save original children so we can restore them after the prediction run.
+	savedChildren := e.children
+	savedChildrenByName := e.childrenByName
+
+	// Clone children for prediction so ChildAllocations uses shadow state.
+	if len(e.children) > 0 {
+		clonedChildren := make([]*childEntry, len(e.children))
+		clonedByName := make(map[string]*childEntry, len(e.childrenByName))
+
+		for idx, child := range e.children {
+			clonedAccount := child.account.Clone()
+			clonedBroker := NewSimulatedBroker()
+			clonedAccount.SetBroker(clonedBroker)
+
+			clonedChildren[idx] = &childEntry{
+				strategy: child.strategy,
+				name:     child.name,
+				weight:   child.weight,
+				schedule: child.schedule,
+				account:  clonedAccount,
+				broker:   clonedBroker,
+			}
+			clonedByName[child.name] = clonedChildren[idx]
+		}
+
+		e.children = clonedChildren
+		e.childrenByName = clonedByName
+	}
+
+	// Save and restore engine state (including children).
 	savedDate := e.currentDate
 	e.predicting = true
 	e.currentDate = predictedDate
@@ -646,18 +676,47 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 	defer func() {
 		e.currentDate = savedDate
 		e.predicting = false
+		e.children = savedChildren
+		e.childrenByName = savedChildrenByName
 	}()
 
-	// Set the broker's price provider.
+	// Set the parent shadow broker's price provider.
 	shadowBroker.SetPriceProvider(e, predictedDate)
 
-	// Run Compute.
+	// Build compute context.
 	computeLogger := zerolog.Ctx(ctx).With().
 		Str("strategy", e.strategy.Name()).
 		Time("date", predictedDate).
 		Logger()
 	computeCtx := computeLogger.WithContext(ctx)
 
+	// Run any child strategies that are scheduled on the predicted date so that
+	// ChildAllocations reflects up-to-date child portfolios.
+	for _, child := range e.children {
+		if child.schedule == nil {
+			continue
+		}
+
+		nextChildDate := child.schedule.Next(predictedDate.Add(-time.Nanosecond))
+		if nextChildDate.Format("2006-01-02") != predictedDate.Format("2006-01-02") {
+			continue
+		}
+
+		child.broker.SetPriceProvider(e, predictedDate)
+
+		childBatch := child.account.NewBatch(predictedDate)
+		if err := child.strategy.Compute(computeCtx, e, child.account, childBatch); err != nil {
+			return nil, fmt.Errorf("engine: PredictedPortfolio child %q compute on %v: %w",
+				child.name, predictedDate, err)
+		}
+
+		if err := child.account.ExecuteBatch(computeCtx, childBatch); err != nil {
+			return nil, fmt.Errorf("engine: PredictedPortfolio child %q execute on %v: %w",
+				child.name, predictedDate, err)
+		}
+	}
+
+	// Run the parent strategy Compute on the cloned account.
 	batch := clone.NewBatch(predictedDate)
 	if err := e.strategy.Compute(computeCtx, e, clone, batch); err != nil {
 		return nil, fmt.Errorf("engine: PredictedPortfolio compute on %v: %w",

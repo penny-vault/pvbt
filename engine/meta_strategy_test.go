@@ -379,6 +379,40 @@ var _ = Describe("MetaStrategy", func() {
 		})
 	})
 
+	Context("PredictedPortfolio with meta-strategy", func() {
+		It("returns a non-nil portfolio with transactions after a backtest", func() {
+			strategy := &testMetaStrategy{}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			backtestStart := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			backtestEnd := time.Date(2024, 4, 30, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), backtestStart, backtestEnd)
+			Expect(err).NotTo(HaveOccurred())
+
+			predictedPortfolio, predErr := eng.PredictedPortfolio(context.Background())
+			Expect(predErr).NotTo(HaveOccurred())
+			Expect(predictedPortfolio).NotTo(BeNil())
+
+			txns := predictedPortfolio.Transactions()
+			Expect(len(txns)).To(BeNumerically(">", 0),
+				"expected predicted portfolio to have transactions")
+
+			hasBuy := false
+			for _, txn := range txns {
+				if txn.Type == portfolio.BuyTransaction {
+					hasBuy = true
+					break
+				}
+			}
+			Expect(hasBuy).To(BeTrue(), "expected at least one buy transaction in predicted portfolio")
+		})
+	})
+
 	Context("ChildAllocations with overrides", func() {
 		It("reflects 80/20 weight split when overrides are used", func() {
 			strategy := &testMetaStrategyWithOverride{}
