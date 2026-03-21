@@ -60,6 +60,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 	}
 
+	// 1c. Discover child strategies before hydrating parent.
+	e.childrenByName = make(map[string]*childEntry)
+	if err := e.discoverChildren(e.strategy, make(map[uintptr]bool)); err != nil {
+		return nil, fmt.Errorf("engine: %w", err)
+	}
+
 	// 2. Hydrate strategy fields from default tags.
 	if err := hydrateFields(e, e.strategy); err != nil {
 		return nil, fmt.Errorf("engine: %w", err)
@@ -100,6 +106,39 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		if e.benchmark == (asset.Asset{}) {
 			e.benchmark = asset.Asset{Ticker: e.benchmarkTicker}
 		}
+	}
+
+	// 4d. Initialize child strategies.
+	for _, child := range e.children {
+		if err := hydrateFields(e, child.strategy); err != nil {
+			return nil, fmt.Errorf("engine: hydrating child %q: %w", child.name, err)
+		}
+
+		child.strategy.Setup(e)
+
+		// Extract schedule from Describe().
+		if desc, ok := child.strategy.(Descriptor); ok {
+			description := desc.Describe()
+			if description.Schedule != "" {
+				tc, tcErr := tradecron.New(description.Schedule, tradecron.RegularHours)
+				if tcErr != nil {
+					return nil, fmt.Errorf("engine: child %q schedule: %w", child.name, tcErr)
+				}
+				child.schedule = tc
+			}
+		}
+
+		if child.schedule == nil {
+			return nil, fmt.Errorf("engine: child strategy %q did not set a schedule", child.name)
+		}
+
+		// Create child portfolio with simulated broker.
+		childBroker := NewSimulatedBroker()
+		child.broker = childBroker
+		child.account = portfolio.New(
+			portfolio.WithCash(100, start),
+			portfolio.WithBroker(childBroker),
+		)
 	}
 
 	// 5. Validate: error if schedule is nil.
@@ -169,19 +208,35 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		return nil, fmt.Errorf("engine: creating daily equity schedule: %w", dailyErr)
 	}
 
-	// Collect strategy dates by calendar date for matching.
-	strategyCalDates := make(map[string]bool)
+	// Collect parent strategy dates by calendar date for matching.
+	parentCalDates := make(map[string]bool)
 	cur := e.schedule.Next(start.Add(-time.Nanosecond))
 
 	for !cur.After(end) {
-		strategyCalDates[cur.Format("2006-01-02")] = true
+		parentCalDates[cur.Format("2006-01-02")] = true
 		cur = e.schedule.Next(cur.Add(time.Nanosecond))
+	}
+
+	// Collect child strategy dates.
+	childCalDates := make(map[string]map[string]bool)
+	for _, child := range e.children {
+		if child.schedule == nil {
+			continue
+		}
+		dates := make(map[string]bool)
+		childCur := child.schedule.Next(start.Add(-time.Nanosecond))
+		for !childCur.After(end) {
+			dates[childCur.Format("2006-01-02")] = true
+			childCur = child.schedule.Next(childCur.Add(time.Nanosecond))
+		}
+		childCalDates[child.name] = dates
 	}
 
 	// Walk all trading days via the daily schedule.
 	type backtestStep struct {
-		date       time.Time
-		isStrategy bool
+		date             time.Time
+		isParentStrategy bool
+		childStrategies  []string
 	}
 
 	var steps []backtestStep
@@ -189,9 +244,18 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	cur = dailySchedule.Next(start.Add(-time.Nanosecond))
 	for !cur.After(end) {
 		calKey := cur.Format("2006-01-02")
+
+		var scheduledChildren []string
+		for _, child := range e.children {
+			if childCalDates[child.name][calKey] {
+				scheduledChildren = append(scheduledChildren, child.name)
+			}
+		}
+
 		steps = append(steps, backtestStep{
-			date:       cur,
-			isStrategy: strategyCalDates[calKey],
+			date:             cur,
+			isParentStrategy: parentCalDates[calKey],
+			childStrategies:  scheduledChildren,
 		})
 		cur = dailySchedule.Next(cur.Add(time.Nanosecond))
 	}
@@ -215,7 +279,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			Time("date", date).
 			Int("step", stepIdx+1).
 			Int("total", len(steps)).
-			Bool("strategy_day", step.isStrategy).
+			Bool("strategy_day", step.isParentStrategy).
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
@@ -224,8 +288,27 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, err
 		}
 
+		// Run scheduled child strategies (children before parent).
+		for _, childName := range step.childStrategies {
+			child := e.childrenByName[childName]
+			child.broker.SetPriceProvider(e, date)
+
+			if err := child.account.CancelOpenOrders(stepCtx); err != nil {
+				return nil, fmt.Errorf("engine: child %q cancel orders on %v: %w", childName, date, err)
+			}
+
+			childBatch := child.account.NewBatch(date)
+			if err := child.strategy.Compute(stepCtx, e, child.account, childBatch); err != nil {
+				return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, date, err)
+			}
+
+			if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
+				return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, date, err)
+			}
+		}
+
 		// 15-16. Run strategy only on strategy-schedule dates.
-		if step.isStrategy {
+		if step.isParentStrategy {
 			// 15. Update simulated broker with price provider and date.
 			if sb, ok := e.broker.(*SimulatedBroker); ok {
 				sb.SetPriceProvider(e, date)
@@ -254,8 +337,19 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, err
 		}
 
+		// Housekeep and update prices for all child portfolios at every step.
+		for _, child := range e.children {
+			if err := e.housekeepAccount(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
+			}
+
+			if err := e.updateAccountPrices(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q price update on %v: %w", child.name, date, err)
+			}
+		}
+
 		// 18b. Compute registered metrics only on strategy dates.
-		if step.isStrategy {
+		if step.isParentStrategy {
 			computeMetrics(acct, date)
 		}
 
