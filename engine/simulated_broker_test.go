@@ -130,6 +130,54 @@ var _ = Describe("SimulatedBroker", func() {
 		})
 	})
 
+	Context("Orders", func() {
+		It("returns empty when no deferred orders exist", func() {
+			simBroker := engine.NewSimulatedBroker()
+
+			orders, err := simBroker.Orders(context.Background())
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(orders).To(BeEmpty())
+		})
+	})
+
+	Context("Cancel", func() {
+		It("removes a deferred stop-loss order from pending", func() {
+			simBroker := engine.NewSimulatedBroker()
+
+			stopOrder := broker.Order{
+				ID:        "order-sl-1",
+				Asset:     aapl,
+				Side:      broker.Sell,
+				Qty:       100,
+				OrderType: broker.Market,
+				GroupRole: broker.RoleStopLoss,
+			}
+			err := simBroker.Submit(context.Background(), stopOrder)
+			Expect(err).NotTo(HaveOccurred())
+
+			orders, err := simBroker.Orders(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(orders).To(HaveLen(1))
+
+			err = simBroker.Cancel(context.Background(), "order-sl-1")
+			Expect(err).NotTo(HaveOccurred())
+
+			orders, err = simBroker.Orders(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(orders).To(BeEmpty())
+		})
+
+		It("returns an error for an unknown order ID", func() {
+			simBroker := engine.NewSimulatedBroker()
+
+			err := simBroker.Cancel(context.Background(), "nonexistent-order")
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("nonexistent-order"))
+		})
+	})
+
 	Context("Connect and Close", func() {
 		It("succeeds without error", func() {
 			simBroker := engine.NewSimulatedBroker()

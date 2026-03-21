@@ -30,15 +30,17 @@ const fillChannelSize = 1024
 // SimulatedBroker fills all orders at the close price for backtesting.
 // The engine sets a PriceProvider and date before each Compute step.
 type SimulatedBroker struct {
-	prices broker.PriceProvider
-	date   time.Time
-	fills  chan broker.Fill
+	prices  broker.PriceProvider
+	date    time.Time
+	fills   chan broker.Fill
+	pending map[string]broker.Order
 }
 
 // NewSimulatedBroker creates a SimulatedBroker with no price provider set.
 func NewSimulatedBroker() *SimulatedBroker {
 	return &SimulatedBroker{
-		fills: make(chan broker.Fill, fillChannelSize),
+		fills:   make(chan broker.Fill, fillChannelSize),
+		pending: make(map[string]broker.Order),
 	}
 }
 
@@ -57,6 +59,11 @@ func (b *SimulatedBroker) Fills() <-chan broker.Fill {
 }
 
 func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error {
+	if order.GroupRole == broker.RoleStopLoss || order.GroupRole == broker.RoleTakeProfit {
+		b.pending[order.ID] = order
+		return nil
+	}
+
 	if b.prices == nil {
 		return fmt.Errorf("simulated broker: no price provider set")
 	}
@@ -91,15 +98,25 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 	return nil
 }
 
-func (b *SimulatedBroker) Cancel(_ context.Context, _ string) error {
-	return fmt.Errorf("simulated broker: cancel not supported")
+func (b *SimulatedBroker) Cancel(_ context.Context, orderID string) error {
+	if _, ok := b.pending[orderID]; !ok {
+		return fmt.Errorf("simulated broker: order %s not found", orderID)
+	}
+	delete(b.pending, orderID)
+	return nil
 }
 
 func (b *SimulatedBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
 	return fmt.Errorf("simulated broker: replace not supported")
 }
 
-func (b *SimulatedBroker) Orders(_ context.Context) ([]broker.Order, error) { return nil, nil }
+func (b *SimulatedBroker) Orders(_ context.Context) ([]broker.Order, error) {
+	orders := make([]broker.Order, 0, len(b.pending))
+	for _, order := range b.pending {
+		orders = append(orders, order)
+	}
+	return orders, nil
+}
 func (b *SimulatedBroker) Positions(_ context.Context) ([]broker.Position, error) {
 	return nil, nil
 }
