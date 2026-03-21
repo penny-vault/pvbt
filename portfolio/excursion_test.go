@@ -177,6 +177,127 @@ var _ = Describe("ExcursionRecord", func() {
 		})
 	})
 
+	Describe("TradeDetail", func() {
+		It("produces a TradeDetail on full position close", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+
+			// Simulate price movement: High=115, Low=90
+			df, err := data.NewDataFrame(
+				[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+				[]asset.Asset{acme},
+				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+				data.Daily,
+				[]float64{110.0, 110.0, 115.0, 90.0},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdateExcursions(df)
+
+			// Close position
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  110.0,
+				Amount: 1_100.0,
+			})
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+
+			td := details[0]
+			Expect(td.Asset).To(Equal(acme))
+			Expect(td.EntryDate).To(Equal(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)))
+			Expect(td.ExitDate).To(Equal(time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)))
+			Expect(td.EntryPrice).To(Equal(100.0))
+			Expect(td.ExitPrice).To(Equal(110.0))
+			Expect(td.Qty).To(Equal(10.0))
+			Expect(td.PnL).To(Equal(100.0))         // (110-100)*10
+			Expect(td.HoldDays).To(Equal(31.0))
+			Expect(td.MFE).To(BeNumerically("~", 0.15, 1e-9))  // (115-100)/100
+			Expect(td.MAE).To(BeNumerically("~", -0.10, 1e-9)) // (90-100)/100
+		})
+
+		It("produces TradeDetail on partial close and keeps excursion record", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  100.0,
+				Amount: -2_000.0,
+			})
+
+			df, err := data.NewDataFrame(
+				[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+				[]asset.Asset{acme},
+				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+				data.Daily,
+				[]float64{110.0, 110.0, 112.0, 95.0},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdateExcursions(df)
+
+			// Partial sell
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  110.0,
+				Amount: 1_100.0,
+			})
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].Qty).To(Equal(10.0))
+			Expect(details[0].MFE).To(BeNumerically("~", 0.12, 1e-9))  // (112-100)/100
+			Expect(details[0].MAE).To(BeNumerically("~", -0.05, 1e-9)) // (95-100)/100
+
+			// Excursion record still exists
+			exc := acct.Excursions()
+			Expect(exc).To(HaveKey(acme))
+		})
+
+		It("produces MFE=0 MAE=0 for same-day open/close", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  102.0,
+				Amount: 1_020.0,
+			})
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].MFE).To(Equal(0.0))
+			Expect(details[0].MAE).To(Equal(0.0))
+		})
+	})
+
 	Describe("position close", func() {
 		It("removes excursion record when position is fully closed", func() {
 			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))

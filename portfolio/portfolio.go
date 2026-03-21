@@ -117,6 +117,11 @@ type Portfolio interface {
 	// Annotations returns the full annotation log in the order entries
 	// were recorded.
 	Annotations() []Annotation
+
+	// TradeDetails returns all completed round-trip trades with per-trade
+	// MFE and MAE excursion data. Strategies may use this during Compute()
+	// to adapt behavior based on past trade quality.
+	TradeDetails() []TradeDetail
 }
 
 // PortfolioManager is the interface the engine uses to manage the
