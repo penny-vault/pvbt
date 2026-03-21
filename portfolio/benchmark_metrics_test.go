@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -239,37 +240,37 @@ var _ = Describe("Benchmark Metrics", func() {
 		})
 
 		It("Beta returns nil from ComputeSeries", func() {
-			s, err := portfolio.Beta.ComputeSeries(a, nil)
+			s, err := portfolio.Beta.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("Alpha returns nil from ComputeSeries", func() {
-			s, err := portfolio.Alpha.ComputeSeries(a, nil)
+			s, err := portfolio.Alpha.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("TrackingError returns nil from ComputeSeries", func() {
-			s, err := portfolio.TrackingError.ComputeSeries(a, nil)
+			s, err := portfolio.TrackingError.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("InformationRatio returns nil from ComputeSeries", func() {
-			s, err := portfolio.InformationRatio.ComputeSeries(a, nil)
+			s, err := portfolio.InformationRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("Treynor returns nil from ComputeSeries", func() {
-			s, err := portfolio.Treynor.ComputeSeries(a, nil)
+			s, err := portfolio.Treynor.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("RSquared returns nil from ComputeSeries", func() {
-			s, err := portfolio.RSquared.ComputeSeries(a, nil)
+			s, err := portfolio.RSquared.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})

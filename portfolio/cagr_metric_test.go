@@ -16,6 +16,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"math"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -27,7 +28,7 @@ import (
 var _ = Describe("CAGR", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 120})
-		s, err := portfolio.CAGR.ComputeSeries(a, nil)
+		s, err := portfolio.CAGR.ComputeSeries(context.Background(), a, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s).To(BeNil())
 	})

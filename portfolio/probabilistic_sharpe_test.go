@@ -16,6 +16,8 @@
 package portfolio_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -28,7 +30,7 @@ var _ = Describe("ProbabilisticSharpe", func() {
 			[]float64{100, 105, 98, 103, 97, 110},
 			[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 		)
-		s, err := portfolio.ProbabilisticSharpe.ComputeSeries(a, nil)
+		s, err := portfolio.ProbabilisticSharpe.ComputeSeries(context.Background(), a, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s).To(BeNil())
 	})

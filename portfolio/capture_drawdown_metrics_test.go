@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -74,7 +75,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			s, err := portfolio.UpsideCaptureRatio.ComputeSeries(a, nil)
+			s, err := portfolio.UpsideCaptureRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
@@ -84,7 +85,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			s, err := portfolio.DownsideCaptureRatio.ComputeSeries(a, nil)
+			s, err := portfolio.DownsideCaptureRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
@@ -94,7 +95,7 @@ var _ = Describe("Capture and Drawdown Metrics", func() {
 				[]float64{10000, 12000, 10800, 12960},
 				[]float64{100, 110, 99, 108.9},
 			)
-			s, err := portfolio.AvgDrawdown.ComputeSeries(a, nil)
+			s, err := portfolio.AvgDrawdown.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
