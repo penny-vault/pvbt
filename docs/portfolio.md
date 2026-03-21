@@ -191,6 +191,46 @@ Time in force controls how long the order stays active. The default is `DayOrder
 | `OnTheOpen` | Fill only at the opening price |
 | `OnTheClose` | Fill only at the closing price |
 
+#### Bracket and OCO orders
+
+Bracket and OCO modifiers link orders for coordinated execution. They are only supported through `batch.Order`, not through direct `Account.Order` calls.
+
+**Bracket** attaches stop-loss and take-profit exits to an entry order. The exits activate as an OCO pair when the entry fills:
+
+```go
+// Buy SPY with a 5% stop loss and 10% take profit (percentage offsets from fill price).
+batch.Order(ctx, spy, portfolio.Buy, 100,
+    portfolio.Limit(400),
+    portfolio.WithBracket(portfolio.StopLossPercent(5), portfolio.TakeProfitPercent(10)),
+)
+
+// Same idea with absolute price targets.
+batch.Order(ctx, spy, portfolio.Buy, 100,
+    portfolio.Limit(400),
+    portfolio.WithBracket(portfolio.StopLossPrice(380), portfolio.TakeProfitPrice(440)),
+)
+```
+
+Exit target constructors:
+
+| Constructor | Description |
+|-------------|-------------|
+| `StopLossPrice(price)` | Stop loss at a fixed price |
+| `StopLossPercent(pct)` | Stop loss as percentage below fill price (e.g., 5 for 5%) |
+| `TakeProfitPrice(price)` | Take profit at a fixed price |
+| `TakeProfitPercent(pct)` | Take profit as percentage above fill price (e.g., 10 for 10%) |
+
+**OCO** (one-cancels-other) creates two linked orders from a single `batch.Order` call. When one fills, the other is cancelled:
+
+```go
+// Protect existing position: sell if price drops to $380 (stop) or rises to $440 (limit).
+batch.Order(ctx, spy, portfolio.Sell, 100,
+    portfolio.OCO(portfolio.StopLeg(380), portfolio.LimitLeg(440)),
+)
+```
+
+In backtesting, the simulated broker evaluates bracket/OCO exits against each bar's high and low prices. If both legs could trigger on the same bar, the stop loss wins (pessimistic assumption). Bracket exits persist across bars within a frame and are cancelled at frame boundaries.
+
 #### Trade annotation
 
 **WithJustification** attaches an explanation to the resulting transaction:

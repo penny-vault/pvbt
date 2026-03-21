@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "time"
+import (
+	"time"
+
+	"github.com/penny-vault/pvbt/broker"
+)
 
 // Side indicates a buy or sell direction.
 type Side int
@@ -119,4 +123,81 @@ func (lotSelectionModifier) orderModifier() {}
 // WithLotSelection overrides the portfolio default lot selection for this order.
 func WithLotSelection(method LotSelection) OrderModifier {
 	return lotSelectionModifier{method: method}
+}
+
+// --- Bracket and OCO modifiers ---
+
+// ExitTarget describes a single exit condition for a bracket order. Either
+// AbsolutePrice or PercentOffset is set, but not both.
+type ExitTarget struct {
+	AbsolutePrice float64
+	PercentOffset float64
+}
+
+// StopLossPrice creates an ExitTarget that triggers a stop at the given
+// absolute price.
+func StopLossPrice(price float64) ExitTarget {
+	return ExitTarget{AbsolutePrice: price}
+}
+
+// StopLossPercent creates an ExitTarget that triggers a stop at the given
+// percentage below the entry price. For example, StopLossPercent(5.0) means
+// a stop at 5% below the entry price (PercentOffset = -0.05).
+func StopLossPercent(pct float64) ExitTarget {
+	return ExitTarget{PercentOffset: -pct / 100.0}
+}
+
+// TakeProfitPrice creates an ExitTarget that closes the position at the
+// given absolute price.
+func TakeProfitPrice(price float64) ExitTarget {
+	return ExitTarget{AbsolutePrice: price}
+}
+
+// TakeProfitPercent creates an ExitTarget that closes the position at the
+// given percentage above the entry price. For example, TakeProfitPercent(10.0)
+// means a take-profit at 10% above the entry price (PercentOffset = +0.10).
+func TakeProfitPercent(pct float64) ExitTarget {
+	return ExitTarget{PercentOffset: pct / 100.0}
+}
+
+// OCOLeg describes one leg of an OCO (one-cancels-other) order pair.
+type OCOLeg struct {
+	OrderType broker.OrderType
+	Price     float64
+}
+
+// StopLeg creates an OCOLeg with a Stop order type at the given price.
+func StopLeg(price float64) OCOLeg {
+	return OCOLeg{OrderType: broker.Stop, Price: price}
+}
+
+// LimitLeg creates an OCOLeg with a Limit order type at the given price.
+func LimitLeg(price float64) OCOLeg {
+	return OCOLeg{OrderType: broker.Limit, Price: price}
+}
+
+type bracketModifier struct {
+	stopLoss   ExitTarget
+	takeProfit ExitTarget
+}
+
+func (bracketModifier) orderModifier() {}
+
+// WithBracket attaches a bracket order to the primary order, automatically
+// placing a stop-loss and a take-profit exit when the primary order fills.
+func WithBracket(stopLoss, takeProfit ExitTarget) OrderModifier {
+	return bracketModifier{stopLoss: stopLoss, takeProfit: takeProfit}
+}
+
+type ocoModifier struct {
+	legA OCOLeg
+	legB OCOLeg
+}
+
+func (ocoModifier) orderModifier() {}
+
+// OCO submits two exit legs as a one-cancels-other pair: when one leg fills
+// the other is automatically cancelled.
+func OCO(legA, legB OCOLeg) OrderModifier {
+	return ocoModifier{legA: legA, legB: legB}
 }

@@ -650,6 +650,134 @@ var _ = Describe("Account.Clone", func() {
 		Expect(acct.GetMetadata("key")).To(Equal("original"))
 		Expect(acct.Annotations()).To(HaveLen(1))
 	})
+
+	It("does not panic and isolates group state when group fields are populated", func() {
+		ts := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+		testAsset := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		mb := newMockBroker()
+		// Do not deliver fills so the entry order stays pending.
+		mb.submitFn = func(_ broker.Order) error { return nil }
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		batch := acct.NewBatch(ts)
+		err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The account should have pending orders and group state.
+		Expect(acct.PendingOrderIDs()).NotTo(BeEmpty())
+
+		// Clone must not panic.
+		clone := acct.Clone()
+		Expect(clone).NotTo(BeNil())
+
+		// Mutating the clone's pending orders must not affect the original.
+		for _, orderID := range clone.PendingOrderIDs() {
+			clone.SetPendingOrder(broker.Order{ID: orderID + "-clone"})
+		}
+		for _, id := range acct.PendingOrderIDs() {
+			Expect(id).NotTo(HaveSuffix("-clone"))
+		}
+	})
+})
+
+var _ = Describe("CancelOpenOrders group cleanup", func() {
+	var (
+		testAsset asset.Asset
+		ts        time.Time
+	)
+
+	BeforeEach(func() {
+		testAsset = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		ts = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("clears pendingOrders, pendingGroups, and deferredExits after cancellation", func() {
+		mb := newMockBroker()
+		canceledIDs := []string{}
+		mb.cancelFn = func(orderID string) error {
+			canceledIDs = append(canceledIDs, orderID)
+			return nil
+		}
+		// Do not deliver fills so the entry order stays pending.
+		mb.submitFn = func(_ broker.Order) error { return nil }
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		batch := acct.NewBatch(ts)
+		err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The entry order is pending (no fill was delivered).
+		pendingBefore := acct.PendingOrderIDs()
+		Expect(pendingBefore).NotTo(BeEmpty())
+
+		err = acct.CancelOpenOrders(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+
+		// broker.Cancel was called for every pending order.
+		Expect(canceledIDs).To(ConsistOf(pendingBefore))
+
+		// All group state is cleared.
+		Expect(acct.PendingOrderIDs()).To(BeEmpty())
+	})
+
+	It("allows a new batch to be submitted cleanly after CancelOpenOrders", func() {
+		mb := newMockBroker()
+		mb.submitFn = func(ord broker.Order) error {
+			// Deliver a fill for the second batch's entry order.
+			mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+			return nil
+		}
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		// Submit first batch (no fills) then cancel.
+		firstBatch := acct.NewBatch(ts)
+		firstSubmitFn := mb.submitFn
+		mb.submitFn = func(_ broker.Order) error { return nil } // no fills for first batch
+		err := firstBatch.Order(context.Background(), testAsset, portfolio.Buy, 5,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.ExecuteBatch(context.Background(), firstBatch)).To(Succeed())
+
+		err = acct.CancelOpenOrders(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.PendingOrderIDs()).To(BeEmpty())
+
+		// Restore fill-delivering submitFn for second batch.
+		mb.submitFn = firstSubmitFn
+
+		// Submit a plain second batch; should not panic or error.
+		secondBatch := acct.NewBatch(ts)
+		err = secondBatch.Order(context.Background(), testAsset, portfolio.Buy, 10)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.ExecuteBatch(context.Background(), secondBatch)).To(Succeed())
+	})
 })
 
 var _ = Describe("TransactionType", func() {
@@ -1221,5 +1349,258 @@ var _ = Describe("Window", func() {
 		fullSharpe, err := acct.PerformanceMetric(portfolio.Sharpe).Value()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fullSharpe).NotTo(BeNumerically("~", windowedSharpe, 1e-10))
+	})
+
+	Describe("ExecuteBatch group submission", func() {
+		var (
+			testAsset asset.Asset
+			ts        time.Time
+		)
+
+		BeforeEach(func() {
+			testAsset = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+			ts = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+		})
+
+		It("submits standalone OCO legs individually when broker lacks GroupSubmitter", func() {
+			mb := newMockBroker()
+			mb.submitFn = func(ord broker.Order) error {
+				mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 50.0, Qty: ord.Qty, FilledAt: ts}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, ts),
+				portfolio.WithBroker(mb),
+			)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(45.0), portfolio.LimitLeg(55.0)))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(batch.Groups()).To(HaveLen(1))
+			Expect(batch.Groups()[0].Type).To(Equal(broker.GroupOCO))
+
+			// With a plain broker (no GroupSubmitter), OCO legs are submitted individually.
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mb.submitted).To(HaveLen(2))
+		})
+
+		It("submits OCO legs via GroupSubmitter when broker supports it", func() {
+			mgb := newMockGroupBroker()
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(45.0), portfolio.LimitLeg(55.0)))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// SubmitGroup called once; individual Submit not called.
+			Expect(mgb.submittedGroups).To(HaveLen(1))
+			Expect(mgb.submittedGroups[0].groupType).To(Equal(broker.GroupOCO))
+			Expect(mgb.submittedGroups[0].orders).To(HaveLen(2))
+			Expect(mgb.submitted).To(BeEmpty())
+		})
+
+		It("submits bracket entry individually and then exits after entry fill", func() {
+			mb := newMockBroker()
+			mb.submitFn = func(ord broker.Order) error {
+				// Only deliver a fill for the entry order (not for exit orders).
+				if ord.GroupRole == broker.RoleEntry {
+					mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+				portfolio.WithBracket(
+					portfolio.StopLossPrice(90.0),
+					portfolio.TakeProfitPrice(115.0),
+				))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(batch.Groups()).To(HaveLen(1))
+			Expect(batch.Groups()[0].Type).To(Equal(broker.GroupBracket))
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Entry is submitted first, then entry fill triggers exit submission.
+			// With a non-GroupSubmitter broker, exits are submitted individually.
+			Expect(mb.submitted).To(HaveLen(3))
+			Expect(mb.submitted[0].GroupRole).To(Equal(broker.RoleEntry))
+
+			// Verify exit orders were submitted with correct prices and roles.
+			var hasStopLoss, hasTakeProfit bool
+			for _, ord := range mb.submitted[1:] {
+				switch ord.GroupRole {
+				case broker.RoleStopLoss:
+					hasStopLoss = true
+					Expect(ord.StopPrice).To(Equal(90.0))
+					Expect(ord.Side).To(Equal(broker.Sell))
+				case broker.RoleTakeProfit:
+					hasTakeProfit = true
+					Expect(ord.LimitPrice).To(Equal(115.0))
+					Expect(ord.Side).To(Equal(broker.Sell))
+				}
+			}
+			Expect(hasStopLoss).To(BeTrue())
+			Expect(hasTakeProfit).To(BeTrue())
+		})
+	})
+
+	Describe("DrainFills two-phase logic", func() {
+		var (
+			testAsset asset.Asset
+			ts        time.Time
+		)
+
+		BeforeEach(func() {
+			testAsset = asset.Asset{CompositeFigi: "TEST", Ticker: "TEST"}
+			ts = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		})
+
+		It("submits bracket exit orders when entry fill arrives via GroupSubmitter broker", func() {
+			mgb := newMockGroupBroker()
+
+			// Configure submitFn to deliver a fill for the entry order.
+			mgb.submitFn = func(ord broker.Order) error {
+				mgb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			stopPct := 5.0   // 5% below entry -> PercentOffset = -0.05
+			takePct := 10.0  // 10% above entry -> PercentOffset = +0.10
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+				portfolio.WithBracket(
+					portfolio.StopLossPercent(stopPct),
+					portfolio.TakeProfitPercent(takePct),
+				))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Entry was submitted individually, then DrainFills (called inside
+			// ExecuteBatch) should have triggered bracket exit submission via
+			// SubmitGroup.
+			Expect(mgb.submittedGroups).To(HaveLen(1))
+			Expect(mgb.submittedGroups[0].groupType).To(Equal(broker.GroupOCO))
+			Expect(mgb.submittedGroups[0].orders).To(HaveLen(2))
+
+			exitOrders := mgb.submittedGroups[0].orders
+
+			// Find stop-loss and take-profit orders.
+			var stopLoss, takeProfit broker.Order
+			for _, ord := range exitOrders {
+				switch ord.GroupRole {
+				case broker.RoleStopLoss:
+					stopLoss = ord
+				case broker.RoleTakeProfit:
+					takeProfit = ord
+				}
+			}
+
+			// Verify stop loss price = fillPrice * (1 - stopPct/100) = 100 * 0.95 = 95.
+			Expect(stopLoss.StopPrice).To(BeNumerically("~", 95.0, 0.001))
+			// Verify take profit price = fillPrice * (1 + takePct/100) = 100 * 1.10 = 110.
+			Expect(takeProfit.LimitPrice).To(BeNumerically("~", 110.0, 0.001))
+
+			// Exit orders have side opposite to entry (entry=Buy -> exit=Sell).
+			Expect(stopLoss.Side).To(Equal(broker.Sell))
+			Expect(takeProfit.Side).To(Equal(broker.Sell))
+
+			// TIF = GTC.
+			Expect(stopLoss.TimeInForce).To(Equal(broker.GTC))
+			Expect(takeProfit.TimeInForce).To(Equal(broker.GTC))
+		})
+
+		It("cancels OCO sibling on fill without calling broker.Cancel for GroupSubmitter broker", func() {
+			mgb := newMockGroupBroker()
+
+			cancelCalled := false
+			mgb.cancelFn = func(_ string) error {
+				cancelCalled = true
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			// Manually set up an OCO group in pendingOrders and pendingGroups.
+			// Simulate two OCO orders already tracked by the account.
+			orderA := broker.Order{
+				ID:        "oco-a",
+				Asset:     testAsset,
+				Side:      broker.Sell,
+				Qty:       10,
+				OrderType: broker.Stop,
+				StopPrice: 95.0,
+				GroupID:   "oco-group-1",
+				GroupRole: broker.RoleStopLoss,
+			}
+			orderB := broker.Order{
+				ID:         "oco-b",
+				Asset:      testAsset,
+				Side:       broker.Sell,
+				Qty:        10,
+				OrderType:  broker.Limit,
+				LimitPrice: 110.0,
+				GroupID:    "oco-group-1",
+				GroupRole:  broker.RoleTakeProfit,
+			}
+
+			acct.SetPendingOrder(orderA)
+			acct.SetPendingOrder(orderB)
+			acct.SetPendingGroup(&broker.OrderGroup{
+				ID:       "oco-group-1",
+				Type:     broker.GroupOCO,
+				OrderIDs: []string{"oco-a", "oco-b"},
+			})
+
+			// Simulate a fill arriving for orderA.
+			mgb.fillCh <- broker.Fill{OrderID: "oco-a", Price: 95.0, Qty: 10, FilledAt: ts}
+
+			err := acct.DrainFills(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// The sibling (orderB) should be removed from pendingOrders
+			// WITHOUT calling broker.Cancel (since broker is a GroupSubmitter).
+			Expect(cancelCalled).To(BeFalse())
+			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-b"))
+			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-a"))
+		})
 	})
 })

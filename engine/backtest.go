@@ -294,6 +294,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
+		// Evaluate pending bracket/OCO orders against intrabar prices.
+		if sb, ok := e.broker.(*SimulatedBroker); ok {
+			sb.SetPriceProvider(e, date)
+			sb.EvaluatePending()
+		}
+
 		// 13-14b. Housekeep parent account (dividends + fill draining).
 		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
 			return nil, err
@@ -303,6 +309,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		for _, childName := range step.childStrategies {
 			child := e.childrenByName[childName]
 			child.broker.SetPriceProvider(e, date)
+			child.broker.EvaluatePending()
 
 			if err := child.account.CancelOpenOrders(stepCtx); err != nil {
 				return nil, fmt.Errorf("engine: child %q cancel orders on %v: %w", childName, date, err)

@@ -60,6 +60,9 @@ type Account struct {
 	annotations       []Annotation
 	middleware        []Middleware
 	pendingOrders     map[string]broker.Order
+	pendingGroups     map[string]*broker.OrderGroup // groupID -> group
+	brokerHasGroups   bool                          // cached GroupSubmitter check
+	deferredExits     map[string]OrderGroupSpec     // groupID -> bracket spec
 	lotSelection      LotSelection
 	substitutions     map[asset.Asset]Substitution
 	excursions        map[asset.Asset]ExcursionRecord
@@ -75,6 +78,8 @@ func New(opts ...Option) *Account {
 		recentBuys:      make(map[asset.Asset][]recentBuy),
 		metadata:        make(map[string]string),
 		pendingOrders:   make(map[string]broker.Order),
+		pendingGroups:   make(map[string]*broker.OrderGroup),
+		deferredExits:   make(map[string]OrderGroupSpec),
 		substitutions:   make(map[asset.Asset]Substitution),
 		excursions:      make(map[asset.Asset]ExcursionRecord),
 	}
@@ -274,6 +279,10 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 			justification = modifier.reason
 		case lotSelectionModifier:
 			order.LotSelection = int(modifier.method)
+		case bracketModifier:
+			return fmt.Errorf("bracket/OCO modifiers require batch submission")
+		case ocoModifier:
+			return fmt.Errorf("bracket/OCO modifiers require batch submission")
 		}
 	}
 
@@ -1379,10 +1388,35 @@ func (a *Account) TradeDetails() []TradeDetail { return a.tradeDetails }
 // have been recorded yet.
 func (a *Account) Prices() *data.DataFrame { return a.prices }
 
-func (a *Account) SetBroker(b broker.Broker) { a.broker = b }
+func (a *Account) SetBroker(b broker.Broker) {
+	a.broker = b
+	_, a.brokerHasGroups = b.(broker.GroupSubmitter)
+}
 
 // HasBroker returns true if a broker has been set on the account.
 func (a *Account) HasBroker() bool { return a.broker != nil }
+
+// SetPendingOrder inserts an order into the pending-orders map. This is
+// intended for test setup; production code uses ExecuteBatch.
+func (a *Account) SetPendingOrder(order broker.Order) {
+	a.pendingOrders[order.ID] = order
+}
+
+// SetPendingGroup inserts a group into the pending-groups map. This is
+// intended for test setup; production code uses ExecuteBatch.
+func (a *Account) SetPendingGroup(group *broker.OrderGroup) {
+	a.pendingGroups[group.ID] = group
+}
+
+// PendingOrderIDs returns a slice of all pending order IDs.
+func (a *Account) PendingOrderIDs() []string {
+	ids := make([]string, 0, len(a.pendingOrders))
+	for id := range a.pendingOrders {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
 
 // SetBenchmark sets the benchmark asset after construction.
 func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
@@ -1449,7 +1483,9 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		return fmt.Errorf("execute batch: no broker set")
 	}
 
-	// 4. Assign IDs, track, and submit orders.
+	// 4. Assign IDs to all orders and add to pendingOrders. Collect orders by groupID.
+	groupOrders := make(map[string][]broker.Order) // groupID -> orders in that group
+
 	for idx := range batch.Orders {
 		order := &batch.Orders[idx]
 		if order.ID == "" {
@@ -1458,12 +1494,78 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 
 		a.pendingOrders[order.ID] = *order
 
+		if order.GroupID != "" {
+			groupOrders[order.GroupID] = append(groupOrders[order.GroupID], *order)
+		}
+	}
+
+	// 5. Store deferred bracket exits: for each GroupBracket spec, record the spec in
+	// deferredExits keyed by groupID so exit orders can be submitted after the entry fills.
+	for _, spec := range batch.Groups() {
+		if spec.Type == broker.GroupBracket {
+			a.deferredExits[spec.GroupID] = spec
+		}
+	}
+
+	// 6. Submit grouped orders.
+	submittedGroups := make(map[string]bool) // track which groupIDs have been handled
+
+	for _, spec := range batch.Groups() {
+		orders := groupOrders[spec.GroupID]
+
+		switch spec.Type {
+		case broker.GroupOCO:
+			// Standalone OCO: submit as a group if broker supports it, else individually.
+			if a.brokerHasGroups {
+				gs := a.broker.(broker.GroupSubmitter)
+				if err := gs.SubmitGroup(ctx, orders, broker.GroupOCO); err != nil {
+					return fmt.Errorf("execute batch: submit group %s: %w", spec.GroupID, err)
+				}
+
+				group := &broker.OrderGroup{ID: spec.GroupID, Type: broker.GroupOCO}
+				for _, ord := range orders {
+					group.OrderIDs = append(group.OrderIDs, ord.ID)
+				}
+
+				a.pendingGroups[spec.GroupID] = group
+			} else {
+				for _, ord := range orders {
+					if err := a.broker.Submit(ctx, ord); err != nil {
+						return fmt.Errorf("execute batch: submit %s: %w", ord.Asset.Ticker, err)
+					}
+				}
+			}
+
+		case broker.GroupBracket:
+			// For brackets, submit only the entry order now; exits are deferred.
+			if spec.EntryIndex >= 0 && spec.EntryIndex < len(batch.Orders) {
+				entryOrder := batch.Orders[spec.EntryIndex]
+				if err := a.broker.Submit(ctx, entryOrder); err != nil {
+					return fmt.Errorf("execute batch: submit %s: %w", entryOrder.Asset.Ticker, err)
+				}
+
+				group := &broker.OrderGroup{ID: spec.GroupID, Type: broker.GroupBracket, OrderIDs: []string{entryOrder.ID}}
+				a.pendingGroups[spec.GroupID] = group
+			}
+		}
+
+		submittedGroups[spec.GroupID] = true
+	}
+
+	// 7. Submit remaining non-group orders individually.
+	for idx := range batch.Orders {
+		order := &batch.Orders[idx]
+		if order.GroupID != "" && submittedGroups[order.GroupID] {
+			// Already handled as part of a group.
+			continue
+		}
+
 		if err := a.broker.Submit(ctx, *order); err != nil {
 			return fmt.Errorf("execute batch: submit %s: %w", order.Asset.Ticker, err)
 		}
 	}
 
-	// 5. Drain immediate fills.
+	// 8. Drain immediate fills.
 	a.drainFillsFromChannel()
 
 	return nil
@@ -1476,14 +1578,29 @@ func (a *Account) DrainFills(_ context.Context) error {
 	return nil
 }
 
+// deferredExitInfo records the information needed to submit bracket exit
+// orders after a bracket entry fill.
+type deferredExitInfo struct {
+	groupID   string
+	spec      OrderGroupSpec
+	entrySide broker.Side
+	fillPrice float64
+	asset     asset.Asset
+	qty       float64
+}
+
 // drainFillsFromChannel reads all available fills from the broker's
-// fill channel (non-blocking) and records each as a transaction.
+// fill channel (non-blocking) and records each as a transaction. After
+// draining, it submits deferred bracket exit orders for any entry fills.
 func (a *Account) drainFillsFromChannel() {
 	if a.broker == nil {
 		return
 	}
 
 	fillCh := a.broker.Fills()
+
+	// Phase 1: Collect fills and handle OCO cancellations.
+	var pendingExits []deferredExitInfo
 
 	for {
 		select {
@@ -1520,35 +1637,197 @@ func (a *Account) drainFillsFromChannel() {
 			})
 
 			delete(a.pendingOrders, fill.OrderID)
+
+			// Group handling for the filled order.
+			if order.GroupID != "" {
+				switch order.GroupRole {
+				case broker.RoleEntry:
+					// Bracket entry filled: collect deferred exits for Phase 2.
+					if spec, found := a.deferredExits[order.GroupID]; found {
+						pendingExits = append(pendingExits, deferredExitInfo{
+							groupID:   order.GroupID,
+							spec:      spec,
+							entrySide: order.Side,
+							fillPrice: fill.Price,
+							asset:     order.Asset,
+							qty:       fill.Qty,
+						})
+						delete(a.deferredExits, order.GroupID)
+					}
+
+				case broker.RoleStopLoss, broker.RoleTakeProfit:
+					// OCO leg filled: cancel siblings.
+					a.cancelOCOSiblings(order.GroupID, fill.OrderID)
+				}
+			}
+
 		default:
-			return
+			goto phase2
 		}
+	}
+
+phase2:
+	// Phase 2: Submit deferred bracket exit orders.
+	for _, exitInfo := range pendingExits {
+		a.submitBracketExits(exitInfo)
 	}
 }
 
-// CancelOpenOrders cancels all open or submitted orders and removes
-// them from the pending-orders tracker.
+// cancelOCOSiblings removes sibling orders from an OCO group when one
+// leg fills. For GroupSubmitter brokers, siblings are removed from
+// pendingOrders directly (the broker handles cancellation). For fallback
+// brokers, Cancel is called on each sibling.
+func (a *Account) cancelOCOSiblings(groupID, filledOrderID string) {
+	group, ok := a.pendingGroups[groupID]
+	if !ok {
+		return
+	}
+
+	for _, siblingID := range group.OrderIDs {
+		if siblingID == filledOrderID {
+			continue
+		}
+
+		if a.brokerHasGroups {
+			delete(a.pendingOrders, siblingID)
+		} else {
+			if err := a.broker.Cancel(context.Background(), siblingID); err != nil {
+				log.Warn().Err(err).
+					Str("orderID", siblingID).
+					Str("groupID", groupID).
+					Msg("failed to cancel OCO sibling")
+			}
+
+			delete(a.pendingOrders, siblingID)
+		}
+	}
+
+	delete(a.pendingGroups, groupID)
+}
+
+// submitBracketExits creates and submits the stop-loss and take-profit
+// exit orders for a filled bracket entry.
+func (a *Account) submitBracketExits(info deferredExitInfo) {
+	exitGroupID := info.groupID + "-exits"
+
+	// Determine exit prices.
+	stopPrice := resolveExitPrice(info.fillPrice, info.spec.StopLoss)
+	takeProfitPrice := resolveExitPrice(info.fillPrice, info.spec.TakeProfit)
+
+	// Exit side is opposite of entry side.
+	var exitSide broker.Side
+	if info.entrySide == broker.Buy {
+		exitSide = broker.Sell
+	} else {
+		exitSide = broker.Buy
+	}
+
+	stopLossOrder := broker.Order{
+		ID:          exitGroupID + "-sl",
+		Asset:       info.asset,
+		Side:        exitSide,
+		Qty:         info.qty,
+		OrderType:   broker.Stop,
+		StopPrice:   stopPrice,
+		TimeInForce: broker.GTC,
+		GroupID:     exitGroupID,
+		GroupRole:   broker.RoleStopLoss,
+	}
+
+	takeProfitOrder := broker.Order{
+		ID:          exitGroupID + "-tp",
+		Asset:       info.asset,
+		Side:        exitSide,
+		Qty:         info.qty,
+		OrderType:   broker.Limit,
+		LimitPrice:  takeProfitPrice,
+		TimeInForce: broker.GTC,
+		GroupID:     exitGroupID,
+		GroupRole:   broker.RoleTakeProfit,
+	}
+
+	// Track in pendingOrders and pendingGroups.
+	a.pendingOrders[stopLossOrder.ID] = stopLossOrder
+	a.pendingOrders[takeProfitOrder.ID] = takeProfitOrder
+	a.pendingGroups[exitGroupID] = &broker.OrderGroup{
+		ID:       exitGroupID,
+		Type:     broker.GroupOCO,
+		OrderIDs: []string{stopLossOrder.ID, takeProfitOrder.ID},
+	}
+
+	// Submit via GroupSubmitter or individual Submit.
+	exitOrders := []broker.Order{stopLossOrder, takeProfitOrder}
+
+	if a.brokerHasGroups {
+		gs := a.broker.(broker.GroupSubmitter)
+		if err := gs.SubmitGroup(context.Background(), exitOrders, broker.GroupOCO); err != nil {
+			log.Warn().Err(err).
+				Str("groupID", exitGroupID).
+				Msg("failed to submit bracket exit group")
+		}
+	} else {
+		for _, ord := range exitOrders {
+			if err := a.broker.Submit(context.Background(), ord); err != nil {
+				log.Warn().Err(err).
+					Str("orderID", ord.ID).
+					Str("groupID", exitGroupID).
+					Msg("failed to submit bracket exit order")
+			}
+		}
+	}
+
+	// Clean up the parent bracket group.
+	delete(a.pendingGroups, info.groupID)
+}
+
+// resolveExitPrice computes the exit price from an ExitTarget. If
+// AbsolutePrice is non-zero, it is used directly; otherwise the price
+// is computed as fillPrice * (1 + PercentOffset).
+func resolveExitPrice(fillPrice float64, target ExitTarget) float64 {
+	if target.AbsolutePrice != 0 {
+		return target.AbsolutePrice
+	}
+
+	return fillPrice * (1 + target.PercentOffset)
+}
+
+// CancelOpenOrders cancels all pending orders tracked by the account and
+// clears all group state (pendingOrders, pendingGroups, deferredExits).
 func (a *Account) CancelOpenOrders(ctx context.Context) error {
 	if a.broker == nil {
 		return nil
 	}
 
-	orders, err := a.broker.Orders(ctx)
-	if err != nil {
-		return fmt.Errorf("cancel open orders: %w", err)
-	}
+	var errs []error
 
-	for _, order := range orders {
-		if order.Status == broker.OrderOpen || order.Status == broker.OrderSubmitted {
-			if cancelErr := a.broker.Cancel(ctx, order.ID); cancelErr != nil {
-				return fmt.Errorf("cancel order %s: %w", order.ID, cancelErr)
+	// Separate bracket exit orders (stop-loss/take-profit) from regular orders.
+	// Bracket exits persist across bars until triggered by EvaluatePending.
+	survivingOrders := make(map[string]broker.Order)
+	survivingGroups := make(map[string]*broker.OrderGroup)
+
+	for orderID, order := range a.pendingOrders {
+		if order.GroupRole == broker.RoleStopLoss || order.GroupRole == broker.RoleTakeProfit {
+			survivingOrders[orderID] = order
+
+			if order.GroupID != "" {
+				if grp, ok := a.pendingGroups[order.GroupID]; ok {
+					survivingGroups[order.GroupID] = grp
+				}
 			}
 
-			delete(a.pendingOrders, order.ID)
+			continue
 		}
+
+		// Best-effort cancel: order may have already been filled by the broker
+		// (e.g. market orders fill immediately in SimulatedBroker.Submit).
+		_ = a.broker.Cancel(ctx, orderID) //nolint:errcheck // intentional best-effort; fill races are expected
 	}
 
-	return nil
+	a.pendingOrders = survivingOrders
+	a.pendingGroups = survivingGroups
+	a.deferredExits = make(map[string]OrderGroupSpec)
+
+	return errors.Join(errs...)
 }
 
 // Clone returns a deep copy of the Account suitable for prediction runs.
@@ -1584,6 +1863,19 @@ func (acct *Account) Clone() *Account {
 	pendingOrders := make(map[string]broker.Order, len(acct.pendingOrders))
 	for orderID, order := range acct.pendingOrders {
 		pendingOrders[orderID] = order
+	}
+
+	pendingGroups := make(map[string]*broker.OrderGroup, len(acct.pendingGroups))
+	for groupID, group := range acct.pendingGroups {
+		groupCopy := *group
+		groupCopy.OrderIDs = make([]string, len(group.OrderIDs))
+		copy(groupCopy.OrderIDs, group.OrderIDs)
+		pendingGroups[groupID] = &groupCopy
+	}
+
+	deferredExits := make(map[string]OrderGroupSpec, len(acct.deferredExits))
+	for groupID, spec := range acct.deferredExits {
+		deferredExits[groupID] = spec
 	}
 
 	recentLossSales := make(map[asset.Asset][]recentLossSale, len(acct.recentLossSales))
@@ -1636,6 +1928,9 @@ func (acct *Account) Clone() *Account {
 		annotations:       annotations,
 		middleware:        acct.middleware,
 		pendingOrders:     pendingOrders,
+		pendingGroups:     pendingGroups,
+		brokerHasGroups:   acct.brokerHasGroups,
+		deferredExits:     deferredExits,
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
 	}

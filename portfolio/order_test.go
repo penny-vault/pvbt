@@ -110,6 +110,37 @@ func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 
 var _ broker.Broker = (*mockBroker)(nil)
 
+// mockGroupBroker embeds mockBroker and implements broker.GroupSubmitter so that
+// tests can verify that ExecuteBatch calls SubmitGroup for OCO orders when the
+// broker supports contingent group submission.
+type mockGroupBroker struct {
+	*mockBroker
+	submittedGroups []struct {
+		orders    []broker.Order
+		groupType broker.GroupType
+	}
+	submitGroupErr error
+}
+
+func newMockGroupBroker() *mockGroupBroker {
+	return &mockGroupBroker{mockBroker: newMockBroker()}
+}
+
+func (m *mockGroupBroker) SubmitGroup(_ context.Context, orders []broker.Order, groupType broker.GroupType) error {
+	if m.submitGroupErr != nil {
+		return m.submitGroupErr
+	}
+
+	m.submittedGroups = append(m.submittedGroups, struct {
+		orders    []broker.Order
+		groupType broker.GroupType
+	}{orders: orders, groupType: groupType})
+
+	return nil
+}
+
+var _ broker.GroupSubmitter = (*mockGroupBroker)(nil)
+
 var _ = Describe("Order", func() {
 	var (
 		testAsset asset.Asset
@@ -280,6 +311,86 @@ var _ = Describe("Order", func() {
 			// negative (short) position.
 			Expect(acct.Cash()).To(Equal(10_600.0))
 			Expect(acct.Position(testAsset)).To(Equal(-5.0))
+		})
+	})
+
+	Describe("ExitTarget constructors", func() {
+		It("StopLossPrice sets AbsolutePrice and zero PercentOffset", func() {
+			et := portfolio.StopLossPrice(95.0)
+			Expect(et.AbsolutePrice).To(Equal(95.0))
+			Expect(et.PercentOffset).To(Equal(0.0))
+		})
+
+		It("StopLossPercent sets PercentOffset and zero AbsolutePrice", func() {
+			et := portfolio.StopLossPercent(5.0)
+			Expect(et.AbsolutePrice).To(Equal(0.0))
+			Expect(et.PercentOffset).To(BeNumerically("~", -0.05, 1e-9))
+		})
+
+		It("TakeProfitPrice sets AbsolutePrice and zero PercentOffset", func() {
+			et := portfolio.TakeProfitPrice(110.0)
+			Expect(et.AbsolutePrice).To(Equal(110.0))
+			Expect(et.PercentOffset).To(Equal(0.0))
+		})
+
+		It("TakeProfitPercent sets PercentOffset and zero AbsolutePrice", func() {
+			et := portfolio.TakeProfitPercent(10.0)
+			Expect(et.AbsolutePrice).To(Equal(0.0))
+			Expect(et.PercentOffset).To(BeNumerically("~", 0.10, 1e-9))
+		})
+	})
+
+	Describe("OCOLeg constructors", func() {
+		It("StopLeg sets OrderType to Stop and the given price", func() {
+			leg := portfolio.StopLeg(90.0)
+			Expect(leg.OrderType).To(Equal(broker.Stop))
+			Expect(leg.Price).To(Equal(90.0))
+		})
+
+		It("LimitLeg sets OrderType to Limit and the given price", func() {
+			leg := portfolio.LimitLeg(105.0)
+			Expect(leg.OrderType).To(Equal(broker.Limit))
+			Expect(leg.Price).To(Equal(105.0))
+		})
+	})
+
+	Describe("WithBracket modifier", func() {
+		It("implements OrderModifier", func() {
+			stopLoss := portfolio.StopLossPrice(90.0)
+			takeProfit := portfolio.TakeProfitPrice(115.0)
+			// compile-time interface check
+			var mod portfolio.OrderModifier = portfolio.WithBracket(stopLoss, takeProfit)
+			Expect(mod).ToNot(BeNil())
+		})
+	})
+
+	Describe("OCO modifier", func() {
+		It("implements OrderModifier", func() {
+			legA := portfolio.StopLeg(90.0)
+			legB := portfolio.LimitLeg(110.0)
+			// compile-time interface check
+			var mod portfolio.OrderModifier = portfolio.OCO(legA, legB)
+			Expect(mod).ToNot(BeNil())
+		})
+	})
+
+	Describe("bracket/OCO rejection via Account.Order", func() {
+		It("returns an error when WithBracket modifier is used", func() {
+			stopLoss := portfolio.StopLossPrice(90.0)
+			takeProfit := portfolio.TakeProfitPrice(115.0)
+			err := acct.Order(context.Background(), testAsset, portfolio.Buy, 10, portfolio.WithBracket(stopLoss, takeProfit))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bracket/OCO modifiers require batch submission"))
+			Expect(mb.submitted).To(BeEmpty())
+		})
+
+		It("returns an error when OCO modifier is used", func() {
+			legA := portfolio.StopLeg(90.0)
+			legB := portfolio.LimitLeg(110.0)
+			err := acct.Order(context.Background(), testAsset, portfolio.Buy, 10, portfolio.OCO(legA, legB))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bracket/OCO modifiers require batch submission"))
+			Expect(mb.submitted).To(BeEmpty())
 		})
 	})
 

@@ -100,6 +100,12 @@ type Order struct {
 	// 0=FIFO (default), 1=LIFO, 2=HighestCost, 3=SpecificID.
 	// Set via portfolio.WithLotSelection order modifier.
 	LotSelection int
+	// GroupID associates this order with a contingent order group when
+	// non-empty. The value matches OrderGroup.ID for the owning group.
+	GroupID string
+	// GroupRole identifies the role this order plays within its group
+	// (entry, stop-loss, or take-profit). Zero means no role assigned.
+	GroupRole GroupRole
 }
 
 // OrderType identifies the price behavior of an order.
@@ -148,6 +154,46 @@ type Balance struct {
 	NetLiquidatingValue float64
 	EquityBuyingPower   float64
 	MaintenanceReq      float64
+}
+
+// GroupType identifies the kind of contingent order group.
+type GroupType int
+
+const (
+	// GroupOCO is a One-Cancels-Other group: when one order fills or is
+	// cancelled, the remaining orders in the group are cancelled.
+	GroupOCO GroupType = iota + 1
+
+	// GroupBracket is a bracket order group consisting of an entry order
+	// plus a stop-loss and a take-profit leg.
+	GroupBracket
+)
+
+// OrderGroup describes a contingent group of orders submitted together.
+type OrderGroup struct {
+	ID       string
+	Type     GroupType
+	OrderIDs []string
+}
+
+// GroupRole identifies the role an order plays within a group.
+type GroupRole int
+
+const (
+	// RoleEntry is the entry leg of a bracket order.
+	RoleEntry GroupRole = iota + 1
+
+	// RoleStopLoss is the stop-loss leg of a bracket order.
+	RoleStopLoss
+
+	// RoleTakeProfit is the take-profit leg of a bracket order.
+	RoleTakeProfit
+)
+
+// GroupSubmitter is implemented by brokers that support submitting
+// contingent order groups atomically.
+type GroupSubmitter interface {
+	SubmitGroup(ctx context.Context, orders []Order, groupType GroupType) error
 }
 
 // PriceProvider supplies current market prices. The engine implements

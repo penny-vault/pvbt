@@ -235,28 +235,28 @@ var _ = Describe("Middleware", func() {
 		Expect(acct.Cash()).To(Equal(10_000.0 - 500.0))
 	})
 
-	It("CancelOpenOrders cancels open orders", func() {
+	It("CancelOpenOrders cancels all pending orders tracked by the account", func() {
 		mb := newMockBroker()
 		canceledIDs := []string{}
 		mb.cancelFn = func(orderID string) error {
 			canceledIDs = append(canceledIDs, orderID)
 			return nil
 		}
-		mb.ordersFn = func() ([]broker.Order, error) {
-			return []broker.Order{
-				{ID: "o1", Status: broker.OrderOpen},
-				{ID: "o2", Status: broker.OrderFilled},
-				{ID: "o3", Status: broker.OrderSubmitted},
-			}, nil
-		}
 
 		acct := portfolio.New(portfolio.WithCash(10_000, t1), portfolio.WithBroker(mb))
+
+		// Seed pending orders directly (the account only tracks open/submitted orders).
+		acct.SetPendingOrder(broker.Order{ID: "o1", Status: broker.OrderOpen})
+		acct.SetPendingOrder(broker.Order{ID: "o3", Status: broker.OrderSubmitted})
 
 		err := acct.CancelOpenOrders(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 
-		// Should cancel o1 (Open) and o3 (Submitted), but not o2 (Filled).
+		// All orders in pendingOrders are cancelled.
 		Expect(canceledIDs).To(ConsistOf("o1", "o3"))
+
+		// pendingOrders is cleared after cancellation.
+		Expect(acct.PendingOrderIDs()).To(BeEmpty())
 	})
 })
 

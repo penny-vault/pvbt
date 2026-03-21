@@ -508,6 +508,126 @@ var _ = Describe("Batch", func() {
 		})
 	})
 
+	Describe("OCO modifier", func() {
+		It("expands into 2 orders with correct types, prices, GroupRole, and shared GroupID", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			err := batch.Order(context.Background(), spy, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(90.0), portfolio.LimitLeg(115.0)))
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(batch.Orders).To(HaveLen(2))
+
+			legA := batch.Orders[0]
+			Expect(legA.Asset).To(Equal(spy))
+			Expect(legA.Side).To(Equal(broker.Sell))
+			Expect(legA.Qty).To(Equal(10.0))
+			Expect(legA.OrderType).To(Equal(broker.Stop))
+			Expect(legA.StopPrice).To(Equal(90.0))
+			Expect(legA.GroupRole).To(Equal(broker.RoleStopLoss))
+			Expect(legA.GroupID).NotTo(BeEmpty())
+
+			legB := batch.Orders[1]
+			Expect(legB.Asset).To(Equal(spy))
+			Expect(legB.Side).To(Equal(broker.Sell))
+			Expect(legB.Qty).To(Equal(10.0))
+			Expect(legB.OrderType).To(Equal(broker.Limit))
+			Expect(legB.LimitPrice).To(Equal(115.0))
+			Expect(legB.GroupRole).To(Equal(broker.RoleTakeProfit))
+			Expect(legB.GroupID).To(Equal(legA.GroupID))
+		})
+
+		It("records in Groups() with Type=GroupOCO and EntryIndex=-1", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			err := batch.Order(context.Background(), spy, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(90.0), portfolio.LimitLeg(115.0)))
+			Expect(err).NotTo(HaveOccurred())
+
+			groups := batch.Groups()
+			Expect(groups).To(HaveLen(1))
+			Expect(groups[0].Type).To(Equal(broker.GroupOCO))
+			Expect(groups[0].EntryIndex).To(Equal(-1))
+			Expect(groups[0].GroupID).NotTo(BeEmpty())
+			Expect(groups[0].GroupID).To(Equal(batch.Orders[0].GroupID))
+		})
+
+		It("creates separate GroupIDs for two OCO calls", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Order(context.Background(), spy, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(90.0), portfolio.LimitLeg(115.0)))).To(Succeed())
+			Expect(batch.Order(context.Background(), aapl, portfolio.Sell, 5,
+				portfolio.OCO(portfolio.StopLeg(180.0), portfolio.LimitLeg(220.0)))).To(Succeed())
+
+			groups := batch.Groups()
+			Expect(groups).To(HaveLen(2))
+			Expect(groups[0].GroupID).NotTo(Equal(groups[1].GroupID))
+		})
+	})
+
+	Describe("WithBracket modifier", func() {
+		It("adds 1 entry order with GroupRole=RoleEntry and non-empty GroupID", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			err := batch.Order(context.Background(), spy, portfolio.Buy, 10,
+				portfolio.WithBracket(portfolio.StopLossPrice(90.0), portfolio.TakeProfitPrice(115.0)))
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(batch.Orders).To(HaveLen(1))
+
+			entry := batch.Orders[0]
+			Expect(entry.Asset).To(Equal(spy))
+			Expect(entry.Side).To(Equal(broker.Buy))
+			Expect(entry.Qty).To(Equal(10.0))
+			Expect(entry.GroupRole).To(Equal(broker.RoleEntry))
+			Expect(entry.GroupID).NotTo(BeEmpty())
+		})
+
+		It("records in Groups() with Type=GroupBracket, correct EntryIndex, and exit targets", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			stopLoss := portfolio.StopLossPrice(90.0)
+			takeProfit := portfolio.TakeProfitPrice(115.0)
+
+			err := batch.Order(context.Background(), spy, portfolio.Buy, 10,
+				portfolio.WithBracket(stopLoss, takeProfit))
+			Expect(err).NotTo(HaveOccurred())
+
+			groups := batch.Groups()
+			Expect(groups).To(HaveLen(1))
+			Expect(groups[0].Type).To(Equal(broker.GroupBracket))
+			Expect(groups[0].EntryIndex).To(Equal(0))
+			Expect(groups[0].GroupID).NotTo(BeEmpty())
+			Expect(groups[0].GroupID).To(Equal(batch.Orders[0].GroupID))
+			Expect(groups[0].StopLoss).To(Equal(stopLoss))
+			Expect(groups[0].TakeProfit).To(Equal(takeProfit))
+		})
+
+		It("records EntryIndex pointing to the correct order when preceding orders exist", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy, aapl}, []float64{100, 200})
+			batch := portfolio.NewBatch(ts, acct)
+
+			// Add a plain order first (index 0).
+			Expect(batch.Order(context.Background(), aapl, portfolio.Buy, 5)).To(Succeed())
+
+			// Bracket order should land at index 1.
+			Expect(batch.Order(context.Background(), spy, portfolio.Buy, 10,
+				portfolio.WithBracket(portfolio.StopLossPrice(90.0), portfolio.TakeProfitPrice(115.0)))).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(2))
+			groups := batch.Groups()
+			Expect(groups).To(HaveLen(1))
+			Expect(groups[0].EntryIndex).To(Equal(1))
+			Expect(batch.Orders[1].GroupRole).To(Equal(broker.RoleEntry))
+		})
+	})
+
 	Describe("RebalanceTo", func() {
 		It("appends sell and buy orders to reach target allocation", func() {
 			// Account: 10 SPY @ 100, cash = 0, total = 1000.
