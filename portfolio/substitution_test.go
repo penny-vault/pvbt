@@ -207,6 +207,51 @@ var _ = Describe("Substitution mapping", func() {
 		})
 	})
 
+	Describe("ProjectedHoldings sell order for substitute", func() {
+		It("sell of substitute reduces logical position", func() {
+			acct := buildPricedAccountWithAssets(90_000, []asset.Asset{spy, ivv}, []float64{450, 445})
+			buyLot(acct, ivv, ts, 445.0, 20)
+
+			expiry := ts.AddDate(0, 1, 0)
+			acct.RegisterSubstitution(spy, ivv, expiry)
+
+			batch := portfolio.NewBatch(ts, acct)
+			// Sell 5 shares of IVV (the substitute).
+			batch.Orders = append(batch.Orders, broker.Order{
+				Asset:       ivv,
+				Side:        broker.Sell,
+				Qty:         5,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			})
+
+			projected := batch.ProjectedHoldings()
+			// After selling 5 IVV, projected SPY quantity should be 15.
+			Expect(projected).To(HaveKey(spy))
+			Expect(projected).NotTo(HaveKey(ivv))
+			Expect(projected[spy]).To(BeNumerically("~", 15.0, 0.001))
+		})
+	})
+
+	Describe("Clone substitutions are independent", func() {
+		It("mutating original substitutions does not affect the clone", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			expiry := ts.AddDate(0, 1, 0)
+			acct.RegisterSubstitution(spy, ivv, expiry)
+
+			clone := acct.Clone()
+
+			// Register a new substitution on the original after cloning.
+			acct.RegisterSubstitution(qqq, qqqe, expiry)
+
+			// The clone should only see the one substitution registered before the clone.
+			cloneSubs := clone.ActiveSubstitutions()
+			Expect(cloneSubs).To(HaveLen(1))
+			Expect(cloneSubs).To(HaveKey(spy))
+			Expect(cloneSubs).NotTo(HaveKey(qqq))
+		})
+	})
+
 	Describe("Multiple substitutions", func() {
 		It("maps multiple substitutes to their logical originals", func() {
 			acct := buildPricedAccountWithAssets(80_000,

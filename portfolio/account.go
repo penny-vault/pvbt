@@ -386,7 +386,9 @@ func (a *Account) Holdings(fn func(asset.Asset, float64)) {
 
 	// When substitutions are active, multiple real assets may map to the
 	// same logical asset. Aggregate quantities under the logical key.
-	if len(a.substitutions) > 0 && !asOf.IsZero() {
+	// A zero asOf is safe here: time.Time{}.Before(expiry) is true for any
+	// real expiry date, so substitutions remain active when prices are absent.
+	if len(a.substitutions) > 0 {
 		logical := make(map[asset.Asset]float64, len(a.holdings))
 		for realAsset, qty := range a.holdings {
 			key := mapToLogical(realAsset, a.substitutions, asOf)
@@ -800,16 +802,31 @@ func (a *Account) RegisterSubstitution(original, substitute asset.Asset, until t
 	}
 }
 
-// ActiveSubstitutions returns a copy of the substitution map.
-// This implements the TaxAware interface.
+// ActiveSubstitutions returns a copy of the substitution map containing only
+// non-expired entries. A substitution is considered expired when its Until date
+// is before the price end date. If no prices are loaded the cutoff is unknown
+// and all entries are returned. This implements the TaxAware interface.
 func (a *Account) ActiveSubstitutions() map[asset.Asset]Substitution {
 	if len(a.substitutions) == 0 {
 		return nil
 	}
 
+	var cutoff time.Time
+	if a.prices != nil {
+		cutoff = a.prices.End()
+	}
+
 	result := make(map[asset.Asset]Substitution, len(a.substitutions))
 	for key, sub := range a.substitutions {
-		result[key] = sub
+		// Include the entry when prices are not loaded (cutoff is zero) or when
+		// the substitution has not yet expired.
+		if cutoff.IsZero() || !sub.Until.Before(cutoff) {
+			result[key] = sub
+		}
+	}
+
+	if len(result) == 0 {
+		return nil
 	}
 
 	return result
