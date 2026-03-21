@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-03-21
+
 ### Added
 
 - The engine validates historical data coverage before a backtest begins. Strategies declare how many trading days of warmup data they need; in strict mode the engine rejects the run if any asset falls short, and in permissive mode it shifts the start date forward until all assets have enough history.
@@ -109,5 +111,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails
 - Save and reload complete backtest results between sessions
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/penny-vault/pvbt/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/penny-vault/pvbt/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/penny-vault/pvbt/releases/tag/v0.1.0
