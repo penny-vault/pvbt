@@ -108,38 +108,17 @@ type streamerMessage struct {
     Data      json.RawMessage `json:"data"`
     Timestamp int64           `json:"timestamp"`
 }
-
-// orderNotification is the "Order" type payload from the streamer.
-// It mirrors orderResponse but includes nested fills.
-type orderNotification struct {
-    ID     string                   `json:"id"`
-    Status string                   `json:"status"`
-    Legs   []orderLegWithFills      `json:"legs"`
-}
-
-type orderLegWithFills struct {
-    Symbol         string          `json:"symbol"`
-    InstrumentType string          `json:"instrument-type"`
-    Action         string          `json:"action"`
-    Quantity       float64         `json:"quantity"`
-    Fills          []legFill       `json:"fills"`
-}
-
-type legFill struct {
-    FillID   string  `json:"fill-id"`
-    Price    float64 `json:"fill-price"`
-    Quantity string  `json:"quantity"`
-    FilledAt string  `json:"filled-at"`
-}
 ```
+
+The streamer reuses the `orderResponse` and `orderLegResponse` types (updated with nested fills in Section 6) to parse the notification data. This avoids duplicate type definitions -- both the REST `getOrders` response and the WebSocket notification use the same order structure per the tastytrade docs ("Streamer messages always contain a full object representation").
+
+A helper function `parseLegFillQuantity(s string) float64` converts the string quantity field to float64. The `filled-at` field is an ISO 8601 timestamp string parsed with `time.Parse(time.RFC3339, ...)`.
 
 Update `handleMessage()`:
 1. Unmarshal into `streamerMessage`.
 2. If `Type != "Order"`, ignore.
-3. Unmarshal `Data` into `orderNotification`.
-4. Iterate `Legs[].Fills[]`, deduplicate by `fill-id`, emit a `broker.Fill` for each unseen fill with `OrderID` set to the notification's `ID`.
-
-Note: The `quantity` field in `legFill` is a string in the API response and must be parsed to `float64`. The `filled-at` field is an ISO 8601 timestamp string.
+3. Unmarshal `Data` into `orderResponse`.
+4. Iterate `Legs[].Fills[]`, deduplicate by `fill-id`, emit a `broker.Fill` for each unseen fill with `OrderID` set to the order's `ID`.
 
 ### 5. Add WebSocket Connect and Heartbeat
 
@@ -170,11 +149,13 @@ func (client *apiClient) account() string {
 
 Add a heartbeat ticker in `run()` that sends `{"action": "heartbeat"}` every 30 seconds. The ticker is stopped on shutdown.
 
+**Reconnection:** The `reconnect()` method must also send the connect message after re-dialing, before calling `pollMissedFills`. The heartbeat ticker in `run()` continues across reconnections since it runs in the main loop -- no restart is needed. If a heartbeat write fails (connection broken), it triggers the normal reconnection flow via the readPump error path.
+
 ### 6. Fix `pollMissedFills` to Extract Fills from Order Legs
 
 **Problem:** `pollMissedFills` uses `order.Price` and `order.ID` for the fill. The actual API returns fills nested in `legs[].fills[]` with individual fill IDs, prices, quantities, and timestamps.
 
-**Fix:** Update `orderResponse` and `orderLegResponse` in `types.go` to include the nested fills structure:
+**Fix:** Update `orderResponse` and `orderLegResponse` in `types.go` to include the nested fills structure. These types are shared by both REST responses and WebSocket notifications (see Section 4).
 
 ```go
 type orderResponse struct {
@@ -203,6 +184,8 @@ type legFillResponse struct {
     FilledAt string  `json:"filled-at"`
 }
 ```
+
+The `Quantity` field in `legFillResponse` is a string per the API. Add a helper `parseLegFillQuantity(s string) float64` that calls `strconv.ParseFloat` and returns 0 on error. The `FilledAt` field is parsed with `time.Parse(time.RFC3339, ...)`.
 
 Update `pollMissedFills` to iterate over `legs[].fills[]` for each order, deduplicate by `fill-id`, and emit individual `broker.Fill` entries with proper price, quantity, and timestamp.
 
@@ -294,13 +277,14 @@ func (client *apiClient) submitComplexOrder(ctx context.Context, order complexOr
 }
 ```
 
-The response type:
+The response type (complete definition -- also used in Section 10 for populating the `complexOrderIDs` map):
 
 ```go
 type complexOrderSubmitResponse struct {
     Data struct {
         ComplexOrder struct {
-            ID string `json:"id"`
+            ID     string          `json:"id"`
+            Orders []orderResponse `json:"orders"`
         } `json:"complex-order"`
     } `json:"data"`
 }
@@ -310,6 +294,10 @@ type complexOrderSubmitResponse struct {
 
 ```go
 func (ttBroker *TastytradeBroker) SubmitGroup(ctx context.Context, orders []broker.Order, groupType broker.GroupType) error {
+    if len(orders) == 0 {
+        return fmt.Errorf("tastytrade: SubmitGroup called with no orders")
+    }
+
     ttBroker.mu.Lock()
     defer ttBroker.mu.Unlock()
 
@@ -343,25 +331,32 @@ func (ttBroker *TastytradeBroker) submitOCO(ctx context.Context, orders []broker
 }
 ```
 
-**OTOCO mapping:** The entry order (`GroupRole == RoleEntry`) becomes the `trigger-order`. The remaining orders (stop-loss, take-profit) go into `orders`:
+**OTOCO mapping:** The entry order (`GroupRole == RoleEntry`) becomes the `trigger-order`. The remaining orders (stop-loss, take-profit) go into `orders`. Exactly one entry order must be present; zero or multiple is an error.
 
 ```go
 func (ttBroker *TastytradeBroker) submitOTOCO(ctx context.Context, orders []broker.Order) error {
-    var triggerOrder orderRequest
+    var triggerOrder *orderRequest
     var contingentOrders []orderRequest
 
     for _, order := range orders {
         ttOrder := toTastytradeOrder(order)
         if order.GroupRole == broker.RoleEntry {
-            triggerOrder = ttOrder
+            if triggerOrder != nil {
+                return fmt.Errorf("tastytrade: OTOCO group has multiple entry orders")
+            }
+            triggerOrder = &ttOrder
         } else {
             contingentOrders = append(contingentOrders, ttOrder)
         }
     }
 
+    if triggerOrder == nil {
+        return fmt.Errorf("tastytrade: OTOCO group has no entry order")
+    }
+
     req := complexOrderRequest{
         Type:         "OTOCO",
-        TriggerOrder: &triggerOrder,
+        TriggerOrder: triggerOrder,
         Orders:       contingentOrders,
     }
 
@@ -423,20 +418,7 @@ func (ttBroker *TastytradeBroker) Cancel(ctx context.Context, orderID string) er
 }
 ```
 
-The complex order ID comes from the `submitComplexOrder` response. Update `submitOCO` and `submitOTOCO` to capture the returned ID and populate the map. To get the individual child order IDs, the `complexOrderSubmitResponse` needs to include the child orders:
-
-```go
-type complexOrderSubmitResponse struct {
-    Data struct {
-        ComplexOrder struct {
-            ID     string          `json:"id"`
-            Orders []orderResponse `json:"orders"`
-        } `json:"complex-order"`
-    } `json:"data"`
-}
-```
-
-After submission, iterate the response's `Orders` to map each child order ID back to the complex order ID.
+The complex order ID comes from the `submitComplexOrder` response (see `complexOrderSubmitResponse` in Section 9, which includes both the complex order ID and the child `Orders`). Update `submitOCO` and `submitOTOCO` to capture the returned complex order ID and child order IDs, then populate `complexOrderIDs` by mapping each child order ID to the complex order ID.
 
 ### 11. Update `orderResponse` with `complex-order-id`
 
@@ -490,18 +472,23 @@ The verification step must fetch each doc URL and confirm the implementation mat
 | `broker/tastytrade/client.go` | Fix `getQuote()` endpoint. Add pagination to `getOrders()`. Add `submitComplexOrder()` and `cancelComplexOrder()` methods. Add `sessionToken()` and `account()` accessors. |
 | `broker/tastytrade/broker.go` | Add `complexOrderIDs` map to `TastytradeBroker`. Add `SubmitGroup()`, `submitOCO()`, `submitOTOCO()` methods. Update `Cancel()` to check complex order map. Update `Orders()` to populate complex order map from REST response. Initialize `complexOrderIDs` in `New()`. |
 | `broker/tastytrade/streamer.go` | Update `handleMessage()` to parse streamer envelope and extract fills from `legs[].fills[]`. Add `connect` message after WebSocket dial. Add heartbeat ticker in `run()`. Update `pollMissedFills()` to extract fills from order leg structure. |
+| `broker/tastytrade/errors.go` | Add sentinel errors for invalid group submissions (`ErrEmptyOrderGroup`, `ErrNoEntryOrder`, `ErrMultipleEntryOrders`). |
 | `broker/tastytrade/exports_test.go` | Add test exports for `submitComplexOrder`, `cancelComplexOrder`, `sessionToken`, `account`. Add `ComplexOrderRequest` and related type aliases. |
 
 ## Testing Strategy
 
 - Compile-time check: `var _ broker.GroupSubmitter = (*TastytradeBroker)(nil)`
 - Unit tests for `SubmitGroup` with OCO and OTOCO using `httptest.Server` mock
+- Unit tests for `SubmitGroup` validation: empty orders slice, OTOCO with no entry, OTOCO with multiple entries
 - Unit tests for `Cancel` routing between simple and complex order endpoints
-- Unit tests for updated `handleMessage` with tastytrade envelope format
+- Unit tests for updated `handleMessage` with tastytrade streamer envelope format
+- Unit tests for WebSocket connect message sent on initial connect and on reconnect
+- Unit tests for heartbeat messages being sent periodically
 - Unit tests for `pollMissedFills` with nested `legs[].fills[]` structure
 - Unit tests for `getOrders` pagination (multi-page response)
 - Unit tests for `getQuote` with new endpoint format
 - Unit tests for `price-effect` and `automated-source` in `toTastytradeOrder`
 - Unit tests for `Contingent` status mapping
+- Unit tests for `Orders()` populating `complexOrderIDs` from REST response
 - Update existing tests to use correct API response formats where they differ
 - API verification step in the implementation plan that fetches developer docs and confirms conformance
