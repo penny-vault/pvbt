@@ -65,6 +65,7 @@ func (eng *Engine) discoverChildren(parentStrategy Strategy, visited map[uintptr
 
 		// Check if the field implements Strategy (directly or via pointer).
 		implementsStrategy := field.Type.Implements(strategyType)
+
 		pointerImplementsStrategy := field.Type.Kind() == reflect.Pointer &&
 			field.Type.Elem().Implements(strategyType)
 		if !implementsStrategy && !pointerImplementsStrategy {
@@ -123,11 +124,13 @@ func (eng *Engine) discoverChildren(parentStrategy Strategy, visited map[uintptr
 		if visited[childPtr] {
 			return fmt.Errorf("discoverChildren: cycle detected on field %s", field.Name)
 		}
+
 		visited[childPtr] = true
 
 		// Apply preset if tag is present.
 		if presetTag := field.Tag.Get("preset"); presetTag != "" {
 			info := DescribeStrategy(childStrategy)
+
 			presetValues, found := info.Suggestions[presetTag]
 			if !found {
 				return fmt.Errorf("discoverChildren: field %s: preset %q not found on strategy %s",
@@ -224,12 +227,13 @@ func applyParamValue(target Strategy, paramName string, rawValue string) error {
 			return fmt.Errorf("field %s is not settable", field.Name)
 		}
 
-		switch {
-		case field.Type == durationType:
+		switch field.Type {
+		case durationType:
 			parsed, err := time.ParseDuration(rawValue)
 			if err != nil {
 				return fmt.Errorf("parsing duration %q for field %s: %w", rawValue, field.Name, err)
 			}
+
 			fieldValue.Set(reflect.ValueOf(parsed))
 
 		default:
@@ -241,18 +245,21 @@ func applyParamValue(target Strategy, paramName string, rawValue string) error {
 				if err != nil {
 					return fmt.Errorf("parsing int %q for field %s: %w", rawValue, field.Name, err)
 				}
+
 				fieldValue.SetInt(int64(parsed))
 			case reflect.Float64:
 				parsed, err := strconv.ParseFloat(rawValue, 64)
 				if err != nil {
 					return fmt.Errorf("parsing float64 %q for field %s: %w", rawValue, field.Name, err)
 				}
+
 				fieldValue.SetFloat(parsed)
 			case reflect.Bool:
 				parsed, err := strconv.ParseBool(rawValue)
 				if err != nil {
 					return fmt.Errorf("parsing bool %q for field %s: %w", rawValue, field.Name, err)
 				}
+
 				fieldValue.SetBool(parsed)
 			default:
 				// Skip types handled by hydrateFields later (asset.Asset, universe.Universe).

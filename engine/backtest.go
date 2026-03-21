@@ -124,6 +124,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				if tcErr != nil {
 					return nil, fmt.Errorf("engine: child %q schedule: %w", child.name, tcErr)
 				}
+
 				child.schedule = tc
 			}
 		}
@@ -219,16 +220,20 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// Collect child strategy dates.
 	childCalDates := make(map[string]map[string]bool)
+
 	for _, child := range e.children {
 		if child.schedule == nil {
 			continue
 		}
+
 		dates := make(map[string]bool)
+
 		childCur := child.schedule.Next(start.Add(-time.Nanosecond))
 		for !childCur.After(end) {
 			dates[childCur.Format("2006-01-02")] = true
 			childCur = child.schedule.Next(childCur.Add(time.Nanosecond))
 		}
+
 		childCalDates[child.name] = dates
 	}
 
@@ -246,6 +251,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		calKey := cur.Format("2006-01-02")
 
 		var scheduledChildren []string
+
 		for _, child := range e.children {
 			if childCalDates[child.name][calKey] {
 				scheduledChildren = append(scheduledChildren, child.name)
