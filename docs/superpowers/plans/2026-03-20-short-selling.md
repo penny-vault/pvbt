@@ -620,11 +620,14 @@ case BuyTransaction:
             }
         }
 
+        // Compute average short entry price BEFORE consuming lots (same
+        // pattern as computeConsumedLotInfo on the long side).
+        avgShortEntry := a.avgShortEntryPrice(txn.Asset, coverQty, method)
+
         // Consume short lots using the same selection methods as longs.
         a.consumeShortLots(txn.Asset, coverQty, method)
 
         // Wash sale check: covering a short at a loss.
-        avgShortEntry := a.avgShortEntryPrice(txn.Asset, coverQty, method)
         lossPerShare := txn.Price - avgShortEntry
         if lossPerShare > 0 {
             a.recentLossSales[txn.Asset] = append(a.recentLossSales[txn.Asset], recentLossSale{
@@ -1148,7 +1151,7 @@ func (a *Account) MarginDeficiency() float64 {
     if smv == 0 {
         return 0
     }
-    requiredEquity := smv * (1 + a.maintenanceMarginRate())
+    requiredEquity := smv * a.maintenanceMarginRate()
     deficit := requiredEquity - a.Equity()
     if deficit < 0 {
         return 0
@@ -2121,6 +2124,10 @@ In `portfolio/metric_registration.go`, add `ShortWinRate`, `LongWinRate`, `Short
 - [ ] **Step 7: Update TradeMetrics() computation**
 
 Update the `TradeMetrics()` method on Account to populate the new fields by querying the new metrics.
+
+- [ ] **Step 8: Update unrealized P&L metrics for short lots**
+
+Modify `portfolio/unrealized_stcg.go` and `portfolio/unrealized_ltcg.go` to also iterate over `a.shortLots` (not just `a.taxLots`). For short lots, unrealized P&L = (entry price - current price) x quantity. LTCG/STCG classification uses the same 1-year holding period threshold.
 
 - [ ] **Step 8: Run tests**
 
