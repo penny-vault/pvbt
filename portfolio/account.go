@@ -61,6 +61,7 @@ type Account struct {
 	middleware        []Middleware
 	pendingOrders     map[string]broker.Order
 	lotSelection      LotSelection
+	substitutions     map[asset.Asset]Substitution
 }
 
 // New creates an Account with the given options.
@@ -72,6 +73,7 @@ func New(opts ...Option) *Account {
 		recentBuys:      make(map[asset.Asset][]recentBuy),
 		metadata:        make(map[string]string),
 		pendingOrders:   make(map[string]broker.Order),
+		substitutions:   make(map[asset.Asset]Substitution),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -373,8 +375,31 @@ func (a *Account) PositionValue(ast asset.Asset) float64 {
 }
 
 // Holdings iterates over all current positions, calling fn with each
-// asset and its held quantity.
+// asset and its held quantity. When active substitutions exist, real
+// assets are mapped back to their logical originals so that strategy
+// code sees the canonical asset names.
 func (a *Account) Holdings(fn func(asset.Asset, float64)) {
+	var asOf time.Time
+	if a.prices != nil {
+		asOf = a.prices.End()
+	}
+
+	// When substitutions are active, multiple real assets may map to the
+	// same logical asset. Aggregate quantities under the logical key.
+	if len(a.substitutions) > 0 && !asOf.IsZero() {
+		logical := make(map[asset.Asset]float64, len(a.holdings))
+		for realAsset, qty := range a.holdings {
+			key := mapToLogical(realAsset, a.substitutions, asOf)
+			logical[key] += qty
+		}
+
+		for ast, qty := range logical {
+			fn(ast, qty)
+		}
+
+		return
+	}
+
 	for ast, qty := range a.holdings {
 		fn(ast, qty)
 	}
@@ -765,13 +790,30 @@ func (a *Account) RealizedGainsYTD() (ltcg, stcg float64) {
 	return ltcg, stcg
 }
 
-// RegisterSubstitution is a stub for Task 7 substitution mapping.
-// This implements the TaxAware interface.
-func (a *Account) RegisterSubstitution(original, substitute asset.Asset, until time.Time) {}
+// RegisterSubstitution records that substitute is being held in place of
+// original until the given expiry time. This implements the TaxAware interface.
+func (a *Account) RegisterSubstitution(original, substitute asset.Asset, until time.Time) {
+	a.substitutions[original] = Substitution{
+		Original:   original,
+		Substitute: substitute,
+		Until:      until,
+	}
+}
 
-// ActiveSubstitutions is a stub for Task 7 substitution mapping.
+// ActiveSubstitutions returns a copy of the substitution map.
 // This implements the TaxAware interface.
-func (a *Account) ActiveSubstitutions() map[asset.Asset]Substitution { return nil }
+func (a *Account) ActiveSubstitutions() map[asset.Asset]Substitution {
+	if len(a.substitutions) == 0 {
+		return nil
+	}
+
+	result := make(map[asset.Asset]Substitution, len(a.substitutions))
+	for key, sub := range a.substitutions {
+		result[key] = sub
+	}
+
+	return result
+}
 
 // pruneWashSaleTracking removes entries older than 30 days from the
 // wash sale tracking maps.
@@ -1469,6 +1511,11 @@ func (acct *Account) Clone() *Account {
 	washSales := make([]WashSaleRecord, len(acct.washSales))
 	copy(washSales, acct.washSales)
 
+	substitutions := make(map[asset.Asset]Substitution, len(acct.substitutions))
+	for key, sub := range acct.substitutions {
+		substitutions[key] = sub
+	}
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -1482,6 +1529,7 @@ func (acct *Account) Clone() *Account {
 		recentBuys:        recentBuys,
 		washSales:         washSales,
 		lotSelection:      acct.lotSelection,
+		substitutions:     substitutions,
 		metadata:          metadata,
 		metrics:           acct.metrics,
 		registeredMetrics: acct.registeredMetrics,

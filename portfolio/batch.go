@@ -229,13 +229,25 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 // quantities using math.Floor(amount / price). Assets with unknown prices
 // (priceOf returns 0) that only appear in buy orders are not added to the
 // projected holdings.
+//
+// When active substitutions exist (the portfolio implements TaxAware),
+// order assets that are substitutes for a logical original are recorded
+// under the original asset name, consistent with the logical view
+// returned by Holdings().
 func (b *Batch) ProjectedHoldings() map[asset.Asset]float64 {
 	holdings := make(map[asset.Asset]float64)
 
-	// Seed with current holdings.
+	// Seed with current holdings (already mapped to logical by Account.Holdings).
 	b.portfolio.Holdings(func(ast asset.Asset, qty float64) {
 		holdings[ast] = qty
 	})
+
+	// Obtain active substitutions if the portfolio supports them.
+	var subs map[asset.Asset]Substitution
+
+	if taxAware, ok := b.portfolio.(TaxAware); ok {
+		subs = taxAware.ActiveSubstitutions()
+	}
 
 	for _, order := range b.Orders {
 		price := b.priceOf(order.Asset)
@@ -248,15 +260,21 @@ func (b *Batch) ProjectedHoldings() map[asset.Asset]float64 {
 			qty = math.Floor(order.Amount / price)
 		}
 
-		switch order.Side {
-		case broker.Buy:
-			holdings[order.Asset] += qty
-		case broker.Sell:
-			holdings[order.Asset] -= qty
+		// Map the order asset to its logical original if a substitution is active.
+		orderAsset := order.Asset
+		if len(subs) > 0 {
+			orderAsset = mapToLogical(order.Asset, subs, b.Timestamp)
 		}
 
-		if holdings[order.Asset] == 0 {
-			delete(holdings, order.Asset)
+		switch order.Side {
+		case broker.Buy:
+			holdings[orderAsset] += qty
+		case broker.Sell:
+			holdings[orderAsset] -= qty
+		}
+
+		if holdings[orderAsset] == 0 {
+			delete(holdings, orderAsset)
 		}
 	}
 
