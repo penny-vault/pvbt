@@ -17,6 +17,7 @@ package portfolio
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"time"
 
@@ -24,6 +25,15 @@ import (
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
+
+// OrderGroupSpec describes an order group before submission.
+type OrderGroupSpec struct {
+	GroupID    string
+	Type       broker.GroupType
+	EntryIndex int // index into batch.Orders; -1 for standalone OCO
+	StopLoss   ExitTarget
+	TakeProfit ExitTarget
+}
 
 // Batch accumulates orders and annotations produced during a single engine
 // frame. Rather than executing trades immediately, a Batch buffers them so
@@ -44,6 +54,9 @@ type Batch struct {
 	// position queries. It is unexported to prevent strategy code from
 	// modifying it through the Batch.
 	portfolio Portfolio
+
+	// groups holds order group specifications accumulated during Order calls.
+	groups []OrderGroupSpec
 }
 
 // NewBatch creates an empty Batch for the given timestamp and portfolio snapshot.
@@ -59,6 +72,11 @@ func NewBatch(timestamp time.Time, port Portfolio) *Batch {
 // Portfolio returns the read-only portfolio reference associated with this batch.
 func (b *Batch) Portfolio() Portfolio {
 	return b.portfolio
+}
+
+// Groups returns the order group specifications accumulated during Order calls.
+func (b *Batch) Groups() []OrderGroupSpec {
+	return b.groups
 }
 
 // Annotate stores a key-value pair in the batch's annotation map.
@@ -87,6 +105,10 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 
 	var hasLimit, hasStop bool
 
+	var bracket *bracketModifier
+
+	var oco *ocoModifier
+
 	for _, mod := range mods {
 		switch modifier := mod.(type) {
 		case limitModifier:
@@ -114,6 +136,12 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 			order.Justification = modifier.reason
 		case lotSelectionModifier:
 			order.LotSelection = int(modifier.method)
+		case bracketModifier:
+			// handled in post-expansion below
+			bracket = &modifier
+		case ocoModifier:
+			// handled in post-expansion below
+			oco = &modifier
 		}
 	}
 
@@ -123,6 +151,75 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 		order.OrderType = broker.Limit
 	} else if hasStop {
 		order.OrderType = broker.Stop
+	}
+
+	groupIndex := len(b.groups)
+	ts := b.Timestamp.UnixNano()
+
+	if oco != nil {
+		// Discard the original order. Create two broker.Order entries from the OCO legs.
+		groupID := fmt.Sprintf("oco-%d-%d", ts, groupIndex)
+
+		legAOrder := broker.Order{
+			Asset:       ast,
+			Side:        order.Side,
+			Qty:         qty,
+			TimeInForce: order.TimeInForce,
+			GTDDate:     order.GTDDate,
+			GroupID:     groupID,
+			GroupRole:   broker.RoleStopLoss,
+			OrderType:   oco.legA.OrderType,
+		}
+		if oco.legA.OrderType == broker.Stop {
+			legAOrder.StopPrice = oco.legA.Price
+		} else {
+			legAOrder.LimitPrice = oco.legA.Price
+		}
+
+		legBOrder := broker.Order{
+			Asset:       ast,
+			Side:        order.Side,
+			Qty:         qty,
+			TimeInForce: order.TimeInForce,
+			GTDDate:     order.GTDDate,
+			GroupID:     groupID,
+			GroupRole:   broker.RoleTakeProfit,
+			OrderType:   oco.legB.OrderType,
+		}
+		if oco.legB.OrderType == broker.Stop {
+			legBOrder.StopPrice = oco.legB.Price
+		} else {
+			legBOrder.LimitPrice = oco.legB.Price
+		}
+
+		b.Orders = append(b.Orders, legAOrder, legBOrder)
+		b.groups = append(b.groups, OrderGroupSpec{
+			GroupID:    groupID,
+			Type:       broker.GroupOCO,
+			EntryIndex: -1,
+		})
+
+		return nil
+	}
+
+	if bracket != nil {
+		// Tag the entry order with GroupID and GroupRole=RoleEntry.
+		groupID := fmt.Sprintf("bracket-%d-%d", ts, groupIndex)
+		entryIndex := len(b.Orders)
+
+		order.GroupID = groupID
+		order.GroupRole = broker.RoleEntry
+
+		b.Orders = append(b.Orders, order)
+		b.groups = append(b.groups, OrderGroupSpec{
+			GroupID:    groupID,
+			Type:       broker.GroupBracket,
+			EntryIndex: entryIndex,
+			StopLoss:   bracket.stopLoss,
+			TakeProfit: bracket.takeProfit,
+		})
+
+		return nil
 	}
 
 	b.Orders = append(b.Orders, order)
