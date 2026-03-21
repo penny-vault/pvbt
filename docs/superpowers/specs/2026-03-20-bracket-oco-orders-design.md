@@ -30,7 +30,7 @@ type OrderGroup struct {
 type GroupRole int
 
 const (
-    RoleEntry      GroupRole = iota
+    RoleEntry      GroupRole = iota + 1
     RoleStopLoss
     RoleTakeProfit
 )
@@ -91,6 +91,12 @@ type OCOLeg struct {
 func StopLeg(price float64) OCOLeg    // creates a Stop order leg
 func LimitLeg(price float64) OCOLeg   // creates a Limit order leg
 ```
+
+### Batch Expansion Mechanism
+
+`batch.Order()` gains a post-modifier expansion step. After the existing modifier type-switch runs, the method checks whether an `OCO` modifier was applied. If so, it clones the order, sets each clone's order type and price from the corresponding `OCOLeg`, tags both with matching group metadata, and appends both to `b.Orders` (instead of the single original).
+
+For `WithBracket`, no expansion happens at batch-build time. The modifier records the exit targets on the entry order. Expansion into OCO legs is deferred to `DrainFills` when the entry fill price is known (for percentage targets) or to `ExecuteBatch` (for absolute price targets).
 
 ### Usage Examples
 
@@ -172,7 +178,15 @@ type Account struct {
 
 4. **CancelOpenOrders** (at frame boundary): Iterates `pendingOrders` and calls `broker.Cancel` for each. Also cleans up `pendingGroups` -- cancelling any order in a group cancels all members.
 
-**Key invariant**: Group state is always consistent -- if any order in a group is cancelled or filled, the group reacts atomically. The account layer is the single source of truth for group membership, even when the broker handles native OCO.
+### Cancellation Ownership
+
+When a broker implements `GroupSubmitter`, the **broker owns sibling cancellation**. It handles the OCO fill internally and only emits a fill for the winning leg. The account layer sees the fill, looks up the group, and cleans up `pendingGroups` and `pendingOrders` -- but does **not** call `broker.Cancel` because the broker already handled it.
+
+When a broker does **not** implement `GroupSubmitter` (fallback path), the **account owns cancellation**. On receiving a fill for a group member, the account calls `broker.Cancel` on each sibling order.
+
+The account distinguishes these paths by checking whether the broker implements `GroupSubmitter` at the same point it checks during submission.
+
+**Key invariant**: Group state is always consistent -- if any order in a group is cancelled or filled, the group reacts atomically. The account layer is the single source of truth for group membership.
 
 ## Simulated Broker -- Intrabar Fill Simulation
 
