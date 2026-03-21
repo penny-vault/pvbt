@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "fmt"
+
 // TradeDirection indicates whether a round-trip trade was a long or short position.
 type TradeDirection int
 
@@ -25,8 +27,12 @@ const (
 
 // String returns "Long" or "Short".
 func (d TradeDirection) String() string {
-	if d == TradeShort {
+	switch d {
+	case TradeLong:
+		return "Long"
+	case TradeShort:
 		return "Short"
+	default:
+		return fmt.Sprintf("TradeDirection(%d)", int(d))
 	}
-	return "Long"
 }
