@@ -1873,6 +1873,13 @@ func (acct *Account) Clone() *Account {
 		taxLots[held] = lotsCopy
 	}
 
+	shortLots := make(map[asset.Asset][]TaxLot, len(acct.shortLots))
+	for held, lots := range acct.shortLots {
+		lotsCopy := make([]TaxLot, len(lots))
+		copy(lotsCopy, lots)
+		shortLots[held] = lotsCopy
+	}
+
 	pendingOrders := make(map[string]broker.Order, len(acct.pendingOrders))
 	for orderID, order := range acct.pendingOrders {
 		pendingOrders[orderID] = order
@@ -1930,6 +1937,7 @@ func (acct *Account) Clone() *Account {
 		benchmark:         acct.benchmark,
 		riskFreeValue:     acct.riskFreeValue,
 		taxLots:           taxLots,
+		shortLots:         shortLots,
 		recentLossSales:   recentLossSales,
 		recentBuys:        recentBuys,
 		washSales:         washSales,
