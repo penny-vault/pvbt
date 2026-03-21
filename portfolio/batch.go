@@ -112,6 +112,8 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 			order.GTDDate = modifier.date
 		case justificationModifier:
 			order.Justification = modifier.reason
+		case lotSelectionModifier:
+			order.LotSelection = int(modifier.method)
 		}
 	}
 

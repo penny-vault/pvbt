@@ -253,6 +253,8 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 			order.GTDDate = modifier.date
 		case justificationModifier:
 			justification = modifier.reason
+		case lotSelectionModifier:
+			order.LotSelection = int(modifier.method)
 		}
 	}
 
