@@ -199,7 +199,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// PHASE 3: STEP LOOP
 
 	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
-	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	for stepIdx, step := range steps {
 		// 10. Check context cancellation.
@@ -336,6 +336,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 			// 18. Record equity.
 			acct.UpdatePrices(priceDF)
+			acct.UpdateExcursions(priceDF)
 		} else {
 			// No assets to price -- record cash-only portfolio value.
 			cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
@@ -344,6 +345,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			}
 
 			acct.UpdatePrices(cashDF)
+			acct.UpdateExcursions(cashDF)
 		}
 
 		// 18b. Compute registered metrics only on strategy dates.
