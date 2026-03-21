@@ -35,8 +35,9 @@
 //     default struct tags. It sets the trading schedule, benchmark, risk-free
 //     asset, and performs any other one-time initialization.
 //   - Compute runs at each scheduled step. It receives a context, the engine
-//     (for data fetching), and the portfolio (current holdings). The strategy
-//     computes signals, selects assets, and tells the portfolio to rebalance.
+//     (for data fetching), the portfolio (current holdings, read-only), and
+//     the batch (for accumulating orders and annotations). The strategy
+//     computes signals, selects assets, and writes orders to the batch.
 //
 // # Example
 //
@@ -74,7 +75,7 @@
 //		}
 //	}
 //
-//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
 //		mom1 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(1))
 //		mom3 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3))
 //		mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
@@ -101,7 +102,7 @@
 //			log.Error().Err(err).Msg("EqualWeight failed")
 //			return err
 //		}
-//		portfolio.RebalanceTo(ctx, plan...)
+//		batch.RebalanceTo(ctx, plan...)
 //		return nil
 //	}
 //
@@ -230,9 +231,9 @@
 // additional metadata such as a shortcode, description, source URL, version,
 // schedule, and benchmark via the [StrategyDescription] struct. When Schedule
 // and Benchmark are declared in Describe(), the engine reads them during
-// initialization and the strategy does not need to call [Engine.Schedule] or
-// [Engine.SetBenchmark] in Setup. The imperative methods still work and
-// override values from Describe().
+// initialization and the strategy does not need to set them in Setup.
+// [Engine.SetBenchmark] in Setup overrides the value from Describe(). The
+// risk-free rate (DGS3MO) is resolved automatically by the engine.
 //
 // [DescribeStrategy] takes a [Strategy] (not an engine) and produces a
 // [StrategyInfo] struct that serializes to JSON. It collects name and
@@ -245,7 +246,7 @@
 // Strategies use zerolog for structured logging. The logger is carried on
 // the context passed to Compute. Use zerolog.Ctx(ctx) to retrieve it:
 //
-//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, portfolio portfolio.Portfolio) error {
+//	func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
 //		log := zerolog.Ctx(ctx)
 //		log.Info().Str("strategy", s.Name()).Msg("computing")
 //		return nil

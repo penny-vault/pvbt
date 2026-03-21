@@ -326,10 +326,11 @@
 //     UpsideCaptureRatio, DownsideCaptureRatio.
 //   - [Portfolio.TaxMetrics]: LTCG, STCG, UnrealizedLTCG,
 //     UnrealizedSTCG, QualifiedDividends, NonQualifiedIncome,
-//     TaxCostRatio.
+//     TaxCostRatio, TaxDrag.
 //   - [Portfolio.TradeMetrics]: WinRate, AverageWin, AverageLoss,
 //     ProfitFactor, AverageHoldingPeriod, Turnover, NPositivePeriods,
-//     GainLossRatio.
+//     GainLossRatio, AverageMFE, AverageMAE, MedianMFE, MedianMAE,
+//     EdgeRatio, TradeCaptureRatio.
 //   - [Portfolio.WithdrawalMetrics]: SafeWithdrawalRate,
 //     PerpetualWithdrawalRate, DynamicWithdrawalRate.
 //
