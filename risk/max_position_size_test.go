@@ -71,6 +71,34 @@ var _ = Describe("MaxPositionSize", func() {
 		return acct
 	}
 
+	// buildShortAccount creates an Account with the given cash and a short
+	// position. The sell transaction creates a short lot (no existing long).
+	buildShortAccount := func(cash float64, ast asset.Asset, price float64, shortQty float64) *portfolio.Account {
+		// Cash is initial cash plus proceeds from short sale.
+		acct := portfolio.New(portfolio.WithCash(cash+price*shortQty, time.Time{}))
+
+		acct.Record(portfolio.Transaction{
+			Date:   ts,
+			Asset:  ast,
+			Type:   portfolio.SellTransaction,
+			Qty:    shortQty,
+			Price:  price,
+			Amount: 0, // cash already accounted for
+		})
+
+		df, err := data.NewDataFrame(
+			[]time.Time{ts},
+			[]asset.Asset{ast},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{price},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		acct.UpdatePrices(df)
+
+		return acct
+	}
+
 	Describe("Process", func() {
 		It("injects a sell order to cap a position that exceeds the limit", func() {
 			// 80 shares of SPY at $100 = $8000 position.
@@ -163,6 +191,71 @@ var _ = Describe("MaxPositionSize", func() {
 
 			Expect(batch.Orders).To(BeEmpty())
 			Expect(batch.Annotations).NotTo(HaveKey("risk:max-position-size"))
+		})
+
+		It("injects a buy order to cap a short position that exceeds the limit", func() {
+			// Short 80 shares SPY @ $100 = -$8000 position.
+			// Cash = $10000 (initial) + $8000 (short proceeds) = $18000.
+			// Equity = cash + LMV - SMV = 18000 + 0 - 8000 = 10000.
+			// Short weight = -8000 / 10000 = -0.80, abs = 0.80.
+			// Limit = 0.50 => excess = 0.30 * 10000 = $3000 must be covered.
+			acct := buildShortAccount(10_000, spy, 100, 80)
+			batch := portfolio.NewBatch(ts, acct)
+
+			mw := risk.MaxPositionSize(0.50)
+			Expect(mw.Process(ctx, batch)).To(Succeed())
+
+			buys := ordersWithSide(batch.Orders, broker.Buy)
+			Expect(buys).To(HaveLen(1))
+			Expect(buys[0].Asset).To(Equal(spy))
+			Expect(buys[0].Amount).To(BeNumerically("~", 3_000.0, 1e-6))
+			Expect(buys[0].OrderType).To(Equal(broker.Market))
+		})
+
+		It("does not restrict a sell that closes a long position", func() {
+			// 40 shares SPY @ $100 = $4000 (40% of $10000). Limit = 0.50.
+			// A sell of 20 shares reduces position to 20% -- should not be blocked.
+			acct := buildAccount(6_000, spy, 100, 40)
+			batch := portfolio.NewBatch(ts, acct)
+			batch.Orders = append(batch.Orders, broker.Order{
+				Asset:       spy,
+				Side:        broker.Sell,
+				Amount:      2_000,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			})
+
+			mw := risk.MaxPositionSize(0.50)
+			Expect(mw.Process(ctx, batch)).To(Succeed())
+
+			// The original sell should remain, and no additional orders should be added.
+			sells := ordersWithSide(batch.Orders, broker.Sell)
+			Expect(sells).To(HaveLen(1))
+			Expect(sells[0].Amount).To(BeNumerically("~", 2_000.0, 1e-6))
+		})
+
+		It("annotates the batch when capping a short position", func() {
+			acct := buildShortAccount(10_000, spy, 100, 80)
+			batch := portfolio.NewBatch(ts, acct)
+
+			mw := risk.MaxPositionSize(0.50)
+			Expect(mw.Process(ctx, batch)).To(Succeed())
+
+			Expect(batch.Annotations).To(HaveKey("risk:max-position-size"))
+			Expect(batch.Annotations["risk:max-position-size"]).To(ContainSubstring("short"))
+			Expect(batch.Annotations["risk:max-position-size"]).To(ContainSubstring("SPY"))
+		})
+
+		It("does not modify a short position within the limit", func() {
+			// Short 30 shares SPY @ $100 = -$3000. Cash = $13000.
+			// Equity = 13000 - 3000 = 10000. Weight = -30%, abs = 30%.
+			acct := buildShortAccount(10_000, spy, 100, 30)
+			batch := portfolio.NewBatch(ts, acct)
+
+			mw := risk.MaxPositionSize(0.50)
+			Expect(mw.Process(ctx, batch)).To(Succeed())
+
+			Expect(batch.Orders).To(BeEmpty())
 		})
 	})
 })
