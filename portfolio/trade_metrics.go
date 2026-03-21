@@ -31,4 +31,6 @@ type TradeMetrics struct {
 	AverageMAE           float64 // mean MAE across all round trips
 	MedianMFE            float64 // median MFE across all round trips
 	MedianMAE            float64 // median MAE across all round trips
+	EdgeRatio            float64 // average MFE / abs(average MAE)
+	TradeCaptureRatio    float64 // mean realized return pct / mean MFE
 }

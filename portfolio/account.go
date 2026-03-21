@@ -593,6 +593,16 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 		errs = append(errs, err)
 	}
 
+	tradeMetrics.EdgeRatio, err = a.PerformanceMetric(EdgeRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.TradeCaptureRatio, err = a.PerformanceMetric(TradeCaptureRatio).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return tradeMetrics, errors.Join(errs...)
 }
 

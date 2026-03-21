@@ -62,6 +62,7 @@ func WithTradeMetrics() Option {
 			WinRate, AverageWin, AverageLoss, ProfitFactor,
 			AverageHoldingPeriod, Turnover, NPositivePeriods, TradeGainLossRatio,
 			AverageMFE, AverageMAE, MedianMFE, MedianMAE,
+			EdgeRatio, TradeCaptureRatio,
 		} {
 			WithMetric(metric)(acct)
 		}

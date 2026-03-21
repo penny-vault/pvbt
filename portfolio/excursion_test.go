@@ -532,6 +532,24 @@ var _ = Describe("ExcursionRecord", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", -0.13, 1e-9))
 		})
+
+		// EdgeRatio = average MFE / abs(average MAE) = 0.125 / 0.13
+		It("computes EdgeRatio", func() {
+			val, err := acct.PerformanceMetric(portfolio.EdgeRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", 0.125/0.13, 1e-4))
+		})
+
+		// TradeCaptureRatio = mean realized return pct / mean MFE
+		// Trade 1 return: (110-100)/100 = 0.10
+		// Trade 2 return: (45-50)/50 = -0.10
+		// Mean return = 0.0, Mean MFE = 0.125
+		// TradeCaptureRatio = 0.0 / 0.125 = 0.0
+		It("computes TradeCaptureRatio", func() {
+			val, err := acct.PerformanceMetric(portfolio.TradeCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", 0.0, 1e-9))
+		})
 	})
 
 	Describe("with no trades", func() {
@@ -543,6 +561,8 @@ var _ = Describe("ExcursionRecord", func() {
 			Expect(tradeMetrics.AverageMAE).To(Equal(0.0))
 			Expect(tradeMetrics.MedianMFE).To(Equal(0.0))
 			Expect(tradeMetrics.MedianMAE).To(Equal(0.0))
+			Expect(math.IsNaN(tradeMetrics.EdgeRatio)).To(BeTrue())
+			Expect(math.IsNaN(tradeMetrics.TradeCaptureRatio)).To(BeTrue())
 		})
 	})
 
