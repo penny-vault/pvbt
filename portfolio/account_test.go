@@ -55,6 +55,15 @@ var _ = Describe("Account", func() {
 			)
 			Expect(a.Benchmark()).To(Equal(spy))
 		})
+
+		It("returns empty short lots for new account", func() {
+			acct := portfolio.New()
+			var count int
+			acct.ShortLots(func(ast asset.Asset, lots []portfolio.TaxLot) {
+				count += len(lots)
+			})
+			Expect(count).To(Equal(0))
+		})
 	})
 
 	Describe("SetBroker", func() {
@@ -165,6 +174,178 @@ var _ = Describe("Account", func() {
 			})
 			Expect(a.Cash()).To(Equal(8_600.0))
 			Expect(a.Position(spy)).To(Equal(5.0))
+		})
+
+		It("creates short lots when selling without long positions", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  150.0,
+				Amount: 15000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(-100.0))
+			Expect(acct.Cash()).To(Equal(115000.0))
+
+			var shortLotCount int
+			var shortLotQty float64
+			var shortLotPrice float64
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+					if len(lots) > 0 {
+						shortLotQty = lots[0].Qty
+						shortLotPrice = lots[0].Price
+					}
+				}
+			})
+			Expect(shortLotCount).To(Equal(1))
+			Expect(shortLotQty).To(Equal(100.0))
+			Expect(shortLotPrice).To(Equal(150.0))
+
+			// No TradeDetail should be generated for a pure short open.
+			Expect(acct.TradeDetails()).To(BeEmpty())
+		})
+
+		It("closes long lots then creates short lots for the remainder", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Buy 50 shares
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  140.0,
+				Amount: -7000.0,
+			})
+
+			// Sell 80 shares -- closes 50 long, opens 30 short
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    80,
+				Price:  150.0,
+				Amount: 12000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(-30.0))
+
+			// Long lots should be fully consumed
+			longLots := acct.UnrealizedLots(testAsset)
+			Expect(longLots).To(BeEmpty())
+
+			// Short lots should have the remainder
+			var shortLotQty float64
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					for _, lot := range lots {
+						shortLotQty += lot.Qty
+					}
+				}
+			})
+			Expect(shortLotQty).To(Equal(30.0))
+
+			// TradeDetail should show the long close.
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].Direction).To(Equal(portfolio.TradeLong))
+			Expect(details[0].EntryPrice).To(Equal(140.0))
+			Expect(details[0].ExitPrice).To(Equal(150.0))
+			Expect(details[0].Qty).To(Equal(50.0))
+			Expect(details[0].PnL).To(Equal(500.0)) // (150-140) * 50
+		})
+
+		It("covers short lots on buy when short position exists", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Open short: sell 100 at 150
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  150.0,
+				Amount: 15000.0,
+			})
+
+			// Cover: buy 100 at 140 (profit $10/share)
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  140.0,
+				Amount: -14000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(0.0))
+			Expect(acct.Cash()).To(Equal(101000.0)) // 100k + 15k - 14k
+
+			var shortLotCount int
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+				}
+			})
+			Expect(shortLotCount).To(Equal(0))
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].Direction).To(Equal(portfolio.TradeShort))
+			Expect(details[0].PnL).To(Equal(1000.0)) // (150 - 140) * 100
+			Expect(details[0].EntryPrice).To(Equal(150.0))
+			Expect(details[0].ExitPrice).To(Equal(140.0))
+		})
+
+		It("partially covers short then creates long lots for remainder", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Open short: sell 50 at 150
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  150.0,
+				Amount: 7500.0,
+			})
+
+			// Buy 80: covers 50 short, opens 30 long
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    80,
+				Price:  140.0,
+				Amount: -11200.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(30.0))
+
+			var shortLotCount int
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+				}
+			})
+			Expect(shortLotCount).To(Equal(0))
+
+			longLots := acct.UnrealizedLots(testAsset)
+			totalLongQty := 0.0
+			for _, lot := range longLots {
+				totalLongQty += lot.Qty
+			}
+			Expect(totalLongQty).To(Equal(30.0))
 		})
 	})
 
@@ -1602,5 +1783,92 @@ var _ = Describe("Window", func() {
 			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-b"))
 			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-a"))
 		})
+	})
+})
+
+var _ = Describe("ApplySplit", func() {
+	var (
+		acme asset.Asset
+	)
+
+	BeforeEach(func() {
+		acme = asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+	})
+
+	It("adjusts long position and tax lots for a 2:1 split", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: -20_000,
+		})
+
+		splitDate := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+		err := acct.ApplySplit(acme, splitDate, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(acct.Position(acme)).To(Equal(200.0))
+
+		lots := acct.TaxLots()[acme]
+		Expect(lots).To(HaveLen(1))
+		Expect(lots[0].Qty).To(Equal(200.0))
+		Expect(lots[0].Price).To(Equal(100.0))
+
+		txns := acct.Transactions()
+		lastTxn := txns[len(txns)-1]
+		Expect(lastTxn.Type).To(Equal(portfolio.SplitTransaction))
+		Expect(lastTxn.Qty).To(Equal(200.0))
+		Expect(lastTxn.Price).To(Equal(2.0))
+		Expect(lastTxn.Amount).To(Equal(0.0))
+	})
+
+	It("adjusts short position and short lots for a 2:1 split", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.SellTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: 20_000,
+		})
+
+		splitDate := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+		err := acct.ApplySplit(acme, splitDate, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(acct.Position(acme)).To(Equal(-200.0))
+
+		var shortLots []portfolio.TaxLot
+		acct.ShortLots(func(ast asset.Asset, lots []portfolio.TaxLot) {
+			if ast == acme {
+				shortLots = lots
+			}
+		})
+		Expect(shortLots).To(HaveLen(1))
+		Expect(shortLots[0].Qty).To(Equal(200.0))
+		Expect(shortLots[0].Price).To(Equal(100.0))
+	})
+
+	It("returns error when split factor is zero", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: -20_000,
+		})
+
+		err := acct.ApplySplit(acme, date, 0)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("split factor cannot be zero"))
 	})
 })

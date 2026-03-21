@@ -50,6 +50,11 @@ type Batch struct {
 	// Annotations holds key-value metadata accumulated by calls to Annotate.
 	Annotations map[string]string
 
+	// SkipMiddleware bypasses the middleware chain when true. Used for
+	// margin-call response batches where risk limits must not block
+	// emergency position adjustments.
+	SkipMiddleware bool
+
 	// portfolio is the read-only portfolio snapshot used for price and
 	// position queries. It is unexported to prevent strategy code from
 	// modifying it through the Batch.
@@ -259,10 +264,17 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 
 		var sells []pendingOrder
 
-		// Sell all holdings not in the target allocation.
+		var coverBuys []pendingOrder
+
+		// Liquidate all positions not in the target allocation.
+		// Long positions are sold; short positions are covered (bought back).
 		b.portfolio.Holdings(func(ast asset.Asset, qty float64) {
-			if _, ok := alloc.Members[ast]; !ok && qty > 0 {
-				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+			if _, ok := alloc.Members[ast]; !ok && qty != 0 {
+				if qty > 0 {
+					sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+				} else {
+					coverBuys = append(coverBuys, pendingOrder{asset: ast, side: Buy, qty: math.Abs(qty)})
+				}
 			}
 		})
 
@@ -290,7 +302,20 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 			b.Orders = append(b.Orders, order)
 		}
 
-		// Recompute value after projected sells to use actual available cash.
+		// Cover short positions not in the target allocation.
+		for _, cover := range coverBuys {
+			order := broker.Order{
+				Asset:         cover.asset,
+				Side:          broker.Buy,
+				Qty:           cover.qty,
+				OrderType:     broker.Market,
+				TimeInForce:   broker.Day,
+				Justification: alloc.Justification,
+			}
+			b.Orders = append(b.Orders, order)
+		}
+
+		// Recompute value after projected sells/covers to use actual available cash.
 		postSellValue := b.ProjectedValue()
 
 		var buys []pendingOrder

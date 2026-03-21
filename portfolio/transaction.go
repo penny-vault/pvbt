@@ -37,6 +37,8 @@ func (t TransactionType) String() string {
 		return "Deposit"
 	case WithdrawalTransaction:
 		return "Withdrawal"
+	case SplitTransaction:
+		return "Split"
 	default:
 		return fmt.Sprintf("TransactionType(%d)", int(t))
 	}
@@ -64,6 +66,9 @@ const (
 
 	// WithdrawalTransaction records cash removed from the portfolio.
 	WithdrawalTransaction
+
+	// SplitTransaction records a stock split adjustment.
+	SplitTransaction
 )
 
 // Transaction is a single entry in the portfolio's transaction log. Every

@@ -80,7 +80,7 @@ var _ = Describe("PredictedPortfolio", func() {
 		spyAsset = asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
 		testAssets = []asset.Asset{spyAsset}
 		assetProvider = &mockAssetProvider{assets: testAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 		dataStart = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	})
 

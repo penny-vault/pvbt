@@ -24,6 +24,8 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/rs/zerolog"
 )
 
 const fillChannelSize = 1024
@@ -31,11 +33,13 @@ const fillChannelSize = 1024
 // SimulatedBroker fills all orders at the close price for backtesting.
 // The engine sets a PriceProvider and date before each Compute step.
 type SimulatedBroker struct {
-	prices  broker.PriceProvider
-	date    time.Time
-	fills   chan broker.Fill
-	pending map[string]broker.Order
-	groups  map[string][]string // groupID -> orderIDs
+	prices            broker.PriceProvider
+	date              time.Time
+	fills             chan broker.Fill
+	pending           map[string]broker.Order
+	groups            map[string][]string // groupID -> orderIDs
+	portfolio         portfolio.Portfolio
+	initialMarginRate float64
 }
 
 // NewSimulatedBroker creates a SimulatedBroker with no price provider set.
@@ -51,6 +55,16 @@ func NewSimulatedBroker() *SimulatedBroker {
 func (b *SimulatedBroker) SetPriceProvider(p broker.PriceProvider, date time.Time) {
 	b.prices = p
 	b.date = date
+}
+
+// SetPortfolio sets the portfolio reference used for margin checks.
+func (b *SimulatedBroker) SetPortfolio(p portfolio.Portfolio) {
+	b.portfolio = p
+}
+
+// SetInitialMarginRate sets the initial margin rate for short sells.
+func (b *SimulatedBroker) SetInitialMarginRate(rate float64) {
+	b.initialMarginRate = rate
 }
 
 func (b *SimulatedBroker) Connect(_ context.Context) error { return nil }
@@ -94,6 +108,35 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 
 	if qty == 0 {
 		return nil
+	}
+
+	// Check initial margin for short-opening sells.
+	if order.Side == broker.Sell && b.portfolio != nil {
+		currentPos := b.portfolio.Position(order.Asset)
+		if currentPos-qty < 0 {
+			shortIncrease := qty
+			if currentPos > 0 {
+				shortIncrease = qty - currentPos
+			}
+
+			newShortValue := b.portfolio.ShortMarketValue() + shortIncrease*price
+			equity := b.portfolio.Equity()
+
+			initialRate := b.initialMarginRate
+			if initialRate == 0 {
+				initialRate = 0.50
+			}
+
+			if newShortValue > 0 && equity/newShortValue < initialRate {
+				zerolog.Ctx(ctx).Warn().
+					Str("asset", order.Asset.Ticker).
+					Float64("equity", equity).
+					Float64("new_short_value", newShortValue).
+					Msg("order rejected: insufficient margin")
+
+				return nil
+			}
+		}
 	}
 
 	b.fills <- broker.Fill{

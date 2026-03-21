@@ -178,9 +178,24 @@ Every metric below is a package-level variable implementing `PerformanceMetric`.
 | `PerpetualWithdrawalRate` | Maximum constant annual withdrawal rate where the ending balance equals or exceeds the inflation-adjusted starting balance. Ensures the portfolio maintains real purchasing power indefinitely. |
 | `DynamicWithdrawalRate` | Maximum annual withdrawal rate with dynamic adjustments: each year's withdrawal is the lesser of the inflation-adjusted initial withdrawal and the current balance times the rate. Adapts spending to portfolio performance. |
 
+## Long/short breakdown metrics
+
+When a portfolio holds both long and short positions, aggregate metrics like `WinRate` and `ProfitFactor` blend the two sides together and can obscure whether the edge comes from longs, shorts, or both. The following metrics split the trade population by direction.
+
+| Name | Description |
+|------|-------------|
+| `LongWinRate` | Percentage of long round-trip trades that were profitable. |
+| `ShortWinRate` | Percentage of short round-trip trades that were profitable. |
+| `LongProfitFactor` | Gross profit divided by gross loss across long trades only. Values above 1.0 indicate the long book is net profitable. |
+| `ShortProfitFactor` | Gross profit divided by gross loss across short trades only. Values above 1.0 indicate the short book is net profitable. |
+
+All four metrics are included in the `TradeMetrics` bundle and can also be queried individually via `p.PerformanceMetric(ShortWinRate).Value()`.
+
 ## Trade quality: MFE and MAE
 
 Maximum Favorable Excursion (MFE) measures how far the price moved in a trade's favor before the position was closed. Maximum Adverse Excursion (MAE) measures how far the price moved against the position before exit. Both are expressed as fractions of the entry price: MFE is always non-negative and MAE is always non-positive.
+
+For short trades the sign convention is reversed relative to price movement: a price drop is favorable for a short, so MFE reflects the magnitude of the price decline from entry; a price rise is adverse, so MAE reflects how far the price moved up before exit. The non-negative MFE / non-positive MAE convention is preserved regardless of trade direction.
 
 Together they answer the question traditional metrics cannot: "Did the strategy exit well?" A strategy can have a positive win rate and still leave significant profit on the table if it consistently exits too early, or it can suffer unnecessary losses by holding too long through adverse moves. MFE and MAE make these exit quality problems visible.
 
@@ -249,7 +264,7 @@ For convenience, several bundles return a struct with commonly grouped metrics c
 | `UpsideCaptureRatio` | Percentage of benchmark gains captured |
 | `DownsideCaptureRatio` | Percentage of benchmark losses captured |
 
-**TaxMetrics** -- tax efficiency measurements derived from the transaction log and tax lot tracking (`p.TaxMetrics()`):
+**TaxMetrics** -- tax efficiency measurements derived from the transaction log and tax lot tracking (`p.TaxMetrics()`). Unrealized P&L figures include open short lots, valued at the difference between the current market price and the short sale price:
 
 | Name | Description |
 |------|-------------|
@@ -280,6 +295,10 @@ For convenience, several bundles return a struct with commonly grouped metrics c
 | `MedianMAE` | Median Maximum Adverse Excursion across all trades |
 | `EdgeRatio` | Ratio of average MFE to absolute average MAE |
 | `TradeCaptureRatio` | Ratio of mean realized return to mean MFE |
+| `LongWinRate` | Percentage of long trades that were profitable |
+| `ShortWinRate` | Percentage of short trades that were profitable |
+| `LongProfitFactor` | Gross profit divided by gross loss across long trades |
+| `ShortProfitFactor` | Gross profit divided by gross loss across short trades |
 
 **WithdrawalMetrics** -- sustainable spending rates derived from Monte Carlo simulation of historical returns (`p.WithdrawalMetrics()`):
 

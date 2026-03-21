@@ -201,6 +201,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	e.start = start
 	e.end = end
 
+	// Wire portfolio to simulated broker for margin checks.
+	if sb, ok := e.broker.(*SimulatedBroker); ok {
+		sb.SetPortfolio(acct)
+	}
+
 	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
 	if err := e.broker.Connect(ctx); err != nil {
 		return nil, fmt.Errorf("engine: broker connect: %w", err)
@@ -305,6 +310,19 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, err
 		}
 
+		// Set prices for margin computation. The housekeeping step above
+		// fetched close prices so this call hits the cache. SetPrices
+		// stores the price DataFrame without recording an equity point;
+		// the full UpdatePrices call later handles equity recording.
+		if err := e.setMarginPrices(stepCtx, acct, date); err != nil {
+			return nil, err
+		}
+
+		// Check margin and handle margin calls (runs every trading day).
+		if err := e.checkAndHandleMarginCall(stepCtx, acct, date); err != nil {
+			return nil, fmt.Errorf("engine: margin call on %v: %w", date, err)
+		}
+
 		// Run scheduled child strategies (children before parent).
 		for _, childName := range step.childStrategies {
 			child := e.childrenByName[childName]
@@ -384,7 +402,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 // is included in the housekeeping data fetch; pass asset.Asset{} for child
 // accounts that have no benchmark.
 func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
-	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
 
 	var heldAssets []asset.Asset
 
@@ -410,16 +428,67 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 		}
 	}
 
+	// Drain fills from previous step (before splits and dividends).
+	if acct.HasBroker() {
+		if drainErr := acct.DrainFills(ctx); drainErr != nil {
+			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
+		}
+	}
+
+	// Apply stock splits before dividends (dividend values are post-split).
+	if housekeepDF != nil {
+		for _, heldAsset := range heldAssets {
+			splitFactor := housekeepDF.ValueAt(heldAsset, data.SplitFactor, date)
+			if math.IsNaN(splitFactor) || splitFactor == 1.0 {
+				continue
+			}
+
+			if err := acct.ApplySplit(heldAsset, date, splitFactor); err != nil {
+				return fmt.Errorf("engine: apply split for %s on %v: %w", heldAsset.Ticker, date, err)
+			}
+		}
+	}
+
+	// Record borrow fees for short positions.
+	if housekeepDF != nil {
+		borrowRate := acct.BorrowRate()
+		for _, heldAsset := range heldAssets {
+			qty := acct.Position(heldAsset)
+			if qty >= 0 {
+				continue
+			}
+
+			closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, date)
+			if math.IsNaN(closePrice) || closePrice == 0 {
+				continue
+			}
+
+			dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
+			acct.Record(portfolio.Transaction{
+				Date:          date,
+				Asset:         heldAsset,
+				Type:          portfolio.FeeTransaction,
+				Amount:        -dailyFee,
+				Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
+			})
+		}
+	}
+
 	// Record dividends for held assets.
 	if housekeepDF != nil {
 		for _, heldAsset := range heldAssets {
 			qty := acct.Position(heldAsset)
-			if qty <= 0 {
+			if qty == 0 {
 				continue
 			}
 
 			divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
-			if !math.IsNaN(divPerShare) && divPerShare > 0 {
+			if math.IsNaN(divPerShare) || divPerShare <= 0 {
+				continue
+			}
+
+			if qty > 0 {
+				// Long position: receive dividend.
 				acct.Record(portfolio.Transaction{
 					Date:   date,
 					Asset:  heldAsset,
@@ -428,14 +497,18 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 					Qty:    qty,
 					Price:  divPerShare,
 				})
+			} else {
+				// Short position: owe dividend.
+				acct.Record(portfolio.Transaction{
+					Date:          date,
+					Asset:         heldAsset,
+					Type:          portfolio.DividendTransaction,
+					Amount:        divPerShare * qty, // negative (qty is negative)
+					Qty:           qty,
+					Price:         divPerShare,
+					Justification: fmt.Sprintf("short dividend obligation: %s ex-date %s", heldAsset.Ticker, date.Format("2006-01-02")),
+				})
 			}
-		}
-	}
-
-	// Drain fills from previous step.
-	if acct.HasBroker() {
-		if drainErr := acct.DrainFills(ctx); drainErr != nil {
-			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
 		}
 	}
 

@@ -156,7 +156,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 			return
 		}
 
-		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
 		priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
 		step := 0
 
@@ -234,16 +234,72 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			}
 
-			// f. Record dividends for held assets.
+			// f. Drain fills from previous step (before splits and dividends).
+			if acct.HasBroker() {
+				if err := acct.DrainFills(stepCtx); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("drain fills failed")
+					continue
+				}
+			}
+
+			// f2. Apply stock splits before dividends (dividend values are post-split).
+			if housekeepDF != nil {
+				for _, heldAsset := range heldAssets {
+					splitFactor := housekeepDF.ValueAt(heldAsset, data.SplitFactor, e.currentDate)
+					if math.IsNaN(splitFactor) || splitFactor == 1.0 {
+						continue
+					}
+
+					if err := acct.ApplySplit(heldAsset, e.currentDate, splitFactor); err != nil {
+						zerolog.Ctx(stepCtx).Error().Err(err).
+							Str("asset", heldAsset.Ticker).
+							Msg("apply split failed")
+
+						continue
+					}
+				}
+			}
+
+			// f3. Record borrow fees for short positions.
+			if housekeepDF != nil {
+				borrowRate := acct.BorrowRate()
+				for _, heldAsset := range heldAssets {
+					qty := acct.Position(heldAsset)
+					if qty >= 0 {
+						continue
+					}
+
+					closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, e.currentDate)
+					if math.IsNaN(closePrice) || closePrice == 0 {
+						continue
+					}
+
+					dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
+					acct.Record(portfolio.Transaction{
+						Date:          e.currentDate,
+						Asset:         heldAsset,
+						Type:          portfolio.FeeTransaction,
+						Amount:        -dailyFee,
+						Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
+					})
+				}
+			}
+
+			// f4. Record dividends for held assets.
 			if housekeepDF != nil {
 				for _, heldAsset := range heldAssets {
 					qty := acct.Position(heldAsset)
-					if qty <= 0 {
+					if qty == 0 {
 						continue
 					}
 
 					divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, e.currentDate)
-					if !math.IsNaN(divPerShare) && divPerShare > 0 {
+					if math.IsNaN(divPerShare) || divPerShare <= 0 {
+						continue
+					}
+
+					if qty > 0 {
+						// Long position: receive dividend.
 						acct.Record(portfolio.Transaction{
 							Date:   e.currentDate,
 							Asset:  heldAsset,
@@ -252,16 +308,26 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 							Qty:    qty,
 							Price:  divPerShare,
 						})
+					} else {
+						// Short position: owe dividend.
+						acct.Record(portfolio.Transaction{
+							Date:          e.currentDate,
+							Asset:         heldAsset,
+							Type:          portfolio.DividendTransaction,
+							Amount:        divPerShare * qty, // negative (qty is negative)
+							Qty:           qty,
+							Price:         divPerShare,
+							Justification: fmt.Sprintf("short dividend obligation: %s ex-date %s", heldAsset.Ticker, e.currentDate.Format("2006-01-02")),
+						})
 					}
 				}
 			}
 
-			// f2. Drain fills from previous step.
-			if acct.HasBroker() {
-				if err := acct.DrainFills(stepCtx); err != nil {
-					zerolog.Ctx(stepCtx).Error().Err(err).Msg("drain fills failed")
-					continue
-				}
+			// Set prices for margin computation and check for margin calls.
+			if marginErr := e.setMarginPrices(stepCtx, acct, e.currentDate); marginErr != nil {
+				zerolog.Ctx(stepCtx).Error().Err(marginErr).Msg("margin price fetch failed")
+			} else if marginErr := e.checkAndHandleMarginCall(stepCtx, acct, e.currentDate); marginErr != nil {
+				zerolog.Ctx(stepCtx).Error().Err(marginErr).Msg("margin call handling failed")
 			}
 
 			// g-h. Run strategy only on strategy-schedule days.

@@ -558,16 +558,129 @@ batch.Order(ctx, spy, portfolio.Sell, 100,
 
 Bracket/OCO modifiers are batch-only. See the [Portfolio documentation](portfolio.md#bracket-and-oco-orders) for full details.
 
+### Short selling
+
+Selling an asset you do not own opens a short position. The position quantity becomes negative in the portfolio. Profits accumulate when the price falls; losses mount when it rises.
+
+**Open a short** by calling `Order` with `Sell` when you hold zero or fewer shares:
+
+```go
+// Short 100 shares of XYZ.
+batch.Order(ctx, xyz, portfolio.Sell, 100)
+```
+
+**Cover a short** by calling `Order` with `Buy`:
+
+```go
+// Buy back 100 shares to close the short.
+batch.Order(ctx, xyz, portfolio.Buy, 100)
+```
+
+**Declarative short selling with RebalanceTo** -- use a negative weight in the allocation. `RebalanceTo` translates negative weights into sell orders and covers shorts that are no longer in the target:
+
+```go
+batch.RebalanceTo(ctx, portfolio.Allocation{
+    Date: eng.CurrentDate(),
+    Members: map[asset.Asset]float64{
+        spy: 1.20,    // 120% long SPY
+        qqq: -0.20,   // 20% short QQQ (hedge)
+    },
+})
+```
+
+**Pairs trading example** -- long the relatively underperforming asset, short the outperformer, market-neutral:
+
+```go
+func (s *PairsStrategy) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    log := zerolog.Ctx(ctx)
+
+    df, err := s.Pair.Window(ctx, data.Months(1), data.MetricClose)
+    if err != nil {
+        log.Error().Err(err).Msg("data fetch failed")
+        return nil
+    }
+
+    // One-month return for each leg.
+    ret := df.Pct(df.Len() - 1).Last()
+    retA := ret.Value(s.AssetA, data.MetricClose)
+    retB := ret.Value(s.AssetB, data.MetricClose)
+
+    // Go long the laggard, short the leader.
+    var longLeg, shortLeg asset.Asset
+    if retA > retB {
+        longLeg, shortLeg = s.AssetB, s.AssetA
+    } else {
+        longLeg, shortLeg = s.AssetA, s.AssetB
+    }
+
+    if err := batch.RebalanceTo(ctx, portfolio.Allocation{
+        Date: eng.CurrentDate(),
+        Members: map[asset.Asset]float64{
+            longLeg:  1.0,
+            shortLeg: -1.0,
+        },
+        Justification: "pairs rebalance",
+    }); err != nil {
+        log.Error().Err(err).Msg("rebalance failed")
+    }
+
+    return nil
+}
+```
+
+### Reading margin state
+
+During `Compute`, use the portfolio to inspect margin health before placing orders:
+
+```go
+ratio      := port.MarginRatio()      // equity / short market value; NaN if no shorts
+deficiency := port.MarginDeficiency() // dollars needed to restore maintenance margin; 0 if healthy
+buyPower   := port.BuyingPower()      // cash minus margin reserved for existing shorts
+```
+
+`MarginRatio` returns `NaN` when there are no short positions. The engine triggers a margin call when `MarginDeficiency()` is greater than zero (equity has fallen below the maintenance margin rate, which defaults to 30% of short market value).
+
+### MarginCallHandler
+
+By default, when a margin call is triggered, the engine automatically covers short positions proportionally until the deficiency is cleared. Strategies can override this behaviour by implementing the `MarginCallHandler` interface from the `engine` package:
+
+```go
+type MarginCallHandler interface {
+    OnMarginCall(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error
+}
+```
+
+If `OnMarginCall` resolves the deficiency fully, auto-liquidation is skipped. If a deficiency remains after the handler returns, the engine falls back to automatic proportional liquidation.
+
+Example -- a strategy that covers all shorts immediately on a margin call:
+
+```go
+func (s *PairsStrategy) OnMarginCall(ctx context.Context, _ *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    zerolog.Ctx(ctx).Warn().Msg("margin call: covering all short positions")
+
+    port.Holdings(func(held asset.Asset, qty float64) {
+        if qty < 0 {
+            // Buy back the full short quantity.
+            batch.Order(ctx, held, portfolio.Buy, -qty)
+        }
+    })
+
+    return nil
+}
+```
+
+The `batch` inside `OnMarginCall` bypasses risk middleware so that emergency covers are never blocked by position-size or exposure-limit rules.
+
 ### Reading portfolio state
 
 ```go
 port.Cash()                 // available cash
 port.Value()                // total value (cash + holdings)
-port.Position(spy)          // shares held
-port.PositionValue(spy)     // market value of position
+port.Position(spy)          // shares held (negative for shorts)
+port.PositionValue(spy)     // market value of position (negative for shorts)
 
 port.Holdings(func(a asset.Asset, qty float64) {
-    // iterate all positions
+    // iterate all positions; qty is negative for short positions
 })
 
 port.Transactions()         // full trade log

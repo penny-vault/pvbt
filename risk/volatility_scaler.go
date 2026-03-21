@@ -77,14 +77,14 @@ func (vs *volatilityScaler) Process(ctx context.Context, batch *portfolio.Batch)
 	for ast, weight := range projectedWeights {
 		vol := computeAnnualizedVol(priceFrame, ast)
 		if math.IsNaN(vol) || vol <= 0 {
-			withoutVolWeight += weight
+			withoutVolWeight += math.Abs(weight)
 			continue
 		}
 
 		withVol = append(withVol, volEntry{
 			asset:          ast,
 			vol:            vol,
-			originalWeight: weight,
+			originalWeight: math.Abs(weight),
 		})
 	}
 

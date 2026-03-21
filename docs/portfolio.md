@@ -163,6 +163,25 @@ batch.RebalanceTo(ctx, plan...)
 
 `RebalanceTo` accepts variadic `Allocation` arguments. Pass a single allocation for an immediate rebalance, or spread a `PortfolioPlan` to apply a series of rebalances in date order. The batch diffs current holdings against each target and accumulates the necessary buy/sell orders. After `Compute` returns, the engine runs the batch through middleware and submits the final orders to the broker.
 
+`RebalanceTo` also covers any short positions not present in the target allocation. Previously, only long positions were liquidated when they fell off the target list; now short positions are bought to close as well. This keeps the portfolio tightly aligned with the declared allocation regardless of whether positions are long or short.
+
+#### Negative weights for short positions
+
+`Members` weights can be negative. A weight of `-0.50` means "short 50% of portfolio value." This is the same convention used by Zipline, QuantConnect, and most other systematic trading frameworks. Long and short weights can be mixed freely within a single allocation:
+
+```go
+// 80% long SPY, 20% short TLT
+portfolio.Allocation{
+    Date: t,
+    Members: map[asset.Asset]float64{
+        spy: 0.80,
+        tlt: -0.20,
+    },
+}
+```
+
+The total of the absolute values of all weights can exceed 1.0 for leveraged portfolios. There is no requirement that weights sum to any particular value, but gross exposure beyond 1.0 requires margin (see [Margin accounting](#margin-accounting)).
+
 A more involved example -- weight selected assets by market cap:
 
 ```go
@@ -322,6 +341,52 @@ p.Holdings(func(a Asset, qty float64) {
 })
 ```
 
+## Short position lifecycle
+
+Selling an asset the portfolio does not own opens a short position. The broker borrows shares on the portfolio's behalf and delivers the sale proceeds to the account. Buying while short closes (covers) the position:
+
+- **Sell with no long position** → opens a short. A `SellTransaction` is recorded; short tax lots begin tracking the cost basis (the price at which shares were borrowed and sold).
+- **Buy while short** → covers the short first, then creates longs from any remaining quantity. If the buy quantity exactly matches the short, the position is closed flat. If the buy exceeds the short, the excess quantity becomes a new long position. A `BuyTransaction` is recorded for the full quantity; the short tax lots are closed at FIFO order.
+
+Short tax lots track cost basis the same way long tax lots do. The holding period begins when the short was opened. When the short is covered, realized gain or loss is computed as (short sale price − cover price) × quantity. Short gains and losses flow into the same STCG/LTCG metrics as long positions.
+
+`p.Position(asset)` returns a negative quantity for short positions. `p.PositionValue(asset)` returns the current mark-to-market value (negative for shorts, reflecting the liability).
+
+## Margin accounting
+
+Short selling and leveraged long positions require margin. The portfolio tracks margin state through several `Portfolio` interface methods:
+
+```go
+p.LongMarketValue()    // total market value of long positions
+p.ShortMarketValue()   // total absolute market value of short positions (always >= 0)
+p.Equity()             // cash + long market value − short market value
+p.BuyingPower()        // cash available for new positions given current margin
+p.MarginRatio()        // equity / (long + short market value); NaN when no positions
+p.MarginDeficiency()   // shortfall below the maintenance margin threshold; 0 if compliant
+```
+
+Margin parameters are configured when constructing the account:
+
+```go
+acct := portfolio.New(
+    portfolio.WithCash(100_000, startDate),
+    portfolio.WithInitialMargin(0.50),      // Regulation T default: 50%
+    portfolio.WithMaintenanceMargin(0.25),  // typical broker minimum: 25%
+)
+```
+
+`WithInitialMargin` sets the fraction of a new position's value that must be covered by equity. `WithMaintenanceMargin` sets the ongoing minimum equity fraction. If `MarginDeficiency()` is positive, the account is below the maintenance threshold and new orders that increase exposure are rejected by the engine.
+
+## Borrow fees and dividend obligations
+
+Holding a short position incurs two ongoing costs that the engine applies automatically.
+
+**Daily borrow fee.** Each trading day, a fee proportional to the short market value is debited from cash. The fee rate is set per-asset by the broker or data provider and annualized. The engine converts this to a per-day charge and records a `FeeTransaction`.
+
+**Dividend debit on ex-date.** When a shorted asset pays a dividend, the portfolio owes that dividend to the lender. On the ex-date, the engine records a `FeeTransaction` equal to (dividend per share × shorted quantity). This mirrors the `DividendTransaction` received by long holders but appears as a cash outflow for short holders.
+
+Strategy code does not need to handle either of these events directly; the engine injects them through `PortfolioManager` the same way it injects dividends for long positions.
+
 ## Transaction log
 
 Every operation that changes the portfolio's state appends to the transaction log. The log is the source of truth for performance measurement, tax calculations, and trade analysis.
@@ -350,11 +415,12 @@ Transaction types:
 | Type | Recorded when |
 |------|---------------|
 | `BuyTransaction` | An asset is purchased (via `RebalanceTo` or `Order`) |
-| `SellTransaction` | An asset is sold |
+| `SellTransaction` | An asset is sold (or a short position is opened) |
 | `DividendTransaction` | A dividend payment is received |
-| `FeeTransaction` | A commission or fee is charged |
+| `FeeTransaction` | A commission, borrow fee, or dividend obligation on a short is charged |
 | `DepositTransaction` | Cash is added to the account |
 | `WithdrawalTransaction` | Cash is removed from the account |
+| `SplitTransaction` | A stock split or reverse split is applied; quantity and cost basis are adjusted |
 
 To access the full log:
 
@@ -461,14 +527,16 @@ Middleware executes as an ordered chain: each middleware receives the batch outp
 
 ### Built-in risk middleware
 
-The `risk` package provides four middleware implementations:
+The `risk` package provides middleware implementations that are short-aware. Position size limits apply symmetrically to both long and short positions: `MaxPositionSize(0.25)` means no single position -- long or short -- may exceed 25% of total portfolio value in absolute terms.
 
 | Middleware | Description |
 |------------|-------------|
-| `MaxPositionSize(limit float64)` | Caps any single position at `limit` (0.0-1.0) of total portfolio value. Injects sell orders to reduce overweight positions; excess goes to cash. |
-| `DrawdownCircuitBreaker(threshold float64)` | Force-liquidates all equity positions when drawdown from peak exceeds `threshold` (e.g., 0.15 for 15%). Removes all buy orders and sells everything. |
-| `MaxPositionCount(n int)` | Limits concurrent positions to `n`. When projected holdings exceed the limit, the smallest positions by dollar value are sold first. |
-| `VolatilityScaler(ds DataSource, lookback int)` | Scales position sizes inversely to trailing realized volatility over `lookback` trading days. Higher-volatility assets receive smaller allocations. The engine satisfies the `DataSource` interface. |
+| `MaxPositionSize(limit)` | Caps any single position at `limit` (0.0-1.0) of total portfolio value. Applies symmetrically to longs and shorts. Injects orders to reduce overweight positions; excess goes to cash. |
+| `DrawdownCircuitBreaker(threshold)` | Force-liquidates all equity positions when drawdown from peak exceeds `threshold` (e.g., 0.15 for 15%). Removes all buy orders, sells all longs, and covers all shorts. |
+| `MaxPositionCount(n)` | Limits concurrent positions to `n`. When projected holdings exceed the limit, the smallest positions by absolute dollar value are closed first. |
+| `VolatilityScaler(dataSource, lookback)` | Scales position sizes inversely to trailing realized volatility over `lookback` trading days. Higher-volatility assets receive smaller allocations. Requires a `DataSource` (the engine satisfies this interface). |
+| `GrossExposureLimit(limit)` | Caps the sum of absolute position weights (long + short) at `limit`. A limit of 1.5 allows up to 150% gross exposure. |
+| `NetExposureLimit(min, max)` | Constrains the net long-minus-short weight to the range `[min, max]`. Use to enforce market-neutral bands (e.g., `NetExposureLimit(-0.1, 0.1)`) or to prevent the portfolio from becoming net short unintentionally. |
 
 ### Convenience profiles
 

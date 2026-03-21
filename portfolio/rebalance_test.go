@@ -296,6 +296,99 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(buyTxns[0].Justification).To(BeEmpty())
 	})
 
+	It("generates sell order for negative weight target", func() {
+		// Account with 100k cash, no positions.
+		// RebalanceTo with weight -0.50 for SPY should sell to open short.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{500},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		mb := newMockBroker()
+		// Sell order: target = -0.50 * 100000 = -50000, current = 0,
+		// diff = -50000, so sell $50000 worth = 100 shares.
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy: {{Price: 500.0, Qty: 100, FilledAt: fill}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mb))
+		acct.UpdatePrices(df)
+
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
+			Date: t1,
+			Members: map[asset.Asset]float64{
+				spy: -0.50,
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Should have a sell order submitted.
+		Expect(mb.submitted).To(HaveLen(1))
+		Expect(mb.submitted[0].Side).To(Equal(broker.Sell))
+		Expect(mb.submitted[0].Asset).To(Equal(spy))
+		Expect(mb.submitted[0].Amount).To(BeNumerically("~", 50_000.0, 1))
+	})
+
+	It("covers short positions not in target allocation", func() {
+		// Account has a short position in SPY (-100 shares).
+		// Rebalance to 100% AAPL (SPY not in target).
+		// Should generate a buy order to cover the short SPY, then buy AAPL.
+		df, err := data.NewDataFrame(
+			[]time.Time{t1},
+			[]asset.Asset{spy, aapl},
+			[]data.Metric{data.MetricClose},
+			data.Daily,
+			[]float64{500, 200},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Seed account with a short position: sell 100 SPY to open short.
+		mbSetup := newMockBroker()
+		mbSetup.fills = [][]broker.Fill{
+			{{Price: 500.0, Qty: 100, FilledAt: fill}},
+		}
+		acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}), portfolio.WithBroker(mbSetup))
+		acct.UpdatePrices(df)
+		Expect(acct.Order(context.Background(), spy, portfolio.Sell, 100)).To(Succeed())
+		// Now: cash = 150000, -100 SPY (short), value = 150000 - 50000 = 100000
+
+		Expect(acct.Position(spy)).To(Equal(-100.0))
+
+		// Swap broker for rebalance.
+		mb := newMockBroker()
+		// First: buy to cover 100 SPY (not in target), then buy AAPL.
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spy:  {{Price: 500.0, Qty: 100, FilledAt: fill}},
+			aapl: {{Price: 200.0, Qty: 250, FilledAt: fill}},
+		}
+		acct.SetBroker(mb)
+
+		err = acct.RebalanceTo(context.Background(), portfolio.Allocation{
+			Date: t1,
+			Members: map[asset.Asset]float64{
+				aapl: 0.50,
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		// SPY short should be covered.
+		Expect(acct.Position(spy)).To(Equal(0.0))
+		// AAPL should be bought.
+		Expect(acct.Position(aapl)).To(Equal(250.0))
+
+		// First order should be a buy to cover SPY, second a buy for AAPL.
+		Expect(mb.submitted).To(HaveLen(2))
+		Expect(mb.submitted[0].Side).To(Equal(broker.Buy))
+		Expect(mb.submitted[0].Asset).To(Equal(spy))
+		Expect(mb.submitted[0].Qty).To(Equal(100.0))
+		Expect(mb.submitted[1].Side).To(Equal(broker.Buy))
+		Expect(mb.submitted[1].Asset).To(Equal(aapl))
+	})
+
 	It("processes multiple variadic allocations", func() {
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},

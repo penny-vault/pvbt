@@ -45,7 +45,7 @@ The backtest proceeds in four phases:
 
 1. **Initialization** -- loads assets, hydrates strategy fields from struct tags, builds the provider routing table, calls `strategy.Setup`, validates the schedule, checks warmup data availability (see [Warmup](#warmup)), and creates the portfolio account.
 2. **Date enumeration** -- walks the tradecron schedule from start to end to build the list of trading dates.
-3. **Step loop** -- iterates every engine date (see [Steps and frames](#steps-and-frames) below). At each step: drains the broker fill channel, records dividends, and updates the equity curve. On frames (dates matching the trading schedule), the engine also cancels open orders, creates a fresh batch, calls `strategy.Compute`, runs the batch through middleware, and submits the resulting orders to the broker.
+3. **Step loop** -- iterates every engine date (see [Steps and frames](#steps-and-frames) below). At each step: drains the broker fill channel, applies stock splits, debits borrow fees, records dividends, runs a margin check, and updates the equity curve. On frames (dates matching the trading schedule), the engine also cancels open orders, creates a fresh batch, calls `strategy.Compute`, runs the batch through middleware, and submits the resulting orders to the broker.
 4. **Return** -- returns the portfolio with the full transaction log, equity curve, and computed metrics.
 
 ## Steps and frames
@@ -55,6 +55,41 @@ The engine uses two levels of iteration:
 - **Step** -- every engine iteration (typically every trading day). At each step the engine drains broker fills, records dividends, and updates the equity curve and performance metrics.
 - **Frame** -- a step where the trading schedule fires. At a frame the engine cancels open orders, creates a `Batch`, calls `strategy.Compute`, executes the batch through the middleware chain, and submits orders to the broker.
 - **Batch** -- the container for a single frame's orders and annotations. Created fresh at the start of each frame and discarded after submission. Strategy code writes to the batch; middleware transforms it.
+
+### Housekeeping order within each step
+
+At every step the engine performs housekeeping in a fixed order before updating the equity curve:
+
+1. **Drain fills** -- consume all pending fills from the broker's `Fills()` channel and apply them to the portfolio.
+2. **Apply splits** -- adjust share quantities and cost bases for any stock splits effective on the current date.
+3. **Borrow fees** -- debit daily borrow fees for all open short positions (see [broker.md](broker.md)).
+4. **Dividends** -- credit dividend income and adjust short positions for dividend obligations.
+5. **Margin check** -- verify that maintenance margin requirements are met. The margin check runs every trading day regardless of whether the current step is a frame (i.e., whether the strategy fires). If the check fails, the `MarginCallHandler` is invoked.
+
+### Margin calls and auto-liquidation
+
+When a margin check fails, the engine calls the registered `MarginCallHandler`:
+
+```go
+type MarginCallHandler interface {
+    OnMarginCall(ctx context.Context, eng *Engine, port portfolio.Portfolio, deficit float64) error
+}
+```
+
+The handler receives the engine, the current portfolio (read-only), and the equity deficit in dollars. The default implementation auto-liquidates the largest short position at market until the deficit is resolved. A custom handler can be registered with `engine.WithMarginCallHandler(h)`:
+
+```go
+eng := engine.New(&MyStrategy{},
+    engine.WithMarginCallHandler(myHandler),
+    // ...
+)
+```
+
+The handler may submit orders through the engine or return an error to halt the run. If no handler is registered, the default auto-liquidation behavior applies.
+
+### Stock split handling
+
+When a split is effective on the current date, the engine adjusts all affected lots before any other housekeeping for that step. For long lots the share count is multiplied by the split ratio and the cost basis per share is divided by the same ratio. For short lots the liability is adjusted symmetrically: the short share count increases and the proceeds-per-share decrease, so the net position value is unchanged. Any fractional shares produced by the split are settled as cash at the post-split price.
 
 ## Live trading
 

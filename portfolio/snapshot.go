@@ -44,6 +44,8 @@ type PortfolioSnapshot interface {
 	AllMetadata() map[string]string
 	TradeDetails() []TradeDetail
 	Excursions() map[asset.Asset]ExcursionRecord
+	// ShortLots iterates over all open short tax lots grouped by asset.
+	ShortLots(fn func(asset.Asset, []TaxLot))
 }
 
 // WithPortfolioSnapshot returns an Option that restores an Account from
@@ -73,5 +75,9 @@ func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
 		for ast, rec := range snap.Excursions() {
 			acct.excursions[ast] = rec
 		}
+
+		snap.ShortLots(func(ast asset.Asset, lots []TaxLot) {
+			acct.shortLots[ast] = append(acct.shortLots[ast], lots...)
+		})
 	}
 }

@@ -18,6 +18,7 @@ package portfolio
 import (
 	"math"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -59,6 +60,21 @@ func (unrealizedLTCG) Compute(acct *Account, _ *Period) (float64, error) {
 			}
 		}
 	}
+
+	// Include short lots: unrealized P&L = (entry price - current price) * qty
+	acct.ShortLots(func(shortAsset asset.Asset, lots []TaxLot) {
+		currentPrice := prices.Value(shortAsset, data.MetricClose)
+		if math.IsNaN(currentPrice) {
+			return
+		}
+
+		for _, lot := range lots {
+			holdingDays := now.Sub(lot.Date).Hours() / 24
+			if holdingDays > 365 {
+				total += (lot.Price - currentPrice) * lot.Qty
+			}
+		}
+	})
 
 	return total, nil
 }

@@ -250,6 +250,65 @@ func (s *bracketStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portf
 	return nil
 }
 
+// shortOnceStrategy sells (shorts) a fixed number of shares on the
+// first Compute call and then does nothing. This leaves a short
+// position open for housekeeping to process borrow fees and dividends.
+type shortOnceStrategy struct {
+	target    asset.Asset
+	qty       float64
+	callCount int
+}
+
+func (s *shortOnceStrategy) Name() string { return "shortOnce" }
+
+func (s *shortOnceStrategy) Setup(_ *engine.Engine) {}
+
+func (s *shortOnceStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *shortOnceStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	s.callCount++
+	if s.callCount == 1 {
+		batch.Order(ctx, s.target, portfolio.Sell, s.qty)
+	}
+	return nil
+}
+
+// longShortStrategy goes long one asset and short another for the first
+// two strategy dates, then covers the short on the third date. This
+// exercises the complete short-selling pipeline end-to-end.
+type longShortStrategy struct {
+	longAsset  asset.Asset
+	shortAsset asset.Asset
+	callCount  int
+}
+
+func (s *longShortStrategy) Name() string { return "longShort" }
+
+func (s *longShortStrategy) Setup(_ *engine.Engine) {}
+
+func (s *longShortStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *longShortStrategy) Compute(ctx context.Context, _ *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
+	s.callCount++
+	switch s.callCount {
+	case 1:
+		// Day 1: go long 50 shares of longAsset, short 40 shares of shortAsset.
+		batch.Order(ctx, s.longAsset, portfolio.Buy, 50)
+		batch.Order(ctx, s.shortAsset, portfolio.Sell, 40)
+	case 3:
+		// Day 3: cover the short position.
+		shortQty := fund.Position(s.shortAsset)
+		if shortQty < 0 {
+			batch.Order(ctx, s.shortAsset, portfolio.Buy, -shortQty)
+		}
+	}
+	return nil
+}
+
 // failingStrategy always returns an error from Compute.
 type failingStrategy struct{}
 
@@ -278,6 +337,20 @@ func makeDailyTestData(start time.Time, nDays int, testAssets []asset.Asset, met
 	for i := range vals {
 		vals[i] = 100.0 + float64(i)
 	}
+
+	// SplitFactor columns must be 1.0 (no split) to avoid unintended
+	// split adjustments during housekeeping.
+	for assetIdx := range testAssets {
+		for metricIdx, metric := range metrics {
+			if metric == data.SplitFactor {
+				colStart := (assetIdx*len(metrics) + metricIdx) * nDays
+				for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+					vals[colStart+dayIdx] = 1.0
+				}
+			}
+		}
+	}
+
 	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
 	Expect(err).NotTo(HaveOccurred())
 	return df
@@ -297,7 +370,7 @@ var _ = Describe("Backtest", func() {
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
 		testAssets = []asset.Asset{aapl, msft}
 		assetProvider = &mockAssetProvider{assets: testAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 	})
 
 	Context("end to end", func() {
@@ -517,7 +590,7 @@ var _ = Describe("Backtest", func() {
 			// MFE = (115 - 102) / 102 > 0
 			// MAE = (88 - 102) / 102 < 0
 
-			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			times := make([]time.Time, nDays)
@@ -526,17 +599,18 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 5 metrics x 30 days = 150 values
-			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)]
+			// 1 asset x 6 metrics x 30 days = 180 values
+			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)][SplitFactor(30)]
 			vals := make([]float64, nDays*len(excursionAssets)*len(excursionMetrics))
 
-			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95
+			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95, SplitFactor=1
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
 				vals[0*nDays+dayIdx] = 100.0 + float64(dayIdx) // Close: 100, 101, 102, ...
 				vals[1*nDays+dayIdx] = 100.0 + float64(dayIdx) // AdjClose: same as Close
 				vals[2*nDays+dayIdx] = 0.0                     // Dividend: 0
 				vals[3*nDays+dayIdx] = 105.0 + float64(dayIdx) // High: 105, 106, 107, ...
 				vals[4*nDays+dayIdx] = 95.0                    // Low: 95 baseline
+				vals[5*nDays+dayIdx] = 1.0                     // SplitFactor: 1 (no split)
 			}
 
 			// Override specific days for controlled excursion values.
@@ -575,7 +649,7 @@ var _ = Describe("Backtest", func() {
 		It("caps position size when MaxPositionSize is configured", func() {
 			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
 			allAssets := append(testAssets, spy)
-			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeDailyTestData(dataStart, 400, allAssets, allMetrics)
@@ -643,7 +717,7 @@ var _ = Describe("Backtest", func() {
 		// Each row is {close, high, low}; AdjClose=close, Dividend=0.
 		makeBracketTestData := func(startDate time.Time, testAsset asset.Asset, rows []struct{ close, high, low float64 }) *data.DataFrame {
 			numDays := len(rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			assets := []asset.Asset{testAsset}
 
 			times := make([]time.Time, numDays)
@@ -661,6 +735,7 @@ var _ = Describe("Backtest", func() {
 				vals[2*numDays+dayIdx] = 0.0       // Dividend
 				vals[3*numDays+dayIdx] = row.high   // MetricHigh
 				vals[4*numDays+dayIdx] = row.low    // MetricLow
+				vals[5*numDays+dayIdx] = 1.0        // SplitFactor: no split
 			}
 
 			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, vals)
@@ -690,7 +765,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
@@ -743,7 +818,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
@@ -780,6 +855,375 @@ var _ = Describe("Backtest", func() {
 				}
 			}
 			Expect(hasSellAtTP).To(BeTrue(), "expected a sell transaction at take-profit price ~110, got transactions: %v", txns)
+		})
+	})
+
+	Context("short position housekeeping", func() {
+		It("charges daily borrow fees on short positions", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-SHORT", Ticker: "SHORT"}
+			shortAssets := []asset.Asset{testStock}
+			shortProvider := &mockAssetProvider{assets: shortAssets}
+
+			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			nDays := 30
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// 1 asset x 6 metrics x 30 days
+			vals := make([]float64, nDays*len(shortAssets)*len(shortMetrics))
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				vals[0*nDays+dayIdx] = 100.0 // Close: constant $100
+				vals[1*nDays+dayIdx] = 100.0 // AdjClose
+				vals[2*nDays+dayIdx] = 0.0   // Dividend: none
+				vals[3*nDays+dayIdx] = 102.0 // High
+				vals[4*nDays+dayIdx] = 98.0  // Low
+				vals[5*nDays+dayIdx] = 1.0   // SplitFactor: no split
+			}
+
+			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, vals)
+			Expect(dfErr).NotTo(HaveOccurred())
+			shortDataProvider := data.NewTestProvider(shortMetrics, shortDF)
+
+			borrowRate := 0.10 // 10% annualized for easy math
+			acct := portfolio.New(
+				portfolio.WithCash(200_000, time.Time{}),
+				portfolio.WithBorrowRate(borrowRate),
+			)
+
+			strategy := &shortOnceStrategy{target: testStock, qty: 100}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(shortDataProvider),
+				engine.WithAssetProvider(shortProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// Count borrow fee transactions.
+			txns := fund.Transactions()
+			feeCount := 0
+			totalFees := 0.0
+			for _, tx := range txns {
+				if tx.Type == portfolio.FeeTransaction {
+					feeCount++
+					totalFees += tx.Amount // negative
+				}
+			}
+
+			// There should be at least one fee transaction (one per trading
+			// day after the short is opened).
+			Expect(feeCount).To(BeNumerically(">=", 1), "expected borrow fee transactions")
+			Expect(totalFees).To(BeNumerically("<", 0), "borrow fees should be negative")
+
+			// Verify the daily fee amount: 100 shares * $100 * (10% / 252)
+			expectedDailyFee := 100.0 * 100.0 * (borrowRate / 252.0)
+			// Each fee transaction should match this amount (negated).
+			for _, tx := range txns {
+				if tx.Type == portfolio.FeeTransaction {
+					Expect(tx.Amount).To(BeNumerically("~", -expectedDailyFee, 0.01))
+					Expect(tx.Justification).To(ContainSubstring("borrow fee"))
+					Expect(tx.Justification).To(ContainSubstring("10.00%"))
+				}
+			}
+		})
+
+		It("debits cash for dividends on short positions", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-DIVSHORT", Ticker: "DIVSHORT"}
+			shortAssets := []asset.Asset{testStock}
+			shortProvider := &mockAssetProvider{assets: shortAssets}
+
+			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			nDays := 30
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// 1 asset x 6 metrics x 30 days
+			vals := make([]float64, nDays*len(shortAssets)*len(shortMetrics))
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				vals[0*nDays+dayIdx] = 100.0 // Close
+				vals[1*nDays+dayIdx] = 100.0 // AdjClose
+				vals[2*nDays+dayIdx] = 0.0   // Dividend: none by default
+				vals[3*nDays+dayIdx] = 102.0 // High
+				vals[4*nDays+dayIdx] = 98.0  // Low
+				vals[5*nDays+dayIdx] = 1.0   // SplitFactor
+			}
+
+			// Place a $2.00 dividend on day 7 (Jan 8). The short is opened
+			// on the first strategy date (Jan 1 or Jan 2), so by Jan 8 the
+			// short position is established.
+			vals[2*nDays+7] = 2.00
+
+			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, vals)
+			Expect(dfErr).NotTo(HaveOccurred())
+			shortDataProvider := data.NewTestProvider(shortMetrics, shortDF)
+
+			acct := portfolio.New(
+				portfolio.WithCash(200_000, time.Time{}),
+				portfolio.WithBorrowRate(0.005),
+			)
+
+			strategy := &shortOnceStrategy{target: testStock, qty: 50}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(shortDataProvider),
+				engine.WithAssetProvider(shortProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// Find dividend transactions.
+			txns := fund.Transactions()
+			var shortDivTxns []portfolio.Transaction
+			for _, tx := range txns {
+				if tx.Type == portfolio.DividendTransaction && tx.Amount < 0 {
+					shortDivTxns = append(shortDivTxns, tx)
+				}
+			}
+
+			Expect(shortDivTxns).To(HaveLen(1), "expected exactly one short dividend debit")
+			// 50 shares short * $2.00 = -$100 obligation
+			Expect(shortDivTxns[0].Amount).To(BeNumerically("~", -100.0, 0.01))
+			Expect(shortDivTxns[0].Justification).To(ContainSubstring("short dividend obligation"))
+		})
+
+		It("uses default borrow rate of 0.5% when none is configured", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			Expect(acct.BorrowRate()).To(BeNumerically("~", 0.005, 1e-9))
+		})
+	})
+
+	Context("Short Selling Integration", func() {
+		It("runs a complete long/short backtest", func() {
+			longStock := asset.Asset{CompositeFigi: "FIGI-LONG", Ticker: "LONG"}
+			shortStock := asset.Asset{CompositeFigi: "FIGI-SHORT2", Ticker: "SHORT2"}
+			integrationAssets := []asset.Asset{longStock, shortStock}
+			integrationProvider := &mockAssetProvider{assets: integrationAssets}
+
+			integrationMetrics := []data.Metric{
+				data.MetricClose, data.AdjClose, data.Dividend,
+				data.MetricHigh, data.MetricLow, data.SplitFactor,
+			}
+			nDays := 30
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// 2 assets x 6 metrics x 30 days = 360 values.
+			// Column layout per asset: [Close][AdjClose][Dividend][High][Low][SplitFactor]
+			// Assets are interleaved: asset0-metric0, asset1-metric0, asset0-metric1, ...
+			// Actually, the DataFrame layout is: for each (asset, metric) pair in order.
+			nAssets := len(integrationAssets)
+			nMetrics := len(integrationMetrics)
+			vals := make([]float64, nDays*nAssets*nMetrics)
+
+			// Long asset: price rises from 100 to ~110 over the period.
+			// Short asset: price drops from 100 to ~90 over the period (profitable short).
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				longPrice := 100.0 + float64(dayIdx)*0.5    // rises: 100, 100.5, 101, ...
+				shortPrice := 100.0 - float64(dayIdx)*0.5   // drops: 100, 99.5, 99, ...
+				longHigh := longPrice + 2.0
+				longLow := longPrice - 2.0
+				shortHigh := shortPrice + 2.0
+				shortLow := shortPrice - 2.0
+
+				// Asset 0 (long) columns: Close, AdjClose, Dividend, High, Low, SplitFactor
+				// Asset 1 (short) columns: Close, AdjClose, Dividend, High, Low, SplitFactor
+				// Column index = (assetIdx*nMetrics + metricIdx)*nDays + dayIdx
+				// Long asset (index 0)
+				vals[(0*nMetrics+0)*nDays+dayIdx] = longPrice  // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = longPrice  // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend
+				vals[(0*nMetrics+3)*nDays+dayIdx] = longHigh   // High
+				vals[(0*nMetrics+4)*nDays+dayIdx] = longLow    // Low
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor
+
+				// Short asset (index 1)
+				vals[(1*nMetrics+0)*nDays+dayIdx] = shortPrice // Close
+				vals[(1*nMetrics+1)*nDays+dayIdx] = shortPrice // AdjClose
+				vals[(1*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend
+				vals[(1*nMetrics+3)*nDays+dayIdx] = shortHigh  // High
+				vals[(1*nMetrics+4)*nDays+dayIdx] = shortLow   // Low
+				vals[(1*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor
+			}
+
+			// Place a $1.50 dividend on the short asset on day 2 (Jan 3, Wednesday).
+			// The short position is opened on the first strategy date (Jan 1),
+			// and covered on the third strategy date (Jan 3). Housekeeping runs
+			// before Compute, so the dividend on Jan 3 is processed while the
+			// short position is still open.
+			vals[(1*nMetrics+2)*nDays+2] = 1.50
+
+			integrationDF, dfErr := data.NewDataFrame(times, integrationAssets, integrationMetrics, data.Daily, vals)
+			Expect(dfErr).NotTo(HaveOccurred())
+			integrationDataProvider := data.NewTestProvider(integrationMetrics, integrationDF)
+
+			borrowRate := 0.08 // 8% annualized
+			acct := portfolio.New(
+				portfolio.WithCash(200_000, time.Time{}),
+				portfolio.WithBorrowRate(borrowRate),
+				portfolio.WithTradeMetrics(),
+			)
+
+			strategy := &longShortStrategy{
+				longAsset:  longStock,
+				shortAsset: shortStock,
+			}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(integrationDataProvider),
+				engine.WithAssetProvider(integrationProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// ---------------------------------------------------------------
+			// 1. Verify short position was opened and then covered.
+			// ---------------------------------------------------------------
+			txns := fund.Transactions()
+
+			// There must be at least one sell transaction (opening the short)
+			// and at least one buy transaction covering it.
+			hasSellShort := false
+			hasCoverBuy := false
+			for _, tx := range txns {
+				if tx.Asset == shortStock && tx.Type == portfolio.SellTransaction {
+					hasSellShort = true
+				}
+				if tx.Asset == shortStock && tx.Type == portfolio.BuyTransaction {
+					hasCoverBuy = true
+				}
+			}
+			Expect(hasSellShort).To(BeTrue(), "expected sell (short) transaction for SHORT2")
+			Expect(hasCoverBuy).To(BeTrue(), "expected buy (cover) transaction for SHORT2")
+
+			// After covering, the short position should be zero.
+			Expect(fund.Position(shortStock)).To(BeNumerically("==", 0),
+				"short position should be zero after covering")
+
+			// Long position should still be held.
+			Expect(fund.Position(longStock)).To(BeNumerically(">", 0),
+				"long position should remain open")
+
+			// ---------------------------------------------------------------
+			// 2. Verify borrow fees were recorded.
+			// ---------------------------------------------------------------
+			feeCount := 0
+			totalFees := 0.0
+			for _, tx := range txns {
+				if tx.Type == portfolio.FeeTransaction {
+					feeCount++
+					totalFees += tx.Amount
+				}
+			}
+			Expect(feeCount).To(BeNumerically(">=", 1),
+				"expected at least one borrow fee transaction")
+			Expect(totalFees).To(BeNumerically("<", 0),
+				"total borrow fees should be negative (a cost)")
+
+			// ---------------------------------------------------------------
+			// 3. Verify short dividend obligation was recorded.
+			// ---------------------------------------------------------------
+			var shortDivTxns []portfolio.Transaction
+			for _, tx := range txns {
+				if tx.Type == portfolio.DividendTransaction && tx.Amount < 0 {
+					shortDivTxns = append(shortDivTxns, tx)
+				}
+			}
+			Expect(shortDivTxns).To(HaveLen(1),
+				"expected exactly one negative dividend transaction (short obligation)")
+			// 40 shares short * $1.50 dividend = -$60.
+			Expect(shortDivTxns[0].Amount).To(BeNumerically("~", -60.0, 0.01))
+
+			// ---------------------------------------------------------------
+			// 4. Verify margin accounting is correct.
+			// ---------------------------------------------------------------
+			// After covering, ShortMarketValue should be 0.
+			Expect(fund.ShortMarketValue()).To(BeNumerically("==", 0),
+				"short market value should be zero after covering all shorts")
+			// LongMarketValue should be positive (we hold the long stock).
+			Expect(fund.LongMarketValue()).To(BeNumerically(">", 0))
+			// MarginDeficiency should be 0 (no short positions).
+			Expect(fund.MarginDeficiency()).To(BeNumerically("==", 0))
+
+			// ---------------------------------------------------------------
+			// 5. Verify P&L from covering the short.
+			// ---------------------------------------------------------------
+			// Short was opened at day 0 price ($100) and covered around day 4-6.
+			// The short asset price drops, so covering is profitable.
+			// Net cash should be less than initial (we bought long stock) but
+			// the short cover should have yielded a profit.
+			details := fund.TradeDetails()
+			var shortTrade *portfolio.TradeDetail
+			for idx := range details {
+				if details[idx].Asset == shortStock {
+					shortTrade = &details[idx]
+					break
+				}
+			}
+			Expect(shortTrade).NotTo(BeNil(), "expected a completed short trade detail")
+			// Short sold at ~$100, covered at lower price, so PnL > 0.
+			Expect(shortTrade.PnL).To(BeNumerically(">", 0),
+				"short trade P&L should be positive when price drops")
+
+			// ---------------------------------------------------------------
+			// 6. Verify TradeDetails have correct Direction field.
+			// ---------------------------------------------------------------
+			Expect(shortTrade.Direction).To(Equal(portfolio.TradeShort),
+				"short trade should have Direction == TradeShort")
+
+			var longTrade *portfolio.TradeDetail
+			for idx := range details {
+				if details[idx].Asset == longStock {
+					longTrade = &details[idx]
+					break
+				}
+			}
+			// The long position is not closed in this test, so there may be
+			// no long trade detail. If there is one, verify its direction.
+			if longTrade != nil {
+				Expect(longTrade.Direction).To(Equal(portfolio.TradeLong),
+					"long trade should have Direction == TradeLong")
+			}
+
+			// ---------------------------------------------------------------
+			// 7. Verify long/short metrics are computed correctly.
+			// ---------------------------------------------------------------
+			tradeMetrics, tmErr := fund.TradeMetrics()
+			Expect(tmErr).NotTo(HaveOccurred())
+
+			// We have exactly one winning short trade, so ShortWinRate = 1.0 (100%).
+			Expect(tradeMetrics.ShortWinRate).To(BeNumerically("~", 1.0, 0.01),
+				"ShortWinRate should be 1.0 with a single winning short trade")
+			// ShortProfitFactor is NaN when there are no losing short trades
+			// (division by zero). This is the correct behavior.
+			Expect(math.IsNaN(tradeMetrics.ShortProfitFactor)).To(BeTrue(),
+				"ShortProfitFactor should be NaN when there are no losing short trades")
 		})
 	})
 })
