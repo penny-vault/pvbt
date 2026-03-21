@@ -193,7 +193,19 @@ The background goroutine's select loop includes a case for the context passed to
 | Stop | `"Stop"` -- uses `Order.StopPrice` |
 | StopLimit | `"Stop Limit"` -- uses both `Order.StopPrice` and `Order.LimitPrice` |
 
-**OnOpen/OnClose time-in-force:** tastytrade does not natively support these as order attributes. They are mapped to Market/Day orders. The engine's tradecron scheduling already ensures `Compute()` fires at the correct time, so the broker relies on the engine's timing rather than encoding this in the order.
+**Time-in-force mapping:**
+
+| broker.TimeInForce | tastytrade Mapping |
+|--------------------|--------------------|
+| Day | `"Day"` |
+| GTC | `"GTC"` |
+| GTD | `"GTD"` -- uses `Order.GTDDate` |
+| IOC | `"IOC"` |
+| FOK | `"FOK"` |
+| OnOpen | `"Day"` (see note below) |
+| OnClose | `"Day"` (see note below) |
+
+**OnOpen/OnClose:** tastytrade does not natively support these as order attributes. They are mapped to Market/Day orders. The engine's tradecron scheduling already ensures `Compute()` fires at the correct time, so the broker relies on the engine's timing rather than encoding this in the order.
 
 ## Type Mappings
 
@@ -213,9 +225,11 @@ type sessionResponse struct {
 
 // Orders
 type orderRequest struct {
-    TimeInForce string     `json:"time-in-force"`
-    OrderType   string     `json:"order-type"`
-    Legs        []orderLeg `json:"legs"`
+    TimeInForce  string     `json:"time-in-force"`
+    OrderType    string     `json:"order-type"`
+    Price        float64    `json:"price,omitempty"`         // limit price
+    StopTrigger  float64    `json:"stop-trigger,omitempty"`  // stop trigger price
+    Legs         []orderLeg `json:"legs"`
 }
 
 type orderLeg struct {
