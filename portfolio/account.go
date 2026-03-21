@@ -811,18 +811,13 @@ func (a *Account) ActiveSubstitutions() map[asset.Asset]Substitution {
 		return nil
 	}
 
-	var cutoff time.Time
-	if a.prices != nil {
-		cutoff = a.prices.End()
-	}
-
+	// Return all substitutions. Callers that need expiry filtering (e.g.,
+	// mapToLogical in ProjectedHoldings) perform their own timestamp check.
+	// Returning all entries allows the TaxLossHarvester's swap-back logic
+	// to detect recently-expired substitutions that need reversal.
 	result := make(map[asset.Asset]Substitution, len(a.substitutions))
 	for key, sub := range a.substitutions {
-		// Include the entry when prices are not loaded (cutoff is zero) or when
-		// the substitution has not yet expired.
-		if cutoff.IsZero() || !sub.Until.Before(cutoff) {
-			result[key] = sub
-		}
+		result[key] = sub
 	}
 
 	if len(result) == 0 {
