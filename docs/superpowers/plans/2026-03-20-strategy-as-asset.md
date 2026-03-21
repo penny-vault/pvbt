@@ -29,6 +29,9 @@
 | `portfolio/batch.go` | Modify | Skip `$CASH` in `RebalanceTo` |
 | `portfolio/account.go` | Modify | Skip `$CASH` in `RebalanceTo` |
 | `engine/exports_test.go` | Modify | Test exports for discoverChildren |
+| `docs/engine.md` | Modify | Document meta-strategies, ChildAllocations, ChildPortfolios |
+| `docs/strategy-guide.md` | Modify | Add meta-strategy authoring guide |
+| `CHANGELOG.md` | Modify | Add changelog entry |
 
 ---
 
@@ -826,7 +829,38 @@ git commit -m "feat: support child strategies in PredictedPortfolio"
 
 ---
 
-### Task 11: Lint and final verification
+### Task 11: Documentation and changelog
+
+**Files:**
+- Modify: `docs/engine.md`
+- Modify: `docs/strategy-guide.md`
+- Modify: `CHANGELOG.md`
+
+- [ ] **Step 1: Update docs/engine.md**
+
+- Add `ChildAllocations()` and `ChildPortfolios()` to the "Engine methods for strategy authors" section.
+- Add a "Meta-strategies" section explaining child strategy fields, `weight` tags, and the execution model (children before parent).
+- Document the `$CASH` sentinel behavior.
+
+- [ ] **Step 2: Update docs/strategy-guide.md**
+
+- Add a "Meta-strategies" section after "Engine configuration" showing the full pattern: declaring children with `weight`/`preset`/`params` tags, calling `ChildAllocations()` in Compute, and using `ChildPortfolios()` for dynamic decisions.
+- Include the worked example from the spec (10% ADM, 40% BAA, 50% DAA).
+
+- [ ] **Step 3: Update CHANGELOG.md**
+
+Add entry to the Unreleased section under Added. Use a complete sentence with a subject, active voice, combining related items into one bullet.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add docs/engine.md docs/strategy-guide.md CHANGELOG.md
+git commit -m "docs: document meta-strategy support and child allocations"
+```
+
+---
+
+### Task 12: Lint and final verification
 
 - [ ] **Step 1: Run linter**
 
