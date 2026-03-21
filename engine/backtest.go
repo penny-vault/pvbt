@@ -198,9 +198,6 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// PHASE 3: STEP LOOP
 
-	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
-	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
-
 	for stepIdx, step := range steps {
 		// 10. Check context cancellation.
 		if err := ctx.Err(); err != nil {
@@ -222,58 +219,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
-		// 13. Fetch housekeeping data for held assets.
-		var heldAssets []asset.Asset
-
-		acct.Holdings(func(a asset.Asset, _ float64) {
-			heldAssets = append(heldAssets, a)
-		})
-
-		var housekeepAssets []asset.Asset
-
-		housekeepAssets = append(housekeepAssets, heldAssets...)
-		if e.benchmark != (asset.Asset{}) {
-			housekeepAssets = append(housekeepAssets, e.benchmark)
-		}
-
-		var housekeepDF *data.DataFrame
-
-		if len(housekeepAssets) > 0 {
-			var fetchErr error
-
-			housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
-			if fetchErr != nil {
-				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
-			}
-		}
-
-		// 14. Record dividends for held assets.
-		if housekeepDF != nil {
-			for _, heldAsset := range heldAssets {
-				qty := acct.Position(heldAsset)
-				if qty <= 0 {
-					continue
-				}
-
-				divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
-				if !math.IsNaN(divPerShare) && divPerShare > 0 {
-					acct.Record(portfolio.Transaction{
-						Date:   date,
-						Asset:  heldAsset,
-						Type:   portfolio.DividendTransaction,
-						Amount: divPerShare * qty,
-						Qty:    qty,
-						Price:  divPerShare,
-					})
-				}
-			}
-		}
-
-		// 14b. Drain fills from previous step.
-		if acct.HasBroker() {
-			if err := acct.DrainFills(stepCtx); err != nil {
-				return nil, fmt.Errorf("engine: drain fills on %v: %w", date, err)
-			}
+		// 13-14b. Housekeep parent account (dividends + fill draining).
+		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, err
 		}
 
 		// 15-16. Run strategy only on strategy-schedule dates.
@@ -301,49 +249,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			}
 		}
 
-		// 17. Build price DataFrame for all held assets (including any
-		// newly acquired positions from Compute).
-		var priceAssets []asset.Asset
-
-		acct.Holdings(func(a asset.Asset, _ float64) {
-			priceAssets = append(priceAssets, a)
-		})
-
-		if e.benchmark != (asset.Asset{}) {
-			priceAssets = append(priceAssets, e.benchmark)
-		}
-
-		// Convert DGS3MO yield to cumulative risk-free value.
-		if e.riskFreeResolved {
-			rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, date, []data.Metric{data.MetricClose})
-			if rfFetchErr == nil {
-				yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
-				if !math.IsNaN(yield) && yield > 0 {
-					e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
-				} else if e.riskFreeCumulative == 0 {
-					e.riskFreeCumulative = 100.0
-				}
-			}
-		}
-
-		acct.SetRiskFreeValue(e.riskFreeCumulative)
-
-		if len(priceAssets) > 0 {
-			priceDF, err := e.FetchAt(stepCtx, priceAssets, date, priceMetrics)
-			if err != nil {
-				return nil, fmt.Errorf("engine: price fetch on %v: %w", date, err)
-			}
-
-			// 18. Record equity.
-			acct.UpdatePrices(priceDF)
-		} else {
-			// No assets to price -- record cash-only portfolio value.
-			cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
-			if cashErr != nil {
-				return nil, fmt.Errorf("engine: cash-only DataFrame on %v: %w", date, cashErr)
-			}
-
-			acct.UpdatePrices(cashDF)
+		// 17-18. Update parent account prices.
+		if err := e.updateAccountPrices(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, err
 		}
 
 		// 18b. Compute registered metrics only on strategy dates.
@@ -357,4 +265,120 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// PHASE 4: RETURN
 	return acct, nil
+}
+
+// housekeepAccount records dividends for held assets and drains broker fills
+// for the given account on date. benchmark controls whether the benchmark asset
+// is included in the housekeeping data fetch; pass asset.Asset{} for child
+// accounts that have no benchmark.
+func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+
+	var heldAssets []asset.Asset
+
+	acct.Holdings(func(a asset.Asset, _ float64) {
+		heldAssets = append(heldAssets, a)
+	})
+
+	var housekeepAssets []asset.Asset
+
+	housekeepAssets = append(housekeepAssets, heldAssets...)
+	if benchmark != (asset.Asset{}) {
+		housekeepAssets = append(housekeepAssets, benchmark)
+	}
+
+	var housekeepDF *data.DataFrame
+
+	if len(housekeepAssets) > 0 {
+		var fetchErr error
+
+		housekeepDF, fetchErr = eng.Fetch(ctx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
+		if fetchErr != nil {
+			return fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
+		}
+	}
+
+	// Record dividends for held assets.
+	if housekeepDF != nil {
+		for _, heldAsset := range heldAssets {
+			qty := acct.Position(heldAsset)
+			if qty <= 0 {
+				continue
+			}
+
+			divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
+			if !math.IsNaN(divPerShare) && divPerShare > 0 {
+				acct.Record(portfolio.Transaction{
+					Date:   date,
+					Asset:  heldAsset,
+					Type:   portfolio.DividendTransaction,
+					Amount: divPerShare * qty,
+					Qty:    qty,
+					Price:  divPerShare,
+				})
+			}
+		}
+	}
+
+	// Drain fills from previous step.
+	if acct.HasBroker() {
+		if drainErr := acct.DrainFills(ctx); drainErr != nil {
+			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
+		}
+	}
+
+	return nil
+}
+
+// updateAccountPrices fetches current prices and updates equity for the given
+// account on date. benchmark controls whether the benchmark asset is included
+// in the price fetch; pass asset.Asset{} for child accounts. The risk-free
+// rate logic (DGS3MO yield to cumulative conversion) only runs when benchmark
+// is non-zero, matching the behavior of the parent account.
+func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
+
+	var priceAssets []asset.Asset
+
+	acct.Holdings(func(a asset.Asset, _ float64) {
+		priceAssets = append(priceAssets, a)
+	})
+
+	if benchmark != (asset.Asset{}) {
+		priceAssets = append(priceAssets, benchmark)
+	}
+
+	// Convert DGS3MO yield to cumulative risk-free value (parent account only).
+	if benchmark != (asset.Asset{}) && eng.riskFreeResolved {
+		rfDF, rfFetchErr := eng.FetchAt(ctx, []asset.Asset{eng.riskFreeAssetDGS}, date, []data.Metric{data.MetricClose})
+		if rfFetchErr == nil {
+			yield := rfDF.Value(eng.riskFreeAssetDGS, data.MetricClose)
+			if !math.IsNaN(yield) && yield > 0 {
+				eng.riskFreeCumulative = portfolio.YieldToCumulative(yield, eng.riskFreeCumulative)
+			} else if eng.riskFreeCumulative == 0 {
+				eng.riskFreeCumulative = 100.0
+			}
+		}
+	}
+
+	acct.SetRiskFreeValue(eng.riskFreeCumulative)
+
+	if len(priceAssets) > 0 {
+		priceDF, fetchErr := eng.FetchAt(ctx, priceAssets, date, priceMetrics)
+		if fetchErr != nil {
+			return fmt.Errorf("engine: price fetch on %v: %w", date, fetchErr)
+		}
+
+		acct.UpdatePrices(priceDF)
+	} else {
+		// No assets to price -- record cash-only portfolio value.
+		cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
+		if cashErr != nil {
+			return fmt.Errorf("engine: cash-only DataFrame on %v: %w", date, cashErr)
+		}
+
+		acct.UpdatePrices(cashDF)
+	}
+
+	return nil
 }
