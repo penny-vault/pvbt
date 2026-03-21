@@ -597,9 +597,17 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 }
 
 // Close releases all resources held by the engine, including closing
-// all registered data providers.
+// the broker and all registered data providers.
 func (e *Engine) Close() error {
 	var firstErr error
+
+	// Close the broker.
+	if e.broker != nil {
+		if err := e.broker.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+
 	for _, p := range e.providers {
 		if err := p.Close(); err != nil && firstErr == nil {
 			firstErr = err
