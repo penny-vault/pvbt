@@ -20,11 +20,12 @@ const (
 
 // TastytradeBroker implements broker.Broker for the tastytrade brokerage.
 type TastytradeBroker struct {
-	client   *apiClient
-	streamer *fillStreamer
-	fills    chan broker.Fill
-	sandbox  bool
-	mu       sync.Mutex
+	client          *apiClient
+	streamer        *fillStreamer
+	fills           chan broker.Fill
+	sandbox         bool
+	complexOrderIDs map[string]string // maps child order ID -> complex order ID
+	mu              sync.Mutex
 }
 
 // Option configures a TastytradeBroker.
@@ -40,7 +41,8 @@ func WithSandbox() Option {
 // New creates a new TastytradeBroker with the given options.
 func New(opts ...Option) *TastytradeBroker {
 	ttBroker := &TastytradeBroker{
-		fills: make(chan broker.Fill, fillChannelSize),
+		fills:           make(chan broker.Fill, fillChannelSize),
+		complexOrderIDs: make(map[string]string),
 	}
 
 	for _, opt := range opts {
@@ -125,6 +127,14 @@ func (ttBroker *TastytradeBroker) Submit(ctx context.Context, order broker.Order
 }
 
 func (ttBroker *TastytradeBroker) Cancel(ctx context.Context, orderID string) error {
+	ttBroker.mu.Lock()
+	complexID, isComplex := ttBroker.complexOrderIDs[orderID]
+	ttBroker.mu.Unlock()
+
+	if isComplex {
+		return ttBroker.client.cancelComplexOrder(ctx, complexID)
+	}
+
 	return ttBroker.client.cancelOrder(ctx, orderID)
 }
 
@@ -138,6 +148,14 @@ func (ttBroker *TastytradeBroker) Orders(ctx context.Context) ([]broker.Order, e
 	if err != nil {
 		return nil, fmt.Errorf("tastytrade: get orders: %w", err)
 	}
+
+	ttBroker.mu.Lock()
+	for _, resp := range responses {
+		if resp.ComplexOrderID != "" {
+			ttBroker.complexOrderIDs[resp.ID] = resp.ComplexOrderID
+		}
+	}
+	ttBroker.mu.Unlock()
 
 	orders := make([]broker.Order, len(responses))
 	for idx, resp := range responses {
@@ -168,4 +186,92 @@ func (ttBroker *TastytradeBroker) Balance(ctx context.Context) (broker.Balance, 
 	}
 
 	return toBrokerBalance(resp), nil
+}
+
+// SubmitGroup submits a group of orders as a native complex order (OCO or OTOCO).
+func (ttBroker *TastytradeBroker) SubmitGroup(ctx context.Context, orders []broker.Order, groupType broker.GroupType) error {
+	if len(orders) == 0 {
+		return ErrEmptyOrderGroup
+	}
+
+	ttBroker.mu.Lock()
+	defer ttBroker.mu.Unlock()
+
+	switch groupType {
+	case broker.GroupOCO:
+		return ttBroker.submitOCO(ctx, orders)
+	case broker.GroupBracket:
+		return ttBroker.submitOTOCO(ctx, orders)
+	default:
+		return fmt.Errorf("tastytrade: unsupported group type %d", groupType)
+	}
+}
+
+func (ttBroker *TastytradeBroker) submitOCO(ctx context.Context, orders []broker.Order) error {
+	ttOrders := make([]orderRequest, len(orders))
+	for idx, order := range orders {
+		ttOrders[idx] = toTastytradeOrder(order)
+	}
+
+	req := complexOrderRequest{
+		Type:   "OCO",
+		Orders: ttOrders,
+	}
+
+	result, err := ttBroker.client.submitComplexOrder(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	ttBroker.mapComplexOrderIDs(result)
+
+	return nil
+}
+
+func (ttBroker *TastytradeBroker) submitOTOCO(ctx context.Context, orders []broker.Order) error {
+	var (
+		triggerOrder     *orderRequest
+		contingentOrders []orderRequest
+	)
+
+	for _, order := range orders {
+		ttOrder := toTastytradeOrder(order)
+		if order.GroupRole == broker.RoleEntry {
+			if triggerOrder != nil {
+				return ErrMultipleEntryOrders
+			}
+
+			triggerOrder = &ttOrder
+		} else {
+			contingentOrders = append(contingentOrders, ttOrder)
+		}
+	}
+
+	if triggerOrder == nil {
+		return ErrNoEntryOrder
+	}
+
+	req := complexOrderRequest{
+		Type:         "OTOCO",
+		TriggerOrder: triggerOrder,
+		Orders:       contingentOrders,
+	}
+
+	result, err := ttBroker.client.submitComplexOrder(ctx, req)
+	if err != nil {
+		return err
+	}
+
+	ttBroker.mapComplexOrderIDs(result)
+
+	return nil
+}
+
+func (ttBroker *TastytradeBroker) mapComplexOrderIDs(result complexOrderSubmitResponse) {
+	complexID := result.Data.ComplexOrder.ID
+	for _, childOrder := range result.Data.ComplexOrder.Orders {
+		if childOrder.ID != "" {
+			ttBroker.complexOrderIDs[childOrder.ID] = complexID
+		}
+	}
 }

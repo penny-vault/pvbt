@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -150,7 +151,9 @@ func (client *apiClient) replaceOrder(ctx context.Context, orderID string, order
 	return nil
 }
 
-// getOrders retrieves all orders for the account.
+// getOrders retrieves all orders for the account. The account-level
+// orders endpoint does not support offset pagination; it returns all
+// matching results in a single response.
 func (client *apiClient) getOrders(ctx context.Context) ([]orderResponse, error) {
 	endpoint := fmt.Sprintf("/accounts/%s/orders", client.accountID)
 
@@ -169,6 +172,46 @@ func (client *apiClient) getOrders(ctx context.Context) ([]orderResponse, error)
 	}
 
 	return result.Data.Items, nil
+}
+
+// submitComplexOrder sends an OCO or OTOCO complex order.
+func (client *apiClient) submitComplexOrder(ctx context.Context, order complexOrderRequest) (complexOrderSubmitResponse, error) {
+	endpoint := fmt.Sprintf("/accounts/%s/complex-orders", client.accountID)
+
+	var result complexOrderSubmitResponse
+
+	resp, err := client.resty.R().
+		SetContext(ctx).
+		SetBody(order).
+		SetResult(&result).
+		Post(endpoint)
+	if err != nil {
+		return complexOrderSubmitResponse{}, fmt.Errorf("submit complex order: %w", err)
+	}
+
+	if resp.IsError() {
+		return complexOrderSubmitResponse{}, NewHTTPError(resp.StatusCode(), resp.String())
+	}
+
+	return result, nil
+}
+
+// cancelComplexOrder deletes an existing complex order by its complex-order ID.
+func (client *apiClient) cancelComplexOrder(ctx context.Context, complexOrderID string) error {
+	endpoint := fmt.Sprintf("/accounts/%s/complex-orders/%s", client.accountID, complexOrderID)
+
+	resp, err := client.resty.R().
+		SetContext(ctx).
+		Delete(endpoint)
+	if err != nil {
+		return fmt.Errorf("cancel complex order: %w", err)
+	}
+
+	if resp.IsError() {
+		return NewHTTPError(resp.StatusCode(), resp.String())
+	}
+
+	return nil
 }
 
 // getPositions retrieves all positions for the account.
@@ -219,9 +262,19 @@ func (client *apiClient) getBalance(ctx context.Context) (balanceResponse, error
 	return envelope.Data, nil
 }
 
+// sessionToken returns the current session token.
+func (client *apiClient) sessionToken() string {
+	return client.resty.Token
+}
+
+// account returns the account ID.
+func (client *apiClient) account() string {
+	return client.accountID
+}
+
 // getQuote retrieves the last price for a symbol.
 func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, error) {
-	endpoint := fmt.Sprintf("/market-data/%s/quotes", symbol)
+	endpoint := "/market-data/by-type?equity=" + url.QueryEscape(symbol)
 
 	var result quoteResponse
 

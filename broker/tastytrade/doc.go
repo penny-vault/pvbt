@@ -50,4 +50,12 @@
 // All four broker.OrderType values are supported: Market, Limit, Stop,
 // and StopLimit. Dollar-amount orders (Qty=0, Amount>0) are converted
 // to share quantities by fetching a real-time quote.
+//
+// # Order Groups
+//
+// TastytradeBroker implements broker.GroupSubmitter for native OCO and
+// bracket (OTOCO) order support. OCO pairs are submitted atomically
+// via tastytrade's complex-orders endpoint. Bracket orders map the
+// entry to a trigger order and the stop-loss/take-profit legs to
+// contingent orders.
 package tastytrade

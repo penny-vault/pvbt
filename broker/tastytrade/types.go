@@ -1,7 +1,8 @@
 package tastytrade
 
 import (
-	"time"
+	"encoding/json"
+	"strconv"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
@@ -38,11 +39,13 @@ type accountItem struct {
 }
 
 type orderRequest struct {
-	TimeInForce string     `json:"time-in-force"`
-	OrderType   string     `json:"order-type"`
-	Price       float64    `json:"price,omitempty"`
-	StopTrigger float64    `json:"stop-trigger,omitempty"`
-	Legs        []orderLeg `json:"legs"`
+	TimeInForce     string     `json:"time-in-force"`
+	OrderType       string     `json:"order-type"`
+	Price           float64    `json:"price,omitempty"`
+	PriceEffect     string     `json:"price-effect,omitempty"`
+	StopTrigger     float64    `json:"stop-trigger,omitempty"`
+	AutomatedSource bool       `json:"automated-source"`
+	Legs            []orderLeg `json:"legs"`
 }
 
 type orderLeg struct {
@@ -66,21 +69,51 @@ type ordersListResponse struct {
 	} `json:"data"`
 }
 
+type complexOrderRequest struct {
+	Type         string         `json:"type"`
+	TriggerOrder *orderRequest  `json:"trigger-order,omitempty"`
+	Orders       []orderRequest `json:"orders"`
+}
+
+type complexOrderSubmitResponse struct {
+	Data struct {
+		ComplexOrder struct {
+			ID     string          `json:"id"`
+			Orders []orderResponse `json:"orders"`
+		} `json:"complex-order"`
+	} `json:"data"`
+}
+
 type orderResponse struct {
-	ID          string             `json:"id"`
-	Status      string             `json:"status"`
-	OrderType   string             `json:"order-type"`
-	TimeInForce string             `json:"time-in-force"`
-	Price       float64            `json:"price"`
-	StopTrigger float64            `json:"stop-trigger"`
-	Legs        []orderLegResponse `json:"legs"`
+	ID             string             `json:"id"`
+	Status         string             `json:"status"`
+	OrderType      string             `json:"order-type"`
+	TimeInForce    string             `json:"time-in-force"`
+	Price          float64            `json:"price"`
+	StopTrigger    float64            `json:"stop-trigger"`
+	ComplexOrderID string             `json:"complex-order-id"`
+	Legs           []orderLegResponse `json:"legs"`
 }
 
 type orderLegResponse struct {
-	Symbol         string  `json:"symbol"`
-	InstrumentType string  `json:"instrument-type"`
-	Action         string  `json:"action"`
-	Quantity       float64 `json:"quantity"`
+	Symbol         string            `json:"symbol"`
+	InstrumentType string            `json:"instrument-type"`
+	Action         string            `json:"action"`
+	Quantity       float64           `json:"quantity"`
+	Fills          []legFillResponse `json:"fills"`
+}
+
+type legFillResponse struct {
+	FillID   string  `json:"fill-id"`
+	Price    float64 `json:"fill-price"`
+	Quantity string  `json:"quantity"`
+	FilledAt string  `json:"filled-at"`
+}
+
+type streamerMessage struct {
+	Type      string          `json:"type"`
+	Data      json.RawMessage `json:"data"`
+	Timestamp int64           `json:"timestamp"`
 }
 
 type positionsListResponse struct {
@@ -117,22 +150,16 @@ type quoteItem struct {
 	LastPrice float64 `json:"last"`
 }
 
-type fillEvent struct {
-	OrderID  string    `json:"order-id"`
-	FillID   string    `json:"fill-id"`
-	Price    float64   `json:"price"`
-	Quantity float64   `json:"quantity"`
-	FilledAt time.Time `json:"filled-at"`
-}
-
 // --- Translation functions ---
 
 func toTastytradeOrder(order broker.Order) orderRequest {
 	return orderRequest{
-		TimeInForce: mapTimeInForce(order.TimeInForce),
-		OrderType:   mapOrderType(order.OrderType),
-		Price:       order.LimitPrice,
-		StopTrigger: order.StopPrice,
+		TimeInForce:     mapTimeInForce(order.TimeInForce),
+		OrderType:       mapOrderType(order.OrderType),
+		Price:           order.LimitPrice,
+		PriceEffect:     mapPriceEffect(order.Side, order.OrderType),
+		StopTrigger:     order.StopPrice,
+		AutomatedSource: true,
 		Legs: []orderLeg{
 			{
 				InstrumentType: "Equity",
@@ -182,16 +209,31 @@ func toBrokerBalance(resp balanceResponse) broker.Balance {
 	}
 }
 
-func toBrokerFill(event fillEvent) broker.Fill {
-	return broker.Fill{
-		OrderID:  event.OrderID,
-		Price:    event.Price,
-		Qty:      event.Quantity,
-		FilledAt: event.FilledAt,
+func parseLegFillQuantity(quantity string) float64 {
+	value, err := strconv.ParseFloat(quantity, 64)
+	if err != nil {
+		return 0
 	}
+
+	return value
 }
 
 // --- Mapping helpers ---
+
+func mapPriceEffect(side broker.Side, orderType broker.OrderType) string {
+	if orderType == broker.Market {
+		return ""
+	}
+
+	switch side {
+	case broker.Buy:
+		return "Debit"
+	case broker.Sell:
+		return "Credit"
+	default:
+		return "Debit"
+	}
+}
 
 func mapSide(side broker.Side) string {
 	switch side {
@@ -238,13 +280,13 @@ func mapTimeInForce(tif broker.TimeInForce) string {
 
 func mapTTStatus(status string) broker.OrderStatus {
 	switch status {
-	case "Received", "Routed", "In Flight":
+	case "Received", "Routed", "In Flight", "Contingent":
 		return broker.OrderSubmitted
 	case "Live":
 		return broker.OrderOpen
 	case "Filled":
 		return broker.OrderFilled
-	case "Cancelled", "Expired", "Rejected":
+	case "Cancelled", "Expired", "Rejected", "Removed", "Partially Removed":
 		return broker.OrderCancelled
 	default:
 		return broker.OrderOpen

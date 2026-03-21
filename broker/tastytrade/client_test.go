@@ -280,6 +280,7 @@ var _ = Describe("apiClient", func() {
 			Expect(orders[1].Status).To(Equal("Filled"))
 			Expect(orders[1].Price).To(Equal(100.0))
 		})
+
 	})
 
 	Describe("Positions", func() {
@@ -338,9 +339,11 @@ var _ = Describe("apiClient", func() {
 	})
 
 	Describe("Quotes", func() {
-		It("retrieves the last price for a symbol", func() {
+		It("retrieves the last price using the by-type endpoint", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /market-data/TSLA/quotes", func(writer http.ResponseWriter, req *http.Request) {
+				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
+					Expect(req.URL.Query().Get("equity")).To(Equal("TSLA"))
+
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{

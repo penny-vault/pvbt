@@ -45,6 +45,25 @@ func newFillStreamer(client *apiClient, fills chan broker.Fill, wsURL string) *f
 	}
 }
 
+// sendConnect sends the required connect action to the WebSocket server.
+func (streamer *fillStreamer) sendConnect() error {
+	msg := map[string]any{
+		"action":     "connect",
+		"value":      []string{streamer.client.account()},
+		"auth-token": streamer.client.sessionToken(),
+	}
+
+	streamer.mu.Lock()
+	conn := streamer.wsConn
+	streamer.mu.Unlock()
+
+	if conn == nil {
+		return ErrStreamDisconnected
+	}
+
+	return conn.WriteJSON(msg)
+}
+
 // connect dials the WebSocket and starts the background read loop.
 func (streamer *fillStreamer) connect(ctx context.Context) error {
 	streamer.ctx = ctx
@@ -57,6 +76,10 @@ func (streamer *fillStreamer) connect(ctx context.Context) error {
 	streamer.mu.Lock()
 	streamer.wsConn = conn
 	streamer.mu.Unlock()
+
+	if connectErr := streamer.sendConnect(); connectErr != nil {
+		return fmt.Errorf("fill streamer send connect: %w", connectErr)
+	}
 
 	streamer.wg.Add(1)
 
@@ -107,6 +130,9 @@ func (streamer *fillStreamer) run() {
 
 	messages := make(chan wsMessage, 16)
 
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
+
 	streamer.mu.Lock()
 	conn := streamer.wsConn
 	streamer.mu.Unlock()
@@ -117,13 +143,25 @@ func (streamer *fillStreamer) run() {
 		select {
 		case <-streamer.done:
 			return
-
 		case <-streamer.ctx.Done():
 			return
+		case <-heartbeat.C:
+			streamer.mu.Lock()
+			currentConn := streamer.wsConn
+			streamer.mu.Unlock()
 
+			if currentConn != nil {
+				heartbeatMsg := map[string]string{
+					"action":     "heartbeat",
+					"auth-token": streamer.client.sessionToken(),
+				}
+
+				if writeErr := currentConn.WriteJSON(heartbeatMsg); writeErr != nil {
+					continue
+				}
+			}
 		case msg := <-messages:
 			if msg.err != nil {
-				// Check if we are shutting down before attempting reconnect.
 				select {
 				case <-streamer.done:
 					return
@@ -132,12 +170,10 @@ func (streamer *fillStreamer) run() {
 				default:
 				}
 
-				// Connection error -- attempt reconnect.
 				if reconnectErr := streamer.reconnect(streamer.ctx); reconnectErr != nil {
 					return
 				}
 
-				// Start a new readPump for the new connection.
 				streamer.mu.Lock()
 				conn = streamer.wsConn
 				streamer.mu.Unlock()
@@ -153,32 +189,55 @@ func (streamer *fillStreamer) run() {
 	}
 }
 
-// handleMessage parses a WebSocket message as a fillEvent and delivers it.
+// handleMessage parses a WebSocket message as a streamer envelope and delivers fills.
 func (streamer *fillStreamer) handleMessage(data []byte) {
-	var event fillEvent
-	if unmarshalErr := json.Unmarshal(data, &event); unmarshalErr != nil {
+	var msg streamerMessage
+	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
 
-	// Deduplicate by FillID.
-	streamer.mu.Lock()
-
-	_, alreadySeen := streamer.seenFills[event.FillID]
-	if !alreadySeen {
-		streamer.seenFills[event.FillID] = time.Now()
-	}
-	streamer.mu.Unlock()
-
-	if alreadySeen {
+	if msg.Type != "Order" {
 		return
 	}
 
-	fill := toBrokerFill(event)
+	var order orderResponse
+	if unmarshalErr := json.Unmarshal(msg.Data, &order); unmarshalErr != nil {
+		return
+	}
 
-	select {
-	case streamer.fills <- fill:
-	case <-streamer.done:
-	case <-streamer.ctx.Done():
+	for _, leg := range order.Legs {
+		for _, legFill := range leg.Fills {
+			streamer.mu.Lock()
+
+			_, alreadySeen := streamer.seenFills[legFill.FillID]
+			if !alreadySeen {
+				streamer.seenFills[legFill.FillID] = time.Now()
+			}
+			streamer.mu.Unlock()
+
+			if alreadySeen {
+				continue
+			}
+
+			filledAt, parseErr := time.Parse(time.RFC3339, legFill.FilledAt)
+			if parseErr != nil {
+				continue
+			}
+
+			fill := broker.Fill{
+				OrderID:  order.ID,
+				Price:    legFill.Price,
+				Qty:      parseLegFillQuantity(legFill.Quantity),
+				FilledAt: filledAt,
+			}
+			select {
+			case streamer.fills <- fill:
+			case <-streamer.done:
+				return
+			case <-streamer.ctx.Done():
+				return
+			}
+		}
 	}
 }
 
@@ -227,6 +286,10 @@ func (streamer *fillStreamer) reconnect(ctx context.Context) error {
 		streamer.wsConn = conn
 		streamer.mu.Unlock()
 
+		if connectErr := streamer.sendConnect(); connectErr != nil {
+			continue
+		}
+
 		streamer.pollMissedFills(ctx)
 
 		return nil
@@ -247,29 +310,39 @@ func (streamer *fillStreamer) pollMissedFills(ctx context.Context) {
 			continue
 		}
 
-		streamer.mu.Lock()
+		for _, leg := range order.Legs {
+			for _, legFill := range leg.Fills {
+				streamer.mu.Lock()
 
-		_, alreadySeen := streamer.seenFills[order.ID]
-		if !alreadySeen {
-			streamer.seenFills[order.ID] = time.Now()
-		}
-		streamer.mu.Unlock()
+				_, alreadySeen := streamer.seenFills[legFill.FillID]
+				if !alreadySeen {
+					streamer.seenFills[legFill.FillID] = time.Now()
+				}
+				streamer.mu.Unlock()
 
-		if alreadySeen {
-			continue
-		}
+				if alreadySeen {
+					continue
+				}
 
-		fill := broker.Fill{
-			OrderID: order.ID,
-			Price:   order.Price,
-		}
+				filledAt, parseErr := time.Parse(time.RFC3339, legFill.FilledAt)
+				if parseErr != nil {
+					continue
+				}
 
-		select {
-		case streamer.fills <- fill:
-		case <-streamer.done:
-			return
-		case <-ctx.Done():
-			return
+				fill := broker.Fill{
+					OrderID:  order.ID,
+					Price:    legFill.Price,
+					Qty:      parseLegFillQuantity(legFill.Quantity),
+					FilledAt: filledAt,
+				}
+				select {
+				case streamer.fills <- fill:
+				case <-streamer.done:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
 	}
 }

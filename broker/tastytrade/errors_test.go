@@ -20,6 +20,9 @@ var _ = Describe("Errors", func() {
 			Expect(tastytrade.ErrAccountNotFound).To(MatchError("tastytrade: no accounts found"))
 			Expect(tastytrade.ErrOrderRejected).To(MatchError("tastytrade: order rejected"))
 			Expect(tastytrade.ErrStreamDisconnected).To(MatchError("tastytrade: WebSocket disconnected"))
+			Expect(tastytrade.ErrEmptyOrderGroup).To(MatchError("tastytrade: SubmitGroup called with no orders"))
+			Expect(tastytrade.ErrNoEntryOrder).To(MatchError("tastytrade: OTOCO group has no entry order"))
+			Expect(tastytrade.ErrMultipleEntryOrders).To(MatchError("tastytrade: OTOCO group has multiple entry orders"))
 		})
 	})
 

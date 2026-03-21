@@ -1820,7 +1820,9 @@ func (a *Account) CancelOpenOrders(ctx context.Context) error {
 
 		// Best-effort cancel: order may have already been filled by the broker
 		// (e.g. market orders fill immediately in SimulatedBroker.Submit).
-		_ = a.broker.Cancel(ctx, orderID) //nolint:errcheck // intentional best-effort; fill races are expected
+		if cancelErr := a.broker.Cancel(ctx, orderID); cancelErr != nil {
+			_ = cancelErr
+		}
 	}
 
 	a.pendingOrders = survivingOrders

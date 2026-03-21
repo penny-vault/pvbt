@@ -9,6 +9,12 @@ import (
 // APIClientForTestType is an exported alias so the _test package can name the type.
 type APIClientForTestType = apiClient
 
+// ComplexOrderRequest is an exported alias for complexOrderRequest, used in tests.
+type ComplexOrderRequest = complexOrderRequest
+
+// ComplexOrderSubmitResponse is an exported alias for complexOrderSubmitResponse, used in tests.
+type ComplexOrderSubmitResponse = complexOrderSubmitResponse
+
 // OrderRequest is an exported alias for orderRequest, used in tests.
 type OrderRequest = orderRequest
 
@@ -63,9 +69,29 @@ func (client *apiClient) GetQuote(ctx context.Context, symbol string) (float64, 
 	return client.getQuote(ctx, symbol)
 }
 
+// SubmitComplexOrder exposes submitComplexOrder for testing.
+func (client *apiClient) SubmitComplexOrder(ctx context.Context, order complexOrderRequest) (complexOrderSubmitResponse, error) {
+	return client.submitComplexOrder(ctx, order)
+}
+
+// CancelComplexOrder exposes cancelComplexOrder for testing.
+func (client *apiClient) CancelComplexOrder(ctx context.Context, complexOrderID string) error {
+	return client.cancelComplexOrder(ctx, complexOrderID)
+}
+
 // AccountID returns the client's account ID for test assertions.
 func (client *apiClient) AccountID() string {
 	return client.accountID
+}
+
+// SessionToken exposes sessionToken for testing.
+func (client *apiClient) SessionToken() string {
+	return client.sessionToken()
+}
+
+// Account exposes account for testing.
+func (client *apiClient) Account() string {
+	return client.account()
 }
 
 // --- Fill streamer test exports ---
@@ -73,8 +99,11 @@ func (client *apiClient) AccountID() string {
 // FillStreamerForTestType is an exported alias so the _test package can name the type.
 type FillStreamerForTestType = fillStreamer
 
-// FillEvent is an exported alias for fillEvent, used in tests.
-type FillEvent = fillEvent
+// LegFillResponse is an exported alias for legFillResponse, used in tests.
+type LegFillResponse = legFillResponse
+
+// StreamerMessage is an exported alias for streamerMessage, used in tests.
+type StreamerMessage = streamerMessage
 
 // NewFillStreamerForTest creates a fillStreamer for testing.
 func NewFillStreamerForTest(client *apiClient, fills chan broker.Fill, wsURL string) *fillStreamer {

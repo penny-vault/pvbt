@@ -16,8 +16,9 @@ import (
 	"github.com/penny-vault/pvbt/broker/tastytrade"
 )
 
-// Compile-time interface check.
+// Compile-time interface checks.
 var _ broker.Broker = (*tastytrade.TastytradeBroker)(nil)
+var _ broker.GroupSubmitter = (*tastytrade.TastytradeBroker)(nil)
 
 var _ = Describe("TastytradeBroker", func() {
 	var (
@@ -155,7 +156,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var submittedQty float64
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /market-data/TSLA/quotes", func(writer http.ResponseWriter, req *http.Request) {
+				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
@@ -206,7 +207,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var submitCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /market-data/BRK.A/quotes", func(writer http.ResponseWriter, req *http.Request) {
+				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
@@ -254,6 +255,41 @@ var _ = Describe("TastytradeBroker", func() {
 			err := ttBroker.Cancel(ctx, "ORD-CANCEL-1")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(cancelCalled.Load()).To(Equal(int32(1)))
+		})
+
+		It("cancels via complex-orders endpoint when order is part of a complex group", func() {
+			var complexCancelCalled atomic.Int32
+
+			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
+					writer.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(writer).Encode(map[string]any{
+						"data": map[string]any{
+							"complex-order": map[string]any{
+								"id": "CX-99",
+								"orders": []map[string]any{
+									{"id": "OCO-LEG-A", "status": "Live"},
+									{"id": "OCO-LEG-B", "status": "Contingent"},
+								},
+							},
+						},
+					})
+				})
+				mux.HandleFunc("DELETE /accounts/ACCT-001/complex-orders/CX-99", func(writer http.ResponseWriter, req *http.Request) {
+					complexCancelCalled.Add(1)
+					writer.WriteHeader(http.StatusOK)
+				})
+			})
+
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Buy, Qty: 10, OrderType: broker.Limit, LimitPrice: 150.0, TimeInForce: broker.Day},
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Sell, Qty: 10, OrderType: broker.Limit, LimitPrice: 160.0, TimeInForce: broker.GTC},
+			}, broker.GroupOCO)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ttBroker.Cancel(ctx, "OCO-LEG-A")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(complexCancelCalled.Load()).To(Equal(int32(1)))
 		})
 	})
 
@@ -317,6 +353,145 @@ var _ = Describe("TastytradeBroker", func() {
 			Expect(orders[0].Asset.Ticker).To(Equal("GOOG"))
 			Expect(orders[0].Qty).To(Equal(15.0))
 			Expect(orders[0].Status).To(Equal(broker.OrderOpen))
+		})
+
+		It("populates complexOrderIDs from REST response", func() {
+			var complexCancelCalled atomic.Int32
+
+			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				mux.HandleFunc("GET /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
+					writer.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(writer).Encode(map[string]any{
+						"data": map[string]any{
+							"items": []map[string]any{
+								{
+									"id":               "OCO-REST-A",
+									"status":           "Live",
+									"order-type":       "Limit",
+									"time-in-force":    "Day",
+									"complex-order-id": "CPLX-REST-1",
+									"legs": []map[string]any{
+										{
+											"symbol":          "SPY",
+											"instrument-type": "Equity",
+											"action":          "Sell to Close",
+											"quantity":        5,
+										},
+									},
+								},
+							},
+						},
+					})
+				})
+				mux.HandleFunc("DELETE /accounts/ACCT-001/complex-orders/CPLX-REST-1", func(writer http.ResponseWriter, req *http.Request) {
+					complexCancelCalled.Add(1)
+					writer.WriteHeader(http.StatusOK)
+				})
+			})
+
+			_, err := ttBroker.Orders(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = ttBroker.Cancel(ctx, "OCO-REST-A")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(complexCancelCalled.Load()).To(Equal(int32(1)))
+		})
+	})
+
+	Describe("SubmitGroup", Label("orders"), func() {
+		It("submits an OCO complex order and maps child order IDs", func() {
+			var receivedBody map[string]any
+			var complexCancelCalled atomic.Int32
+
+			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
+					json.NewDecoder(req.Body).Decode(&receivedBody)
+					writer.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(writer).Encode(map[string]any{
+						"data": map[string]any{
+							"complex-order": map[string]any{
+								"id": "COMPLEX-1",
+								"orders": []map[string]any{
+									{"id": "OCO-LEG-A", "status": "Live"},
+									{"id": "OCO-LEG-B", "status": "Contingent"},
+								},
+							},
+						},
+					})
+				})
+				mux.HandleFunc("DELETE /accounts/ACCT-001/complex-orders/COMPLEX-1", func(writer http.ResponseWriter, req *http.Request) {
+					complexCancelCalled.Add(1)
+					writer.WriteHeader(http.StatusOK)
+				})
+			})
+
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Buy, Qty: 10, OrderType: broker.Limit, LimitPrice: 150.0, TimeInForce: broker.Day},
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Sell, Qty: 10, OrderType: broker.Limit, LimitPrice: 160.0, TimeInForce: broker.GTC},
+			}, broker.GroupOCO)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(receivedBody["type"]).To(Equal("OCO"))
+
+			legs, ok := receivedBody["orders"].([]any)
+			Expect(ok).To(BeTrue())
+			Expect(legs).To(HaveLen(2))
+
+			// Cancel a child order to verify it routes to complex-orders endpoint.
+			err = ttBroker.Cancel(ctx, "OCO-LEG-A")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(complexCancelCalled.Load()).To(Equal(int32(1)))
+		})
+
+		It("submits an OTOCO complex order with trigger and contingent legs", func() {
+			var receivedBody map[string]any
+
+			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
+					json.NewDecoder(req.Body).Decode(&receivedBody)
+					writer.Header().Set("Content-Type", "application/json")
+					json.NewEncoder(writer).Encode(map[string]any{
+						"data": map[string]any{
+							"complex-order": map[string]any{
+								"id":     "BRACKET-1",
+								"orders": []map[string]any{},
+							},
+						},
+					})
+				})
+			})
+
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{
+				{Asset: asset.Asset{Ticker: "SPY"}, Side: broker.Buy, Qty: 5, OrderType: broker.Market, TimeInForce: broker.Day, GroupRole: broker.RoleEntry},
+				{Asset: asset.Asset{Ticker: "SPY"}, Side: broker.Sell, Qty: 5, OrderType: broker.Limit, LimitPrice: 460.0, TimeInForce: broker.GTC, GroupRole: broker.RoleTakeProfit},
+				{Asset: asset.Asset{Ticker: "SPY"}, Side: broker.Sell, Qty: 5, OrderType: broker.Stop, LimitPrice: 430.0, TimeInForce: broker.GTC, GroupRole: broker.RoleStopLoss},
+			}, broker.GroupBracket)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(receivedBody["type"]).To(Equal("OTOCO"))
+			Expect(receivedBody["trigger-order"]).ToNot(BeNil())
+		})
+
+		It("returns ErrEmptyOrderGroup for empty slice", func() {
+			ttBroker := authenticatedBroker(nil)
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{}, broker.GroupOCO)
+			Expect(err).To(MatchError(tastytrade.ErrEmptyOrderGroup))
+		})
+
+		It("returns ErrNoEntryOrder when OTOCO has no entry", func() {
+			ttBroker := authenticatedBroker(nil)
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Sell, Qty: 10, OrderType: broker.Limit, LimitPrice: 160.0, TimeInForce: broker.GTC, GroupRole: broker.RoleTakeProfit},
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Sell, Qty: 10, OrderType: broker.Stop, LimitPrice: 140.0, TimeInForce: broker.GTC, GroupRole: broker.RoleStopLoss},
+			}, broker.GroupBracket)
+			Expect(err).To(MatchError(tastytrade.ErrNoEntryOrder))
+		})
+
+		It("returns ErrMultipleEntryOrders when OTOCO has two entries", func() {
+			ttBroker := authenticatedBroker(nil)
+			err := ttBroker.SubmitGroup(ctx, []broker.Order{
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Buy, Qty: 10, OrderType: broker.Market, TimeInForce: broker.Day, GroupRole: broker.RoleEntry},
+				{Asset: asset.Asset{Ticker: "AAPL"}, Side: broker.Buy, Qty: 10, OrderType: broker.Market, TimeInForce: broker.Day, GroupRole: broker.RoleEntry},
+			}, broker.GroupBracket)
+			Expect(err).To(MatchError(tastytrade.ErrMultipleEntryOrders))
 		})
 	})
 
