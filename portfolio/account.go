@@ -669,6 +669,7 @@ func (a *Account) Record(txn Transaction) {
 
 			// Match against tax lots FIFO to get entry dates and per-lot qty.
 			tdRemaining := txn.Qty
+
 			tdLots := a.taxLots[txn.Asset]
 			for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
 				matched := tdLots[tdLotIdx].Qty

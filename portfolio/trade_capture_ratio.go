@@ -34,6 +34,7 @@ func (tradeCaptureRatio) Compute(acct *Account, _ *Period) (float64, error) {
 	}
 
 	var sumReturnPct, sumMFE float64
+
 	for _, trade := range trades {
 		returnPct := (trade.ExitPrice - trade.EntryPrice) / trade.EntryPrice
 		sumReturnPct += returnPct

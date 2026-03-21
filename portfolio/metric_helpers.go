@@ -148,6 +148,7 @@ func roundTrips(details []TradeDetail, txns []Transaction) ([]roundTrip, float64
 	}
 
 	var totalSellValue float64
+
 	for _, txn := range txns {
 		if txn.Type == SellTransaction {
 			totalSellValue += txn.Price * txn.Qty
