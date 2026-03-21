@@ -54,9 +54,11 @@ func (a *Account) benchmarkView() (*Account, error) {
 		return nil, err
 	}
 
-	// Shallow copy the account, swap perfData.
+	// Shallow copy the account, swap perfData, and clear the computed cache
+	// so derived columns are recomputed against the benchmark equity curve.
 	view := *a
 	view.perfData = newPerfData
+	view.computed = nil
 
 	return &view, nil
 }

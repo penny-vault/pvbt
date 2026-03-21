@@ -71,6 +71,7 @@ type Account struct {
 	initialMargin     float64
 	maintenanceMargin float64
 	borrowRate        float64
+	computed          map[data.Metric]bool
 }
 
 // New creates an Account with the given options.
@@ -1657,6 +1658,9 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 			return
 		}
 	}
+
+	// Invalidate lazily-computed columns so they are recomputed on next access.
+	a.computed = nil
 }
 
 // PerfData returns the accumulated performance DataFrame, or nil if no
@@ -2314,4 +2318,179 @@ func (a *Account) BorrowRate() float64 {
 	}
 
 	return 0.005 // default 0.5%
+}
+
+// ---------------------------------------------------------------------------
+// PortfolioStats interface implementation
+// ---------------------------------------------------------------------------
+
+// ensureComputed checks whether the given metric column has already been
+// lazily computed. If not it runs the compute function and marks the column
+// as done. This avoids recomputing derived columns on every metric access.
+func (a *Account) ensureComputed(metric data.Metric, compute func()) {
+	if a.computed == nil {
+		a.computed = make(map[data.Metric]bool)
+	}
+
+	if a.computed[metric] {
+		return
+	}
+
+	compute()
+	a.computed[metric] = true
+}
+
+// Returns lazily computes the period-over-period percentage returns of the
+// portfolio equity curve, stores them as a column, and returns the windowed
+// DataFrame.
+func (a *Account) Returns(_ context.Context, window *Period) *data.DataFrame {
+	a.ensureComputed(data.PortfolioReturns, func() {
+		if a.perfData == nil {
+			return
+		}
+
+		pctDF := a.perfData.Pct()
+		returnsCol := pctDF.Column(portfolioAsset, data.PortfolioEquity)
+
+		if err := a.perfData.Insert(portfolioAsset, data.PortfolioReturns, returnsCol); err != nil {
+			log.Error().Err(err).Msg("Account.Returns: failed to insert returns column")
+		}
+	})
+
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// ExcessReturns lazily computes portfolio returns minus the risk-free rate
+// and returns the windowed DataFrame.
+func (a *Account) ExcessReturns(ctx context.Context, window *Period) *data.DataFrame {
+	// Ensure base returns are computed first.
+	a.Returns(ctx, nil)
+
+	a.ensureComputed(data.PortfolioExcessReturns, func() {
+		if a.perfData == nil {
+			return
+		}
+
+		returnsCol := a.perfData.Column(portfolioAsset, data.PortfolioReturns)
+		rfPctDF := a.perfData.Pct()
+		rfCol := rfPctDF.Column(portfolioAsset, data.PortfolioRiskFree)
+
+		excessCol := make([]float64, len(returnsCol))
+		for idx := range returnsCol {
+			if idx < len(rfCol) {
+				excessCol[idx] = returnsCol[idx] - rfCol[idx]
+			} else {
+				excessCol[idx] = returnsCol[idx]
+			}
+		}
+
+		if err := a.perfData.Insert(portfolioAsset, data.PortfolioExcessReturns, excessCol); err != nil {
+			log.Error().Err(err).Msg("Account.ExcessReturns: failed to insert excess returns column")
+		}
+	})
+
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// Drawdown lazily computes the percentage drawdown from the running equity
+// peak and returns the windowed DataFrame.
+func (a *Account) Drawdown(_ context.Context, window *Period) *data.DataFrame {
+	a.ensureComputed(data.PortfolioDrawdown, func() {
+		if a.perfData == nil {
+			return
+		}
+
+		cumMaxDF := a.perfData.CumMax()
+		diffDF := a.perfData.Sub(cumMaxDF, data.PortfolioEquity)
+		ddDF := diffDF.Div(cumMaxDF, data.PortfolioEquity)
+		ddCol := ddDF.Column(portfolioAsset, data.PortfolioEquity)
+
+		if err := a.perfData.Insert(portfolioAsset, data.PortfolioDrawdown, ddCol); err != nil {
+			log.Error().Err(err).Msg("Account.Drawdown: failed to insert drawdown column")
+		}
+	})
+
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// BenchmarkReturns lazily computes the period-over-period percentage returns
+// of the benchmark and returns the windowed DataFrame.
+func (a *Account) BenchmarkReturns(_ context.Context, window *Period) *data.DataFrame {
+	a.ensureComputed(data.PortfolioBenchReturns, func() {
+		if a.perfData == nil {
+			return
+		}
+
+		pctDF := a.perfData.Pct()
+		benchReturnsCol := pctDF.Column(portfolioAsset, data.PortfolioBenchmark)
+
+		if err := a.perfData.Insert(portfolioAsset, data.PortfolioBenchReturns, benchReturnsCol); err != nil {
+			log.Error().Err(err).Msg("Account.BenchmarkReturns: failed to insert benchmark returns column")
+		}
+	})
+
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// EquitySeries returns the windowed perfData DataFrame containing the equity curve.
+func (a *Account) EquitySeries(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// TransactionsView returns the full transaction log in chronological order.
+// This satisfies the PortfolioStats interface.
+func (a *Account) TransactionsView(_ context.Context) []Transaction {
+	return a.transactions
+}
+
+// TradeDetailsView returns all completed round-trip trades with per-trade
+// MFE and MAE excursion data. This satisfies the PortfolioStats interface.
+func (a *Account) TradeDetailsView(_ context.Context) []TradeDetail {
+	return a.tradeDetails
+}
+
+// PricesView returns the most recent price DataFrame.
+// This satisfies the PortfolioStats interface.
+func (a *Account) PricesView(_ context.Context) *data.DataFrame {
+	return a.prices
+}
+
+// TaxLotsView returns the current tax lot positions keyed by asset.
+// This satisfies the PortfolioStats interface.
+func (a *Account) TaxLotsView(_ context.Context) map[asset.Asset][]TaxLot {
+	return a.taxLots
+}
+
+// ShortLotsView iterates over all open short tax lots, calling fn with each
+// asset and its lots. This satisfies the PortfolioStats interface.
+func (a *Account) ShortLotsView(_ context.Context, fn func(asset.Asset, []TaxLot)) {
+	for ast, lots := range a.shortLots {
+		fn(ast, lots)
+	}
+}
+
+// PerfDataView returns the accumulated performance DataFrame, or nil if no
+// prices have been recorded yet. This satisfies the PortfolioStats interface.
+func (a *Account) PerfDataView(_ context.Context) *data.DataFrame {
+	return a.perfData
 }

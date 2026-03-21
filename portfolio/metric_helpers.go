@@ -20,6 +20,18 @@ import (
 	"time"
 )
 
+// removeNaN returns a copy of col with all NaN values removed.
+func removeNaN(col []float64) []float64 {
+	clean := make([]float64, 0, len(col))
+	for _, val := range col {
+		if !math.IsNaN(val) {
+			clean = append(clean, val)
+		}
+	}
+
+	return clean
+}
+
 // defaultInflationRate is the assumed annual inflation rate for withdrawal
 // metric calculations.
 const defaultInflationRate = 0.03

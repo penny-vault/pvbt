@@ -15,13 +15,38 @@
 
 package portfolio
 
-import "errors"
+import (
+	"context"
+	"errors"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+)
 
 var (
 	ErrNoRiskFreeRate        = errors.New("risk-free rate not configured")
 	ErrNoBenchmark           = errors.New("benchmark not configured")
 	ErrBenchmarkNotSupported = errors.New("metric does not support benchmark targeting")
 )
+
+// PortfolioStats provides read-only access to the data a performance metric
+// needs to compute its value. Account implements this interface directly.
+// The lazy-computed columns (Returns, ExcessReturns, Drawdown,
+// BenchmarkReturns) are cached on Account and invalidated when new price
+// rows arrive.
+type PortfolioStats interface {
+	Returns(ctx context.Context, window *Period) *data.DataFrame
+	ExcessReturns(ctx context.Context, window *Period) *data.DataFrame
+	Drawdown(ctx context.Context, window *Period) *data.DataFrame
+	BenchmarkReturns(ctx context.Context, window *Period) *data.DataFrame
+	EquitySeries(ctx context.Context, window *Period) *data.DataFrame
+	TransactionsView(ctx context.Context) []Transaction
+	TradeDetailsView(ctx context.Context) []TradeDetail
+	PricesView(ctx context.Context) *data.DataFrame
+	TaxLotsView(ctx context.Context) map[asset.Asset][]TaxLot
+	ShortLotsView(ctx context.Context, fn func(asset.Asset, []TaxLot))
+	PerfDataView(ctx context.Context) *data.DataFrame
+}
 
 // BenchmarkTargetable is a marker interface for metrics that can be
 // computed against a benchmark equity curve. Metrics that embed both
@@ -34,10 +59,11 @@ type BenchmarkTargetable interface {
 
 // PerformanceMetric is implemented by each metric type (Sharpe, Beta,
 // etc.). Each implementation lives in its own file with an unexported
-// struct and an exported package-level var. The Account is passed to
-// give metrics access to everything they might need: the transaction
-// log, performance data (perfData DataFrame), and current positions.
-// Anyone can define custom metrics by implementing this interface.
+// struct and an exported package-level var. The PortfolioStats interface
+// is passed to give metrics access to everything they might need: the
+// transaction log, performance data (perfData DataFrame), and current
+// positions. Anyone can define custom metrics by implementing this
+// interface.
 type PerformanceMetric interface {
 	// Name returns a human-readable name for the metric (e.g. "Sharpe").
 	Name() string
@@ -47,14 +73,14 @@ type PerformanceMetric interface {
 	Description() string
 
 	// Compute calculates a single scalar value for the metric. The
-	// Account provides access to transaction history, equity curve,
+	// PortfolioStats provides access to transaction history, equity curve,
 	// benchmark data, and risk-free data. If window is nil, the full
 	// history is used.
-	Compute(a *Account, window *Period) (float64, error)
+	Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error)
 
 	// ComputeSeries calculates a rolling time series of the metric.
 	// If window is nil, the full history is used.
-	ComputeSeries(a *Account, window *Period) ([]float64, error)
+	ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error)
 }
 
 // PerformanceMetricQuery is the builder returned by
@@ -69,49 +95,49 @@ type PerformanceMetricQuery struct {
 }
 
 // Window sets the lookback period for the metric computation.
-func (q PerformanceMetricQuery) Window(p Period) PerformanceMetricQuery {
-	q.window = &p
-	return q
+func (query PerformanceMetricQuery) Window(period Period) PerformanceMetricQuery {
+	query.window = &period
+	return query
 }
 
 // Benchmark tells the query to compute the metric against the benchmark
 // equity curve instead of the portfolio equity curve.
-func (q PerformanceMetricQuery) Benchmark() PerformanceMetricQuery {
-	q.benchmark = true
-	return q
+func (query PerformanceMetricQuery) Benchmark() PerformanceMetricQuery {
+	query.benchmark = true
+	return query
 }
 
 // Value computes and returns a single scalar value for the metric.
-func (q PerformanceMetricQuery) Value() (float64, error) {
-	account, err := q.resolveAccount()
+func (query PerformanceMetricQuery) Value() (float64, error) {
+	stats, err := query.resolveStats()
 	if err != nil {
 		return 0, err
 	}
 
-	return q.metric.Compute(account, q.window)
+	return query.metric.Compute(context.Background(), stats, query.window)
 }
 
 // Series computes and returns a rolling time series for the metric.
-func (q PerformanceMetricQuery) Series() ([]float64, error) {
-	account, err := q.resolveAccount()
+func (query PerformanceMetricQuery) Series() (*data.DataFrame, error) {
+	stats, err := query.resolveStats()
 	if err != nil {
 		return nil, err
 	}
 
-	return q.metric.ComputeSeries(account, q.window)
+	return query.metric.ComputeSeries(context.Background(), stats, query.window)
 }
 
-// resolveAccount returns the account to compute against. When the
+// resolveStats returns the PortfolioStats to compute against. When the
 // benchmark flag is set it verifies the metric supports benchmark
 // targeting, then returns a view account with the benchmark equity curve.
-func (q PerformanceMetricQuery) resolveAccount() (*Account, error) {
-	if !q.benchmark {
-		return q.account, nil
+func (query PerformanceMetricQuery) resolveStats() (PortfolioStats, error) {
+	if !query.benchmark {
+		return query.account, nil
 	}
 
-	if _, ok := q.metric.(BenchmarkTargetable); !ok {
+	if _, ok := query.metric.(BenchmarkTargetable); !ok {
 		return nil, ErrBenchmarkNotSupported
 	}
 
-	return q.account.benchmarkView()
+	return query.account.benchmarkView()
 }

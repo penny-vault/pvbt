@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -34,14 +35,16 @@ func standardWindows() []portfolio.Period {
 	}
 }
 
-// computeMetrics computes all registered metrics on the account for
+// computeMetrics computes all provided metrics on the PortfolioStats for
 // the given date across all standard windows plus since-inception.
-func computeMetrics(acct *portfolio.Account, date time.Time) {
-	for _, metric := range acct.RegisteredMetrics() {
+func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []portfolio.PerformanceMetric, appendMetric func(portfolio.MetricRow)) {
+	ctx := context.Background()
+
+	for _, metric := range metrics {
 		// Since inception (nil window).
-		val, err := metric.Compute(acct, nil)
+		val, err := metric.Compute(ctx, stats, nil)
 		if err == nil {
-			acct.AppendMetric(portfolio.MetricRow{
+			appendMetric(portfolio.MetricRow{
 				Date:   date,
 				Name:   metric.Name(),
 				Window: "since_inception",
@@ -51,11 +54,11 @@ func computeMetrics(acct *portfolio.Account, date time.Time) {
 
 		// Standard windows.
 		for _, window := range standardWindows() {
-			wCopy := window
+			windowCopy := window
 
-			val, err := metric.Compute(acct, &wCopy)
+			val, err := metric.Compute(ctx, stats, &windowCopy)
 			if err == nil {
-				acct.AppendMetric(portfolio.MetricRow{
+				appendMetric(portfolio.MetricRow{
 					Date:   date,
 					Name:   metric.Name(),
 					Window: windowLabel(window),
