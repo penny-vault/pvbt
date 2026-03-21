@@ -650,6 +650,134 @@ var _ = Describe("Account.Clone", func() {
 		Expect(acct.GetMetadata("key")).To(Equal("original"))
 		Expect(acct.Annotations()).To(HaveLen(1))
 	})
+
+	It("does not panic and isolates group state when group fields are populated", func() {
+		ts := time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+		testAsset := asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+
+		mb := newMockBroker()
+		// Do not deliver fills so the entry order stays pending.
+		mb.submitFn = func(_ broker.Order) error { return nil }
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		batch := acct.NewBatch(ts)
+		err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The account should have pending orders and group state.
+		Expect(acct.PendingOrderIDs()).NotTo(BeEmpty())
+
+		// Clone must not panic.
+		clone := acct.Clone()
+		Expect(clone).NotTo(BeNil())
+
+		// Mutating the clone's pending orders must not affect the original.
+		for _, orderID := range clone.PendingOrderIDs() {
+			clone.SetPendingOrder(broker.Order{ID: orderID + "-clone"})
+		}
+		for _, id := range acct.PendingOrderIDs() {
+			Expect(id).NotTo(HaveSuffix("-clone"))
+		}
+	})
+})
+
+var _ = Describe("CancelOpenOrders group cleanup", func() {
+	var (
+		testAsset asset.Asset
+		ts        time.Time
+	)
+
+	BeforeEach(func() {
+		testAsset = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+		ts = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+	})
+
+	It("clears pendingOrders, pendingGroups, and deferredExits after cancellation", func() {
+		mb := newMockBroker()
+		canceledIDs := []string{}
+		mb.cancelFn = func(orderID string) error {
+			canceledIDs = append(canceledIDs, orderID)
+			return nil
+		}
+		// Do not deliver fills so the entry order stays pending.
+		mb.submitFn = func(_ broker.Order) error { return nil }
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		batch := acct.NewBatch(ts)
+		err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+
+		err = acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The entry order is pending (no fill was delivered).
+		pendingBefore := acct.PendingOrderIDs()
+		Expect(pendingBefore).NotTo(BeEmpty())
+
+		err = acct.CancelOpenOrders(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+
+		// broker.Cancel was called for every pending order.
+		Expect(canceledIDs).To(ConsistOf(pendingBefore))
+
+		// All group state is cleared.
+		Expect(acct.PendingOrderIDs()).To(BeEmpty())
+	})
+
+	It("allows a new batch to be submitted cleanly after CancelOpenOrders", func() {
+		mb := newMockBroker()
+		mb.submitFn = func(ord broker.Order) error {
+			// Deliver a fill for the second batch's entry order.
+			mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+			return nil
+		}
+
+		acct := portfolio.New(portfolio.WithCash(50_000, ts), portfolio.WithBroker(mb))
+		df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		// Submit first batch (no fills) then cancel.
+		firstBatch := acct.NewBatch(ts)
+		firstSubmitFn := mb.submitFn
+		mb.submitFn = func(_ broker.Order) error { return nil } // no fills for first batch
+		err := firstBatch.Order(context.Background(), testAsset, portfolio.Buy, 5,
+			portfolio.WithBracket(
+				portfolio.StopLossPrice(90.0),
+				portfolio.TakeProfitPrice(115.0),
+			))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.ExecuteBatch(context.Background(), firstBatch)).To(Succeed())
+
+		err = acct.CancelOpenOrders(context.Background())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.PendingOrderIDs()).To(BeEmpty())
+
+		// Restore fill-delivering submitFn for second batch.
+		mb.submitFn = firstSubmitFn
+
+		// Submit a plain second batch; should not panic or error.
+		secondBatch := acct.NewBatch(ts)
+		err = secondBatch.Order(context.Background(), testAsset, portfolio.Buy, 10)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.ExecuteBatch(context.Background(), secondBatch)).To(Succeed())
+	})
 })
 
 var _ = Describe("TransactionType", func() {
