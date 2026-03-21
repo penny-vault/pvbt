@@ -126,61 +126,31 @@ func YieldToCumulative(annualYieldPct, prevCumulative float64) float64 {
 	return prevCumulative * (1 + dailyReturn)
 }
 
-// roundTrip represents a completed buy-sell pair matched via FIFO.
+// roundTrip represents a completed buy-sell pair.
 type roundTrip struct {
 	pnl      float64
 	holdDays float64
+	mfe      float64
+	mae      float64
 }
 
-// roundTrips builds round-trip trades from transactions using FIFO matching.
+// roundTrips builds round-trip data from TradeDetails.
 // It also returns the total sell value for turnover calculation.
-func roundTrips(txns []Transaction) ([]roundTrip, float64) {
-	type openLot struct {
-		date  time.Time
-		qty   float64
-		price float64
+func roundTrips(details []TradeDetail, txns []Transaction) ([]roundTrip, float64) {
+	trips := make([]roundTrip, len(details))
+	for idx, td := range details {
+		trips[idx] = roundTrip{
+			pnl:      td.PnL,
+			holdDays: td.HoldDays,
+			mfe:      td.MFE,
+			mae:      td.MAE,
+		}
 	}
 
-	openLots := make(map[string][]openLot) // keyed by CompositeFigi
-
-	var (
-		trips          []roundTrip
-		totalSellValue float64
-	)
-
+	var totalSellValue float64
 	for _, txn := range txns {
-		key := txn.Asset.CompositeFigi
-		switch txn.Type {
-		case BuyTransaction:
-			openLots[key] = append(openLots[key], openLot{
-				date:  txn.Date,
-				qty:   txn.Qty,
-				price: txn.Price,
-			})
-		case SellTransaction:
+		if txn.Type == SellTransaction {
 			totalSellValue += txn.Price * txn.Qty
-			remaining := txn.Qty
-
-			lots := openLots[key]
-			for len(lots) > 0 && remaining > 0 {
-				matched := lots[0].qty
-				if matched > remaining {
-					matched = remaining
-				}
-
-				pnl := (txn.Price - lots[0].price) * matched
-				days := txn.Date.Sub(lots[0].date).Hours() / 24.0
-				trips = append(trips, roundTrip{pnl: pnl, holdDays: days})
-
-				lots[0].qty -= matched
-				remaining -= matched
-
-				if lots[0].qty == 0 {
-					lots = lots[1:]
-				}
-			}
-
-			openLots[key] = lots
 		}
 	}
 

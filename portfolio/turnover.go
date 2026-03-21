@@ -28,7 +28,7 @@ func (turnover) Description() string {
 }
 
 func (turnover) Compute(a *Account, _ *Period) (float64, error) {
-	_, totalSellValue := roundTrips(a.Transactions())
+	_, totalSellValue := roundTrips(a.TradeDetails(), a.Transactions())
 
 	perfData := a.PerfData()
 	if perfData == nil {

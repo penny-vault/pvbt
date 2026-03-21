@@ -29,7 +29,7 @@ func (profitFactor) Description() string {
 }
 
 func (profitFactor) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 
 	var sumWin, sumLoss float64
 
