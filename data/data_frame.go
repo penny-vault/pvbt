@@ -29,18 +29,18 @@ import (
 	"gonum.org/v1/gonum/stat"
 )
 
-// DataFrame stores contiguous float64 data in column-major order. Each
-// column represents a single (Asset, Metric) pair across all timestamps.
-// Columns are stored contiguously so that time-series operations and SIMD
-// can work on a single uninterrupted []float64 slice.
+// DataFrame stores float64 data with one []float64 slice per (Asset, Metric)
+// column. Each column holds T values in chronological order. The column for
+// asset index a and metric index m is at columns[a*M + m].
 //
-// For a frame with T timestamps, A assets, and M metrics the total length
-// of Data is T*A*M. The column for asset index a and metric index m starts
-// at offset (a*M + m) * T and runs for T elements.
+// View operations (Between, Window, Metrics, Assets) create new DataFrames
+// that share the underlying column slices by reference, avoiding data copies.
+// Three-index slice expressions cap view capacity to prevent AppendRow
+// aliasing.
 type DataFrame struct {
-	// data holds all values in column-major order: each (asset, metric)
-	// column is a contiguous run of T values in chronological order.
-	data []float64
+	// columns holds one []float64 per (asset, metric) pair.
+	// Column index = aIdx*len(metrics) + mIdx.
+	columns [][]float64
 
 	// times lists the timestamps in chronological order.
 	times []time.Time
@@ -50,10 +50,10 @@ type DataFrame struct {
 	// repeated time.Time.Date() / timezone lookups during binary search.
 	dateKeys []int32
 
-	// assets lists the assets in the order they appear in the data slab.
+	// assets lists the assets in the order they appear.
 	assets []asset.Asset
 
-	// metrics lists the metrics in the order they appear in the data slab.
+	// metrics lists the metrics in the order they appear.
 	metrics []Metric
 
 	// assetIndex maps CompositeFigi to the asset's position in assets
@@ -144,14 +144,21 @@ func (df *DataFrame) ensureDateKeys() {
 	df.dateKeys = keys
 }
 
-// NewDataFrame constructs a DataFrame from the given dimensions and data.
-// The data slice must have length len(times) * len(assets) * len(metrics),
-// laid out in column-major order as described on DataFrame.
-func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, data []float64) (*DataFrame, error) {
-	expected := len(times) * len(assets) * len(metrics)
-	if len(data) != expected {
-		return nil, fmt.Errorf("data length %d does not match dimensions %d (times=%d, assets=%d, metrics=%d)",
-			len(data), expected, len(times), len(assets), len(metrics))
+// NewDataFrame constructs a DataFrame from the given dimensions and columns.
+// columns must have length len(assets)*len(metrics), and each column must
+// have length len(times).
+func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, columns [][]float64) (*DataFrame, error) {
+	expected := len(assets) * len(metrics)
+	if len(columns) != expected {
+		return nil, fmt.Errorf("columns count %d does not match dimensions %d (assets=%d, metrics=%d)",
+			len(columns), expected, len(assets), len(metrics))
+	}
+
+	for i, col := range columns {
+		if len(col) != len(times) {
+			return nil, fmt.Errorf("column %d length %d does not match time axis length %d",
+				i, len(col), len(times))
+		}
 	}
 
 	idx := make(map[string]int, len(assets))
@@ -160,7 +167,7 @@ func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, fre
 	}
 
 	return &DataFrame{
-		data:       data,
+		columns:    columns,
 		times:      times,
 		assets:     assets,
 		metrics:    metrics,
@@ -169,10 +176,22 @@ func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, fre
 	}, nil
 }
 
+// SlabToColumns reshapes a flat column-major slab into per-column slices.
+// Each column sub-slice has its capacity capped so that append() on one
+// column cannot corrupt adjacent columns in the shared backing array.
+func SlabToColumns(slab []float64, numCols, colLen int) [][]float64 {
+	cols := make([][]float64, numCols)
+	for i := range cols {
+		cols[i] = slab[i*colLen : (i+1)*colLen : (i+1)*colLen]
+	}
+
+	return cols
+}
+
 // mustNewDataFrame is an internal helper that calls NewDataFrame and panics
 // on error. Use only when dimensions are guaranteed correct by construction.
-func mustNewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, data []float64) *DataFrame {
-	df, err := NewDataFrame(times, assets, metrics, freq, data)
+func mustNewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, columns [][]float64) *DataFrame {
+	df, err := NewDataFrame(times, assets, metrics, freq, columns)
 	if err != nil {
 		panic("internal error: " + err.Error())
 	}
