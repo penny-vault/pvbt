@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type averageHoldingPeriod struct{}
 
 func (averageHoldingPeriod) Name() string { return "AverageHoldingPeriod" }
@@ -26,8 +32,8 @@ func (averageHoldingPeriod) Description() string {
 		"transaction costs."
 }
 
-func (averageHoldingPeriod) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
+func (averageHoldingPeriod) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trips, _ := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 	if len(trips) == 0 {
 		return 0, nil
 	}
@@ -40,7 +46,7 @@ func (averageHoldingPeriod) Compute(a *Account, _ *Period) (float64, error) {
 	return sumHold / float64(len(trips)), nil
 }
 
-func (averageHoldingPeriod) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (averageHoldingPeriod) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

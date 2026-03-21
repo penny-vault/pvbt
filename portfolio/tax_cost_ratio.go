@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type taxCostRatio struct{}
 
@@ -25,8 +29,8 @@ func (taxCostRatio) Description() string {
 	return "Estimated percentage of portfolio gain lost to taxes. Computed as estimated tax liability (using 25% for short-term gains, 15% for long-term gains and qualified dividends) divided by total portfolio gain. Lower values indicate more tax-efficient strategies."
 }
 
-func (taxCostRatio) Compute(acct *Account, _ *Period) (float64, error) {
-	pd := acct.PerfData()
+func (taxCostRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
@@ -41,7 +45,7 @@ func (taxCostRatio) Compute(acct *Account, _ *Period) (float64, error) {
 		return 0, nil
 	}
 
-	ltcg, stcg, qualDiv, nonQualDiv := realizedGains(acct.Transactions())
+	ltcg, stcg, qualDiv, nonQualDiv := realizedGains(stats.TransactionsView(ctx))
 
 	estimatedTax := 0.0
 	if stcg > 0 {
@@ -58,7 +62,7 @@ func (taxCostRatio) Compute(acct *Account, _ *Period) (float64, error) {
 	return estimatedTax / totalGain, nil
 }
 
-func (taxCostRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (taxCostRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
 
 // TaxCostRatioMetric is the estimated percentage of portfolio gain lost to taxes.
 var TaxCostRatioMetric PerformanceMetric = taxCostRatio{}

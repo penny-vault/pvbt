@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type averageLoss struct{}
 
 func (averageLoss) Name() string { return "AverageLoss" }
@@ -26,8 +32,8 @@ func (averageLoss) Description() string {
 		"same portfolio rather than across different ones."
 }
 
-func (averageLoss) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
+func (averageLoss) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trips, _ := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 
 	var (
 		losses  int
@@ -48,7 +54,7 @@ func (averageLoss) Compute(a *Account, _ *Period) (float64, error) {
 	return sumLoss / float64(losses), nil
 }
 
-func (averageLoss) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (averageLoss) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
 
 // AverageLoss is the average loss on losing round-trip trades (negative value).
 var AverageLoss PerformanceMetric = averageLoss{}

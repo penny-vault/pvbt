@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type longWinRate struct{}
 
 func (longWinRate) Name() string { return "LongWinRate" }
@@ -24,12 +30,13 @@ func (longWinRate) Description() string {
 		"FIFO-matched buy/sell pairs. Only includes trades with Direction == TradeLong."
 }
 
-func (longWinRate) Compute(acct *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(acct.TradeDetails(), acct.Transactions())
+func (longWinRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
+	trips, _ := roundTrips(trades, stats.TransactionsView(ctx))
 
 	var longTrips []roundTrip
 
-	for idx, td := range acct.TradeDetails() {
+	for idx, td := range trades {
 		if td.Direction == TradeLong {
 			longTrips = append(longTrips, trips[idx])
 		}
@@ -50,7 +57,7 @@ func (longWinRate) Compute(acct *Account, _ *Period) (float64, error) {
 	return float64(wins) / float64(len(longTrips)), nil
 }
 
-func (longWinRate) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
+func (longWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
 
 // LongWinRate is the percentage of long round-trip trades that were profitable.
 var LongWinRate PerformanceMetric = longWinRate{}

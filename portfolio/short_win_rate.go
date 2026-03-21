@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type shortWinRate struct{}
 
 func (shortWinRate) Name() string { return "ShortWinRate" }
@@ -24,12 +30,13 @@ func (shortWinRate) Description() string {
 		"FIFO-matched short-sell/buy-cover pairs. Only includes trades with Direction == TradeShort."
 }
 
-func (shortWinRate) Compute(acct *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(acct.TradeDetails(), acct.Transactions())
+func (shortWinRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
+	trips, _ := roundTrips(trades, stats.TransactionsView(ctx))
 
 	var shortTrips []roundTrip
 
-	for idx, td := range acct.TradeDetails() {
+	for idx, td := range trades {
 		if td.Direction == TradeShort {
 			shortTrips = append(shortTrips, trips[idx])
 		}
@@ -50,7 +57,7 @@ func (shortWinRate) Compute(acct *Account, _ *Period) (float64, error) {
 	return float64(wins) / float64(len(shortTrips)), nil
 }
 
-func (shortWinRate) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
+func (shortWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
 
 // ShortWinRate is the percentage of short round-trip trades that were profitable.
 var ShortWinRate PerformanceMetric = shortWinRate{}

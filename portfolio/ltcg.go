@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type ltcgMetric struct{}
 
 func (ltcgMetric) Name() string { return "LTCG" }
@@ -23,12 +29,12 @@ func (ltcgMetric) Description() string {
 	return "Total realized long-term capital gains from positions held longer than 365 days. Computed by replaying the transaction log with FIFO lot matching. Taxed at preferential rates (typically 15-20%)."
 }
 
-func (ltcgMetric) Compute(a *Account, _ *Period) (float64, error) {
-	ltcg, _, _, _ := realizedGains(a.Transactions())
+func (ltcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	ltcg, _, _, _ := realizedGains(stats.TransactionsView(ctx))
 	return ltcg, nil
 }
 
-func (ltcgMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (ltcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
 
 // LTCG is realized long-term capital gains (holding period > 365 days).
 var LTCGMetric PerformanceMetric = ltcgMetric{}

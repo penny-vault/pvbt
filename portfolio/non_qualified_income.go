@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type nonQualifiedIncome struct{}
 
 func (nonQualifiedIncome) Name() string { return "NonQualifiedIncome" }
@@ -26,10 +32,10 @@ func (nonQualifiedIncome) Description() string {
 		"interest distributions."
 }
 
-func (nonQualifiedIncome) Compute(a *Account, _ *Period) (float64, error) {
+func (nonQualifiedIncome) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
 	var total float64
 
-	for _, tx := range a.Transactions() {
+	for _, tx := range stats.TransactionsView(ctx) {
 		if tx.Type == DividendTransaction && !tx.Qualified {
 			total += tx.Amount
 		}
@@ -38,7 +44,7 @@ func (nonQualifiedIncome) Compute(a *Account, _ *Period) (float64, error) {
 	return total, nil
 }
 
-func (nonQualifiedIncome) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (nonQualifiedIncome) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

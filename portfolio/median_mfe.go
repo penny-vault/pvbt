@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "sort"
+import (
+	"context"
+	"sort"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type medianMFE struct{}
 
@@ -27,8 +32,8 @@ func (medianMFE) Description() string {
 		"than the mean, giving a better sense of typical upside potential."
 }
 
-func (medianMFE) Compute(acct *Account, _ *Period) (float64, error) {
-	trades := acct.TradeDetails()
+func (medianMFE) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
 	if len(trades) == 0 {
 		return 0, nil
 	}
@@ -48,7 +53,7 @@ func (medianMFE) Compute(acct *Account, _ *Period) (float64, error) {
 	return values[count/2], nil
 }
 
-func (medianMFE) ComputeSeries(acct *Account, window *Period) ([]float64, error) {
+func (medianMFE) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

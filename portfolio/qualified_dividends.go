@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type qualifiedDividends struct{}
 
 func (qualifiedDividends) Name() string { return "QualifiedDividends" }
@@ -23,10 +29,10 @@ func (qualifiedDividends) Description() string {
 	return "Total qualified dividend income received. Qualified dividends are taxed at preferential capital gains rates rather than ordinary income rates."
 }
 
-func (qualifiedDividends) Compute(a *Account, _ *Period) (float64, error) {
+func (qualifiedDividends) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
 	var total float64
 
-	for _, tx := range a.Transactions() {
+	for _, tx := range stats.TransactionsView(ctx) {
 		if tx.Type == DividendTransaction && tx.Qualified {
 			total += tx.Amount
 		}
@@ -35,7 +41,7 @@ func (qualifiedDividends) Compute(a *Account, _ *Period) (float64, error) {
 	return total, nil
 }
 
-func (qualifiedDividends) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (qualifiedDividends) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

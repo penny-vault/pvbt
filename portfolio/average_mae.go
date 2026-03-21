@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type averageMAE struct{}
 
 func (averageMAE) Name() string { return "AverageMAE" }
@@ -25,8 +31,8 @@ func (averageMAE) Description() string {
 		"closer to zero indicates tighter risk control."
 }
 
-func (averageMAE) Compute(acct *Account, _ *Period) (float64, error) {
-	trades := acct.TradeDetails()
+func (averageMAE) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
 	if len(trades) == 0 {
 		return 0, nil
 	}
@@ -39,7 +45,7 @@ func (averageMAE) Compute(acct *Account, _ *Period) (float64, error) {
 	return sumMAE / float64(len(trades)), nil
 }
 
-func (averageMAE) ComputeSeries(acct *Account, window *Period) ([]float64, error) {
+func (averageMAE) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 
