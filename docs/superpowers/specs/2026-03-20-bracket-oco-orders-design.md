@@ -179,7 +179,7 @@ type Account struct {
 
    **Phase 2 -- Submit deferred exits**: After the drain loop completes, iterate the collected deferred exits. For each:
    - Resolve percentage offsets using the entry fill price.
-   - Create the two exit orders (stop loss and take profit), assign order IDs, add to `pendingOrders`.
+   - Create the two exit orders (stop loss and take profit), assign order IDs, set `TimeInForce` to `GTC` (exits persist across bars until filled or cancelled at frame boundary), add to `pendingOrders`.
    - Submit to the broker as an OCO group (via `GroupSubmitter.SubmitGroup` or individual `Submit` calls).
    - Any fills produced by these submissions (e.g., the simulated broker synchronously filling an exit leg) are picked up on the next `DrainFills` call (at the next housekeeping step), not in this pass. This means a bracket entry and its exit cannot fill on the same bar -- the exit legs become eligible for intrabar evaluation starting on the next bar after the entry fills. This is a deliberate simplification that avoids re-entrancy and is conservative (no same-bar round-trips).
 
@@ -209,14 +209,24 @@ The simulated broker currently returns errors for `Cancel()` and returns nil for
 
 These are required because `CancelOpenOrders` (called at frame boundaries) relies on `Orders()` to enumerate open orders and `Cancel()` to remove them. The account-layer OCO fallback path also calls `Cancel()` to remove siblings.
 
+### Synchronous vs. Deferred Fill Model
+
+The simulated broker gains an internal pending order map. Orders are split into two categories at `Submit()` time:
+
+- **Synchronous fill** (existing behavior, unchanged): Market orders and any order without a `GroupID`. These fill immediately in `Submit()` at the close price and push a fill onto the channel before `Submit()` returns.
+- **Deferred fill** (new): Orders with a `GroupID` and a `GroupRole` of `RoleStopLoss` or `RoleTakeProfit`. These are stored in the pending order map and evaluated against intrabar price data on each subsequent bar (via a new `EvaluatePending()` method called from the engine's price-update step). Entry orders in a bracket group fill synchronously like any other order.
+
+This split preserves backward compatibility -- existing non-bracket code sees identical fill timing.
+
 ### Fill Evaluation Order Within a Bar
+
+The `EvaluatePending()` method checks deferred orders against the current bar's high/low data.
 
 For long positions:
 
 1. Check pending stop loss orders against the bar's **low** price. If low <= stop price, the stop triggers.
 2. Check pending take profit orders against the bar's **high** price. If high >= take profit price, the take profit triggers.
 3. If both legs of an OCO could trigger on the same bar, **stop loss wins** (pessimistic assumption).
-4. All other pending orders (market, limit, stop, stop-limit) continue to fill as today.
 
 For short positions, the logic inverts: stop loss triggers when **high** >= stop price, take profit triggers when **low** <= take profit price. The stop-loss-wins priority applies in both cases.
 
