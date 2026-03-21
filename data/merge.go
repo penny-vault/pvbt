@@ -133,16 +133,16 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 		cols[i] = make([]float64, 0, totalLen)
 	}
 
-	for _, f := range sorted {
+	for _, frame := range sorted {
 		for aIdx, a := range assets {
 			for mIdx, m := range metrics {
-				colIdx := aIdx*len(metrics) + mIdx
-				col := f.Column(a, m)
+				idx := aIdx*len(metrics) + mIdx
+				col := frame.Column(a, m)
 
 				if col == nil {
-					cols[colIdx] = append(cols[colIdx], make([]float64, len(f.times))...)
+					cols[idx] = append(cols[idx], make([]float64, len(frame.times))...)
 				} else {
-					cols[colIdx] = append(cols[colIdx], col...)
+					cols[idx] = append(cols[idx], col...)
 				}
 			}
 		}

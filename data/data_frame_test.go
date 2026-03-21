@@ -315,11 +315,20 @@ var _ = Describe("DataFrame", func() {
 			Expect(narrowed.Value(aapl, data.Price)).To(Equal(104.0))
 		})
 
-		It("Assets produces independent copy", func() {
+		It("Assets view shares column data with parent", func() {
 			narrowed := df.Assets(aapl)
 			col := narrowed.Column(aapl, data.Price)
 			col[4] = 999.0
-			Expect(df.Value(aapl, data.Price)).To(Equal(104.0))
+			// View shares underlying column data -- mutation is visible in parent.
+			Expect(df.Value(aapl, data.Price)).To(Equal(999.0))
+			// Restore for other tests.
+			col[4] = 104.0
+		})
+
+		It("Assets view is structurally independent", func() {
+			narrowed := df.Assets(aapl)
+			Expect(narrowed.ColCount()).To(Equal(2)) // 1 asset * 2 metrics
+			Expect(df.ColCount()).To(Equal(4))        // 2 assets * 2 metrics
 		})
 
 		It("Metrics narrows to requested metrics", func() {
@@ -333,11 +342,14 @@ var _ = Describe("DataFrame", func() {
 			Expect(narrowed.Len()).To(Equal(0))
 		})
 
-		It("Metrics produces independent copy", func() {
+		It("Metrics view shares column data with parent", func() {
 			narrowed := df.Metrics(data.Price)
 			col := narrowed.Column(aapl, data.Price)
 			col[4] = 999.0
-			Expect(df.Value(aapl, data.Price)).To(Equal(104.0))
+			// View shares underlying column data -- mutation is visible in parent.
+			Expect(df.Value(aapl, data.Price)).To(Equal(999.0))
+			// Restore for other tests.
+			col[4] = 104.0
 		})
 
 		It("Metrics with reordered arguments preserves requested order", func() {
@@ -375,11 +387,14 @@ var _ = Describe("DataFrame", func() {
 			Expect(sub.Value(aapl, data.Price)).To(Equal(102.0))
 		})
 
-		It("Between produces independent copy", func() {
+		It("Between view shares column data with parent", func() {
 			sub := df.Between(times[0], times[4])
 			col := sub.Column(aapl, data.Price)
 			col[0] = 999.0
-			Expect(df.ValueAt(aapl, data.Price, times[0])).To(Equal(100.0))
+			// View shares underlying column data -- mutation is visible in parent.
+			Expect(df.ValueAt(aapl, data.Price, times[0])).To(Equal(999.0))
+			// Restore for other tests.
+			col[0] = 100.0
 		})
 
 		It("Between with boundaries outside the frame returns all rows", func() {
@@ -2114,6 +2129,48 @@ var _ = Describe("AppendRow", func() {
 		// Snapshot should be unaffected
 		Expect(snapshot.Len()).To(Equal(1))
 		Expect(df.Len()).To(Equal(2))
+	})
+
+	It("AppendRow does not affect views created via Between", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		t2 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		t3 := time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1, t2}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, data.Daily, [][]float64{{100, 110}},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		view := df.Between(t1, t2)
+		Expect(view.Len()).To(Equal(2))
+
+		err = df.AppendRow(t3, []float64{120})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(view.Len()).To(Equal(2))
+		Expect(view.Value(spy, data.MetricClose)).To(Equal(110.0))
+		Expect(df.Len()).To(Equal(3))
+	})
+
+	It("Insert does not affect views", func() {
+		t1 := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		df, err := data.NewDataFrame(
+			[]time.Time{t1}, []asset.Asset{spy},
+			[]data.Metric{data.MetricClose}, data.Daily, [][]float64{{100}},
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		view := df.Metrics(data.MetricClose)
+		Expect(view.ColCount()).To(Equal(1))
+
+		err = df.Insert(spy, data.Volume, []float64{5000})
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(view.ColCount()).To(Equal(1))
+		Expect(view.Value(spy, data.MetricClose)).To(Equal(100.0))
+		Expect(df.ColCount()).To(Equal(2))
 	})
 
 	Describe("Broadcast Sub", func() {

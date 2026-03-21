@@ -86,12 +86,12 @@ func ExampleData() (*TestProvider, AssetProvider) {
 			price := basePrice[aIdx]*(1+dailyDrift[aIdx]*float64(timeIdx)) + wave
 			price = math.Round(price*100) / 100
 
-			cols[aIdx*numMetrics+0][timeIdx] = price                                          // MetricClose
-			cols[aIdx*numMetrics+1][timeIdx] = price                                          // AdjClose
-			cols[aIdx*numMetrics+2][timeIdx] = 0                                              // Dividend
+			cols[aIdx*numMetrics+0][timeIdx] = price                                              // MetricClose
+			cols[aIdx*numMetrics+1][timeIdx] = price                                              // AdjClose
+			cols[aIdx*numMetrics+2][timeIdx] = 0                                                  // Dividend
 			cols[aIdx*numMetrics+3][timeIdx] = math.Round((price+basePrice[aIdx]*0.01)*100) / 100 // MetricHigh
 			cols[aIdx*numMetrics+4][timeIdx] = math.Round((price-basePrice[aIdx]*0.01)*100) / 100 // MetricLow
-			cols[aIdx*numMetrics+5][timeIdx] = 1.0                                            // SplitFactor
+			cols[aIdx*numMetrics+5][timeIdx] = 1.0                                                // SplitFactor
 		}
 	}
 
