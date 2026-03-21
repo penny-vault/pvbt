@@ -323,6 +323,13 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			}
 
+			// Set prices for margin computation and check for margin calls.
+			if marginErr := e.setMarginPrices(stepCtx, acct, e.currentDate); marginErr != nil {
+				zerolog.Ctx(stepCtx).Error().Err(marginErr).Msg("margin price fetch failed")
+			} else if marginErr := e.checkAndHandleMarginCall(stepCtx, acct, e.currentDate); marginErr != nil {
+				zerolog.Ctx(stepCtx).Error().Err(marginErr).Msg("margin call handling failed")
+			}
+
 			// g-h. Run strategy only on strategy-schedule days.
 			if isStrategy {
 				if sb, ok := e.broker.(*SimulatedBroker); ok {

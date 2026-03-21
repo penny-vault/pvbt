@@ -1691,6 +1691,15 @@ func (a *Account) TradeDetails() []TradeDetail { return a.tradeDetails }
 // have been recorded yet.
 func (a *Account) Prices() *data.DataFrame { return a.prices }
 
+// SetPrices stores a price DataFrame on the account without recording an
+// equity point. This is used to make margin calculations available before
+// the full UpdatePrices call that records performance data.
+func (a *Account) SetPrices(priceData *data.DataFrame) {
+	if priceData != nil && priceData.Len() > 0 {
+		a.prices = priceData
+	}
+}
+
 func (a *Account) SetBroker(b broker.Broker) {
 	a.broker = b
 	_, a.brokerHasGroups = b.(broker.GroupSubmitter)

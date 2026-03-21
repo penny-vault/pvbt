@@ -305,6 +305,19 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, err
 		}
 
+		// Set prices for margin computation. The housekeeping step above
+		// fetched close prices so this call hits the cache. SetPrices
+		// stores the price DataFrame without recording an equity point;
+		// the full UpdatePrices call later handles equity recording.
+		if err := e.setMarginPrices(stepCtx, acct, date); err != nil {
+			return nil, err
+		}
+
+		// Check margin and handle margin calls (runs every trading day).
+		if err := e.checkAndHandleMarginCall(stepCtx, acct, date); err != nil {
+			return nil, fmt.Errorf("engine: margin call on %v: %w", date, err)
+		}
+
 		// Run scheduled child strategies (children before parent).
 		for _, childName := range step.childStrategies {
 			child := e.childrenByName[childName]
