@@ -11,11 +11,11 @@ Add active tax optimization to pvbt, building on the existing FIFO tax lot track
 
 Tax optimization spans two layers:
 
-1. **Account layer (correctness)** -- Wash sale tracking, configurable lot selection, and substitution mapping live in the portfolio system. These are always-on regardless of whether tax middleware is active.
+1. **Portfolio layer (correctness)** -- Wash sale tracking, configurable lot selection, and substitution mapping live in the portfolio system behind the `Portfolio` and `TaxAware` interfaces. These are always-on regardless of whether tax middleware is active.
 2. **Tax middleware (optimization)** -- A `TaxLossHarvester` middleware actively identifies and executes loss harvesting opportunities. Uses the same `portfolio.Middleware` interface as the risk overlay.
 3. **Tax drag metric (reporting)** -- A new metric computed from the transaction log measuring return lost to trading-related taxes.
 
-## Account Layer Changes
+## Portfolio Layer Changes
 
 ### Lot Selection
 
@@ -26,7 +26,7 @@ A new `LotSelection` type with four methods:
 - `HighestCost` -- sell the lot with the highest cost basis first (produces the largest realized loss when the position is underwater)
 - `SpecificID` -- sell a specific lot by reference (requires adding an ID field to `TaxLot`)
 
-The account holds a default lot selection method set at construction time (defaults to `FIFO` for backwards compatibility). `broker.Order` gains an optional `LotSelection` field; when set, it overrides the account default for that order. A corresponding `WithLotSelection(method)` `OrderModifier` is added to `portfolio/order.go` so middleware can set lot selection through the standard `batch.Order()` API. The account's sell-recording logic switches on the method to determine which lots to consume.
+The portfolio implementation holds a default lot selection method set at construction time (defaults to `FIFO` for backwards compatibility). `broker.Order` gains an optional `LotSelection` field; when set, it overrides the portfolio default for that order. A corresponding `WithLotSelection(method)` `OrderModifier` is added to `portfolio/order.go` so middleware can set lot selection through the standard `batch.Order()` API. The sell-recording logic switches on the method to determine which lots to consume.
 
 ### Wash Sale Tracking
 
@@ -56,9 +56,9 @@ type TaxAware interface {
 }
 ```
 
-Note: `SetLotSelection` is not on this interface. The account-wide default is set at construction via `WithLotSelection()`, and per-order overrides use the `WithLotSelection` `OrderModifier` on individual orders. There is no need for middleware to mutate the account-wide default at runtime.
+Note: `SetLotSelection` is not on this interface. The portfolio-wide default is set at construction via `WithLotSelection()`, and per-order overrides use the `WithLotSelection` `OrderModifier` on individual orders. There is no need for middleware to mutate the portfolio-wide default at runtime.
 
-`Account` implements both `Portfolio` and `TaxAware`. The tax middleware type-asserts the batch's portfolio reference to `TaxAware` to access tax-specific capabilities. Strategies and risk middleware only see `Portfolio`.
+The concrete implementation (currently `Account`) implements both `Portfolio` and `TaxAware`. The tax middleware type-asserts the batch's portfolio reference to `TaxAware` to access tax-specific capabilities. Strategies and risk middleware only see `Portfolio`.
 
 ### Substitution Mapping
 
@@ -124,14 +124,14 @@ Implemented as a new field on `TaxMetrics` and a corresponding metric computatio
 - `tax_loss_harvester.go` -- the middleware implementation
 - `profiles.go` -- convenience constructors returning `[]portfolio.Middleware` for consistency with the risk package (e.g., `tax.TaxEfficient(config)` returns a single-element slice today but allows future composition)
 
-### Account layer changes (`pvbt/portfolio/`)
+### Portfolio layer changes (`pvbt/portfolio/`)
 
 - `lot_selection.go` -- `LotSelection` type and constants
 - `wash_sale.go` -- `WashSaleRecord` type, wash sale detection logic, 30-day window tracking
 - `tax_aware.go` -- `TaxAware` interface definition
 - `substitution.go` -- substitution registration and Holdings/ProjectedHoldings/ProjectedWeights mapping
 - `tax_drag.go` -- new metric
-- Modifications to `account.go` -- implement `TaxAware`, lot selection in sell path, wash sale checks in buy path
+- Modifications to `account.go` -- implement `TaxAware` on the concrete type, lot selection in sell path, wash sale checks in buy path
 - Modifications to `broker/order.go` -- optional `LotSelection` field on `Order`
 - Addition of `TaxDrag` field to `TaxMetrics`
 
