@@ -712,9 +712,12 @@ func (a *Account) Record(txn Transaction) {
 }
 
 // WashSaleRecords returns all wash sale records detected during the
-// account's lifetime.
+// account's lifetime. The returned slice is a copy; mutations do not
+// affect the account's internal state.
 func (a *Account) WashSaleRecords() []WashSaleRecord {
-	return a.washSales
+	result := make([]WashSaleRecord, len(a.washSales))
+	copy(result, a.washSales)
+	return result
 }
 
 // pruneWashSaleTracking removes entries older than 30 days from the
@@ -766,7 +769,7 @@ func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty 
 
 	for idx := 0; idx < len(sales) && remaining > 0; idx++ {
 		daysDiff := buyDate.Sub(sales[idx].date).Hours() / 24
-		if daysDiff > float64(washSaleWindowDays) {
+		if daysDiff > float64(washSaleWindowDays) || daysDiff < 0 {
 			continue
 		}
 
@@ -849,8 +852,21 @@ func (a *Account) checkWashSaleOnSell(ast asset.Asset, sellDate time.Time, sellQ
 
 		disallowedLoss := matchQty * lossPerShare
 
-		// Adjust the recent buy lot's cost basis.
-		a.adjustLotBasis(ast, buys[idx].lotID, lossPerShare)
+		// When matchQty is less than the full lot size, split the lot so
+		// that only the matched shares receive the basis adjustment. The
+		// remainder keeps its original basis.
+		adjustedLotID := buys[idx].lotID
+		if matchQty < buys[idx].qty {
+			headID, tailID := a.splitLot(ast, buys[idx].lotID, matchQty)
+			adjustedLotID = headID
+
+			// Update the recentBuy entry to refer to the tail lot for
+			// any future matching against the leftover shares.
+			buys[idx].lotID = tailID
+		}
+
+		// Adjust only the matched portion's cost basis.
+		a.adjustLotBasis(ast, adjustedLotID, lossPerShare)
 
 		// Record the wash sale.
 		a.washSales = append(a.washSales, WashSaleRecord{
@@ -858,7 +874,7 @@ func (a *Account) checkWashSaleOnSell(ast asset.Asset, sellDate time.Time, sellQ
 			SellDate:       sellDate,
 			RebuyDate:      buys[idx].date,
 			DisallowedLoss: disallowedLoss,
-			AdjustedLotID:  buys[idx].lotID,
+			AdjustedLotID:  adjustedLotID,
 		})
 
 		buys[idx].qty -= matchQty
@@ -907,12 +923,46 @@ func (a *Account) adjustLotBasis(ast asset.Asset, lotID string, perShareAdjustme
 	}
 }
 
+// splitLot splits a tax lot with the given ID into two lots: a head lot
+// of headQty shares (which keeps the original lot ID) and a tail lot of
+// the remaining shares (which gets a new derived ID). The head lot is
+// returned first, then the tail. This is used to apply basis adjustments
+// to only a portion of a lot's shares.
+func (a *Account) splitLot(ast asset.Asset, lotID string, headQty float64) (headID, tailID string) {
+	lots := a.taxLots[ast]
+	for idx := range lots {
+		if lots[idx].ID != lotID {
+			continue
+		}
+
+		original := lots[idx]
+		tailQty := original.Qty - headQty
+
+		// Shrink the existing lot to headQty shares; it keeps the original ID.
+		lots[idx].Qty = headQty
+		headID = original.ID
+
+		// Create a new lot for the remaining shares with a derived ID.
+		tailID = fmt.Sprintf("%s-split", original.ID)
+		tail := TaxLot{
+			ID:    tailID,
+			Date:  original.Date,
+			Qty:   tailQty,
+			Price: original.Price,
+		}
+
+		a.taxLots[ast] = append(lots, tail)
+		return headID, tailID
+	}
+
+	return lotID, ""
+}
+
 // consumedLotInfo holds information about the lots that would be consumed
 // by a sell operation, without actually consuming them.
 type consumedLotInfo struct {
-	avgCostBasis    float64
-	latestBuyDate   time.Time
-	earliestBuyDate time.Time
+	avgCostBasis  float64
+	latestBuyDate time.Time
 }
 
 // computeConsumedLotInfo computes the weighted average cost basis and the
@@ -930,15 +980,11 @@ func (a *Account) computeConsumedLotInfo(ast asset.Asset, qty float64, method Lo
 
 	var totalCost, totalQty float64
 
-	var earliest, latest time.Time
+	var latest time.Time
 
 	accumulate := func(lot TaxLot, consumed float64) {
 		totalCost += consumed * lot.Price
 		totalQty += consumed
-
-		if earliest.IsZero() || lot.Date.Before(earliest) {
-			earliest = lot.Date
-		}
 
 		if latest.IsZero() || lot.Date.After(latest) {
 			latest = lot.Date
@@ -993,9 +1039,8 @@ func (a *Account) computeConsumedLotInfo(ast asset.Asset, qty float64, method Lo
 	}
 
 	return consumedLotInfo{
-		avgCostBasis:    totalCost / totalQty,
-		latestBuyDate:   latest,
-		earliestBuyDate: earliest,
+		avgCostBasis:  totalCost / totalQty,
+		latestBuyDate: latest,
 	}
 }
 

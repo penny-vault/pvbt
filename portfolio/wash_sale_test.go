@@ -153,6 +153,53 @@ var _ = Describe("Wash sale detection", func() {
 		})
 	})
 
+	Describe("partial wash sale (reverse direction): sell fewer shares than buy lot size", func() {
+		It("adjusts only the matched shares' basis, leaving remaining shares unchanged", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+
+			// Buy original lot at $100 first; FIFO will consume this lot first.
+			origBuyDate := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+			buyLot(acct, spy, origBuyDate, 100.0, 10)
+
+			// Buy 10 replacement shares at $85 within 30 days of the upcoming sell.
+			recentBuyDate := time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)
+			buyLot(acct, spy, recentBuyDate, 85.0, 10)
+
+			// Sell only 5 shares at $80 (loss of $20/share vs the $100 original basis).
+			// FIFO consumes 5 shares from the Jan-2 lot.
+			// matchQty = 5, which is less than the recent buy lot size of 10.
+			// DisallowedLoss = 5 * $20 = $100 total.
+			// Only 5 of the 10 replacement shares should have their basis bumped.
+			sellDate := time.Date(2026, 1, 25, 0, 0, 0, 0, time.UTC)
+			sellLot(acct, spy, sellDate, 80.0, 5)
+
+			// After the sell the account holds:
+			//   - 5 shares of the original lot that remain unsold: basis $100
+			//   - 5 shares of the recent buy lot that were matched: basis $85 + $20 = $105
+			//   - 5 shares of the recent buy lot that were NOT matched: basis $85
+			lots := acct.TaxLots()[spy]
+			Expect(lots).To(HaveLen(3))
+
+			// Collect prices across all lots; all have qty 5.
+			prices := make([]float64, 0, 3)
+			for _, lot := range lots {
+				Expect(lot.Qty).To(BeNumerically("~", 5.0, 0.001))
+				prices = append(prices, lot.Price)
+			}
+
+			Expect(prices).To(ContainElements(
+				BeNumerically("~", 105.0, 0.001), // adjusted matched portion
+				BeNumerically("~", 85.0, 0.001),  // unadjusted remainder of recent buy
+				BeNumerically("~", 100.0, 0.001), // remaining original lot
+			))
+
+			// Verify the wash sale record captures the correct disallowed amount.
+			records := acct.WashSaleRecords()
+			Expect(records).To(HaveLen(1))
+			Expect(records[0].DisallowedLoss).To(BeNumerically("~", 100.0, 0.001))
+		})
+	})
+
 	Describe("WashSaleRecords accessible", func() {
 		It("stores and returns wash sale records", func() {
 			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
