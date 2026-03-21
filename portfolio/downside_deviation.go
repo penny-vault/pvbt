@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,8 +31,8 @@ func (downsideDeviation) Description() string {
 	return "Standard deviation of negative returns only. Unlike standard deviation which treats upside and downside volatility equally, this focuses solely on harmful volatility. Used in the Sortino ratio denominator."
 }
 
-func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
+func (downsideDeviation) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
@@ -41,15 +42,12 @@ func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := pd.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
 
 	// Filter to only negative excess returns.
 	var neg []float64
@@ -64,12 +62,12 @@ func (downsideDeviation) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(df.Times())
 
 	return stat.StdDev(neg, nil) * math.Sqrt(af), nil
 }
 
-func (downsideDeviation) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (downsideDeviation) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

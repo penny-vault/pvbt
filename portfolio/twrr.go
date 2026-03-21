@@ -16,9 +16,10 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/asset"
 )
 
 type twrr struct{}
@@ -32,20 +33,16 @@ func (twrr) Description() string {
 // Compute returns the total time-weighted return over the window (or full
 // history when window is nil). It compounds sub-period returns derived
 // from the equity curve: product(1 + r_i) - 1.
-func (twrr) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (twrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	product := 1.0
 	for _, ri := range col {
@@ -57,30 +54,37 @@ func (twrr) Compute(a *Account, window *Period) (float64, error) {
 
 // ComputeSeries returns the cumulative return at each point: the running
 // product of (1 + r_i) minus 1. The result has length len(equity)-1.
-func (twrr) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (twrr) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return nil, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	if len(col) == 0 {
 		return nil, nil
 	}
 
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	// The returns DataFrame has NaN at index 0; the clean col starts at index 1.
+	// Use times[1:] to match.
+	times := df.Times()
+	seriesTimes := times[1:]
 
 	cum := make([]float64, len(col))
 
 	product := 1.0
-	for i, ri := range col {
+	for idx, ri := range col {
 		product *= (1 + ri)
-		cum[i] = product - 1
+		cum[idx] = product - 1
 	}
 
-	return cum, nil
+	return data.NewDataFrame(
+		seriesTimes,
+		[]asset.Asset{portfolioAsset},
+		[]data.Metric{data.PortfolioReturns},
+		df.Frequency(),
+		[][]float64{cum},
+	)
 }
 
 func (twrr) BenchmarkTargetable() {}

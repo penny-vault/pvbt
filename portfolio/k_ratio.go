@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,20 +31,13 @@ func (kRatio) Description() string {
 	return "Measures the consistency of equity curve growth by fitting a linear regression to the log equity curve and dividing the slope by the standard error. Higher values indicate smoother, more consistent growth. Negative values indicate a declining equity curve."
 }
 
-func (kRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (kRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
-		return 0, nil
-	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
 
 	count := len(col)
 	if count < 3 {
@@ -54,9 +48,9 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	logVAMI := make([]float64, count)
 
 	cumProd := 1000.0
-	for i, ri := range col {
+	for idx, ri := range col {
 		cumProd *= (1 + ri)
-		logVAMI[i] = math.Log(cumProd)
+		logVAMI[idx] = math.Log(cumProd)
 	}
 
 	// OLS regression: y = logVAMI, x = [0, 1, ..., count-1].
@@ -67,10 +61,10 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	sumXXdev := 0.0
 	sumXYdev := 0.0
 
-	for i := 0; i < count; i++ {
-		dx := float64(i) - meanX
+	for idx := 0; idx < count; idx++ {
+		dx := float64(idx) - meanX
 		sumXXdev += dx * dx
-		sumXYdev += dx * (logVAMI[i] - meanY)
+		sumXYdev += dx * (logVAMI[idx] - meanY)
 	}
 
 	if sumXXdev == 0 {
@@ -83,9 +77,9 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	// Compute residuals and standard error of slope.
 	sumResidSq := 0.0
 
-	for i := 0; i < count; i++ {
-		predicted := slope*float64(i) + intercept
-		resid := logVAMI[i] - predicted
+	for idx := 0; idx < count; idx++ {
+		predicted := slope*float64(idx) + intercept
+		resid := logVAMI[idx] - predicted
 		sumResidSq += resid * resid
 	}
 
@@ -97,7 +91,9 @@ func (kRatio) Compute(a *Account, window *Period) (float64, error) {
 	return slope / stderr, nil
 }
 
-func (kRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (kRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // KRatio measures the consistency of returns over time: the slope of
 // the log-VAMI regression line divided by the standard error of the

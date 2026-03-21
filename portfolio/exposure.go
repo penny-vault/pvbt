@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 )
@@ -29,20 +29,16 @@ func (exposure) Description() string {
 	return "Fraction of periods where the portfolio had non-zero returns, indicating time invested in the market. A value of 1.0 means always invested; 0.5 means invested half the time. Essential for strategies that hold cash or go flat between signals."
 }
 
-func (exposure) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (exposure) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	active := 0
 
@@ -55,7 +51,9 @@ func (exposure) Compute(a *Account, window *Period) (float64, error) {
 	return float64(active) / float64(len(col)), nil
 }
 
-func (exposure) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (exposure) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Exposure measures the fraction of periods where the portfolio had
 // non-zero returns. For strategies that go to cash between signals,

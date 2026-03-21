@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/asset"
+)
 
 type maxDrawdown struct{}
 
@@ -25,20 +30,16 @@ func (maxDrawdown) Description() string {
 	return "Largest peak-to-trough decline in the equity curve as a decimal fraction. A value of -0.20 means the portfolio fell 20% from its peak. More negative values indicate larger drawdowns."
 }
 
-func (maxDrawdown) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (maxDrawdown) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Drawdown(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-	if equity.Len() == 0 {
+	ddCol := df.Column(portfolioAsset, data.PortfolioDrawdown)
+	if len(ddCol) == 0 {
 		return 0, nil
 	}
-
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	minDD := 0.0
 	for _, v := range ddCol {
@@ -50,21 +51,24 @@ func (maxDrawdown) Compute(a *Account, window *Period) (float64, error) {
 	return minDD, nil
 }
 
-func (maxDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (maxDrawdown) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error) {
+	df := stats.Drawdown(ctx, window)
+	if df == nil {
 		return nil, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-	if equity.Len() == 0 {
+	ddCol := df.Column(portfolioAsset, data.PortfolioDrawdown)
+	if len(ddCol) == 0 {
 		return nil, nil
 	}
 
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-
-	return dd.Column(portfolioAsset, data.PortfolioEquity), nil
+	return data.NewDataFrame(
+		df.Times(),
+		[]asset.Asset{portfolioAsset},
+		[]data.Metric{data.PortfolioDrawdown},
+		df.Frequency(),
+		[][]float64{ddCol},
+	)
 }
 
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.

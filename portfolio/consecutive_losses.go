@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 )
@@ -29,20 +29,16 @@ func (consecutiveLosses) Description() string {
 	return "Longest streak of consecutive periods with negative returns. Critical for understanding drawdown psychology -- longer losing streaks are harder to endure even if total loss is small. The value is a count of periods."
 }
 
-func (consecutiveLosses) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (consecutiveLosses) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	maxStreak := 0
 	current := 0
@@ -61,7 +57,7 @@ func (consecutiveLosses) Compute(a *Account, window *Period) (float64, error) {
 	return float64(maxStreak), nil
 }
 
-func (consecutiveLosses) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (consecutiveLosses) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

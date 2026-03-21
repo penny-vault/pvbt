@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,26 +31,23 @@ func (smartSharpe) Description() string {
 	return "Sharpe ratio penalized for autocorrelation in returns. When returns are serially correlated, the standard Sharpe overstates risk-adjusted performance. The penalty factor is 1 + 2*sum(autocorrelations), following Lo (2002). Lower than Sharpe when returns exhibit positive autocorrelation."
 }
 
-func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (smartSharpe) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := perfData.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
 	if len(erCol) < 2 {
 		return 0, nil
 	}
@@ -59,7 +57,7 @@ func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(df.Times())
 	rawSharpe := stat.Mean(erCol, nil) / stdDev * math.Sqrt(af)
 
 	penalty := autocorrelationPenalty(erCol)
@@ -70,7 +68,9 @@ func (smartSharpe) Compute(a *Account, window *Period) (float64, error) {
 	return rawSharpe / penalty, nil
 }
 
-func (smartSharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (smartSharpe) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // autocorrelationPenalty computes the Lo (2002) correction factor:
 // sqrt(1 + 2*sum(rho_k)) where rho_k is the autocorrelation at lag k.

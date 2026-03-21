@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,26 +31,23 @@ func (probabilisticSharpe) Description() string {
 	return "Probability that the true Sharpe ratio exceeds zero, accounting for skewness and kurtosis of returns. Based on Bailey and Lopez de Prado (2012). Values near 1.0 indicate high confidence the strategy has positive risk-adjusted returns. Values near 0.5 indicate no statistical evidence of skill."
 }
 
-func (probabilisticSharpe) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (probabilisticSharpe) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := perfData.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
 
 	count := len(erCol)
 	if count < 4 {
@@ -102,7 +100,7 @@ func (probabilisticSharpe) Compute(a *Account, window *Period) (float64, error) 
 	return normalCDF(z), nil
 }
 
-func (probabilisticSharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (probabilisticSharpe) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

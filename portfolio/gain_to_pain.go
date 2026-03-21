@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,20 +30,16 @@ func (gainToPain) Description() string {
 	return "Jack Schwager's Gain-to-Pain Ratio: sum of all returns divided by the absolute sum of negative returns. Measures total gains per unit of total pain endured. Values above 1.0 are good; above 2.0 is excellent. Unlike GainLossRatio (average win/loss), this uses total sums."
 }
 
-func (gainToPain) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (gainToPain) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	var totalReturn, negativeSum float64
 	for _, v := range col {
@@ -59,7 +56,9 @@ func (gainToPain) Compute(a *Account, window *Period) (float64, error) {
 	return totalReturn / negativeSum, nil
 }
 
-func (gainToPain) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (gainToPain) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // GainToPainRatio is Jack Schwager's metric: the sum of all returns
 // divided by the absolute sum of negative returns. It captures total

@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,24 +30,25 @@ func (recoveryFactor) Description() string {
 	return "Total compounded return divided by the absolute value of the maximum drawdown. Measures how many times over the strategy recovered from its worst decline. Higher values indicate greater resilience. A value of 3.0 means the strategy earned 3x its worst drawdown."
 }
 
-func (recoveryFactor) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (recoveryFactor) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	eqDF := stats.EquitySeries(ctx, window)
+	if eqDF == nil {
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	eqCol := equity.Column(portfolioAsset, data.PortfolioEquity)
+	eqCol := eqDF.Column(portfolioAsset, data.PortfolioEquity)
 	if len(eqCol) < 2 {
 		return 0, nil
 	}
 
 	totalReturn := eqCol[len(eqCol)-1]/eqCol[0] - 1
 
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+	ddDF := stats.Drawdown(ctx, window)
+	if ddDF == nil {
+		return 0, nil
+	}
+
+	ddCol := ddDF.Column(portfolioAsset, data.PortfolioDrawdown)
 
 	minDD := 0.0
 	for _, v := range ddCol {
@@ -62,7 +64,9 @@ func (recoveryFactor) Compute(a *Account, window *Period) (float64, error) {
 	return totalReturn / math.Abs(minDD), nil
 }
 
-func (recoveryFactor) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (recoveryFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // RecoveryFactor is the total compounded return divided by the absolute
 // maximum drawdown. It tells you how many times the strategy has earned

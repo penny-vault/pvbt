@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,24 +30,25 @@ func (kellerRatio) Description() string {
 	return "Risk-adjusted return that penalizes drawdowns non-linearly: K = R * (1 - D/(1-D)), where R is total return and D is maximum drawdown. When R < 0 or D > 50% the ratio is 0. Small drawdowns have limited impact; as drawdowns approach 50% the penalty grows sharply, making this useful for evaluating tactical allocation strategies."
 }
 
-func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (kellerRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	eqDF := stats.EquitySeries(ctx, window)
+	if eqDF == nil {
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	eqCol := equity.Column(portfolioAsset, data.PortfolioEquity)
+	eqCol := eqDF.Column(portfolioAsset, data.PortfolioEquity)
 	if len(eqCol) < 2 {
 		return 0, nil
 	}
 
 	totalReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
 
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+	ddDF := stats.Drawdown(ctx, window)
+	if ddDF == nil {
+		return 0, nil
+	}
+
+	ddCol := ddDF.Column(portfolioAsset, data.PortfolioDrawdown)
 
 	// Find max drawdown as a positive number (abs of most negative drawdown).
 	minDD := 0.0
@@ -65,7 +67,9 @@ func (kellerRatio) Compute(a *Account, window *Period) (float64, error) {
 	return 0, nil
 }
 
-func (kellerRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (kellerRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // KellerRatio adjusts return for drawdown severity:
 // K = R * (1 - D/(1-D)) when R >= 0 and D <= 50%, else 0.

@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 	"gonum.org/v1/gonum/stat"
@@ -30,20 +30,13 @@ func (skewness) Description() string {
 	return "Measures the asymmetry of the return distribution. Positive skew means more extreme positive returns. Negative skew means more extreme negative returns (the common case for equities). Zero indicates a symmetric distribution."
 }
 
-func (skewness) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (skewness) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
-		return 0, nil
-	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
 
 	numValues := len(col)
 	if numValues < 3 {
@@ -66,7 +59,9 @@ func (skewness) Compute(a *Account, window *Period) (float64, error) {
 	return sum / float64(numValues) / (stdDev * stdDev * stdDev), nil
 }
 
-func (skewness) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (skewness) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Skewness measures the asymmetry of the return distribution.
 // Negative skew means the left tail is longer (more large losses
