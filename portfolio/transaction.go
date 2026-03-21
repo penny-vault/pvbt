@@ -104,4 +104,10 @@ type Transaction struct {
 	// Set automatically from the Allocation's Justification field during
 	// RebalanceTo, or from the WithJustification OrderModifier during Order.
 	Justification string
+
+	// LotSelection overrides the account-level default lot selection method
+	// for this specific sell transaction. Zero (LotFIFO) means use the
+	// account default. Set automatically from broker.Order.LotSelection
+	// when a fill is recorded via submitAndRecord.
+	LotSelection int
 }

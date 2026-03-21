@@ -15,6 +15,8 @@
 
 package portfolio
 
+import "sort"
+
 // LotSelection determines which tax lots are consumed when selling a position.
 type LotSelection int
 
@@ -29,3 +31,17 @@ const (
 	// LotSpecificID sells a specific lot identified by ID.
 	LotSpecificID
 )
+
+// sortLotsByDateAsc sorts lots in ascending date order (earliest first).
+func sortLotsByDateAsc(lots []TaxLot) {
+	sort.SliceStable(lots, func(i, j int) bool {
+		return lots[i].Date.Before(lots[j].Date)
+	})
+}
+
+// sortLotsByPriceDesc sorts lots in descending price order (highest cost first).
+func sortLotsByPriceDesc(lots []TaxLot) {
+	sort.SliceStable(lots, func(i, j int) bool {
+		return lots[i].Price > lots[j].Price
+	})
+}

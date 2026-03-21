@@ -57,6 +57,7 @@ type Account struct {
 	annotations       []Annotation
 	middleware        []Middleware
 	pendingOrders     map[string]broker.Order
+	lotSelection      LotSelection
 }
 
 // New creates an Account with the given options.
@@ -97,6 +98,14 @@ func WithCash(amount float64, date time.Time) Option {
 			Type:   DepositTransaction,
 			Amount: amount,
 		})
+	}
+}
+
+// WithDefaultLotSelection sets the lot selection method used for all sell
+// transactions that do not carry a per-order override.
+func WithDefaultLotSelection(method LotSelection) Option {
+	return func(acct *Account) {
+		acct.lotSelection = method
 	}
 }
 
@@ -308,6 +317,7 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 				Price:         fill.Price,
 				Amount:        amount,
 				Justification: justification,
+				LotSelection:  order.LotSelection,
 			})
 		default:
 			return nil
@@ -630,27 +640,21 @@ func (a *Account) Record(txn Transaction) {
 	case BuyTransaction:
 		a.holdings[txn.Asset] += txn.Qty
 		a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], TaxLot{
+			ID:    fmt.Sprintf("lot-%d-%d", txn.Date.UnixNano(), len(a.taxLots[txn.Asset])),
 			Date:  txn.Date,
 			Qty:   txn.Qty,
 			Price: txn.Price,
 		})
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
-		remaining := txn.Qty
-		lots := a.taxLots[txn.Asset]
 
-		lotIdx := 0
-		for lotIdx < len(lots) && remaining > 0 {
-			if lots[lotIdx].Qty <= remaining {
-				remaining -= lots[lotIdx].Qty
-				lotIdx++
-			} else {
-				lots[lotIdx].Qty -= remaining
-				remaining = 0
-			}
+		method := LotSelection(txn.LotSelection)
+		if method == LotFIFO && a.lotSelection != LotFIFO {
+			method = a.lotSelection
 		}
 
-		a.taxLots[txn.Asset] = lots[lotIdx:]
+		a.consumeLots(txn.Asset, txn.Qty, method)
+
 		if a.holdings[txn.Asset] == 0 {
 			delete(a.holdings, txn.Asset)
 			delete(a.taxLots, txn.Asset)
@@ -671,6 +675,76 @@ func (a *Account) isDividendQualified(ast asset.Asset, divDate time.Time) bool {
 	holdingDays := divDate.Sub(lots[0].Date).Hours() / 24
 
 	return holdingDays > 60
+}
+
+// consumeLots removes qty shares from the tax lot list for ast using the
+// specified lot selection method. The caller is responsible for updating
+// holdings and cleaning up empty map entries.
+func (a *Account) consumeLots(ast asset.Asset, qty float64, method LotSelection) {
+	lots := a.taxLots[ast]
+
+	switch method {
+	case LotLIFO:
+		// Consume from the back of the slice (most recently acquired first).
+		remaining := qty
+
+		end := len(lots)
+
+		for end > 0 && remaining > 0 {
+			idx := end - 1
+			if lots[idx].Qty <= remaining {
+				remaining -= lots[idx].Qty
+				end--
+			} else {
+				lots[idx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		a.taxLots[ast] = lots[:end]
+
+	case LotHighestCost:
+		// Sort a copy by price descending, consume highest first, then
+		// restore the remaining lots to date-ascending order.
+		sortLotsByPriceDesc(lots)
+
+		remaining := qty
+
+		lotIdx := 0
+
+		for lotIdx < len(lots) && remaining > 0 {
+			if lots[lotIdx].Qty <= remaining {
+				remaining -= lots[lotIdx].Qty
+				lotIdx++
+			} else {
+				lots[lotIdx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		remainingLots := lots[lotIdx:]
+		sortLotsByDateAsc(remainingLots)
+
+		a.taxLots[ast] = remainingLots
+
+	default: // LotFIFO
+		// Consume from the front of the slice (earliest acquired first).
+		remaining := qty
+
+		lotIdx := 0
+
+		for lotIdx < len(lots) && remaining > 0 {
+			if lots[lotIdx].Qty <= remaining {
+				remaining -= lots[lotIdx].Qty
+				lotIdx++
+			} else {
+				lots[lotIdx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		a.taxLots[ast] = lots[lotIdx:]
+	}
 }
 
 // UpdatePrices stores the latest price DataFrame, computes the total
