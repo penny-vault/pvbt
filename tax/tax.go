@@ -16,8 +16,19 @@
 package tax
 
 import (
+	"context"
+	"time"
+
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
+
+// DataSource is the interface used to fetch price data for assets.
+type DataSource interface {
+	Fetch(ctx context.Context, assets []asset.Asset, lookback data.Period, metrics []data.Metric) (*data.DataFrame, error)
+	FetchAt(ctx context.Context, assets []asset.Asset, t time.Time, metrics []data.Metric) (*data.DataFrame, error)
+	CurrentDate() time.Time
+}
 
 // HarvesterConfig configures the TaxLossHarvester middleware.
 type HarvesterConfig struct {
@@ -34,4 +45,9 @@ type HarvesterConfig struct {
 	// When a substitute is configured, the harvester can sell the
 	// original and buy the substitute even inside a wash sale window.
 	Substitutes map[asset.Asset]asset.Asset
+
+	// DataSource is the price data provider. It is present for API
+	// compatibility; the current implementation derives prices from
+	// the portfolio's position data.
+	DataSource DataSource
 }

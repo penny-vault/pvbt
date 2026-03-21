@@ -41,7 +41,7 @@ func NewTaxLossHarvester(config HarvesterConfig) portfolio.Middleware {
 }
 
 // washSaleWindowDays is the IRS wash sale look-back period.
-const washSaleWindowDays = 31
+const washSaleWindowDays = 30
 
 // Process implements portfolio.Middleware. It scans for harvestable
 // losses and injects sell (and optionally substitute buy) orders.
@@ -174,6 +174,10 @@ func (h *TaxLossHarvester) swapBackExpiredSubstitutions(ctx context.Context, bat
 		}
 
 		subPrice := currentPrice(batch, sub.Substitute)
+		if subPrice <= 0 {
+			continue
+		}
+
 		sellDollars := subQty * subPrice
 
 		justification := fmt.Sprintf(
@@ -182,6 +186,7 @@ func (h *TaxLossHarvester) swapBackExpiredSubstitutions(ctx context.Context, bat
 		)
 
 		if err := batch.Order(ctx, sub.Substitute, portfolio.Sell, subQty,
+			portfolio.WithLotSelection(portfolio.LotHighestCost),
 			portfolio.WithJustification(justification),
 		); err != nil {
 			return fmt.Errorf("tax loss harvester swap-back: sell %s: %w", sub.Substitute.Ticker, err)
