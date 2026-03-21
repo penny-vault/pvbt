@@ -343,6 +343,26 @@ var _ = Describe("Order", func() {
 		})
 	})
 
+	Describe("bracket/OCO rejection via Account.Order", func() {
+		It("returns an error when WithBracket modifier is used", func() {
+			stopLoss := portfolio.StopLossPrice(90.0)
+			takeProfit := portfolio.TakeProfitPrice(115.0)
+			err := acct.Order(context.Background(), testAsset, portfolio.Buy, 10, portfolio.WithBracket(stopLoss, takeProfit))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bracket/OCO modifiers require batch submission"))
+			Expect(mb.submitted).To(BeEmpty())
+		})
+
+		It("returns an error when OCO modifier is used", func() {
+			legA := portfolio.StopLeg(90.0)
+			legB := portfolio.LimitLeg(110.0)
+			err := acct.Order(context.Background(), testAsset, portfolio.Buy, 10, portfolio.OCO(legA, legB))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("bracket/OCO modifiers require batch submission"))
+			Expect(mb.submitted).To(BeEmpty())
+		})
+	})
+
 	DescribeTable("time-in-force modifiers",
 		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
 			acct.Order(context.Background(), testAsset, portfolio.Buy, 1, mod)

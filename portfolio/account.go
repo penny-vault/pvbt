@@ -274,6 +274,10 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 			justification = modifier.reason
 		case lotSelectionModifier:
 			order.LotSelection = int(modifier.method)
+		case bracketModifier:
+			return fmt.Errorf("bracket/OCO modifiers require batch submission")
+		case ocoModifier:
+			return fmt.Errorf("bracket/OCO modifiers require batch submission")
 		}
 	}
 
