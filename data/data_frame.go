@@ -45,6 +45,11 @@ type DataFrame struct {
 	// times lists the timestamps in chronological order.
 	times []time.Time
 
+	// dateKeys caches integer date keys (year*10000 + month*100 + day) for
+	// each timestamp. Populated for Daily-or-coarser frames to eliminate
+	// repeated time.Time.Date() / timezone lookups during binary search.
+	dateKeys []int32
+
 	// assets lists the assets in the order they appear in the data slab.
 	assets []asset.Asset
 
@@ -112,7 +117,31 @@ func (df *DataFrame) RiskFreeRates() []float64 {
 // receiver to the target DataFrame. Returns target for chaining.
 func (df *DataFrame) propagateAux(target *DataFrame) *DataFrame {
 	target.riskFreeRates = df.riskFreeRates
+	target.dateKeys = df.dateKeys
+
 	return target
+}
+
+// dateKey converts a time.Time to an integer YYYYMMDD key.
+func dateKey(t time.Time) int32 {
+	year, month, day := t.Date()
+	return int32(year)*10000 + int32(month)*100 + int32(day)
+}
+
+// ensureDateKeys lazily builds the dateKey cache on first access.
+// Only DataFrames that perform date-based lookups (timeIndexByDate,
+// Between) pay the cost; intermediate DataFrames in metric chains skip it.
+func (df *DataFrame) ensureDateKeys() {
+	if df.dateKeys != nil || df.freq < Daily || len(df.times) == 0 {
+		return
+	}
+
+	keys := make([]int32, len(df.times))
+	for idx, ts := range df.times {
+		keys[idx] = dateKey(ts)
+	}
+
+	df.dateKeys = keys
 }
 
 // NewDataFrame constructs a DataFrame from the given dimensions and data.
@@ -186,26 +215,17 @@ func (df *DataFrame) timeIndex(timestamp time.Time) (int, bool) {
 // ignoring the time-of-day component. Daily data has no meaningful
 // time -- the stored hour is an artifact of eodTimestamp.
 func (df *DataFrame) timeIndexByDate(t time.Time) (int, bool) {
-	tY, tM, tD := t.Date()
+	df.ensureDateKeys()
 
-	idx := sort.Search(len(df.times), func(idx int) bool {
-		sY, sM, sD := df.times[idx].Date()
-		// Compare year, then month, then day.
-		if sY != tY {
-			return sY > tY
-		}
+	target := dateKey(t)
+	keys := df.dateKeys
 
-		if sM != tM {
-			return sM > tM
-		}
-
-		return sD >= tD
+	idx := sort.Search(len(keys), func(idx int) bool {
+		return keys[idx] >= target
 	})
-	if idx < len(df.times) {
-		sY, sM, sD := df.times[idx].Date()
-		if sY == tY && sM == tM && sD == tD {
-			return idx, true
-		}
+
+	if idx < len(keys) && keys[idx] == target {
+		return idx, true
 	}
 
 	return 0, false
@@ -432,6 +452,12 @@ func (df *DataFrame) Copy() *DataFrame {
 		result.riskFreeRates = rfCopy
 	}
 
+	if df.dateKeys != nil {
+		dkCopy := make([]int32, len(df.dateKeys))
+		copy(dkCopy, df.dateKeys)
+		result.dateKeys = dkCopy
+	}
+
 	return result
 }
 
@@ -575,48 +601,37 @@ func (df *DataFrame) Between(start, end time.Time) *DataFrame {
 		return WithErr(df.err)
 	}
 
-	before, after := timeBefore, timeAfter
+	var startIdx, endIdx int
+
 	if df.freq >= Daily {
-		before, after = dateBefore, dateAfter
+		df.ensureDateKeys()
+
+		startKey := dateKey(start)
+		endKey := dateKey(end)
+		keys := df.dateKeys
+
+		startIdx = sort.Search(len(keys), func(i int) bool {
+			return keys[i] >= startKey
+		})
+
+		endIdx = sort.Search(len(keys), func(i int) bool {
+			return keys[i] > endKey
+		})
+	} else {
+		startIdx = sort.Search(len(df.times), func(i int) bool {
+			return !df.times[i].Before(start)
+		})
+
+		endIdx = sort.Search(len(df.times), func(i int) bool {
+			return df.times[i].After(end)
+		})
 	}
-
-	startIdx := sort.Search(len(df.times), func(i int) bool {
-		return !before(df.times[i], start)
-	})
-
-	endIdx := sort.Search(len(df.times), func(i int) bool {
-		return after(df.times[i], end)
-	})
 
 	if startIdx >= endIdx {
 		return mustNewDataFrame(nil, nil, nil, 0, nil)
 	}
 
 	return df.sliceByTimeIndices(startIdx, endIdx)
-}
-
-func timeBefore(a, b time.Time) bool { return a.Before(b) }
-func timeAfter(a, b time.Time) bool  { return a.After(b) }
-
-// dateBefore reports whether a's calendar date is strictly before b's.
-func dateBefore(a, b time.Time) bool {
-	aY, aM, aD := a.Date()
-
-	bY, bM, bD := b.Date()
-	if aY != bY {
-		return aY < bY
-	}
-
-	if aM != bM {
-		return aM < bM
-	}
-
-	return aD < bD
-}
-
-// dateAfter reports whether a's calendar date is strictly after b's.
-func dateAfter(a, b time.Time) bool {
-	return dateBefore(b, a)
 }
 
 func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
@@ -647,6 +662,10 @@ func (df *DataFrame) sliceByTimeIndices(startIdx, endIdx int) *DataFrame {
 		result.riskFreeRates = df.riskFreeRates[startIdx:endIdx]
 	}
 
+	if df.dateKeys != nil {
+		result.dateKeys = df.dateKeys[startIdx:endIdx]
+	}
+
 	return result
 }
 
@@ -658,11 +677,28 @@ func (df *DataFrame) Filter(predicate func(t time.Time, row *DataFrame) bool) *D
 		return WithErr(df.err)
 	}
 
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+	rowSize := assetLen * metricLen
+
+	// Build a reusable single-row DataFrame to pass to the predicate,
+	// avoiding per-row allocation.
+	rowData := make([]float64, rowSize)
+	rowDF := mustNewDataFrame([]time.Time{{}}, df.assets, df.metrics, df.freq, rowData)
+
 	var indices []int
 
-	for tIdx, t := range df.times {
-		row := df.At(t)
-		if predicate(t, row) {
+	for tIdx, timestamp := range df.times {
+		// Populate rowData in-place from the column-major slab.
+		for aIdx := range assetLen {
+			for mIdx := range metricLen {
+				rowData[aIdx*metricLen+mIdx] = df.data[df.colOffset(aIdx, mIdx)+tIdx]
+			}
+		}
+
+		rowDF.times[0] = timestamp
+
+		if predicate(timestamp, rowDF) {
 			indices = append(indices, tIdx)
 		}
 	}
@@ -712,6 +748,15 @@ func (df *DataFrame) sliceByIndices(indices []int) *DataFrame {
 		result.riskFreeRates = rfSlice
 	}
 
+	if df.dateKeys != nil {
+		dkSlice := make([]int32, newTimeLen)
+		for newIdx, oldIdx := range indices {
+			dkSlice[newIdx] = df.dateKeys[oldIdx]
+		}
+
+		result.dateKeys = dkSlice
+	}
+
 	return result
 }
 
@@ -723,11 +768,13 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 
 	isNaN := math.IsNaN(val)
 
-	return df.Filter(func(_ time.Time, row *DataFrame) bool {
-		if isNaN {
-			return !floats.HasNaN(row.data)
-		}
+	// Fast path: scan the column-major slab directly without going through
+	// Filter's per-row DataFrame machinery.
+	if isNaN {
+		return df.dropNaN()
+	}
 
+	return df.Filter(func(_ time.Time, row *DataFrame) bool {
 		for _, v := range row.data {
 			if v == val {
 				return false
@@ -736,6 +783,44 @@ func (df *DataFrame) Drop(val float64) *DataFrame {
 
 		return true
 	})
+}
+
+// dropNaN is a fast path for Drop(NaN) that scans the column-major slab
+// directly, marking timestamps that contain any NaN, without creating
+// per-row DataFrames or going through Filter.
+func (df *DataFrame) dropNaN() *DataFrame {
+	timeLen := len(df.times)
+	if timeLen == 0 {
+		return mustNewDataFrame(nil, nil, nil, 0, nil)
+	}
+
+	assetLen := len(df.assets)
+	metricLen := len(df.metrics)
+
+	// hasNaN[tIdx] is true if any column has NaN at that timestamp.
+	hasNaN := make([]bool, timeLen)
+
+	for aIdx := range assetLen {
+		for mIdx := range metricLen {
+			col := df.colSlice(aIdx, mIdx)
+			for tIdx, val := range col {
+				if math.IsNaN(val) {
+					hasNaN[tIdx] = true
+				}
+			}
+		}
+	}
+
+	// Collect indices that are NaN-free.
+	indices := make([]int, 0, timeLen)
+
+	for tIdx, bad := range hasNaN {
+		if !bad {
+			indices = append(indices, tIdx)
+		}
+	}
+
+	return df.sliceByIndices(indices)
 }
 
 // RenameMetric returns a new DataFrame with metric old replaced by new.
@@ -1912,6 +1997,11 @@ func (df *DataFrame) AppendRow(timestamp time.Time, values []float64) error {
 
 	df.data = newData
 	df.times = append(df.times, timestamp)
+
+	if df.dateKeys != nil {
+		df.dateKeys = append(df.dateKeys, dateKey(timestamp))
+	}
+
 	df.riskFreeRates = nil
 
 	return nil
