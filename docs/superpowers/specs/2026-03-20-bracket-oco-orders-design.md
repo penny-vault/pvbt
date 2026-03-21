@@ -163,7 +163,8 @@ The account gains group tracking alongside the existing `pendingOrders` map:
 type Account struct {
     // ... existing fields ...
 
-    pendingGroups map[string]*broker.OrderGroup  // groupID -> group
+    pendingGroups    map[string]*broker.OrderGroup  // groupID -> group
+    brokerHasGroups  bool                           // cached GroupSubmitter check
 }
 ```
 
@@ -211,16 +212,35 @@ These are required because `CancelOpenOrders` (called at frame boundaries) relie
 
 ### Synchronous vs. Deferred Fill Model
 
-The simulated broker gains an internal pending order map. Orders are split into two categories at `Submit()` time:
+The simulated broker gains an internal pending order map. Orders are split into two categories at `Submit()` time based on `GroupRole`:
 
-- **Synchronous fill** (existing behavior, unchanged): Market orders and any order without a `GroupID`. These fill immediately in `Submit()` at the close price and push a fill onto the channel before `Submit()` returns.
-- **Deferred fill** (new): Orders with a `GroupID` and a `GroupRole` of `RoleStopLoss` or `RoleTakeProfit`. These are stored in the pending order map and evaluated against intrabar price data on each subsequent bar (via a new `EvaluatePending()` method called from the engine's price-update step). Entry orders in a bracket group fill synchronously like any other order.
+- **Synchronous fill** (existing behavior, unchanged): Any order where `GroupRole` is zero (standalone orders) or `RoleEntry`. This includes market orders, limit orders, stop orders, and bracket entry orders. These fill immediately in `Submit()` at the close price and push a fill onto the channel before `Submit()` returns.
+- **Deferred fill** (new): Orders where `GroupRole` is `RoleStopLoss` or `RoleTakeProfit`. These are stored in the pending order map and evaluated against intrabar price data on each subsequent bar.
 
 This split preserves backward compatibility -- existing non-bracket code sees identical fill timing.
 
+### EvaluatePending Integration
+
+The simulated broker exposes a new method:
+
+```go
+// EvaluatePending checks deferred orders against the current bar's
+// high/low data. Uses the price provider and date already set via
+// SetPriceProvider. Triggered fills are pushed onto the fills channel.
+func (sb *SimulatedBroker) EvaluatePending()
+```
+
+`EvaluatePending` takes no arguments -- it uses the price provider and current date already set via `SetPriceProvider(engine, date)`, which the engine calls before this point. The engine already fetches `MetricHigh` and `MetricLow` in `updateAccountPrices`, so the data is available.
+
+**Engine integration point**: The engine calls `EvaluatePending()` via a type assertion (`if sb, ok := e.broker.(*SimulatedBroker); ok`) **before** `DrainFills` in the housekeeping step at the start of each bar. This ensures triggered fills are on the channel and available for draining. The call sequence per bar becomes:
+
+1. `SetPriceProvider(engine, date)`
+2. `sb.EvaluatePending()` (simulated broker only, via type assertion)
+3. `acct.DrainFills(ctx)` (picks up triggered fills)
+
 ### Fill Evaluation Order Within a Bar
 
-The `EvaluatePending()` method checks deferred orders against the current bar's high/low data.
+`EvaluatePending()` checks deferred orders against the current bar's high/low data.
 
 For long positions:
 
