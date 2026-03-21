@@ -281,7 +281,6 @@ func (r *SnapshotRecorder) recordDataFrame(df *DataFrame, requestedMetrics []Met
 
 func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric) error {
 	want := metricSet(metrics)
-	numTimes := len(df.times)
 	numMetrics := len(df.metrics)
 
 	// Build metric index for the DataFrame.
@@ -309,9 +308,7 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 					return nil
 				}
 
-				colStart := (assetIdx*numMetrics + mi) * numTimes
-
-				val := df.data[colStart+timeIdx]
+				val := df.columns[assetIdx*numMetrics+mi][timeIdx]
 				if math.IsNaN(val) {
 					return nil
 				}
@@ -347,7 +344,6 @@ func (r *SnapshotRecorder) recordEod(tx *sql.Tx, df *DataFrame, metrics []Metric
 }
 
 func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) error {
-	numTimes := len(df.times)
 	numMetrics := len(df.metrics)
 
 	mIdx := make(map[Metric]int, len(df.metrics))
@@ -365,9 +361,7 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 					return nil
 				}
 
-				colStart := (assetIdx*numMetrics + mi) * numTimes
-
-				val := df.data[colStart+timeIdx]
+				val := df.columns[assetIdx*numMetrics+mi][timeIdx]
 				if math.IsNaN(val) {
 					return nil
 				}
@@ -408,7 +402,6 @@ func (r *SnapshotRecorder) recordMetrics(tx *sql.Tx, df *DataFrame, _ []Metric) 
 }
 
 func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics []Metric) error {
-	numTimes := len(df.times)
 	numDFMetrics := len(df.metrics)
 
 	mIdx := make(map[Metric]int, len(df.metrics))
@@ -474,9 +467,7 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 					continue
 				}
 
-				colStart := (assetIdx*numDFMetrics + mi) * numTimes
-
-				val := df.data[colStart+timeIdx]
+				val := df.columns[assetIdx*numDFMetrics+mi][timeIdx]
 				if math.IsNaN(val) {
 					args[3+idx] = nil
 				} else {

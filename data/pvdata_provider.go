@@ -323,7 +323,8 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		}
 	}
 
-	df, err := NewDataFrame(times, req.Assets, req.Metrics, req.Frequency, data)
+	df, err := NewDataFrame(times, req.Assets, req.Metrics, req.Frequency,
+		SlabToColumns(data, len(req.Assets)*len(req.Metrics), len(times)))
 	if err != nil {
 		return nil, fmt.Errorf("building DataFrame: %w", err)
 	}
