@@ -141,9 +141,10 @@ func StopLossPrice(price float64) ExitTarget {
 }
 
 // StopLossPercent creates an ExitTarget that triggers a stop at the given
-// percentage below the entry price.
+// percentage below the entry price. For example, StopLossPercent(5.0) means
+// a stop at 5% below the entry price (PercentOffset = -0.05).
 func StopLossPercent(pct float64) ExitTarget {
-	return ExitTarget{PercentOffset: pct}
+	return ExitTarget{PercentOffset: -pct / 100.0}
 }
 
 // TakeProfitPrice creates an ExitTarget that closes the position at the
@@ -153,9 +154,10 @@ func TakeProfitPrice(price float64) ExitTarget {
 }
 
 // TakeProfitPercent creates an ExitTarget that closes the position at the
-// given percentage above the entry price.
+// given percentage above the entry price. For example, TakeProfitPercent(10.0)
+// means a take-profit at 10% above the entry price (PercentOffset = +0.10).
 func TakeProfitPercent(pct float64) ExitTarget {
-	return ExitTarget{PercentOffset: pct}
+	return ExitTarget{PercentOffset: pct / 100.0}
 }
 
 // OCOLeg describes one leg of an OCO (one-cancels-other) order pair.

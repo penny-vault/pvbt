@@ -324,7 +324,7 @@ var _ = Describe("Order", func() {
 		It("StopLossPercent sets PercentOffset and zero AbsolutePrice", func() {
 			et := portfolio.StopLossPercent(5.0)
 			Expect(et.AbsolutePrice).To(Equal(0.0))
-			Expect(et.PercentOffset).To(Equal(5.0))
+			Expect(et.PercentOffset).To(BeNumerically("~", -0.05, 1e-9))
 		})
 
 		It("TakeProfitPrice sets AbsolutePrice and zero PercentOffset", func() {
@@ -336,7 +336,7 @@ var _ = Describe("Order", func() {
 		It("TakeProfitPercent sets PercentOffset and zero AbsolutePrice", func() {
 			et := portfolio.TakeProfitPercent(10.0)
 			Expect(et.AbsolutePrice).To(Equal(0.0))
-			Expect(et.PercentOffset).To(Equal(10.0))
+			Expect(et.PercentOffset).To(BeNumerically("~", 0.10, 1e-9))
 		})
 	})
 

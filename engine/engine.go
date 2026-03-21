@@ -617,10 +617,12 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
-// Prices implements broker.PriceProvider. It returns close prices for
-// the requested assets at the engine's current simulation date.
+// Prices implements broker.PriceProvider. It returns close, high, and low
+// prices for the requested assets at the engine's current simulation date.
+// High and low are needed by EvaluatePending for intrabar bracket order
+// evaluation.
 func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
-	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{data.MetricClose})
+	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{data.MetricClose, data.MetricHigh, data.MetricLow})
 }
 
 // PredictedPortfolio runs the strategy's Compute against a shadow copy of the

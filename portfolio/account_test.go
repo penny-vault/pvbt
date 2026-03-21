@@ -1494,8 +1494,8 @@ var _ = Describe("Window", func() {
 			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
 			acct.UpdatePrices(df)
 
-			stopPct := -0.05  // 5% below entry
-			takePct := 0.10   // 10% above entry
+			stopPct := 5.0   // 5% below entry -> PercentOffset = -0.05
+			takePct := 10.0  // 10% above entry -> PercentOffset = +0.10
 
 			batch := acct.NewBatch(ts)
 			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
@@ -1528,10 +1528,10 @@ var _ = Describe("Window", func() {
 				}
 			}
 
-			// Verify stop loss price = fillPrice * (1 + stopPct) = 100 * 0.95 = 95.
-			Expect(stopLoss.StopPrice).To(BeNumerically("~", 100.0*(1+stopPct), 0.001))
-			// Verify take profit price = fillPrice * (1 + takePct) = 100 * 1.10 = 110.
-			Expect(takeProfit.LimitPrice).To(BeNumerically("~", 100.0*(1+takePct), 0.001))
+			// Verify stop loss price = fillPrice * (1 - stopPct/100) = 100 * 0.95 = 95.
+			Expect(stopLoss.StopPrice).To(BeNumerically("~", 95.0, 0.001))
+			// Verify take profit price = fillPrice * (1 + takePct/100) = 100 * 1.10 = 110.
+			Expect(takeProfit.LimitPrice).To(BeNumerically("~", 110.0, 0.001))
 
 			// Exit orders have side opposite to entry (entry=Buy -> exit=Sell).
 			Expect(stopLoss.Side).To(Equal(broker.Sell))

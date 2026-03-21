@@ -1800,14 +1800,31 @@ func (a *Account) CancelOpenOrders(ctx context.Context) error {
 
 	var errs []error
 
-	for orderID := range a.pendingOrders {
-		if cancelErr := a.broker.Cancel(ctx, orderID); cancelErr != nil {
-			errs = append(errs, fmt.Errorf("cancel order %s: %w", orderID, cancelErr))
+	// Separate bracket exit orders (stop-loss/take-profit) from regular orders.
+	// Bracket exits persist across bars until triggered by EvaluatePending.
+	survivingOrders := make(map[string]broker.Order)
+	survivingGroups := make(map[string]*broker.OrderGroup)
+
+	for orderID, order := range a.pendingOrders {
+		if order.GroupRole == broker.RoleStopLoss || order.GroupRole == broker.RoleTakeProfit {
+			survivingOrders[orderID] = order
+
+			if order.GroupID != "" {
+				if grp, ok := a.pendingGroups[order.GroupID]; ok {
+					survivingGroups[order.GroupID] = grp
+				}
+			}
+
+			continue
 		}
+
+		// Best-effort cancel: order may have already been filled by the broker
+		// (e.g. market orders fill immediately in SimulatedBroker.Submit).
+		_ = a.broker.Cancel(ctx, orderID)
 	}
 
-	a.pendingOrders = make(map[string]broker.Order)
-	a.pendingGroups = make(map[string]*broker.OrderGroup)
+	a.pendingOrders = survivingOrders
+	a.pendingGroups = survivingGroups
 	a.deferredExits = make(map[string]OrderGroupSpec)
 
 	return errors.Join(errs...)

@@ -223,6 +223,33 @@ func (s *buyThenSellStrategy) Compute(ctx context.Context, eng *engine.Engine, f
 	return nil
 }
 
+// bracketStrategy places a single bracket order (buy with stop-loss and take-profit)
+// on the first Compute call, then does nothing on subsequent calls.
+type bracketStrategy struct {
+	placed    bool
+	testAsset asset.Asset
+	stopPct   float64
+	tpPct     float64
+}
+
+func (s *bracketStrategy) Name() string       { return "bracket-test" }
+func (s *bracketStrategy) Setup(_ *engine.Engine) {}
+func (s *bracketStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+func (s *bracketStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	if !s.placed {
+		s.placed = true
+		return batch.Order(ctx, s.testAsset, portfolio.Buy, 100,
+			portfolio.WithBracket(
+				portfolio.StopLossPercent(s.stopPct),
+				portfolio.TakeProfitPercent(s.tpPct),
+			),
+		)
+	}
+	return nil
+}
+
 // failingStrategy always returns an error from Compute.
 type failingStrategy struct{}
 
@@ -607,6 +634,152 @@ var _ = Describe("Backtest", func() {
 				}
 			}
 			Expect(hasSell).To(BeTrue(), "expected sell transactions from risk middleware")
+		})
+	})
+
+	Context("bracket orders", func() {
+		// makeBracketTestData builds a DataFrame for a single asset with explicit
+		// Close, AdjClose, Dividend, High, Low values per day.
+		// Each row is {close, high, low}; AdjClose=close, Dividend=0.
+		makeBracketTestData := func(startDate time.Time, testAsset asset.Asset, rows []struct{ close, high, low float64 }) *data.DataFrame {
+			numDays := len(rows)
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			assets := []asset.Asset{testAsset}
+
+			times := make([]time.Time, numDays)
+			for idx := range times {
+				day := startDate.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// Layout: (assetIdx * numMetrics + metricIdx) * numDays + dayIdx
+			// With 1 asset: metricIdx * numDays + dayIdx
+			vals := make([]float64, numDays*len(assets)*len(bracketMetrics))
+			for dayIdx, row := range rows {
+				vals[0*numDays+dayIdx] = row.close // MetricClose
+				vals[1*numDays+dayIdx] = row.close // AdjClose
+				vals[2*numDays+dayIdx] = 0.0       // Dividend
+				vals[3*numDays+dayIdx] = row.high   // MetricHigh
+				vals[4*numDays+dayIdx] = row.low    // MetricLow
+			}
+
+			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, vals)
+			Expect(dfErr).NotTo(HaveOccurred())
+			return df
+		}
+
+		It("triggers stop loss on intrabar low", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-SL", Ticker: "SL"}
+			bracketAssets := []asset.Asset{testStock}
+			bracketAssetProvider := &mockAssetProvider{assets: bracketAssets}
+
+			// Timeline:
+			// Day 0 (Mon 2024-01-01): close=100, buy fills at 100
+			// Day 1 (Tue 2024-01-02): DrainFills creates bracket exits (stop@95, TP@110).
+			//   EvaluatePending runs before DrainFills so it cannot see them yet.
+			//   Prices: close=99, high=101, low=97 (no trigger)
+			// Day 2 (Wed 2024-01-03): EvaluatePending evaluates bracket exits against
+			//   today's prices. close=97, high=101, low=93 -> stop triggers (93 <= 95)
+			// Day 3 (Thu 2024-01-04): padding day
+			rows := []struct{ close, high, low float64 }{
+				{100, 102, 98},  // Day 0: entry fills at close=100
+				{99, 101, 97},   // Day 1: bracket exits created; no trigger
+				{97, 101, 93},   // Day 2: stop triggers (low 93 <= stop 95)
+				{98, 99, 96},    // Day 3: padding
+			}
+
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeBracketTestData(dataStart, testStock, rows)
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			provider := data.NewTestProvider(bracketMetrics, df)
+
+			strategy := &bracketStrategy{
+				testAsset: testStock,
+				stopPct:   5.0,  // 5% stop loss -> stop at 95
+				tpPct:     10.0, // 10% take profit -> TP at 110
+			}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(bracketAssetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+			hasSellAt95 := false
+			for _, txn := range txns {
+				if txn.Type == portfolio.SellTransaction && txn.Asset == testStock && txn.Price == 95.0 {
+					hasSellAt95 = true
+					break
+				}
+			}
+			Expect(hasSellAt95).To(BeTrue(), "expected a sell transaction at stop-loss price 95, got transactions: %v", txns)
+		})
+
+		It("triggers take profit on intrabar high", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-TP", Ticker: "TP"}
+			bracketAssets := []asset.Asset{testStock}
+			bracketAssetProvider := &mockAssetProvider{assets: bracketAssets}
+
+			// Timeline:
+			// Day 0 (Mon 2024-01-01): close=100, buy fills at 100
+			// Day 1 (Tue 2024-01-02): DrainFills creates bracket exits (stop@95, TP@110).
+			//   Prices: close=101, high=103, low=99 (no trigger)
+			// Day 2 (Wed 2024-01-03): EvaluatePending checks bracket exits.
+			//   close=112, high=115, low=99 -> TP triggers (115 >= 110)
+			// Day 3 (Thu 2024-01-04): padding day
+			rows := []struct{ close, high, low float64 }{
+				{100, 102, 98},  // Day 0: entry fills at close=100
+				{101, 103, 99},  // Day 1: bracket exits created; no trigger
+				{112, 115, 99},  // Day 2: TP triggers (high 115 >= TP 110)
+				{113, 114, 111}, // Day 3: padding
+			}
+
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeBracketTestData(dataStart, testStock, rows)
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			provider := data.NewTestProvider(bracketMetrics, df)
+
+			strategy := &bracketStrategy{
+				testAsset: testStock,
+				stopPct:   5.0,  // 5% stop loss -> stop at 95
+				tpPct:     10.0, // 10% take profit -> TP at 110
+			}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(bracketAssetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+			hasSellAtTP := false
+			for _, txn := range txns {
+				if txn.Type == portfolio.SellTransaction && txn.Asset == testStock {
+					// Allow small floating-point tolerance on the TP price.
+					diff := txn.Price - 110.0
+					if diff < 0 {
+						diff = -diff
+					}
+					if diff < 0.01 {
+						hasSellAtTP = true
+						break
+					}
+				}
+			}
+			Expect(hasSellAtTP).To(BeTrue(), "expected a sell transaction at take-profit price ~110, got transactions: %v", txns)
 		})
 	})
 })
