@@ -65,7 +65,9 @@ func (turnover) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (f
 	return (totalSellValue / meanValue) * (365.25 / periodDays), nil
 }
 
-func (turnover) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (turnover) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Turnover is the annualized portfolio turnover rate, computed as
 // total sell value divided by mean portfolio value, scaled to a year.

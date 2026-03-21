@@ -79,7 +79,7 @@ var _ = Describe("Return Metrics", func() {
 			df, err := a.PerformanceMetric(portfolio.TWRR).Series()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(df.Len()).To(Equal(4))
-			series := df.Column(perfAsset, data.PortfolioReturns)
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", 0.05, 1e-9))
 			Expect(series[2]).To(BeNumerically("~", 0.15, 1e-9))

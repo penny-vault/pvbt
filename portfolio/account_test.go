@@ -1675,8 +1675,8 @@ var _ = Describe("Window", func() {
 			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
 			acct.UpdatePrices(df)
 
-			stopPct := 5.0   // 5% below entry -> PercentOffset = -0.05
-			takePct := 10.0  // 10% above entry -> PercentOffset = +0.10
+			stopPct := 5.0  // 5% below entry -> PercentOffset = -0.05
+			takePct := 10.0 // 10% above entry -> PercentOffset = +0.10
 
 			batch := acct.NewBatch(ts)
 			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,

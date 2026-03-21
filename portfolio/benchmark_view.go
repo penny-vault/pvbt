@@ -58,7 +58,7 @@ func (a *Account) benchmarkView() (*Account, error) {
 	// so derived columns are recomputed against the benchmark equity curve.
 	view := *a
 	view.perfData = newPerfData
-	view.computed = nil
+	view.dfCache = nil
 
 	return &view, nil
 }

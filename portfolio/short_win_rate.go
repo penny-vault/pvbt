@@ -57,7 +57,9 @@ func (shortWinRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period
 	return float64(wins) / float64(len(shortTrips)), nil
 }
 
-func (shortWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (shortWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // ShortWinRate is the percentage of short round-trip trades that were profitable.
 var ShortWinRate PerformanceMetric = shortWinRate{}

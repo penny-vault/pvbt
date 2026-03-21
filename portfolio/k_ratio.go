@@ -37,7 +37,7 @@ func (kRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	count := len(col)
 	if count < 3 {

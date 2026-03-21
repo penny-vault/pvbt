@@ -57,7 +57,9 @@ func (longWinRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period)
 	return float64(wins) / float64(len(longTrips)), nil
 }
 
-func (longWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (longWinRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // LongWinRate is the percentage of long round-trip trades that were profitable.
 var LongWinRate PerformanceMetric = longWinRate{}

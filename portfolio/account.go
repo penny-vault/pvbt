@@ -71,7 +71,7 @@ type Account struct {
 	initialMargin     float64
 	maintenanceMargin float64
 	borrowRate        float64
-	computed          map[data.Metric]bool
+	dfCache           map[dfCacheKey]*data.DataFrame
 }
 
 // New creates an Account with the given options.
@@ -1659,8 +1659,8 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		}
 	}
 
-	// Invalidate lazily-computed columns so they are recomputed on next access.
-	a.computed = nil
+	// Invalidate lazily-computed DataFrames so they are recomputed on next access.
+	a.dfCache = nil
 }
 
 // PerfData returns the accumulated performance DataFrame, or nil if no
@@ -2324,128 +2324,108 @@ func (a *Account) BorrowRate() float64 {
 // PortfolioStats interface implementation
 // ---------------------------------------------------------------------------
 
-// ensureComputed checks whether the given metric column has already been
-// lazily computed. If not it runs the compute function and marks the column
-// as done. This avoids recomputing derived columns on every metric access.
-func (a *Account) ensureComputed(metric data.Metric, compute func()) {
-	if a.computed == nil {
-		a.computed = make(map[data.Metric]bool)
-	}
-
-	if a.computed[metric] {
-		return
-	}
-
-	compute()
-	a.computed[metric] = true
+// dfCacheKey identifies a cached DataFrame result by derived metric and window.
+type dfCacheKey struct {
+	metric data.Metric
+	window string
 }
 
-// Returns lazily computes the period-over-period percentage returns of the
-// portfolio equity curve, stores them as a column, and returns the windowed
-// DataFrame.
+// windowKey returns a stable string key for a Period (or "nil" for nil).
+func windowKey(window *Period) string {
+	if window == nil {
+		return "nil"
+	}
+
+	return fmt.Sprintf("%d_%d", window.Unit, window.N)
+}
+
+// cachedDF returns a previously computed DataFrame, or nil if not cached.
+func (a *Account) cachedDF(metric data.Metric, window *Period) *data.DataFrame {
+	if a.dfCache == nil {
+		return nil
+	}
+
+	return a.dfCache[dfCacheKey{metric: metric, window: windowKey(window)}]
+}
+
+// putDF stores a computed DataFrame in the cache.
+func (a *Account) putDF(metric data.Metric, window *Period, df *data.DataFrame) {
+	if a.dfCache == nil {
+		a.dfCache = make(map[dfCacheKey]*data.DataFrame)
+	}
+
+	a.dfCache[dfCacheKey{metric: metric, window: windowKey(window)}] = df
+}
+
+// Returns computes period-over-period percentage returns of the portfolio
+// equity curve within the given window. Results are cached per window.
 func (a *Account) Returns(_ context.Context, window *Period) *data.DataFrame {
-	a.ensureComputed(data.PortfolioReturns, func() {
-		if a.perfData == nil {
-			return
-		}
-
-		pctDF := a.perfData.Pct()
-		returnsCol := pctDF.Column(portfolioAsset, data.PortfolioEquity)
-
-		if err := a.perfData.Insert(portfolioAsset, data.PortfolioReturns, returnsCol); err != nil {
-			log.Error().Err(err).Msg("Account.Returns: failed to insert returns column")
-		}
-	})
-
 	if a.perfData == nil {
 		return nil
 	}
 
-	return a.perfData.Window(window)
+	if cached := a.cachedDF(data.PortfolioReturns, window); cached != nil {
+		return cached
+	}
+
+	df := a.perfData.Window(window).Metrics(data.PortfolioEquity).Pct()
+	a.putDF(data.PortfolioReturns, window, df)
+
+	return df
 }
 
-// ExcessReturns lazily computes portfolio returns minus the risk-free rate
-// and returns the windowed DataFrame.
-func (a *Account) ExcessReturns(ctx context.Context, window *Period) *data.DataFrame {
-	// Ensure base returns are computed first.
-	a.Returns(ctx, nil)
-
-	a.ensureComputed(data.PortfolioExcessReturns, func() {
-		if a.perfData == nil {
-			return
-		}
-
-		returnsCol := a.perfData.Column(portfolioAsset, data.PortfolioReturns)
-		rfPctDF := a.perfData.Pct()
-		rfCol := rfPctDF.Column(portfolioAsset, data.PortfolioRiskFree)
-
-		excessCol := make([]float64, len(returnsCol))
-		for idx := range returnsCol {
-			if idx < len(rfCol) {
-				excessCol[idx] = returnsCol[idx] - rfCol[idx]
-			} else {
-				excessCol[idx] = returnsCol[idx]
-			}
-		}
-
-		if err := a.perfData.Insert(portfolioAsset, data.PortfolioExcessReturns, excessCol); err != nil {
-			log.Error().Err(err).Msg("Account.ExcessReturns: failed to insert excess returns column")
-		}
-	})
-
+// ExcessReturns computes portfolio returns minus the risk-free rate within
+// the given window. Results are cached per window.
+func (a *Account) ExcessReturns(_ context.Context, window *Period) *data.DataFrame {
 	if a.perfData == nil {
 		return nil
 	}
 
-	return a.perfData.Window(window)
+	if cached := a.cachedDF(data.PortfolioExcessReturns, window); cached != nil {
+		return cached
+	}
+
+	perfDF := a.perfData.Window(window).Metrics(data.PortfolioEquity, data.PortfolioRiskFree).Pct()
+	df := perfDF.Metrics(data.PortfolioEquity).Sub(perfDF, data.PortfolioRiskFree)
+	a.putDF(data.PortfolioExcessReturns, window, df)
+
+	return df
 }
 
-// Drawdown lazily computes the percentage drawdown from the running equity
-// peak and returns the windowed DataFrame.
+// Drawdown computes the percentage drawdown from the running equity peak
+// within the given window. Results are cached per window.
 func (a *Account) Drawdown(_ context.Context, window *Period) *data.DataFrame {
-	a.ensureComputed(data.PortfolioDrawdown, func() {
-		if a.perfData == nil {
-			return
-		}
-
-		cumMaxDF := a.perfData.CumMax()
-		diffDF := a.perfData.Sub(cumMaxDF, data.PortfolioEquity)
-		ddDF := diffDF.Div(cumMaxDF, data.PortfolioEquity)
-		ddCol := ddDF.Column(portfolioAsset, data.PortfolioEquity)
-
-		if err := a.perfData.Insert(portfolioAsset, data.PortfolioDrawdown, ddCol); err != nil {
-			log.Error().Err(err).Msg("Account.Drawdown: failed to insert drawdown column")
-		}
-	})
-
 	if a.perfData == nil {
 		return nil
 	}
 
-	return a.perfData.Window(window)
+	if cached := a.cachedDF(data.PortfolioDrawdown, window); cached != nil {
+		return cached
+	}
+
+	equity := a.perfData.Window(window).Metrics(data.PortfolioEquity)
+	peak := equity.CumMax()
+	df := equity.Sub(peak).Div(peak)
+	a.putDF(data.PortfolioDrawdown, window, df)
+
+	return df
 }
 
-// BenchmarkReturns lazily computes the period-over-period percentage returns
-// of the benchmark and returns the windowed DataFrame.
+// BenchmarkReturns computes period-over-period percentage returns of the
+// benchmark within the given window. Results are cached per window.
 func (a *Account) BenchmarkReturns(_ context.Context, window *Period) *data.DataFrame {
-	a.ensureComputed(data.PortfolioBenchReturns, func() {
-		if a.perfData == nil {
-			return
-		}
-
-		pctDF := a.perfData.Pct()
-		benchReturnsCol := pctDF.Column(portfolioAsset, data.PortfolioBenchmark)
-
-		if err := a.perfData.Insert(portfolioAsset, data.PortfolioBenchReturns, benchReturnsCol); err != nil {
-			log.Error().Err(err).Msg("Account.BenchmarkReturns: failed to insert benchmark returns column")
-		}
-	})
-
 	if a.perfData == nil {
 		return nil
 	}
 
-	return a.perfData.Window(window)
+	if cached := a.cachedDF(data.PortfolioBenchReturns, window); cached != nil {
+		return cached
+	}
+
+	df := a.perfData.Window(window).Metrics(data.PortfolioBenchmark).Pct()
+	a.putDF(data.PortfolioBenchReturns, window, df)
+
+	return df
 }
 
 // EquitySeries returns the windowed perfData DataFrame containing the equity curve.

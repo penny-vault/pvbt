@@ -34,7 +34,9 @@ func (stcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) 
 	return stcg, nil
 }
 
-func (stcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (stcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // STCG is realized short-term capital gains (holding period <= 365 days).
 var STCGMetric PerformanceMetric = stcgMetric{}

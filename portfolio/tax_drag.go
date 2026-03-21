@@ -59,7 +59,9 @@ func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (fl
 	return estimatedTax / preTaxReturn, nil
 }
 
-func (taxDrag) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (taxDrag) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // TaxDragMetric is the percentage of pre-tax return consumed by taxes from trading activity.
 var TaxDragMetric PerformanceMetric = taxDrag{}

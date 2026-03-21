@@ -80,7 +80,9 @@ func (unrealizedSTCG) Compute(ctx context.Context, stats PortfolioStats, _ *Peri
 	return total, nil
 }
 
-func (unrealizedSTCG) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (unrealizedSTCG) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // UnrealizedSTCGMetric is unrealized short-term capital gains from positions
 // held 365 days or fewer.

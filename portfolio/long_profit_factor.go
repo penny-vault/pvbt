@@ -56,7 +56,9 @@ func (longProfitFactor) Compute(ctx context.Context, stats PortfolioStats, _ *Pe
 	return sumWin / math.Abs(sumLoss), nil
 }
 
-func (longProfitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (longProfitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // LongProfitFactor is the ratio of gross profit to gross loss from long round-trip trades.
 var LongProfitFactor PerformanceMetric = longProfitFactor{}

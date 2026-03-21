@@ -80,7 +80,9 @@ func (unrealizedLTCG) Compute(ctx context.Context, stats PortfolioStats, _ *Peri
 	return total, nil
 }
 
-func (unrealizedLTCG) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (unrealizedLTCG) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // UnrealizedLTCGMetric is unrealized long-term capital gains from positions
 // held longer than 365 days.

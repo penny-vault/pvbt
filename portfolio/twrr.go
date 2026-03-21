@@ -18,8 +18,8 @@ package portfolio
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
 type twrr struct{}
@@ -39,7 +39,7 @@ func (twrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) == 0 {
 		return 0, nil
 	}
@@ -60,7 +60,7 @@ func (twrr) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Per
 		return nil, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) == 0 {
 		return nil, nil
 	}
@@ -81,7 +81,7 @@ func (twrr) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Per
 	return data.NewDataFrame(
 		seriesTimes,
 		[]asset.Asset{portfolioAsset},
-		[]data.Metric{data.PortfolioReturns},
+		[]data.Metric{data.PortfolioEquity},
 		df.Frequency(),
 		[][]float64{cum},
 	)

@@ -18,8 +18,8 @@ package portfolio
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
 type maxDrawdown struct{}
@@ -36,7 +36,7 @@ func (maxDrawdown) Compute(ctx context.Context, stats PortfolioStats, window *Pe
 		return 0, nil
 	}
 
-	ddCol := df.Column(portfolioAsset, data.PortfolioDrawdown)
+	ddCol := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ddCol) == 0 {
 		return 0, nil
 	}
@@ -57,7 +57,7 @@ func (maxDrawdown) ComputeSeries(ctx context.Context, stats PortfolioStats, wind
 		return nil, nil
 	}
 
-	ddCol := df.Column(portfolioAsset, data.PortfolioDrawdown)
+	ddCol := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ddCol) == 0 {
 		return nil, nil
 	}
@@ -65,7 +65,7 @@ func (maxDrawdown) ComputeSeries(ctx context.Context, stats PortfolioStats, wind
 	return data.NewDataFrame(
 		df.Times(),
 		[]asset.Asset{portfolioAsset},
-		[]data.Metric{data.PortfolioDrawdown},
+		[]data.Metric{data.PortfolioEquity},
 		df.Frequency(),
 		[][]float64{ddCol},
 	)

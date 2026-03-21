@@ -47,7 +47,7 @@ func (sharpe) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 		return 0, nil
 	}
 
-	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(erCol) < 2 {
 		return 0, nil
 	}

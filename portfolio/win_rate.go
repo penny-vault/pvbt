@@ -49,7 +49,9 @@ func (winRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (fl
 	return float64(wins) / float64(len(trips)), nil
 }
 
-func (winRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (winRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // WinRate is the percentage of round-trip trades that were profitable.
 var WinRate PerformanceMetric = winRate{}

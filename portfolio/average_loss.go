@@ -54,7 +54,9 @@ func (averageLoss) Compute(ctx context.Context, stats PortfolioStats, _ *Period)
 	return sumLoss / float64(losses), nil
 }
 
-func (averageLoss) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (averageLoss) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // AverageLoss is the average loss on losing round-trip trades (negative value).
 var AverageLoss PerformanceMetric = averageLoss{}

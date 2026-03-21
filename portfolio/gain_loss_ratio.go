@@ -37,7 +37,7 @@ func (gainLossRatio) Compute(ctx context.Context, stats PortfolioStats, window *
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) == 0 {
 		return 0, nil
 	}

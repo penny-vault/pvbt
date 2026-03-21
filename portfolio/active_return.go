@@ -18,8 +18,8 @@ package portfolio
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 )
 
 type activeReturn struct{}
@@ -43,8 +43,8 @@ func (activeReturn) Compute(ctx context.Context, stats PortfolioStats, window *P
 		return 0, nil
 	}
 
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
@@ -65,6 +65,18 @@ func (activeReturn) Compute(ctx context.Context, stats PortfolioStats, window *P
 // portfolio cumulative return series and the benchmark cumulative
 // return series.
 func (activeReturn) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error) {
+	// Check if benchmark is configured by examining the raw equity-level
+	// benchmark column. A zero first value means no benchmark was set.
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
+		return nil, nil
+	}
+
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
+		return nil, ErrNoBenchmark
+	}
+
 	rdf := stats.Returns(ctx, window)
 	bdf := stats.BenchmarkReturns(ctx, window)
 
@@ -72,8 +84,8 @@ func (activeReturn) ComputeSeries(ctx context.Context, stats PortfolioStats, win
 		return nil, nil
 	}
 
-	portR := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
-	benchR := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
+	portR := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	benchR := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
 
 	count := len(portR)
 	if len(benchR) < count {

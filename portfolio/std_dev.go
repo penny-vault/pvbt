@@ -19,8 +19,8 @@ import (
 	"context"
 	"math"
 
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"gonum.org/v1/gonum/stat"
 )
 
@@ -38,7 +38,7 @@ func (stdDev) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) < 2 {
 		return 0, nil
 	}
@@ -59,7 +59,7 @@ func (stdDev) ComputeSeries(ctx context.Context, stats PortfolioStats, window *P
 		return nil, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) == 0 {
 		return nil, nil
 	}
@@ -70,7 +70,7 @@ func (stdDev) ComputeSeries(ctx context.Context, stats PortfolioStats, window *P
 	return data.NewDataFrame(
 		seriesTimes,
 		[]asset.Asset{portfolioAsset},
-		[]data.Metric{data.PortfolioReturns},
+		[]data.Metric{data.PortfolioEquity},
 		df.Frequency(),
 		[][]float64{col},
 	)

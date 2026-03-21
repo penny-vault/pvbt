@@ -56,7 +56,9 @@ func (shortProfitFactor) Compute(ctx context.Context, stats PortfolioStats, _ *P
 	return sumWin / math.Abs(sumLoss), nil
 }
 
-func (shortProfitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (shortProfitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // ShortProfitFactor is the ratio of gross profit to gross loss from short round-trip trades.
 var ShortProfitFactor PerformanceMetric = shortProfitFactor{}

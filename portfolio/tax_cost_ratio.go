@@ -62,7 +62,9 @@ func (taxCostRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period
 	return estimatedTax / totalGain, nil
 }
 
-func (taxCostRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (taxCostRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // TaxCostRatioMetric is the estimated percentage of portfolio gain lost to taxes.
 var TaxCostRatioMetric PerformanceMetric = taxCostRatio{}

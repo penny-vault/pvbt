@@ -53,7 +53,9 @@ func (profitFactor) Compute(ctx context.Context, stats PortfolioStats, _ *Period
 	return sumWin / math.Abs(sumLoss), nil
 }
 
-func (profitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (profitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // ProfitFactor is the ratio of gross profit to gross loss from round-trip trades.
 var ProfitFactor PerformanceMetric = profitFactor{}

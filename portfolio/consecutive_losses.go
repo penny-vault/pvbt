@@ -35,7 +35,7 @@ func (consecutiveLosses) Compute(ctx context.Context, stats PortfolioStats, wind
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(col) == 0 {
 		return 0, nil
 	}

@@ -47,7 +47,7 @@ func (downsideDeviation) Compute(ctx context.Context, stats PortfolioStats, wind
 		return 0, nil
 	}
 
-	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	// Filter to only negative excess returns.
 	var neg []float64

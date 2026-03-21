@@ -34,7 +34,9 @@ func (ltcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) 
 	return ltcg, nil
 }
 
-func (ltcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (ltcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // LTCG is realized long-term capital gains (holding period > 365 days).
 var LTCGMetric PerformanceMetric = ltcgMetric{}

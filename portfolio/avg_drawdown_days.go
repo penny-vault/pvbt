@@ -35,7 +35,7 @@ func (avgDrawdownDays) Compute(ctx context.Context, stats PortfolioStats, window
 		return 0, nil
 	}
 
-	ddCol := df.Column(portfolioAsset, data.PortfolioDrawdown)
+	ddCol := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ddCol) < 2 {
 		return 0, nil
 	}

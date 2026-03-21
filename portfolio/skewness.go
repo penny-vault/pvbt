@@ -36,7 +36,7 @@ func (skewness) Compute(ctx context.Context, stats PortfolioStats, window *Perio
 		return 0, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioReturns))
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	numValues := len(col)
 	if numValues < 3 {

@@ -93,7 +93,7 @@ var _ = Describe("Benchmark targeting", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(df.Len()).To(Equal(2))
 			// Cumulative returns: after day 1: 10%, after day 2: 21%
-			series := df.Column(perfAsset, data.PortfolioReturns)
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", 0.21, 1e-9))
 		})

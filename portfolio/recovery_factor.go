@@ -48,7 +48,7 @@ func (recoveryFactor) Compute(ctx context.Context, stats PortfolioStats, window 
 		return 0, nil
 	}
 
-	ddCol := ddDF.Column(portfolioAsset, data.PortfolioDrawdown)
+	ddCol := ddDF.Column(portfolioAsset, data.PortfolioEquity)
 
 	minDD := 0.0
 	for _, v := range ddCol {

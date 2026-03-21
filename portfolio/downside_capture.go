@@ -30,6 +30,18 @@ func (downsideCaptureRatio) Description() string {
 }
 
 func (downsideCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	// Check if benchmark is configured by examining the raw equity-level
+	// benchmark column. A zero first value means no benchmark was set.
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
+		return 0, nil
+	}
+
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
+		return 0, ErrNoBenchmark
+	}
+
 	rdf := stats.Returns(ctx, window)
 	bdf := stats.BenchmarkReturns(ctx, window)
 
@@ -37,8 +49,8 @@ func (downsideCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, w
 		return 0, nil
 	}
 
-	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
-	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
 
 	count := len(pCol)
 	if len(bCol) < count {

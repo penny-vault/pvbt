@@ -34,15 +34,15 @@ const mockFillChannelSize = 256
 // through a channel, matching the broker.Broker interface.
 type mockBroker struct {
 	submitted    []broker.Order
-	fills        [][]broker.Fill               // one []Fill per Submit call, consumed in order
-	fillsByAsset map[asset.Asset][]broker.Fill // look up fills by asset (for map-iteration-safe tests)
-	defaultFill  *broker.Fill                  // when set, deliver a fill at this price/time with order qty
-	submitErr    error                         // when set, Submit returns this error immediately
-	submitFn     func(order broker.Order) error      // optional hook for Submit (bypasses default logic)
+	fills        [][]broker.Fill                // one []Fill per Submit call, consumed in order
+	fillsByAsset map[asset.Asset][]broker.Fill  // look up fills by asset (for map-iteration-safe tests)
+	defaultFill  *broker.Fill                   // when set, deliver a fill at this price/time with order qty
+	submitErr    error                          // when set, Submit returns this error immediately
+	submitFn     func(order broker.Order) error // optional hook for Submit (bypasses default logic)
 	callIdx      int
 	fillCh       chan broker.Fill
-	cancelFn     func(orderID string) error          // optional hook for Cancel
-	ordersFn     func() ([]broker.Order, error)      // optional hook for Orders
+	cancelFn     func(orderID string) error     // optional hook for Cancel
+	ordersFn     func() ([]broker.Order, error) // optional hook for Orders
 }
 
 func newMockBroker() *mockBroker {

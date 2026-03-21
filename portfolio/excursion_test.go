@@ -364,7 +364,7 @@ var _ = Describe("ExcursionRecord", func() {
 			Expect(td.EntryPrice).To(Equal(100.0))
 			Expect(td.ExitPrice).To(Equal(110.0))
 			Expect(td.Qty).To(Equal(10.0))
-			Expect(td.PnL).To(Equal(100.0))         // (110-100)*10
+			Expect(td.PnL).To(Equal(100.0)) // (110-100)*10
 			Expect(td.HoldDays).To(Equal(31.0))
 			Expect(td.MFE).To(BeNumerically("~", 0.15, 1e-9))  // (115-100)/100
 			Expect(td.MAE).To(BeNumerically("~", -0.10, 1e-9)) // (90-100)/100

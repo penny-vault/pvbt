@@ -47,7 +47,7 @@ func (sortino) Compute(ctx context.Context, stats PortfolioStats, window *Period
 		return 0, nil
 	}
 
-	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	// Downside deviation: sqrt(mean(min(r_i, 0)^2)) using all N observations.
 	count := len(erCol)

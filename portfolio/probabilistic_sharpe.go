@@ -47,7 +47,7 @@ func (probabilisticSharpe) Compute(ctx context.Context, stats PortfolioStats, wi
 		return 0, nil
 	}
 
-	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioExcessReturns))
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	count := len(erCol)
 	if count < 4 {

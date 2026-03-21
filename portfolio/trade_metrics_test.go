@@ -678,7 +678,7 @@ var _ = Describe("TradeMetrics", func() {
 
 				Expect(tm.LongWinRate).To(Equal(1.0))
 				Expect(tm.ShortWinRate).To(Equal(0.0))
-				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue()) // no losses
+				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue())  // no losses
 				Expect(math.IsNaN(tm.ShortProfitFactor)).To(BeTrue()) // no short trades
 			})
 		})
@@ -710,7 +710,7 @@ var _ = Describe("TradeMetrics", func() {
 
 				Expect(tm.LongWinRate).To(Equal(0.0))
 				Expect(tm.ShortWinRate).To(Equal(1.0))
-				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue()) // no long trades
+				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue())  // no long trades
 				Expect(math.IsNaN(tm.ShortProfitFactor)).To(BeTrue()) // no losses
 			})
 		})

@@ -48,7 +48,7 @@ func (kellerRatio) Compute(ctx context.Context, stats PortfolioStats, window *Pe
 		return 0, nil
 	}
 
-	ddCol := ddDF.Column(portfolioAsset, data.PortfolioDrawdown)
+	ddCol := ddDF.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Find max drawdown as a positive number (abs of most negative drawdown).
 	minDD := 0.0

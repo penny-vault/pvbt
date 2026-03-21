@@ -53,7 +53,9 @@ func (averageWin) Compute(ctx context.Context, stats PortfolioStats, _ *Period) 
 	return sumWin / float64(wins), nil
 }
 
-func (averageWin) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) { return nil, nil }
+func (averageWin) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // AverageWin is the average profit on winning round-trip trades.
 var AverageWin PerformanceMetric = averageWin{}
