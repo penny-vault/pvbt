@@ -5,6 +5,7 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // Test-only exports for black-box testing of dataCache.
@@ -112,4 +113,29 @@ func ChildEntryName(entry *childEntry) string {
 // ChildEntryWeight returns the weight from a childEntry.
 func ChildEntryWeight(entry *childEntry) float64 {
 	return entry.weight
+}
+
+// SetChildrenForTest directly injects children into the engine for unit tests
+// that need to verify ChildAllocations and ChildPortfolios without running a
+// full backtest.
+func SetChildrenForTest(eng *Engine, entries []*childEntry) {
+	eng.children = entries
+	eng.childrenByName = make(map[string]*childEntry, len(entries))
+	for _, entry := range entries {
+		eng.childrenByName[entry.name] = entry
+	}
+}
+
+// NewChildEntryForTest constructs a childEntry for use in unit tests.
+func NewChildEntryForTest(name string, weight float64, account *portfolio.Account) *childEntry {
+	return &childEntry{
+		name:    name,
+		weight:  weight,
+		account: account,
+	}
+}
+
+// SetEngineDateForTest sets the engine's currentDate for unit tests.
+func SetEngineDateForTest(eng *Engine, date time.Time) {
+	eng.currentDate = date
 }
