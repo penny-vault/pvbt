@@ -12,7 +12,7 @@ The implementation follows a bottom-up approach, building from the data model th
 
 Short lots mirror long tax lots with inverted entry/exit semantics.
 
-**Opening a short position:** When `Record()` processes a sell transaction, it first tries to consume existing long lots (closing a long). If no long lots exist or quantity exceeds long holdings, the remainder creates short lots. Each short lot records:
+**Opening a short position:** `Record()` must be refactored to add short-aware routing. Currently, sells always consume long lots and buys always create long lots. The new behavior: when `Record()` processes a sell transaction, it first tries to consume existing long lots (closing a long). If no long lots exist or quantity exceeds long holdings, the remainder creates short lots. Each short lot records:
 
 ```go
 type TaxLot struct {
@@ -29,7 +29,7 @@ Short lots are stored in a separate map from long lots to avoid ambiguity:
 shortLots map[asset.Asset][]TaxLot
 ```
 
-**Covering a short:** When `Record()` processes a buy transaction and short lots exist for the asset, it consumes short lots before creating long lots. Lot selection uses the same methods as longs (FIFO, LIFO, HighestCost).
+**Covering a short:** Similarly, the buy path in `Record()` must be extended. When `Record()` processes a buy transaction and short lots exist for the asset, it consumes short lots before creating long lots. Lot selection uses the same methods as longs (FIFO, LIFO, HighestCost).
 
 **Realized P&L on cover:**
 - P&L = (entry price - cover price) x quantity
@@ -44,7 +44,7 @@ shortLots map[asset.Asset][]TaxLot
 
 A new daily housekeeping step that adjusts positions and tax lots when stock splits occur. Runs for all held positions, both long and short.
 
-**When to run:** After price updates, before `Compute`. Runs before dividend housekeeping on the same day since dividend per share values are post-split.
+**When to run:** Inside `housekeepAccount`, before dividend recording. The current engine loop runs housekeeping (step 13-14b) before `Compute` (step 15-16). Within `housekeepAccount`, the order is: drain broker fills, apply splits, then record dividends. Splits must run before dividends because dividend per share values are post-split. The `SplitFactor` metric must be added to the `housekeepMetrics` slice so it is fetched alongside close, adjusted close, and dividend data.
 
 **Position adjustment:**
 - New quantity = old quantity x split factor
@@ -114,16 +114,17 @@ Both are daily housekeeping steps in the engine loop.
 - Recorded as a `DividendTransaction` with negative amount
 - Justification field populated with context, e.g., "short dividend obligation: MSFT ex-date 2026-03-20"
 - Runs in the same housekeeping step as existing long dividend recording
+- Note: the current dividend recording code in `housekeepAccount` does not guard against negative quantities -- it would record a positive dividend for short positions. The implementation must check position sign and apply the correct dividend treatment (credit for longs, debit for shorts)
 
 ## 5. Margin Calls and MarginCallHandler
 
-### engine/engine.go
+### engine/backtest.go, engine/live.go
 
-Daily margin check in the engine loop, after price updates and all housekeeping (splits, borrow fees, dividends), before `Compute`.
+Daily margin check in the engine loop, after housekeeping (splits, borrow fees, dividends) but before `Compute`. In the current backtest loop, this is a new step between step 13-14b (housekeeping) and step 15-16 (strategy compute). The check runs on every trading day, not just strategy-schedule days, so it fires even for strategies with weekly or monthly schedules.
 
 **Detection:** If margin ratio < maintenance margin rate, a margin call is active.
 
-**Optional strategy interface:**
+**Optional strategy interface (defined in engine package):**
 
 ```go
 type MarginCallHandler interface {
@@ -133,11 +134,9 @@ type MarginCallHandler interface {
 
 **Response flow:**
 1. Engine checks if strategy implements `MarginCallHandler` (type assertion)
-2. If yes: engine creates a batch, calls `OnMarginCall`, strategy writes orders to address the shortfall, engine executes the batch
+2. If yes: engine creates a batch, calls `OnMarginCall`, strategy writes orders to address the shortfall, engine executes the batch. The batch bypasses risk middleware since the strategy is responding to an emergency and risk limits should not block the response.
 3. If no: engine auto-liquidates by covering short positions proportionally until margin is restored
 4. After either path: re-check margin. If still breached, force-liquidate proportionally
-
-**Margin calls fire on any trading day**, regardless of the strategy's schedule. This is critical for strategies that run on weekly or monthly schedules but could have margin breaches on intervening days.
 
 ## 6. Risk Middleware Updates
 
@@ -149,6 +148,7 @@ Extend existing risk middleware to understand short positions.
 - Apply to both long and short positions symmetrically
 - A short position's size = abs(market value) as a percentage of portfolio value
 - A 10% limit means no single position (long or short) exceeds 10%
+- Middleware must query current portfolio holdings to determine whether a sell order opens a new short vs closes a long, since the order itself does not carry this distinction. The middleware already receives the `Portfolio` interface (via `Batch`) which provides `Position(asset)` for this check. A sell order that would result in a net negative position is a short-opening order; a sell that reduces a positive position is a long-closing order.
 
 **Gross and net exposure limits (new):**
 - Gross exposure = (long market value + short market value) / equity
@@ -227,9 +227,9 @@ Exposed as additional registered performance metrics: `LongWinRate`, `ShortWinRa
 
 ## Negative Weights in Allocations
 
-### portfolio/batch.go
+### portfolio/account.go, portfolio/batch.go
 
-`RebalanceTo` accepts negative weights to indicate short targets. A weight of -0.50 means "short 50% of portfolio value in this asset."
+`RebalanceTo` is defined on both `Account` (account.go) and `Batch` (batch.go). Both must accept negative weights to indicate short targets. A weight of -0.50 means "short 50% of portfolio value in this asset."
 
 The delta math extends naturally:
 - Target position = portfolio value x weight / current price (negative weight produces negative target)
