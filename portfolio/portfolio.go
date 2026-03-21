@@ -122,6 +122,26 @@ type Portfolio interface {
 	// MFE and MAE excursion data. Strategies may use this during Compute()
 	// to adapt behavior based on past trade quality.
 	TradeDetails() []TradeDetail
+
+	// Equity returns the portfolio equity: cash + long market value - short market value.
+	Equity() float64
+
+	// LongMarketValue returns the total market value of all long positions.
+	LongMarketValue() float64
+
+	// ShortMarketValue returns the total absolute market value of all short positions.
+	ShortMarketValue() float64
+
+	// MarginRatio returns equity divided by short market value.
+	// Returns NaN if there are no short positions.
+	MarginRatio() float64
+
+	// MarginDeficiency returns the dollar amount needed to restore maintenance
+	// margin. Returns 0 if the account is healthy or has no short positions.
+	MarginDeficiency() float64
+
+	// BuyingPower returns cash minus margin reserved for short positions.
+	BuyingPower() float64
 }
 
 // PortfolioManager is the interface the engine uses to manage the

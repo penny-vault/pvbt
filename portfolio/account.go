@@ -68,6 +68,9 @@ type Account struct {
 	substitutions     map[asset.Asset]Substitution
 	excursions        map[asset.Asset]ExcursionRecord
 	tradeDetails      []TradeDetail
+	initialMargin     float64
+	maintenanceMargin float64
+	borrowRate        float64
 }
 
 // New creates an Account with the given options.
