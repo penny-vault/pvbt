@@ -124,8 +124,7 @@ Key optimizations:
 | Metric | Value |
 |--------|-------|
 | 20-year ADM backtest | ~4s |
-| Total allocations | 4.1 GB (down from 57.5 GB before optimization) |
-| Speedup from v0.3.0 baseline | 8.9x |
+| Total allocations per run | 4.1 GB |
 
 ## License
 
