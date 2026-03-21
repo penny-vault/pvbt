@@ -1791,29 +1791,26 @@ func resolveExitPrice(fillPrice float64, target ExitTarget) float64 {
 	return fillPrice * (1 + target.PercentOffset)
 }
 
-// CancelOpenOrders cancels all open or submitted orders and removes
-// them from the pending-orders tracker.
+// CancelOpenOrders cancels all pending orders tracked by the account and
+// clears all group state (pendingOrders, pendingGroups, deferredExits).
 func (a *Account) CancelOpenOrders(ctx context.Context) error {
 	if a.broker == nil {
 		return nil
 	}
 
-	orders, err := a.broker.Orders(ctx)
-	if err != nil {
-		return fmt.Errorf("cancel open orders: %w", err)
-	}
+	var errs []error
 
-	for _, order := range orders {
-		if order.Status == broker.OrderOpen || order.Status == broker.OrderSubmitted {
-			if cancelErr := a.broker.Cancel(ctx, order.ID); cancelErr != nil {
-				return fmt.Errorf("cancel order %s: %w", order.ID, cancelErr)
-			}
-
-			delete(a.pendingOrders, order.ID)
+	for orderID := range a.pendingOrders {
+		if cancelErr := a.broker.Cancel(ctx, orderID); cancelErr != nil {
+			errs = append(errs, fmt.Errorf("cancel order %s: %w", orderID, cancelErr))
 		}
 	}
 
-	return nil
+	a.pendingOrders = make(map[string]broker.Order)
+	a.pendingGroups = make(map[string]*broker.OrderGroup)
+	a.deferredExits = make(map[string]OrderGroupSpec)
+
+	return errors.Join(errs...)
 }
 
 // Clone returns a deep copy of the Account suitable for prediction runs.
