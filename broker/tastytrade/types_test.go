@@ -1,8 +1,6 @@
 package tastytrade
 
 import (
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -279,23 +277,18 @@ var _ = Describe("Types", Label("translation"), func() {
 		})
 	})
 
-	Describe("toBrokerFill", func() {
-		It("translates a fill event", func() {
-			fillTime := time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)
-			event := fillEvent{
-				OrderID:  "tt-order-1",
-				FillID:   "fill-1",
-				Price:    152.50,
-				Quantity: 50,
-				FilledAt: fillTime,
-			}
-
-			result := toBrokerFill(event)
-
-			Expect(result.OrderID).To(Equal("tt-order-1"))
-			Expect(result.Price).To(Equal(152.50))
-			Expect(result.Qty).To(Equal(50.0))
-			Expect(result.FilledAt).To(Equal(fillTime))
+	Describe("parseLegFillQuantity", func() {
+		It("parses a valid numeric string", func() {
+			Expect(parseLegFillQuantity("50")).To(Equal(50.0))
+		})
+		It("parses a decimal string", func() {
+			Expect(parseLegFillQuantity("25.5")).To(Equal(25.5))
+		})
+		It("returns zero for invalid input", func() {
+			Expect(parseLegFillQuantity("abc")).To(Equal(0.0))
+		})
+		It("returns zero for empty string", func() {
+			Expect(parseLegFillQuantity("")).To(Equal(0.0))
 		})
 	})
 })

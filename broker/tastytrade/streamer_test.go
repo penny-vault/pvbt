@@ -41,52 +41,45 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 
 	Describe("Fill delivery", Label("streaming"), func() {
 		It("emits a broker.Fill with correct fields when a fill event arrives", func() {
-			filledAt := time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)
 			handlerDone := make(chan struct{})
-
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
-
-				event := tastytrade.FillEvent{
-					OrderID:  "ORD-100",
-					FillID:   "FILL-1",
-					Price:    150.25,
-					Quantity: 50,
-					FilledAt: filledAt,
+				envelope := map[string]any{
+					"type": "Order",
+					"data": map[string]any{
+						"id": "ORD-100", "status": "Filled",
+						"legs": []map[string]any{{
+							"symbol": "AAPL", "instrument-type": "Equity", "action": "Buy to Open", "quantity": 50,
+							"fills": []map[string]any{{"fill-id": "FILL-1", "fill-price": 150.25, "quantity": "50", "filled-at": "2026-03-20T14:30:00Z"}},
+						}},
+					},
+					"timestamp": 1742480400000,
 				}
-
-				payload, marshalErr := json.Marshal(event)
+				payload, marshalErr := json.Marshal(envelope)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				conn.WriteMessage(websocket.TextMessage, payload)
-
-				// Keep connection open until test completes.
 				<-handlerDone
 			}))
 			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
-
 			fills := make(chan broker.Fill, 10)
 			client := tastytrade.NewAPIClientForTest("http://unused.test")
 			streamer := tastytrade.NewFillStreamerForTest(client, fills, wsServerURL(server))
-
 			Expect(streamer.ConnectStreamer(ctx)).To(Succeed())
 			DeferCleanup(func() { streamer.CloseStreamer() })
-
 			var received broker.Fill
 			Eventually(fills, 3*time.Second).Should(Receive(&received))
-
 			Expect(received.OrderID).To(Equal("ORD-100"))
 			Expect(received.Price).To(Equal(150.25))
 			Expect(received.Qty).To(Equal(50.0))
-			Expect(received.FilledAt).To(Equal(filledAt))
+			Expect(received.FilledAt).To(Equal(time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)))
 		})
 	})
 
 	Describe("Deduplication", Label("streaming"), func() {
 		It("delivers only one fill when the same fill ID is sent twice", func() {
-			filledAt := time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)
 			handlerDone := make(chan struct{})
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
@@ -94,15 +87,19 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
 
-				event := tastytrade.FillEvent{
-					OrderID:  "ORD-200",
-					FillID:   "FILL-DUP",
-					Price:    99.50,
-					Quantity: 10,
-					FilledAt: filledAt,
+				envelope := map[string]any{
+					"type": "Order",
+					"data": map[string]any{
+						"id": "ORD-200", "status": "Filled",
+						"legs": []map[string]any{{
+							"symbol": "AAPL", "instrument-type": "Equity", "action": "Buy to Open", "quantity": 10,
+							"fills": []map[string]any{{"fill-id": "FILL-DUP", "fill-price": 99.50, "quantity": "10", "filled-at": "2026-03-20T14:30:00Z"}},
+						}},
+					},
+					"timestamp": 1742480400000,
 				}
 
-				payload, marshalErr := json.Marshal(event)
+				payload, marshalErr := json.Marshal(envelope)
 				Expect(marshalErr).ToNot(HaveOccurred())
 
 				// Send the same fill twice.
@@ -134,7 +131,6 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 
 	Describe("Partial fills", Label("streaming"), func() {
 		It("delivers both fills when they share an order ID but have different fill IDs", func() {
-			filledAt := time.Date(2026, 3, 20, 15, 0, 0, 0, time.UTC)
 			handlerDone := make(chan struct{})
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
@@ -142,28 +138,24 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
 
-				firstPartial := tastytrade.FillEvent{
-					OrderID:  "ORD-300",
-					FillID:   "FILL-A",
-					Price:    200.00,
-					Quantity: 30,
-					FilledAt: filledAt,
+				envelope := map[string]any{
+					"type": "Order",
+					"data": map[string]any{
+						"id": "ORD-300", "status": "Filled",
+						"legs": []map[string]any{{
+							"symbol": "AAPL", "instrument-type": "Equity", "action": "Buy to Open", "quantity": 100,
+							"fills": []map[string]any{
+								{"fill-id": "FILL-A", "fill-price": 200.00, "quantity": "30", "filled-at": "2026-03-20T15:00:00Z"},
+								{"fill-id": "FILL-B", "fill-price": 200.10, "quantity": "70", "filled-at": "2026-03-20T15:00:01Z"},
+							},
+						}},
+					},
+					"timestamp": 1742480400000,
 				}
 
-				secondPartial := tastytrade.FillEvent{
-					OrderID:  "ORD-300",
-					FillID:   "FILL-B",
-					Price:    200.10,
-					Quantity: 70,
-					FilledAt: filledAt.Add(time.Second),
-				}
-
-				firstPayload, _ := json.Marshal(firstPartial)
-				secondPayload, _ := json.Marshal(secondPartial)
-
-				conn.WriteMessage(websocket.TextMessage, firstPayload)
-				time.Sleep(50 * time.Millisecond)
-				conn.WriteMessage(websocket.TextMessage, secondPayload)
+				payload, marshalErr := json.Marshal(envelope)
+				Expect(marshalErr).ToNot(HaveOccurred())
+				conn.WriteMessage(websocket.TextMessage, payload)
 
 				<-handlerDone
 			}))

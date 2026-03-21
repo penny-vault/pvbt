@@ -1,7 +1,8 @@
 package tastytrade
 
 import (
-	"time"
+	"encoding/json"
+	"strconv"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
@@ -69,20 +70,35 @@ type ordersListResponse struct {
 }
 
 type orderResponse struct {
-	ID          string             `json:"id"`
-	Status      string             `json:"status"`
-	OrderType   string             `json:"order-type"`
-	TimeInForce string             `json:"time-in-force"`
-	Price       float64            `json:"price"`
-	StopTrigger float64            `json:"stop-trigger"`
-	Legs        []orderLegResponse `json:"legs"`
+	ID             string             `json:"id"`
+	Status         string             `json:"status"`
+	OrderType      string             `json:"order-type"`
+	TimeInForce    string             `json:"time-in-force"`
+	Price          float64            `json:"price"`
+	StopTrigger    float64            `json:"stop-trigger"`
+	ComplexOrderID string             `json:"complex-order-id"`
+	Legs           []orderLegResponse `json:"legs"`
 }
 
 type orderLegResponse struct {
-	Symbol         string  `json:"symbol"`
-	InstrumentType string  `json:"instrument-type"`
-	Action         string  `json:"action"`
-	Quantity       float64 `json:"quantity"`
+	Symbol         string            `json:"symbol"`
+	InstrumentType string            `json:"instrument-type"`
+	Action         string            `json:"action"`
+	Quantity       float64           `json:"quantity"`
+	Fills          []legFillResponse `json:"fills"`
+}
+
+type legFillResponse struct {
+	FillID   string  `json:"fill-id"`
+	Price    float64 `json:"fill-price"`
+	Quantity string  `json:"quantity"`
+	FilledAt string  `json:"filled-at"`
+}
+
+type streamerMessage struct {
+	Type      string          `json:"type"`
+	Data      json.RawMessage `json:"data"`
+	Timestamp int64           `json:"timestamp"`
 }
 
 type positionsListResponse struct {
@@ -117,14 +133,6 @@ type quoteResponse struct {
 type quoteItem struct {
 	Symbol    string  `json:"symbol"`
 	LastPrice float64 `json:"last"`
-}
-
-type fillEvent struct {
-	OrderID  string    `json:"order-id"`
-	FillID   string    `json:"fill-id"`
-	Price    float64   `json:"price"`
-	Quantity float64   `json:"quantity"`
-	FilledAt time.Time `json:"filled-at"`
 }
 
 // --- Translation functions ---
@@ -186,13 +194,12 @@ func toBrokerBalance(resp balanceResponse) broker.Balance {
 	}
 }
 
-func toBrokerFill(event fillEvent) broker.Fill {
-	return broker.Fill{
-		OrderID:  event.OrderID,
-		Price:    event.Price,
-		Qty:      event.Quantity,
-		FilledAt: event.FilledAt,
+func parseLegFillQuantity(quantity string) float64 {
+	value, err := strconv.ParseFloat(quantity, 64)
+	if err != nil {
+		return 0
 	}
+	return value
 }
 
 // --- Mapping helpers ---

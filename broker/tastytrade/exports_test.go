@@ -73,8 +73,11 @@ func (client *apiClient) AccountID() string {
 // FillStreamerForTestType is an exported alias so the _test package can name the type.
 type FillStreamerForTestType = fillStreamer
 
-// FillEvent is an exported alias for fillEvent, used in tests.
-type FillEvent = fillEvent
+// LegFillResponse is an exported alias for legFillResponse, used in tests.
+type LegFillResponse = legFillResponse
+
+// StreamerMessage is an exported alias for streamerMessage, used in tests.
+type StreamerMessage = streamerMessage
 
 // NewFillStreamerForTest creates a fillStreamer for testing.
 func NewFillStreamerForTest(client *apiClient, fills chan broker.Fill, wsURL string) *fillStreamer {

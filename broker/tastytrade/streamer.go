@@ -153,32 +153,45 @@ func (streamer *fillStreamer) run() {
 	}
 }
 
-// handleMessage parses a WebSocket message as a fillEvent and delivers it.
+// handleMessage parses a WebSocket message as a streamer envelope and delivers fills.
 func (streamer *fillStreamer) handleMessage(data []byte) {
-	var event fillEvent
-	if unmarshalErr := json.Unmarshal(data, &event); unmarshalErr != nil {
+	var msg streamerMessage
+	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
-
-	// Deduplicate by FillID.
-	streamer.mu.Lock()
-
-	_, alreadySeen := streamer.seenFills[event.FillID]
-	if !alreadySeen {
-		streamer.seenFills[event.FillID] = time.Now()
-	}
-	streamer.mu.Unlock()
-
-	if alreadySeen {
+	if msg.Type != "Order" {
 		return
 	}
-
-	fill := toBrokerFill(event)
-
-	select {
-	case streamer.fills <- fill:
-	case <-streamer.done:
-	case <-streamer.ctx.Done():
+	var order orderResponse
+	if unmarshalErr := json.Unmarshal(msg.Data, &order); unmarshalErr != nil {
+		return
+	}
+	for _, leg := range order.Legs {
+		for _, legFill := range leg.Fills {
+			streamer.mu.Lock()
+			_, alreadySeen := streamer.seenFills[legFill.FillID]
+			if !alreadySeen {
+				streamer.seenFills[legFill.FillID] = time.Now()
+			}
+			streamer.mu.Unlock()
+			if alreadySeen {
+				continue
+			}
+			filledAt, _ := time.Parse(time.RFC3339, legFill.FilledAt)
+			fill := broker.Fill{
+				OrderID:  order.ID,
+				Price:    legFill.Price,
+				Qty:      parseLegFillQuantity(legFill.Quantity),
+				FilledAt: filledAt,
+			}
+			select {
+			case streamer.fills <- fill:
+			case <-streamer.done:
+				return
+			case <-streamer.ctx.Done():
+				return
+			}
+		}
 	}
 }
 
@@ -247,29 +260,32 @@ func (streamer *fillStreamer) pollMissedFills(ctx context.Context) {
 			continue
 		}
 
-		streamer.mu.Lock()
-
-		_, alreadySeen := streamer.seenFills[order.ID]
-		if !alreadySeen {
-			streamer.seenFills[order.ID] = time.Now()
-		}
-		streamer.mu.Unlock()
-
-		if alreadySeen {
-			continue
-		}
-
-		fill := broker.Fill{
-			OrderID: order.ID,
-			Price:   order.Price,
-		}
-
-		select {
-		case streamer.fills <- fill:
-		case <-streamer.done:
-			return
-		case <-ctx.Done():
-			return
+		for _, leg := range order.Legs {
+			for _, legFill := range leg.Fills {
+				streamer.mu.Lock()
+				_, alreadySeen := streamer.seenFills[legFill.FillID]
+				if !alreadySeen {
+					streamer.seenFills[legFill.FillID] = time.Now()
+				}
+				streamer.mu.Unlock()
+				if alreadySeen {
+					continue
+				}
+				filledAt, _ := time.Parse(time.RFC3339, legFill.FilledAt)
+				fill := broker.Fill{
+					OrderID:  order.ID,
+					Price:    legFill.Price,
+					Qty:      parseLegFillQuantity(legFill.Quantity),
+					FilledAt: filledAt,
+				}
+				select {
+				case streamer.fills <- fill:
+				case <-streamer.done:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
 		}
 	}
 }
