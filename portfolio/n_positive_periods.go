@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 )
@@ -29,20 +29,16 @@ func (nPositivePeriods) Description() string {
 	return "Fraction of periods with positive equity curve returns. A value of 0.55 means 55% of periods had positive returns. Combined with GainLossRatio, gives a complete picture of the return distribution's win/loss profile."
 }
 
-func (nPositivePeriods) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (nPositivePeriods) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	count := 0
 
@@ -55,7 +51,9 @@ func (nPositivePeriods) Compute(a *Account, window *Period) (float64, error) {
 	return float64(count) / float64(len(col)), nil
 }
 
-func (nPositivePeriods) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (nPositivePeriods) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // NPositivePeriods is the percentage of periods with positive returns.
 // A higher value indicates the portfolio gains more often than it

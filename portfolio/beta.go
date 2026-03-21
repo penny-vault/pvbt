@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,28 +31,30 @@ func (beta) Description() string {
 	return "Sensitivity of portfolio returns to benchmark returns. A beta of 1.0 moves in lockstep with the benchmark. Above 1.0 amplifies benchmark moves, below 1.0 dampens them. Negative beta moves opposite to the benchmark."
 }
 
-func (beta) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
+func (beta) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	// Check if benchmark is configured by examining the raw equity-level
+	// benchmark column. A zero first value means no benchmark was set.
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
 
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	perfDF := pd.Window(window)
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
 
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
-	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
 
-	if len(pCol) == 0 || len(bCol) == 0 {
+	if len(pCol) == 0 {
 		return 0, nil
 	}
 
@@ -72,7 +75,9 @@ func (beta) Compute(a *Account, window *Period) (float64, error) {
 	return cov / benchVariance, nil
 }
 
-func (beta) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (beta) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Beta measures the portfolio's sensitivity to benchmark movements.
 var Beta PerformanceMetric = beta{}

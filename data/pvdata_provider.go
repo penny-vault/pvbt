@@ -323,7 +323,8 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		}
 	}
 
-	df, err := NewDataFrame(times, req.Assets, req.Metrics, req.Frequency, data)
+	df, err := NewDataFrame(times, req.Assets, req.Metrics, req.Frequency,
+		SlabToColumns(data, len(req.Assets)*len(req.Metrics), len(times)))
 	if err != nil {
 		return nil, fmt.Errorf("building DataFrame: %w", err)
 	}
@@ -358,10 +359,7 @@ func (p *PVDataProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron.M
 	}
 	defer rows.Close()
 
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		return nil, fmt.Errorf("pvdata: load timezone: %w", err)
-	}
+	nyc := eodLocation
 
 	var holidays []tradecron.MarketHoliday
 
@@ -916,12 +914,11 @@ func metricSet(ms []Metric) map[Metric]bool {
 	return s
 }
 
+// eodLocation is cached to avoid repeated time.LoadLocation calls
+// (which read timezone data from disk each time).
+var eodLocation = mustLoadLocation("America/New_York")
+
 // eodTimestamp converts a database date to the market close timestamp (16:00 Eastern).
 func eodTimestamp(timestamp time.Time) time.Time {
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		panic(fmt.Sprintf("failed to load America/New_York timezone: %v", err))
-	}
-
-	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 16, 0, 0, 0, nyc)
+	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 16, 0, 0, 0, eodLocation)
 }

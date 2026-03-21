@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -69,28 +70,28 @@ var _ = Describe("Specialized Metrics", func() {
 	Describe("ComputeSeries returns nil", func() {
 		It("UlcerIndex returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			s, err := portfolio.UlcerIndex.ComputeSeries(a, nil)
+			s, err := portfolio.UlcerIndex.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("ValueAtRisk returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			s, err := portfolio.ValueAtRisk.ComputeSeries(a, nil)
+			s, err := portfolio.ValueAtRisk.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("KRatio returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			s, err := portfolio.KRatio.ComputeSeries(a, nil)
+			s, err := portfolio.KRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("KellerRatio returns nil from ComputeSeries", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-			s, err := portfolio.KellerRatio.ComputeSeries(a, nil)
+			s, err := portfolio.KellerRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})

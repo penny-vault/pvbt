@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,20 +30,16 @@ func (omegaRatio) Description() string {
 	return "Probability-weighted ratio of gains over losses relative to a zero threshold. Captures the entire return distribution, not just the first two moments like Sharpe. A value above 1.0 means gains outweigh losses. Higher is better."
 }
 
-func (omegaRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (omegaRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Omega = sum(max(r_i, 0)) / sum(max(-r_i, 0))
 	// Threshold is 0 (no risk-free subtraction).
@@ -63,7 +60,9 @@ func (omegaRatio) Compute(a *Account, window *Period) (float64, error) {
 	return gains / losses, nil
 }
 
-func (omegaRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (omegaRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // OmegaRatio is the probability-weighted ratio of gains over losses.
 // Unlike Sharpe, it considers the entire return distribution including

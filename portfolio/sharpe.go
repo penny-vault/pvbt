@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,8 +31,8 @@ func (sharpe) Description() string {
 	return "Risk-adjusted return relative to a risk-free rate. Computed as the mean excess return divided by its standard deviation, annualized. Higher values indicate better risk-adjusted performance. A Sharpe above 1.0 is generally considered good, above 2.0 is very good."
 }
 
-func (sharpe) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
+func (sharpe) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
@@ -41,15 +42,12 @@ func (sharpe) Compute(a *Account, window *Period) (float64, error) {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := pd.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 	if len(erCol) < 2 {
 		return 0, nil
 	}
@@ -59,12 +57,14 @@ func (sharpe) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(df.Times())
 
 	return stat.Mean(erCol, nil) / stdDev * math.Sqrt(af), nil
 }
 
-func (sharpe) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (sharpe) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Sharpe is the Sharpe ratio: risk-adjusted return relative to a
 // risk-free rate, using standard deviation of returns as the risk measure.

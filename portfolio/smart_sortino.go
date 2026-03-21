@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,26 +31,23 @@ func (smartSortino) Description() string {
 	return "Sortino ratio penalized for autocorrelation in returns. Applies the same Lo (2002) correction as SmartSharpe but to the Sortino ratio. Lower than Sortino when returns exhibit positive autocorrelation."
 }
 
-func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (smartSortino) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := perfData.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	count := len(erCol)
 	if count == 0 {
@@ -69,7 +67,7 @@ func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(df.Times())
 	rawSortino := stat.Mean(erCol, nil) / downsideDev * math.Sqrt(af)
 
 	penalty := autocorrelationPenalty(erCol)
@@ -80,7 +78,9 @@ func (smartSortino) Compute(a *Account, window *Period) (float64, error) {
 	return rawSortino / penalty, nil
 }
 
-func (smartSortino) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (smartSortino) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // SmartSortino is the Sortino ratio corrected for autocorrelation in
 // returns using the Lo (2002) method. It divides the standard Sortino

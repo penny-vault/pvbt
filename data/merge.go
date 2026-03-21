@@ -126,29 +126,29 @@ func MergeTimes(frames ...*DataFrame) (*DataFrame, error) {
 	copy(metrics, sorted[0].metrics)
 
 	totalLen := len(allTimes)
-	newData := make([]float64, len(assets)*len(metrics)*totalLen)
+	numCols := len(assets) * len(metrics)
+	cols := make([][]float64, numCols)
 
-	tOffset := 0
-
-	for _, f := range sorted {
-		fTimeLen := len(f.times)
-
-		for aIdx, a := range assets {
-			for mIdx, m := range metrics {
-				col := f.Column(a, m)
-				if col == nil {
-					continue
-				}
-
-				dstOff := (aIdx*len(metrics)+mIdx)*totalLen + tOffset
-				copy(newData[dstOff:dstOff+fTimeLen], col)
-			}
-		}
-
-		tOffset += fTimeLen
+	for i := range cols {
+		cols[i] = make([]float64, 0, totalLen)
 	}
 
-	result, err := NewDataFrame(allTimes, assets, metrics, sorted[0].freq, newData)
+	for _, frame := range sorted {
+		for aIdx, a := range assets {
+			for mIdx, m := range metrics {
+				idx := aIdx*len(metrics) + mIdx
+				col := frame.Column(a, m)
+
+				if col == nil {
+					cols[idx] = append(cols[idx], make([]float64, len(frame.times))...)
+				} else {
+					cols[idx] = append(cols[idx], col...)
+				}
+			}
+		}
+	}
+
+	result, err := NewDataFrame(allTimes, assets, metrics, sorted[0].freq, cols)
 	if err != nil {
 		return nil, err
 	}

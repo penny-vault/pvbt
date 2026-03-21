@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"context"
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type edgeRatio struct{}
 
@@ -27,8 +32,8 @@ func (edgeRatio) Description() string {
 		"typically exceed adverse excursions, suggesting a positive trading edge."
 }
 
-func (edgeRatio) Compute(acct *Account, _ *Period) (float64, error) {
-	trades := acct.TradeDetails()
+func (edgeRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
 	if len(trades) == 0 {
 		return math.NaN(), nil
 	}
@@ -50,7 +55,7 @@ func (edgeRatio) Compute(acct *Account, _ *Period) (float64, error) {
 	return avgMFE / math.Abs(avgMAE), nil
 }
 
-func (edgeRatio) ComputeSeries(acct *Account, window *Period) ([]float64, error) {
+func (edgeRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

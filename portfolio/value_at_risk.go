@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 	"sort"
 
@@ -30,20 +31,16 @@ func (valueAtRisk) Description() string {
 	return "The 5th percentile of historical returns, representing the worst-case loss expected 95% of the time. A value of -0.02 means there is a 5% chance of losing more than 2% in a single period. More negative values indicate higher risk."
 }
 
-func (valueAtRisk) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (valueAtRisk) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	sorted := make([]float64, len(col))
 	copy(sorted, col)
@@ -54,7 +51,9 @@ func (valueAtRisk) Compute(a *Account, window *Period) (float64, error) {
 	return sorted[idx], nil
 }
 
-func (valueAtRisk) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (valueAtRisk) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // ValueAtRisk estimates the maximum expected loss over a given time
 // horizon at a specified confidence level (e.g., 95%). A VaR of 5%

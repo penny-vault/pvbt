@@ -581,7 +581,8 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		}
 	}
 
-	assembled, err := data.NewDataFrame(unionTimes, assets, metrics, data.Daily, slab)
+	assembled, err := data.NewDataFrame(unionTimes, assets, metrics, data.Daily,
+		data.SlabToColumns(slab, len(assets)*len(metrics), len(unionTimes)))
 	if err != nil {
 		return nil, fmt.Errorf("engine: assemble cached data: %w", err)
 	}

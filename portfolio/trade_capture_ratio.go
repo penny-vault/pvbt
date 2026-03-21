@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"context"
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type tradeCaptureRatio struct{}
 
@@ -27,8 +32,8 @@ func (tradeCaptureRatio) Description() string {
 		"favorable excursion; values near 0 indicate premature exits."
 }
 
-func (tradeCaptureRatio) Compute(acct *Account, _ *Period) (float64, error) {
-	trades := acct.TradeDetails()
+func (tradeCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
 	if len(trades) == 0 {
 		return math.NaN(), nil
 	}
@@ -52,7 +57,7 @@ func (tradeCaptureRatio) Compute(acct *Account, _ *Period) (float64, error) {
 	return avgReturnPct / avgMFE, nil
 }
 
-func (tradeCaptureRatio) ComputeSeries(acct *Account, window *Period) ([]float64, error) {
+func (tradeCaptureRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

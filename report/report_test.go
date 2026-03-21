@@ -37,10 +37,10 @@ func buildPriceDF(timestamp time.Time, assets []asset.Asset, closes []float64) *
 	adjCloses := make([]float64, len(closes))
 	copy(adjCloses, closes)
 
-	vals := make([]float64, 0, len(assets)*2)
+	cols := make([][]float64, 0, len(assets)*2)
 	for idx := range assets {
-		vals = append(vals, closes[idx])
-		vals = append(vals, adjCloses[idx])
+		cols = append(cols, []float64{closes[idx]})
+		cols = append(cols, []float64{adjCloses[idx]})
 	}
 
 	df, err := data.NewDataFrame(
@@ -48,7 +48,7 @@ func buildPriceDF(timestamp time.Time, assets []asset.Asset, closes []float64) *
 		assets,
 		[]data.Metric{data.MetricClose, data.AdjClose},
 		data.Daily,
-		vals,
+		cols,
 	)
 	if err != nil {
 		panic(err)

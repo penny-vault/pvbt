@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,8 +30,13 @@ func (treynor) Description() string {
 	return "Excess return per unit of systematic risk (beta). Similar to Sharpe but uses beta instead of standard deviation. Appropriate for well-diversified portfolios where unsystematic risk has been eliminated."
 }
 
-func (treynor) Compute(acct *Account, window *Period) (float64, error) {
-	pd := acct.PerfData()
+func (treynor) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
+		return 0, nil
+	}
+
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
@@ -40,17 +46,15 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := pd.Window(window)
-	eq := perfDF.Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
-	rfWinCol := perfDF.Column(portfolioAsset, data.PortfolioRiskFree)
+	eqCol := df.Column(portfolioAsset, data.PortfolioEquity)
+	rfWinCol := pd.Window(window).Column(portfolioAsset, data.PortfolioRiskFree)
 
 	if len(eqCol) < 2 || len(rfWinCol) < 2 {
 		return 0, nil
 	}
 
 	// Compute time span in years; return 0 for very short backtests.
-	times := perfDF.Times()
+	times := df.Times()
 
 	calendarDays := times[len(times)-1].Sub(times[0]).Hours() / 24
 	if calendarDays < 30 {
@@ -63,7 +67,7 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 	cagrPortfolio := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1/years) - 1
 	cagrRiskFree := math.Pow(rfWinCol[len(rfWinCol)-1]/rfWinCol[0], 1/years) - 1
 
-	betaValue, err := Beta.Compute(acct, window)
+	betaValue, err := Beta.Compute(ctx, stats, window)
 	if err != nil {
 		return 0, err
 	}
@@ -75,7 +79,9 @@ func (treynor) Compute(acct *Account, window *Period) (float64, error) {
 	return (cagrPortfolio - cagrRiskFree) / betaValue, nil
 }
 
-func (treynor) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (treynor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Treynor is the Treynor ratio: excess return per unit of systematic
 // risk (beta).

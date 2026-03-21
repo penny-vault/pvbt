@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,20 +31,16 @@ func (gainLossRatio) Description() string {
 	return "Average gain on winning periods divided by average loss on losing periods, computed from equity curve period returns. A ratio above 1.0 means gains are larger than losses on average. Reflects overall portfolio behavior including cash drag, dividends, and unrealized P&L. Compare with TradeGainLossRatio which uses round-trip trade PnL instead."
 }
 
-func (gainLossRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (gainLossRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	var positive, negative []float64
 
@@ -62,7 +59,9 @@ func (gainLossRatio) Compute(a *Account, window *Period) (float64, error) {
 	return stat.Mean(positive, nil) / math.Abs(stat.Mean(negative, nil)), nil
 }
 
-func (gainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (gainLossRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // GainLossRatio is the average gain on winning periods divided by the
 // average loss on losing periods. A ratio above 1.0 means wins are

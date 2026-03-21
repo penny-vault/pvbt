@@ -297,7 +297,8 @@ func (p *SnapshotProvider) Fetch(ctx context.Context, req DataRequest) (*DataFra
 		}
 	}
 
-	return NewDataFrame(times, req.Assets, req.Metrics, req.Frequency, slab)
+	return NewDataFrame(times, req.Assets, req.Metrics, req.Frequency,
+		SlabToColumns(slab, len(req.Assets)*len(req.Metrics), len(times)))
 }
 
 func (p *SnapshotProvider) fetchEod(

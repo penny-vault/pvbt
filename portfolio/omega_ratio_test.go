@@ -16,6 +16,8 @@
 package portfolio_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -25,7 +27,7 @@ import (
 var _ = Describe("OmegaRatio", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
-		s, err := portfolio.OmegaRatio.ComputeSeries(a, nil)
+		s, err := portfolio.OmegaRatio.ComputeSeries(context.Background(), a, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s).To(BeNil())
 	})

@@ -642,7 +642,8 @@ func (a *Account) readPerfData(db *sql.DB) error {
 		}
 	}
 
-	df, err := data.NewDataFrame(times, assets, metrics, perfFreq, vals)
+	df, err := data.NewDataFrame(times, assets, metrics, perfFreq,
+		data.SlabToColumns(vals, len(assets)*len(metrics), len(times)))
 	if err != nil {
 		return fmt.Errorf("build perfData: %w", err)
 	}

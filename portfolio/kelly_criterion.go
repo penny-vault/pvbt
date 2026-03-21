@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,20 +30,16 @@ func (kellyCriterion) Description() string {
 	return "Optimal fraction of capital to risk per period based on historical win rate and payoff ratio. Computed as W - (1-W)/R where W is win rate and R is average win / average loss. Values above 0 suggest positive edge; values near 0 or negative suggest the strategy should not be traded."
 }
 
-func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (kellyCriterion) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	var (
 		wins, losses    int
@@ -71,7 +68,9 @@ func (kellyCriterion) Compute(a *Account, window *Period) (float64, error) {
 	return w - (1-w)/(avgWin/avgLoss), nil
 }
 
-func (kellyCriterion) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (kellyCriterion) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // KellyCriterion computes the optimal capital allocation fraction using
 // the Kelly formula: W - (1-W)/R where W is win rate and R is the ratio

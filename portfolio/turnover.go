@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type turnover struct{}
 
@@ -27,10 +31,10 @@ func (turnover) Description() string {
 		"value of 1.0 means the entire portfolio was turned over once per year."
 }
 
-func (turnover) Compute(a *Account, _ *Period) (float64, error) {
-	_, totalSellValue := roundTrips(a.TradeDetails(), a.Transactions())
+func (turnover) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	_, totalSellValue := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 
-	perfData := a.PerfData()
+	perfData := stats.PerfDataView(ctx)
 	if perfData == nil {
 		return 0, nil
 	}
@@ -61,7 +65,9 @@ func (turnover) Compute(a *Account, _ *Period) (float64, error) {
 	return (totalSellValue / meanValue) * (365.25 / periodDays), nil
 }
 
-func (turnover) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (turnover) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Turnover is the annualized portfolio turnover rate, computed as
 // total sell value divided by mean portfolio value, scaled to a year.

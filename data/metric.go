@@ -304,4 +304,12 @@ const (
 	PortfolioBenchmark Metric = "PortfolioBenchmark"
 	// PortfolioRiskFree is the risk-free rate used for risk-adjusted return calculations.
 	PortfolioRiskFree Metric = "PortfolioRiskFree"
+	// PortfolioReturns is the period-over-period percentage return of portfolio equity.
+	PortfolioReturns Metric = "portfolio_returns"
+	// PortfolioExcessReturns is portfolio returns minus the risk-free rate.
+	PortfolioExcessReturns Metric = "portfolio_excess_returns"
+	// PortfolioDrawdown is the percentage decline from the running equity peak.
+	PortfolioDrawdown Metric = "portfolio_drawdown"
+	// PortfolioBenchReturns is the period-over-period percentage return of the benchmark.
+	PortfolioBenchReturns Metric = "portfolio_bench_returns"
 )

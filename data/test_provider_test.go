@@ -44,9 +44,9 @@ var _ = Describe("TestProvider", func() {
 			times[i] = base.AddDate(0, 0, i)
 		}
 
-		vals := []float64{
-			100, 101, 102, 103, 104, // AAPL Price
-			200, 202, 204, 206, 208, // GOOG Price
+		vals := [][]float64{
+			{100, 101, 102, 103, 104}, // AAPL Price
+			{200, 202, 204, 206, 208}, // GOOG Price
 		}
 		frame, err := data.NewDataFrame(times, []asset.Asset{aapl, goog}, []data.Metric{data.Price}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())

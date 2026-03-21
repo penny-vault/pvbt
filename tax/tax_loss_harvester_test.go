@@ -82,7 +82,7 @@ func buildAccount(cash float64, ast asset.Asset, buyPrice, currentPrice, qty flo
 		[]asset.Asset{ast},
 		[]data.Metric{data.MetricClose},
 		data.Daily,
-		[]float64{currentPrice},
+		[][]float64{{currentPrice}},
 	)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -174,7 +174,7 @@ var _ = Describe("TaxLossHarvester", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{88.0},
+				[][]float64{{88.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)
@@ -219,7 +219,7 @@ var _ = Describe("TaxLossHarvester", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{75.0},
+				[][]float64{{75.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)
@@ -257,7 +257,7 @@ var _ = Describe("TaxLossHarvester", func() {
 				[]asset.Asset{spy, voo},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{75.0, 80.0},
+				[][]float64{{75.0}, {80.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)
@@ -311,7 +311,7 @@ var _ = Describe("TaxLossHarvester", func() {
 				[]asset.Asset{spy, voo},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{88.0, 95.0},
+				[][]float64{{88.0}, {95.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)

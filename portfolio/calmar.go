@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,16 +30,14 @@ func (calmar) Description() string {
 	return "Annualized return divided by maximum drawdown. Measures return per unit of drawdown risk. Higher values indicate the strategy earns more return for each unit of peak-to-trough decline endured."
 }
 
-func (calmar) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (calmar) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	eqDF := stats.EquitySeries(ctx, window)
+	if eqDF == nil {
 		return 0, nil
 	}
 
-	perfDF := pd.Window(window)
-	equity := perfDF.Metrics(data.PortfolioEquity)
-	eqCol := equity.Column(portfolioAsset, data.PortfolioEquity)
-	eqTimes := perfDF.Times()
+	eqCol := eqDF.Column(portfolioAsset, data.PortfolioEquity)
+	eqTimes := eqDF.Times()
 
 	if len(eqCol) < 2 || len(eqTimes) < 2 {
 		return 0, nil
@@ -51,9 +50,12 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 
 	annualizedReturn := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1
 
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+	ddDF := stats.Drawdown(ctx, window)
+	if ddDF == nil {
+		return 0, nil
+	}
+
+	ddCol := ddDF.Column(portfolioAsset, data.PortfolioEquity)
 
 	minDD := 0.0
 	for _, v := range ddCol {
@@ -69,7 +71,9 @@ func (calmar) Compute(a *Account, window *Period) (float64, error) {
 	return annualizedReturn / math.Abs(minDD), nil
 }
 
-func (calmar) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (calmar) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
 func (calmar) BenchmarkTargetable() {}

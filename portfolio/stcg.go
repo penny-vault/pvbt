@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type stcgMetric struct{}
 
 func (stcgMetric) Name() string { return "STCG" }
@@ -23,12 +29,14 @@ func (stcgMetric) Description() string {
 	return "Total realized short-term capital gains from positions held 365 days or fewer. Computed by replaying the transaction log with FIFO lot matching. Taxed as ordinary income."
 }
 
-func (stcgMetric) Compute(a *Account, _ *Period) (float64, error) {
-	_, stcg, _, _ := realizedGains(a.Transactions())
+func (stcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	_, stcg, _, _ := realizedGains(stats.TransactionsView(ctx))
 	return stcg, nil
 }
 
-func (stcgMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (stcgMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // STCG is realized short-term capital gains (holding period <= 365 days).
 var STCGMetric PerformanceMetric = stcgMetric{}

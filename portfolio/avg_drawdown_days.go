@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type avgDrawdownDays struct{}
 
@@ -25,20 +29,16 @@ func (avgDrawdownDays) Description() string {
 	return "Mean duration of drawdown periods in trading days. A drawdown period starts when the equity falls below its peak and ends when a new peak is reached. Complements AvgDrawdown (magnitude) by measuring how long recoveries take."
 }
 
-func (avgDrawdownDays) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (avgDrawdownDays) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Drawdown(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-	if equity.Len() < 2 {
+	ddCol := df.Column(portfolioAsset, data.PortfolioEquity)
+	if len(ddCol) < 2 {
 		return 0, nil
 	}
-
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
 
 	// Count drawdown episodes and their durations.
 	var durations []int
@@ -69,7 +69,9 @@ func (avgDrawdownDays) Compute(a *Account, window *Period) (float64, error) {
 	return float64(total) / float64(len(durations)), nil
 }
 
-func (avgDrawdownDays) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (avgDrawdownDays) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // AvgDrawdownDays is the mean duration of drawdown episodes in trading
 // days. It measures how long the strategy typically spends recovering

@@ -44,10 +44,7 @@ func ExampleData() (*TestProvider, AssetProvider) {
 
 	// Generate trading days (skip weekends). Timestamps use US Eastern
 	// at 16:00 (market close) to match tradecron schedule dates.
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		panic("ExampleData: load America/New_York: " + err.Error())
-	}
+	nyc := eodLocation
 
 	start := time.Date(2024, time.January, 2, 16, 0, 0, 0, nyc)
 	end := time.Date(2024, time.June, 28, 16, 0, 0, 0, nyc)
@@ -66,7 +63,11 @@ func ExampleData() (*TestProvider, AssetProvider) {
 	numTimes := len(times)
 	numAssets := len(assets)
 	numMetrics := len(metrics)
-	vals := make([]float64, numTimes*numAssets*numMetrics)
+
+	cols := make([][]float64, numAssets*numMetrics)
+	for i := range cols {
+		cols[i] = make([]float64, numTimes)
+	}
 
 	// Deterministic price curves using simple sine-modulated trends.
 	//   SPY: starts 450, trends up ~8% annualized
@@ -82,22 +83,16 @@ func ExampleData() (*TestProvider, AssetProvider) {
 			price := basePrice[aIdx]*(1+dailyDrift[aIdx]*float64(timeIdx)) + wave
 			price = math.Round(price*100) / 100
 
-			// MetricClose column
-			vals[(aIdx*numMetrics+0)*numTimes+timeIdx] = price
-			// AdjClose column (same as close for this synthetic data)
-			vals[(aIdx*numMetrics+1)*numTimes+timeIdx] = price
-			// Dividend column (zero -- no dividends in synthetic data)
-			vals[(aIdx*numMetrics+2)*numTimes+timeIdx] = 0
-			// MetricHigh column (close + 1% of base price)
-			vals[(aIdx*numMetrics+3)*numTimes+timeIdx] = math.Round((price+basePrice[aIdx]*0.01)*100) / 100
-			// MetricLow column (close - 1% of base price)
-			vals[(aIdx*numMetrics+4)*numTimes+timeIdx] = math.Round((price-basePrice[aIdx]*0.01)*100) / 100
-			// SplitFactor column (1.0 -- no splits in synthetic data)
-			vals[(aIdx*numMetrics+5)*numTimes+timeIdx] = 1.0
+			cols[aIdx*numMetrics+0][timeIdx] = price                                              // MetricClose
+			cols[aIdx*numMetrics+1][timeIdx] = price                                              // AdjClose
+			cols[aIdx*numMetrics+2][timeIdx] = 0                                                  // Dividend
+			cols[aIdx*numMetrics+3][timeIdx] = math.Round((price+basePrice[aIdx]*0.01)*100) / 100 // MetricHigh
+			cols[aIdx*numMetrics+4][timeIdx] = math.Round((price-basePrice[aIdx]*0.01)*100) / 100 // MetricLow
+			cols[aIdx*numMetrics+5][timeIdx] = 1.0                                                // SplitFactor
 		}
 	}
 
-	frame, err := NewDataFrame(times, assets, metrics, Daily, vals)
+	frame, err := NewDataFrame(times, assets, metrics, Daily, cols)
 	if err != nil {
 		panic(fmt.Sprintf("ExampleData: %v", err))
 	}

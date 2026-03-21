@@ -20,6 +20,18 @@ import (
 	"time"
 )
 
+// removeNaN returns a copy of col with all NaN values removed.
+func removeNaN(col []float64) []float64 {
+	clean := make([]float64, 0, len(col))
+	for _, val := range col {
+		if !math.IsNaN(val) {
+			clean = append(clean, val)
+		}
+	}
+
+	return clean
+}
+
 // defaultInflationRate is the assumed annual inflation rate for withdrawal
 // metric calculations.
 const defaultInflationRate = 0.03
@@ -47,7 +59,7 @@ func withdrawalSustainable(
 	startBalance := equity[0]
 	balance := startBalance
 	startDate := times[0]
-	yearBoundary := startDate.AddDate(1, 0, 0)
+	yearBoundaryUnix := startDate.AddDate(1, 0, 0).Unix()
 	yearsElapsed := 0
 
 	for dayIdx := 1; dayIdx < len(equity); dayIdx++ {
@@ -57,8 +69,9 @@ func withdrawalSustainable(
 			balance *= (1 + dailyReturn)
 		}
 
-		// Check for year boundary.
-		if !times[dayIdx].Before(yearBoundary) {
+		// Check for year boundary. Unix() is a direct field access with no
+		// timezone lookup, unlike time.Time.Before which decomposes dates.
+		if times[dayIdx].Unix() >= yearBoundaryUnix {
 			yearsElapsed++
 			inflationFactor := math.Pow(1+defaultInflationRate, float64(yearsElapsed))
 			withdrawal := rate * startBalance * inflationFactor
@@ -75,7 +88,7 @@ func withdrawalSustainable(
 				return false
 			}
 
-			yearBoundary = startDate.AddDate(yearsElapsed+1, 0, 0)
+			yearBoundaryUnix = startDate.AddDate(yearsElapsed+1, 0, 0).Unix()
 		}
 	}
 

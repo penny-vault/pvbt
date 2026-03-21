@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 )
@@ -29,26 +29,28 @@ func (downsideCaptureRatio) Description() string {
 	return "Measures how much of the benchmark's downside the portfolio experiences. A value of 0.8 means the portfolio loses only 80% of the benchmark's loss during down periods. Lower is better."
 }
 
-func (downsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (downsideCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	// Check if benchmark is configured by examining the raw equity-level
+	// benchmark column. A zero first value means no benchmark was set.
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	perfDF := perfData.Window(window)
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
 
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
-	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
 
 	count := len(pCol)
 	if len(bCol) < count {
@@ -79,7 +81,7 @@ func (downsideCaptureRatio) Compute(a *Account, window *Period) (float64, error)
 	return geoP / geoB, nil
 }
 
-func (downsideCaptureRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (downsideCaptureRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

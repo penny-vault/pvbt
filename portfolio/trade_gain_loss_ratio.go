@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"context"
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type tradeGainLossRatio struct{}
 
@@ -29,8 +34,8 @@ func (tradeGainLossRatio) Description() string {
 		"which uses equity curve period returns instead."
 }
 
-func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
+func (tradeGainLossRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trips, _ := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 
 	var (
 		wins, losses    int
@@ -57,7 +62,7 @@ func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
 	return avgWin / math.Abs(avgLoss), nil
 }
 
-func (tradeGainLossRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (tradeGainLossRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

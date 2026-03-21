@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "math"
+import (
+	"context"
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type longProfitFactor struct{}
 
@@ -26,12 +31,13 @@ func (longProfitFactor) Description() string {
 		"A value above 1.0 means long trades are profitable overall."
 }
 
-func (longProfitFactor) Compute(acct *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(acct.TradeDetails(), acct.Transactions())
+func (longProfitFactor) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
+	trips, _ := roundTrips(trades, stats.TransactionsView(ctx))
 
 	var sumWin, sumLoss float64
 
-	for idx, td := range acct.TradeDetails() {
+	for idx, td := range trades {
 		if td.Direction != TradeLong {
 			continue
 		}
@@ -50,7 +56,9 @@ func (longProfitFactor) Compute(acct *Account, _ *Period) (float64, error) {
 	return sumWin / math.Abs(sumLoss), nil
 }
 
-func (longProfitFactor) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
+func (longProfitFactor) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // LongProfitFactor is the ratio of gross profit to gross loss from long round-trip trades.
 var LongProfitFactor PerformanceMetric = longProfitFactor{}

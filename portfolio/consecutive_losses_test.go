@@ -16,6 +16,8 @@
 package portfolio_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -25,7 +27,7 @@ import (
 var _ = Describe("ConsecutiveLosses", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 95})
-		s, err := portfolio.ConsecutiveLosses.ComputeSeries(a, nil)
+		s, err := portfolio.ConsecutiveLosses.ComputeSeries(context.Background(), a, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s).To(BeNil())
 	})

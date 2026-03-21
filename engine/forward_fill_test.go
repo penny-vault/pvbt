@@ -42,7 +42,7 @@ var _ = Describe("ForwardFillTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500.0},
+			[][]float64{{500.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -65,7 +65,7 @@ var _ = Describe("ForwardFillTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500.0},
+			[][]float64{{500.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -83,7 +83,7 @@ var _ = Describe("ForwardFillTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Tick,
-			[]float64{500.0},
+			[][]float64{{500.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -101,7 +101,7 @@ var _ = Describe("ForwardFillTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Weekly,
-			[]float64{500.0},
+			[][]float64{{500.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -122,7 +122,7 @@ var _ = Describe("ForwardFillTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Monthly,
-			[]float64{500.0},
+			[][]float64{{500.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 

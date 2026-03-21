@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type taxDrag struct{}
 
@@ -25,8 +29,8 @@ func (taxDrag) Description() string {
 	return "Percentage of pre-tax return consumed by taxes from trading activity, excluding dividend taxation. Uses 25% for short-term gains and 15% for long-term gains."
 }
 
-func (taxDrag) Compute(acct *Account, _ *Period) (float64, error) {
-	perfData := acct.PerfData()
+func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	perfData := stats.PerfDataView(ctx)
 	if perfData == nil {
 		return 0, nil
 	}
@@ -41,7 +45,7 @@ func (taxDrag) Compute(acct *Account, _ *Period) (float64, error) {
 		return 0, nil
 	}
 
-	ltcg, stcg, _, _ := realizedGains(acct.Transactions())
+	ltcg, stcg, _, _ := realizedGains(stats.TransactionsView(ctx))
 
 	estimatedTax := 0.0
 	if stcg > 0 {
@@ -55,7 +59,9 @@ func (taxDrag) Compute(acct *Account, _ *Period) (float64, error) {
 	return estimatedTax / preTaxReturn, nil
 }
 
-func (taxDrag) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (taxDrag) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // TaxDragMetric is the percentage of pre-tax return consumed by taxes from trading activity.
 var TaxDragMetric PerformanceMetric = taxDrag{}

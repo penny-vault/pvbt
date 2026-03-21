@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 	"gonum.org/v1/gonum/stat"
@@ -30,8 +30,15 @@ func (alpha) Description() string {
 	return "Annualized excess return above what the CAPM predicts given the portfolio's beta. Positive alpha indicates the portfolio outperformed its risk-adjusted expectation. The \"skill\" component of returns."
 }
 
-func (alpha) Compute(acct *Account, window *Period) (float64, error) {
-	pd := acct.PerfData()
+func (alpha) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
+
+	if rdf == nil || bdf == nil {
+		return 0, nil
+	}
+
+	pd := stats.PerfDataView(ctx)
 	if pd == nil {
 		return 0, nil
 	}
@@ -41,29 +48,34 @@ func (alpha) Compute(acct *Account, window *Period) (float64, error) {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
-		return 0, ErrNoBenchmark
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+
+	// Get risk-free returns for the window.
+	rfPctDF := pd.Window(window).Metrics(data.PortfolioRiskFree).Pct()
+	rCol := removeNaN(rfPctDF.Column(portfolioAsset, data.PortfolioRiskFree))
+
+	// Use the shortest common length.
+	minLen := len(pCol)
+	if len(bCol) < minLen {
+		minLen = len(bCol)
 	}
 
-	perfDF := pd.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
+	if len(rCol) < minLen {
+		minLen = len(rCol)
+	}
 
-	if returns.Len() < 2 {
+	if minLen < 2 {
 		return 0, nil
 	}
 
-	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
-	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
-	rCol := returns.Column(portfolioAsset, data.PortfolioRiskFree)
-
-	if len(pCol) < 2 || len(bCol) < 2 || len(rCol) < 2 {
-		return 0, nil
-	}
+	pCol = pCol[:minLen]
+	bCol = bCol[:minLen]
+	rCol = rCol[:minLen]
 
 	// Compute mean excess returns.
-	excessPortfolio := make([]float64, len(pCol))
-	excessBenchmark := make([]float64, len(bCol))
+	excessPortfolio := make([]float64, minLen)
+	excessBenchmark := make([]float64, minLen)
 
 	for idx := range pCol {
 		excessPortfolio[idx] = pCol[idx] - rCol[idx]
@@ -73,17 +85,19 @@ func (alpha) Compute(acct *Account, window *Period) (float64, error) {
 	meanExcessPortfolio := stat.Mean(excessPortfolio, nil)
 	meanExcessBenchmark := stat.Mean(excessBenchmark, nil)
 
-	betaVal, err := Beta.Compute(acct, window)
+	betaVal, err := Beta.Compute(ctx, stats, window)
 	if err != nil {
 		return 0, err
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(rdf.Times())
 
 	return (meanExcessPortfolio - betaVal*meanExcessBenchmark) * af, nil
 }
 
-func (alpha) ComputeSeries(_ *Account, _ *Period) ([]float64, error) { return nil, nil }
+func (alpha) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Alpha is Jensen's alpha: the portfolio's excess return over what CAPM
 // would predict given its beta.

@@ -36,11 +36,11 @@ func buildWeekdayDF(start, end time.Time) *data.DataFrame {
 		}
 		times = append(times, day)
 	}
-	vals := make([]float64, len(times))
-	for i := range vals {
-		vals[i] = 100.0 + float64(i)*0.1
+	col := make([]float64, len(times))
+	for i := range col {
+		col[i] = 100.0 + float64(i)*0.1
 	}
-	df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, data.Daily, vals)
+	df, err := data.NewDataFrame(times, []asset.Asset{spy}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{col})
 	ExpectWithOffset(1, err).NotTo(HaveOccurred())
 	return df
 }

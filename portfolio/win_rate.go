@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type winRate struct{}
 
 func (winRate) Name() string { return "WinRate" }
@@ -26,8 +32,8 @@ func (winRate) Description() string {
 		"can still be profitable."
 }
 
-func (winRate) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
+func (winRate) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trips, _ := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 	if len(trips) == 0 {
 		return 0, nil
 	}
@@ -43,7 +49,9 @@ func (winRate) Compute(a *Account, _ *Period) (float64, error) {
 	return float64(wins) / float64(len(trips)), nil
 }
 
-func (winRate) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (winRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // WinRate is the percentage of round-trip trades that were profitable.
 var WinRate PerformanceMetric = winRate{}

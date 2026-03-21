@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -114,14 +115,14 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("SafeWithdrawalRate", func() {
 		It("returns 0 for backtests shorter than 1 year", func() {
 			a := buildShortAccount()
-			val, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.SafeWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(0.0))
 		})
 
 		It("returns a positive rate for moderate growth", func() {
 			a := buildModerateAccount()
-			val, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.SafeWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically(">", 0.0))
 		})
@@ -130,9 +131,9 @@ var _ = Describe("Withdrawal Metrics", func() {
 			declining := buildDecliningAccount()
 			moderate := buildModerateAccount()
 
-			declSWR, err := portfolio.SafeWithdrawalRate.Compute(declining, nil)
+			declSWR, err := portfolio.SafeWithdrawalRate.Compute(context.Background(), declining, nil)
 			Expect(err).NotTo(HaveOccurred())
-			modSWR, err := portfolio.SafeWithdrawalRate.Compute(moderate, nil)
+			modSWR, err := portfolio.SafeWithdrawalRate.Compute(context.Background(), moderate, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(declSWR).To(BeNumerically("<", modSWR))
@@ -140,7 +141,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			series, err := portfolio.SafeWithdrawalRate.ComputeSeries(a, nil)
+			series, err := portfolio.SafeWithdrawalRate.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(BeNil())
 		})
@@ -149,7 +150,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("PerpetualWithdrawalRate", func() {
 		It("returns 0 for backtests shorter than 1 year", func() {
 			a := buildShortAccount()
-			val, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.PerpetualWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(0.0))
 		})
@@ -158,21 +159,21 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// With 0% returns over ~13 months, any withdrawal means the
 			// ending balance cannot preserve inflation-adjusted purchasing power.
 			a := buildFlatAccount()
-			val, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.PerpetualWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(0.0))
 		})
 
 		It("returns 0 for a steeply declining curve", func() {
 			a := buildDecliningAccount()
-			val, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.PerpetualWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(0.0))
 		})
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			series, err := portfolio.PerpetualWithdrawalRate.ComputeSeries(a, nil)
+			series, err := portfolio.PerpetualWithdrawalRate.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(BeNil())
 		})
@@ -181,7 +182,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("DynamicWithdrawalRate", func() {
 		It("returns 0 for backtests shorter than 1 year", func() {
 			a := buildShortAccount()
-			val, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.DynamicWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(Equal(0.0))
 		})
@@ -190,14 +191,14 @@ var _ = Describe("Withdrawal Metrics", func() {
 			// Dynamic withdrawal adapts downward, so with 0% returns and
 			// only 1 year boundary the portfolio never fully depletes.
 			a := buildFlatAccount()
-			val, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			val, err := portfolio.DynamicWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", 0.200, 0.001))
 		})
 
 		It("returns nil from ComputeSeries", func() {
 			a := buildModerateAccount()
-			series, err := portfolio.DynamicWithdrawalRate.ComputeSeries(a, nil)
+			series, err := portfolio.DynamicWithdrawalRate.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(series).To(BeNil())
 		})
@@ -206,11 +207,11 @@ var _ = Describe("Withdrawal Metrics", func() {
 	Describe("ordering invariant", func() {
 		It("PerpetualWithdrawalRate <= SafeWithdrawalRate <= DynamicWithdrawalRate", func() {
 			a := buildModerateAccount()
-			pwr, err := portfolio.PerpetualWithdrawalRate.Compute(a, nil)
+			pwr, err := portfolio.PerpetualWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
-			swr, err := portfolio.SafeWithdrawalRate.Compute(a, nil)
+			swr, err := portfolio.SafeWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
-			dwr, err := portfolio.DynamicWithdrawalRate.Compute(a, nil)
+			dwr, err := portfolio.DynamicWithdrawalRate.Compute(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(pwr).To(BeNumerically("<=", swr))

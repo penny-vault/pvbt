@@ -76,9 +76,10 @@ var _ = Describe("Return Metrics", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
 			a := buildReturnAccount(dates, []float64{100, 110, 105, 115, 120})
 
-			series, err := a.PerformanceMetric(portfolio.TWRR).Series()
+			df, err := a.PerformanceMetric(portfolio.TWRR).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(HaveLen(4))
+			Expect(df.Len()).To(Equal(4))
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", 0.05, 1e-9))
 			Expect(series[2]).To(BeNumerically("~", 0.15, 1e-9))
@@ -241,9 +242,9 @@ var _ = Describe("Return Metrics", func() {
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df1)
 
-			series, err := a.PerformanceMetric(portfolio.MWRR).Series()
+			df, err := a.PerformanceMetric(portfolio.MWRR).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(BeNil())
+			Expect(df).To(BeNil())
 		})
 
 		It("returns positive MWRR when terminal value exceeds total deposits", func() {
@@ -817,9 +818,10 @@ var _ = Describe("Return Metrics", func() {
 				[]float64{50, 52, 54},
 			)
 
-			series, err := a.PerformanceMetric(portfolio.ActiveReturn).Series()
+			df, err := a.PerformanceMetric(portfolio.ActiveReturn).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(HaveLen(2))
+			Expect(df.Len()).To(Equal(2))
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.06, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", -0.03, 1e-9))
 		})

@@ -57,18 +57,23 @@ func (d *DownsampledDataFrame) aggregate(reducer func([]float64) float64) *DataF
 	newTimeLen := len(groups)
 	assetLen := len(d.df.assets)
 	metricLen := len(d.df.metrics)
-	newData := make([]float64, assetLen*metricLen*newTimeLen)
+	numCols := assetLen * metricLen
+	cols := make([][]float64, numCols)
+
+	for i := range cols {
+		cols[i] = make([]float64, newTimeLen)
+	}
+
 	newTimes := make([]time.Time, newTimeLen)
 
 	for gIdx, timeGroup := range groups {
 		newTimes[gIdx] = d.df.times[timeGroup.end-1]
 
-		for aIdx := 0; aIdx < assetLen; aIdx++ {
-			for mIdx := 0; mIdx < metricLen; mIdx++ {
-				srcOff := d.df.colOffset(aIdx, mIdx)
-				vals := d.df.data[srcOff+timeGroup.start : srcOff+timeGroup.end]
-				dstOff := (aIdx*metricLen + mIdx) * newTimeLen
-				newData[dstOff+gIdx] = reducer(vals)
+		for aIdx := range assetLen {
+			for mIdx := range metricLen {
+				srcCol := d.df.columns[d.df.colIdx(aIdx, mIdx)]
+				vals := srcCol[timeGroup.start:timeGroup.end]
+				cols[aIdx*metricLen+mIdx][gIdx] = reducer(vals)
 			}
 		}
 	}
@@ -79,7 +84,7 @@ func (d *DownsampledDataFrame) aggregate(reducer func([]float64) float64) *DataF
 	metrics := make([]Metric, metricLen)
 	copy(metrics, d.df.metrics)
 
-	result := mustNewDataFrame(newTimes, assets, metrics, d.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, d.freq, cols)
 
 	if d.df.riskFreeRates != nil {
 		rfRates := make([]float64, newTimeLen)

@@ -1,6 +1,7 @@
 package portfolio_test
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -75,28 +76,28 @@ var _ = Describe("Distribution Metrics", func() {
 	Describe("ComputeSeries returns nil", func() {
 		It("ExcessKurtosis returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			s, err := portfolio.ExcessKurtosis.ComputeSeries(a, nil)
+			s, err := portfolio.ExcessKurtosis.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("Skewness returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			s, err := portfolio.Skewness.ComputeSeries(a, nil)
+			s, err := portfolio.Skewness.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("NPositivePeriods returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			s, err := portfolio.NPositivePeriods.ComputeSeries(a, nil)
+			s, err := portfolio.NPositivePeriods.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})
 
 		It("GainLossRatio returns nil from ComputeSeries", func() {
 			a := cashAccount([]float64{100, 105, 102, 108, 106, 110, 112})
-			s, err := portfolio.GainLossRatio.ComputeSeries(a, nil)
+			s, err := portfolio.GainLossRatio.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(s).To(BeNil())
 		})

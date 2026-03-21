@@ -16,6 +16,8 @@
 package portfolio_test
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -25,7 +27,7 @@ import (
 var _ = Describe("AvgDrawdownDays", func() {
 	It("returns nil from ComputeSeries", func() {
 		a := buildAccountFromEquity([]float64{100, 90, 100})
-		s, err := portfolio.AvgDrawdownDays.ComputeSeries(a, nil)
+		s, err := portfolio.AvgDrawdownDays.ComputeSeries(context.Background(), a, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(s).To(BeNil())
 	})

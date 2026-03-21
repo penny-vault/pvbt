@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 	"sort"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,20 +30,16 @@ func (cvarMetric) Description() string {
 	return "Conditional Value at Risk (Expected Shortfall) at 95% confidence. The average loss in the worst 5% of periods. More negative values indicate higher tail risk. Superior to VaR because it captures the magnitude of extreme losses, not just their threshold."
 }
 
-func (cvarMetric) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (cvarMetric) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	sorted := make([]float64, len(col))
 	copy(sorted, col)
@@ -56,14 +52,16 @@ func (cvarMetric) Compute(a *Account, window *Period) (float64, error) {
 	}
 
 	sum := 0.0
-	for i := 0; i < cutoff; i++ {
-		sum += sorted[i]
+	for idx := 0; idx < cutoff; idx++ {
+		sum += sorted[idx]
 	}
 
 	return sum / float64(cutoff), nil
 }
 
-func (cvarMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (cvarMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // CVaR is Conditional Value at Risk (Expected Shortfall) at 95%
 // confidence. It measures the average loss in the worst 5% of periods,

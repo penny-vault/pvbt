@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 	"sort"
 
@@ -30,28 +31,24 @@ func (tailRatio) Description() string {
 	return "Ratio of the 95th percentile return to the absolute 5th percentile return. Measures the asymmetry between upside and downside tails. Values above 1.0 indicate the upside tail is fatter than the downside. Higher is better."
 }
 
-func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (tailRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
+	if len(col) == 0 {
 		return 0, nil
 	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
 
 	sorted := make([]float64, len(col))
 	copy(sorted, col)
 	sort.Float64s(sorted)
 
-	n := len(sorted)
-	fifthPercentile := sorted[int(math.Floor(0.05*float64(n)))]
-	p95 := sorted[int(math.Floor(0.95*float64(n)))]
+	numValues := len(sorted)
+	fifthPercentile := sorted[int(math.Floor(0.05*float64(numValues)))]
+	p95 := sorted[int(math.Floor(0.95*float64(numValues)))]
 
 	if fifthPercentile == 0 {
 		return 0, nil
@@ -60,7 +57,9 @@ func (tailRatio) Compute(a *Account, window *Period) (float64, error) {
 	return p95 / math.Abs(fifthPercentile), nil
 }
 
-func (tailRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (tailRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // TailRatio is the 95th percentile return divided by the absolute 5th
 // percentile return. It measures the asymmetry between extreme gains

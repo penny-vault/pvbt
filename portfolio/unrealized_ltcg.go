@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -30,9 +31,9 @@ func (unrealizedLTCG) Description() string {
 	return "Unrealized long-term capital gains from open positions held longer than 365 days. Computed by comparing current market prices to cost basis of existing tax lots. These gains become realized (and taxable) when positions are sold."
 }
 
-func (unrealizedLTCG) Compute(acct *Account, _ *Period) (float64, error) {
-	prices := acct.Prices()
-	perfData := acct.PerfData()
+func (unrealizedLTCG) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	prices := stats.PricesView(ctx)
+	perfData := stats.PerfDataView(ctx)
 
 	if prices == nil || perfData == nil {
 		return 0, nil
@@ -47,7 +48,7 @@ func (unrealizedLTCG) Compute(acct *Account, _ *Period) (float64, error) {
 
 	var total float64
 
-	for ast, lots := range acct.TaxLots() {
+	for ast, lots := range stats.TaxLotsView(ctx) {
 		currentPrice := prices.Value(ast, data.MetricClose)
 		if math.IsNaN(currentPrice) {
 			return math.NaN(), nil
@@ -62,7 +63,7 @@ func (unrealizedLTCG) Compute(acct *Account, _ *Period) (float64, error) {
 	}
 
 	// Include short lots: unrealized P&L = (entry price - current price) * qty
-	acct.ShortLots(func(shortAsset asset.Asset, lots []TaxLot) {
+	stats.ShortLotsView(ctx, func(shortAsset asset.Asset, lots []TaxLot) {
 		currentPrice := prices.Value(shortAsset, data.MetricClose)
 		if math.IsNaN(currentPrice) {
 			return
@@ -79,7 +80,9 @@ func (unrealizedLTCG) Compute(acct *Account, _ *Period) (float64, error) {
 	return total, nil
 }
 
-func (unrealizedLTCG) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (unrealizedLTCG) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // UnrealizedLTCGMetric is unrealized long-term capital gains from positions
 // held longer than 365 days.

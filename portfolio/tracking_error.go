@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,32 +31,42 @@ func (trackingError) Description() string {
 	return "Annualized standard deviation of the difference between portfolio and benchmark returns. Measures how closely the portfolio follows its benchmark. Lower values indicate tighter tracking."
 }
 
-func (trackingError) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (trackingError) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	// Check if benchmark is configured by examining the raw equity-level
+	// benchmark column. A zero first value means no benchmark was set.
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
+	bmRaw := pd.Column(portfolioAsset, data.PortfolioBenchmark)
+	if len(bmRaw) == 0 || bmRaw[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	perfDF := perfData.Window(window)
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
 
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
-		return 0, nil
-	}
-	// Compute active returns = portfolio returns - benchmark returns
-	activeReturns := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioBenchmark)
-	if activeReturns.Len() == 0 {
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	arCol := activeReturns.Column(portfolioAsset, data.PortfolioEquity)
-	if len(arCol) < 2 {
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+
+	// Compute active returns = portfolio returns - benchmark returns.
+	minLen := len(pCol)
+	if len(bCol) < minLen {
+		minLen = len(bCol)
+	}
+
+	if minLen < 2 {
 		return 0, nil
+	}
+
+	arCol := make([]float64, minLen)
+	for idx := 0; idx < minLen; idx++ {
+		arCol[idx] = pCol[idx] - bCol[idx]
 	}
 
 	stdDev := stat.StdDev(arCol, nil)
@@ -63,12 +74,14 @@ func (trackingError) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(rdf.Times())
 
 	return stdDev * math.Sqrt(af), nil
 }
 
-func (trackingError) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (trackingError) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // TrackingError is the standard deviation of the difference between
 // portfolio returns and benchmark returns.

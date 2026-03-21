@@ -386,7 +386,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// 18b. Compute registered metrics only on strategy dates.
 		if step.isParentStrategy {
-			computeMetrics(acct, date)
+			computeMetrics(acct, date, acct.RegisteredMetrics(), acct.AppendMetric)
 		}
 
 		// 19. Evict old cache data.

@@ -4,6 +4,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -88,10 +89,11 @@ var _ = Describe("Benchmark targeting", func() {
 			bilPrices := []float64{91.50, 91.50, 91.50}
 			acct := buildAccountWithRF(spyPrices, bilPrices)
 
-			series, err := acct.PerformanceMetric(portfolio.TWRR).Benchmark().Series()
+			df, err := acct.PerformanceMetric(portfolio.TWRR).Benchmark().Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(HaveLen(2))
+			Expect(df.Len()).To(Equal(2))
 			// Cumulative returns: after day 1: 10%, after day 2: 21%
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
 			Expect(series[1]).To(BeNumerically("~", 0.21, 1e-9))
 		})

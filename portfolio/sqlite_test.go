@@ -285,7 +285,7 @@ var _ = Describe("SQLite", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose, data.AdjClose},
 				data.Daily,
-				[]float64{500, 500},
+				[][]float64{{500}, {500}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(priceDF)

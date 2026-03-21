@@ -16,7 +16,7 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
 	"gonum.org/v1/gonum/stat"
@@ -30,20 +30,13 @@ func (excessKurtosis) Description() string {
 	return "Measures the heaviness of return distribution tails relative to a normal distribution. Positive values indicate fat tails (more extreme returns than expected). Negative values indicate thin tails."
 }
 
-func (excessKurtosis) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (excessKurtosis) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Returns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-
-	r := eq.Pct().Drop(math.NaN())
-	if r.Len() == 0 {
-		return 0, nil
-	}
-
-	col := r.Column(portfolioAsset, data.PortfolioEquity)
+	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	numValues := len(col)
 	if numValues < 4 {
@@ -66,7 +59,9 @@ func (excessKurtosis) Compute(a *Account, window *Period) (float64, error) {
 	return sum/float64(numValues)/(stdDev*stdDev*stdDev*stdDev) - 3, nil
 }
 
-func (excessKurtosis) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (excessKurtosis) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // ExcessKurtosis measures tail risk -- how much fatter the tails of
 // the return distribution are compared to a normal distribution.

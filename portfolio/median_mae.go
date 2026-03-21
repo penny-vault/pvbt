@@ -15,7 +15,12 @@
 
 package portfolio
 
-import "sort"
+import (
+	"context"
+	"sort"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type medianMAE struct{}
 
@@ -27,8 +32,8 @@ func (medianMAE) Description() string {
 		"the median is more robust to outliers than the mean."
 }
 
-func (medianMAE) Compute(acct *Account, _ *Period) (float64, error) {
-	trades := acct.TradeDetails()
+func (medianMAE) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trades := stats.TradeDetailsView(ctx)
 	if len(trades) == 0 {
 		return 0, nil
 	}
@@ -48,7 +53,7 @@ func (medianMAE) Compute(acct *Account, _ *Period) (float64, error) {
 	return values[count/2], nil
 }
 
-func (medianMAE) ComputeSeries(acct *Account, window *Period) ([]float64, error) {
+func (medianMAE) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

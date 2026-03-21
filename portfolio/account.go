@@ -71,6 +71,7 @@ type Account struct {
 	initialMargin     float64
 	maintenanceMargin float64
 	borrowRate        float64
+	dfCache           map[dfCacheKey]*data.DataFrame
 }
 
 // New creates an Account with the given options.
@@ -1644,7 +1645,7 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		assets := []asset.Asset{portfolioAsset}
 		metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
 
-		row, err := data.NewDataFrame(timestamps, assets, metrics, data.Daily, []float64{total, benchVal, rfVal})
+		row, err := data.NewDataFrame(timestamps, assets, metrics, data.Daily, [][]float64{{total}, {benchVal}, {rfVal}})
 		if err != nil {
 			log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
 			return
@@ -1657,6 +1658,9 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 			return
 		}
 	}
+
+	// Invalidate lazily-computed DataFrames so they are recomputed on next access.
+	a.dfCache = nil
 }
 
 // PerfData returns the accumulated performance DataFrame, or nil if no
@@ -2314,4 +2318,159 @@ func (a *Account) BorrowRate() float64 {
 	}
 
 	return 0.005 // default 0.5%
+}
+
+// ---------------------------------------------------------------------------
+// PortfolioStats interface implementation
+// ---------------------------------------------------------------------------
+
+// dfCacheKey identifies a cached DataFrame result by derived metric and window.
+type dfCacheKey struct {
+	metric data.Metric
+	window string
+}
+
+// windowKey returns a stable string key for a Period (or "nil" for nil).
+func windowKey(window *Period) string {
+	if window == nil {
+		return "nil"
+	}
+
+	return fmt.Sprintf("%d_%d", window.Unit, window.N)
+}
+
+// cachedDF returns a previously computed DataFrame, or nil if not cached.
+func (a *Account) cachedDF(metric data.Metric, window *Period) *data.DataFrame {
+	if a.dfCache == nil {
+		return nil
+	}
+
+	return a.dfCache[dfCacheKey{metric: metric, window: windowKey(window)}]
+}
+
+// putDF stores a computed DataFrame in the cache.
+func (a *Account) putDF(metric data.Metric, window *Period, df *data.DataFrame) {
+	if a.dfCache == nil {
+		a.dfCache = make(map[dfCacheKey]*data.DataFrame)
+	}
+
+	a.dfCache[dfCacheKey{metric: metric, window: windowKey(window)}] = df
+}
+
+// Returns computes period-over-period percentage returns of the portfolio
+// equity curve within the given window. Results are cached per window.
+func (a *Account) Returns(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	if cached := a.cachedDF(data.PortfolioReturns, window); cached != nil {
+		return cached
+	}
+
+	df := a.perfData.Window(window).Metrics(data.PortfolioEquity).Pct()
+	a.putDF(data.PortfolioReturns, window, df)
+
+	return df
+}
+
+// ExcessReturns computes portfolio returns minus the risk-free rate within
+// the given window. Results are cached per window.
+func (a *Account) ExcessReturns(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	if cached := a.cachedDF(data.PortfolioExcessReturns, window); cached != nil {
+		return cached
+	}
+
+	perfDF := a.perfData.Window(window).Metrics(data.PortfolioEquity, data.PortfolioRiskFree).Pct()
+	df := perfDF.Metrics(data.PortfolioEquity).Sub(perfDF, data.PortfolioRiskFree)
+	a.putDF(data.PortfolioExcessReturns, window, df)
+
+	return df
+}
+
+// Drawdown computes the percentage drawdown from the running equity peak
+// within the given window. Results are cached per window.
+func (a *Account) Drawdown(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	if cached := a.cachedDF(data.PortfolioDrawdown, window); cached != nil {
+		return cached
+	}
+
+	equity := a.perfData.Window(window).Metrics(data.PortfolioEquity)
+	peak := equity.CumMax()
+	df := equity.Sub(peak).Div(peak)
+	a.putDF(data.PortfolioDrawdown, window, df)
+
+	return df
+}
+
+// BenchmarkReturns computes period-over-period percentage returns of the
+// benchmark within the given window. Results are cached per window.
+func (a *Account) BenchmarkReturns(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	if cached := a.cachedDF(data.PortfolioBenchReturns, window); cached != nil {
+		return cached
+	}
+
+	df := a.perfData.Window(window).Metrics(data.PortfolioBenchmark).Pct()
+	a.putDF(data.PortfolioBenchReturns, window, df)
+
+	return df
+}
+
+// EquitySeries returns the windowed perfData DataFrame containing the equity curve.
+func (a *Account) EquitySeries(_ context.Context, window *Period) *data.DataFrame {
+	if a.perfData == nil {
+		return nil
+	}
+
+	return a.perfData.Window(window)
+}
+
+// TransactionsView returns the full transaction log in chronological order.
+// This satisfies the PortfolioStats interface.
+func (a *Account) TransactionsView(_ context.Context) []Transaction {
+	return a.transactions
+}
+
+// TradeDetailsView returns all completed round-trip trades with per-trade
+// MFE and MAE excursion data. This satisfies the PortfolioStats interface.
+func (a *Account) TradeDetailsView(_ context.Context) []TradeDetail {
+	return a.tradeDetails
+}
+
+// PricesView returns the most recent price DataFrame.
+// This satisfies the PortfolioStats interface.
+func (a *Account) PricesView(_ context.Context) *data.DataFrame {
+	return a.prices
+}
+
+// TaxLotsView returns the current tax lot positions keyed by asset.
+// This satisfies the PortfolioStats interface.
+func (a *Account) TaxLotsView(_ context.Context) map[asset.Asset][]TaxLot {
+	return a.taxLots
+}
+
+// ShortLotsView iterates over all open short tax lots, calling fn with each
+// asset and its lots. This satisfies the PortfolioStats interface.
+func (a *Account) ShortLotsView(_ context.Context, fn func(asset.Asset, []TaxLot)) {
+	for ast, lots := range a.shortLots {
+		fn(ast, lots)
+	}
+}
+
+// PerfDataView returns the accumulated performance DataFrame, or nil if no
+// prices have been recorded yet. This satisfies the PortfolioStats interface.
+func (a *Account) PerfDataView(_ context.Context) *data.DataFrame {
+	return a.perfData
 }

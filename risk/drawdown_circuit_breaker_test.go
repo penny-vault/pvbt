@@ -83,7 +83,7 @@ var _ = Describe("DrawdownCircuitBreaker", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{100},
+				[][]float64{{100}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)
@@ -143,7 +143,7 @@ var _ = Describe("DrawdownCircuitBreaker", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{price},
+				[][]float64{{price}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)

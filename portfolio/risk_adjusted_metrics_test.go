@@ -16,12 +16,14 @@
 package portfolio_test
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -121,9 +123,10 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 			)
 
-			series, err := acct.PerformanceMetric(portfolio.StdDev).Series()
+			df, err := acct.PerformanceMetric(portfolio.StdDev).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(HaveLen(5))
+			Expect(df.Len()).To(Equal(5))
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.05, 1e-10))
 			Expect(series[1]).To(BeNumerically("~", -0.06667, 1e-4))
 		})
@@ -155,9 +158,10 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
 			)
 
-			series, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Series()
+			df, err := acct.PerformanceMetric(portfolio.MaxDrawdown).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(series).To(HaveLen(6))
+			Expect(df.Len()).To(Equal(6))
+			series := df.Column(perfAsset, data.PortfolioEquity)
 			Expect(series[0]).To(BeNumerically("~", 0.0, 1e-10))
 			Expect(series[1]).To(BeNumerically("~", 0.0, 1e-10))
 			Expect(series[2]).To(BeNumerically("~", -0.06667, 1e-4))
@@ -434,7 +438,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					portfolio.Treynor,
 					portfolio.Alpha,
 				} {
-					v, err := m.Compute(acct, nil)
+					v, err := m.Compute(context.Background(), acct, nil)
 					Expect(err).To(MatchError(portfolio.ErrNoRiskFreeRate), m.Name())
 					Expect(v).To(Equal(0.0), m.Name())
 				}
@@ -453,7 +457,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 					portfolio.DownsideCaptureRatio,
 					portfolio.ActiveReturn,
 				} {
-					v, err := m.Compute(acct, nil)
+					v, err := m.Compute(context.Background(), acct, nil)
 					Expect(err).To(MatchError(portfolio.ErrNoBenchmark), m.Name())
 					Expect(v).To(Equal(0.0), m.Name())
 				}

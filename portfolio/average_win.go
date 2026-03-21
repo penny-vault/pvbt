@@ -15,6 +15,12 @@
 
 package portfolio
 
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
 type averageWin struct{}
 
 func (averageWin) Name() string { return "AverageWin" }
@@ -25,8 +31,8 @@ func (averageWin) Description() string {
 		"sizing, compare within the same portfolio rather than across different ones."
 }
 
-func (averageWin) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
+func (averageWin) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+	trips, _ := roundTrips(stats.TradeDetailsView(ctx), stats.TransactionsView(ctx))
 
 	var (
 		wins   int
@@ -47,7 +53,9 @@ func (averageWin) Compute(a *Account, _ *Period) (float64, error) {
 	return sumWin / float64(wins), nil
 }
 
-func (averageWin) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (averageWin) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // AverageWin is the average profit on winning round-trip trades.
 var AverageWin PerformanceMetric = averageWin{}

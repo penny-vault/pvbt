@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,26 +31,23 @@ func (sortino) Description() string {
 	return "Like Sharpe but penalizes only downside volatility. Uses downside deviation instead of standard deviation, making it more appropriate for strategies with asymmetric return distributions. Higher is better."
 }
 
-func (sortino) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (sortino) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
 		return 0, nil
 	}
 
-	rfCol := perfData.Column(portfolioAsset, data.PortfolioRiskFree)
+	rfCol := pd.Column(portfolioAsset, data.PortfolioRiskFree)
 	if len(rfCol) == 0 || rfCol[0] == 0 {
 		return 0, ErrNoRiskFreeRate
 	}
 
-	perfDF := perfData.Window(window)
-	returns := perfDF.Pct().Drop(math.NaN())
-
-	er := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioRiskFree)
-	if er.Len() == 0 {
+	df := stats.ExcessReturns(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	erCol := er.Column(portfolioAsset, data.PortfolioEquity)
+	erCol := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
 
 	// Downside deviation: sqrt(mean(min(r_i, 0)^2)) using all N observations.
 	count := len(erCol)
@@ -70,12 +68,14 @@ func (sortino) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(df.Times())
 
 	return stat.Mean(erCol, nil) / downsideDev * math.Sqrt(af), nil
 }
 
-func (sortino) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (sortino) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // Sortino is the Sortino ratio: like Sharpe but uses downside deviation
 // instead of total standard deviation, penalizing only negative volatility.

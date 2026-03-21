@@ -16,6 +16,8 @@
 package portfolio
 
 import (
+	"context"
+
 	"github.com/penny-vault/pvbt/data"
 	"gonum.org/v1/gonum/stat"
 )
@@ -28,21 +30,13 @@ func (avgDrawdown) Description() string {
 	return "Average of all drawdown values in the equity curve. Gives a sense of typical drawdown depth over the full history, unlike MaxDrawdown which only captures the worst case."
 }
 
-func (avgDrawdown) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (avgDrawdown) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.Drawdown(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	equity := pd.Window(window).Metrics(data.PortfolioEquity)
-	if equity.Len() == 0 {
-		return 0, nil
-	}
-
-	peak := equity.CumMax()
-	dd := equity.Sub(peak).Div(peak)
-
-	ddCol := dd.Column(portfolioAsset, data.PortfolioEquity)
+	ddCol := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ddCol) == 0 {
 		return 0, nil
 	}
@@ -50,7 +44,9 @@ func (avgDrawdown) Compute(a *Account, window *Period) (float64, error) {
 	return stat.Mean(ddCol, nil), nil
 }
 
-func (avgDrawdown) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (avgDrawdown) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // AvgDrawdown is the mean loss percentage across all drawdown periods.
 // A drawdown is the decline from a peak to a subsequent trough.

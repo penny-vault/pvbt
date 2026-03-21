@@ -61,7 +61,13 @@ func EarningsYield(ctx context.Context, assetUniverse universe.Universe, t ...ti
 		resultData[i] = eps / price
 	}
 
-	result, buildErr := data.NewDataFrame(times, assets, []data.Metric{EarningsYieldSignal}, data.Daily, resultData)
+	// Each asset is one column, one metric (EarningsYieldSignal), one timestamp.
+	cols := make([][]float64, len(assets))
+	for i := range assets {
+		cols[i] = []float64{resultData[i]}
+	}
+
+	result, buildErr := data.NewDataFrame(times, assets, []data.Metric{EarningsYieldSignal}, data.Daily, cols)
 	if buildErr != nil {
 		return data.WithErr(fmt.Errorf("EarningsYield: %w", buildErr))
 	}

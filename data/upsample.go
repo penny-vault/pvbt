@@ -72,22 +72,24 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 	newTimes := u.generateTimes()
 	assetLen := len(u.df.assets)
 	metricLen := len(u.df.metrics)
-	newData := make([]float64, assetLen*metricLen*len(newTimes))
+	numCols := assetLen * metricLen
+	cols := make([][]float64, numCols)
 
-	for aIdx := 0; aIdx < assetLen; aIdx++ {
-		for mIdx := 0; mIdx < metricLen; mIdx++ {
+	for aIdx := range assetLen {
+		for mIdx := range metricLen {
 			srcCol := u.df.colSlice(aIdx, mIdx)
-			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
+			dstCol := make([]float64, len(newTimes))
 			srcIdx := 0
 
 			for idx, timestamp := range newTimes {
-				// Advance source index to the latest timestamp <= timestamp
 				for srcIdx < len(u.df.times)-1 && !u.df.times[srcIdx+1].After(timestamp) {
 					srcIdx++
 				}
 
-				newData[dstOff+idx] = srcCol[srcIdx]
+				dstCol[idx] = srcCol[srcIdx]
 			}
+
+			cols[aIdx*metricLen+mIdx] = dstCol
 		}
 	}
 
@@ -97,7 +99,7 @@ func (u *UpsampledDataFrame) ForwardFill() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, cols)
 
 	if u.df.riskFreeRates != nil {
 		rfRates := make([]float64, len(newTimes))
@@ -126,22 +128,24 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 	newTimes := u.generateTimes()
 	assetLen := len(u.df.assets)
 	metricLen := len(u.df.metrics)
-	newData := make([]float64, assetLen*metricLen*len(newTimes))
+	numCols := assetLen * metricLen
+	cols := make([][]float64, numCols)
 
-	for aIdx := 0; aIdx < assetLen; aIdx++ {
-		for mIdx := 0; mIdx < metricLen; mIdx++ {
+	for aIdx := range assetLen {
+		for mIdx := range metricLen {
 			srcCol := u.df.colSlice(aIdx, mIdx)
-			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
+			dstCol := make([]float64, len(newTimes))
 			srcIdx := 0
 
 			for idx, timestamp := range newTimes {
-				// Advance source index to the earliest timestamp >= timestamp
 				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx].Before(timestamp) {
 					srcIdx++
 				}
 
-				newData[dstOff+idx] = srcCol[srcIdx]
+				dstCol[idx] = srcCol[srcIdx]
 			}
+
+			cols[aIdx*metricLen+mIdx] = dstCol
 		}
 	}
 
@@ -151,7 +155,7 @@ func (u *UpsampledDataFrame) BackFill() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, cols)
 
 	if u.df.riskFreeRates != nil {
 		rfRates := make([]float64, len(newTimes))
@@ -181,32 +185,33 @@ func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 	newTimes := u.generateTimes()
 	assetLen := len(u.df.assets)
 	metricLen := len(u.df.metrics)
-	newData := make([]float64, assetLen*metricLen*len(newTimes))
+	numCols := assetLen * metricLen
+	cols := make([][]float64, numCols)
 
-	for aIdx := 0; aIdx < assetLen; aIdx++ {
-		for mIdx := 0; mIdx < metricLen; mIdx++ {
+	for aIdx := range assetLen {
+		for mIdx := range metricLen {
 			srcCol := u.df.colSlice(aIdx, mIdx)
-			dstOff := (aIdx*metricLen + mIdx) * len(newTimes)
+			dstCol := make([]float64, len(newTimes))
 			srcIdx := 0
 
 			for idx, timestamp := range newTimes {
-				// Find surrounding source timestamps.
 				for srcIdx < len(u.df.times)-1 && u.df.times[srcIdx+1].Before(timestamp) {
 					srcIdx++
 				}
 
 				if srcIdx >= len(u.df.times)-1 || timestamp.Equal(u.df.times[srcIdx]) {
-					newData[dstOff+idx] = srcCol[srcIdx]
+					dstCol[idx] = srcCol[srcIdx]
 				} else {
-					// Linear interpolation.
 					t0 := u.df.times[srcIdx]
 					t1 := u.df.times[srcIdx+1]
 					v0 := srcCol[srcIdx]
 					v1 := srcCol[srcIdx+1]
 					frac := float64(timestamp.Sub(t0)) / float64(t1.Sub(t0))
-					newData[dstOff+idx] = v0 + frac*(v1-v0)
+					dstCol[idx] = v0 + frac*(v1-v0)
 				}
 			}
+
+			cols[aIdx*metricLen+mIdx] = dstCol
 		}
 	}
 
@@ -216,7 +221,7 @@ func (u *UpsampledDataFrame) Interpolate() *DataFrame {
 	metrics := make([]Metric, metricLen)
 	copy(metrics, u.df.metrics)
 
-	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, newData)
+	result := mustNewDataFrame(newTimes, assets, metrics, u.freq, cols)
 
 	if u.df.riskFreeRates != nil {
 		rfRates := make([]float64, len(newTimes))

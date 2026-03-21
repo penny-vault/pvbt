@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type safeWithdrawalRate struct{}
 
@@ -25,15 +29,14 @@ func (safeWithdrawalRate) Description() string {
 	return "The maximum percentage of the initial portfolio that can be withdrawn annually (inflation-adjusted) without depleting the portfolio over the actual return path."
 }
 
-func (safeWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (safeWithdrawalRate) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	windowed := pd.Window(window)
-	equity := windowed.Column(portfolioAsset, data.PortfolioEquity)
-	times := windowed.Times()
+	equity := df.Column(portfolioAsset, data.PortfolioEquity)
+	times := df.Times()
 
 	// Need at least 1 year of data for a meaningful withdrawal rate.
 	if len(equity) < 2 || len(times) < 2 {
@@ -65,7 +68,7 @@ func (safeWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
 	return bestRate, nil
 }
 
-func (safeWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (safeWithdrawalRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

@@ -498,9 +498,9 @@ var _ = Describe("Account", func() {
 				[]asset.Asset{spy, bm},
 				[]data.Metric{data.MetricClose, data.AdjClose},
 				data.Daily,
-				[]float64{
-					455.0, 453.0, // spy: close, adjclose
-					math.NaN(), math.NaN(), // bm: close, adjclose (NaN)
+				[][]float64{
+					{455.0}, {453.0}, // spy: close, adjclose
+					{math.NaN()}, {math.NaN()}, // bm: close, adjclose (NaN)
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -680,7 +680,7 @@ var _ = Describe("Account", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{math.NaN()},
+				[][]float64{{math.NaN()}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df)
@@ -1675,8 +1675,8 @@ var _ = Describe("Window", func() {
 			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
 			acct.UpdatePrices(df)
 
-			stopPct := 5.0   // 5% below entry -> PercentOffset = -0.05
-			takePct := 10.0  // 10% above entry -> PercentOffset = +0.10
+			stopPct := 5.0  // 5% below entry -> PercentOffset = -0.05
+			takePct := 10.0 // 10% above entry -> PercentOffset = +0.10
 
 			batch := acct.NewBatch(ts)
 			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
