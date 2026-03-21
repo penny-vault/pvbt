@@ -439,10 +439,12 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 			if qty >= 0 {
 				continue
 			}
+
 			closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, date)
 			if math.IsNaN(closePrice) || closePrice == 0 {
 				continue
 			}
+
 			dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
 			acct.Record(portfolio.Transaction{
 				Date:          date,

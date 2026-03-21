@@ -2262,5 +2262,6 @@ func (a *Account) BorrowRate() float64 {
 	if a.borrowRate > 0 {
 		return a.borrowRate
 	}
+
 	return 0.005 // default 0.5%
 }

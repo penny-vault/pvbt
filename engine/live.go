@@ -268,10 +268,12 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 					if qty >= 0 {
 						continue
 					}
+
 					closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, e.currentDate)
 					if math.IsNaN(closePrice) || closePrice == 0 {
 						continue
 					}
+
 					dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
 					acct.Record(portfolio.Transaction{
 						Date:          e.currentDate,
