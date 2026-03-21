@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type dynamicWithdrawalRate struct{}
 
@@ -25,15 +29,14 @@ func (dynamicWithdrawalRate) Description() string {
 	return "A withdrawal rate that adjusts based on current portfolio value over the actual return path. Increases withdrawals when the portfolio grows and decreases them during drawdowns, providing a balance between income and capital preservation."
 }
 
-func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (dynamicWithdrawalRate) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	windowed := pd.Window(window)
-	equity := windowed.Column(portfolioAsset, data.PortfolioEquity)
-	times := windowed.Times()
+	equity := df.Column(portfolioAsset, data.PortfolioEquity)
+	times := df.Times()
 
 	if len(equity) < 2 || len(times) < 2 {
 		return 0, nil
@@ -63,7 +66,7 @@ func (dynamicWithdrawalRate) Compute(a *Account, window *Period) (float64, error
 	return bestRate, nil
 }
 
-func (dynamicWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (dynamicWithdrawalRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

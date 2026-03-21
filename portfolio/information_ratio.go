@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,32 +31,30 @@ func (informationRatio) Description() string {
 	return "Active return divided by tracking error. Measures how consistently the portfolio outperforms its benchmark per unit of active risk taken. Higher values indicate more consistent outperformance."
 }
 
-func (informationRatio) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (informationRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
+
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
-		return 0, ErrNoBenchmark
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
+
+	// Active returns = portfolio returns - benchmark returns.
+	minLen := len(pCol)
+	if len(bCol) < minLen {
+		minLen = len(bCol)
 	}
 
-	perfDF := perfData.Window(window)
-
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
-		return 0, nil
-	}
-	// Active returns = portfolio returns - benchmark returns
-	activeReturns := returns.Metrics(data.PortfolioEquity).Sub(returns, data.PortfolioBenchmark)
-	if activeReturns.Len() == 0 {
+	if minLen < 2 {
 		return 0, nil
 	}
 
-	arCol := activeReturns.Column(portfolioAsset, data.PortfolioEquity)
-	if len(arCol) < 2 {
-		return 0, nil
+	arCol := make([]float64, minLen)
+	for idx := 0; idx < minLen; idx++ {
+		arCol[idx] = pCol[idx] - bCol[idx]
 	}
 
 	trackingErr := stat.StdDev(arCol, nil)
@@ -63,12 +62,12 @@ func (informationRatio) Compute(a *Account, window *Period) (float64, error) {
 		return 0, nil
 	}
 
-	af := annualizationFactor(perfDF.Times())
+	af := annualizationFactor(rdf.Times())
 
 	return stat.Mean(arCol, nil) / trackingErr * math.Sqrt(af), nil
 }
 
-func (informationRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (informationRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

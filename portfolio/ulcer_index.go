@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,14 +30,13 @@ func (ulcerIndex) Description() string {
 	return "Measures downside risk using both the depth and duration of drawdowns over a 14-period lookback window. Computed as the square root of the mean of squared percentage drawdowns. Values are on a 0-100 percentage scale. Higher values indicate more painful drawdown experiences. Returns 0 when fewer than 14 data points are available."
 }
 
-func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (ulcerIndex) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	eq := pd.Window(window).Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
+	eqCol := df.Column(portfolioAsset, data.PortfolioEquity)
 
 	const lookback = 14
 
@@ -51,19 +51,21 @@ func (ulcerIndex) Compute(a *Account, window *Period) (float64, error) {
 	peak := tail[0]
 	sumSq := 0.0
 
-	for _, v := range tail {
-		if v > peak {
-			peak = v
+	for _, val := range tail {
+		if val > peak {
+			peak = val
 		}
 
-		dd := (v - peak) / peak * 100 // percentage scale
+		dd := (val - peak) / peak * 100 // percentage scale
 		sumSq += dd * dd
 	}
 
 	return math.Sqrt(sumSq / float64(lookback)), nil
 }
 
-func (ulcerIndex) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (ulcerIndex) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // UlcerIndex measures downside risk using both the depth and duration
 // of drawdowns. Computed as the square root of the mean of squared

@@ -16,9 +16,10 @@
 package portfolio
 
 import (
-	"math"
+	"context"
 
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/asset"
 )
 
 type activeReturn struct{}
@@ -31,20 +32,24 @@ func (activeReturn) Description() string {
 
 // Compute returns the portfolio total return minus the benchmark total
 // return. Total return is (end/start) - 1.
-func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (activeReturn) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
+	pd := stats.PerfDataView(ctx)
+	if pd == nil {
+		return 0, nil
+	}
+
+	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
 	if len(bmCol) == 0 || bmCol[0] == 0 {
 		return 0, ErrNoBenchmark
 	}
 
-	perfDF := perfData.Window(window)
-	eqCol := perfDF.Column(portfolioAsset, data.PortfolioEquity)
-	benchCol := perfDF.Column(portfolioAsset, data.PortfolioBenchmark)
+	eqCol := df.Column(portfolioAsset, data.PortfolioEquity)
+	benchCol := pd.Window(window).Column(portfolioAsset, data.PortfolioBenchmark)
 
 	if len(eqCol) < 2 || len(benchCol) < 2 {
 		return 0, nil
@@ -59,26 +64,16 @@ func (activeReturn) Compute(a *Account, window *Period) (float64, error) {
 // ComputeSeries returns the element-wise difference between the
 // portfolio cumulative return series and the benchmark cumulative
 // return series.
-func (activeReturn) ComputeSeries(a *Account, window *Period) ([]float64, error) {
-	perfData := a.PerfData()
-	if perfData == nil {
+func (activeReturn) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error) {
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
+
+	if rdf == nil || bdf == nil {
 		return nil, nil
 	}
 
-	bmCol := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
-		return nil, ErrNoBenchmark
-	}
-
-	perfDF := perfData.Window(window).Metrics(data.PortfolioEquity, data.PortfolioBenchmark)
-
-	returns := perfDF.Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
-		return nil, nil
-	}
-
-	portR := returns.Column(portfolioAsset, data.PortfolioEquity)
-	benchR := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	portR := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
+	benchR := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
 
 	count := len(portR)
 	if len(benchR) < count {
@@ -93,13 +88,24 @@ func (activeReturn) ComputeSeries(a *Account, window *Period) ([]float64, error)
 	cumPort := 1.0
 	cumBench := 1.0
 
-	for i := 0; i < count; i++ {
-		cumPort *= (1 + portR[i])
-		cumBench *= (1 + benchR[i])
-		series[i] = (cumPort - 1) - (cumBench - 1)
+	for idx := 0; idx < count; idx++ {
+		cumPort *= (1 + portR[idx])
+		cumBench *= (1 + benchR[idx])
+		series[idx] = (cumPort - 1) - (cumBench - 1)
 	}
 
-	return series, nil
+	times := rdf.Times()
+	if len(times) > count {
+		times = times[:count]
+	}
+
+	return data.NewDataFrame(
+		times,
+		[]asset.Asset{portfolioAsset},
+		[]data.Metric{data.PortfolioEquity},
+		rdf.Frequency(),
+		[][]float64{series},
+	)
 }
 
 // ActiveReturn is the difference between portfolio return and benchmark

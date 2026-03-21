@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,16 +30,14 @@ func (cagrMetric) Description() string {
 	return "Compound Annual Growth Rate. The annualized rate of return that would produce the same total return if compounded each year. The standard metric for comparing returns across strategies with different time horizons."
 }
 
-func (cagrMetric) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (cagrMetric) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	perfDF := pd.Window(window)
-	eq := perfDF.Metrics(data.PortfolioEquity)
-	eqCol := eq.Column(portfolioAsset, data.PortfolioEquity)
-	eqTimes := perfDF.Times()
+	eqCol := df.Column(portfolioAsset, data.PortfolioEquity)
+	eqTimes := df.Times()
 
 	if len(eqCol) < 2 || len(eqTimes) < 2 {
 		return 0, nil
@@ -52,7 +51,9 @@ func (cagrMetric) Compute(a *Account, window *Period) (float64, error) {
 	return math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1, nil
 }
 
-func (cagrMetric) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (cagrMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // CAGR is the Compound Annual Growth Rate -- the annualized return
 // that accounts for compounding. It is the standard way to compare

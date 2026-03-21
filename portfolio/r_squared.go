@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -30,26 +31,16 @@ func (rSquared) Description() string {
 	return "Proportion of portfolio return variance explained by benchmark returns. Ranges from 0 to 1. Values near 1.0 mean the portfolio closely tracks the benchmark. Low R-squared makes beta and alpha less meaningful."
 }
 
-func (rSquared) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (rSquared) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
+
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
-		return 0, ErrNoBenchmark
-	}
-
-	perfDF := pd.Window(window)
-
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
-		return 0, nil
-	}
-
-	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
-	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
 
 	if len(pCol) < 2 || len(bCol) < 2 {
 		return 0, nil
@@ -67,7 +58,9 @@ func (rSquared) Compute(a *Account, window *Period) (float64, error) {
 	return corr * corr, nil
 }
 
-func (rSquared) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (rSquared) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // RSquared measures how well portfolio returns are explained by
 // benchmark returns (coefficient of determination). Ranges from 0

@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 
 	"github.com/penny-vault/pvbt/data"
@@ -29,26 +30,16 @@ func (upsideCaptureRatio) Description() string {
 	return "Measures how much of the benchmark's upside the portfolio captures. A value of 1.1 means the portfolio gains 110% of the benchmark's return during up periods. Higher is better."
 }
 
-func (upsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (upsideCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	rdf := stats.Returns(ctx, window)
+	bdf := stats.BenchmarkReturns(ctx, window)
+
+	if rdf == nil || bdf == nil {
 		return 0, nil
 	}
 
-	bmCol := pd.Column(portfolioAsset, data.PortfolioBenchmark)
-	if len(bmCol) == 0 || bmCol[0] == 0 {
-		return 0, ErrNoBenchmark
-	}
-
-	perfDF := pd.Window(window)
-
-	returns := perfDF.Metrics(data.PortfolioEquity, data.PortfolioBenchmark).Pct().Drop(math.NaN())
-	if returns.Len() == 0 {
-		return 0, nil
-	}
-
-	pCol := returns.Column(portfolioAsset, data.PortfolioEquity)
-	bCol := returns.Column(portfolioAsset, data.PortfolioBenchmark)
+	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioReturns))
+	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchReturns))
 
 	numPeriods := len(pCol)
 	if len(bCol) < numPeriods {
@@ -58,10 +49,10 @@ func (upsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
 	// Filter periods where benchmark return > 0.
 	var upP, upB []float64
 
-	for i := 0; i < numPeriods; i++ {
-		if bCol[i] > 0 {
-			upP = append(upP, pCol[i])
-			upB = append(upB, bCol[i])
+	for idx := 0; idx < numPeriods; idx++ {
+		if bCol[idx] > 0 {
+			upP = append(upP, pCol[idx])
+			upB = append(upB, bCol[idx])
 		}
 	}
 
@@ -79,7 +70,7 @@ func (upsideCaptureRatio) Compute(a *Account, window *Period) (float64, error) {
 	return geoP / geoB, nil
 }
 
-func (upsideCaptureRatio) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (upsideCaptureRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 
@@ -91,8 +82,8 @@ func geometricMean(returns []float64) float64 {
 	}
 
 	product := 1.0
-	for _, v := range returns {
-		product *= (1 + v)
+	for _, val := range returns {
+		product *= (1 + val)
 	}
 
 	return math.Pow(product, 1.0/float64(len(returns))) - 1

@@ -15,7 +15,11 @@
 
 package portfolio
 
-import "github.com/penny-vault/pvbt/data"
+import (
+	"context"
+
+	"github.com/penny-vault/pvbt/data"
+)
 
 type perpetualWithdrawalRate struct{}
 
@@ -25,15 +29,14 @@ func (perpetualWithdrawalRate) Description() string {
 	return "The withdrawal rate that preserves the real (inflation-adjusted) value of the portfolio over the actual return path. More conservative than SafeWithdrawalRate as it aims to maintain purchasing power."
 }
 
-func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, error) {
-	pd := a.PerfData()
-	if pd == nil {
+func (perpetualWithdrawalRate) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	windowed := pd.Window(window)
-	equity := windowed.Column(portfolioAsset, data.PortfolioEquity)
-	times := windowed.Times()
+	equity := df.Column(portfolioAsset, data.PortfolioEquity)
+	times := df.Times()
 
 	if len(equity) < 2 || len(times) < 2 {
 		return 0, nil
@@ -63,7 +66,7 @@ func (perpetualWithdrawalRate) Compute(a *Account, window *Period) (float64, err
 	return bestRate, nil
 }
 
-func (perpetualWithdrawalRate) ComputeSeries(a *Account, window *Period) ([]float64, error) {
+func (perpetualWithdrawalRate) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
 	return nil, nil
 }
 

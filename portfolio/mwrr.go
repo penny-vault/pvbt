@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -35,14 +36,14 @@ func (mwrr) Description() string {
 // positive (investor receives). The final portfolio value is added as a
 // positive terminal cash flow. Newton-Raphson is used to find the rate r
 // such that sum(cf_i / (1+r)^(t_i/365)) = 0.
-func (mwrr) Compute(acct *Account, window *Period) (float64, error) {
-	perfData := acct.PerfData()
-	if perfData == nil {
+func (mwrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	equity := perfData.Column(portfolioAsset, data.PortfolioEquity)
-	times := perfData.Times()
+	equity := df.Column(portfolioAsset, data.PortfolioEquity)
+	times := df.Times()
 
 	if len(equity) < 2 {
 		return 0, nil
@@ -58,25 +59,25 @@ func (mwrr) Compute(acct *Account, window *Period) (float64, error) {
 
 	startDate := times[0]
 
-	for _, txn := range acct.Transactions() {
+	for _, txn := range stats.TransactionsView(ctx) {
 		switch txn.Type {
 		case DepositTransaction:
 			// From investor perspective, deposits are outflows (negative).
-			d := txn.Date
-			if d.IsZero() {
-				d = startDate
+			txnDate := txn.Date
+			if txnDate.IsZero() {
+				txnDate = startDate
 			}
 
-			flows = append(flows, cashFlow{date: d, amount: -txn.Amount})
+			flows = append(flows, cashFlow{date: txnDate, amount: -txn.Amount})
 		case WithdrawalTransaction:
 			// Withdrawals have negative Amount in the tx log; from investor
 			// perspective they are inflows (positive), so negate again.
-			d := txn.Date
-			if d.IsZero() {
-				d = startDate
+			txnDate := txn.Date
+			if txnDate.IsZero() {
+				txnDate = startDate
 			}
 
-			flows = append(flows, cashFlow{date: d, amount: -txn.Amount})
+			flows = append(flows, cashFlow{date: txnDate, amount: -txn.Amount})
 		}
 	}
 
@@ -147,7 +148,9 @@ func (mwrr) Compute(acct *Account, window *Period) (float64, error) {
 }
 
 // ComputeSeries returns nil; MWRR is a single scalar metric.
-func (mwrr) ComputeSeries(a *Account, window *Period) ([]float64, error) { return nil, nil }
+func (mwrr) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {
+	return nil, nil
+}
 
 // MWRR is the money-weighted rate of return: accounts for the timing
 // and size of cash flows (deposits/withdrawals) using XIRR. Unlike
