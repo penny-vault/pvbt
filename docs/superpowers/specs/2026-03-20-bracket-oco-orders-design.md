@@ -76,9 +76,20 @@ Order modifiers for bracket and OCO:
 // The exit legs become an OCO group activated when the entry fills.
 func WithBracket(stopLoss, takeProfit ExitTarget) OrderModifier
 
-// OCO links two orders as one-cancels-other. Used for attaching exits
-// to an existing position without an entry order.
-func OCO(legA, legB OrderModifier) OrderModifier
+// OCO creates two linked sell orders from a single batch.Order call.
+// The batch expands this into two separate broker.Order entries with a
+// shared group ID. When one fills, the other is cancelled.
+func OCO(legA, legB OCOLeg) OrderModifier
+
+// OCOLeg defines one side of an OCO pair.
+type OCOLeg struct {
+    OrderType  broker.OrderType
+    Price      float64 // stop price for Stop orders, limit price for Limit orders
+}
+
+// Helper constructors for OCO legs:
+func StopLeg(price float64) OCOLeg    // creates a Stop order leg
+func LimitLeg(price float64) OCOLeg   // creates a Limit order leg
 ```
 
 ### Usage Examples
@@ -96,9 +107,12 @@ batch.Order(spy, portfolio.Buy, 100,
     portfolio.WithBracket(portfolio.StopLossPrice(95), portfolio.TakeProfitPrice(115)),
 )
 
-// OCO: protect existing position with stop + limit target
+// OCO: protect existing position with stop + limit target.
+// This single batch.Order call expands into two broker.Order entries
+// sharing a group ID. The asset, side, and qty are shared; the order
+// type and price differ per leg.
 batch.Order(spy, portfolio.Sell, 100,
-    portfolio.OCO(portfolio.Stop(95), portfolio.Limit(115)),
+    portfolio.OCO(portfolio.StopLeg(95), portfolio.LimitLeg(115)),
 )
 ```
 
@@ -145,9 +159,9 @@ type Account struct {
 
 ### Lifecycle Within a Frame
 
-1. **Batch building**: When `batch.Order()` receives a `WithBracket` modifier, the batch records the entry order plus two pending exit targets. When it receives an `OCO` modifier, it records two linked orders.
+1. **Batch building**: When `batch.Order()` receives a `WithBracket` modifier, the batch records the entry order plus two pending exit targets. When it receives an `OCO` modifier, the batch **expands the single call into two `broker.Order` entries** sharing the same asset, side, and quantity but with different order types and prices (one per `OCOLeg`). Both orders are tagged with matching group metadata.
 
-2. **ExecuteBatch**: Assigns group IDs (e.g., `group-<timestamp>-<idx>`). For brackets with percentage offsets, the exit legs are not yet fully formed -- they need the entry fill price. These are stored as deferred exits in the group. For brackets with absolute prices and for standalone OCO groups, all orders are ready and submitted (via `GroupSubmitter` or individual submit with fallback).
+2. **ExecuteBatch**: Assigns group IDs (e.g., `group-<timestamp>-<idx>`) and order IDs to all orders including expanded OCO pairs. For brackets with percentage offsets, the exit legs are not yet fully formed -- they need the entry fill price. These are stored as deferred exits in the group. For brackets with absolute prices and for standalone OCO groups, all orders are ready and submitted (via `GroupSubmitter` or individual submit with fallback).
 
 3. **DrainFills**: When a fill arrives:
    - Look up `fill.OrderID` in `pendingOrders` as today.
@@ -156,7 +170,7 @@ type Account struct {
      - **OCO leg filled**: Cancel all other orders in the group via `broker.Cancel`.
    - Remove completed groups from `pendingGroups`.
 
-4. **CancelOpenOrders** (at frame boundary): Cancels all pending orders including group members. Cleans up `pendingGroups`.
+4. **CancelOpenOrders** (at frame boundary): Iterates `pendingOrders` and calls `broker.Cancel` for each. Also cleans up `pendingGroups` -- cancelling any order in a group cancels all members.
 
 **Key invariant**: Group state is always consistent -- if any order in a group is cancelled or filled, the group reacts atomically. The account layer is the single source of truth for group membership, even when the broker handles native OCO.
 
@@ -164,12 +178,25 @@ type Account struct {
 
 The simulated broker currently fills all orders at the bar's close price. It gains intrabar price checking for OCO/bracket legs.
 
+### Prerequisite: Cancel and Orders Support
+
+The simulated broker currently returns errors for `Cancel()` and returns nil for `Orders()`. Both must be implemented:
+
+- **Cancel(ctx, orderID)**: Remove the order from the simulated broker's internal pending order map and do not emit a fill for it.
+- **Orders(ctx)**: Return all submitted-but-unfilled orders from the internal pending map.
+
+These are required because `CancelOpenOrders` (called at frame boundaries) relies on `Orders()` to enumerate open orders and `Cancel()` to remove them. The account-layer OCO fallback path also calls `Cancel()` to remove siblings.
+
 ### Fill Evaluation Order Within a Bar
+
+For long positions:
 
 1. Check pending stop loss orders against the bar's **low** price. If low <= stop price, the stop triggers.
 2. Check pending take profit orders against the bar's **high** price. If high >= take profit price, the take profit triggers.
 3. If both legs of an OCO could trigger on the same bar, **stop loss wins** (pessimistic assumption).
 4. All other pending orders (market, limit, stop, stop-limit) continue to fill as today.
+
+For short positions, the logic inverts: stop loss triggers when **high** >= stop price, take profit triggers when **low** <= take profit price. The stop-loss-wins priority applies in both cases.
 
 ### Fill Prices for Triggered Orders
 
