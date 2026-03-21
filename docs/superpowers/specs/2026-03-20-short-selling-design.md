@@ -12,7 +12,12 @@ The implementation follows a bottom-up approach, building from the data model th
 
 Short lots mirror long tax lots with inverted entry/exit semantics.
 
-**Opening a short position:** `Record()` must be refactored to add short-aware routing. Currently, sells always consume long lots and buys always create long lots. The new behavior: when `Record()` processes a sell transaction, it first tries to consume existing long lots (closing a long). If no long lots exist or quantity exceeds long holdings, the remainder creates short lots. Each short lot records:
+**Opening a short position:** `Record()` must be refactored to add short-aware routing. Currently, the sell path unconditionally decrements holdings by the transaction quantity and calls `consumeLots()` to match against long tax lots. The new behavior requires splitting the sell path into two phases:
+
+1. **Close longs first:** If long lots exist for the asset, consume them via the existing `consumeLots()` path up to the available long quantity. Generate `TradeDetail` entries for the closed long lots as today.
+2. **Open shorts with remainder:** If the sell quantity exceeds the long lot quantity (or no long lots exist), create short lots for the remainder. Do not call `consumeLots()` for this portion. Do not generate long-oriented `TradeDetail` entries. Skip long-oriented wash sale tracking for the short-opening portion. Update holdings to the resulting negative quantity and ensure the holdings cleanup check handles non-zero negative values (currently only checks `== 0`).
+
+Each short lot records:
 
 ```go
 type TaxLot struct {
@@ -23,7 +28,7 @@ type TaxLot struct {
 }
 ```
 
-Short lots are stored in a separate map from long lots to avoid ambiguity:
+Short lots reuse the existing `TaxLot` struct (defined in `portfolio/snapshot.go`). They are stored in a separate map from long lots to avoid ambiguity:
 
 ```go
 shortLots map[asset.Asset][]TaxLot
@@ -136,7 +141,7 @@ type MarginCallHandler interface {
 
 **Response flow:**
 1. Engine checks if strategy implements `MarginCallHandler` (type assertion)
-2. If yes: engine creates a batch, calls `OnMarginCall`, strategy writes orders to address the shortfall, engine executes the batch. The batch bypasses risk middleware since the strategy is responding to an emergency and risk limits should not block the response.
+2. If yes: engine creates a batch, calls `OnMarginCall`, strategy writes orders to address the shortfall, engine executes the batch. The batch bypasses risk middleware by setting a flag on the `Batch` (e.g., `SkipMiddleware bool`). `ExecuteBatch` checks this flag and skips the middleware loop when set. This prevents risk limits from blocking emergency margin-call responses.
 3. If no: engine auto-liquidates by covering short positions proportionally until margin is restored
 4. After either path: re-check margin. If still breached, force-liquidate proportionally
 
@@ -171,7 +176,7 @@ Extend existing risk middleware to understand short positions.
 **Initial margin enforcement:**
 - Before filling a short order, verify that post-trade equity / post-trade short market value >= initial margin rate
 - If insufficient margin, reject the order (no fill sent, rejection logged)
-- Requires read access to current portfolio state for the margin check
+- Requires read access to current portfolio state for the margin check. The `SimulatedBroker` must hold a `portfolio.Portfolio` reference, set during construction or via a setter alongside `SetPriceProvider`. This is a new dependency -- the broker currently only has a `PriceProvider`
 
 **Borrow availability:**
 - All securities borrowable at the configured flat rate
@@ -242,9 +247,9 @@ No new types needed. The sign convention (negative = short) is the industry stan
 
 Helper functions like `EqualWeight` default to long (positive weights). Strategy authors use negative weights explicitly when constructing short allocations.
 
-**Liquidation of unlisted positions:** The current `RebalanceTo` implementation liquidates positions not present in the target allocation, but only checks `qty > 0` (long positions). This must be updated to also cover (buy back) short positions not in the target allocation.
+**Liquidation of unlisted positions:** Both `RebalanceTo` implementations (account.go and batch.go) liquidate positions not present in the target allocation, but only check `qty > 0` (long positions). Both must be updated to also cover (buy back) short positions not in the target allocation.
 
-**Live engine parity:** The live engine (`engine/live.go`) has the same housekeeping structure as the backtest engine. All housekeeping changes (splits, borrow fees, dividend debits, margin checks) apply to both engines identically.
+**Live engine parity:** The live engine (`engine/live.go`) has a different loop structure than the backtest engine but performs the same housekeeping operations (dividend recording, price updates). All housekeeping changes (splits, borrow fees, dividend debits, margin checks) apply to both engines. The planner must examine the live engine loop independently to determine correct insertion points for each new housekeeping step, rather than assuming backtest step numbers apply.
 
 ## Implementation Order
 
