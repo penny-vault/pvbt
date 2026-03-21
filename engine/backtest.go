@@ -60,6 +60,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 	}
 
+	// 1c. Discover child strategies before hydrating parent.
+	e.childrenByName = make(map[string]*childEntry)
+	if err := e.discoverChildren(e.strategy, make(map[uintptr]bool)); err != nil {
+		return nil, fmt.Errorf("engine: %w", err)
+	}
+
 	// 2. Hydrate strategy fields from default tags.
 	if err := hydrateFields(e, e.strategy); err != nil {
 		return nil, fmt.Errorf("engine: %w", err)
@@ -100,6 +106,40 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		if e.benchmark == (asset.Asset{}) {
 			e.benchmark = asset.Asset{Ticker: e.benchmarkTicker}
 		}
+	}
+
+	// 4d. Initialize child strategies.
+	for _, child := range e.children {
+		if err := hydrateFields(e, child.strategy); err != nil {
+			return nil, fmt.Errorf("engine: hydrating child %q: %w", child.name, err)
+		}
+
+		child.strategy.Setup(e)
+
+		// Extract schedule from Describe().
+		if desc, ok := child.strategy.(Descriptor); ok {
+			description := desc.Describe()
+			if description.Schedule != "" {
+				tc, tcErr := tradecron.New(description.Schedule, tradecron.RegularHours)
+				if tcErr != nil {
+					return nil, fmt.Errorf("engine: child %q schedule: %w", child.name, tcErr)
+				}
+
+				child.schedule = tc
+			}
+		}
+
+		if child.schedule == nil {
+			return nil, fmt.Errorf("engine: child strategy %q did not set a schedule", child.name)
+		}
+
+		// Create child portfolio with simulated broker.
+		childBroker := NewSimulatedBroker()
+		child.broker = childBroker
+		child.account = portfolio.New(
+			portfolio.WithCash(100, start),
+			portfolio.WithBroker(childBroker),
+		)
 	}
 
 	// 5. Validate: error if schedule is nil.
@@ -169,19 +209,39 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		return nil, fmt.Errorf("engine: creating daily equity schedule: %w", dailyErr)
 	}
 
-	// Collect strategy dates by calendar date for matching.
-	strategyCalDates := make(map[string]bool)
+	// Collect parent strategy dates by calendar date for matching.
+	parentCalDates := make(map[string]bool)
 	cur := e.schedule.Next(start.Add(-time.Nanosecond))
 
 	for !cur.After(end) {
-		strategyCalDates[cur.Format("2006-01-02")] = true
+		parentCalDates[cur.Format("2006-01-02")] = true
 		cur = e.schedule.Next(cur.Add(time.Nanosecond))
+	}
+
+	// Collect child strategy dates.
+	childCalDates := make(map[string]map[string]bool)
+
+	for _, child := range e.children {
+		if child.schedule == nil {
+			continue
+		}
+
+		dates := make(map[string]bool)
+
+		childCur := child.schedule.Next(start.Add(-time.Nanosecond))
+		for !childCur.After(end) {
+			dates[childCur.Format("2006-01-02")] = true
+			childCur = child.schedule.Next(childCur.Add(time.Nanosecond))
+		}
+
+		childCalDates[child.name] = dates
 	}
 
 	// Walk all trading days via the daily schedule.
 	type backtestStep struct {
-		date       time.Time
-		isStrategy bool
+		date             time.Time
+		isParentStrategy bool
+		childStrategies  []string
 	}
 
 	var steps []backtestStep
@@ -189,17 +249,24 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	cur = dailySchedule.Next(start.Add(-time.Nanosecond))
 	for !cur.After(end) {
 		calKey := cur.Format("2006-01-02")
+
+		var scheduledChildren []string
+
+		for _, child := range e.children {
+			if childCalDates[child.name][calKey] {
+				scheduledChildren = append(scheduledChildren, child.name)
+			}
+		}
+
 		steps = append(steps, backtestStep{
-			date:       cur,
-			isStrategy: strategyCalDates[calKey],
+			date:             cur,
+			isParentStrategy: parentCalDates[calKey],
+			childStrategies:  scheduledChildren,
 		})
 		cur = dailySchedule.Next(cur.Add(time.Nanosecond))
 	}
 
 	// PHASE 3: STEP LOOP
-
-	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
-	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	for stepIdx, step := range steps {
 		// 10. Check context cancellation.
@@ -218,66 +285,36 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			Time("date", date).
 			Int("step", stepIdx+1).
 			Int("total", len(steps)).
-			Bool("strategy_day", step.isStrategy).
+			Bool("strategy_day", step.isParentStrategy).
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
-		// 13. Fetch housekeeping data for held assets.
-		var heldAssets []asset.Asset
-
-		acct.Holdings(func(a asset.Asset, _ float64) {
-			heldAssets = append(heldAssets, a)
-		})
-
-		var housekeepAssets []asset.Asset
-
-		housekeepAssets = append(housekeepAssets, heldAssets...)
-		if e.benchmark != (asset.Asset{}) {
-			housekeepAssets = append(housekeepAssets, e.benchmark)
+		// 13-14b. Housekeep parent account (dividends + fill draining).
+		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, err
 		}
 
-		var housekeepDF *data.DataFrame
+		// Run scheduled child strategies (children before parent).
+		for _, childName := range step.childStrategies {
+			child := e.childrenByName[childName]
+			child.broker.SetPriceProvider(e, date)
 
-		if len(housekeepAssets) > 0 {
-			var fetchErr error
-
-			housekeepDF, fetchErr = e.Fetch(stepCtx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
-			if fetchErr != nil {
-				return nil, fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
+			if err := child.account.CancelOpenOrders(stepCtx); err != nil {
+				return nil, fmt.Errorf("engine: child %q cancel orders on %v: %w", childName, date, err)
 			}
-		}
 
-		// 14. Record dividends for held assets.
-		if housekeepDF != nil {
-			for _, heldAsset := range heldAssets {
-				qty := acct.Position(heldAsset)
-				if qty <= 0 {
-					continue
-				}
-
-				divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
-				if !math.IsNaN(divPerShare) && divPerShare > 0 {
-					acct.Record(portfolio.Transaction{
-						Date:   date,
-						Asset:  heldAsset,
-						Type:   portfolio.DividendTransaction,
-						Amount: divPerShare * qty,
-						Qty:    qty,
-						Price:  divPerShare,
-					})
-				}
+			childBatch := child.account.NewBatch(date)
+			if err := child.strategy.Compute(stepCtx, e, child.account, childBatch); err != nil {
+				return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, date, err)
 			}
-		}
 
-		// 14b. Drain fills from previous step.
-		if acct.HasBroker() {
-			if err := acct.DrainFills(stepCtx); err != nil {
-				return nil, fmt.Errorf("engine: drain fills on %v: %w", date, err)
+			if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
+				return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, date, err)
 			}
 		}
 
 		// 15-16. Run strategy only on strategy-schedule dates.
-		if step.isStrategy {
+		if step.isParentStrategy {
 			// 15. Update simulated broker with price provider and date.
 			if sb, ok := e.broker.(*SimulatedBroker); ok {
 				sb.SetPriceProvider(e, date)
@@ -301,55 +338,24 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			}
 		}
 
-		// 17. Build price DataFrame for all held assets (including any
-		// newly acquired positions from Compute).
-		var priceAssets []asset.Asset
-
-		acct.Holdings(func(a asset.Asset, _ float64) {
-			priceAssets = append(priceAssets, a)
-		})
-
-		if e.benchmark != (asset.Asset{}) {
-			priceAssets = append(priceAssets, e.benchmark)
+		// 17-18. Update parent account prices.
+		if err := e.updateAccountPrices(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, err
 		}
 
-		// Convert DGS3MO yield to cumulative risk-free value.
-		if e.riskFreeResolved {
-			rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, date, []data.Metric{data.MetricClose})
-			if rfFetchErr == nil {
-				yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
-				if !math.IsNaN(yield) && yield > 0 {
-					e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
-				} else if e.riskFreeCumulative == 0 {
-					e.riskFreeCumulative = 100.0
-				}
-			}
-		}
-
-		acct.SetRiskFreeValue(e.riskFreeCumulative)
-
-		if len(priceAssets) > 0 {
-			priceDF, err := e.FetchAt(stepCtx, priceAssets, date, priceMetrics)
-			if err != nil {
-				return nil, fmt.Errorf("engine: price fetch on %v: %w", date, err)
+		// Housekeep and update prices for all child portfolios at every step.
+		for _, child := range e.children {
+			if err := e.housekeepAccount(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
 			}
 
-			// 18. Record equity.
-			acct.UpdatePrices(priceDF)
-			acct.UpdateExcursions(priceDF)
-		} else {
-			// No assets to price -- record cash-only portfolio value.
-			cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
-			if cashErr != nil {
-				return nil, fmt.Errorf("engine: cash-only DataFrame on %v: %w", date, cashErr)
+			if err := e.updateAccountPrices(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q price update on %v: %w", child.name, date, err)
 			}
-
-			acct.UpdatePrices(cashDF)
-			acct.UpdateExcursions(cashDF)
 		}
 
 		// 18b. Compute registered metrics only on strategy dates.
-		if step.isStrategy {
+		if step.isParentStrategy {
 			computeMetrics(acct, date)
 		}
 
@@ -359,4 +365,122 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// PHASE 4: RETURN
 	return acct, nil
+}
+
+// housekeepAccount records dividends for held assets and drains broker fills
+// for the given account on date. benchmark controls whether the benchmark asset
+// is included in the housekeeping data fetch; pass asset.Asset{} for child
+// accounts that have no benchmark.
+func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+
+	var heldAssets []asset.Asset
+
+	acct.Holdings(func(a asset.Asset, _ float64) {
+		heldAssets = append(heldAssets, a)
+	})
+
+	var housekeepAssets []asset.Asset
+
+	housekeepAssets = append(housekeepAssets, heldAssets...)
+	if benchmark != (asset.Asset{}) {
+		housekeepAssets = append(housekeepAssets, benchmark)
+	}
+
+	var housekeepDF *data.DataFrame
+
+	if len(housekeepAssets) > 0 {
+		var fetchErr error
+
+		housekeepDF, fetchErr = eng.Fetch(ctx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
+		if fetchErr != nil {
+			return fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
+		}
+	}
+
+	// Record dividends for held assets.
+	if housekeepDF != nil {
+		for _, heldAsset := range heldAssets {
+			qty := acct.Position(heldAsset)
+			if qty <= 0 {
+				continue
+			}
+
+			divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
+			if !math.IsNaN(divPerShare) && divPerShare > 0 {
+				acct.Record(portfolio.Transaction{
+					Date:   date,
+					Asset:  heldAsset,
+					Type:   portfolio.DividendTransaction,
+					Amount: divPerShare * qty,
+					Qty:    qty,
+					Price:  divPerShare,
+				})
+			}
+		}
+	}
+
+	// Drain fills from previous step.
+	if acct.HasBroker() {
+		if drainErr := acct.DrainFills(ctx); drainErr != nil {
+			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
+		}
+	}
+
+	return nil
+}
+
+// updateAccountPrices fetches current prices and updates equity for the given
+// account on date. benchmark controls whether the benchmark asset is included
+// in the price fetch; pass asset.Asset{} for child accounts. The risk-free
+// rate logic (DGS3MO yield to cumulative conversion) only runs when benchmark
+// is non-zero, matching the behavior of the parent account.
+func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
+
+	var priceAssets []asset.Asset
+
+	acct.Holdings(func(a asset.Asset, _ float64) {
+		priceAssets = append(priceAssets, a)
+	})
+
+	if benchmark != (asset.Asset{}) {
+		priceAssets = append(priceAssets, benchmark)
+	}
+
+	// Convert DGS3MO yield to cumulative risk-free value (parent account only).
+	if benchmark != (asset.Asset{}) && eng.riskFreeResolved {
+		rfDF, rfFetchErr := eng.FetchAt(ctx, []asset.Asset{eng.riskFreeAssetDGS}, date, []data.Metric{data.MetricClose})
+		if rfFetchErr == nil {
+			yield := rfDF.Value(eng.riskFreeAssetDGS, data.MetricClose)
+			if !math.IsNaN(yield) && yield > 0 {
+				eng.riskFreeCumulative = portfolio.YieldToCumulative(yield, eng.riskFreeCumulative)
+			} else if eng.riskFreeCumulative == 0 {
+				eng.riskFreeCumulative = 100.0
+			}
+		}
+	}
+
+	acct.SetRiskFreeValue(eng.riskFreeCumulative)
+
+	if len(priceAssets) > 0 {
+		priceDF, fetchErr := eng.FetchAt(ctx, priceAssets, date, priceMetrics)
+		if fetchErr != nil {
+			return fmt.Errorf("engine: price fetch on %v: %w", date, fetchErr)
+		}
+
+		acct.UpdatePrices(priceDF)
+		acct.UpdateExcursions(priceDF)
+	} else {
+		// No assets to price -- record cash-only portfolio value.
+		cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
+		if cashErr != nil {
+			return fmt.Errorf("engine: cash-only DataFrame on %v: %w", date, cashErr)
+		}
+
+		acct.UpdatePrices(cashDF)
+		acct.UpdateExcursions(cashDF)
+	}
+
+	return nil
 }

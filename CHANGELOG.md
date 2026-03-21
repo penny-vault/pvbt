@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Set the benchmark from the command line with `--benchmark` on backtest, live, and snapshot (e.g. `--benchmark SPY`)
 - A portfolio middleware system intercepts and modifies orders between strategy execution and the broker, enabling risk management, slippage modeling, and other post-allocation processing without changing strategy code
 - Built-in risk middleware enforces position size caps (`risk.MaxPositionSize`), drawdown circuit breakers (`risk.DrawdownCircuitBreaker`), position count limits (`risk.MaxPositionCount`), and inverse-volatility position scaling (`risk.VolatilityScaler`); pre-built profiles (`risk.Conservative`, `risk.Moderate`, `risk.Aggressive`) bundle common configurations
+- The engine supports meta-strategies that allocate across child strategies declared as struct fields with `weight` tags; children run on their own schedules automatically, and `ChildAllocations()` expands their holdings into a flat set of underlying asset weights (including a `$CASH` sentinel for uninvested cash) ready to pass directly to `RebalanceTo`
 - Track Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) for every trade, measuring how far prices moved for and against each position before exit; per-trade details are available via `TradeDetails()` and summary statistics (AverageMFE, AverageMAE, MedianMFE, MedianMAE, EdgeRatio, TradeCaptureRatio) are added to the TradeMetrics bundle
 
 ### Changed

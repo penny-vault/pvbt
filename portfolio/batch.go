@@ -135,6 +135,20 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 // buy/sell amounts.
 func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 	for _, alloc := range allocs {
+		// Filter out $CASH entries -- cash is the implicit remainder.
+		filtered := make(map[asset.Asset]float64, len(alloc.Members))
+		for memberAsset, weight := range alloc.Members {
+			if memberAsset.Ticker != "$CASH" {
+				filtered[memberAsset] = weight
+			}
+		}
+
+		alloc = Allocation{
+			Date:          alloc.Date,
+			Members:       filtered,
+			Justification: alloc.Justification,
+		}
+
 		totalValue := b.ProjectedValue()
 
 		type pendingOrder struct {

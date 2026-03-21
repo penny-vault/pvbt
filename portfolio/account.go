@@ -119,6 +119,20 @@ func (a *Account) Benchmark() asset.Asset {
 
 func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 	for _, alloc := range allocs {
+		// Filter out $CASH entries -- cash is the implicit remainder.
+		filtered := make(map[asset.Asset]float64, len(alloc.Members))
+		for memberAsset, weight := range alloc.Members {
+			if memberAsset.Ticker != "$CASH" {
+				filtered[memberAsset] = weight
+			}
+		}
+
+		alloc = Allocation{
+			Date:          alloc.Date,
+			Members:       filtered,
+			Justification: alloc.Justification,
+		}
+
 		totalValue := a.Value()
 
 		type pendingOrder struct {
