@@ -45,6 +45,25 @@ func newFillStreamer(client *apiClient, fills chan broker.Fill, wsURL string) *f
 	}
 }
 
+// sendConnect sends the required connect action to the WebSocket server.
+func (streamer *fillStreamer) sendConnect() error {
+	msg := map[string]any{
+		"action":     "connect",
+		"value":      []string{streamer.client.account()},
+		"auth-token": streamer.client.sessionToken(),
+	}
+
+	streamer.mu.Lock()
+	conn := streamer.wsConn
+	streamer.mu.Unlock()
+
+	if conn == nil {
+		return ErrStreamDisconnected
+	}
+
+	return conn.WriteJSON(msg)
+}
+
 // connect dials the WebSocket and starts the background read loop.
 func (streamer *fillStreamer) connect(ctx context.Context) error {
 	streamer.ctx = ctx
@@ -57,6 +76,10 @@ func (streamer *fillStreamer) connect(ctx context.Context) error {
 	streamer.mu.Lock()
 	streamer.wsConn = conn
 	streamer.mu.Unlock()
+
+	if connectErr := streamer.sendConnect(); connectErr != nil {
+		return fmt.Errorf("fill streamer send connect: %w", connectErr)
+	}
 
 	streamer.wg.Add(1)
 
@@ -106,6 +129,8 @@ func (streamer *fillStreamer) run() {
 	defer streamer.wg.Done()
 
 	messages := make(chan wsMessage, 16)
+	heartbeat := time.NewTicker(30 * time.Second)
+	defer heartbeat.Stop()
 
 	streamer.mu.Lock()
 	conn := streamer.wsConn
@@ -117,13 +142,17 @@ func (streamer *fillStreamer) run() {
 		select {
 		case <-streamer.done:
 			return
-
 		case <-streamer.ctx.Done():
 			return
-
+		case <-heartbeat.C:
+			streamer.mu.Lock()
+			currentConn := streamer.wsConn
+			streamer.mu.Unlock()
+			if currentConn != nil {
+				currentConn.WriteJSON(map[string]string{"action": "heartbeat"})
+			}
 		case msg := <-messages:
 			if msg.err != nil {
-				// Check if we are shutting down before attempting reconnect.
 				select {
 				case <-streamer.done:
 					return
@@ -131,22 +160,15 @@ func (streamer *fillStreamer) run() {
 					return
 				default:
 				}
-
-				// Connection error -- attempt reconnect.
 				if reconnectErr := streamer.reconnect(streamer.ctx); reconnectErr != nil {
 					return
 				}
-
-				// Start a new readPump for the new connection.
 				streamer.mu.Lock()
 				conn = streamer.wsConn
 				streamer.mu.Unlock()
-
 				go streamer.readPump(conn, messages)
-
 				continue
 			}
-
 			streamer.pruneSeenFills()
 			streamer.handleMessage(msg.data)
 		}
@@ -239,6 +261,10 @@ func (streamer *fillStreamer) reconnect(ctx context.Context) error {
 		streamer.mu.Lock()
 		streamer.wsConn = conn
 		streamer.mu.Unlock()
+
+		if connectErr := streamer.sendConnect(); connectErr != nil {
+			continue
+		}
 
 		streamer.pollMissedFills(ctx)
 

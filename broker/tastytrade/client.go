@@ -220,6 +220,16 @@ func (client *apiClient) getBalance(ctx context.Context) (balanceResponse, error
 	return envelope.Data, nil
 }
 
+// sessionToken returns the current session token.
+func (client *apiClient) sessionToken() string {
+	return client.resty.Token
+}
+
+// account returns the account ID.
+func (client *apiClient) account() string {
+	return client.accountID
+}
+
 // getQuote retrieves the last price for a symbol.
 func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, error) {
 	endpoint := "/market-data/by-type?equity=" + url.QueryEscape(symbol)

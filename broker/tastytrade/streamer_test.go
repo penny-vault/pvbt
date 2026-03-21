@@ -46,6 +46,8 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
+				// Consume the connect message sent by the streamer.
+				conn.ReadMessage()
 				envelope := map[string]any{
 					"type": "Order",
 					"data": map[string]any{
@@ -86,6 +88,8 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
+				// Consume the connect message sent by the streamer.
+				conn.ReadMessage()
 
 				envelope := map[string]any{
 					"type": "Order",
@@ -137,6 +141,8 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
+				// Consume the connect message sent by the streamer.
+				conn.ReadMessage()
 
 				envelope := map[string]any{
 					"type": "Order",
@@ -178,6 +184,72 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 
 			Expect(secondFill.OrderID).To(Equal("ORD-300"))
 			Expect(secondFill.Qty).To(Equal(70.0))
+		})
+	})
+
+	Describe("Connect message", Label("streaming"), func() {
+		It("sends a connect action with auth token and account after dialing", func() {
+			connectReceived := make(chan map[string]any, 1)
+			handlerDone := make(chan struct{})
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(writer).Encode(map[string]any{
+					"data": map[string]any{
+						"session-token": "ws-test-token",
+						"user":          map[string]any{"external-id": "u1"},
+					},
+				})
+			})
+			mux.HandleFunc("GET /customers/me/accounts", func(writer http.ResponseWriter, req *http.Request) {
+				writer.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(writer).Encode(map[string]any{
+					"data": map[string]any{
+						"items": []map[string]any{
+							{"account": map[string]any{"account-number": "WS-ACCT"}},
+						},
+					},
+				})
+			})
+
+			restServer := httptest.NewServer(mux)
+			DeferCleanup(restServer.Close)
+
+			wsServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
+				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
+				Expect(upgradeErr).ToNot(HaveOccurred())
+				defer conn.Close()
+
+				_, msgData, readErr := conn.ReadMessage()
+				Expect(readErr).ToNot(HaveOccurred())
+
+				var msg map[string]any
+				json.Unmarshal(msgData, &msg)
+				connectReceived <- msg
+
+				<-handlerDone
+			}))
+			DeferCleanup(func() { close(handlerDone) })
+			DeferCleanup(wsServer.Close)
+
+			client := tastytrade.NewAPIClientForTest(restServer.URL)
+			Expect(client.Authenticate(ctx, "user@test.com", "secret")).To(Succeed())
+
+			fills := make(chan broker.Fill, 10)
+			streamer := tastytrade.NewFillStreamerForTest(client, fills, wsServerURL(wsServer))
+
+			Expect(streamer.ConnectStreamer(ctx)).To(Succeed())
+			DeferCleanup(func() { streamer.CloseStreamer() })
+
+			var msg map[string]any
+			Eventually(connectReceived, 3*time.Second).Should(Receive(&msg))
+			Expect(msg["action"]).To(Equal("connect"))
+			Expect(msg["auth-token"]).To(Equal("ws-test-token"))
+
+			valueSlice, ok := msg["value"].([]any)
+			Expect(ok).To(BeTrue())
+			Expect(valueSlice).To(ContainElement("WS-ACCT"))
 		})
 	})
 

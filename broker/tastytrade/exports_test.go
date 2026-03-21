@@ -68,6 +68,16 @@ func (client *apiClient) AccountID() string {
 	return client.accountID
 }
 
+// SessionToken exposes sessionToken for testing.
+func (client *apiClient) SessionToken() string {
+	return client.sessionToken()
+}
+
+// Account exposes account for testing.
+func (client *apiClient) Account() string {
+	return client.account()
+}
+
 // --- Fill streamer test exports ---
 
 // FillStreamerForTestType is an exported alias so the _test package can name the type.
