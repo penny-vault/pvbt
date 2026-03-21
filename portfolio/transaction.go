@@ -109,5 +109,5 @@ type Transaction struct {
 	// for this specific sell transaction. Zero (LotFIFO) means use the
 	// account default. Set automatically from broker.Order.LotSelection
 	// when a fill is recorded via submitAndRecord.
-	LotSelection int
+	LotSelection LotSelection
 }

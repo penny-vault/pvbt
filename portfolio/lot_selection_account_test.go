@@ -145,7 +145,7 @@ var _ = Describe("Account lot selection", func() {
 				Qty:          10,
 				Price:        price,
 				Amount:       price * 10,
-				LotSelection: int(portfolio.LotLIFO),
+				LotSelection: portfolio.LotLIFO,
 			})
 
 			lots := acct.TaxLots()[spy]

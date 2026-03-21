@@ -317,7 +317,7 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 				Price:         fill.Price,
 				Amount:        amount,
 				Justification: justification,
-				LotSelection:  order.LotSelection,
+				LotSelection:  LotSelection(order.LotSelection),
 			})
 		default:
 			return nil
@@ -648,7 +648,7 @@ func (a *Account) Record(txn Transaction) {
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
 
-		method := LotSelection(txn.LotSelection)
+		method := txn.LotSelection
 		if method == LotFIFO && a.lotSelection != LotFIFO {
 			method = a.lotSelection
 		}
@@ -946,6 +946,7 @@ func (a *Account) drainFillsFromChannel() {
 				Price:         fill.Price,
 				Amount:        amount,
 				Justification: order.Justification,
+				LotSelection:  LotSelection(order.LotSelection),
 			})
 
 			delete(a.pendingOrders, fill.OrderID)
@@ -1024,6 +1025,7 @@ func (acct *Account) Clone() *Account {
 		benchmark:         acct.benchmark,
 		riskFreeValue:     acct.riskFreeValue,
 		taxLots:           taxLots,
+		lotSelection:      acct.lotSelection,
 		metadata:          metadata,
 		metrics:           acct.metrics,
 		registeredMetrics: acct.registeredMetrics,
