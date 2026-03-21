@@ -135,6 +135,15 @@ func NewChildEntryForTest(name string, weight float64, account *portfolio.Accoun
 	}
 }
 
+// NewChildEntryWithStrategyForTest constructs a childEntry with a strategy for use in unit tests.
+func NewChildEntryWithStrategyForTest(name string, weight float64, strategy Strategy) *childEntry {
+	return &childEntry{
+		name:     name,
+		weight:   weight,
+		strategy: strategy,
+	}
+}
+
 // SetEngineDateForTest sets the engine's currentDate for unit tests.
 func SetEngineDateForTest(eng *Engine, date time.Time) {
 	eng.currentDate = date
