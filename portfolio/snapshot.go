@@ -41,6 +41,8 @@ type PortfolioSnapshot interface {
 	TaxLots() map[asset.Asset][]TaxLot
 	Metrics() []MetricRow
 	AllMetadata() map[string]string
+	TradeDetails() []TradeDetail
+	Excursions() map[asset.Asset]ExcursionRecord
 }
 
 // WithPortfolioSnapshot returns an Option that restores an Account from
@@ -64,6 +66,11 @@ func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
 		acct.metrics = append(acct.metrics, snap.Metrics()...)
 		for k, v := range snap.AllMetadata() {
 			acct.metadata[k] = v
+		}
+
+		acct.tradeDetails = append(acct.tradeDetails, snap.TradeDetails()...)
+		for ast, rec := range snap.Excursions() {
+			acct.excursions[ast] = rec
 		}
 	}
 }

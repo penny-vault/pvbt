@@ -12,6 +12,149 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
+var _ = Describe("Clone", func() {
+	var (
+		acme asset.Asset
+	)
+
+	BeforeEach(func() {
+		acme = asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+	})
+
+	It("deep-copies excursions and tradeDetails", func() {
+		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+		acct.Record(portfolio.Transaction{
+			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    10,
+			Price:  100.0,
+			Amount: -1_000.0,
+		})
+
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+			[]asset.Asset{acme},
+			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+			data.Daily,
+			[]float64{110.0, 110.0, 115.0, 90.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		acct.UpdateExcursions(df)
+
+		clone := acct.Clone()
+
+		// Excursions should be independent copies
+		cloneExc := clone.Excursions()
+		Expect(cloneExc).To(HaveKey(acme))
+		Expect(cloneExc[acme].HighPrice).To(Equal(115.0))
+
+		// Mutating clone should not affect original
+		df2, err := data.NewDataFrame(
+			[]time.Time{time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC)},
+			[]asset.Asset{acme},
+			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+			data.Daily,
+			[]float64{120.0, 120.0, 130.0, 85.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		clone.UpdateExcursions(df2)
+
+		origExc := acct.Excursions()
+		Expect(origExc[acme].HighPrice).To(Equal(115.0))
+		Expect(clone.Excursions()[acme].HighPrice).To(Equal(130.0))
+	})
+})
+
+var _ = Describe("WithPortfolioSnapshot", func() {
+	var (
+		acme asset.Asset
+	)
+
+	BeforeEach(func() {
+		acme = asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+	})
+
+	It("restores excursions and tradeDetails from snapshot", func() {
+		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+		acct.Record(portfolio.Transaction{
+			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    10,
+			Price:  100.0,
+			Amount: -1_000.0,
+		})
+
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+			[]asset.Asset{acme},
+			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+			data.Daily,
+			[]float64{110.0, 110.0, 115.0, 90.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		acct.UpdateExcursions(df)
+
+		// Create new account from snapshot
+		restored := portfolio.New(portfolio.WithPortfolioSnapshot(acct))
+
+		exc := restored.Excursions()
+		Expect(exc).To(HaveKey(acme))
+		Expect(exc[acme].HighPrice).To(Equal(115.0))
+		Expect(exc[acme].LowPrice).To(Equal(90.0))
+
+		// Also verify trade details round-trip
+		details := restored.TradeDetails()
+		Expect(details).To(BeEmpty()) // no sells yet, so no trade details
+	})
+
+	It("restores tradeDetails from snapshot", func() {
+		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+		acct.Record(portfolio.Transaction{
+			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    10,
+			Price:  100.0,
+			Amount: -1_000.0,
+		})
+
+		df, err := data.NewDataFrame(
+			[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+			[]asset.Asset{acme},
+			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+			data.Daily,
+			[]float64{110.0, 110.0, 115.0, 90.0},
+		)
+		Expect(err).NotTo(HaveOccurred())
+		acct.UpdateExcursions(df)
+
+		// Close position to generate a TradeDetail
+		acct.Record(portfolio.Transaction{
+			Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+			Asset:  acme,
+			Type:   portfolio.SellTransaction,
+			Qty:    10,
+			Price:  110.0,
+			Amount: 1_100.0,
+		})
+
+		Expect(acct.TradeDetails()).To(HaveLen(1))
+
+		restored := portfolio.New(portfolio.WithPortfolioSnapshot(acct))
+
+		restoredDetails := restored.TradeDetails()
+		Expect(restoredDetails).To(HaveLen(1))
+		Expect(restoredDetails[0].Asset).To(Equal(acme))
+		Expect(restoredDetails[0].MFE).To(BeNumerically("~", 0.15, 1e-9))
+		Expect(restoredDetails[0].MAE).To(BeNumerically("~", -0.10, 1e-9))
+	})
+})
+
 var _ = Describe("ExcursionRecord", func() {
 	var (
 		acme asset.Asset
