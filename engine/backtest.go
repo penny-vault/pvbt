@@ -431,16 +431,44 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 		}
 	}
 
+	// Record borrow fees for short positions.
+	if housekeepDF != nil {
+		borrowRate := acct.BorrowRate()
+		for _, heldAsset := range heldAssets {
+			qty := acct.Position(heldAsset)
+			if qty >= 0 {
+				continue
+			}
+			closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, date)
+			if math.IsNaN(closePrice) || closePrice == 0 {
+				continue
+			}
+			dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
+			acct.Record(portfolio.Transaction{
+				Date:          date,
+				Asset:         heldAsset,
+				Type:          portfolio.FeeTransaction,
+				Amount:        -dailyFee,
+				Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
+			})
+		}
+	}
+
 	// Record dividends for held assets.
 	if housekeepDF != nil {
 		for _, heldAsset := range heldAssets {
 			qty := acct.Position(heldAsset)
-			if qty <= 0 {
+			if qty == 0 {
 				continue
 			}
 
 			divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
-			if !math.IsNaN(divPerShare) && divPerShare > 0 {
+			if math.IsNaN(divPerShare) || divPerShare <= 0 {
+				continue
+			}
+
+			if qty > 0 {
+				// Long position: receive dividend.
 				acct.Record(portfolio.Transaction{
 					Date:   date,
 					Asset:  heldAsset,
@@ -448,6 +476,17 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 					Amount: divPerShare * qty,
 					Qty:    qty,
 					Price:  divPerShare,
+				})
+			} else {
+				// Short position: owe dividend.
+				acct.Record(portfolio.Transaction{
+					Date:          date,
+					Asset:         heldAsset,
+					Type:          portfolio.DividendTransaction,
+					Amount:        divPerShare * qty, // negative (qty is negative)
+					Qty:           qty,
+					Price:         divPerShare,
+					Justification: fmt.Sprintf("short dividend obligation: %s ex-date %s", heldAsset.Ticker, date.Format("2006-01-02")),
 				})
 			}
 		}

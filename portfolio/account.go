@@ -2256,3 +2256,11 @@ func (acct *Account) Clone() *Account {
 
 	return clone
 }
+
+// BorrowRate returns the configured annualized borrow fee rate.
+func (a *Account) BorrowRate() float64 {
+	if a.borrowRate > 0 {
+		return a.borrowRate
+	}
+	return 0.005 // default 0.5%
+}
