@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The engine supports meta-strategies that allocate across child strategies declared as struct fields with `weight` tags; children run on their own schedules automatically, and `ChildAllocations()` expands their holdings into a flat set of underlying asset weights (including a `$CASH` sentinel for uninvested cash) ready to pass directly to `RebalanceTo`
 - Track Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) for every trade, measuring how far prices moved for and against each position before exit; per-trade details are available via `TradeDetails()` and summary statistics (AverageMFE, AverageMAE, MedianMFE, MedianMAE, EdgeRatio, TradeCaptureRatio) are added to the TradeMetrics bundle
 - The tastytrade broker integration implements the Broker interface for live equity trading, with WebSocket fill streaming, automatic session management, and a sandbox mode for paper trading
+- Bracket and OCO (one-cancels-other) order groups let strategies submit linked exit orders; a bracket combines an entry order with a stop-loss and take-profit that activate only after the entry fills, while an OCO pair cancels the remaining leg as soon as one fills; the simulated broker resolves intrabar fills using high/low price data, with stop-loss taking priority when both legs could trigger on the same bar; brokers that support native group submission implement the optional `GroupSubmitter` interface; middleware can inspect order groups via `Batch.Groups()`
 
 ### Changed
 
