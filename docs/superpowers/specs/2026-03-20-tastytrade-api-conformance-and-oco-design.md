@@ -468,7 +468,7 @@ The verification step must fetch each doc URL and confirm the implementation mat
 
 | File | Change |
 |------|--------|
-| `broker/tastytrade/types.go` | Add `price-effect` and `automated-source` to `orderRequest`. Add `complexOrderRequest`, `complexOrderSubmitResponse`, `streamerMessage`, `orderNotification`, `orderLegWithFills`, `legFill` types. Add `complex-order-id` and nested fills to `orderResponse`/`orderLegResponse`. Update `toTastytradeOrder()` to set `price-effect` and `automated-source`. |
+| `broker/tastytrade/types.go` | Add `price-effect` and `automated-source` to `orderRequest`. Add `complexOrderRequest`, `complexOrderSubmitResponse`, `streamerMessage` types. Add `legFillResponse` type. Add `complex-order-id` and nested `Fills []legFillResponse` to `orderResponse`/`orderLegResponse`. Update `toTastytradeOrder()` to set `price-effect` and `automated-source`. Add `parseLegFillQuantity` helper. |
 | `broker/tastytrade/client.go` | Fix `getQuote()` endpoint. Add pagination to `getOrders()`. Add `submitComplexOrder()` and `cancelComplexOrder()` methods. Add `sessionToken()` and `account()` accessors. |
 | `broker/tastytrade/broker.go` | Add `complexOrderIDs` map to `TastytradeBroker`. Add `SubmitGroup()`, `submitOCO()`, `submitOTOCO()` methods. Update `Cancel()` to check complex order map. Update `Orders()` to populate complex order map from REST response. Initialize `complexOrderIDs` in `New()`. |
 | `broker/tastytrade/streamer.go` | Update `handleMessage()` to parse streamer envelope and extract fills from `legs[].fills[]`. Add `connect` message after WebSocket dial. Add heartbeat ticker in `run()`. Update `pollMissedFills()` to extract fills from order leg structure. |
