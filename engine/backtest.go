@@ -201,6 +201,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	e.start = start
 	e.end = end
 
+	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
+	if err := e.broker.Connect(ctx); err != nil {
+		return nil, fmt.Errorf("engine: broker connect: %w", err)
+	}
+
 	// PHASE 2: DATE ENUMERATION
 
 	// 9. Create a daily schedule for equity recording on every trading day.
