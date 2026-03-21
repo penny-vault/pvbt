@@ -66,6 +66,8 @@ const (
 
 The transaction captures: asset, date, split factor, old quantity, new quantity.
 
+**Sentinel handling:** A NaN or missing split factor is treated as 1.0 (no split). A split factor of 0 is an error and must be rejected to avoid destroying position data.
+
 **Data source:** The `SplitFactor` metric is already fetched and stored by data providers. The engine reads it from the DataFrame each day.
 
 ## 3. Margin Accounting
@@ -114,7 +116,7 @@ Both are daily housekeeping steps in the engine loop.
 - Recorded as a `DividendTransaction` with negative amount
 - Justification field populated with context, e.g., "short dividend obligation: MSFT ex-date 2026-03-20"
 - Runs in the same housekeeping step as existing long dividend recording
-- Note: the current dividend recording code in `housekeepAccount` does not guard against negative quantities -- it would record a positive dividend for short positions. The implementation must check position sign and apply the correct dividend treatment (credit for longs, debit for shorts)
+- Note: the current dividend recording code in `housekeepAccount` already skips positions where `qty <= 0`. The implementation must change this guard to handle negative quantities (short positions) by debiting cash instead of skipping them
 
 ## 5. Margin Calls and MarginCallHandler
 
@@ -239,6 +241,10 @@ The delta math extends naturally:
 No new types needed. The sign convention (negative = short) is the industry standard used by Zipline, QuantConnect, Backtrader, and others.
 
 Helper functions like `EqualWeight` default to long (positive weights). Strategy authors use negative weights explicitly when constructing short allocations.
+
+**Liquidation of unlisted positions:** The current `RebalanceTo` implementation liquidates positions not present in the target allocation, but only checks `qty > 0` (long positions). This must be updated to also cover (buy back) short positions not in the target allocation.
+
+**Live engine parity:** The live engine (`engine/live.go`) has the same housekeeping structure as the backtest engine. All housekeeping changes (splits, borrow fees, dividend debits, margin checks) apply to both engines identically.
 
 ## Implementation Order
 
