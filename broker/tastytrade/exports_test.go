@@ -9,6 +9,12 @@ import (
 // APIClientForTestType is an exported alias so the _test package can name the type.
 type APIClientForTestType = apiClient
 
+// ComplexOrderRequest is an exported alias for complexOrderRequest, used in tests.
+type ComplexOrderRequest = complexOrderRequest
+
+// ComplexOrderSubmitResponse is an exported alias for complexOrderSubmitResponse, used in tests.
+type ComplexOrderSubmitResponse = complexOrderSubmitResponse
+
 // OrderRequest is an exported alias for orderRequest, used in tests.
 type OrderRequest = orderRequest
 
@@ -61,6 +67,16 @@ func (client *apiClient) GetBalance(ctx context.Context) (balanceResponse, error
 // GetQuote exposes getQuote for testing.
 func (client *apiClient) GetQuote(ctx context.Context, symbol string) (float64, error) {
 	return client.getQuote(ctx, symbol)
+}
+
+// SubmitComplexOrder exposes submitComplexOrder for testing.
+func (client *apiClient) SubmitComplexOrder(ctx context.Context, order complexOrderRequest) (complexOrderSubmitResponse, error) {
+	return client.submitComplexOrder(ctx, order)
+}
+
+// CancelComplexOrder exposes cancelComplexOrder for testing.
+func (client *apiClient) CancelComplexOrder(ctx context.Context, complexOrderID string) error {
+	return client.cancelComplexOrder(ctx, complexOrderID)
 }
 
 // AccountID returns the client's account ID for test assertions.

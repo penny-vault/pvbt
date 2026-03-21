@@ -69,6 +69,21 @@ type ordersListResponse struct {
 	} `json:"data"`
 }
 
+type complexOrderRequest struct {
+	Type         string         `json:"type"`
+	TriggerOrder *orderRequest  `json:"trigger-order,omitempty"`
+	Orders       []orderRequest `json:"orders"`
+}
+
+type complexOrderSubmitResponse struct {
+	Data struct {
+		ComplexOrder struct {
+			ID     string          `json:"id"`
+			Orders []orderResponse `json:"orders"`
+		} `json:"complex-order"`
+	} `json:"data"`
+}
+
 type orderResponse struct {
 	ID             string             `json:"id"`
 	Status         string             `json:"status"`
