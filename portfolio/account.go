@@ -51,6 +51,9 @@ type Account struct {
 	benchmark         asset.Asset
 	riskFreeValue     float64
 	taxLots           map[asset.Asset][]TaxLot
+	recentLossSales   map[asset.Asset][]recentLossSale
+	recentBuys        map[asset.Asset][]recentBuy
+	washSales         []WashSaleRecord
 	metadata          map[string]string
 	metrics           []MetricRow
 	registeredMetrics []PerformanceMetric
@@ -63,10 +66,12 @@ type Account struct {
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
 	acct := &Account{
-		holdings:      make(map[asset.Asset]float64),
-		taxLots:       make(map[asset.Asset][]TaxLot),
-		metadata:      make(map[string]string),
-		pendingOrders: make(map[string]broker.Order),
+		holdings:        make(map[asset.Asset]float64),
+		taxLots:         make(map[asset.Asset][]TaxLot),
+		recentLossSales: make(map[asset.Asset][]recentLossSale),
+		recentBuys:      make(map[asset.Asset][]recentBuy),
+		metadata:        make(map[string]string),
+		pendingOrders:   make(map[string]broker.Order),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -627,11 +632,15 @@ func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
 // --- PortfolioManager interface ---
 
 // Record appends a transaction to the log and updates cash, holdings,
-// and tax lots accordingly.
+// and tax lots accordingly. It also performs wash sale detection on both
+// buy and sell transactions.
 func (a *Account) Record(txn Transaction) {
 	if txn.Type == DividendTransaction {
 		txn.Qualified = a.isDividendQualified(txn.Asset, txn.Date)
 	}
+
+	// Prune expired wash sale tracking entries.
+	a.pruneWashSaleTracking(txn.Date)
 
 	a.transactions = append(a.transactions, txn)
 	a.cash += txn.Amount
@@ -639,12 +648,27 @@ func (a *Account) Record(txn Transaction) {
 	switch txn.Type {
 	case BuyTransaction:
 		a.holdings[txn.Asset] += txn.Qty
-		a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], TaxLot{
-			ID:    fmt.Sprintf("lot-%d-%d", txn.Date.UnixNano(), len(a.taxLots[txn.Asset])),
+
+		lotID := fmt.Sprintf("lot-%d-%d", txn.Date.UnixNano(), len(a.taxLots[txn.Asset]))
+		newLot := TaxLot{
+			ID:    lotID,
 			Date:  txn.Date,
 			Qty:   txn.Qty,
 			Price: txn.Price,
+		}
+
+		a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], newLot)
+
+		// Check for wash sale: buy after a recent loss sale.
+		a.checkWashSaleOnBuy(txn.Asset, txn.Date, txn.Qty, lotID)
+
+		// Track this buy for the reverse direction.
+		a.recentBuys[txn.Asset] = append(a.recentBuys[txn.Asset], recentBuy{
+			date:  txn.Date,
+			lotID: lotID,
+			qty:   txn.Qty,
 		})
+
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
 
@@ -653,12 +677,325 @@ func (a *Account) Record(txn Transaction) {
 			method = a.lotSelection
 		}
 
+		// Compute info about the lots to be consumed before actually
+		// consuming them, so we can determine gain/loss.
+		consumed := a.computeConsumedLotInfo(txn.Asset, txn.Qty, method)
+
 		a.consumeLots(txn.Asset, txn.Qty, method)
+
+		// Determine if this was a loss sale.
+		lossPerShare := consumed.avgCostBasis - txn.Price
+		if lossPerShare > 0 {
+			// Check for wash sale: loss sale after a recent buy.
+			// Only consider buys that occurred after the consumed lot's
+			// purchase date (buys before the sold lot was purchased are
+			// original holdings, not replacement purchases).
+			disallowedQty := a.checkWashSaleOnSell(txn.Asset, txn.Date, txn.Qty, lossPerShare, consumed.latestBuyDate)
+
+			// Track only the remaining (non-disallowed) quantity in
+			// recentLossSales for the forward direction.
+			remainingLossQty := txn.Qty - disallowedQty
+			if remainingLossQty > 0 {
+				a.recentLossSales[txn.Asset] = append(a.recentLossSales[txn.Asset], recentLossSale{
+					date:         txn.Date,
+					lossPerShare: lossPerShare,
+					qty:          remainingLossQty,
+				})
+			}
+		}
 
 		if a.holdings[txn.Asset] == 0 {
 			delete(a.holdings, txn.Asset)
 			delete(a.taxLots, txn.Asset)
 		}
+	}
+}
+
+// WashSaleRecords returns all wash sale records detected during the
+// account's lifetime.
+func (a *Account) WashSaleRecords() []WashSaleRecord {
+	return a.washSales
+}
+
+// pruneWashSaleTracking removes entries older than 30 days from the
+// wash sale tracking maps.
+func (a *Account) pruneWashSaleTracking(asOf time.Time) {
+	cutoff := asOf.AddDate(0, 0, -washSaleWindowDays)
+
+	for ast, sales := range a.recentLossSales {
+		pruned := sales[:0]
+		for _, sale := range sales {
+			if sale.date.After(cutoff) || sale.date.Equal(cutoff) {
+				pruned = append(pruned, sale)
+			}
+		}
+
+		if len(pruned) == 0 {
+			delete(a.recentLossSales, ast)
+		} else {
+			a.recentLossSales[ast] = pruned
+		}
+	}
+
+	for ast, buys := range a.recentBuys {
+		pruned := buys[:0]
+		for _, buy := range buys {
+			if buy.date.After(cutoff) || buy.date.Equal(cutoff) {
+				pruned = append(pruned, buy)
+			}
+		}
+
+		if len(pruned) == 0 {
+			delete(a.recentBuys, ast)
+		} else {
+			a.recentBuys[ast] = pruned
+		}
+	}
+}
+
+// checkWashSaleOnBuy checks if there are recent loss sales within 30 days
+// of this buy. If so, it disallows the loss by adding it to the new lot's
+// cost basis.
+func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty float64, lotID string) {
+	sales := a.recentLossSales[ast]
+	if len(sales) == 0 {
+		return
+	}
+
+	remaining := buyQty
+
+	for idx := 0; idx < len(sales) && remaining > 0; idx++ {
+		daysDiff := buyDate.Sub(sales[idx].date).Hours() / 24
+		if daysDiff > float64(washSaleWindowDays) {
+			continue
+		}
+
+		// Compute how many shares trigger the wash sale.
+		matchQty := sales[idx].qty
+		if matchQty > remaining {
+			matchQty = remaining
+		}
+
+		disallowedLoss := matchQty * sales[idx].lossPerShare
+
+		// Adjust the new lot's cost basis.
+		a.adjustLotBasis(ast, lotID, sales[idx].lossPerShare)
+
+		// Record the wash sale.
+		a.washSales = append(a.washSales, WashSaleRecord{
+			Asset:          ast,
+			SellDate:       sales[idx].date,
+			RebuyDate:      buyDate,
+			DisallowedLoss: disallowedLoss,
+			AdjustedLotID:  lotID,
+		})
+
+		// Consume from the loss sale entry.
+		sales[idx].qty -= matchQty
+		remaining -= matchQty
+	}
+
+	// Remove fully consumed entries.
+	pruned := sales[:0]
+	for _, sale := range sales {
+		if sale.qty > 0 {
+			pruned = append(pruned, sale)
+		}
+	}
+
+	if len(pruned) == 0 {
+		delete(a.recentLossSales, ast)
+	} else {
+		a.recentLossSales[ast] = pruned
+	}
+}
+
+// checkWashSaleOnSell checks if there are recent buys within 30 days of
+// this loss sale. If so, it adjusts the recent buy's lot cost basis.
+// Only buys that occurred after consumedLotDate are considered as potential
+// replacement purchases (buys before the sold lot's purchase are original
+// holdings). It returns the quantity of shares whose loss was disallowed
+// (so the caller can reduce the amount tracked in recentLossSales).
+func (a *Account) checkWashSaleOnSell(ast asset.Asset, sellDate time.Time, sellQty, lossPerShare float64, consumedLotDate time.Time) float64 {
+	buys := a.recentBuys[ast]
+	if len(buys) == 0 {
+		return 0
+	}
+
+	remaining := sellQty
+	disallowedQty := 0.0
+
+	for idx := 0; idx < len(buys) && remaining > 0; idx++ {
+		daysDiff := sellDate.Sub(buys[idx].date).Hours() / 24
+		if daysDiff > float64(washSaleWindowDays) || daysDiff < 0 {
+			continue
+		}
+
+		// Only consider buys that occurred after the consumed lot's
+		// purchase date. Earlier buys are original holdings.
+		if !buys[idx].date.After(consumedLotDate) {
+			continue
+		}
+
+		// Only adjust if the lot still exists in taxLots.
+		if !a.lotExists(ast, buys[idx].lotID) {
+			continue
+		}
+
+		matchQty := buys[idx].qty
+		if matchQty > remaining {
+			matchQty = remaining
+		}
+
+		disallowedLoss := matchQty * lossPerShare
+
+		// Adjust the recent buy lot's cost basis.
+		a.adjustLotBasis(ast, buys[idx].lotID, lossPerShare)
+
+		// Record the wash sale.
+		a.washSales = append(a.washSales, WashSaleRecord{
+			Asset:          ast,
+			SellDate:       sellDate,
+			RebuyDate:      buys[idx].date,
+			DisallowedLoss: disallowedLoss,
+			AdjustedLotID:  buys[idx].lotID,
+		})
+
+		buys[idx].qty -= matchQty
+		remaining -= matchQty
+		disallowedQty += matchQty
+	}
+
+	// Remove fully consumed entries.
+	pruned := buys[:0]
+	for _, buy := range buys {
+		if buy.qty > 0 {
+			pruned = append(pruned, buy)
+		}
+	}
+
+	if len(pruned) == 0 {
+		delete(a.recentBuys, ast)
+	} else {
+		a.recentBuys[ast] = pruned
+	}
+
+	return disallowedQty
+}
+
+// lotExists returns true if a lot with the given ID exists in the
+// account's tax lots for the specified asset.
+func (a *Account) lotExists(ast asset.Asset, lotID string) bool {
+	for _, lot := range a.taxLots[ast] {
+		if lot.ID == lotID {
+			return true
+		}
+	}
+
+	return false
+}
+
+// adjustLotBasis adds the given per-share adjustment to the cost basis
+// of the specified lot.
+func (a *Account) adjustLotBasis(ast asset.Asset, lotID string, perShareAdjustment float64) {
+	lots := a.taxLots[ast]
+	for idx := range lots {
+		if lots[idx].ID == lotID {
+			lots[idx].Price += perShareAdjustment
+			return
+		}
+	}
+}
+
+// consumedLotInfo holds information about the lots that would be consumed
+// by a sell operation, without actually consuming them.
+type consumedLotInfo struct {
+	avgCostBasis    float64
+	latestBuyDate   time.Time
+	earliestBuyDate time.Time
+}
+
+// computeConsumedLotInfo computes the weighted average cost basis and the
+// date range of lots that would be consumed by a sell of the given quantity
+// using the specified lot selection method. This does NOT modify the lots.
+func (a *Account) computeConsumedLotInfo(ast asset.Asset, qty float64, method LotSelection) consumedLotInfo {
+	lots := a.taxLots[ast]
+	if len(lots) == 0 || qty == 0 {
+		return consumedLotInfo{}
+	}
+
+	// Make a working copy to avoid mutating the real lots.
+	work := make([]TaxLot, len(lots))
+	copy(work, lots)
+
+	var totalCost, totalQty float64
+
+	var earliest, latest time.Time
+
+	accumulate := func(lot TaxLot, consumed float64) {
+		totalCost += consumed * lot.Price
+		totalQty += consumed
+
+		if earliest.IsZero() || lot.Date.Before(earliest) {
+			earliest = lot.Date
+		}
+
+		if latest.IsZero() || lot.Date.After(latest) {
+			latest = lot.Date
+		}
+	}
+
+	switch method {
+	case LotLIFO:
+		remaining := qty
+
+		for idx := len(work) - 1; idx >= 0 && remaining > 0; idx-- {
+			consumed := work[idx].Qty
+			if consumed > remaining {
+				consumed = remaining
+			}
+
+			accumulate(work[idx], consumed)
+			remaining -= consumed
+		}
+
+	case LotHighestCost:
+		sortLotsByPriceDesc(work)
+
+		remaining := qty
+
+		for idx := 0; idx < len(work) && remaining > 0; idx++ {
+			consumed := work[idx].Qty
+			if consumed > remaining {
+				consumed = remaining
+			}
+
+			accumulate(work[idx], consumed)
+			remaining -= consumed
+		}
+
+	default: // LotFIFO
+		remaining := qty
+
+		for idx := 0; idx < len(work) && remaining > 0; idx++ {
+			consumed := work[idx].Qty
+			if consumed > remaining {
+				consumed = remaining
+			}
+
+			accumulate(work[idx], consumed)
+			remaining -= consumed
+		}
+	}
+
+	if totalQty == 0 {
+		return consumedLotInfo{}
+	}
+
+	return consumedLotInfo{
+		avgCostBasis:    totalCost / totalQty,
+		latestBuyDate:   latest,
+		earliestBuyDate: earliest,
 	}
 }
 
@@ -1016,6 +1353,23 @@ func (acct *Account) Clone() *Account {
 		pendingOrders[orderID] = order
 	}
 
+	recentLossSales := make(map[asset.Asset][]recentLossSale, len(acct.recentLossSales))
+	for ast, sales := range acct.recentLossSales {
+		salesCopy := make([]recentLossSale, len(sales))
+		copy(salesCopy, sales)
+		recentLossSales[ast] = salesCopy
+	}
+
+	recentBuys := make(map[asset.Asset][]recentBuy, len(acct.recentBuys))
+	for ast, buys := range acct.recentBuys {
+		buysCopy := make([]recentBuy, len(buys))
+		copy(buysCopy, buys)
+		recentBuys[ast] = buysCopy
+	}
+
+	washSales := make([]WashSaleRecord, len(acct.washSales))
+	copy(washSales, acct.washSales)
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -1025,6 +1379,9 @@ func (acct *Account) Clone() *Account {
 		benchmark:         acct.benchmark,
 		riskFreeValue:     acct.riskFreeValue,
 		taxLots:           taxLots,
+		recentLossSales:   recentLossSales,
+		recentBuys:        recentBuys,
+		washSales:         washSales,
 		lotSelection:      acct.lotSelection,
 		metadata:          metadata,
 		metrics:           acct.metrics,

@@ -65,7 +65,7 @@ var _ = Describe("Account lot selection", func() {
 		day2 = time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
 		day3 = time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)
 		day4 = time.Date(2026, 1, 6, 0, 0, 0, 0, time.UTC)
-		price = 150.0
+		price = 350.0
 	})
 
 	Describe("FIFO (default)", func() {
