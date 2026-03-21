@@ -4,7 +4,16 @@
 
 Implement the `Broker` interface for tastytrade as the first live broker integration. Equities only. The integration lives in a single package `broker/tastytrade/` and uses tastytrade's REST API for order management and WebSocket streaming API for real-time fill notifications.
 
-The design preserves the "same code for backtest and live" principle -- strategies interact through the Portfolio/Batch layer and never touch the broker directly. Swapping `SimulatedBroker` for `TastytradeBroker` via `engine.WithBroker()` is the only change needed to go live.
+The design preserves the "same code for backtest and live" principle -- strategies interact through the Portfolio/Batch layer and never touch the broker directly. Swapping `SimulatedBroker` for `TastytradeBroker` via `engine.WithBroker()` is the primary change needed to go live.
+
+### Engine Integration Notes
+
+The engine currently does not call `broker.Connect()` or `broker.Close()`. The implementation must add these lifecycle calls:
+
+- `Connect(ctx)` called during engine initialization (in `createAccount` or at the start of `Backtest`/`RunLive`), after the broker is assigned.
+- `Close()` called during engine teardown (in the engine's `Close()` method), alongside data provider cleanup.
+
+The engine calls `SetPriceProvider()` on the broker in several places, but uses a type assertion `if sb, ok := e.broker.(*SimulatedBroker); ok` for the parent broker. This means a non-SimulatedBroker safely skips that code. Child strategies always use `*SimulatedBroker` (the `childEntry.broker` field is typed as `*SimulatedBroker`), so child broker calls are unaffected.
 
 ## Package Structure
 
@@ -73,7 +82,7 @@ Uses [go-resty](https://github.com/go-resty/resty) for HTTP communication. Resty
 ### Session Management
 
 - Session token is set on the Resty client and included automatically on all requests.
-- Resty `OnBeforeRequest` middleware intercepts 401 responses, re-authenticates once, and retries the original request.
+- Resty `OnAfterResponse` middleware intercepts 401 responses, re-authenticates once, and retries the original request.
 - If re-auth fails, the error is returned immediately.
 
 ### Retry Behavior
@@ -102,21 +111,27 @@ Configured on the Resty client:
 
 ```go
 type fillStreamer struct {
-    client    *apiClient
+    client    *apiClient       // also provides accountID
     fills     chan broker.Fill  // shared channel with broker
-    accountID string
     wsConn    *websocket.Conn
     seenFills map[string]bool  // deduplication by fill ID
     mu        sync.Mutex
     done      chan struct{}
+    wg        sync.WaitGroup   // tracks background goroutine for clean shutdown
 }
 ```
+
+The streamer accesses the account ID through the `client` rather than storing its own copy.
 
 ### Streaming Behavior
 
 - Connects to tastytrade's account streamer WebSocket endpoint during `Connect()`.
 - A background goroutine listens for order fill events, converts them to `broker.Fill`, and sends on the fills channel.
 - Fill channel is buffered at 1024, consistent with `SimulatedBroker`.
+
+### Partial Fills
+
+Each partial fill produces a separate `broker.Fill` on the channel with the partial quantity and price. The order status transitions to `OrderPartiallyFilled` until the final fill arrives, at which point it becomes `OrderFilled`. This matches tastytrade's behavior of emitting individual execution events.
 
 ### Reconnection and Polling Fallback
 
@@ -125,10 +140,19 @@ type fillStreamer struct {
 - Uses `seenFills` map for deduplication -- fills already received via WebSocket are not re-sent on the channel.
 - Polling is only triggered on reconnection, not on a regular interval.
 
+### seenFills Cleanup
+
+The `seenFills` map is pruned at the start of each trading day. Entries older than 24 hours are evicted. This bounds memory growth for long-running sessions while retaining enough history to deduplicate across reconnections within a trading day.
+
 ### Shutdown
 
 - `Close()` closes the `done` channel, signaling the background goroutine to close the WebSocket connection and exit.
-- The fills channel is closed after the goroutine exits.
+- The goroutine stops sending on the fills channel before exiting. `Close()` waits for the goroutine to fully exit (via `sync.WaitGroup`) before closing the fills channel. This prevents send-on-closed-channel panics.
+- Consumers of the `Fills()` channel should detect closure (receive of zero value with `ok == false`) as a signal that the broker has shut down.
+
+### Context Cancellation
+
+The background goroutine's select loop includes a case for the context passed to `Connect()`. When the context is cancelled (e.g., during `RunLive` shutdown), the goroutine exits cleanly via the same shutdown path as `Close()`. All REST calls pass through context-aware Resty methods, so in-flight HTTP requests are also cancelled.
 
 ## Broker Interface Method Mapping
 
@@ -159,6 +183,15 @@ type fillStreamer struct {
 ### Special Cases
 
 **Dollar-amount orders:** When `Order.Qty == 0` and `Order.Amount > 0`, the broker fetches a quote via `getQuote()`, computes `math.Floor(amount / price)` for the share count, and submits with that quantity. This matches `SimulatedBroker` behavior.
+
+**Order types:** All four order types are supported in this phase:
+
+| broker.OrderType | tastytrade Mapping |
+|------------------|--------------------|
+| Market | `"Market"` |
+| Limit | `"Limit"` -- uses `Order.LimitPrice` |
+| Stop | `"Stop"` -- uses `Order.StopPrice` |
+| StopLimit | `"Stop Limit"` -- uses both `Order.StopPrice` and `Order.LimitPrice` |
 
 **OnOpen/OnClose time-in-force:** tastytrade does not natively support these as order attributes. They are mapped to Market/Day orders. The engine's tradecron scheduling already ensures `Compute()` fires at the correct time, so the broker relies on the engine's timing rather than encoding this in the order.
 
@@ -214,7 +247,18 @@ Unexported functions in `types.go`:
 
 ### Order Status Mapping
 
-tastytrade statuses (Received, Routed, In Flight, Live, Filled, Cancelled, Expired, Rejected) map to corresponding `broker.OrderStatus` values.
+| tastytrade Status | broker.OrderStatus |
+|-------------------|--------------------|
+| Received | `OrderSubmitted` |
+| Routed | `OrderSubmitted` |
+| In Flight | `OrderSubmitted` |
+| Live | `OrderOpen` |
+| Filled | `OrderFilled` |
+| Cancelled | `OrderCancelled` |
+| Expired | `OrderCancelled` |
+| Rejected | `OrderCancelled` |
+
+`Expired` and `Rejected` map to `OrderCancelled` since they are terminal states where the order did not fill. The rejection reason is preserved in the error returned by `Submit()` when applicable.
 
 ## Error Handling
 
