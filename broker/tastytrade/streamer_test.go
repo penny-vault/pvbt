@@ -42,6 +42,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 	Describe("Fill delivery", Label("streaming"), func() {
 		It("emits a broker.Fill with correct fields when a fill event arrives", func() {
 			filledAt := time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)
+			handlerDone := make(chan struct{})
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
@@ -61,8 +62,9 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				conn.WriteMessage(websocket.TextMessage, payload)
 
 				// Keep connection open until test completes.
-				<-ctx.Done()
+				<-handlerDone
 			}))
+			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
 
 			fills := make(chan broker.Fill, 10)
@@ -85,6 +87,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 	Describe("Deduplication", Label("streaming"), func() {
 		It("delivers only one fill when the same fill ID is sent twice", func() {
 			filledAt := time.Date(2026, 3, 20, 14, 30, 0, 0, time.UTC)
+			handlerDone := make(chan struct{})
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
@@ -107,8 +110,9 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				time.Sleep(50 * time.Millisecond)
 				conn.WriteMessage(websocket.TextMessage, payload)
 
-				<-ctx.Done()
+				<-handlerDone
 			}))
+			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
 
 			fills := make(chan broker.Fill, 10)
@@ -131,6 +135,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 	Describe("Partial fills", Label("streaming"), func() {
 		It("delivers both fills when they share an order ID but have different fill IDs", func() {
 			filledAt := time.Date(2026, 3, 20, 15, 0, 0, 0, time.UTC)
+			handlerDone := make(chan struct{})
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
@@ -160,8 +165,9 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				time.Sleep(50 * time.Millisecond)
 				conn.WriteMessage(websocket.TextMessage, secondPayload)
 
-				<-ctx.Done()
+				<-handlerDone
 			}))
+			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
 
 			fills := make(chan broker.Fill, 10)
@@ -185,13 +191,16 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 
 	Describe("Shutdown", Label("streaming"), func() {
 		It("stops the goroutine when CloseStreamer is called", func() {
+			handlerDone := make(chan struct{})
+
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
 				Expect(upgradeErr).ToNot(HaveOccurred())
 				defer conn.Close()
 
-				<-ctx.Done()
+				<-handlerDone
 			}))
+			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
 
 			fills := make(chan broker.Fill, 10)
