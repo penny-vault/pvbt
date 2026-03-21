@@ -33,4 +33,8 @@ type TradeMetrics struct {
 	MedianMAE            float64 // median MAE across all round trips
 	EdgeRatio            float64 // average MFE / abs(average MAE)
 	TradeCaptureRatio    float64 // mean realized return pct / mean MFE
+	LongWinRate          float64 // win rate for long trades only
+	ShortWinRate         float64 // win rate for short trades only
+	LongProfitFactor     float64 // profit factor for long trades only
+	ShortProfitFactor    float64 // profit factor for short trades only
 }

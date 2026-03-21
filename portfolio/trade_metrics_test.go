@@ -531,4 +531,188 @@ var _ = Describe("TradeMetrics", func() {
 			Expect(tm.AverageHoldingPeriod).To(BeNumerically("~", 15.0, 1e-4))
 		})
 	})
+
+	Describe("Long/Short metrics", func() {
+		Describe("with a mix of long and short trades", func() {
+			var tm portfolio.TradeMetrics
+
+			BeforeEach(func() {
+				acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+
+				// Long trade 1: Buy 10 ACME at $100, Sell at $120 -> win $200
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.BuyTransaction,
+					Qty:    10,
+					Price:  100.0,
+					Amount: -1_000.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.SellTransaction,
+					Qty:    10,
+					Price:  120.0,
+					Amount: 1_200.0,
+				})
+
+				// Long trade 2: Buy 20 WIDG at $50, Sell at $45 -> loss -$100
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  widg,
+					Type:   portfolio.BuyTransaction,
+					Qty:    20,
+					Price:  50.0,
+					Amount: -1_000.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  widg,
+					Type:   portfolio.SellTransaction,
+					Qty:    20,
+					Price:  45.0,
+					Amount: 900.0,
+				})
+
+				// Short trade 1: Sell 50 ACME at $150 (short), Buy at $140 -> win $500
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.SellTransaction,
+					Qty:    50,
+					Price:  150.0,
+					Amount: 7_500.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 5, 20, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.BuyTransaction,
+					Qty:    50,
+					Price:  140.0,
+					Amount: -7_000.0,
+				})
+
+				// Short trade 2: Sell 20 WIDG at $40 (short), Buy at $50 -> loss -$200
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  widg,
+					Type:   portfolio.SellTransaction,
+					Qty:    20,
+					Price:  40.0,
+					Amount: 800.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC),
+					Asset:  widg,
+					Type:   portfolio.BuyTransaction,
+					Qty:    20,
+					Price:  50.0,
+					Amount: -1_000.0,
+				})
+
+				var err error
+				tm, err = acct.TradeMetrics()
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("computes ShortWinRate correctly", func() {
+				// 1 winning short out of 2 short trades
+				Expect(tm.ShortWinRate).To(BeNumerically("~", 0.5, 1e-4))
+			})
+
+			It("computes LongWinRate correctly (excludes short trades)", func() {
+				// 1 winning long out of 2 long trades
+				Expect(tm.LongWinRate).To(BeNumerically("~", 0.5, 1e-4))
+			})
+
+			It("computes ShortProfitFactor correctly", func() {
+				// Short gross profit = 500, short gross loss = 200
+				// ProfitFactor = 500 / 200 = 2.5
+				Expect(tm.ShortProfitFactor).To(BeNumerically("~", 2.5, 1e-4))
+			})
+
+			It("computes LongProfitFactor correctly", func() {
+				// Long gross profit = 200, long gross loss = 100
+				// ProfitFactor = 200 / 100 = 2.0
+				Expect(tm.LongProfitFactor).To(BeNumerically("~", 2.0, 1e-4))
+			})
+		})
+
+		Describe("with no trades", func() {
+			It("returns zero for directional win rates and NaN for profit factors", func() {
+				acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+				tm, err := acct.TradeMetrics()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(tm.LongWinRate).To(Equal(0.0))
+				Expect(tm.ShortWinRate).To(Equal(0.0))
+				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue())
+				Expect(math.IsNaN(tm.ShortProfitFactor)).To(BeTrue())
+			})
+		})
+
+		Describe("with only long trades", func() {
+			It("returns zero for short metrics", func() {
+				acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.BuyTransaction,
+					Qty:    10,
+					Price:  100.0,
+					Amount: -1_000.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.SellTransaction,
+					Qty:    10,
+					Price:  120.0,
+					Amount: 1_200.0,
+				})
+
+				tm, err := acct.TradeMetrics()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(tm.LongWinRate).To(Equal(1.0))
+				Expect(tm.ShortWinRate).To(Equal(0.0))
+				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue()) // no losses
+				Expect(math.IsNaN(tm.ShortProfitFactor)).To(BeTrue()) // no short trades
+			})
+		})
+
+		Describe("with only short trades", func() {
+			It("returns zero for long metrics", func() {
+				acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+
+				// Short: Sell 50 at $150, Buy at $140 -> win $500
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.SellTransaction,
+					Qty:    50,
+					Price:  150.0,
+					Amount: 7_500.0,
+				})
+				acct.Record(portfolio.Transaction{
+					Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
+					Asset:  acme,
+					Type:   portfolio.BuyTransaction,
+					Qty:    50,
+					Price:  140.0,
+					Amount: -7_000.0,
+				})
+
+				tm, err := acct.TradeMetrics()
+				Expect(err).NotTo(HaveOccurred())
+
+				Expect(tm.LongWinRate).To(Equal(0.0))
+				Expect(tm.ShortWinRate).To(Equal(1.0))
+				Expect(math.IsNaN(tm.LongProfitFactor)).To(BeTrue()) // no long trades
+				Expect(math.IsNaN(tm.ShortProfitFactor)).To(BeTrue()) // no losses
+			})
+		})
+	})
 })
