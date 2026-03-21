@@ -1396,6 +1396,28 @@ func (a *Account) SetBroker(b broker.Broker) {
 // HasBroker returns true if a broker has been set on the account.
 func (a *Account) HasBroker() bool { return a.broker != nil }
 
+// SetPendingOrder inserts an order into the pending-orders map. This is
+// intended for test setup; production code uses ExecuteBatch.
+func (a *Account) SetPendingOrder(order broker.Order) {
+	a.pendingOrders[order.ID] = order
+}
+
+// SetPendingGroup inserts a group into the pending-groups map. This is
+// intended for test setup; production code uses ExecuteBatch.
+func (a *Account) SetPendingGroup(group *broker.OrderGroup) {
+	a.pendingGroups[group.ID] = group
+}
+
+// PendingOrderIDs returns a slice of all pending order IDs.
+func (a *Account) PendingOrderIDs() []string {
+	ids := make([]string, 0, len(a.pendingOrders))
+	for id := range a.pendingOrders {
+		ids = append(ids, id)
+	}
+
+	return ids
+}
+
 // SetBenchmark sets the benchmark asset after construction.
 func (a *Account) SetBenchmark(b asset.Asset) { a.benchmark = b }
 
@@ -1556,14 +1578,29 @@ func (a *Account) DrainFills(_ context.Context) error {
 	return nil
 }
 
+// deferredExitInfo records the information needed to submit bracket exit
+// orders after a bracket entry fill.
+type deferredExitInfo struct {
+	groupID   string
+	spec      OrderGroupSpec
+	entrySide broker.Side
+	fillPrice float64
+	asset     asset.Asset
+	qty       float64
+}
+
 // drainFillsFromChannel reads all available fills from the broker's
-// fill channel (non-blocking) and records each as a transaction.
+// fill channel (non-blocking) and records each as a transaction. After
+// draining, it submits deferred bracket exit orders for any entry fills.
 func (a *Account) drainFillsFromChannel() {
 	if a.broker == nil {
 		return
 	}
 
 	fillCh := a.broker.Fills()
+
+	// Phase 1: Collect fills and handle OCO cancellations.
+	var pendingExits []deferredExitInfo
 
 	for {
 		select {
@@ -1600,10 +1637,158 @@ func (a *Account) drainFillsFromChannel() {
 			})
 
 			delete(a.pendingOrders, fill.OrderID)
+
+			// Group handling for the filled order.
+			if order.GroupID != "" {
+				switch order.GroupRole {
+				case broker.RoleEntry:
+					// Bracket entry filled: collect deferred exits for Phase 2.
+					if spec, found := a.deferredExits[order.GroupID]; found {
+						pendingExits = append(pendingExits, deferredExitInfo{
+							groupID:   order.GroupID,
+							spec:      spec,
+							entrySide: order.Side,
+							fillPrice: fill.Price,
+							asset:     order.Asset,
+							qty:       fill.Qty,
+						})
+						delete(a.deferredExits, order.GroupID)
+					}
+
+				case broker.RoleStopLoss, broker.RoleTakeProfit:
+					// OCO leg filled: cancel siblings.
+					a.cancelOCOSiblings(order.GroupID, fill.OrderID)
+				}
+			}
+
 		default:
-			return
+			goto phase2
 		}
 	}
+
+phase2:
+	// Phase 2: Submit deferred bracket exit orders.
+	for _, exitInfo := range pendingExits {
+		a.submitBracketExits(exitInfo)
+	}
+}
+
+// cancelOCOSiblings removes sibling orders from an OCO group when one
+// leg fills. For GroupSubmitter brokers, siblings are removed from
+// pendingOrders directly (the broker handles cancellation). For fallback
+// brokers, Cancel is called on each sibling.
+func (a *Account) cancelOCOSiblings(groupID, filledOrderID string) {
+	group, ok := a.pendingGroups[groupID]
+	if !ok {
+		return
+	}
+
+	for _, siblingID := range group.OrderIDs {
+		if siblingID == filledOrderID {
+			continue
+		}
+
+		if a.brokerHasGroups {
+			delete(a.pendingOrders, siblingID)
+		} else {
+			if err := a.broker.Cancel(context.Background(), siblingID); err != nil {
+				log.Warn().Err(err).
+					Str("orderID", siblingID).
+					Str("groupID", groupID).
+					Msg("failed to cancel OCO sibling")
+			}
+
+			delete(a.pendingOrders, siblingID)
+		}
+	}
+
+	delete(a.pendingGroups, groupID)
+}
+
+// submitBracketExits creates and submits the stop-loss and take-profit
+// exit orders for a filled bracket entry.
+func (a *Account) submitBracketExits(info deferredExitInfo) {
+	exitGroupID := info.groupID + "-exits"
+
+	// Determine exit prices.
+	stopPrice := resolveExitPrice(info.fillPrice, info.spec.StopLoss)
+	takeProfitPrice := resolveExitPrice(info.fillPrice, info.spec.TakeProfit)
+
+	// Exit side is opposite of entry side.
+	var exitSide broker.Side
+	if info.entrySide == broker.Buy {
+		exitSide = broker.Sell
+	} else {
+		exitSide = broker.Buy
+	}
+
+	stopLossOrder := broker.Order{
+		ID:          exitGroupID + "-sl",
+		Asset:       info.asset,
+		Side:        exitSide,
+		Qty:         info.qty,
+		OrderType:   broker.Stop,
+		StopPrice:   stopPrice,
+		TimeInForce: broker.GTC,
+		GroupID:     exitGroupID,
+		GroupRole:   broker.RoleStopLoss,
+	}
+
+	takeProfitOrder := broker.Order{
+		ID:          exitGroupID + "-tp",
+		Asset:       info.asset,
+		Side:        exitSide,
+		Qty:         info.qty,
+		OrderType:   broker.Limit,
+		LimitPrice:  takeProfitPrice,
+		TimeInForce: broker.GTC,
+		GroupID:     exitGroupID,
+		GroupRole:   broker.RoleTakeProfit,
+	}
+
+	// Track in pendingOrders and pendingGroups.
+	a.pendingOrders[stopLossOrder.ID] = stopLossOrder
+	a.pendingOrders[takeProfitOrder.ID] = takeProfitOrder
+	a.pendingGroups[exitGroupID] = &broker.OrderGroup{
+		ID:       exitGroupID,
+		Type:     broker.GroupOCO,
+		OrderIDs: []string{stopLossOrder.ID, takeProfitOrder.ID},
+	}
+
+	// Submit via GroupSubmitter or individual Submit.
+	exitOrders := []broker.Order{stopLossOrder, takeProfitOrder}
+
+	if a.brokerHasGroups {
+		gs := a.broker.(broker.GroupSubmitter)
+		if err := gs.SubmitGroup(context.Background(), exitOrders, broker.GroupOCO); err != nil {
+			log.Warn().Err(err).
+				Str("groupID", exitGroupID).
+				Msg("failed to submit bracket exit group")
+		}
+	} else {
+		for _, ord := range exitOrders {
+			if err := a.broker.Submit(context.Background(), ord); err != nil {
+				log.Warn().Err(err).
+					Str("orderID", ord.ID).
+					Str("groupID", exitGroupID).
+					Msg("failed to submit bracket exit order")
+			}
+		}
+	}
+
+	// Clean up the parent bracket group.
+	delete(a.pendingGroups, info.groupID)
+}
+
+// resolveExitPrice computes the exit price from an ExitTarget. If
+// AbsolutePrice is non-zero, it is used directly; otherwise the price
+// is computed as fillPrice * (1 + PercentOffset).
+func resolveExitPrice(fillPrice float64, target ExitTarget) float64 {
+	if target.AbsolutePrice != 0 {
+		return target.AbsolutePrice
+	}
+
+	return fillPrice * (1 + target.PercentOffset)
 }
 
 // CancelOpenOrders cancels all open or submitted orders and removes

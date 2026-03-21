@@ -1283,10 +1283,13 @@ var _ = Describe("Window", func() {
 			Expect(mgb.submitted).To(BeEmpty())
 		})
 
-		It("submits bracket entry individually and defers exits", func() {
+		It("submits bracket entry individually and then exits after entry fill", func() {
 			mb := newMockBroker()
 			mb.submitFn = func(ord broker.Order) error {
-				mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				// Only deliver a fill for the entry order (not for exit orders).
+				if ord.GroupRole == broker.RoleEntry {
+					mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				}
 				return nil
 			}
 
@@ -1311,9 +1314,165 @@ var _ = Describe("Window", func() {
 			err = acct.ExecuteBatch(context.Background(), batch)
 			Expect(err).NotTo(HaveOccurred())
 
-			// Only the entry order is submitted; exit legs are deferred.
-			Expect(mb.submitted).To(HaveLen(1))
+			// Entry is submitted first, then entry fill triggers exit submission.
+			// With a non-GroupSubmitter broker, exits are submitted individually.
+			Expect(mb.submitted).To(HaveLen(3))
 			Expect(mb.submitted[0].GroupRole).To(Equal(broker.RoleEntry))
+
+			// Verify exit orders were submitted with correct prices and roles.
+			var hasStopLoss, hasTakeProfit bool
+			for _, ord := range mb.submitted[1:] {
+				switch ord.GroupRole {
+				case broker.RoleStopLoss:
+					hasStopLoss = true
+					Expect(ord.StopPrice).To(Equal(90.0))
+					Expect(ord.Side).To(Equal(broker.Sell))
+				case broker.RoleTakeProfit:
+					hasTakeProfit = true
+					Expect(ord.LimitPrice).To(Equal(115.0))
+					Expect(ord.Side).To(Equal(broker.Sell))
+				}
+			}
+			Expect(hasStopLoss).To(BeTrue())
+			Expect(hasTakeProfit).To(BeTrue())
+		})
+	})
+
+	Describe("DrainFills two-phase logic", func() {
+		var (
+			testAsset asset.Asset
+			ts        time.Time
+		)
+
+		BeforeEach(func() {
+			testAsset = asset.Asset{CompositeFigi: "TEST", Ticker: "TEST"}
+			ts = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		})
+
+		It("submits bracket exit orders when entry fill arrives via GroupSubmitter broker", func() {
+			mgb := newMockGroupBroker()
+
+			// Configure submitFn to deliver a fill for the entry order.
+			mgb.submitFn = func(ord broker.Order) error {
+				mgb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			stopPct := -0.05  // 5% below entry
+			takePct := 0.10   // 10% above entry
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+				portfolio.WithBracket(
+					portfolio.StopLossPercent(stopPct),
+					portfolio.TakeProfitPercent(takePct),
+				))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Entry was submitted individually, then DrainFills (called inside
+			// ExecuteBatch) should have triggered bracket exit submission via
+			// SubmitGroup.
+			Expect(mgb.submittedGroups).To(HaveLen(1))
+			Expect(mgb.submittedGroups[0].groupType).To(Equal(broker.GroupOCO))
+			Expect(mgb.submittedGroups[0].orders).To(HaveLen(2))
+
+			exitOrders := mgb.submittedGroups[0].orders
+
+			// Find stop-loss and take-profit orders.
+			var stopLoss, takeProfit broker.Order
+			for _, ord := range exitOrders {
+				switch ord.GroupRole {
+				case broker.RoleStopLoss:
+					stopLoss = ord
+				case broker.RoleTakeProfit:
+					takeProfit = ord
+				}
+			}
+
+			// Verify stop loss price = fillPrice * (1 + stopPct) = 100 * 0.95 = 95.
+			Expect(stopLoss.StopPrice).To(BeNumerically("~", 100.0*(1+stopPct), 0.001))
+			// Verify take profit price = fillPrice * (1 + takePct) = 100 * 1.10 = 110.
+			Expect(takeProfit.LimitPrice).To(BeNumerically("~", 100.0*(1+takePct), 0.001))
+
+			// Exit orders have side opposite to entry (entry=Buy -> exit=Sell).
+			Expect(stopLoss.Side).To(Equal(broker.Sell))
+			Expect(takeProfit.Side).To(Equal(broker.Sell))
+
+			// TIF = GTC.
+			Expect(stopLoss.TimeInForce).To(Equal(broker.GTC))
+			Expect(takeProfit.TimeInForce).To(Equal(broker.GTC))
+		})
+
+		It("cancels OCO sibling on fill without calling broker.Cancel for GroupSubmitter broker", func() {
+			mgb := newMockGroupBroker()
+
+			cancelCalled := false
+			mgb.cancelFn = func(_ string) error {
+				cancelCalled = true
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			// Manually set up an OCO group in pendingOrders and pendingGroups.
+			// Simulate two OCO orders already tracked by the account.
+			orderA := broker.Order{
+				ID:        "oco-a",
+				Asset:     testAsset,
+				Side:      broker.Sell,
+				Qty:       10,
+				OrderType: broker.Stop,
+				StopPrice: 95.0,
+				GroupID:   "oco-group-1",
+				GroupRole: broker.RoleStopLoss,
+			}
+			orderB := broker.Order{
+				ID:         "oco-b",
+				Asset:      testAsset,
+				Side:       broker.Sell,
+				Qty:        10,
+				OrderType:  broker.Limit,
+				LimitPrice: 110.0,
+				GroupID:    "oco-group-1",
+				GroupRole:  broker.RoleTakeProfit,
+			}
+
+			acct.SetPendingOrder(orderA)
+			acct.SetPendingOrder(orderB)
+			acct.SetPendingGroup(&broker.OrderGroup{
+				ID:       "oco-group-1",
+				Type:     broker.GroupOCO,
+				OrderIDs: []string{"oco-a", "oco-b"},
+			})
+
+			// Simulate a fill arriving for orderA.
+			mgb.fillCh <- broker.Fill{OrderID: "oco-a", Price: 95.0, Qty: 10, FilledAt: ts}
+
+			err := acct.DrainFills(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+
+			// The sibling (orderB) should be removed from pendingOrders
+			// WITHOUT calling broker.Cancel (since broker is a GroupSubmitter).
+			Expect(cancelCalled).To(BeFalse())
+			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-b"))
+			Expect(acct.PendingOrderIDs()).NotTo(ContainElement("oco-a"))
 		})
 	})
 })
