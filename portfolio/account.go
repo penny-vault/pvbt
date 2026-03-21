@@ -170,10 +170,17 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 
 		var sells []pendingOrder
 
-		// Sell all holdings not in the target allocation.
+		// Liquidate all positions not in the target allocation.
+		// Long positions are sold; short positions are covered (bought back).
+		var coverBuys []pendingOrder
+
 		for ast, qty := range a.holdings {
-			if _, ok := alloc.Members[ast]; !ok && qty > 0 {
-				sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+			if _, ok := alloc.Members[ast]; !ok && qty != 0 {
+				if qty > 0 {
+					sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
+				} else {
+					coverBuys = append(coverBuys, pendingOrder{asset: ast, side: Buy, qty: math.Abs(qty)})
+				}
 			}
 		}
 
@@ -203,7 +210,21 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 			}
 		}
 
-		// Recompute target values after sells so buys use actual
+		// Cover short positions not in the target allocation.
+		for _, coverOrder := range coverBuys {
+			order := broker.Order{
+				Asset:       coverOrder.asset,
+				Side:        broker.Buy,
+				Qty:         coverOrder.qty,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			}
+			if err := a.submitAndRecord(ctx, coverOrder.asset, Buy, order, alloc.Justification); err != nil {
+				return fmt.Errorf("RebalanceTo: cover %s: %w", coverOrder.asset.Ticker, err)
+			}
+		}
+
+		// Recompute target values after sells/covers so buys use actual
 		// available cash rather than the pre-sell portfolio value.
 		postSellValue := a.Value()
 

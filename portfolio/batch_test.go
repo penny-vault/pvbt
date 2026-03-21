@@ -728,6 +728,62 @@ var _ = Describe("Batch", func() {
 			// Portfolio cash is unchanged.
 			Expect(acct.Cash()).To(Equal(initialCash))
 		})
+
+		It("generates sell order for negative weight target", func() {
+			// Account with 10k cash, no positions.
+			// RebalanceTo with weight -0.50 for SPY.
+			// target = -0.50 * 10000 = -5000, current = 0,
+			// diff = -5000, should generate a sell order.
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			err := batch.RebalanceTo(context.Background(), portfolio.Allocation{
+				Date:    ts,
+				Members: map[asset.Asset]float64{spy: -0.50},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			sells := ordersWithSide(batch.Orders, broker.Sell)
+			Expect(sells).To(HaveLen(1))
+			Expect(sells[0].Asset).To(Equal(spy))
+			Expect(sells[0].Amount).To(BeNumerically("~", 5_000.0, 1))
+
+			// No buy orders should exist.
+			buys := ordersWithSide(batch.Orders, broker.Buy)
+			Expect(buys).To(BeEmpty())
+		})
+
+		It("covers short positions not in target allocation", func() {
+			// Account holds -50 SPY (short). Rebalance to 100% AAPL.
+			// Should generate a buy to cover the short SPY position.
+			acct := buildPricedAccount(10_000, []asset.Asset{spy, aapl}, []float64{100, 200})
+			acct.Record(portfolio.Transaction{
+				Date:   ts,
+				Asset:  spy,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  100,
+				Amount: 5_000,
+			})
+			// Now: cash = 15000, -50 SPY (short worth -5000), total value = 10000
+
+			batch := portfolio.NewBatch(ts, acct)
+			err := batch.RebalanceTo(context.Background(), portfolio.Allocation{
+				Date:    ts,
+				Members: map[asset.Asset]float64{aapl: 0.50},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Should have a buy to cover SPY (qty-based, 50 shares).
+			buys := ordersWithSide(batch.Orders, broker.Buy)
+			spyBuys := ordersForAsset(buys, spy)
+			Expect(spyBuys).To(HaveLen(1))
+			Expect(spyBuys[0].Qty).To(Equal(50.0))
+
+			// Should also have a buy for AAPL.
+			aaplBuys := ordersForAsset(buys, aapl)
+			Expect(aaplBuys).To(HaveLen(1))
+		})
 	})
 })
 
