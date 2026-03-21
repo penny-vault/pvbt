@@ -129,6 +129,7 @@ func (streamer *fillStreamer) run() {
 	defer streamer.wg.Done()
 
 	messages := make(chan wsMessage, 16)
+
 	heartbeat := time.NewTicker(30 * time.Second)
 	defer heartbeat.Stop()
 
@@ -148,8 +149,11 @@ func (streamer *fillStreamer) run() {
 			streamer.mu.Lock()
 			currentConn := streamer.wsConn
 			streamer.mu.Unlock()
+
 			if currentConn != nil {
-				currentConn.WriteJSON(map[string]string{"action": "heartbeat"})
+				if writeErr := currentConn.WriteJSON(map[string]string{"action": "heartbeat"}); writeErr != nil {
+					continue
+				}
 			}
 		case msg := <-messages:
 			if msg.err != nil {
@@ -160,15 +164,20 @@ func (streamer *fillStreamer) run() {
 					return
 				default:
 				}
+
 				if reconnectErr := streamer.reconnect(streamer.ctx); reconnectErr != nil {
 					return
 				}
+
 				streamer.mu.Lock()
 				conn = streamer.wsConn
 				streamer.mu.Unlock()
+
 				go streamer.readPump(conn, messages)
+
 				continue
 			}
+
 			streamer.pruneSeenFills()
 			streamer.handleMessage(msg.data)
 		}
@@ -181,25 +190,35 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
+
 	if msg.Type != "Order" {
 		return
 	}
+
 	var order orderResponse
 	if unmarshalErr := json.Unmarshal(msg.Data, &order); unmarshalErr != nil {
 		return
 	}
+
 	for _, leg := range order.Legs {
 		for _, legFill := range leg.Fills {
 			streamer.mu.Lock()
+
 			_, alreadySeen := streamer.seenFills[legFill.FillID]
 			if !alreadySeen {
 				streamer.seenFills[legFill.FillID] = time.Now()
 			}
 			streamer.mu.Unlock()
+
 			if alreadySeen {
 				continue
 			}
-			filledAt, _ := time.Parse(time.RFC3339, legFill.FilledAt)
+
+			filledAt, parseErr := time.Parse(time.RFC3339, legFill.FilledAt)
+			if parseErr != nil {
+				continue
+			}
+
 			fill := broker.Fill{
 				OrderID:  order.ID,
 				Price:    legFill.Price,
@@ -289,15 +308,22 @@ func (streamer *fillStreamer) pollMissedFills(ctx context.Context) {
 		for _, leg := range order.Legs {
 			for _, legFill := range leg.Fills {
 				streamer.mu.Lock()
+
 				_, alreadySeen := streamer.seenFills[legFill.FillID]
 				if !alreadySeen {
 					streamer.seenFills[legFill.FillID] = time.Now()
 				}
 				streamer.mu.Unlock()
+
 				if alreadySeen {
 					continue
 				}
-				filledAt, _ := time.Parse(time.RFC3339, legFill.FilledAt)
+
+				filledAt, parseErr := time.Parse(time.RFC3339, legFill.FilledAt)
+				if parseErr != nil {
+					continue
+				}
+
 				fill := broker.Fill{
 					OrderID:  order.ID,
 					Price:    legFill.Price,

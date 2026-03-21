@@ -191,7 +191,9 @@ func (client *apiClient) getOrders(ctx context.Context) ([]orderResponse, error)
 // submitComplexOrder sends an OCO or OTOCO complex order.
 func (client *apiClient) submitComplexOrder(ctx context.Context, order complexOrderRequest) (complexOrderSubmitResponse, error) {
 	endpoint := fmt.Sprintf("/accounts/%s/complex-orders", client.accountID)
+
 	var result complexOrderSubmitResponse
+
 	resp, err := client.resty.R().
 		SetContext(ctx).
 		SetBody(order).
@@ -200,24 +202,29 @@ func (client *apiClient) submitComplexOrder(ctx context.Context, order complexOr
 	if err != nil {
 		return complexOrderSubmitResponse{}, fmt.Errorf("submit complex order: %w", err)
 	}
+
 	if resp.IsError() {
 		return complexOrderSubmitResponse{}, NewHTTPError(resp.StatusCode(), resp.String())
 	}
+
 	return result, nil
 }
 
 // cancelComplexOrder deletes an existing complex order by its complex-order ID.
 func (client *apiClient) cancelComplexOrder(ctx context.Context, complexOrderID string) error {
 	endpoint := fmt.Sprintf("/accounts/%s/complex-orders/%s", client.accountID, complexOrderID)
+
 	resp, err := client.resty.R().
 		SetContext(ctx).
 		Delete(endpoint)
 	if err != nil {
 		return fmt.Errorf("cancel complex order: %w", err)
 	}
+
 	if resp.IsError() {
 		return NewHTTPError(resp.StatusCode(), resp.String())
 	}
+
 	return nil
 }
 

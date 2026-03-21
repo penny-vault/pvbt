@@ -130,9 +130,11 @@ func (ttBroker *TastytradeBroker) Cancel(ctx context.Context, orderID string) er
 	ttBroker.mu.Lock()
 	complexID, isComplex := ttBroker.complexOrderIDs[orderID]
 	ttBroker.mu.Unlock()
+
 	if isComplex {
 		return ttBroker.client.cancelComplexOrder(ctx, complexID)
 	}
+
 	return ttBroker.client.cancelOrder(ctx, orderID)
 }
 
@@ -191,8 +193,10 @@ func (ttBroker *TastytradeBroker) SubmitGroup(ctx context.Context, orders []brok
 	if len(orders) == 0 {
 		return ErrEmptyOrderGroup
 	}
+
 	ttBroker.mu.Lock()
 	defer ttBroker.mu.Unlock()
+
 	switch groupType {
 	case broker.GroupOCO:
 		return ttBroker.submitOCO(ctx, orders)
@@ -208,45 +212,58 @@ func (ttBroker *TastytradeBroker) submitOCO(ctx context.Context, orders []broker
 	for idx, order := range orders {
 		ttOrders[idx] = toTastytradeOrder(order)
 	}
+
 	req := complexOrderRequest{
 		Type:   "OCO",
 		Orders: ttOrders,
 	}
+
 	result, err := ttBroker.client.submitComplexOrder(ctx, req)
 	if err != nil {
 		return err
 	}
+
 	ttBroker.mapComplexOrderIDs(result)
+
 	return nil
 }
 
 func (ttBroker *TastytradeBroker) submitOTOCO(ctx context.Context, orders []broker.Order) error {
-	var triggerOrder *orderRequest
-	var contingentOrders []orderRequest
+	var (
+		triggerOrder     *orderRequest
+		contingentOrders []orderRequest
+	)
+
 	for _, order := range orders {
 		ttOrder := toTastytradeOrder(order)
 		if order.GroupRole == broker.RoleEntry {
 			if triggerOrder != nil {
 				return ErrMultipleEntryOrders
 			}
+
 			triggerOrder = &ttOrder
 		} else {
 			contingentOrders = append(contingentOrders, ttOrder)
 		}
 	}
+
 	if triggerOrder == nil {
 		return ErrNoEntryOrder
 	}
+
 	req := complexOrderRequest{
 		Type:         "OTOCO",
 		TriggerOrder: triggerOrder,
 		Orders:       contingentOrders,
 	}
+
 	result, err := ttBroker.client.submitComplexOrder(ctx, req)
 	if err != nil {
 		return err
 	}
+
 	ttBroker.mapComplexOrderIDs(result)
+
 	return nil
 }
 
