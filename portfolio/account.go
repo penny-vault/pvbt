@@ -725,32 +725,115 @@ func (a *Account) Record(txn Transaction) {
 	case BuyTransaction:
 		a.holdings[txn.Asset] += txn.Qty
 
-		lotID := fmt.Sprintf("lot-%d-%d", txn.Date.UnixNano(), len(a.taxLots[txn.Asset]))
-		newLot := TaxLot{
-			ID:    lotID,
-			Date:  txn.Date,
-			Qty:   txn.Qty,
-			Price: txn.Price,
+		// Phase 1: Cover short lots (if any exist).
+		shortLots := a.shortLots[txn.Asset]
+
+		shortQty := 0.0
+		for _, lot := range shortLots {
+			shortQty += lot.Qty
 		}
 
-		a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], newLot)
+		coverQty := txn.Qty
+		if coverQty > shortQty {
+			coverQty = shortQty
+		}
 
-		// Check for wash sale: buy after a recent loss sale.
-		a.checkWashSaleOnBuy(txn.Asset, txn.Date, txn.Qty, lotID)
-
-		// Track this buy for the reverse direction.
-		a.recentBuys[txn.Asset] = append(a.recentBuys[txn.Asset], recentBuy{
-			date:  txn.Date,
-			lotID: lotID,
-			qty:   txn.Qty,
-		})
-
-		if _, exists := a.excursions[txn.Asset]; !exists {
-			a.excursions[txn.Asset] = ExcursionRecord{
-				EntryPrice: txn.Price,
-				HighPrice:  txn.Price,
-				LowPrice:   txn.Price,
+		if coverQty > 0 {
+			method := txn.LotSelection
+			if method == LotFIFO && a.lotSelection != LotFIFO {
+				method = a.lotSelection
 			}
+
+			// Generate TradeDetail entries for the short cover.
+			if excursion, hasExcursion := a.excursions[txn.Asset]; hasExcursion {
+				// For shorts: MFE is entry-low (price fell), MAE is entry-high (price rose)
+				mfe := (excursion.EntryPrice - excursion.LowPrice) / excursion.EntryPrice
+				mae := (excursion.EntryPrice - excursion.HighPrice) / excursion.EntryPrice
+
+				tdRemaining := coverQty
+
+				tdLots := shortLots
+				for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
+					matched := tdLots[tdLotIdx].Qty
+					if matched > tdRemaining {
+						matched = tdRemaining
+					}
+
+					a.tradeDetails = append(a.tradeDetails, TradeDetail{
+						Asset:      txn.Asset,
+						EntryDate:  tdLots[tdLotIdx].Date,
+						ExitDate:   txn.Date,
+						EntryPrice: tdLots[tdLotIdx].Price,
+						ExitPrice:  txn.Price,
+						Qty:        matched,
+						PnL:        (tdLots[tdLotIdx].Price - txn.Price) * matched,
+						HoldDays:   txn.Date.Sub(tdLots[tdLotIdx].Date).Hours() / 24.0,
+						MFE:        mfe,
+						MAE:        mae,
+						Direction:  TradeShort,
+					})
+
+					tdRemaining -= matched
+				}
+			}
+
+			// Compute average short entry price BEFORE consuming lots.
+			avgShortEntry := a.avgShortEntryPrice(txn.Asset, coverQty, method)
+
+			// Consume short lots.
+			a.consumeShortLots(txn.Asset, coverQty, method)
+
+			// Wash sale check: covering a short at a loss.
+			lossPerShare := txn.Price - avgShortEntry
+			if lossPerShare > 0 {
+				a.recentLossSales[txn.Asset] = append(a.recentLossSales[txn.Asset], recentLossSale{
+					date:         txn.Date,
+					lossPerShare: lossPerShare,
+					qty:          coverQty,
+				})
+			}
+
+			// If all short lots were consumed, remove the stale short excursion
+			// so Phase 2 creates a fresh one for the long position.
+			if len(a.shortLots[txn.Asset]) == 0 {
+				delete(a.excursions, txn.Asset)
+			}
+		}
+
+		// Phase 2: Create long lots for the remainder.
+		longQty := txn.Qty - coverQty
+		if longQty > 0 {
+			lotID := fmt.Sprintf("lot-%d-%d", txn.Date.UnixNano(), len(a.taxLots[txn.Asset]))
+			newLot := TaxLot{
+				ID:    lotID,
+				Date:  txn.Date,
+				Qty:   longQty,
+				Price: txn.Price,
+			}
+
+			a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], newLot)
+			a.checkWashSaleOnBuy(txn.Asset, txn.Date, longQty, lotID)
+			a.recentBuys[txn.Asset] = append(a.recentBuys[txn.Asset], recentBuy{
+				date:  txn.Date,
+				lotID: lotID,
+				qty:   longQty,
+			})
+
+			if _, exists := a.excursions[txn.Asset]; !exists {
+				a.excursions[txn.Asset] = ExcursionRecord{
+					EntryPrice: txn.Price,
+					HighPrice:  txn.Price,
+					LowPrice:   txn.Price,
+				}
+			}
+		}
+
+		// Cleanup: remove tracking when fully flat.
+		if a.holdings[txn.Asset] == 0 {
+			delete(a.holdings, txn.Asset)
+			delete(a.taxLots, txn.Asset)
+			delete(a.shortLots, txn.Asset)
+			delete(a.excursions, txn.Asset)
 		}
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
@@ -1356,6 +1439,128 @@ func (a *Account) consumeLots(ast asset.Asset, qty float64, method LotSelection)
 		}
 
 		a.taxLots[ast] = lots[lotIdx:]
+	}
+}
+
+// consumeShortLots removes qty shares from the short lots for the given
+// asset using the specified lot selection method. Mirrors consumeLots.
+func (a *Account) consumeShortLots(ast asset.Asset, qty float64, method LotSelection) {
+	lots := a.shortLots[ast]
+
+	switch method {
+	case LotLIFO:
+		remaining := qty
+
+		end := len(lots)
+		for end > 0 && remaining > 0 {
+			idx := end - 1
+			if lots[idx].Qty <= remaining {
+				remaining -= lots[idx].Qty
+				end--
+			} else {
+				lots[idx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		a.shortLots[ast] = lots[:end]
+
+	case LotHighestCost:
+		sortLotsByPriceDesc(lots)
+
+		remaining := qty
+
+		lotIdx := 0
+
+		for lotIdx < len(lots) && remaining > 0 {
+			if lots[lotIdx].Qty <= remaining {
+				remaining -= lots[lotIdx].Qty
+				lotIdx++
+			} else {
+				lots[lotIdx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		remainingLots := lots[lotIdx:]
+		sortLotsByDateAsc(remainingLots)
+
+		a.shortLots[ast] = remainingLots
+
+	default: // LotFIFO
+		remaining := qty
+
+		lotIdx := 0
+
+		for lotIdx < len(lots) && remaining > 0 {
+			if lots[lotIdx].Qty <= remaining {
+				remaining -= lots[lotIdx].Qty
+				lotIdx++
+			} else {
+				lots[lotIdx].Qty -= remaining
+				remaining = 0
+			}
+		}
+
+		a.shortLots[ast] = lots[lotIdx:]
+	}
+}
+
+// avgShortEntryPrice computes the weighted average entry price of short
+// lots that would be consumed for the given qty and method.
+func (a *Account) avgShortEntryPrice(ast asset.Asset, qty float64, method LotSelection) float64 {
+	lots := make([]TaxLot, len(a.shortLots[ast]))
+	copy(lots, a.shortLots[ast])
+
+	switch method {
+	case LotLIFO:
+		remaining := qty
+		totalCost := 0.0
+		totalQty := 0.0
+
+		for idx := len(lots) - 1; idx >= 0 && remaining > 0; idx-- {
+			matched := lots[idx].Qty
+			if matched > remaining {
+				matched = remaining
+			}
+
+			totalCost += matched * lots[idx].Price
+			totalQty += matched
+			remaining -= matched
+		}
+
+		if totalQty == 0 {
+			return 0
+		}
+
+		return totalCost / totalQty
+
+	case LotHighestCost:
+		sortLotsByPriceDesc(lots)
+
+		fallthrough
+
+	default: // FIFO or HighestCost after sort
+		remaining := qty
+		totalCost := 0.0
+		totalQty := 0.0
+
+		for idx := 0; idx < len(lots) && remaining > 0; idx++ {
+			matched := lots[idx].Qty
+			if matched > remaining {
+				matched = remaining
+			}
+
+			totalCost += matched * lots[idx].Price
+			totalQty += matched
+			remaining -= matched
+		}
+
+		if totalQty == 0 {
+			return 0
+		}
+
+		return totalCost / totalQty
 	}
 }
 

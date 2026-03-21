@@ -262,6 +262,91 @@ var _ = Describe("Account", func() {
 			Expect(details[0].Qty).To(Equal(50.0))
 			Expect(details[0].PnL).To(Equal(500.0)) // (150-140) * 50
 		})
+
+		It("covers short lots on buy when short position exists", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Open short: sell 100 at 150
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  150.0,
+				Amount: 15000.0,
+			})
+
+			// Cover: buy 100 at 140 (profit $10/share)
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    100,
+				Price:  140.0,
+				Amount: -14000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(0.0))
+			Expect(acct.Cash()).To(Equal(101000.0)) // 100k + 15k - 14k
+
+			var shortLotCount int
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+				}
+			})
+			Expect(shortLotCount).To(Equal(0))
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].Direction).To(Equal(portfolio.TradeShort))
+			Expect(details[0].PnL).To(Equal(1000.0)) // (150 - 140) * 100
+			Expect(details[0].EntryPrice).To(Equal(150.0))
+			Expect(details[0].ExitPrice).To(Equal(140.0))
+		})
+
+		It("partially covers short then creates long lots for remainder", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Open short: sell 50 at 150
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    50,
+				Price:  150.0,
+				Amount: 7500.0,
+			})
+
+			// Buy 80: covers 50 short, opens 30 long
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    80,
+				Price:  140.0,
+				Amount: -11200.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(30.0))
+
+			var shortLotCount int
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+				}
+			})
+			Expect(shortLotCount).To(Equal(0))
+
+			longLots := acct.UnrealizedLots(testAsset)
+			totalLongQty := 0.0
+			for _, lot := range longLots {
+				totalLongQty += lot.Qty
+			}
+			Expect(totalLongQty).To(Equal(30.0))
+		})
 	})
 
 	Describe("UpdatePrices", func() {
