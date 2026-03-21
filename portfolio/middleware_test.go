@@ -285,4 +285,34 @@ var _ = Describe("Middleware annotation from middleware", func() {
 		Expect(annotations[0].Key).To(Equal("risk:test"))
 		Expect(annotations[0].Value).To(Equal("removed all buy orders"))
 	})
+
+	It("skips middleware when SkipMiddleware is true", func() {
+		spyAsset := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		tradeDate := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+		fillTime := time.Date(2024, 1, 2, 10, 0, 0, 0, time.UTC)
+
+		mb := newMockBroker()
+		mb.fillsByAsset = map[asset.Asset][]broker.Fill{
+			spyAsset: {{OrderID: "batch-" + "1704153600000000000-0", Price: 100.0, Qty: 10, FilledAt: fillTime}},
+		}
+
+		acct := portfolio.New(portfolio.WithCash(10_000, tradeDate), portfolio.WithBroker(mb))
+		df := buildDF(tradeDate, []asset.Asset{spyAsset}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		mw := &testMiddleware{}
+		acct.Use(mw)
+
+		batch := acct.NewBatch(tradeDate)
+		batch.Order(context.Background(), spyAsset, portfolio.Buy, 10)
+		batch.SkipMiddleware = true
+
+		err := acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Middleware must not have been called.
+		Expect(mw.called).To(BeFalse())
+		// Order must still have been submitted.
+		Expect(mb.submitted).To(HaveLen(1))
+	})
 })

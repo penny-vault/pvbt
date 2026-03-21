@@ -51,6 +51,7 @@ type Account struct {
 	benchmark         asset.Asset
 	riskFreeValue     float64
 	taxLots           map[asset.Asset][]TaxLot
+	shortLots         map[asset.Asset][]TaxLot
 	recentLossSales   map[asset.Asset][]recentLossSale
 	recentBuys        map[asset.Asset][]recentBuy
 	washSales         []WashSaleRecord
@@ -74,6 +75,7 @@ func New(opts ...Option) *Account {
 	acct := &Account{
 		holdings:        make(map[asset.Asset]float64),
 		taxLots:         make(map[asset.Asset][]TaxLot),
+		shortLots:       make(map[asset.Asset][]TaxLot),
 		recentLossSales: make(map[asset.Asset][]recentLossSale),
 		recentBuys:      make(map[asset.Asset][]recentBuy),
 		metadata:        make(map[string]string),
@@ -1377,6 +1379,13 @@ func (a *Account) PerfData() *data.DataFrame { return a.perfData }
 // TaxLots returns the current tax lot positions keyed by asset.
 func (a *Account) TaxLots() map[asset.Asset][]TaxLot { return a.taxLots }
 
+// ShortLots iterates over all open short tax lots, calling fn with each asset and its lots.
+func (a *Account) ShortLots(fn func(asset.Asset, []TaxLot)) {
+	for ast, lots := range a.shortLots {
+		fn(ast, lots)
+	}
+}
+
 // Excursions returns the current excursion records keyed by asset.
 func (a *Account) Excursions() map[asset.Asset]ExcursionRecord { return a.excursions }
 
@@ -1467,9 +1476,11 @@ func (a *Account) NewBatch(timestamp time.Time) *Batch {
 // order IDs, submits orders to the broker, and drains immediate fills.
 func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 	// 1. Run middleware chain.
-	for _, mw := range a.middleware {
-		if err := mw.Process(ctx, batch); err != nil {
-			return err
+	if !batch.SkipMiddleware {
+		for _, mw := range a.middleware {
+			if err := mw.Process(ctx, batch); err != nil {
+				return err
+			}
 		}
 	}
 

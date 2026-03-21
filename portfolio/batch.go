@@ -50,6 +50,11 @@ type Batch struct {
 	// Annotations holds key-value metadata accumulated by calls to Annotate.
 	Annotations map[string]string
 
+	// SkipMiddleware bypasses the middleware chain when true. Used for
+	// margin-call response batches where risk limits must not block
+	// emergency position adjustments.
+	SkipMiddleware bool
+
 	// portfolio is the read-only portfolio snapshot used for price and
 	// position queries. It is unexported to prevent strategy code from
 	// modifying it through the Batch.

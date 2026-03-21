@@ -55,6 +55,15 @@ var _ = Describe("Account", func() {
 			)
 			Expect(a.Benchmark()).To(Equal(spy))
 		})
+
+		It("returns empty short lots for new account", func() {
+			acct := portfolio.New()
+			var count int
+			acct.ShortLots(func(ast asset.Asset, lots []portfolio.TaxLot) {
+				count += len(lots)
+			})
+			Expect(count).To(Equal(0))
+		})
 	})
 
 	Describe("SetBroker", func() {
