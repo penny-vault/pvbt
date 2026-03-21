@@ -98,6 +98,35 @@ The engine runs in three phases:
 - [Scheduling](docs/scheduling.md) -- tradecron syntax and schedule configuration
 - [Configuration](docs/configuration.md) -- struct tags, presets, and strategy parameterization
 
+## Performance
+
+The DataFrame engine and metric computation pipeline are optimized for
+throughput. A full 20-year backtest of the Accelerating Dual Momentum strategy
+(85+ metrics, 7 windows per metric, daily rebalancing checks) runs in ~4
+seconds on an M-series MacBook.
+
+Key optimizations:
+
+- **Per-column DataFrame storage.** Each (asset, metric) pair is its own
+  `[]float64`. Time-axis, metric-axis, and asset-axis slicing are zero-copy
+  view operations -- sub-slicing column references instead of copying data.
+- **Lazy integer date keys.** Daily-frequency DataFrames cache YYYYMMDD integer
+  keys for binary search, eliminating timezone lookups during time-index
+  operations.
+- **Per-window metric caching.** The `PortfolioStats` interface caches derived
+  series (returns, excess returns, drawdown, benchmark returns) per window.
+  When 26 metrics request the same windowed returns, the computation runs once.
+- **Allocation-conscious design.** `removeNaN` on extracted `[]float64` columns
+  instead of `DataFrame.Drop(NaN)` on entire frames. `AppendRow` uses
+  per-column `append()` instead of rebuilding the data slab. `Window(nil)`
+  returns a view instead of a deep copy.
+
+| Metric | Value |
+|--------|-------|
+| 20-year ADM backtest | ~4s |
+| Total allocations | 4.1 GB (down from 57.5 GB before optimization) |
+| Speedup from v0.3.0 baseline | 8.9x |
+
 ## License
 
 Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE) for details.
