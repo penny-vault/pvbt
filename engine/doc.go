@@ -142,15 +142,21 @@
 //  1. Fetches housekeeping data (close, adjusted close, dividends) for held
 //     assets, the benchmark, and the risk-free asset.
 //  2. Records dividend income for held positions.
-//  3. Updates the simulated broker with the current price provider and date
+//  3. Evaluates pending bracket/OCO orders against the current bar's
+//     high and low prices. Stop-loss orders trigger when the low breaches
+//     the stop price; take-profit orders trigger when the high reaches
+//     the target. If both could trigger on the same bar, the stop loss
+//     wins (pessimistic assumption). Triggered fills are queued for
+//     processing in the next step.
+//  4. Updates the simulated broker with the current price provider and date
 //     so orders can fill.
-//  4. Calls Compute. The strategy fetches data, computes signals, and tells
+//  5. Calls Compute. The strategy fetches data, computes signals, and tells
 //     the portfolio to rebalance.
-//  5. Fetches post-Compute prices for all held assets (including newly
+//  6. Fetches post-Compute prices for all held assets (including newly
 //     acquired positions) and updates the equity curve.
-//  6. Computes all registered performance metrics across standard windows
+//  7. Computes all registered performance metrics across standard windows
 //     (5yr, 3yr, 1yr, YTD, MTD, WTD, and since-inception).
-//  7. Evicts stale cache entries.
+//  8. Evicts stale cache entries.
 //
 // Phase 4: Return. After the final step, the portfolio contains the full
 // transaction log and can compute performance metrics. It provides access to

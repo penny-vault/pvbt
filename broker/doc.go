@@ -88,6 +88,31 @@
 // order may produce multiple fills when executed in lots at different
 // prices.
 //
+// # Order Groups
+//
+// Orders can be linked into groups for coordinated execution:
+//
+//   - OCO (one-cancels-other): two orders where filling one automatically
+//     cancels the other. Used for attaching stop-loss and take-profit exits
+//     to an existing position.
+//   - Bracket: an entry order plus an OCO pair (stop loss and take profit)
+//     that activates when the entry fills.
+//
+// GroupType identifies the group kind (GroupOCO, GroupBracket). GroupRole
+// identifies an order's role within its group (RoleEntry, RoleStopLoss,
+// RoleTakeProfit). The Order struct carries GroupID and GroupRole fields.
+//
+// OrderGroup links related orders by their IDs. The portfolio account layer
+// tracks groups and orchestrates fill-triggered cancellation.
+//
+// # GroupSubmitter
+//
+// Brokers that natively support OCO/bracket groups can implement the
+// GroupSubmitter interface. Its single method, SubmitGroup, submits a
+// slice of linked orders atomically. When a broker does not implement
+// GroupSubmitter, the account layer submits orders individually and
+// manages cancellation on fill.
+//
 // # Position
 //
 // A Position represents a current holding in the account. It carries the
@@ -112,8 +137,9 @@
 //
 // SimulatedBroker lives in the engine package and fills all orders at the
 // closing price for backtesting. It supports dollar-amount orders by
-// dividing the requested amount by the close price. Cancel and Replace are
-// not supported and return an error if called.
+// dividing the requested amount by the close price. Cancel is supported for
+// managing pending bracket/OCO orders. Replace is not supported and returns
+// an error if called.
 //
 // # Implementing a Broker
 //

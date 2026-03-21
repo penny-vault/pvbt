@@ -120,6 +120,19 @@
 //   - [OnTheOpen]: fill only at the opening price.
 //   - [OnTheClose]: fill only at the closing price.
 //
+// Bracket and OCO modifiers link orders for coordinated execution.
+// These modifiers are only supported through batch submission
+// (Batch.Order), not through direct Account.Order calls:
+//
+//   - [WithBracket]: attach stop-loss and take-profit exits to an entry
+//     order. The exits activate as an OCO pair when the entry fills.
+//     Exit targets are specified as absolute prices ([StopLossPrice],
+//     [TakeProfitPrice]) or percentage offsets from the fill price
+//     ([StopLossPercent], [TakeProfitPercent]).
+//   - [OCO]: create two linked orders from a single Batch.Order call.
+//     Each leg is defined by an [OCOLeg] built with [StopLeg] or
+//     [LimitLeg]. When one leg fills, the other is cancelled.
+//
 // Trade annotation:
 //
 //   - [WithJustification]: attach a human-readable explanation to the
