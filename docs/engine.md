@@ -195,7 +195,9 @@ func (s *ADM) Describe() engine.StrategyDescription {
 }
 ```
 
-Call `engine.DescribeStrategy(strategy)` to get a `StrategyInfo` struct containing the strategy name, schedule, benchmark, parameters, and any preset suggestions. This does not require an engine or Setup to have run. The result is JSON-serializable for CLI and UI use.
+For meta-strategies, child strategies do not need to be listed in `Describe()`. The engine discovers `Children` automatically by scanning struct fields with `weight` tags and includes them in the `StrategyInfo` returned by `DescribeStrategy`.
+
+Call `engine.DescribeStrategy(strategy)` to get a `StrategyInfo` struct containing the strategy name, schedule, benchmark, parameters, preset suggestions, and any discovered children. This does not require an engine or Setup to have run. The result is JSON-serializable for CLI and UI use.
 
 ## Warmup
 
@@ -216,6 +218,69 @@ During backtest initialization the engine checks that every asset in the strateg
 - **Permissive** -- the engine shifts the start date forward one trading day at a time until all assets have enough data. If no valid start date exists before the end date, it returns an error.
 
 A warmup of 0 (the default) skips the check entirely.
+
+## Meta-strategies
+
+A meta-strategy allocates across child strategies rather than directly buying individual assets. The engine discovers child strategies automatically from struct fields tagged with `weight`.
+
+### Declaring children
+
+Each child is a pointer field with a `weight` tag. Optional `preset` and `params` tags configure the child's parameters:
+
+```go
+type MyMeta struct {
+    ADM *adm.ADM `weight:"0.10" preset:"Classic"`
+    BAA *baa.BAA `weight:"0.40"`
+    DAA *daa.DAA `weight:"0.50"`
+}
+```
+
+The `weight` values are the fractional portfolio allocations (they must sum to 1.0). `preset` names a parameter preset defined in the child's `Describe()`. `params` passes individual key=value overrides as a semicolon-separated list (e.g. `params:"lookback=12;threshold=0.02"`).
+
+### Engine initialization
+
+During backtest initialization the engine discovers all `weight`-tagged fields, registers the children as sub-engines, and validates their combined setup. Children always run before the parent: the engine fires each child's Compute on its own schedule, then fires the parent's Compute on the parent's schedule.
+
+### ChildAllocations
+
+`eng.ChildAllocations()` expands each child's current holdings into a flat map of asset weights scaled by the child's portfolio weight. Use this inside the parent's Compute to construct a single allocation plan:
+
+```go
+func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    allocs, err := eng.ChildAllocations(ctx)
+    if err != nil {
+        return err
+    }
+    return batch.RebalanceTo(ctx, allocs...)
+}
+```
+
+**Worked example.** If the parent holds ADM at 10%, BAA at 40%, and DAA at 50%, and on a given day ADM is fully in SPY, BAA holds 60% SPY / 40% TLT, and DAA holds 80% QQQ / 20% cash, then `ChildAllocations` returns:
+
+| Asset  | Weight |
+|--------|--------|
+| SPY    | 0.10 × 1.00 + 0.40 × 0.60 = 0.34 |
+| TLT    | 0.40 × 0.40 = 0.16 |
+| QQQ    | 0.50 × 0.80 = 0.40 |
+| $CASH  | 0.50 × 0.20 = 0.10 |
+
+`$CASH` is a sentinel ticker. `RebalanceTo` leaves that fraction uninvested (as cash).
+
+### ChildPortfolios
+
+`eng.ChildPortfolios()` returns a map from child strategy name to its current `portfolio.Portfolio`. Inspect this for dynamic weight adjustments:
+
+```go
+portfolios := eng.ChildPortfolios()
+// Inspect portfolios["adm"], portfolios["baa"], etc.
+```
+
+You can pass a weight override map to `ChildAllocations` to dynamically adjust allocations without changing the struct tags:
+
+```go
+overrides := map[string]float64{"adm": 0.05, "baa": 0.45, "daa": 0.50}
+allocs, err := eng.ChildAllocations(ctx, engine.WithWeightOverrides(overrides))
+```
 
 ## Resource cleanup
 
