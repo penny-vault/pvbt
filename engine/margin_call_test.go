@@ -125,7 +125,8 @@ var _ = Describe("Margin Call", func() {
 			vals[5*nDays+dayIdx] = 1.0   // SplitFactor
 		}
 
-		testDF, err := data.NewDataFrame(times, []asset.Asset{testStock}, allMetrics, data.Daily, vals)
+		numCols := 1 * len(allMetrics)
+		testDF, err := data.NewDataFrame(times, []asset.Asset{testStock}, allMetrics, data.Daily, data.SlabToColumns(vals, numCols, nDays))
 		Expect(err).NotTo(HaveOccurred())
 
 		return testDF

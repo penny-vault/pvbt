@@ -498,9 +498,9 @@ var _ = Describe("Account", func() {
 				[]asset.Asset{spy, bm},
 				[]data.Metric{data.MetricClose, data.AdjClose},
 				data.Daily,
-				[]float64{
-					455.0, 453.0, // spy: close, adjclose
-					math.NaN(), math.NaN(), // bm: close, adjclose (NaN)
+				[][]float64{
+					{455.0}, {453.0}, // spy: close, adjclose
+					{math.NaN()}, {math.NaN()}, // bm: close, adjclose (NaN)
 				},
 			)
 			Expect(err).NotTo(HaveOccurred())
@@ -680,7 +680,7 @@ var _ = Describe("Account", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{math.NaN()},
+				[][]float64{{math.NaN()}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			a.UpdatePrices(df)

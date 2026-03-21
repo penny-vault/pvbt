@@ -63,7 +63,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500, 200},
+			[][]float64{{500}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -109,7 +109,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500, 200},
+			[][]float64{{500}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -161,7 +161,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy, goog},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500, 1000},
+			[][]float64{{500}, {1000}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -241,7 +241,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -272,7 +272,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -304,7 +304,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -342,7 +342,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500, 200},
+			[][]float64{{500}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -395,7 +395,7 @@ var _ = Describe("RebalanceTo", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500, 200},
+			[][]float64{{500}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -448,7 +448,7 @@ var _ = Describe("Order WithJustification", func() {
 			[]asset.Asset{spyAsset},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 

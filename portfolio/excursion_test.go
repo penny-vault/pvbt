@@ -38,7 +38,7 @@ var _ = Describe("Clone", func() {
 			[]asset.Asset{acme},
 			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 			data.Daily,
-			[]float64{110.0, 110.0, 115.0, 90.0},
+			[][]float64{{110.0}, {110.0}, {115.0}, {90.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdateExcursions(df)
@@ -56,7 +56,7 @@ var _ = Describe("Clone", func() {
 			[]asset.Asset{acme},
 			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 			data.Daily,
-			[]float64{120.0, 120.0, 130.0, 85.0},
+			[][]float64{{120.0}, {120.0}, {130.0}, {85.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		clone.UpdateExcursions(df2)
@@ -93,7 +93,7 @@ var _ = Describe("WithPortfolioSnapshot", func() {
 			[]asset.Asset{acme},
 			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 			data.Daily,
-			[]float64{110.0, 110.0, 115.0, 90.0},
+			[][]float64{{110.0}, {110.0}, {115.0}, {90.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdateExcursions(df)
@@ -128,7 +128,7 @@ var _ = Describe("WithPortfolioSnapshot", func() {
 			[]asset.Asset{acme},
 			[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 			data.Daily,
-			[]float64{110.0, 110.0, 115.0, 90.0},
+			[][]float64{{110.0}, {110.0}, {115.0}, {90.0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdateExcursions(df)
@@ -231,7 +231,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{102.0, 102.0, 108.0, 95.0},
+				[][]float64{{102.0}, {102.0}, {108.0}, {95.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df)
@@ -259,7 +259,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{102.0, 102.0, 105.0, 98.0},
+				[][]float64{{102.0}, {102.0}, {105.0}, {98.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df1)
@@ -270,7 +270,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{107.0, 107.0, 110.0, 99.0},
+				[][]float64{{107.0}, {107.0}, {110.0}, {99.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df2)
@@ -298,7 +298,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{102.0, 102.0, 108.0, 95.0},
+				[][]float64{{102.0}, {102.0}, {108.0}, {95.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df1)
@@ -309,7 +309,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{102.0, 102.0, math.NaN(), math.NaN()},
+				[][]float64{{102.0}, {102.0}, {math.NaN()}, {math.NaN()}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df2)
@@ -339,7 +339,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{110.0, 110.0, 115.0, 90.0},
+				[][]float64{{110.0}, {110.0}, {115.0}, {90.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df)
@@ -387,7 +387,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
 				data.Daily,
-				[]float64{110.0, 110.0, 112.0, 95.0},
+				[][]float64{{110.0}, {110.0}, {112.0}, {95.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df)
@@ -462,7 +462,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
 				[]asset.Asset{acme},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
-				data.Daily, []float64{105.0, 105.0, 115.0, 90.0},
+				data.Daily, [][]float64{{105.0}, {105.0}, {115.0}, {90.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df1)
@@ -488,7 +488,7 @@ var _ = Describe("ExcursionRecord", func() {
 				[]time.Time{time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)},
 				[]asset.Asset{widg},
 				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
-				data.Daily, []float64{48.0, 48.0, 55.0, 42.0},
+				data.Daily, [][]float64{{48.0}, {48.0}, {55.0}, {42.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdateExcursions(df2)

@@ -18,17 +18,17 @@ var _ portfolio.Selector = portfolio.BottomN(1, data.MetricClose)
 // buildDF builds a single-timestamp DataFrame with MetricClose and AdjClose
 // for the given assets. closes and adjCloses must have the same length as assets.
 func buildDF(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *data.DataFrame {
-	vals := make([]float64, 0, len(assets)*2)
+	cols := make([][]float64, 0, len(assets)*2)
 	for i := range assets {
-		vals = append(vals, closes[i])
-		vals = append(vals, adjCloses[i])
+		cols = append(cols, []float64{closes[i]})
+		cols = append(cols, []float64{adjCloses[i]})
 	}
 	df, err := data.NewDataFrame(
 		[]time.Time{t},
 		assets,
 		[]data.Metric{data.MetricClose, data.AdjClose},
 		data.Daily,
-		vals,
+		cols,
 	)
 	Expect(err).NotTo(HaveOccurred())
 	return df
@@ -38,27 +38,24 @@ func buildDF(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *da
 // closeSeries and adjCloseSeries are indexed [time][asset].
 // Data is arranged into column-major order as required by NewDataFrame.
 func buildMultiDF(times []time.Time, assets []asset.Asset, closeSeries, adjCloseSeries [][]float64) *data.DataFrame {
-	T := len(times)
-	A := len(assets)
 	// Column-major: each (asset, metric) column is T contiguous values.
 	// Column order: (a0,close), (a0,adjClose), (a1,close), (a1,adjClose), ...
-	vals := make([]float64, 0, T*A*2)
+	cols := make([][]float64, 0, len(assets)*2)
 	for ai := range assets {
-		// MetricClose column for this asset
+		closeCol := make([]float64, len(times))
+		adjCol := make([]float64, len(times))
 		for ti := range times {
-			vals = append(vals, closeSeries[ti][ai])
+			closeCol[ti] = closeSeries[ti][ai]
+			adjCol[ti] = adjCloseSeries[ti][ai]
 		}
-		// AdjClose column for this asset
-		for ti := range times {
-			vals = append(vals, adjCloseSeries[ti][ai])
-		}
+		cols = append(cols, closeCol, adjCol)
 	}
 	df, err := data.NewDataFrame(
 		times,
 		assets,
 		[]data.Metric{data.MetricClose, data.AdjClose},
 		data.Daily,
-		vals,
+		cols,
 	)
 	Expect(err).NotTo(HaveOccurred())
 	return df

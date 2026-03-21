@@ -106,11 +106,12 @@ var _ = Describe("SnapshotRecorder", func() {
 				time.Date(2024, 1, 3, 16, 0, 0, 0, nyc),
 			}
 
-			// Column-major layout: [spy_close_t0, spy_close_t1, spy_adjclose_t0, spy_adjclose_t1,
-			//                       tlt_close_t0, tlt_close_t1, tlt_adjclose_t0, tlt_adjclose_t1]
-			values := []float64{
-				100.0, 101.0, 99.0, 100.0,
-				50.0, 51.0, 49.0, 50.0,
+			// Column-major layout: each inner slice is one column
+			values := [][]float64{
+				{100.0, 101.0}, // SPY close
+				{99.0, 100.0},  // SPY adj_close
+				{50.0, 51.0},   // TLT close
+				{49.0, 50.0},   // TLT adj_close
 			}
 
 			df, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)

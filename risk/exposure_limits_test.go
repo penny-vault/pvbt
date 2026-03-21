@@ -53,7 +53,7 @@ var _ = Describe("Exposure Limits", func() {
 			[]asset.Asset{ast},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{price},
+			[][]float64{{price}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)
@@ -106,7 +106,7 @@ var _ = Describe("Exposure Limits", func() {
 			[]asset.Asset{longAsset, shortAsset},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{longPrice, shortPrice},
+			[][]float64{{longPrice}, {shortPrice}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)
@@ -148,7 +148,7 @@ var _ = Describe("Exposure Limits", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{200},
+				[][]float64{{200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)
@@ -239,7 +239,7 @@ var _ = Describe("Exposure Limits", func() {
 				[]asset.Asset{spy},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{200},
+				[][]float64{{200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(df)

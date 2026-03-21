@@ -29,14 +29,14 @@ var _ = Describe("EqualWeight", func() {
 	})
 
 	It("assigns 1/N to all assets", func() {
-		// 2 assets, 1 metric, 2 times => data length = 2*1*2 = 4
-		// Layout: [SPY-Close@t1, SPY-Close@t2, AAPL-Close@t1, AAPL-Close@t2]
+		// 2 assets, 1 metric, 2 times => 2 columns of length 2
+		// Layout: SPY-Close=[100,101], AAPL-Close=[200,201]
 		df, err := data.NewDataFrame(
 			[]time.Time{t1, t2},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 101, 200, 201},
+			[][]float64{{100, 101}, {200, 201}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -60,7 +60,7 @@ var _ = Describe("EqualWeight", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -78,7 +78,7 @@ var _ = Describe("EqualWeight", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 101},
+			[][]float64{{100, 101}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -106,14 +106,14 @@ var _ = Describe("WeightedBySignal", func() {
 	})
 
 	It("weights proportionally by signal", func() {
-		// 2 assets, 1 metric (MarketCap), 1 time => data length = 2
-		// Layout: [SPY-MarketCap@t1, AAPL-MarketCap@t1]
+		// 2 assets, 1 metric (MarketCap), 1 time => 2 columns of length 1
+		// Layout: SPY-MarketCap=[300], AAPL-MarketCap=[100]
 		df, err := data.NewDataFrame(
 			[]time.Time{t1},
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, 100},
+			[][]float64{{300}, {100}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -133,7 +133,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, 100},
+			[][]float64{{300}, {100}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -157,7 +157,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{-10, -20},
+			[][]float64{{-10}, {-20}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -177,7 +177,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, math.NaN()},
+			[][]float64{{300}, {math.NaN()}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -198,7 +198,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -216,7 +216,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{0, 0},
+			[][]float64{{0}, {0}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -238,10 +238,10 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{
-				300, // SPY
-				-50, // AAPL (negative, should be ignored)
-				100, // BIL
+			[][]float64{
+				{300}, // SPY
+				{-50}, // AAPL (negative, should be ignored)
+				{100}, // BIL
 			},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -269,11 +269,11 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{
+			[][]float64{
 				// SPY: t1=300, t2=100
-				300, 100,
+				{300, 100},
 				// AAPL: t1=100, t2=300
-				100, 300,
+				{100, 300},
 			},
 		)
 		Expect(err).ToNot(HaveOccurred())
@@ -302,7 +302,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{math.NaN(), math.NaN()},
+			[][]float64{{math.NaN()}, {math.NaN()}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -324,7 +324,7 @@ var _ = Describe("WeightedBySignal", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{200, 800},
+			[][]float64{{200}, {800}},
 		)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -413,7 +413,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -428,10 +428,10 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{
-				100, 101, // SPY
-				200, 201, // AAPL
-				50, 51, // BIL
+			[][]float64{
+				{100, 101}, // SPY
+				{200, 201}, // AAPL
+				{50, 51},   // BIL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -464,7 +464,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200, 50},
+			[][]float64{{100}, {200}, {50}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -486,7 +486,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200},
+			[][]float64{{100}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -507,7 +507,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200},
+			[][]float64{{100}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -527,7 +527,7 @@ var _ = Describe("EqualWeight with Selected column", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200},
+			[][]float64{{100}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -564,7 +564,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300},
+			[][]float64{{300}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -578,7 +578,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, 100, 500},
+			[][]float64{{300}, {100}, {500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -601,9 +601,9 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{
-				300, 100, // SPY
-				100, 300, // AAPL
+			[][]float64{
+				{300, 100}, // SPY
+				{100, 300}, // AAPL
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -628,7 +628,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]asset.Asset{spy, aapl, bil},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{0, 0, 500},
+			[][]float64{{0}, {0}, {500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -651,7 +651,7 @@ var _ = Describe("WeightedBySignal with Selected column", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, 0},
+			[][]float64{{300}, {0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -687,7 +687,7 @@ var _ = Describe("collectSelected", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200},
+			[][]float64{{100}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -704,7 +704,7 @@ var _ = Describe("collectSelected", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100, 200},
+			[][]float64{{100}, {200}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -751,7 +751,7 @@ var _ = Describe("RiskParityFast", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -789,7 +789,7 @@ var _ = Describe("RiskParityFast", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -818,7 +818,7 @@ var _ = Describe("RiskParityFast", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -847,7 +847,7 @@ var _ = Describe("RiskParityFast", func() {
 
 		df, err := data.NewDataFrame(
 			times, []asset.Asset{spy},
-			[]data.Metric{data.AdjClose}, data.Daily, prices,
+			[]data.Metric{data.AdjClose}, data.Daily, [][]float64{prices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, selected)).To(Succeed())
@@ -897,7 +897,7 @@ var _ = Describe("InverseVolatility", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -917,7 +917,7 @@ var _ = Describe("InverseVolatility", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -939,7 +939,7 @@ var _ = Describe("InverseVolatility", func() {
 
 		df, err := data.NewDataFrame(
 			times, []asset.Asset{spy},
-			[]data.Metric{data.AdjClose}, data.Daily, prices,
+			[]data.Metric{data.AdjClose}, data.Daily, [][]float64{prices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, selected)).To(Succeed())
@@ -973,7 +973,7 @@ var _ = Describe("InverseVolatility", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -1009,7 +1009,7 @@ var _ = Describe("InverseVolatility", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -1032,7 +1032,7 @@ var _ = Describe("InverseVolatility", func() {
 		times := []time.Time{time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)}
 		df, err := data.NewDataFrame(
 			times, []asset.Asset{spy},
-			[]data.Metric{data.MetricClose}, data.Daily, []float64{100},
+			[]data.Metric{data.MetricClose}, data.Daily, [][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1061,7 +1061,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300, 100},
+			[][]float64{{300}, {100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1080,7 +1080,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{300},
+			[][]float64{{300}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1094,7 +1094,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{0, 0},
+			[][]float64{{0}, {0}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1113,7 +1113,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{math.NaN(), math.NaN()},
+			[][]float64{{math.NaN()}, {math.NaN()}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1132,7 +1132,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{500},
+			[][]float64{{500}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1149,7 +1149,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MarketCap},
 			data.Daily,
-			[]float64{200, 800},
+			[][]float64{{200}, {800}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1172,7 +1172,7 @@ var _ = Describe("MarketCapWeighted", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, []float64{1})).To(Succeed())
@@ -1221,7 +1221,7 @@ var _ = Describe("RiskParity", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -1252,7 +1252,7 @@ var _ = Describe("RiskParity", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			[]float64{100},
+			[][]float64{{100}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -1281,7 +1281,7 @@ var _ = Describe("RiskParity", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())
@@ -1310,7 +1310,7 @@ var _ = Describe("RiskParity", func() {
 
 		df, err := data.NewDataFrame(
 			times, []asset.Asset{spy},
-			[]data.Metric{data.AdjClose}, data.Daily, prices,
+			[]data.Metric{data.AdjClose}, data.Daily, [][]float64{prices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, selected)).To(Succeed())
@@ -1344,7 +1344,7 @@ var _ = Describe("RiskParity", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.AdjClose},
 			data.Daily,
-			append(spyPrices, aaplPrices...),
+			[][]float64{spyPrices, aaplPrices},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(df.Insert(spy, portfolio.Selected, spySelected)).To(Succeed())

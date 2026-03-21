@@ -149,6 +149,13 @@ func (df *DataFrame) ensureDateKeys() {
 // have length len(times).
 func NewDataFrame(times []time.Time, assets []asset.Asset, metrics []Metric, freq Frequency, columns [][]float64) (*DataFrame, error) {
 	expected := len(assets) * len(metrics)
+
+	// When there are no timestamps, accept nil/empty columns regardless of
+	// asset/metric count -- there is no data to store.
+	if len(times) == 0 && len(columns) == 0 {
+		columns = make([][]float64, expected)
+	}
+
 	if len(columns) != expected {
 		return nil, fmt.Errorf("columns count %d does not match dimensions %d (assets=%d, metrics=%d)",
 			len(columns), expected, len(assets), len(metrics))

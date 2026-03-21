@@ -169,7 +169,8 @@ func makeDailyDF(start time.Time, nDays int, testAssets []asset.Asset, metrics [
 	for i := range vals {
 		vals[i] = float64(i + 1)
 	}
-	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
+	numCols := len(testAssets) * len(metrics)
+	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, data.SlabToColumns(vals, numCols, nDays))
 	Expect(err).NotTo(HaveOccurred())
 	return df
 }

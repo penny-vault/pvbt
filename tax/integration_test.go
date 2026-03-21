@@ -155,7 +155,7 @@ var _ = Describe("Integration: full tax optimization flow", func() {
 			[]asset.Asset{spy, ivv},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{spyDropPrice, ivvPrice},
+			[][]float64{{spyDropPrice}, {ivvPrice}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)
@@ -222,7 +222,7 @@ var _ = Describe("Integration: full tax optimization flow", func() {
 			[]asset.Asset{spy, ivv},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{spySwapBackPrice, ivvSwapBackPrice},
+			[][]float64{{spySwapBackPrice}, {ivvSwapBackPrice}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(dfSwap)

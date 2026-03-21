@@ -44,15 +44,15 @@ var _ = Describe("Merge", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			df1, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricClose}, data.Daily, []float64{
-				100, 101, 102, // a1 Close
-				200, 201, 202, // a2 Close
+			df1, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{
+				{100, 101, 102}, // a1 Close
+				{200, 201, 202}, // a2 Close
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			df2, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricOpen}, data.Daily, []float64{
-				99, 100, 101, // a1 Open
-				199, 200, 201, // a2 Open
+			df2, err := data.NewDataFrame(times, []asset.Asset{a1, a2}, []data.Metric{data.MetricOpen}, data.Daily, [][]float64{
+				{99, 100, 101},  // a1 Open
+				{199, 200, 201}, // a2 Open
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -94,13 +94,13 @@ var _ = Describe("Merge", func() {
 				time.Date(2025, 1, 4, 0, 0, 0, 0, time.UTC),
 			}
 
-			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
-				100, 101,
+			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{
+				{100, 101},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
-				102, 103,
+			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{
+				{102, 103},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
@@ -129,13 +129,13 @@ var _ = Describe("Merge", func() {
 				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
 			}
 
-			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
-				100, 101,
+			df1, err := data.NewDataFrame(times1, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{
+				{100, 101},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, []float64{
-				101, 102,
+			df2, err := data.NewDataFrame(times2, []asset.Asset{a1}, []data.Metric{data.MetricClose}, data.Daily, [][]float64{
+				{101, 102},
 			})
 			Expect(err).NotTo(HaveOccurred())
 

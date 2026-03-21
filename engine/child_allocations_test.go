@@ -71,12 +71,17 @@ func buildPricedAccount(date time.Time, cashBalance float64, positions map[asset
 			slab[slabIdx] = priceValues[slabIdx]
 		}
 
+		columns := make([][]float64, len(priceAssets))
+		for colIdx := range priceAssets {
+			columns[colIdx] = []float64{slab[colIdx]}
+		}
+
 		df, err := data.NewDataFrame(
 			[]time.Time{date},
 			priceAssets,
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			slab,
+			columns,
 		)
 		if err != nil {
 			panic("buildPricedAccount: " + err.Error())

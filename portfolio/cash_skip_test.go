@@ -50,7 +50,7 @@ var _ = Describe("$CASH filtering in RebalanceTo", func() {
 				[]asset.Asset{spyAsset},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{400.0},
+				[][]float64{{400.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -98,7 +98,7 @@ var _ = Describe("$CASH filtering in RebalanceTo", func() {
 				[]asset.Asset{spyAsset},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{400.0},
+				[][]float64{{400.0}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 

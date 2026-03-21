@@ -52,7 +52,7 @@ var _ = Describe("MaxPositionSize", func() {
 			[]asset.Asset{ast},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{price},
+			[][]float64{{price}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)
@@ -91,7 +91,7 @@ var _ = Describe("MaxPositionSize", func() {
 			[]asset.Asset{ast},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{price},
+			[][]float64{{price}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)

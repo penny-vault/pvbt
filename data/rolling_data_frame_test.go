@@ -44,13 +44,13 @@ var _ = Describe("RollingDataFrame", func() {
 		}
 
 		// Values: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
-		vals := make([]float64, 10)
-		for i := range vals {
-			vals[i] = float64(i + 1)
+		col := make([]float64, 10)
+		for i := range col {
+			col[i] = float64(i + 1)
 		}
 
 		var err error
-		df, err = data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
+		df, err = data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, [][]float64{col})
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -203,15 +203,11 @@ var _ = Describe("RollingDataFrame", func() {
 				times[i] = base.AddDate(0, 0, i)
 			}
 
-			vals := []float64{
-				// AAPL Price
-				1, 2, 3, 4, 5,
-				// AAPL Volume
-				10, 20, 30, 40, 50,
-				// GOOG Price
-				100, 200, 300, 400, 500,
-				// GOOG Volume
-				1000, 2000, 3000, 4000, 5000,
+			vals := [][]float64{
+				{1, 2, 3, 4, 5},             // AAPL Price
+				{10, 20, 30, 40, 50},         // AAPL Volume
+				{100, 200, 300, 400, 500},    // GOOG Price
+				{1000, 2000, 3000, 4000, 5000}, // GOOG Volume
 			}
 			multi, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 				[]data.Metric{data.Price, data.Volume}, data.Daily, vals)
@@ -239,7 +235,7 @@ var _ = Describe("RollingDataFrame", func() {
 			}
 
 			// NaN at index 2 should cause windows [0..2], [1..3], [2..4] to be NaN.
-			vals := []float64{1, 2, math.NaN(), 4, 5}
+			vals := [][]float64{{1, 2, math.NaN(), 4, 5}}
 			nanDF, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := nanDF.Rolling(3).Mean()
@@ -263,7 +259,7 @@ var _ = Describe("RollingDataFrame", func() {
 				times[i] = base.AddDate(0, 0, i)
 			}
 
-			vals := []float64{1, 2, math.NaN(), 4, 5}
+			vals := [][]float64{{1, 2, math.NaN(), 4, 5}}
 			nanDF, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 			Expect(err).NotTo(HaveOccurred())
 			result := nanDF.Rolling(3).Sum()

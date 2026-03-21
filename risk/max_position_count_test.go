@@ -57,12 +57,17 @@ var _ = Describe("MaxPositionCount", func() {
 
 		acct := portfolio.New(portfolio.WithCash(cashExtra+totalPositionValue, time.Time{}))
 
+		priceCols := make([][]float64, len(prices))
+		for idx, price := range prices {
+			priceCols[idx] = []float64{price}
+		}
+
 		df, err := data.NewDataFrame(
 			[]time.Time{ts},
 			assets,
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			prices,
+			priceCols,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)

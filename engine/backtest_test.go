@@ -351,7 +351,8 @@ func makeDailyTestData(start time.Time, nDays int, testAssets []asset.Asset, met
 		}
 	}
 
-	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
+	numCols := len(testAssets) * len(metrics)
+	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, data.SlabToColumns(vals, numCols, nDays))
 	Expect(err).NotTo(HaveOccurred())
 	return df
 }
@@ -619,7 +620,7 @@ var _ = Describe("Backtest", func() {
 			// Day 4 (index 4): high spike to 115
 			vals[3*nDays+4] = 115.0
 
-			excursionDF, dfErr := data.NewDataFrame(times, excursionAssets, excursionMetrics, data.Daily, vals)
+			excursionDF, dfErr := data.NewDataFrame(times, excursionAssets, excursionMetrics, data.Daily, data.SlabToColumns(vals, len(excursionAssets)*len(excursionMetrics), nDays))
 			Expect(dfErr).NotTo(HaveOccurred())
 
 			excursionDataProvider := data.NewTestProvider(excursionMetrics, excursionDF)
@@ -738,7 +739,7 @@ var _ = Describe("Backtest", func() {
 				vals[5*numDays+dayIdx] = 1.0        // SplitFactor: no split
 			}
 
-			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, vals)
+			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, data.SlabToColumns(vals, len(assets)*len(bracketMetrics), numDays))
 			Expect(dfErr).NotTo(HaveOccurred())
 			return df
 		}
@@ -884,7 +885,7 @@ var _ = Describe("Backtest", func() {
 				vals[5*nDays+dayIdx] = 1.0   // SplitFactor: no split
 			}
 
-			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, vals)
+			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, data.SlabToColumns(vals, len(shortAssets)*len(shortMetrics), nDays))
 			Expect(dfErr).NotTo(HaveOccurred())
 			shortDataProvider := data.NewTestProvider(shortMetrics, shortDF)
 
@@ -966,7 +967,7 @@ var _ = Describe("Backtest", func() {
 			// short position is established.
 			vals[2*nDays+7] = 2.00
 
-			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, vals)
+			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, data.SlabToColumns(vals, len(shortAssets)*len(shortMetrics), nDays))
 			Expect(dfErr).NotTo(HaveOccurred())
 			shortDataProvider := data.NewTestProvider(shortMetrics, shortDF)
 
@@ -1074,7 +1075,7 @@ var _ = Describe("Backtest", func() {
 			// short position is still open.
 			vals[(1*nMetrics+2)*nDays+2] = 1.50
 
-			integrationDF, dfErr := data.NewDataFrame(times, integrationAssets, integrationMetrics, data.Daily, vals)
+			integrationDF, dfErr := data.NewDataFrame(times, integrationAssets, integrationMetrics, data.Daily, data.SlabToColumns(vals, nAssets*nMetrics, nDays))
 			Expect(dfErr).NotTo(HaveOccurred())
 			integrationDataProvider := data.NewTestProvider(integrationMetrics, integrationDF)
 

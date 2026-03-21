@@ -59,24 +59,26 @@ func (m *mockDataSource) Fetch(_ context.Context, assets []asset.Asset, _ data.P
 		times[idx] = baseDate.AddDate(0, 0, idx)
 	}
 
-	// Build data slab: column-major (asset, metric) pairs, each with maxLen entries.
+	// Build per-column slices: one column per (asset, metric) pair.
 	metrics := []data.Metric{data.MetricClose}
-	values := make([]float64, maxLen*len(assets)*len(metrics))
+	columns := make([][]float64, len(assets)*len(metrics))
 
 	for assetIdx, ast := range assets {
+		col := make([]float64, maxLen)
 		prices, ok := m.pricesByAsset[ast.CompositeFigi]
-		colStart := assetIdx * maxLen
 
 		for timeIdx := 0; timeIdx < maxLen; timeIdx++ {
 			if ok && timeIdx < len(prices) {
-				values[colStart+timeIdx] = prices[timeIdx]
+				col[timeIdx] = prices[timeIdx]
 			} else {
-				values[colStart+timeIdx] = math.NaN()
+				col[timeIdx] = math.NaN()
 			}
 		}
+
+		columns[assetIdx] = col
 	}
 
-	return data.NewDataFrame(times, assets, metrics, data.Daily, values)
+	return data.NewDataFrame(times, assets, metrics, data.Daily, columns)
 }
 
 func (m *mockDataSource) FetchAt(_ context.Context, _ []asset.Asset, _ time.Time, _ []data.Metric) (*data.DataFrame, error) {
@@ -128,12 +130,17 @@ var _ = Describe("VolatilityScaler", func() {
 		acct := portfolio.New(portfolio.WithCash(totalCash, time.Time{}))
 
 		if len(dfAssets) > 0 {
+			priceCols := make([][]float64, len(dfPrices))
+			for idx, price := range dfPrices {
+				priceCols[idx] = []float64{price}
+			}
+
 			priceDF, err := data.NewDataFrame(
 				[]time.Time{ts},
 				dfAssets,
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				dfPrices,
+				priceCols,
 			)
 			Expect(err).NotTo(HaveOccurred())
 			acct.UpdatePrices(priceDF)

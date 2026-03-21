@@ -33,11 +33,11 @@ var _ = Describe("EarningsYield", func() {
 		// AAPL: EPS=5, Price=100 => yield = 0.05
 		// GOOG: EPS=10, Price=200 => yield = 0.05
 		times := []time.Time{now}
-		vals := []float64{
-			5,   // AAPL/EarningsPerShare
-			100, // AAPL/Price
-			10,  // GOOG/EarningsPerShare
-			200, // GOOG/Price
+		vals := [][]float64{
+			{5},   // AAPL/EarningsPerShare
+			{100}, // AAPL/Price
+			{10},  // GOOG/EarningsPerShare
+			{200}, // GOOG/Price
 		}
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
@@ -57,7 +57,7 @@ var _ = Describe("EarningsYield", func() {
 	It("uses explicit time when provided", func() {
 		explicitTime := time.Date(2025, 3, 1, 16, 0, 0, 0, time.UTC)
 		times := []time.Time{explicitTime}
-		vals := []float64{8, 160} // EPS=8, Price=160 => 0.05
+		vals := [][]float64{{8}, {160}} // EPS=8, Price=160 => 0.05
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl},
 			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
 		Expect(err).NotTo(HaveOccurred())
@@ -72,7 +72,7 @@ var _ = Describe("EarningsYield", func() {
 
 	It("returns error when EarningsPerShare metric is missing", func() {
 		times := []time.Time{now}
-		vals := []float64{100} // only Price, no EPS
+		vals := [][]float64{{100}} // only Price, no EPS
 		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}
@@ -85,7 +85,7 @@ var _ = Describe("EarningsYield", func() {
 
 	It("returns error when Price metric is missing", func() {
 		times := []time.Time{now}
-		vals := []float64{5} // only EPS, no Price
+		vals := [][]float64{{5}} // only EPS, no Price
 		df, _ := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.EarningsPerShare}, data.Daily, vals)
 
 		ds := &mockDataSource{currentDate: now, fetchResult: df}

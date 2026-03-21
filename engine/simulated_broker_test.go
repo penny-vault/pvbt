@@ -78,7 +78,11 @@ func (m *mockPriceProvider) Prices(_ context.Context, assets ...asset.Asset) (*d
 			vals[idx] = price
 		}
 	}
-	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, vals)
+	columns := make([][]float64, len(assets))
+	for idx := range assets {
+		columns[idx] = []float64{vals[idx]}
+	}
+	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, columns)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +108,8 @@ func (m *mockHLPriceProvider) Prices(_ context.Context, assets ...asset.Asset) (
 		vals[idx*3+1] = m.high[a]
 		vals[idx*3+2] = m.low[a]
 	}
-	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, vals)
+	numCols := len(assets) * len(metrics)
+	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, data.SlabToColumns(vals, numCols, 1))
 	if err != nil {
 		return nil, err
 	}

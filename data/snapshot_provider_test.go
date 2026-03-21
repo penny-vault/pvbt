@@ -91,7 +91,7 @@ var _ = Describe("SnapshotProvider", func() {
 				time.Date(2024, 1, 3, 16, 0, 0, 0, nyc),
 			}
 
-			values := []float64{100.0, 101.0, 99.0, 100.0}
+			values := [][]float64{{100.0, 101.0}, {99.0, 100.0}}
 
 			df, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)
 			Expect(err).NotTo(HaveOccurred())
@@ -248,9 +248,9 @@ var _ = Describe("SnapshotProvider", func() {
 				time.Date(2024, 6, 5, 16, 0, 0, 0, nyc),
 			}
 
-			values := []float64{
-				100.0, 101.0, 102.0, // close
-				99.0, 100.0, 101.0, // adj_close
+			values := [][]float64{
+				{100.0, 101.0, 102.0}, // close
+				{99.0, 100.0, 101.0},  // adj_close
 			}
 
 			originalDF, err := data.NewDataFrame(storedTimes, assets, metrics, data.Daily, values)
@@ -312,12 +312,12 @@ var _ = Describe("SnapshotProvider", func() {
 				time.Date(2024, 5, 1, 16, 0, 0, 0, nyc),
 			}
 
-			// 2 assets * 2 metrics * 5 times = 20 values (column-major)
-			values := []float64{
-				100, 110, 120, 130, 140, // VFINX close
-				99, 109, 119, 129, 139, // VFINX adj_close
-				50, 55, 60, 65, 70, // PRIDX close
-				49, 54, 59, 64, 69, // PRIDX adj_close
+			// 2 assets * 2 metrics * 5 times = 4 columns (column-major)
+			values := [][]float64{
+				{100, 110, 120, 130, 140}, // VFINX close
+				{99, 109, 119, 129, 139},  // VFINX adj_close
+				{50, 55, 60, 65, 70},      // PRIDX close
+				{49, 54, 59, 64, 69},      // PRIDX adj_close
 			}
 
 			originalDF, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)
@@ -386,17 +386,17 @@ var _ = Describe("SnapshotProvider", func() {
 			}
 
 			// First DataFrame: VFINX only.
-			vfinxValues := []float64{
-				440, 460, 470, // close
-				432, 452, 462, // adj_close
+			vfinxValues := [][]float64{
+				{440, 460, 470}, // close
+				{432, 452, 462}, // adj_close
 			}
 			vfinxDF, err := data.NewDataFrame(times, []asset.Asset{vfinx}, metrics, data.Daily, vfinxValues)
 			Expect(err).NotTo(HaveOccurred())
 
 			// Second DataFrame: PRIDX only.
-			pridxValues := []float64{
-				58, 60, 62, // close
-				57, 59, 61, // adj_close
+			pridxValues := [][]float64{
+				{58, 60, 62}, // close
+				{57, 59, 61}, // adj_close
 			}
 			pridxDF, err := data.NewDataFrame(times, []asset.Asset{pridx}, metrics, data.Daily, pridxValues)
 			Expect(err).NotTo(HaveOccurred())
@@ -483,11 +483,11 @@ var _ = Describe("SnapshotProvider", func() {
 
 			// First fetch: close + adj_close for both assets.
 			priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
-			priceValues := []float64{
-				440, 460, // VFINX close
-				432, 452, // VFINX adj_close
-				58, 60, // PRIDX close
-				57, 59, // PRIDX adj_close
+			priceValues := [][]float64{
+				{440, 460}, // VFINX close
+				{432, 452}, // VFINX adj_close
+				{58, 60},   // PRIDX close
+				{57, 59},   // PRIDX adj_close
 			}
 			priceDF, err := data.NewDataFrame(times, allAssets, priceMetrics, data.Daily, priceValues)
 			Expect(err).NotTo(HaveOccurred())
@@ -508,9 +508,9 @@ var _ = Describe("SnapshotProvider", func() {
 			// Second fetch: ONLY dividend for the same assets+dates.
 			// INSERT OR REPLACE must NOT overwrite close/adj_close with NULL.
 			divOnlyMetrics := []data.Metric{data.Dividend}
-			divOnlyValues := []float64{
-				0.5, 0.0, // VFINX dividend
-				0.3, 0.0, // PRIDX dividend
+			divOnlyValues := [][]float64{
+				{0.5, 0.0}, // VFINX dividend
+				{0.3, 0.0}, // PRIDX dividend
 			}
 			divOnlyDF, err := data.NewDataFrame(times, allAssets, divOnlyMetrics, data.Daily, divOnlyValues)
 			Expect(err).NotTo(HaveOccurred())
@@ -608,12 +608,12 @@ var _ = Describe("SnapshotProvider", func() {
 				time.Date(2024, 1, 4, 16, 0, 0, 0, nyc),
 			}
 
-			// 2 assets * 2 metrics * 3 times = 12 values
-			values := []float64{
-				100.0, 101.0, 102.0, // SPY close
-				99.0, 100.0, 101.0, // SPY adj_close
-				50.0, 51.0, 52.0, // TLT close
-				49.0, 50.0, 51.0, // TLT adj_close
+			// 2 assets * 2 metrics * 3 times = 4 columns
+			values := [][]float64{
+				{100.0, 101.0, 102.0}, // SPY close
+				{99.0, 100.0, 101.0},  // SPY adj_close
+				{50.0, 51.0, 52.0},    // TLT close
+				{49.0, 50.0, 51.0},    // TLT adj_close
 			}
 
 			originalDF, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)

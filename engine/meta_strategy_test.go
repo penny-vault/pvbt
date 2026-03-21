@@ -248,7 +248,8 @@ func makeLowPriceTestData(start time.Time, numDays int, testAssets []asset.Asset
 		}
 	}
 
-	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
+	numCols := numAssets * numMetrics
+	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, data.SlabToColumns(vals, numCols, numDays))
 	Expect(err).NotTo(HaveOccurred())
 	return df
 }

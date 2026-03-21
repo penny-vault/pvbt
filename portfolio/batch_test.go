@@ -45,12 +45,16 @@ var _ = Describe("Batch", func() {
 	// DataFrame so that PositionValue works correctly.
 	buildPricedAccount := func(cash float64, assets []asset.Asset, prices []float64) *portfolio.Account {
 		acct := portfolio.New(portfolio.WithCash(cash, time.Time{}))
+		cols := make([][]float64, len(prices))
+		for i, p := range prices {
+			cols[i] = []float64{p}
+		}
 		df, err := data.NewDataFrame(
 			[]time.Time{ts},
 			assets,
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			prices,
+			cols,
 		)
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdatePrices(df)
@@ -257,7 +261,7 @@ var _ = Describe("Batch", func() {
 				[]asset.Asset{spy, aapl},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{100, 200},
+				[][]float64{{100}, {200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -330,7 +334,7 @@ var _ = Describe("Batch", func() {
 				[]asset.Asset{spy, aapl},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{100, 200},
+				[][]float64{{100}, {200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -473,7 +477,7 @@ var _ = Describe("Batch", func() {
 				[]asset.Asset{spy, aapl},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{100, 200},
+				[][]float64{{100}, {200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -687,7 +691,7 @@ var _ = Describe("Batch", func() {
 				[]asset.Asset{spy, aapl},
 				[]data.Metric{data.MetricClose},
 				data.Daily,
-				[]float64{100, 200},
+				[][]float64{{100}, {200}},
 			)
 			Expect(err).NotTo(HaveOccurred())
 

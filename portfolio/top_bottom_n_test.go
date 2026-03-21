@@ -54,7 +54,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl, msft, goog},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, 30, 20, 5},
+			[][]float64{{10}, {30}, {20}, {5}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -73,7 +73,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, math.NaN()},
+			[][]float64{{10}, {math.NaN()}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -90,7 +90,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl, msft},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, math.NaN(), 5},
+			[][]float64{{10}, {math.NaN()}, {5}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -108,7 +108,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{42},
+			[][]float64{{42}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -124,7 +124,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{math.NaN(), math.NaN()},
+			[][]float64{{math.NaN()}, {math.NaN()}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -141,7 +141,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, 20},
+			[][]float64{{10}, {20}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -158,10 +158,10 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl, msft},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{
-				30, 5,  // SPY
-				10, 20, // AAPL
-				20, 25, // MSFT
+			[][]float64{
+				{30, 5},  // SPY
+				{10, 20}, // AAPL
+				{20, 25}, // MSFT
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -202,7 +202,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl, msft},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{-5, 10, -20},
+			[][]float64{{-5}, {10}, {-20}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -225,7 +225,7 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl, msft, goog},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, 10, 10, 5},
+			[][]float64{{10}, {10}, {10}, {5}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -245,9 +245,9 @@ var _ = Describe("TopN", func() {
 			[]asset.Asset{spy, aapl},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{
-				10, 15,        // SPY
-				math.NaN(), 5, // AAPL: NaN at t1, valid at t2
+			[][]float64{
+				{10, 15},        // SPY
+				{math.NaN(), 5}, // AAPL: NaN at t1, valid at t2
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -292,7 +292,7 @@ var _ = Describe("BottomN", func() {
 			[]asset.Asset{spy, aapl, msft, goog},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{10, 30, 20, 5},
+			[][]float64{{10}, {30}, {20}, {5}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -311,10 +311,10 @@ var _ = Describe("BottomN", func() {
 			[]asset.Asset{spy, aapl, msft},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{
-				5, 30,  // SPY
-				10, 1,  // AAPL
-				20, 15, // MSFT
+			[][]float64{
+				{5, 30},  // SPY
+				{10, 1},  // AAPL
+				{20, 15}, // MSFT
 			},
 		)
 		Expect(err).NotTo(HaveOccurred())
@@ -339,7 +339,7 @@ var _ = Describe("BottomN", func() {
 			[]asset.Asset{spy, aapl, msft},
 			[]data.Metric{data.MetricClose},
 			data.Daily,
-			[]float64{-5, 10, -20},
+			[][]float64{{-5}, {10}, {-20}},
 		)
 		Expect(err).NotTo(HaveOccurred())
 
