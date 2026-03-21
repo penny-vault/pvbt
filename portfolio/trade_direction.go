@@ -21,7 +21,7 @@ import "fmt"
 type TradeDirection int
 
 const (
-	TradeLong  TradeDirection = iota
+	TradeLong TradeDirection = iota
 	TradeShort
 )
 

@@ -175,6 +175,81 @@ var _ = Describe("Account", func() {
 			Expect(a.Cash()).To(Equal(8_600.0))
 			Expect(a.Position(spy)).To(Equal(5.0))
 		})
+
+		It("creates short lots when selling without long positions", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    100,
+				Price:  150.0,
+				Amount: 15000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(-100.0))
+			Expect(acct.Cash()).To(Equal(115000.0))
+
+			var shortLotCount int
+			var shortLotQty float64
+			var shortLotPrice float64
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					shortLotCount = len(lots)
+					if len(lots) > 0 {
+						shortLotQty = lots[0].Qty
+						shortLotPrice = lots[0].Price
+					}
+				}
+			})
+			Expect(shortLotCount).To(Equal(1))
+			Expect(shortLotQty).To(Equal(100.0))
+			Expect(shortLotPrice).To(Equal(150.0))
+		})
+
+		It("closes long lots then creates short lots for the remainder", func() {
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			testAsset := asset.Asset{Ticker: "AAPL", CompositeFigi: "AAPL"}
+
+			// Buy 50 shares
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.BuyTransaction,
+				Qty:    50,
+				Price:  140.0,
+				Amount: -7000.0,
+			})
+
+			// Sell 80 shares -- closes 50 long, opens 30 short
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
+				Asset:  testAsset,
+				Type:   portfolio.SellTransaction,
+				Qty:    80,
+				Price:  150.0,
+				Amount: 12000.0,
+			})
+
+			Expect(acct.Position(testAsset)).To(Equal(-30.0))
+
+			// Long lots should be fully consumed
+			longLots := acct.UnrealizedLots(testAsset)
+			Expect(longLots).To(BeEmpty())
+
+			// Short lots should have the remainder
+			var shortLotQty float64
+			acct.ShortLots(func(a asset.Asset, lots []portfolio.TaxLot) {
+				if a == testAsset {
+					for _, lot := range lots {
+						shortLotQty += lot.Qty
+					}
+				}
+			})
+			Expect(shortLotQty).To(Equal(30.0))
+		})
 	})
 
 	Describe("UpdatePrices", func() {

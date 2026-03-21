@@ -755,73 +755,102 @@ func (a *Account) Record(txn Transaction) {
 	case SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
 
-		// Produce TradeDetail entries from excursion data.
-		if excursion, hasExcursion := a.excursions[txn.Asset]; hasExcursion {
-			mfe := (excursion.HighPrice - excursion.EntryPrice) / excursion.EntryPrice
-			mae := (excursion.LowPrice - excursion.EntryPrice) / excursion.EntryPrice
-
-			// Match against tax lots FIFO to get entry dates and per-lot qty.
-			tdRemaining := txn.Qty
-
-			tdLots := a.taxLots[txn.Asset]
-			for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
-				matched := tdLots[tdLotIdx].Qty
-				if matched > tdRemaining {
-					matched = tdRemaining
-				}
-
-				a.tradeDetails = append(a.tradeDetails, TradeDetail{
-					Asset:      txn.Asset,
-					EntryDate:  tdLots[tdLotIdx].Date,
-					ExitDate:   txn.Date,
-					EntryPrice: tdLots[tdLotIdx].Price,
-					ExitPrice:  txn.Price,
-					Qty:        matched,
-					PnL:        (txn.Price - tdLots[tdLotIdx].Price) * matched,
-					HoldDays:   txn.Date.Sub(tdLots[tdLotIdx].Date).Hours() / 24.0,
-					MFE:        mfe,
-					MAE:        mae,
-				})
-
-				tdRemaining -= matched
-			}
-		}
-
 		method := txn.LotSelection
 		if method == LotFIFO && a.lotSelection != LotFIFO {
 			method = a.lotSelection
 		}
 
-		// Compute info about the lots to be consumed before actually
-		// consuming them, so we can determine gain/loss.
-		consumed := a.computeConsumedLotInfo(txn.Asset, txn.Qty, method)
+		// Phase 1: Close long lots (if any exist).
+		longLots := a.taxLots[txn.Asset]
 
-		a.consumeLots(txn.Asset, txn.Qty, method)
+		longQty := 0.0
+		for _, lot := range longLots {
+			longQty += lot.Qty
+		}
 
-		// Determine if this was a loss sale.
-		lossPerShare := consumed.avgCostBasis - txn.Price
-		if lossPerShare > 0 {
-			// Check for wash sale: loss sale after a recent buy.
-			// Only consider buys that occurred after the consumed lot's
-			// purchase date (buys before the sold lot was purchased are
-			// original holdings, not replacement purchases).
-			disallowedQty := a.checkWashSaleOnSell(txn.Asset, txn.Date, txn.Qty, lossPerShare, consumed.latestBuyDate)
+		closeLongQty := txn.Qty
+		if closeLongQty > longQty {
+			closeLongQty = longQty
+		}
 
-			// Track only the remaining (non-disallowed) quantity in
-			// recentLossSales for the forward direction.
-			remainingLossQty := txn.Qty - disallowedQty
-			if remainingLossQty > 0 {
-				a.recentLossSales[txn.Asset] = append(a.recentLossSales[txn.Asset], recentLossSale{
-					date:         txn.Date,
-					lossPerShare: lossPerShare,
-					qty:          remainingLossQty,
-				})
+		if closeLongQty > 0 {
+			// Generate TradeDetail entries from excursion data.
+			if excursion, hasExcursion := a.excursions[txn.Asset]; hasExcursion {
+				mfe := (excursion.HighPrice - excursion.EntryPrice) / excursion.EntryPrice
+				mae := (excursion.LowPrice - excursion.EntryPrice) / excursion.EntryPrice
+
+				tdRemaining := closeLongQty
+
+				tdLots := a.taxLots[txn.Asset]
+				for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
+					matched := tdLots[tdLotIdx].Qty
+					if matched > tdRemaining {
+						matched = tdRemaining
+					}
+
+					a.tradeDetails = append(a.tradeDetails, TradeDetail{
+						Asset:      txn.Asset,
+						EntryDate:  tdLots[tdLotIdx].Date,
+						ExitDate:   txn.Date,
+						EntryPrice: tdLots[tdLotIdx].Price,
+						ExitPrice:  txn.Price,
+						Qty:        matched,
+						PnL:        (txn.Price - tdLots[tdLotIdx].Price) * matched,
+						HoldDays:   txn.Date.Sub(tdLots[tdLotIdx].Date).Hours() / 24.0,
+						MFE:        mfe,
+						MAE:        mae,
+						Direction:  TradeLong,
+					})
+
+					tdRemaining -= matched
+				}
+			}
+
+			consumed := a.computeConsumedLotInfo(txn.Asset, closeLongQty, method)
+			a.consumeLots(txn.Asset, closeLongQty, method)
+
+			// Check for wash sale on the long close.
+			lossPerShare := consumed.avgCostBasis - txn.Price
+			if lossPerShare > 0 {
+				disallowedQty := a.checkWashSaleOnSell(txn.Asset, txn.Date, closeLongQty, lossPerShare, consumed.latestBuyDate)
+
+				remainingLossQty := closeLongQty - disallowedQty
+				if remainingLossQty > 0 {
+					a.recentLossSales[txn.Asset] = append(a.recentLossSales[txn.Asset], recentLossSale{
+						date:         txn.Date,
+						lossPerShare: lossPerShare,
+						qty:          remainingLossQty,
+					})
+				}
 			}
 		}
 
+		// Phase 2: Open short lots for the remainder.
+		shortQty := txn.Qty - closeLongQty
+		if shortQty > 0 {
+			lotID := fmt.Sprintf("short-%d-%d", txn.Date.UnixNano(), len(a.shortLots[txn.Asset]))
+			a.shortLots[txn.Asset] = append(a.shortLots[txn.Asset], TaxLot{
+				ID:    lotID,
+				Date:  txn.Date,
+				Qty:   shortQty,
+				Price: txn.Price,
+			})
+
+			// Initialize excursion tracking for the short position.
+			if _, exists := a.excursions[txn.Asset]; !exists {
+				a.excursions[txn.Asset] = ExcursionRecord{
+					EntryPrice: txn.Price,
+					HighPrice:  txn.Price,
+					LowPrice:   txn.Price,
+				}
+			}
+		}
+
+		// Cleanup: remove tracking when fully flat.
 		if a.holdings[txn.Asset] == 0 {
 			delete(a.holdings, txn.Asset)
 			delete(a.taxLots, txn.Asset)
+			delete(a.shortLots, txn.Asset)
 			delete(a.excursions, txn.Asset)
 		}
 	}
