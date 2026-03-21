@@ -551,6 +551,11 @@ func (a *Account) TaxMetrics() (TaxMetrics, error) {
 		errs = append(errs, err)
 	}
 
+	taxMetrics.TaxDrag, err = a.PerformanceMetric(TaxDragMetric).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return taxMetrics, errors.Join(errs...)
 }
 

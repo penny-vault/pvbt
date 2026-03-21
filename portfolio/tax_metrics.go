@@ -26,4 +26,5 @@ type TaxMetrics struct {
 	QualifiedDividends float64 // qualified dividend income
 	NonQualifiedIncome float64 // non-qualified dividend and interest income
 	TaxCostRatio       float64 // percentage of return lost to taxes
+	TaxDrag            float64 // percentage of pre-tax return lost to trading-related taxes (excludes dividends)
 }
