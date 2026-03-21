@@ -155,7 +155,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var submittedQty float64
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /market-data/TSLA/quotes", func(writer http.ResponseWriter, req *http.Request) {
+				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
@@ -206,7 +206,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var submitCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /market-data/BRK.A/quotes", func(writer http.ResponseWriter, req *http.Request) {
+				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"sync"
 	"time"
 
@@ -221,7 +222,7 @@ func (client *apiClient) getBalance(ctx context.Context) (balanceResponse, error
 
 // getQuote retrieves the last price for a symbol.
 func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, error) {
-	endpoint := fmt.Sprintf("/market-data/%s/quotes", symbol)
+	endpoint := "/market-data/by-type?equity=" + url.QueryEscape(symbol)
 
 	var result quoteResponse
 
