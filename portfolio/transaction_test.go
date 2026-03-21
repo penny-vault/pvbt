@@ -13,27 +13,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package portfolio
+package portfolio_test
 
 import (
-	"time"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// TradeDetail represents a completed round-trip trade with per-trade
-// excursion data. MFE and MAE are expressed as percentages of the entry
-// price: MFE >= 0 (best favorable move) and MAE <= 0 (worst adverse move).
-type TradeDetail struct {
-	Asset      asset.Asset
-	EntryDate  time.Time
-	ExitDate   time.Time
-	EntryPrice float64
-	ExitPrice  float64
-	Qty        float64
-	PnL        float64
-	HoldDays   float64
-	MFE        float64
-	MAE        float64
-	Direction  TradeDirection
-}
+var _ = Describe("TransactionType", func() {
+	It("returns Split for SplitTransaction", func() {
+		Expect(portfolio.SplitTransaction.String()).To(Equal("Split"))
+	})
+})
