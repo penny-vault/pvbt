@@ -111,3 +111,12 @@ func (justificationModifier) orderModifier() {}
 func WithJustification(reason string) OrderModifier {
 	return justificationModifier{reason: reason}
 }
+
+type lotSelectionModifier struct{ method LotSelection }
+
+func (lotSelectionModifier) orderModifier() {}
+
+// WithLotSelection overrides the portfolio default lot selection for this order.
+func WithLotSelection(method LotSelection) OrderModifier {
+	return lotSelectionModifier{method: method}
+}

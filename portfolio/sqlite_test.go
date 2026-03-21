@@ -203,6 +203,39 @@ var _ = Describe("SQLite", func() {
 			Expect(annotations[2].Timestamp).To(Equal(ts2))
 		})
 
+		It("round-trips tax lot ID", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   portfolio.BuyTransaction,
+				Qty:    5,
+				Price:  500.0,
+				Amount: -2500.0,
+			})
+
+			// Capture the original lot ID before persisting.
+			origLots := acct.TaxLots()
+			Expect(origLots).To(HaveKey(spy))
+			Expect(origLots[spy]).To(HaveLen(1))
+			origID := origLots[spy][0].ID
+			Expect(origID).NotTo(BeEmpty())
+
+			path := filepath.Join(tmpDir, "lotid.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			resLots := restored.TaxLots()
+			Expect(resLots).To(HaveKey(spy))
+			Expect(resLots[spy]).To(HaveLen(1))
+			Expect(resLots[spy][0].ID).To(Equal(origID))
+		})
+
 		It("round-trips transaction justification", func() {
 			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 

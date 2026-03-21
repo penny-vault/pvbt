@@ -25,6 +25,7 @@ import (
 // TaxLot tracks the purchase date, quantity, and price of a position for
 // tax gain/loss calculations.
 type TaxLot struct {
+	ID    string
 	Date  time.Time
 	Qty   float64
 	Price float64

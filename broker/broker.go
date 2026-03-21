@@ -96,6 +96,10 @@ type Order struct {
 	StopPrice     float64
 	GTDDate       time.Time
 	Justification string
+	// LotSelection controls which tax lots are consumed on a sell.
+	// 0=FIFO (default), 1=LIFO, 2=HighestCost, 3=SpecificID.
+	// Set via portfolio.WithLotSelection order modifier.
+	LotSelection int
 }
 
 // OrderType identifies the price behavior of an order.
