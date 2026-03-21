@@ -207,6 +207,9 @@ var _ = Describe("Account", func() {
 			Expect(shortLotCount).To(Equal(1))
 			Expect(shortLotQty).To(Equal(100.0))
 			Expect(shortLotPrice).To(Equal(150.0))
+
+			// No TradeDetail should be generated for a pure short open.
+			Expect(acct.TradeDetails()).To(BeEmpty())
 		})
 
 		It("closes long lots then creates short lots for the remainder", func() {
@@ -249,6 +252,15 @@ var _ = Describe("Account", func() {
 				}
 			})
 			Expect(shortLotQty).To(Equal(30.0))
+
+			// TradeDetail should show the long close.
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			Expect(details[0].Direction).To(Equal(portfolio.TradeLong))
+			Expect(details[0].EntryPrice).To(Equal(140.0))
+			Expect(details[0].ExitPrice).To(Equal(150.0))
+			Expect(details[0].Qty).To(Equal(50.0))
+			Expect(details[0].PnL).To(Equal(500.0)) // (150-140) * 50
 		})
 	})
 

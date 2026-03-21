@@ -781,7 +781,7 @@ func (a *Account) Record(txn Transaction) {
 
 				tdRemaining := closeLongQty
 
-				tdLots := a.taxLots[txn.Asset]
+				tdLots := longLots
 				for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
 					matched := tdLots[tdLotIdx].Qty
 					if matched > tdRemaining {
@@ -825,6 +825,12 @@ func (a *Account) Record(txn Transaction) {
 			}
 		}
 
+		// If all long lots were consumed, remove the stale long excursion so
+		// Phase 2 creates a fresh one for the short position.
+		if closeLongQty > 0 && len(a.taxLots[txn.Asset]) == 0 {
+			delete(a.excursions, txn.Asset)
+		}
+
 		// Phase 2: Open short lots for the remainder.
 		shortQty := txn.Qty - closeLongQty
 		if shortQty > 0 {
@@ -837,6 +843,9 @@ func (a *Account) Record(txn Transaction) {
 			})
 
 			// Initialize excursion tracking for the short position.
+			// Note: MFE/MAE semantics are inverted for shorts (price drop = favorable).
+			// The correct interpretation is handled in Task 12 (P&L metrics) when
+			// generating TradeDetail entries for short covers.
 			if _, exists := a.excursions[txn.Asset]; !exists {
 				a.excursions[txn.Asset] = ExcursionRecord{
 					EntryPrice: txn.Price,
