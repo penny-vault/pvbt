@@ -1040,6 +1040,8 @@ Create `broker/tastytrade/streamer.go` with:
 
 The `seenFills` map should be typed as `map[string]time.Time` (fill ID -> fill time), not `map[string]bool` as shown in the spec. The timestamp is needed for time-based pruning (removing entries older than 24 hours). Update the spec's `fillStreamer` struct accordingly.
 
+The `pruneSeenFills()` method is called at the top of the background goroutine's message-processing loop. On each iteration, it checks whether the current date (truncated to midnight) differs from the last prune date; if so, it evicts entries older than 24 hours and updates the last prune date. This avoids an extra timer goroutine while ensuring pruning happens at day boundaries.
+
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `cd /Users/jdf/Developer/penny-vault/pvbt && go test ./broker/tastytrade/ -v -count=1 --label-filter=streaming`
@@ -1338,7 +1340,7 @@ Expected: FAIL (Connect/Close not called)
 
 - [ ] **Step 3: Add broker.Connect() to Backtest and RunLive**
 
-In `engine/backtest.go`, after `createAccount` returns (after account setup is complete, before schedule enumeration), add:
+In `engine/backtest.go`, insert the Connect call at line 203 (after step 8 "Store start/end on engine", immediately before "PHASE 2: DATE ENUMERATION"):
 
 ```go
 // Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
@@ -1347,9 +1349,17 @@ if err := e.broker.Connect(ctx); err != nil {
 }
 ```
 
+This placement ensures all initialization (asset loading, risk-free data, account setup) completes before the broker connects, minimizing session idle time.
+
 Do NOT add `defer e.broker.Close()` here. The broker is closed by `engine.Close()` (see next step).
 
-In `engine/live.go`, after account setup and before the main loop goroutine starts, add the same `broker.Connect()` call.
+In `engine/live.go`, insert the Connect call at line 141 (after `e.riskFreeCumulative = 0`, immediately before "PHASE 2: GOROUTINE"):
+
+```go
+if err := e.broker.Connect(ctx); err != nil {
+    return nil, fmt.Errorf("engine: broker connect: %w", err)
+}
+```
 
 - [ ] **Step 4: Add broker.Close() to engine.Close()**
 
