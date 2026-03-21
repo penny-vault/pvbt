@@ -1629,6 +1629,54 @@ func (a *Account) ShortLots(fn func(asset.Asset, []TaxLot)) {
 	}
 }
 
+// ApplySplit adjusts holdings, tax lots, short lots, and excursion records
+// for a stock split. splitFactor is the multiplier applied to share
+// quantities (e.g. 2.0 for a 2-for-1 split). A SplitTransaction is
+// appended to the transaction log.
+func (a *Account) ApplySplit(ast asset.Asset, date time.Time, splitFactor float64) error {
+	if splitFactor == 0 {
+		return fmt.Errorf("apply split: split factor cannot be zero for %s", ast.Ticker)
+	}
+
+	qty := a.holdings[ast]
+	if qty == 0 {
+		return nil
+	}
+
+	oldQty := qty
+	newQty := qty * splitFactor
+	a.holdings[ast] = newQty
+
+	for idx := range a.taxLots[ast] {
+		a.taxLots[ast][idx].Qty *= splitFactor
+		a.taxLots[ast][idx].Price /= splitFactor
+	}
+
+	for idx := range a.shortLots[ast] {
+		a.shortLots[ast][idx].Qty *= splitFactor
+		a.shortLots[ast][idx].Price /= splitFactor
+	}
+
+	if excursion, exists := a.excursions[ast]; exists {
+		excursion.EntryPrice /= splitFactor
+		excursion.HighPrice /= splitFactor
+		excursion.LowPrice /= splitFactor
+		a.excursions[ast] = excursion
+	}
+
+	a.transactions = append(a.transactions, Transaction{
+		Date:          date,
+		Asset:         ast,
+		Type:          SplitTransaction,
+		Qty:           newQty,
+		Price:         splitFactor,
+		Amount:        0,
+		Justification: fmt.Sprintf("split %.4g:1 old_qty=%.4g new_qty=%.4g", splitFactor, oldQty, newQty),
+	})
+
+	return nil
+}
+
 // Excursions returns the current excursion records keyed by asset.
 func (a *Account) Excursions() map[asset.Asset]ExcursionRecord { return a.excursions }
 

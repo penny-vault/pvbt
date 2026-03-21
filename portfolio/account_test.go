@@ -1785,3 +1785,90 @@ var _ = Describe("Window", func() {
 		})
 	})
 })
+
+var _ = Describe("ApplySplit", func() {
+	var (
+		acme asset.Asset
+	)
+
+	BeforeEach(func() {
+		acme = asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+	})
+
+	It("adjusts long position and tax lots for a 2:1 split", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: -20_000,
+		})
+
+		splitDate := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+		err := acct.ApplySplit(acme, splitDate, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(acct.Position(acme)).To(Equal(200.0))
+
+		lots := acct.TaxLots()[acme]
+		Expect(lots).To(HaveLen(1))
+		Expect(lots[0].Qty).To(Equal(200.0))
+		Expect(lots[0].Price).To(Equal(100.0))
+
+		txns := acct.Transactions()
+		lastTxn := txns[len(txns)-1]
+		Expect(lastTxn.Type).To(Equal(portfolio.SplitTransaction))
+		Expect(lastTxn.Qty).To(Equal(200.0))
+		Expect(lastTxn.Price).To(Equal(2.0))
+		Expect(lastTxn.Amount).To(Equal(0.0))
+	})
+
+	It("adjusts short position and short lots for a 2:1 split", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.SellTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: 20_000,
+		})
+
+		splitDate := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+		err := acct.ApplySplit(acme, splitDate, 2.0)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(acct.Position(acme)).To(Equal(-200.0))
+
+		var shortLots []portfolio.TaxLot
+		acct.ShortLots(func(ast asset.Asset, lots []portfolio.TaxLot) {
+			if ast == acme {
+				shortLots = lots
+			}
+		})
+		Expect(shortLots).To(HaveLen(1))
+		Expect(shortLots[0].Qty).To(Equal(200.0))
+		Expect(shortLots[0].Price).To(Equal(100.0))
+	})
+
+	It("returns error when split factor is zero", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  acme,
+			Type:   portfolio.BuyTransaction,
+			Qty:    100,
+			Price:  200,
+			Amount: -20_000,
+		})
+
+		err := acct.ApplySplit(acme, date, 0)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("split factor cannot be zero"))
+	})
+})

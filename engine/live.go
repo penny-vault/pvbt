@@ -156,7 +156,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 			return
 		}
 
-		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
 		priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
 		step := 0
 
@@ -234,7 +234,33 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 				}
 			}
 
-			// f. Record dividends for held assets.
+			// f. Drain fills from previous step (before splits and dividends).
+			if acct.HasBroker() {
+				if err := acct.DrainFills(stepCtx); err != nil {
+					zerolog.Ctx(stepCtx).Error().Err(err).Msg("drain fills failed")
+					continue
+				}
+			}
+
+			// f2. Apply stock splits before dividends (dividend values are post-split).
+			if housekeepDF != nil {
+				for _, heldAsset := range heldAssets {
+					splitFactor := housekeepDF.ValueAt(heldAsset, data.SplitFactor, e.currentDate)
+					if math.IsNaN(splitFactor) || splitFactor == 1.0 {
+						continue
+					}
+
+					if err := acct.ApplySplit(heldAsset, e.currentDate, splitFactor); err != nil {
+						zerolog.Ctx(stepCtx).Error().Err(err).
+							Str("asset", heldAsset.Ticker).
+							Msg("apply split failed")
+
+						continue
+					}
+				}
+			}
+
+			// f3. Record dividends for held assets.
 			if housekeepDF != nil {
 				for _, heldAsset := range heldAssets {
 					qty := acct.Position(heldAsset)
@@ -253,14 +279,6 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 							Price:  divPerShare,
 						})
 					}
-				}
-			}
-
-			// f2. Drain fills from previous step.
-			if acct.HasBroker() {
-				if err := acct.DrainFills(stepCtx); err != nil {
-					zerolog.Ctx(stepCtx).Error().Err(err).Msg("drain fills failed")
-					continue
 				}
 			}
 

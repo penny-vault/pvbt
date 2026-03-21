@@ -278,6 +278,20 @@ func makeDailyTestData(start time.Time, nDays int, testAssets []asset.Asset, met
 	for i := range vals {
 		vals[i] = 100.0 + float64(i)
 	}
+
+	// SplitFactor columns must be 1.0 (no split) to avoid unintended
+	// split adjustments during housekeeping.
+	for assetIdx := range testAssets {
+		for metricIdx, metric := range metrics {
+			if metric == data.SplitFactor {
+				colStart := (assetIdx*len(metrics) + metricIdx) * nDays
+				for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+					vals[colStart+dayIdx] = 1.0
+				}
+			}
+		}
+	}
+
 	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, vals)
 	Expect(err).NotTo(HaveOccurred())
 	return df
@@ -297,7 +311,7 @@ var _ = Describe("Backtest", func() {
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
 		testAssets = []asset.Asset{aapl, msft}
 		assetProvider = &mockAssetProvider{assets: testAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 	})
 
 	Context("end to end", func() {
@@ -517,7 +531,7 @@ var _ = Describe("Backtest", func() {
 			// MFE = (115 - 102) / 102 > 0
 			// MAE = (88 - 102) / 102 < 0
 
-			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			times := make([]time.Time, nDays)
@@ -526,17 +540,18 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 5 metrics x 30 days = 150 values
-			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)]
+			// 1 asset x 6 metrics x 30 days = 180 values
+			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)][SplitFactor(30)]
 			vals := make([]float64, nDays*len(excursionAssets)*len(excursionMetrics))
 
-			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95
+			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95, SplitFactor=1
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
 				vals[0*nDays+dayIdx] = 100.0 + float64(dayIdx) // Close: 100, 101, 102, ...
 				vals[1*nDays+dayIdx] = 100.0 + float64(dayIdx) // AdjClose: same as Close
 				vals[2*nDays+dayIdx] = 0.0                     // Dividend: 0
 				vals[3*nDays+dayIdx] = 105.0 + float64(dayIdx) // High: 105, 106, 107, ...
 				vals[4*nDays+dayIdx] = 95.0                    // Low: 95 baseline
+				vals[5*nDays+dayIdx] = 1.0                     // SplitFactor: 1 (no split)
 			}
 
 			// Override specific days for controlled excursion values.
@@ -575,7 +590,7 @@ var _ = Describe("Backtest", func() {
 		It("caps position size when MaxPositionSize is configured", func() {
 			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
 			allAssets := append(testAssets, spy)
-			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeDailyTestData(dataStart, 400, allAssets, allMetrics)

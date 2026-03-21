@@ -384,7 +384,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 // is included in the housekeeping data fetch; pass asset.Asset{} for child
 // accounts that have no benchmark.
 func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
-	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
 
 	var heldAssets []asset.Asset
 
@@ -410,6 +410,27 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 		}
 	}
 
+	// Drain fills from previous step (before splits and dividends).
+	if acct.HasBroker() {
+		if drainErr := acct.DrainFills(ctx); drainErr != nil {
+			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
+		}
+	}
+
+	// Apply stock splits before dividends (dividend values are post-split).
+	if housekeepDF != nil {
+		for _, heldAsset := range heldAssets {
+			splitFactor := housekeepDF.ValueAt(heldAsset, data.SplitFactor, date)
+			if math.IsNaN(splitFactor) || splitFactor == 1.0 {
+				continue
+			}
+
+			if err := acct.ApplySplit(heldAsset, date, splitFactor); err != nil {
+				return fmt.Errorf("engine: apply split for %s on %v: %w", heldAsset.Ticker, date, err)
+			}
+		}
+	}
+
 	// Record dividends for held assets.
 	if housekeepDF != nil {
 		for _, heldAsset := range heldAssets {
@@ -429,13 +450,6 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 					Price:  divPerShare,
 				})
 			}
-		}
-	}
-
-	// Drain fills from previous step.
-	if acct.HasBroker() {
-		if drainErr := acct.DrainFills(ctx); drainErr != nil {
-			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
 		}
 	}
 
