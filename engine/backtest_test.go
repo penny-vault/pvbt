@@ -717,7 +717,7 @@ var _ = Describe("Backtest", func() {
 		// Each row is {close, high, low}; AdjClose=close, Dividend=0.
 		makeBracketTestData := func(startDate time.Time, testAsset asset.Asset, rows []struct{ close, high, low float64 }) *data.DataFrame {
 			numDays := len(rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			assets := []asset.Asset{testAsset}
 
 			times := make([]time.Time, numDays)
@@ -735,6 +735,7 @@ var _ = Describe("Backtest", func() {
 				vals[2*numDays+dayIdx] = 0.0       // Dividend
 				vals[3*numDays+dayIdx] = row.high   // MetricHigh
 				vals[4*numDays+dayIdx] = row.low    // MetricLow
+				vals[5*numDays+dayIdx] = 1.0        // SplitFactor: no split
 			}
 
 			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, vals)
@@ -764,7 +765,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
@@ -817,7 +818,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
