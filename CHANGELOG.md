@@ -28,17 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strategies can open and manage short positions: sell-to-open creates short tax lots with proper cost basis tracking, buy-to-cover closes them, and unrealized P&L includes short lots alongside long lots
 - Margin accounting is fully modeled on the simulated broker: initial margin defaults to 50% (Reg T) and maintenance margin defaults to 30%, both configurable; `Portfolio` exposes `MarginRatio`, `MarginDeficiency`, `ShortMarketValue`, `BuyingPower`, and `Equity` methods; the broker enforces initial margin requirements when submitting short orders
 - Borrow fees accrue daily on short positions at a configurable annualized rate (default 0.5%), and short positions on ex-dates automatically receive dividend obligation debits
-- Strategies that implement the optional `MarginCallHandler` interface receive control when a margin deficiency occurs; strategies that do not implement it fall back to automatic proportional liquidation of positions
+- Strategies that implement the optional `MarginCallHandler` interface receive control when a margin deficiency occurs; strategies that do not implement it fall back to automatic proportional liquidation of positions. Emergency liquidation orders set `Batch.SkipMiddleware` to bypass the middleware chain.
 - Stock splits adjust position quantities and tax lot prices for both long and short positions, and the transaction log records a `SplitTransaction` entry for each affected position
 - `RebalanceTo` accepts negative weights to declare short allocations using the industry-standard sign convention; risk middleware applies position size limits symmetrically to shorts, and two new middleware — `GrossExposureLimit` and `NetExposureLimit` — bound overall leverage
 - Performance metrics include `ShortWinRate`, `LongWinRate`, `ShortProfitFactor`, and `LongProfitFactor` to break down trade statistics separately for long and short sides
-- `Batch` accepts a `SkipMiddleware` flag so emergency margin-call liquidation orders bypass the middleware chain
+
 
 ### Changed
 
 - **Breaking:** `engine.DescribeStrategy` takes a `Strategy` instead of an `*Engine`, decoupling description from the running engine
 - **Breaking:** Strategies declare their schedule in `Describe()` instead of calling `eng.Schedule()` during `Setup`
-- Benchmark moves from a strategy concern to a runner concern, set via the `--benchmark` flag or suggested by strategies in `Describe()`; `eng.SetBenchmark()` is removed
+- **Breaking:** Benchmark moves from a strategy concern to a runner concern, set via the `--benchmark` flag or suggested by strategies in `Describe()`; `eng.SetBenchmark()` is removed
 - **Breaking:** `Strategy.Compute` receives a new `*portfolio.Batch` parameter; strategies write orders and annotations to the batch instead of calling methods on the portfolio directly
 - **Breaking:** The `Portfolio` interface becomes read-only; `RebalanceTo`, `Order`, and `Annotate` move to the `Batch` type, preventing strategies from bypassing middleware. The interface also gains `Prices()`, `TradeDetails()`, and six margin methods (`Equity`, `LongMarketValue`, `ShortMarketValue`, `MarginRatio`, `MarginDeficiency`, `BuyingPower`).
 - **Breaking:** The `PortfolioSnapshot` interface gains `TradeDetails()`, `Excursions()`, and `ShortLots()` methods
