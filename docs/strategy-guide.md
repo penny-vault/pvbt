@@ -569,6 +569,96 @@ func (s *MomentumRotation) Describe() engine.StrategyDescription {
 
 This is optional. Strategies that don't implement it still work.
 
+## Meta-strategies
+
+A meta-strategy allocates a portfolio across several child strategies instead of buying individual assets directly. The engine handles child scheduling, execution, and portfolio expansion automatically.
+
+### Declaring children
+
+Add pointer fields to your struct and tag them with `weight`. The weight is the fractional allocation to that child (all weights must sum to 1.0):
+
+```go
+type MyMeta struct {
+    ADM *adm.ADM `weight:"0.10" preset:"Classic"`
+    BAA *baa.BAA `weight:"0.40"`
+    DAA *daa.DAA `weight:"0.50"`
+}
+```
+
+Two additional tags configure each child's parameters:
+
+| Tag | Purpose | Example |
+|-----|---------|---------|
+| `weight` | Fractional portfolio allocation | `weight:"0.40"` |
+| `preset` | Named parameter preset from the child's `Describe()` | `preset:"Aggressive"` |
+| `params` | Semicolon-separated key=value overrides | `params:"lookback=12;threshold=0.02"` |
+
+### Automatic child scheduling
+
+The engine discovers all `weight`-tagged fields during initialization and registers each child as a sub-engine. Children run on their own schedules independently of the parent. The engine always runs children before the parent; the parent's Compute fires only after all children have been given the opportunity to trade on the current date.
+
+The parent does not need to call the children or manage their schedules. Declare the children in the struct and the engine takes care of the rest.
+
+### ChildAllocations
+
+`eng.ChildAllocations(ctx)` expands each child's current holdings into a flat `[]portfolio.Allocation` scaled by the child's portfolio weight. Pass the result directly to `batch.RebalanceTo` to maintain the full allocation:
+
+```go
+func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    allocs, err := eng.ChildAllocations(ctx)
+    if err != nil {
+        return err
+    }
+    return batch.RebalanceTo(ctx, allocs...)
+}
+```
+
+**Worked example.** Suppose the meta-strategy holds ADM at 10%, BAA at 40%, and DAA at 50%. On a given date:
+
+- ADM is fully invested in SPY (100%)
+- BAA holds SPY 60% / TLT 40%
+- DAA holds QQQ 80% / cash 20%
+
+`ChildAllocations` produces:
+
+| Asset  | Calculation | Weight |
+|--------|-------------|--------|
+| SPY    | 0.10 × 1.00 + 0.40 × 0.60 | 0.34 |
+| TLT    | 0.40 × 0.40 | 0.16 |
+| QQQ    | 0.50 × 0.80 | 0.40 |
+| $CASH  | 0.50 × 0.20 | 0.10 |
+
+### $CASH sentinel
+
+When a child holds uninvested cash, `ChildAllocations` represents that fraction using the `$CASH` sentinel ticker. `RebalanceTo` recognizes `$CASH` and leaves that portion of the portfolio in cash rather than trying to buy a security.
+
+### Dynamic weight adjustments
+
+Use `eng.ChildPortfolios()` to inspect each child's current state, then pass weight overrides to `ChildAllocations`:
+
+```go
+func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    // Inspect child performance to decide weights dynamically.
+    children := eng.ChildPortfolios()
+    admPort := children["adm"]
+
+    overrides := map[string]float64{"adm": 0.10, "baa": 0.40, "daa": 0.50}
+    if admPort.Value() < someThreshold {
+        // Reduce ADM allocation when it is underperforming.
+        overrides["adm"] = 0.05
+        overrides["baa"] = 0.45
+    }
+
+    allocs, err := eng.ChildAllocations(ctx, engine.WithWeightOverrides(overrides))
+    if err != nil {
+        return err
+    }
+    return batch.RebalanceTo(ctx, allocs...)
+}
+```
+
+`ChildPortfolios()` returns a `map[string]portfolio.Portfolio` keyed by child strategy name (the value returned by the child's `Name()` method).
+
 ## Periods
 
 Periods represent calendar-aware durations for lookback windows and performance metric queries:

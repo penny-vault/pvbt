@@ -36,6 +36,50 @@ func (s *warmupStrategy) Describe() engine.StrategyDescription {
 	}
 }
 
+// childWarmupStrategy is a child strategy with a configurable warmup for
+// testing that the engine takes the max of parent and child warmup values.
+type childWarmupStrategy struct {
+	Universe   universe.Universe
+	warmupDays int
+}
+
+func (s *childWarmupStrategy) Name() string { return "childWarmupStrategy" }
+
+func (s *childWarmupStrategy) Setup(_ *engine.Engine) {}
+
+func (s *childWarmupStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+func (s *childWarmupStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule: "0 16 * * 1-5",
+		Warmup:   s.warmupDays,
+	}
+}
+
+// metaWarmupStrategy is a parent strategy that embeds a child with a higher
+// warmup. Parent warmup is 14; child warmup is 200.
+type metaWarmupStrategy struct {
+	Universe universe.Universe
+	Child    *childWarmupStrategy `weight:"1.0"`
+}
+
+func (s *metaWarmupStrategy) Name() string { return "metaWarmupStrategy" }
+
+func (s *metaWarmupStrategy) Setup(_ *engine.Engine) {}
+
+func (s *metaWarmupStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+func (s *metaWarmupStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{
+		Schedule: "0 16 * * 1-5",
+		Warmup:   14,
+	}
+}
+
 var _ = Describe("walkBackTradingDays", func() {
 	It("returns the same date for 0 days", func() {
 		from := time.Date(2024, 2, 5, 16, 0, 0, 0, time.UTC)
@@ -283,6 +327,40 @@ var _ = Describe("validateWarmup", func() {
 			_, err := eng.Backtest(context.Background(), start, end)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("negative"))
+		})
+	})
+
+	Context("child strategy has larger warmup than parent", func() {
+		It("errors when data covers parent warmup (14) but not child warmup (200)", func() {
+			// Data starts 30 trading days before the test start -- enough for
+			// parent warmup of 14 but not for child warmup of 200.
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 60, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			childStrategy := &childWarmupStrategy{
+				warmupDays: 200,
+				Universe:   universe.NewStaticWithSource(testAssets, nil),
+			}
+			strategy := &metaWarmupStrategy{
+				Universe: universe.NewStaticWithSource(testAssets, nil),
+				Child:    childStrategy,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000),
+			)
+
+			// Start is after data start, so parent warmup (14) would pass but
+			// child warmup (200) requires data from far earlier.
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("warmup"))
 		})
 	})
 })

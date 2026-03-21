@@ -86,6 +86,16 @@ func (e *Engine) validateWarmup(ctx context.Context, start, end time.Time) (time
 		e.warmup = desc.Describe().Warmup
 	}
 
+	// Include child strategy warmup values (take the max).
+	for _, child := range e.children {
+		if childDesc, ok := child.strategy.(Descriptor); ok {
+			childWarmup := childDesc.Describe().Warmup
+			if childWarmup > e.warmup {
+				e.warmup = childWarmup
+			}
+		}
+	}
+
 	if e.warmup == 0 {
 		return start, nil
 	}
@@ -99,6 +109,22 @@ func (e *Engine) validateWarmup(ctx context.Context, start, end time.Time) (time
 
 	// Collect assets to validate.
 	strategyAssets := collectStrategyAssets(e.strategy, e.benchmark)
+
+	// Also collect assets from child strategies.
+	seen := make(map[string]bool)
+	for _, existingAsset := range strategyAssets {
+		seen[existingAsset.CompositeFigi] = true
+	}
+
+	for _, child := range e.children {
+		for _, childAsset := range collectStrategyAssets(child.strategy, asset.Asset{}) {
+			if !seen[childAsset.CompositeFigi] {
+				seen[childAsset.CompositeFigi] = true
+				strategyAssets = append(strategyAssets, childAsset)
+			}
+		}
+	}
+
 	if len(strategyAssets) == 0 {
 		return start, nil
 	}

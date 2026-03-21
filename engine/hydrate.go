@@ -30,6 +30,7 @@ var (
 	assetType    = reflect.TypeOf(asset.Asset{})
 	universeType = reflect.TypeOf((*universe.Universe)(nil)).Elem()
 	durationType = reflect.TypeOf(time.Duration(0))
+	strategyType = reflect.TypeOf((*Strategy)(nil)).Elem()
 )
 
 // hydrateFields reflects over the target struct and populates exported fields
@@ -50,6 +51,12 @@ func hydrateFields(eng *Engine, target interface{}) error {
 	for ii := 0; ii < targetType.NumField(); ii++ {
 		field := targetType.Field(ii)
 		if !field.IsExported() {
+			continue
+		}
+
+		// Skip Strategy-typed fields -- handled by discoverChildren.
+		if field.Type.Implements(strategyType) ||
+			(field.Type.Kind() == reflect.Pointer && field.Type.Elem().Implements(strategyType)) {
 			continue
 		}
 

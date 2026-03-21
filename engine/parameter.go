@@ -52,6 +52,12 @@ func StrategyParameters(s Strategy) []Parameter {
 			continue
 		}
 
+		// Skip Strategy-typed fields -- these are children, not parameters.
+		if field.Type.Implements(strategyType) ||
+			(field.Type.Kind() == reflect.Pointer && field.Type.Elem().Implements(strategyType)) {
+			continue
+		}
+
 		name := field.Tag.Get("pvbt")
 		if name == "" {
 			name = strings.ToLower(field.Name)

@@ -23,3 +23,7 @@ type Asset struct {
 
 // EconomicIndicator is a sentinel asset for metrics not tied to a specific instrument.
 var EconomicIndicator = Asset{Ticker: "$ECONOMIC_INDICATOR"}
+
+// CashAsset is a sentinel asset representing uninvested cash in a portfolio.
+// Used by ChildAllocations to represent a child strategy's cash position.
+var CashAsset = Asset{Ticker: "$CASH", CompositeFigi: "$CASH"}

@@ -26,6 +26,31 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
+// childStub is a minimal Strategy used to test that Strategy-typed fields are
+// skipped by StrategyParameters and hydrateFields.
+type childStub struct{}
+
+func (stub *childStub) Name() string { return "child" }
+func (stub *childStub) Setup(_ *engine.Engine) {}
+func (stub *childStub) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+func (stub *childStub) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+// parentWithChild has one regular parameter alongside a Strategy-typed field.
+type parentWithChild struct {
+	Lookback int        `pvbt:"lookback" desc:"lookback" default:"6"`
+	Child    *childStub `pvbt:"child" weight:"0.50"`
+}
+
+func (parent *parentWithChild) Name() string { return "parentWithChild" }
+func (parent *parentWithChild) Setup(_ *engine.Engine) {}
+func (parent *parentWithChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
 // descriptorStrategy implements both Strategy and Descriptor.
 type descriptorStrategy struct {
 	Lookback int    `pvbt:"lookback" desc:"Lookback period" default:"6"`
@@ -59,6 +84,21 @@ func (s *plainStrategy) Setup(_ *engine.Engine) {}
 func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
+
+var _ = Describe("Strategy child-field skipping", func() {
+	It("excludes Strategy-typed fields from StrategyParameters", func() {
+		params := engine.StrategyParameters(&parentWithChild{})
+		Expect(params).To(HaveLen(1))
+		Expect(params[0].Name).To(Equal("lookback"))
+	})
+
+	It("does not error when hydrateFields encounters a Strategy-typed field", func() {
+		target := &parentWithChild{}
+		err := engine.HydrateFieldsForTest(nil, target)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(target.Lookback).To(Equal(6))
+	})
+})
 
 var _ = Describe("DescribeStrategy", func() {
 	Context("with a Descriptor implementation", func() {

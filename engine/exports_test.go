@@ -5,6 +5,7 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 )
 
 // Test-only exports for black-box testing of dataCache.
@@ -75,3 +76,75 @@ var WalkBackTradingDaysForTest = walkBackTradingDays
 
 // CollectStrategyAssetsForTest exposes collectStrategyAssets.
 var CollectStrategyAssetsForTest func(strategy any, benchmark asset.Asset) []asset.Asset = collectStrategyAssets
+
+// HydrateFieldsForTest exposes hydrateFields for white-box testing.
+func HydrateFieldsForTest(eng *Engine, target interface{}) error {
+	return hydrateFields(eng, target)
+}
+
+// ChildEntryForTest is a type alias for childEntry.
+type ChildEntryForTest = childEntry
+
+// DiscoverChildrenForTest exposes discoverChildren for black-box testing.
+func DiscoverChildrenForTest(eng *Engine, parentStrategy Strategy, visited map[uintptr]bool) error {
+	return eng.discoverChildren(parentStrategy, visited)
+}
+
+// EngineChildrenForTest returns the engine's discovered children slice.
+func EngineChildrenForTest(eng *Engine) []*childEntry {
+	return eng.children
+}
+
+// EngineChildrenByNameForTest returns the engine's childrenByName map.
+func EngineChildrenByNameForTest(eng *Engine) map[string]*childEntry {
+	return eng.childrenByName
+}
+
+// ChildEntryStrategy returns the strategy from a childEntry.
+func ChildEntryStrategy(entry *childEntry) Strategy {
+	return entry.strategy
+}
+
+// ChildEntryName returns the name from a childEntry.
+func ChildEntryName(entry *childEntry) string {
+	return entry.name
+}
+
+// ChildEntryWeight returns the weight from a childEntry.
+func ChildEntryWeight(entry *childEntry) float64 {
+	return entry.weight
+}
+
+// SetChildrenForTest directly injects children into the engine for unit tests
+// that need to verify ChildAllocations and ChildPortfolios without running a
+// full backtest.
+func SetChildrenForTest(eng *Engine, entries []*childEntry) {
+	eng.children = entries
+	eng.childrenByName = make(map[string]*childEntry, len(entries))
+	for _, entry := range entries {
+		eng.childrenByName[entry.name] = entry
+	}
+}
+
+// NewChildEntryForTest constructs a childEntry for use in unit tests.
+func NewChildEntryForTest(name string, weight float64, account *portfolio.Account) *childEntry {
+	return &childEntry{
+		name:    name,
+		weight:  weight,
+		account: account,
+	}
+}
+
+// NewChildEntryWithStrategyForTest constructs a childEntry with a strategy for use in unit tests.
+func NewChildEntryWithStrategyForTest(name string, weight float64, strategy Strategy) *childEntry {
+	return &childEntry{
+		name:     name,
+		weight:   weight,
+		strategy: strategy,
+	}
+}
+
+// SetEngineDateForTest sets the engine's currentDate for unit tests.
+func SetEngineDateForTest(eng *Engine, date time.Time) {
+	eng.currentDate = date
+}
