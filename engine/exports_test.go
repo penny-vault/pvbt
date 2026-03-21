@@ -75,3 +75,8 @@ var WalkBackTradingDaysForTest = walkBackTradingDays
 
 // CollectStrategyAssetsForTest exposes collectStrategyAssets.
 var CollectStrategyAssetsForTest func(strategy any, benchmark asset.Asset) []asset.Asset = collectStrategyAssets
+
+// HydrateFieldsForTest exposes hydrateFields for white-box testing.
+func HydrateFieldsForTest(eng *Engine, target interface{}) error {
+	return hydrateFields(eng, target)
+}
