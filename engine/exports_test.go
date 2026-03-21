@@ -80,3 +80,36 @@ var CollectStrategyAssetsForTest func(strategy any, benchmark asset.Asset) []ass
 func HydrateFieldsForTest(eng *Engine, target interface{}) error {
 	return hydrateFields(eng, target)
 }
+
+// ChildEntryForTest is a type alias for childEntry.
+type ChildEntryForTest = childEntry
+
+// DiscoverChildrenForTest exposes discoverChildren for black-box testing.
+func DiscoverChildrenForTest(eng *Engine, parentStrategy Strategy, visited map[uintptr]bool) error {
+	return eng.discoverChildren(parentStrategy, visited)
+}
+
+// EngineChildrenForTest returns the engine's discovered children slice.
+func EngineChildrenForTest(eng *Engine) []*childEntry {
+	return eng.children
+}
+
+// EngineChildrenByNameForTest returns the engine's childrenByName map.
+func EngineChildrenByNameForTest(eng *Engine) map[string]*childEntry {
+	return eng.childrenByName
+}
+
+// ChildEntryStrategy returns the strategy from a childEntry.
+func ChildEntryStrategy(entry *childEntry) Strategy {
+	return entry.strategy
+}
+
+// ChildEntryName returns the name from a childEntry.
+func ChildEntryName(entry *childEntry) string {
+	return entry.name
+}
+
+// ChildEntryWeight returns the weight from a childEntry.
+func ChildEntryWeight(entry *childEntry) float64 {
+	return entry.weight
+}

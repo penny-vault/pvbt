@@ -68,6 +68,9 @@ type Engine struct {
 	end            time.Time
 	metricProvider map[data.Metric]data.BatchProvider
 	predicting     bool
+
+	children       []*childEntry
+	childrenByName map[string]*childEntry
 }
 
 // New creates a new engine for the given strategy.
