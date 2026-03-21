@@ -201,6 +201,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	e.start = start
 	e.end = end
 
+	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
+	if err := e.broker.Connect(ctx); err != nil {
+		return nil, fmt.Errorf("engine: broker connect: %w", err)
+	}
+
 	// PHASE 2: DATE ENUMERATION
 
 	// 9. Create a daily schedule for equity recording on every trading day.
@@ -436,7 +441,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 // rate logic (DGS3MO yield to cumulative conversion) only runs when benchmark
 // is non-zero, matching the behavior of the parent account.
 func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
-	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose}
+	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	var priceAssets []asset.Asset
 
@@ -470,6 +475,7 @@ func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Acco
 		}
 
 		acct.UpdatePrices(priceDF)
+		acct.UpdateExcursions(priceDF)
 	} else {
 		// No assets to price -- record cash-only portfolio value.
 		cashDF, cashErr := data.NewDataFrame([]time.Time{date}, nil, nil, data.Daily, nil)
@@ -478,6 +484,7 @@ func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Acco
 		}
 
 		acct.UpdatePrices(cashDF)
+		acct.UpdateExcursions(cashDF)
 	}
 
 	return nil

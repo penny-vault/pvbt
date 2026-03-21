@@ -137,4 +137,41 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(simBroker.Close()).To(Succeed())
 		})
 	})
+
+	Context("Broker lifecycle", func() {
+		It("calls Close on the broker when engine.Close() is called", func() {
+			mock := &mockLifecycleBroker{}
+			eng := engine.New(nil, engine.WithBroker(mock))
+
+			Expect(mock.closeCalled).To(BeFalse())
+			Expect(eng.Close()).To(Succeed())
+			Expect(mock.closeCalled).To(BeTrue())
+		})
+	})
 })
+
+// mockLifecycleBroker is a minimal broker.Broker that tracks Connect/Close calls.
+type mockLifecycleBroker struct {
+	connectCalled bool
+	closeCalled   bool
+}
+
+func (mock *mockLifecycleBroker) Connect(_ context.Context) error {
+	mock.connectCalled = true
+	return nil
+}
+
+func (mock *mockLifecycleBroker) Close() error {
+	mock.closeCalled = true
+	return nil
+}
+
+func (mock *mockLifecycleBroker) Submit(_ context.Context, _ broker.Order) error        { return nil }
+func (mock *mockLifecycleBroker) Fills() <-chan broker.Fill                              { return nil }
+func (mock *mockLifecycleBroker) Cancel(_ context.Context, _ string) error               { return nil }
+func (mock *mockLifecycleBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
+	return nil
+}
+func (mock *mockLifecycleBroker) Orders(_ context.Context) ([]broker.Order, error)      { return nil, nil }
+func (mock *mockLifecycleBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
+func (mock *mockLifecycleBroker) Balance(_ context.Context) (broker.Balance, error)     { return broker.Balance{}, nil }

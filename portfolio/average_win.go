@@ -26,7 +26,7 @@ func (averageWin) Description() string {
 }
 
 func (averageWin) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 
 	var (
 		wins   int

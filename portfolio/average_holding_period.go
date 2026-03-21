@@ -27,7 +27,7 @@ func (averageHoldingPeriod) Description() string {
 }
 
 func (averageHoldingPeriod) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 	if len(trips) == 0 {
 		return 0, nil
 	}

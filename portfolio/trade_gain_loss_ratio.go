@@ -30,7 +30,7 @@ func (tradeGainLossRatio) Description() string {
 }
 
 func (tradeGainLossRatio) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 
 	var (
 		wins, losses    int

@@ -139,6 +139,10 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 	e.riskFreeCumulative = 0
 
+	if err := e.broker.Connect(ctx); err != nil {
+		return nil, fmt.Errorf("engine: broker connect: %w", err)
+	}
+
 	// PHASE 2: GOROUTINE
 
 	portfolioCh := make(chan portfolio.Portfolio, 1)

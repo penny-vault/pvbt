@@ -24,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Substitution mapping presents a logical portfolio view to strategies when the tax middleware swaps an asset for a correlated substitute; `Holdings()`, `ProjectedHoldings()`, and `ProjectedWeights()` show the original asset while the transaction log reflects reality
 - A tax drag metric measures the percentage of pre-tax return consumed by trading-related taxes, excluding dividend taxation, complementing the existing tax cost ratio
 - The engine supports meta-strategies that allocate across child strategies declared as struct fields with `weight` tags; children run on their own schedules automatically, and `ChildAllocations()` expands their holdings into a flat set of underlying asset weights (including a `$CASH` sentinel for uninvested cash) ready to pass directly to `RebalanceTo`
+- Track Maximum Favorable Excursion (MFE) and Maximum Adverse Excursion (MAE) for every trade, measuring how far prices moved for and against each position before exit; per-trade details are available via `TradeDetails()` and summary statistics (AverageMFE, AverageMAE, MedianMFE, MedianMAE, EdgeRatio, TradeCaptureRatio) are added to the TradeMetrics bundle
+- The tastytrade broker integration implements the Broker interface for live equity trading, with WebSocket fill streaming, automatic session management, and a sandbox mode for paper trading
 
 ### Changed
 
