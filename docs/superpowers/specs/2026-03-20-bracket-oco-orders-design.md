@@ -122,6 +122,10 @@ batch.Order(spy, portfolio.Sell, 100,
 )
 ```
 
+### Constraint: Batch-Only
+
+`WithBracket` and `OCO` modifiers are only supported through `batch.Order()`. The direct `Account.Order()` path does not support them and returns an error if either modifier is present. Strategies should use batches for all bracket/OCO orders, which is already the preferred submission path.
+
 ## Broker Interface Changes
 
 The base `Broker` interface is unchanged. Brokers that support native OCO/bracket group submission implement an optional interface:
@@ -172,19 +176,16 @@ type Account struct {
 3. **DrainFills**: When a fill arrives:
    - Look up `fill.OrderID` in `pendingOrders` as today.
    - If the filled order belongs to a group, check the group type:
-     - **Bracket entry filled**: Resolve percentage offsets using the fill price, create the stop loss and take profit orders, submit them as an OCO group.
-     - **OCO leg filled**: Cancel all other orders in the group via `broker.Cancel`.
+     - **Bracket entry filled**: Resolve percentage offsets using the fill price, create the two exit orders (stop loss and take profit), assign them order IDs, add them to `pendingOrders`, and submit them to the broker as an OCO group (via `GroupSubmitter.SubmitGroup` or individual `Submit` calls). This makes `DrainFills` a submission point for deferred bracket exits, not just a recording point.
+     - **OCO leg filled (fallback broker)**: Call `broker.Cancel` on each sibling order and remove them from `pendingOrders`.
+     - **OCO leg filled (GroupSubmitter broker)**: The broker already cancelled the sibling internally. The account removes all sibling order IDs from `pendingOrders` directly without calling `broker.Cancel`.
    - Remove completed groups from `pendingGroups`.
 
 4. **CancelOpenOrders** (at frame boundary): Iterates `pendingOrders` and calls `broker.Cancel` for each. Also cleans up `pendingGroups` -- cancelling any order in a group cancels all members.
 
 ### Cancellation Ownership
 
-When a broker implements `GroupSubmitter`, the **broker owns sibling cancellation**. It handles the OCO fill internally and only emits a fill for the winning leg. The account layer sees the fill, looks up the group, and cleans up `pendingGroups` and `pendingOrders` -- but does **not** call `broker.Cancel` because the broker already handled it.
-
-When a broker does **not** implement `GroupSubmitter` (fallback path), the **account owns cancellation**. On receiving a fill for a group member, the account calls `broker.Cancel` on each sibling order.
-
-The account distinguishes these paths by checking whether the broker implements `GroupSubmitter` at the same point it checks during submission.
+The account distinguishes cancellation paths by checking whether the broker implements `GroupSubmitter` (the same check used during submission). `GroupSubmitter` brokers own sibling cancellation internally and only emit a fill for the winning leg. Fallback brokers require the account to call `broker.Cancel` explicitly. See step 3 above for the detailed flow.
 
 **Key invariant**: Group state is always consistent -- if any order in a group is cancelled or filled, the group reacts atomically. The account layer is the single source of truth for group membership.
 
