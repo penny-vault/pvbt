@@ -38,11 +38,13 @@ type accountItem struct {
 }
 
 type orderRequest struct {
-	TimeInForce string     `json:"time-in-force"`
-	OrderType   string     `json:"order-type"`
-	Price       float64    `json:"price,omitempty"`
-	StopTrigger float64    `json:"stop-trigger,omitempty"`
-	Legs        []orderLeg `json:"legs"`
+	TimeInForce     string     `json:"time-in-force"`
+	OrderType       string     `json:"order-type"`
+	Price           float64    `json:"price,omitempty"`
+	PriceEffect     string     `json:"price-effect,omitempty"`
+	StopTrigger     float64    `json:"stop-trigger,omitempty"`
+	AutomatedSource bool       `json:"automated-source"`
+	Legs            []orderLeg `json:"legs"`
 }
 
 type orderLeg struct {
@@ -129,10 +131,12 @@ type fillEvent struct {
 
 func toTastytradeOrder(order broker.Order) orderRequest {
 	return orderRequest{
-		TimeInForce: mapTimeInForce(order.TimeInForce),
-		OrderType:   mapOrderType(order.OrderType),
-		Price:       order.LimitPrice,
-		StopTrigger: order.StopPrice,
+		TimeInForce:     mapTimeInForce(order.TimeInForce),
+		OrderType:       mapOrderType(order.OrderType),
+		Price:           order.LimitPrice,
+		PriceEffect:     mapPriceEffect(order.Side, order.OrderType),
+		StopTrigger:     order.StopPrice,
+		AutomatedSource: true,
 		Legs: []orderLeg{
 			{
 				InstrumentType: "Equity",
@@ -193,6 +197,21 @@ func toBrokerFill(event fillEvent) broker.Fill {
 
 // --- Mapping helpers ---
 
+func mapPriceEffect(side broker.Side, orderType broker.OrderType) string {
+	if orderType == broker.Market {
+		return ""
+	}
+
+	switch side {
+	case broker.Buy:
+		return "Debit"
+	case broker.Sell:
+		return "Credit"
+	default:
+		return "Debit"
+	}
+}
+
 func mapSide(side broker.Side) string {
 	switch side {
 	case broker.Buy:
@@ -238,7 +257,7 @@ func mapTimeInForce(tif broker.TimeInForce) string {
 
 func mapTTStatus(status string) broker.OrderStatus {
 	switch status {
-	case "Received", "Routed", "In Flight":
+	case "Received", "Routed", "In Flight", "Contingent":
 		return broker.OrderSubmitted
 	case "Live":
 		return broker.OrderOpen

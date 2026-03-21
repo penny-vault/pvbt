@@ -88,6 +88,82 @@ var _ = Describe("Types", Label("translation"), func() {
 			Expect(result.Price).To(Equal(155.0))
 		})
 
+		It("sets price-effect to Debit for buy orders", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Buy,
+				Qty:         10,
+				OrderType:   broker.Limit,
+				LimitPrice:  150.0,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.PriceEffect).To(Equal("Debit"))
+		})
+
+		It("sets price-effect to Credit for sell orders", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Sell,
+				Qty:         10,
+				OrderType:   broker.Limit,
+				LimitPrice:  150.0,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.PriceEffect).To(Equal("Credit"))
+		})
+
+		It("omits price-effect for market orders", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Buy,
+				Qty:         10,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.PriceEffect).To(BeEmpty())
+		})
+
+		It("sets price-effect to Debit for stop buy orders", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Buy,
+				Qty:         10,
+				OrderType:   broker.Stop,
+				StopPrice:   150.0,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.PriceEffect).To(Equal("Debit"))
+		})
+
+		It("sets price-effect to Credit for stop sell orders", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Sell,
+				Qty:         10,
+				OrderType:   broker.Stop,
+				StopPrice:   150.0,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.PriceEffect).To(Equal("Credit"))
+		})
+
+		It("sets automated-source to true", func() {
+			order := broker.Order{
+				Asset:       asset.Asset{Ticker: "AAPL"},
+				Side:        broker.Buy,
+				Qty:         10,
+				OrderType:   broker.Market,
+				TimeInForce: broker.Day,
+			}
+			result := toTastytradeOrder(order)
+			Expect(result.AutomatedSource).To(BeTrue())
+		})
+
 		It("maps all time-in-force values", func() {
 			for _, tc := range []struct {
 				tif    broker.TimeInForce
@@ -151,6 +227,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				{"Received", broker.OrderSubmitted},
 				{"Routed", broker.OrderSubmitted},
 				{"In Flight", broker.OrderSubmitted},
+				{"Contingent", broker.OrderSubmitted},
 				{"Live", broker.OrderOpen},
 				{"Filled", broker.OrderFilled},
 				{"Cancelled", broker.OrderCancelled},
