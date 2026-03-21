@@ -717,8 +717,56 @@ func (a *Account) Record(txn Transaction) {
 func (a *Account) WashSaleRecords() []WashSaleRecord {
 	result := make([]WashSaleRecord, len(a.washSales))
 	copy(result, a.washSales)
+
 	return result
 }
+
+// WashSaleWindow returns wash sale records for the given asset only.
+// The returned slice is a copy; mutations do not affect internal state.
+// This implements the TaxAware interface.
+func (a *Account) WashSaleWindow(ast asset.Asset) []WashSaleRecord {
+	var result []WashSaleRecord
+
+	for _, rec := range a.washSales {
+		if rec.Asset == ast {
+			result = append(result, rec)
+		}
+	}
+
+	return result
+}
+
+// UnrealizedLots returns a deep copy of the open tax lots for the given asset.
+// The caller may mutate the returned slice without affecting internal state.
+// This implements the TaxAware interface.
+func (a *Account) UnrealizedLots(ast asset.Asset) []TaxLot {
+	src := a.taxLots[ast]
+	if len(src) == 0 {
+		return nil
+	}
+
+	result := make([]TaxLot, len(src))
+	copy(result, src)
+
+	return result
+}
+
+// RealizedGainsYTD returns the total realized long-term and short-term
+// capital gains across all transactions. The "YTD" label is aspirational:
+// for a single-year backtest this equals year-to-date gains.
+// This implements the TaxAware interface.
+func (a *Account) RealizedGainsYTD() (ltcg, stcg float64) {
+	ltcg, stcg, _, _ = realizedGains(a.Transactions())
+	return ltcg, stcg
+}
+
+// RegisterSubstitution is a stub for Task 7 substitution mapping.
+// This implements the TaxAware interface.
+func (a *Account) RegisterSubstitution(original, substitute asset.Asset, until time.Time) {}
+
+// ActiveSubstitutions is a stub for Task 7 substitution mapping.
+// This implements the TaxAware interface.
+func (a *Account) ActiveSubstitutions() map[asset.Asset]Substitution { return nil }
 
 // pruneWashSaleTracking removes entries older than 30 days from the
 // wash sale tracking maps.
@@ -952,6 +1000,7 @@ func (a *Account) splitLot(ast asset.Asset, lotID string, headQty float64) (head
 		}
 
 		a.taxLots[ast] = append(lots, tail)
+
 		return headID, tailID
 	}
 
