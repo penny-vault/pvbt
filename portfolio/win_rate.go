@@ -27,7 +27,7 @@ func (winRate) Description() string {
 }
 
 func (winRate) Compute(a *Account, _ *Period) (float64, error) {
-	trips, _ := roundTrips(a.Transactions())
+	trips, _ := roundTrips(a.TradeDetails(), a.Transactions())
 	if len(trips) == 0 {
 		return 0, nil
 	}

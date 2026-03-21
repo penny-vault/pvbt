@@ -29,15 +29,17 @@ import (
 // through June 2024. The data is deterministic and suitable for use in
 // testable examples and documentation.
 //
-// The returned providers supply [MetricClose], [AdjClose], and [Dividend]
-// metrics. Dividend values are zero (no dividends in the synthetic data).
+// The returned providers supply [MetricClose], [AdjClose], [Dividend],
+// [MetricHigh], and [MetricLow] metrics. Dividend values are zero (no
+// dividends in the synthetic data). High and Low are derived from Close
+// by adding/subtracting 1% of the base price.
 func ExampleData() (*TestProvider, AssetProvider) {
 	spy := asset.Asset{CompositeFigi: "BBG000BDTBL9", Ticker: "SPY"}
 	tlt := asset.Asset{CompositeFigi: "BBG000BKJMY2", Ticker: "TLT"}
 	gld := asset.Asset{CompositeFigi: "BBG000CRF6Q8", Ticker: "GLD"}
 
 	assets := []asset.Asset{spy, tlt, gld}
-	metrics := []Metric{MetricClose, AdjClose, Dividend}
+	metrics := []Metric{MetricClose, AdjClose, Dividend, MetricHigh, MetricLow}
 
 	// Generate trading days (skip weekends). Timestamps use US Eastern
 	// at 16:00 (market close) to match tradecron schedule dates.
@@ -85,6 +87,10 @@ func ExampleData() (*TestProvider, AssetProvider) {
 			vals[(aIdx*numMetrics+1)*numTimes+timeIdx] = price
 			// Dividend column (zero -- no dividends in synthetic data)
 			vals[(aIdx*numMetrics+2)*numTimes+timeIdx] = 0
+			// MetricHigh column (close + 1% of base price)
+			vals[(aIdx*numMetrics+3)*numTimes+timeIdx] = math.Round((price+basePrice[aIdx]*0.01)*100) / 100
+			// MetricLow column (close - 1% of base price)
+			vals[(aIdx*numMetrics+4)*numTimes+timeIdx] = math.Round((price-basePrice[aIdx]*0.01)*100) / 100
 		}
 	}
 

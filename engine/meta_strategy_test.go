@@ -230,13 +230,17 @@ func makeLowPriceTestData(start time.Time, numDays int, testAssets []asset.Asset
 		for metricIdx := 0; metricIdx < numMetrics; metricIdx++ {
 			colStart := (assetIdx*numMetrics + metricIdx) * numDays
 			for dayIdx := 0; dayIdx < numDays; dayIdx++ {
+				basePrice := 10.0 + float64(assetIdx)*2.0 + float64(dayIdx)*0.01
+
 				switch metrics[metricIdx] {
 				case data.Dividend:
 					vals[colStart+dayIdx] = 0.0
+				case data.MetricHigh:
+					vals[colStart+dayIdx] = basePrice * 1.01
+				case data.MetricLow:
+					vals[colStart+dayIdx] = basePrice * 0.99
 				default:
-					// Stable price around 10, with small per-asset offset
-					// and gentle daily drift.
-					vals[colStart+dayIdx] = 10.0 + float64(assetIdx)*2.0 + float64(dayIdx)*0.01
+					vals[colStart+dayIdx] = basePrice
 				}
 			}
 		}
@@ -264,7 +268,7 @@ var _ = Describe("MetaStrategy", func() {
 		tlt = asset.Asset{CompositeFigi: "FIGI-TLT", Ticker: "TLT"}
 		allAssets = []asset.Asset{spy, tlt}
 		assetProvider = &mockAssetProvider{assets: allAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow}
 
 		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		dataFrame := makeLowPriceTestData(dataStart, 400, allAssets, metrics)
