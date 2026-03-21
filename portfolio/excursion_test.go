@@ -441,6 +441,93 @@ var _ = Describe("ExcursionRecord", func() {
 		})
 	})
 
+	Describe("MFE/MAE summary metrics", func() {
+		var acct *portfolio.Account
+
+		BeforeEach(func() {
+			acme := asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+			widg := asset.Asset{CompositeFigi: "WIDG", Ticker: "WIDG"}
+			acct = portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+
+			// Trade 1: ACME buy@100, high=115, low=90, sell@110
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.BuyTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: -1_000.0,
+			})
+			df1, err := data.NewDataFrame(
+				[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+				[]asset.Asset{acme},
+				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+				data.Daily, []float64{105.0, 105.0, 115.0, 90.0},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdateExcursions(df1)
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   portfolio.SellTransaction,
+				Qty:    10,
+				Price:  110.0,
+				Amount: 1_100.0,
+			})
+
+			// Trade 2: WIDG buy@50, high=55, low=42, sell@45
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  widg,
+				Type:   portfolio.BuyTransaction,
+				Qty:    20,
+				Price:  50.0,
+				Amount: -1_000.0,
+			})
+			df2, err := data.NewDataFrame(
+				[]time.Time{time.Date(2024, 3, 15, 0, 0, 0, 0, time.UTC)},
+				[]asset.Asset{widg},
+				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+				data.Daily, []float64{48.0, 48.0, 55.0, 42.0},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdateExcursions(df2)
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  widg,
+				Type:   portfolio.SellTransaction,
+				Qty:    20,
+				Price:  45.0,
+				Amount: 900.0,
+			})
+		})
+
+		// Trade 1: MFE = (115-100)/100 = 0.15, MAE = (90-100)/100 = -0.10
+		// Trade 2: MFE = (55-50)/50 = 0.10, MAE = (42-50)/50 = -0.16
+
+		It("computes AverageMFE", func() {
+			val, err := acct.PerformanceMetric(portfolio.AverageMFE).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", 0.125, 1e-9))
+		})
+
+		It("computes AverageMAE", func() {
+			val, err := acct.PerformanceMetric(portfolio.AverageMAE).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", -0.13, 1e-9))
+		})
+	})
+
+	Describe("with no trades", func() {
+		It("returns zero for averages", func() {
+			emptyAcct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			tradeMetrics, err := emptyAcct.TradeMetrics()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tradeMetrics.AverageMFE).To(Equal(0.0))
+			Expect(tradeMetrics.AverageMAE).To(Equal(0.0))
+		})
+	})
+
 	Describe("position close", func() {
 		It("removes excursion record when position is fully closed", func() {
 			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
