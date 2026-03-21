@@ -516,15 +516,33 @@ var _ = Describe("ExcursionRecord", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(val).To(BeNumerically("~", -0.13, 1e-9))
 		})
+
+		// With 2 trades: median = average of the two
+		// MedianMFE = median(0.15, 0.10) = 0.125
+		// MedianMAE = median(-0.10, -0.16) = -0.13
+
+		It("computes MedianMFE", func() {
+			val, err := acct.PerformanceMetric(portfolio.MedianMFE).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", 0.125, 1e-9))
+		})
+
+		It("computes MedianMAE", func() {
+			val, err := acct.PerformanceMetric(portfolio.MedianMAE).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", -0.13, 1e-9))
+		})
 	})
 
 	Describe("with no trades", func() {
-		It("returns zero for averages", func() {
+		It("returns zero for averages and medians", func() {
 			emptyAcct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			tradeMetrics, err := emptyAcct.TradeMetrics()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tradeMetrics.AverageMFE).To(Equal(0.0))
 			Expect(tradeMetrics.AverageMAE).To(Equal(0.0))
+			Expect(tradeMetrics.MedianMFE).To(Equal(0.0))
+			Expect(tradeMetrics.MedianMAE).To(Equal(0.0))
 		})
 	})
 

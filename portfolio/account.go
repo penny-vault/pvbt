@@ -583,6 +583,16 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 		errs = append(errs, err)
 	}
 
+	tradeMetrics.MedianMFE, err = a.PerformanceMetric(MedianMFE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.MedianMAE, err = a.PerformanceMetric(MedianMAE).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return tradeMetrics, errors.Join(errs...)
 }
 

@@ -29,4 +29,6 @@ type TradeMetrics struct {
 	GainLossRatio        float64 // average gain divided by average loss
 	AverageMFE           float64 // mean MFE across all round trips
 	AverageMAE           float64 // mean MAE across all round trips
+	MedianMFE            float64 // median MFE across all round trips
+	MedianMAE            float64 // median MAE across all round trips
 }

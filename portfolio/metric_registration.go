@@ -61,7 +61,7 @@ func WithTradeMetrics() Option {
 		for _, metric := range []PerformanceMetric{
 			WinRate, AverageWin, AverageLoss, ProfitFactor,
 			AverageHoldingPeriod, Turnover, NPositivePeriods, TradeGainLossRatio,
-			AverageMFE, AverageMAE,
+			AverageMFE, AverageMAE, MedianMFE, MedianMAE,
 		} {
 			WithMetric(metric)(acct)
 		}
