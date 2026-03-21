@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tastytrade broker integration implements the Broker interface for live equity trading, with WebSocket fill streaming, automatic session management, and a sandbox mode for paper trading
 - Bracket and OCO (one-cancels-other) order groups let strategies submit linked exit orders. A bracket combines an entry order with a stop-loss and take-profit that activate only after the entry fills, while an OCO pair cancels the remaining leg as soon as one fills. Brokers that support native group submission implement the optional `GroupSubmitter` interface.
 - The simulated broker resolves intrabar bracket and OCO fills using high/low price data, with stop-loss taking priority when both legs could trigger on the same bar
+- Strategies can open and manage short positions: sell-to-open creates short tax lots with proper cost basis tracking, buy-to-cover closes them, and unrealized P&L includes short lots alongside long lots
+- Margin accounting is fully modeled on the simulated broker: initial margin defaults to 50% (Reg T) and maintenance margin defaults to 30%, both configurable; `Portfolio` exposes `MarginRatio`, `MarginDeficiency`, `ShortMarketValue`, `BuyingPower`, and `Equity` methods; the broker enforces initial margin requirements when submitting short orders
+- Borrow fees accrue daily on short positions at a configurable annualized rate (default 0.5%), and short positions on ex-dates automatically receive dividend obligation debits
+- Strategies that implement the optional `MarginCallHandler` interface receive control when a margin deficiency occurs; strategies that do not implement it fall back to automatic proportional liquidation of positions
+- Stock splits adjust position quantities and tax lot prices for both long and short positions, and the transaction log records a `SplitTransaction` entry for each affected position
+- `RebalanceTo` accepts negative weights to declare short allocations using the industry-standard sign convention; risk middleware applies position size limits symmetrically to shorts, and two new middleware — `GrossExposureLimit` and `NetExposureLimit` — bound overall leverage
+- Performance metrics include `ShortWinRate`, `LongWinRate`, `ShortProfitFactor`, and `LongProfitFactor` to break down trade statistics separately for long and short sides
+- `Batch` accepts a `SkipMiddleware` flag so emergency margin-call liquidation orders bypass the middleware chain
 
 ### Changed
 
@@ -32,8 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Breaking:** Strategies declare their schedule in `Describe()` instead of calling `eng.Schedule()` during `Setup`
 - Benchmark moves from a strategy concern to a runner concern, set via the `--benchmark` flag or suggested by strategies in `Describe()`; `eng.SetBenchmark()` is removed
 - **Breaking:** `Strategy.Compute` receives a new `*portfolio.Batch` parameter; strategies write orders and annotations to the batch instead of calling methods on the portfolio directly
-- **Breaking:** The `Portfolio` interface becomes read-only; `RebalanceTo`, `Order`, and `Annotate` move to the `Batch` type, preventing strategies from bypassing middleware. The interface also gains `Prices()` and `TradeDetails()` methods.
-- **Breaking:** The `PortfolioSnapshot` interface gains `TradeDetails()` and `Excursions()` methods for accessing per-trade MFE/MAE data
+- **Breaking:** The `Portfolio` interface becomes read-only; `RebalanceTo`, `Order`, and `Annotate` move to the `Batch` type, preventing strategies from bypassing middleware. The interface also gains `Prices()`, `TradeDetails()`, and six margin methods (`Equity`, `LongMarketValue`, `ShortMarketValue`, `MarginRatio`, `MarginDeficiency`, `BuyingPower`).
+- **Breaking:** The `PortfolioSnapshot` interface gains `TradeDetails()`, `Excursions()`, and `ShortLots()` methods
+- **Breaking:** `TradeDetail` gains a `Direction` field of type `TradeDirection`; code constructing `TradeDetail` with positional struct literals will not compile (named-field literals are unaffected, with `Direction` defaulting to `TradeLong`)
+- **Breaking:** `TradeMetrics` gains four new fields (`LongWinRate`, `ShortWinRate`, `LongProfitFactor`, `ShortProfitFactor`); same positional literal concern as `TradeDetail`
+- **Breaking:** `Record()` now creates short tax lots when a sell exceeds the long position, and covers short lots when a buy is recorded while short; code that relied on sells silently producing negative holdings without lot tracking will see different behavior
+- **Breaking:** The engine housekeeping order changed from dividends-then-fills to fills-then-splits-then-dividends, which may produce slightly different dividend amounts when a fill and dividend occur on the same day
+- **Breaking:** The simulated broker now silently rejects short sell orders that would violate the initial margin requirement (returns no fill instead of always filling)
 - **Breaking:** `universe.DataSource` becomes a type alias for `data.DataSource`; the `Fetch` lookback parameter changes from `portfolio.Period` to `data.Period`
 - **Breaking:** `Annotation.Timestamp` changes from `int64` (Unix seconds) to `time.Time`; the `data.Annotator` interface and all call sites are updated accordingly
 - **Breaking:** The broker delivers fills through a buffered channel (`Fills()`) instead of returning them from `Submit` and `Replace`, enabling non-blocking order execution for both backtesting and live trading

@@ -223,6 +223,31 @@ type PriceProvider interface {
 
 The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). Fills are delivered through the `Fills()` channel, consistent with the async interface used by live brokers. The simulated broker does not support `Cancel` or `Replace` operations.
 
+#### Short selling
+
+The simulated broker supports short selling. All securities are assumed to be borrowable -- the broker does not model locate requirements or hard-to-borrow conditions.
+
+**Margin enforcement.** When a short order is submitted, the broker checks that the account has sufficient cash to satisfy the initial margin requirement. If cash is insufficient, the order is rejected and the fill channel receives no fill for that order ID. Margin rates are configurable at construction:
+
+```go
+sim := broker.NewSimulatedBroker(priceProvider,
+    broker.WithInitialMargin(0.50),      // 50% initial margin (default: Reg T, 50%)
+    broker.WithMaintenanceMargin(0.30),  // 30% maintenance margin (default: 25%)
+)
+```
+
+`WithInitialMargin` sets the fraction of the short sale proceeds that must be held as collateral at the time of the trade. `WithMaintenanceMargin` sets the fraction of the current market value of short positions that must be maintained as equity; the engine checks this every trading day (see [engine.md](engine.md)).
+
+**Borrow fees.** The simulated broker charges a daily borrow fee on all open short positions. The fee is calculated from a configurable annualized rate and debited from cash each day during the engine's housekeeping step:
+
+```go
+sim := broker.NewSimulatedBroker(priceProvider,
+    broker.WithBorrowRate(0.03), // 3% annualized borrow fee (default: 0.0%)
+)
+```
+
+The daily fee for each short lot is `(annualized rate / 252) * current market value of the lot`. The same rate applies to all securities; per-symbol borrow rate modeling is not currently supported.
+
 ### tastytrade
 
 The `broker/tastytrade` package implements `Broker` and `GroupSubmitter` for live trading with tastytrade. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, and native OCO/bracket (OTOCO) order groups.
