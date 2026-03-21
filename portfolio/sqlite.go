@@ -69,7 +69,8 @@ CREATE TABLE tax_lots (
     asset_figi   TEXT NOT NULL,
     date         TEXT NOT NULL,
     quantity     REAL NOT NULL,
-    price        REAL NOT NULL
+    price        REAL NOT NULL,
+    id           TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE metrics (
@@ -356,7 +357,7 @@ func (a *Account) writeTaxLots(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO tax_lots (asset_ticker, asset_figi, date, quantity, price) VALUES (?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO tax_lots (asset_ticker, asset_figi, date, quantity, price, id) VALUES (?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare tax_lots: %w", err)
 	}
@@ -365,7 +366,7 @@ func (a *Account) writeTaxLots(tx *sql.Tx) error {
 	for ast, lots := range a.taxLots {
 		for _, lot := range lots {
 			d := lot.Date.Format(dateFormat)
-			if _, err := stmt.Exec(ast.Ticker, ast.CompositeFigi, d, lot.Qty, lot.Price); err != nil {
+			if _, err := stmt.Exec(ast.Ticker, ast.CompositeFigi, d, lot.Qty, lot.Price, lot.ID); err != nil {
 				return fmt.Errorf("insert tax_lot: %w", err)
 			}
 		}
@@ -727,7 +728,7 @@ func (a *Account) readHoldings(db *sql.DB) error {
 }
 
 func (a *Account) readTaxLots(db *sql.DB) error {
-	rows, err := db.Query("SELECT asset_ticker, asset_figi, date, quantity, price FROM tax_lots ORDER BY date")
+	rows, err := db.Query("SELECT asset_ticker, asset_figi, date, quantity, price, id FROM tax_lots ORDER BY date")
 	if err != nil {
 		return fmt.Errorf("query tax_lots: %w", err)
 	}
@@ -735,11 +736,11 @@ func (a *Account) readTaxLots(db *sql.DB) error {
 
 	for rows.Next() {
 		var (
-			ticker, figi, dateStr string
-			qty, price            float64
+			ticker, figi, dateStr, lotID string
+			qty, price                   float64
 		)
 
-		if err := rows.Scan(&ticker, &figi, &dateStr, &qty, &price); err != nil {
+		if err := rows.Scan(&ticker, &figi, &dateStr, &qty, &price, &lotID); err != nil {
 			return fmt.Errorf("scan tax_lot: %w", err)
 		}
 
@@ -750,6 +751,7 @@ func (a *Account) readTaxLots(db *sql.DB) error {
 
 		ast := asset.Asset{Ticker: ticker, CompositeFigi: figi}
 		a.taxLots[ast] = append(a.taxLots[ast], TaxLot{
+			ID:    lotID,
 			Date:  parsedTime,
 			Qty:   qty,
 			Price: price,
