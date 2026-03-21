@@ -492,6 +492,30 @@ Available order modifiers:
 | `OnTheOpen` | Fill at market open price |
 | `OnTheClose` | Fill at market close price |
 | `WithJustification(s)` | Attach explanation to resulting transactions |
+| `WithBracket(sl, tp)` | Attach stop-loss and take-profit exits to an entry |
+| `OCO(legA, legB)` | Create two linked orders; filling one cancels the other |
+| `StopLossPercent(pct)` | Exit target: percentage below fill price |
+| `TakeProfitPercent(pct)` | Exit target: percentage above fill price |
+| `StopLossPrice(price)` | Exit target: fixed stop price |
+| `TakeProfitPrice(price)` | Exit target: fixed take-profit price |
+| `StopLeg(price)` | OCO leg: stop order at price |
+| `LimitLeg(price)` | OCO leg: limit order at price |
+
+**Bracket and OCO orders** link entries with automatic exits:
+
+```go
+// Buy with automatic stop-loss (-5%) and take-profit (+10%).
+batch.Order(ctx, spy, portfolio.Buy, 100,
+    portfolio.WithBracket(portfolio.StopLossPercent(5), portfolio.TakeProfitPercent(10)),
+)
+
+// Protect an existing position with linked stop + limit.
+batch.Order(ctx, spy, portfolio.Sell, 100,
+    portfolio.OCO(portfolio.StopLeg(380), portfolio.LimitLeg(440)),
+)
+```
+
+Bracket/OCO modifiers are batch-only. See the [Portfolio documentation](portfolio.md#bracket-and-oco-orders) for full details.
 
 ### Reading portfolio state
 

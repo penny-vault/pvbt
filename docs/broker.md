@@ -58,6 +58,8 @@ type Order struct {
     StopPrice     float64
     GTDDate       time.Time
     Justification string
+    GroupID       string
+    GroupRole     GroupRole
 }
 ```
 
@@ -127,6 +129,33 @@ type Fill struct {
     FilledAt time.Time
 }
 ```
+
+## Order Groups
+
+Orders can be linked into groups for coordinated execution.
+
+| Type | Description |
+|------|-------------|
+| `GroupOCO` | Two orders where filling one cancels the other |
+| `GroupBracket` | Entry order plus an OCO pair of exits |
+
+`GroupRole` identifies an order's purpose within its group:
+
+| Role | Description |
+|------|-------------|
+| `RoleEntry` | The entry order in a bracket group |
+| `RoleStopLoss` | The stop-loss exit leg |
+| `RoleTakeProfit` | The take-profit exit leg |
+
+The `GroupSubmitter` interface allows brokers to submit linked orders atomically:
+
+```go
+type GroupSubmitter interface {
+    SubmitGroup(ctx context.Context, orders []Order, groupType GroupType) error
+}
+```
+
+When a broker implements `GroupSubmitter`, the account submits OCO pairs through it for atomic execution. When it does not, the account submits orders individually and manages cancellation on fill.
 
 ## Position
 
