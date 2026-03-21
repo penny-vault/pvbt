@@ -38,7 +38,7 @@ func (s *ADM) Describe() engine.StrategyDescription {
 	}
 }
 
-func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portfolio) error {
+func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portfolio, batch *portfolio.Batch) error {
 	mom := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3), data.MetricClose)
 	if err := mom.Err(); err != nil {
 		return nil
@@ -54,7 +54,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portf
 	if err != nil {
 		return nil
 	}
-	p.RebalanceTo(ctx, plan...)
+	batch.RebalanceTo(ctx, plan...)
 	return nil
 }
 ```
@@ -77,24 +77,26 @@ A strategy implements three methods:
 |--------|---------|
 | `Name()` | Returns the strategy's short identifier |
 | `Setup(eng *Engine)` | Optional initialization after fields are populated |
-| `Compute(ctx, eng, p)` | Runs at each scheduled step to make allocation decisions |
+| `Compute(ctx, eng, p, batch)` | Runs at each scheduled step to make allocation decisions |
 
 The engine runs in three phases:
 
-1. **Setup** -- populates strategy fields from TOML, registers universes, and builds a data loading plan.
+1. **Setup** -- populates strategy fields from struct tags, registers universes, and builds a data loading plan.
 2. **Computation** -- steps through time according to the schedule, calling `Compute` at each step.
 3. **Results** -- the returned portfolio provides access to the transaction log and performance metrics over its full history.
 
 ## Documentation
 
-- [Overview](docs/overview.md) -- full walkthrough of the example strategy
+- [Strategy Author's Guide](docs/strategy-guide.md) -- complete walkthrough from first strategy to testing
+- [Overview](docs/overview.md) -- introduction and design principles
 - [Engine](docs/engine.md) -- configuration, strategy interface, data access, trade preview
 - [Universes](docs/universes.md) -- asset groups, index tracking, historical membership
 - [Data](docs/data.md) -- metrics, data providers, DataFrames, signals
-- [Portfolio](docs/portfolio.md) -- construction, order types, performance measurement
-- [Broker](docs/broker.md) -- broker interface for live trading
+- [Portfolio](docs/portfolio.md) -- construction, order types, risk middleware, performance measurement
+- [Performance Metrics](docs/performance-metrics.md) -- 60+ metrics reference, custom metrics, MFE/MAE
+- [Broker](docs/broker.md) -- broker interface, tastytrade integration, order groups
 - [Scheduling](docs/scheduling.md) -- tradecron syntax and schedule configuration
-- [Configuration](docs/configuration.md) -- TOML file format and strategy parameterization
+- [Configuration](docs/configuration.md) -- struct tags, presets, and strategy parameterization
 
 ## License
 

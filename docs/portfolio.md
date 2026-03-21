@@ -17,6 +17,36 @@ p, err := eng.Backtest(ctx, start, end)
 
 The engine creates and manages the portfolio account internally. `WithInitialDeposit` sets the starting cash. For advanced use cases, `WithAccount` lets you pass a pre-configured `*portfolio.Account`, and `WithPortfolioSnapshot` restores from a previous run.
 
+### Creating an Account directly
+
+When using `engine.WithAccount`, construct the account with `portfolio.New`:
+
+```go
+acct := portfolio.New(
+    portfolio.WithCash(100_000, startDate),
+    portfolio.WithBenchmark(eng.Asset("SPY")),
+)
+```
+
+Account options:
+
+| Option | Purpose |
+|--------|---------|
+| `WithCash(amount, date)` | Initial cash balance and starting date |
+| `WithBroker(b)` | Attach a broker for order execution |
+| `WithBenchmark(a)` | Set the benchmark asset |
+| `WithAllMetrics()` | Register all 60+ performance metrics (default) |
+| `WithSummaryMetrics()` | Register only Summary metrics (TWRR, Sharpe, etc.) |
+| `WithRiskMetrics()` | Register only risk metrics (Beta, Alpha, etc.) |
+| `WithTradeMetrics()` | Register only trade metrics (WinRate, ProfitFactor, etc.) |
+| `WithTaxMetrics()` | Register only tax metrics (LTCG, STCG, etc.) |
+| `WithWithdrawalMetrics()` | Register only withdrawal rate metrics |
+| `WithMetric(m)` | Register a single metric |
+| `WithDefaultLotSelection(method)` | Default tax lot selection method |
+| `WithPortfolioSnapshot(snap)` | Restore from a previous run's snapshot |
+
+If no metric options are specified, `WithAllMetrics()` is applied automatically. For faster backtests that only need specific metrics, select a subset.
+
 For backtesting, the engine automatically attaches a simulated broker. For live trading, pass a real broker via `engine.WithBroker(b)`. The portfolio delegates all order execution to the broker and never computes fill prices itself.
 
 ## Allocation and PortfolioPlan
@@ -435,20 +465,22 @@ The `risk` package provides four middleware implementations:
 
 | Middleware | Description |
 |------------|-------------|
-| `MaxPositionSize(limit)` | Caps any single position at `limit` (0.0-1.0) of total portfolio value. Injects sell orders to reduce overweight positions; excess goes to cash. |
-| `DrawdownCircuitBreaker(threshold)` | Force-liquidates all equity positions when drawdown from peak exceeds `threshold` (e.g., 0.15 for 15%). Removes all buy orders and sells everything. |
-| `MaxPositionCount(n)` | Limits concurrent positions to `n`. When projected holdings exceed the limit, the smallest positions by dollar value are sold first. |
-| `VolatilityScaler(dataSource, lookback)` | Scales position sizes inversely to trailing realized volatility over `lookback` trading days. Higher-volatility assets receive smaller allocations. Requires a `DataSource` (the engine satisfies this interface). |
+| `MaxPositionSize(limit float64)` | Caps any single position at `limit` (0.0-1.0) of total portfolio value. Injects sell orders to reduce overweight positions; excess goes to cash. |
+| `DrawdownCircuitBreaker(threshold float64)` | Force-liquidates all equity positions when drawdown from peak exceeds `threshold` (e.g., 0.15 for 15%). Removes all buy orders and sells everything. |
+| `MaxPositionCount(n int)` | Limits concurrent positions to `n`. When projected holdings exceed the limit, the smallest positions by dollar value are sold first. |
+| `VolatilityScaler(ds DataSource, lookback int)` | Scales position sizes inversely to trailing realized volatility over `lookback` trading days. Higher-volatility assets receive smaller allocations. The engine satisfies the `DataSource` interface. |
 
 ### Convenience profiles
 
 For common configurations, the `risk` package provides pre-built middleware chains:
 
 ```go
-risk.Conservative(eng)  // 20% max position, 10% drawdown breaker, vol scaling (60 day)
+risk.Conservative(eng)  // 20% max position, 10% drawdown breaker, vol scaling (60 day) -- requires DataSource
 risk.Moderate()         // 25% max position, 15% drawdown breaker
 risk.Aggressive()       // 35% max position, 25% drawdown breaker
 ```
+
+`Conservative` takes a `DataSource` (the engine satisfies this interface) because it includes `VolatilityScaler`. `Moderate` and `Aggressive` do not require one.
 
 ### Risk controls and strategy separation
 

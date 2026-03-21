@@ -28,10 +28,10 @@ import (
     "context"
     "time"
 
+    "github.com/penny-vault/pvbt/data"
     "github.com/penny-vault/pvbt/engine"
     "github.com/penny-vault/pvbt/portfolio"
     "github.com/penny-vault/pvbt/signal"
-    "github.com/penny-vault/pvbt/tradecron"
     "github.com/penny-vault/pvbt/universe"
     "github.com/rs/zerolog/log"
 )
@@ -43,11 +43,13 @@ type ADM struct {
 
 func (s *ADM) Name() string { return "adm" }
 
-func (s *ADM) Setup(e *engine.Engine) {
-    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-    e.Schedule(tc)
-    e.SetBenchmark(e.Asset("VFINX"))
-    e.RiskFreeAsset(e.Asset("DGS3MO"))
+func (s *ADM) Setup(e *engine.Engine) {}
+
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:  "@monthend",
+        Benchmark: "VFINX",
+    }
 }
 
 func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
@@ -120,20 +122,24 @@ The `pvbt` tag controls the CLI flag name. If omitted, the lowercase field name 
 
 ### Setup
 
+The preferred way to declare the schedule and benchmark is through the `Describe()` method (see [Configuration](configuration.md)). If the strategy implements `Descriptor`, Setup can be minimal:
+
 ```go
-func (s *ADM) Setup(e *engine.Engine) {
-    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-    e.Schedule(tc)
-    e.SetBenchmark(e.Asset("VFINX"))
-    e.RiskFreeAsset(e.Asset("DGS3MO"))
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:  "@monthend",
+        Benchmark: "VFINX",
+    }
 }
+
+func (s *ADM) Setup(e *engine.Engine) {}
 ```
 
 Setup runs once, after the engine has populated the strategy's fields from their `default` tags.
 
-`e.Schedule` sets the trading schedule. The tradecron expression `@monthend` means "the last trading day of each month." Tradecron understands market holidays and trading hours -- it will never fire on Christmas or a weekend. The schedule is required; the engine returns an error if Setup does not set one.
+The `Schedule` field sets the trading schedule. The tradecron expression `@monthend` means "the last trading day of each month." Tradecron understands market holidays and trading hours -- it will never fire on Christmas or a weekend. The schedule is required; the engine returns an error if none is set.
 
-`e.SetBenchmark` tells the engine which asset to compare against in performance reports. `e.RiskFreeAsset` sets the risk-free rate used by metrics like Sharpe and Sortino. `e.Asset("DGS3MO")` looks up the 3-month treasury yield by ticker.
+The `Benchmark` field tells the engine which asset to compare against in performance reports. The risk-free rate used by metrics like Sharpe and Sortino is DGS3MO (3-month treasury yield), resolved automatically by the engine when available.
 
 Setup is also where a strategy would register universes it creates itself (e.g., `universe.SP500(provider)`) or do any other one-time initialization.
 
@@ -172,7 +178,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Po
 }
 ```
 
-Compute runs at each scheduled frame -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for data fetching via `e.Fetch` and `e.FetchAt`), the **portfolio** (read-only access to holdings and performance metrics), and the **batch** (where the strategy writes its orders and annotations).
+Compute runs at each scheduled frame -- once per month for ADM. It receives a context (which carries the logger via `zerolog.Ctx(ctx)`), the **engine** (for asset lookup and data fetching), the **portfolio** (read-only access to holdings and performance metrics), and the **batch** (where the strategy writes its orders and annotations).
 
 The first three lines compute momentum at 1-, 3-, and 6-month lookbacks using the `signal.Momentum` function. Each call takes the universe and a period, returning a new DataFrame of momentum scores. DataFrame arithmetic is element-wise: `mom1.Add(mom3).Add(mom6).DivScalar(3)` averages the three scores across all assets in one expression.
 
@@ -184,12 +190,24 @@ The selection step fetches risk-off asset data as a fallback DataFrame, then bui
 
 ### main
 
+The simplest entry point uses `cli.Run`, which gives your strategy a full CLI with `backtest`, `live`, `snapshot`, and `describe` subcommands:
+
+```go
+func main() {
+    cli.Run(&ADM{})
+}
+```
+
+This handles data provider setup, flag registration, and output formatting automatically.
+
+For custom runners or tests, create the engine directly:
+
 ```go
 func main() {
     eng := engine.New(&ADM{},
         engine.WithInitialDeposit(10_000),
-        engine.WithDataProvider(provider),
-        engine.WithAssetProvider(provider),
+        engine.WithDataProvider(myProvider),
+        engine.WithAssetProvider(myProvider),
     )
     defer eng.Close()
 
@@ -257,12 +275,16 @@ Two principles shaped the API.
 
 ## What comes next
 
-The rest of the documentation walks through each concept in detail:
+If you want to get started quickly, read the [Strategy Author's Guide](strategy-guide.md) -- it walks through everything you need to write, run, and test a strategy in one page.
 
-- [Engine](engine.md) covers engine configuration, the strategy interface, data access, and advanced features like predicted portfolios.
-- [Universes](universes.md) covers the different ways to define asset groups, including predefined indexes and using other strategies as assets.
-- [Data](data.md) explains metrics, data providers, DataFrames, and signals.
-- [Portfolio](portfolio.md) covers portfolio construction, order types, and performance measurement.
-- [Broker](broker.md) covers the broker interface for live trading with tastytrade and other brokerages.
-- [Scheduling](scheduling.md) describes tradecron syntax and schedule configuration.
-- [Configuration](configuration.md) explains struct tags and how to parameterize your strategy.
+The rest of the documentation covers each concept in detail:
+
+- [Strategy Author's Guide](strategy-guide.md) -- complete walkthrough from first strategy to testing with snapshots
+- [Engine](engine.md) -- engine configuration, the strategy interface, data access, meta-strategies, and advanced features like predicted portfolios
+- [Universes](universes.md) -- asset groups, index tracking, historical membership, and survivorship bias prevention
+- [Data](data.md) -- metrics, data providers, DataFrames, signals, and the DataFrame API
+- [Portfolio](portfolio.md) -- portfolio construction, order types, risk middleware, and performance measurement
+- [Performance Metrics](performance-metrics.md) -- the full metrics reference including custom metrics and MFE/MAE trade quality analytics
+- [Broker](broker.md) -- the broker interface, tastytrade integration, and order groups
+- [Scheduling](scheduling.md) -- tradecron syntax and market-aware schedule configuration
+- [Configuration](configuration.md) -- struct tags, presets, CLI flags, and strategy metadata

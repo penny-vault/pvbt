@@ -69,20 +69,17 @@ func (s *ADM) Describe() engine.StrategyDescription {
 }
 ```
 
-The engine reads `Schedule` and `Benchmark` from `Describe()` during initialization. If declared there, the strategy does not need to call `eng.Schedule()` or `eng.SetBenchmark()` in `Setup`.
+The engine reads `Schedule` and `Benchmark` from `Describe()` during initialization. If declared there, `Setup` does not need to set them.
 
-The imperative approach still works for backward compatibility or for cases where the schedule/benchmark depends on runtime state:
+The imperative approach still works for the benchmark, which can also be set in `Setup` if it depends on runtime state:
 
 ```go
 func (s *ADM) Setup(e *engine.Engine) {
-    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-    e.Schedule(tc)
     e.SetBenchmark(e.Asset("VFINX"))
-    e.RiskFreeAsset(e.Asset("DGS3MO"))
 }
 ```
 
-Values set in `Setup` override those from `Describe()`.
+A benchmark set in `Setup` overrides the one from `Describe()`. The risk-free rate (DGS3MO, the 3-month treasury yield) is resolved automatically by the engine during initialization when available.
 
 ## Serialization
 

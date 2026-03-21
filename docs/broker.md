@@ -223,6 +223,35 @@ type PriceProvider interface {
 
 The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). Fills are delivered through the `Fills()` channel, consistent with the async interface used by live brokers. The simulated broker does not support `Cancel` or `Replace` operations.
 
-### Future implementations
+### tastytrade
 
-Additional brokers (e.g., tastytrade, Interactive Brokers, Schwab) can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
+The `broker/tastytrade` package implements `Broker` and `GroupSubmitter` for live trading with tastytrade. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, and native OCO/bracket (OTOCO) order groups.
+
+```go
+import "github.com/penny-vault/pvbt/broker/tastytrade"
+
+ttBroker := tastytrade.New()
+// or for paper trading:
+ttBroker := tastytrade.New(tastytrade.WithSandbox())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(ttBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Authentication uses environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `TASTYTRADE_USERNAME` | tastytrade account username |
+| `TASTYTRADE_PASSWORD` | tastytrade account password |
+
+Authentication happens during `Connect()`. The session token is managed internally and refreshed automatically on 401 responses.
+
+Fills are delivered via a WebSocket connection to tastytrade's account streamer. On disconnect, the broker reconnects with exponential backoff and polls for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
+### Other brokers
+
+Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.

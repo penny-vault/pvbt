@@ -37,6 +37,14 @@ The `data` package defines well-known metrics:
 | `BookValue` | Book value per share |
 | `MarketCap` | Market capitalization |
 
+For live trading, additional metrics are available:
+
+| Metric | Description |
+|--------|-------------|
+| `Price` | Current market price (streaming) |
+| `Bid` | Current bid price (streaming) |
+| `Ask` | Current ask price (streaming) |
+
 Custom metrics can be defined anywhere:
 
 ```go
@@ -150,6 +158,16 @@ type IndexProvider interface {
 
 A database provider typically implements `IndexProvider` alongside `BatchProvider`, since both use the same database connection.
 
+### Rating filters
+
+Rating filters select assets by analyst rating for use with `eng.RatedUniverse`:
+
+```go
+data.RatingEq(5)           // exactly 5-star
+data.RatingLTE(3)          // 1, 2, or 3 star
+data.RatingIn(1, 2, 5)     // any of the listed values
+```
+
 ### Data requests
 
 A `DataRequest` describes what data to fetch:
@@ -178,6 +196,10 @@ df.End()                            // latest timestamp
 df.Duration()                       // time span
 df.Len()                            // number of timestamps
 df.ColCount()                       // number of columns (assets * metrics)
+df.Frequency()                      // data resolution (Daily, Weekly, etc.)
+df.Times()                          // copy of all timestamps as []time.Time
+df.AssetList()                      // copy of all assets as []asset.Asset
+df.MetricList()                     // copy of all metrics as []Metric
 df.Value(aapl, data.Price)          // most recent value
 df.ValueAt(aapl, data.Price, t)     // value at time t
 df.Column(aapl, data.Price)         // contiguous []float64, gonum-compatible
@@ -185,6 +207,8 @@ df.At(t)                            // single-row DataFrame at time t
 df.Last()                           // single-row DataFrame, most recent
 df.Copy()                           // deep copy
 df.Table()                          // ASCII table for debugging
+df.Err()                            // error from any chained operation (nil if OK)
+df.Source()                         // the DataSource that created this DataFrame
 ```
 
 ### Narrowing and filtering
@@ -323,6 +347,49 @@ Since `Column` returns `[]float64`, you can also use gonum directly on individua
 prices := df.Column(aapl, data.Price)
 mean := stat.Mean(prices, nil)
 std := stat.StdDev(prices, nil)
+```
+
+### Mutation
+
+DataFrames are normally immutable (operations return new DataFrames), but a few methods mutate in place for construction and labeling:
+
+```go
+df.AppendRow(timestamp, values)     // append a row of values at timestamp
+df.Insert(asset, metric, values)    // insert a new column
+df.RenameMetric(old, new)           // rename a metric column (returns df for chaining)
+```
+
+### CountWhere
+
+`CountWhere` counts how many assets match a predicate for a given metric at each timestep. It returns a single-asset DataFrame (Ticker `"COUNT"`) with a `Count` metric:
+
+```go
+badCanary := df.CountWhere(data.AdjClose, func(v float64) bool {
+    return math.IsNaN(v) || v <= 0
+})
+```
+
+### Risk-free rates
+
+When the engine resolves DGS3MO, it attaches cumulative risk-free rate data to DataFrames. This enables `RiskAdjustedPct`:
+
+```go
+df.RiskFreeRates()                  // []float64 of cumulative risk-free values
+df.SetRiskFreeRates(rates)          // attach risk-free rates (engine does this automatically)
+```
+
+### Error-only DataFrames
+
+`data.WithErr` creates a DataFrame that carries only an error. Useful for signal functions that fail early:
+
+```go
+func MySignal(ctx context.Context, u universe.Universe) *data.DataFrame {
+    df, err := u.At(ctx, u.CurrentDate(), data.MetricClose)
+    if err != nil {
+        return data.WithErr(err)
+    }
+    // ...
+}
 ```
 
 ### Chaining

@@ -157,6 +157,33 @@ Strategy-specific flags are appended after the built-in ones:
 ./momentum-rotation backtest --start 2020-01-01 --lookback 12 --risk-on SPY,QQQ,EFA
 ```
 
+### Describe
+
+Print strategy metadata including parameters, defaults, and available presets:
+
+```bash
+./momentum-rotation describe          # human-readable table
+./momentum-rotation describe --json   # JSON output
+```
+
+### Live
+
+Run the strategy in live trading mode. Requires a broker and data provider:
+
+```bash
+./momentum-rotation live --cash 100000
+```
+
+The strategy runs on its declared schedule, calling `Compute` at each scheduled time. Cancel with Ctrl-C.
+
+### Preset
+
+Apply a named parameter preset (defined via `suggest` struct tags) to any subcommand:
+
+```bash
+./momentum-rotation backtest --preset Classic
+```
+
 ### Snapshot (capture data for offline testing)
 
 ```bash
@@ -216,14 +243,28 @@ func (s *MyStrategy) Describe() engine.StrategyDescription {
 
 The engine validates that all assets in your universes and asset fields have enough data covering the warmup window. In strict mode (the default) the backtest fails immediately if any asset is short. In permissive mode (`engine.WithDateRangeMode(engine.DateRangeModePermissive)`) the engine shifts the start date forward until all assets have sufficient history.
 
-### Benchmark and risk-free assets
+### Benchmark and risk-free rate
+
+The benchmark can be declared in `Describe()` or set in `Setup`:
 
 ```go
-eng.SetBenchmark(eng.Asset("SPY"))
-eng.RiskFreeAsset(eng.Asset("SHV"))
+// Declarative (preferred):
+func (s *MyStrategy) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:  "@monthend",
+        Benchmark: "SPY",
+    }
+}
+
+// Imperative (overrides Describe):
+func (s *MyStrategy) Setup(eng *engine.Engine) {
+    eng.SetBenchmark(eng.Asset("SPY"))
+}
 ```
 
-The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio. The risk-free asset is used for Sharpe, Treynor, and `RiskAdjustedPct`. When a risk-free asset is configured, the engine pre-computes a cumulative risk-free series and attaches it to all DataFrames returned by `Fetch` and `FetchAt`, enabling `df.RiskAdjustedPct(n)` to subtract the risk-free return automatically.
+The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio.
+
+The risk-free rate is DGS3MO (3-month treasury yield), resolved automatically by the engine during initialization when available. When resolved, the engine pre-computes a cumulative risk-free series and attaches it to all DataFrames returned by `Fetch` and `FetchAt`, enabling `df.RiskAdjustedPct(n)` to subtract the risk-free return automatically. The risk-free rate feeds Sharpe, Sortino, Treynor, and related metrics.
 
 ### Asset lookup
 
@@ -625,15 +666,15 @@ The parent does not need to call the children or manage their schedules. Declare
 
 ### ChildAllocations
 
-`eng.ChildAllocations(ctx)` expands each child's current holdings into a flat `[]portfolio.Allocation` scaled by the child's portfolio weight. Pass the result directly to `batch.RebalanceTo` to maintain the full allocation:
+`eng.ChildAllocations()` expands each child's current holdings into a single `portfolio.Allocation` with asset weights scaled by the child's portfolio weight. Pass the result directly to `batch.RebalanceTo`:
 
 ```go
 func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
-    allocs, err := eng.ChildAllocations(ctx)
+    alloc, err := eng.ChildAllocations()
     if err != nil {
         return err
     }
-    return batch.RebalanceTo(ctx, allocs...)
+    return batch.RebalanceTo(ctx, alloc)
 }
 ```
 
@@ -673,11 +714,11 @@ func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio
         overrides["baa"] = 0.45
     }
 
-    allocs, err := eng.ChildAllocations(ctx, engine.WithWeightOverrides(overrides))
+    alloc, err := eng.ChildAllocations(overrides)
     if err != nil {
         return err
     }
-    return batch.RebalanceTo(ctx, allocs...)
+    return batch.RebalanceTo(ctx, alloc)
 }
 ```
 

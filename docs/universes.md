@@ -30,18 +30,18 @@ type Universe interface {
 
 There are three ways to create a universe, depending on where the assets come from.
 
-### From configuration
+### From struct tags
 
-The most common case. The TOML file defines a parameter with `typecode = "[]stock"`, and the strategy declares a `universe.Universe` field:
+The most common case. The strategy declares exported `universe.Universe` fields with `default` tags containing comma-separated tickers:
 
 ```go
 type ADM struct {
-    riskOn  universe.Universe
-    riskOff universe.Universe
+    RiskOn  universe.Universe `pvbt:"riskOn"  desc:"ETFs to invest in"   default:"VOO,SCZ"`
+    RiskOff universe.Universe `pvbt:"riskOff" desc:"Out-of-market asset" default:"TLT"`
 }
 ```
 
-The engine matches the field name to the TOML argument, parses the tickers, builds a `StaticUniverse`, and registers it with the engine automatically before calling Setup. This is the preferred approach when the asset list should be user-configurable.
+The engine uses reflection to find exported fields with `default` tags, parses the comma-separated tickers, builds a `StaticUniverse`, and registers it with the engine automatically before calling Setup. The `pvbt` tag controls the CLI flag name and the `desc` tag provides help text. This is the preferred approach when the asset list should be user-configurable.
 
 ### From explicit tickers
 

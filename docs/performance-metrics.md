@@ -4,6 +4,76 @@ The portfolio tracks its own history and can compute performance metrics over an
 
 Portfolio metrics operate on the returns and transactions of a specific portfolio. The same metric (e.g. `Sharpe` or `MaxDrawdown`) will produce different values for different portfolios because each portfolio has its own equity curve shaped by its particular trades, cash flows, and timing. This is the key distinction from signals (see [Data - Signals](data.md#signals)), which operate on market data like prices and economic indicators and produce the same output regardless of portfolio state.
 
+## Evaluating a portfolio
+
+After a backtest, the portfolio gives you several ways to assess results, from quick headline numbers to deep trade-level analysis.
+
+### Quick summary
+
+`Summary()` returns the metrics most investors check first:
+
+```go
+result, _ := eng.Backtest(ctx, start, end)
+summary, _ := result.Summary()
+
+fmt.Printf("Return: %.2f%%  Sharpe: %.2f  MaxDD: %.2f%%\n",
+    summary.TWRR*100, summary.Sharpe, summary.MaxDrawdown*100)
+```
+
+If Sharpe is above 1.0, returns are attractive relative to risk. If MaxDrawdown exceeds what you could stomach in practice, the strategy needs tighter risk controls regardless of returns.
+
+### Digging deeper
+
+Use the metric bundles to answer specific questions:
+
+| Question | Bundle | Key fields |
+|----------|--------|------------|
+| "Is the return real or just market beta?" | `RiskMetrics()` | Alpha, Beta, RSquared |
+| "How bad can it get?" | `RiskMetrics()` | ValueAtRisk, CVaR, UlcerIndex |
+| "Is it beating the benchmark consistently?" | `RiskMetrics()` | InformationRatio, TrackingError, UpsideCaptureRatio, DownsideCaptureRatio |
+| "Are the trades good?" | `TradeMetrics()` | WinRate, ProfitFactor, EdgeRatio, TradeCaptureRatio |
+| "Is it tax-efficient?" | `TaxMetrics()` | TaxCostRatio, TaxDrag, LTCG vs STCG |
+| "Can I spend from it?" | `WithdrawalMetrics()` | SafeWithdrawalRate, PerpetualWithdrawalRate |
+
+### Windowed analysis
+
+Headline numbers can hide regime changes. Use windowed queries to see how metrics evolve:
+
+```go
+// Compare Sharpe across time horizons
+sharpe1y, _ := result.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Years(1)).Value()
+sharpe3y, _ := result.PerformanceMetric(portfolio.Sharpe).Window(portfolio.Years(3)).Value()
+sharpeAll, _ := result.PerformanceMetric(portfolio.Sharpe).Value()
+
+// Rolling 12-month return series for charting
+series, _ := result.PerformanceMetric(portfolio.TWRR).Window(portfolio.Months(12)).Series()
+```
+
+A strategy with a strong full-history Sharpe but a weak trailing-1Y Sharpe may be decaying. A strategy whose rolling series oscillates wildly may not be robust.
+
+### Trade-level analysis
+
+When aggregate metrics look fine but something feels off, drill into individual trades:
+
+```go
+for _, trade := range result.TradeDetails() {
+    fmt.Printf("%s: entry=%.2f exit=%.2f PnL=%.2f MFE=%.4f MAE=%.4f held=%v days\n",
+        trade.Asset.Ticker, trade.EntryPrice, trade.ExitPrice,
+        trade.PnL, trade.MFE, trade.MAE, trade.HoldDays)
+}
+```
+
+High MFE with low realized profit means exits are too early. Deep MAE with losses means stops are too loose. See [Trade quality: MFE and MAE](#trade-quality-mfe-and-mae) for interpretation guidance.
+
+### Comparing strategies
+
+Run multiple strategies over the same period and compare their bundles. Key comparisons:
+
+- **Risk-adjusted return**: Sharpe, Sortino, Calmar (higher is better)
+- **Drawdown profile**: MaxDrawdown, AvgDrawdown, AvgDrawdownDays (lower is better)
+- **Consistency**: KRatio, ProbabilisticSharpe (higher means more reliable)
+- **Tax efficiency**: TaxCostRatio, ratio of LTCG to STCG (lower cost, more long-term gains is better)
+
 ## Individual metrics
 
 Use `PerformanceMetric` to query a single metric. It returns a `PerformanceMetricQuery` builder with optional `Window` and then `Value` (scalar) or `Series` (rolling `[]float64`):
@@ -190,6 +260,7 @@ For convenience, several bundles return a struct with commonly grouped metrics c
 | `QualifiedDividends` | Qualified dividend income received |
 | `NonQualifiedIncome` | Non-qualified dividend and interest income |
 | `TaxCostRatio` | Percentage of return lost to taxes |
+| `TaxDrag` | Percentage of pre-tax return lost to trading-related taxes (excludes dividends) |
 
 **TradeMetrics** -- trade analysis derived from the transaction log (`p.TradeMetrics()`):
 

@@ -85,22 +85,26 @@ type Strategy interface {
 
 **Name** returns a short identifier (e.g., `"adm"`, `"momentum-rotation"`).
 
-**Setup** runs once after the engine populates strategy fields from their struct tags. If the strategy declares `Schedule` and `Benchmark` in `Describe()`, Setup only needs to handle other initialization. Otherwise, use Setup to set them imperatively:
+**Setup** runs once after the engine populates strategy fields from their struct tags. If the strategy declares `Schedule` and `Benchmark` in `Describe()`, Setup only needs to handle other initialization:
 
 ```go
 // Declarative approach (preferred): schedule and benchmark come from Describe().
-func (s *ADM) Setup(eng *engine.Engine) {
-    eng.RiskFreeAsset(eng.Asset("DGS3MO"))
+func (s *ADM) Setup(eng *engine.Engine) {}
+
+func (s *ADM) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:  "@monthend",
+        Benchmark: "SPY",
+    }
 }
 
-// Imperative approach: still works, and overrides values from Describe().
+// Imperative benchmark override: SetBenchmark in Setup overrides the value from Describe().
 func (s *ADM) Setup(eng *engine.Engine) {
-    tc, _ := tradecron.New("@monthend", tradecron.RegularHours)
-    eng.Schedule(tc)
     eng.SetBenchmark(eng.Asset("SPY"))
-    eng.RiskFreeAsset(eng.Asset("DGS3MO"))
 }
 ```
+
+The risk-free rate (DGS3MO, the 3-month treasury yield) is resolved automatically by the engine during initialization when available.
 
 **Compute** runs at each scheduled trading date. It receives the engine (for data access), the portfolio (read-only, for inspecting holdings and performance), and a batch (for accumulating orders and annotations). Return an error to halt the backtest or signal a problem in live trading.
 
@@ -148,13 +152,13 @@ df, err := eng.FetchAt(ctx, assets, eng.CurrentDate(), []data.Metric{data.Metric
 
 Most strategies fetch data through universes (`universe.Window`, `universe.At`) rather than calling `Fetch`/`FetchAt` directly. The universe methods are higher-level and handle membership resolution automatically.
 
-### Schedule, benchmark, risk-free
+### Benchmark
 
 ```go
-eng.Schedule(tc)                    // Set the trading schedule (required, call in Setup)
 eng.SetBenchmark(eng.Asset("SPY"))  // Set the benchmark for performance comparison
-eng.RiskFreeAsset(eng.Asset("SHV")) // Set the risk-free asset for Sharpe, etc.
 ```
+
+The benchmark can also be declared in `Describe()` via the `Benchmark` field. A value set in `Setup` overrides it. The trading schedule is set via the `Schedule` field in `Describe()`. The risk-free rate (DGS3MO) is resolved automatically by the engine.
 
 ## Previewing upcoming trades
 
@@ -243,15 +247,15 @@ During backtest initialization the engine discovers all `weight`-tagged fields, 
 
 ### ChildAllocations
 
-`eng.ChildAllocations()` expands each child's current holdings into a flat map of asset weights scaled by the child's portfolio weight. Use this inside the parent's Compute to construct a single allocation plan:
+`eng.ChildAllocations()` expands each child's current holdings into a single `portfolio.Allocation` with asset weights scaled by the child's portfolio weight. Use this inside the parent's Compute to construct an allocation:
 
 ```go
 func (s *MyMeta) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
-    allocs, err := eng.ChildAllocations(ctx)
+    alloc, err := eng.ChildAllocations()
     if err != nil {
         return err
     }
-    return batch.RebalanceTo(ctx, allocs...)
+    return batch.RebalanceTo(ctx, alloc)
 }
 ```
 
@@ -279,7 +283,7 @@ You can pass a weight override map to `ChildAllocations` to dynamically adjust a
 
 ```go
 overrides := map[string]float64{"adm": 0.05, "baa": 0.45, "daa": 0.50}
-allocs, err := eng.ChildAllocations(ctx, engine.WithWeightOverrides(overrides))
+alloc, err := eng.ChildAllocations(overrides)
 ```
 
 ## Resource cleanup
