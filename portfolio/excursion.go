@@ -15,6 +15,34 @@
 
 package portfolio
 
+import (
+	"math"
+
+	"github.com/penny-vault/pvbt/data"
+)
+
+// UpdateExcursions reads the daily High and Low prices from the DataFrame
+// and updates the running extremes for each open position. If High or Low
+// is NaN for an asset, that asset is skipped for that day.
+func (acct *Account) UpdateExcursions(df *data.DataFrame) {
+	for held := range acct.excursions {
+		highPrice := df.Value(held, data.MetricHigh)
+		lowPrice := df.Value(held, data.MetricLow)
+
+		record := acct.excursions[held]
+
+		if !math.IsNaN(highPrice) && highPrice > record.HighPrice {
+			record.HighPrice = highPrice
+		}
+
+		if !math.IsNaN(lowPrice) && lowPrice < record.LowPrice {
+			record.LowPrice = lowPrice
+		}
+
+		acct.excursions[held] = record
+	}
+}
+
 // ExcursionRecord tracks the running price extremes for an open position.
 // EntryPrice is the fill price of the first buy that opened the position.
 // HighPrice tracks the running maximum of daily High prices observed while

@@ -165,6 +165,11 @@ type PortfolioManager interface {
 	// and drains immediate fills.
 	ExecuteBatch(ctx context.Context, batch *Batch) error
 
+	// UpdateExcursions reads daily High and Low prices from the DataFrame
+	// and updates the running extremes for each open position. Called by
+	// the engine after UpdatePrices at each step.
+	UpdateExcursions(df *data.DataFrame)
+
 	// DrainFills drains any pending fills from the broker's fill
 	// channel and records them as transactions.
 	DrainFills(ctx context.Context) error
