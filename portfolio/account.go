@@ -60,6 +60,9 @@ type Account struct {
 	annotations       []Annotation
 	middleware        []Middleware
 	pendingOrders     map[string]broker.Order
+	pendingGroups     map[string]*broker.OrderGroup // groupID -> group
+	brokerHasGroups   bool                          // cached GroupSubmitter check
+	deferredExits     map[string]OrderGroupSpec     // groupID -> bracket spec
 	lotSelection      LotSelection
 	substitutions     map[asset.Asset]Substitution
 	excursions        map[asset.Asset]ExcursionRecord
@@ -75,6 +78,8 @@ func New(opts ...Option) *Account {
 		recentBuys:      make(map[asset.Asset][]recentBuy),
 		metadata:        make(map[string]string),
 		pendingOrders:   make(map[string]broker.Order),
+		pendingGroups:   make(map[string]*broker.OrderGroup),
+		deferredExits:   make(map[string]OrderGroupSpec),
 		substitutions:   make(map[asset.Asset]Substitution),
 		excursions:      make(map[asset.Asset]ExcursionRecord),
 	}
@@ -1383,7 +1388,10 @@ func (a *Account) TradeDetails() []TradeDetail { return a.tradeDetails }
 // have been recorded yet.
 func (a *Account) Prices() *data.DataFrame { return a.prices }
 
-func (a *Account) SetBroker(b broker.Broker) { a.broker = b }
+func (a *Account) SetBroker(b broker.Broker) {
+	a.broker = b
+	_, a.brokerHasGroups = b.(broker.GroupSubmitter)
+}
 
 // HasBroker returns true if a broker has been set on the account.
 func (a *Account) HasBroker() bool { return a.broker != nil }
@@ -1453,7 +1461,9 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		return fmt.Errorf("execute batch: no broker set")
 	}
 
-	// 4. Assign IDs, track, and submit orders.
+	// 4. Assign IDs to all orders and add to pendingOrders. Collect orders by groupID.
+	groupOrders := make(map[string][]broker.Order) // groupID -> orders in that group
+
 	for idx := range batch.Orders {
 		order := &batch.Orders[idx]
 		if order.ID == "" {
@@ -1462,12 +1472,78 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 
 		a.pendingOrders[order.ID] = *order
 
+		if order.GroupID != "" {
+			groupOrders[order.GroupID] = append(groupOrders[order.GroupID], *order)
+		}
+	}
+
+	// 5. Store deferred bracket exits: for each GroupBracket spec, record the spec in
+	// deferredExits keyed by groupID so exit orders can be submitted after the entry fills.
+	for _, spec := range batch.Groups() {
+		if spec.Type == broker.GroupBracket {
+			a.deferredExits[spec.GroupID] = spec
+		}
+	}
+
+	// 6. Submit grouped orders.
+	submittedGroups := make(map[string]bool) // track which groupIDs have been handled
+
+	for _, spec := range batch.Groups() {
+		orders := groupOrders[spec.GroupID]
+
+		switch spec.Type {
+		case broker.GroupOCO:
+			// Standalone OCO: submit as a group if broker supports it, else individually.
+			if a.brokerHasGroups {
+				gs := a.broker.(broker.GroupSubmitter)
+				if err := gs.SubmitGroup(ctx, orders, broker.GroupOCO); err != nil {
+					return fmt.Errorf("execute batch: submit group %s: %w", spec.GroupID, err)
+				}
+
+				group := &broker.OrderGroup{ID: spec.GroupID, Type: broker.GroupOCO}
+				for _, ord := range orders {
+					group.OrderIDs = append(group.OrderIDs, ord.ID)
+				}
+
+				a.pendingGroups[spec.GroupID] = group
+			} else {
+				for _, ord := range orders {
+					if err := a.broker.Submit(ctx, ord); err != nil {
+						return fmt.Errorf("execute batch: submit %s: %w", ord.Asset.Ticker, err)
+					}
+				}
+			}
+
+		case broker.GroupBracket:
+			// For brackets, submit only the entry order now; exits are deferred.
+			if spec.EntryIndex >= 0 && spec.EntryIndex < len(batch.Orders) {
+				entryOrder := batch.Orders[spec.EntryIndex]
+				if err := a.broker.Submit(ctx, entryOrder); err != nil {
+					return fmt.Errorf("execute batch: submit %s: %w", entryOrder.Asset.Ticker, err)
+				}
+
+				group := &broker.OrderGroup{ID: spec.GroupID, Type: broker.GroupBracket, OrderIDs: []string{entryOrder.ID}}
+				a.pendingGroups[spec.GroupID] = group
+			}
+		}
+
+		submittedGroups[spec.GroupID] = true
+	}
+
+	// 7. Submit remaining non-group orders individually.
+	for idx := range batch.Orders {
+		order := &batch.Orders[idx]
+		if order.GroupID != "" && submittedGroups[order.GroupID] {
+			// Already handled as part of a group.
+			continue
+		}
+
 		if err := a.broker.Submit(ctx, *order); err != nil {
 			return fmt.Errorf("execute batch: submit %s: %w", order.Asset.Ticker, err)
 		}
 	}
 
-	// 5. Drain immediate fills.
+	// 8. Drain immediate fills.
 	a.drainFillsFromChannel()
 
 	return nil
@@ -1590,6 +1666,19 @@ func (acct *Account) Clone() *Account {
 		pendingOrders[orderID] = order
 	}
 
+	pendingGroups := make(map[string]*broker.OrderGroup, len(acct.pendingGroups))
+	for groupID, group := range acct.pendingGroups {
+		groupCopy := *group
+		groupCopy.OrderIDs = make([]string, len(group.OrderIDs))
+		copy(groupCopy.OrderIDs, group.OrderIDs)
+		pendingGroups[groupID] = &groupCopy
+	}
+
+	deferredExits := make(map[string]OrderGroupSpec, len(acct.deferredExits))
+	for groupID, spec := range acct.deferredExits {
+		deferredExits[groupID] = spec
+	}
+
 	recentLossSales := make(map[asset.Asset][]recentLossSale, len(acct.recentLossSales))
 	for ast, sales := range acct.recentLossSales {
 		salesCopy := make([]recentLossSale, len(sales))
@@ -1640,6 +1729,9 @@ func (acct *Account) Clone() *Account {
 		annotations:       annotations,
 		middleware:        acct.middleware,
 		pendingOrders:     pendingOrders,
+		pendingGroups:     pendingGroups,
+		brokerHasGroups:   acct.brokerHasGroups,
+		deferredExits:     deferredExits,
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
 	}

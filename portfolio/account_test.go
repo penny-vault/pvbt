@@ -1222,4 +1222,98 @@ var _ = Describe("Window", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(fullSharpe).NotTo(BeNumerically("~", windowedSharpe, 1e-10))
 	})
+
+	Describe("ExecuteBatch group submission", func() {
+		var (
+			testAsset asset.Asset
+			ts        time.Time
+		)
+
+		BeforeEach(func() {
+			testAsset = asset.Asset{CompositeFigi: "AAPL", Ticker: "AAPL"}
+			ts = time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC)
+		})
+
+		It("submits standalone OCO legs individually when broker lacks GroupSubmitter", func() {
+			mb := newMockBroker()
+			mb.submitFn = func(ord broker.Order) error {
+				mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 50.0, Qty: ord.Qty, FilledAt: ts}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, ts),
+				portfolio.WithBroker(mb),
+			)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(45.0), portfolio.LimitLeg(55.0)))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(batch.Groups()).To(HaveLen(1))
+			Expect(batch.Groups()[0].Type).To(Equal(broker.GroupOCO))
+
+			// With a plain broker (no GroupSubmitter), OCO legs are submitted individually.
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(mb.submitted).To(HaveLen(2))
+		})
+
+		It("submits OCO legs via GroupSubmitter when broker supports it", func() {
+			mgb := newMockGroupBroker()
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, ts),
+				portfolio.WithBroker(mgb),
+			)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Sell, 10,
+				portfolio.OCO(portfolio.StopLeg(45.0), portfolio.LimitLeg(55.0)))
+			Expect(err).NotTo(HaveOccurred())
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// SubmitGroup called once; individual Submit not called.
+			Expect(mgb.submittedGroups).To(HaveLen(1))
+			Expect(mgb.submittedGroups[0].groupType).To(Equal(broker.GroupOCO))
+			Expect(mgb.submittedGroups[0].orders).To(HaveLen(2))
+			Expect(mgb.submitted).To(BeEmpty())
+		})
+
+		It("submits bracket entry individually and defers exits", func() {
+			mb := newMockBroker()
+			mb.submitFn = func(ord broker.Order) error {
+				mb.fillCh <- broker.Fill{OrderID: ord.ID, Price: 100.0, Qty: ord.Qty, FilledAt: ts}
+				return nil
+			}
+
+			acct := portfolio.New(
+				portfolio.WithCash(50_000, ts),
+				portfolio.WithBroker(mb),
+			)
+
+			df := buildDF(ts, []asset.Asset{testAsset}, []float64{100.0}, []float64{100.0})
+			acct.UpdatePrices(df)
+
+			batch := acct.NewBatch(ts)
+			err := batch.Order(context.Background(), testAsset, portfolio.Buy, 10,
+				portfolio.WithBracket(
+					portfolio.StopLossPrice(90.0),
+					portfolio.TakeProfitPrice(115.0),
+				))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(batch.Groups()).To(HaveLen(1))
+			Expect(batch.Groups()[0].Type).To(Equal(broker.GroupBracket))
+
+			err = acct.ExecuteBatch(context.Background(), batch)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Only the entry order is submitted; exit legs are deferred.
+			Expect(mb.submitted).To(HaveLen(1))
+			Expect(mb.submitted[0].GroupRole).To(Equal(broker.RoleEntry))
+		})
+	})
 })

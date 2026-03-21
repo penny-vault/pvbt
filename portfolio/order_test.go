@@ -110,6 +110,37 @@ func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 
 var _ broker.Broker = (*mockBroker)(nil)
 
+// mockGroupBroker embeds mockBroker and implements broker.GroupSubmitter so that
+// tests can verify that ExecuteBatch calls SubmitGroup for OCO orders when the
+// broker supports contingent group submission.
+type mockGroupBroker struct {
+	*mockBroker
+	submittedGroups []struct {
+		orders    []broker.Order
+		groupType broker.GroupType
+	}
+	submitGroupErr error
+}
+
+func newMockGroupBroker() *mockGroupBroker {
+	return &mockGroupBroker{mockBroker: newMockBroker()}
+}
+
+func (m *mockGroupBroker) SubmitGroup(_ context.Context, orders []broker.Order, groupType broker.GroupType) error {
+	if m.submitGroupErr != nil {
+		return m.submitGroupErr
+	}
+
+	m.submittedGroups = append(m.submittedGroups, struct {
+		orders    []broker.Order
+		groupType broker.GroupType
+	}{orders: orders, groupType: groupType})
+
+	return nil
+}
+
+var _ broker.GroupSubmitter = (*mockGroupBroker)(nil)
+
 var _ = Describe("Order", func() {
 	var (
 		testAsset asset.Asset
