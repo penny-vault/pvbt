@@ -103,7 +103,12 @@ func (r *SnapshotRecorder) recordMarketHolidays(holidays []tradecron.MarketHolid
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO market_holidays (event_date, early_close, close_time) VALUES (?, ?, ?)")
 	if err != nil {
@@ -169,7 +174,12 @@ func (r *SnapshotRecorder) recordAssets(assets []asset.Asset) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO assets (composite_figi, ticker) VALUES (?, ?)")
 	if err != nil {
@@ -241,7 +251,12 @@ func (r *SnapshotRecorder) recordDataFrame(df *DataFrame, requestedMetrics []Met
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	if metrics, ok := viewMetrics["eod"]; ok {
 		if err := r.recordEod(tx, df, metrics); err != nil {
@@ -507,7 +522,12 @@ func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, m
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO index_members (index_name, event_date, composite_figi, ticker) VALUES (?, ?, ?, ?)")
 	if err != nil {
@@ -559,7 +579,12 @@ func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback() //nolint:errcheck // rollback after commit is a no-op
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	stmt, err := tx.Prepare("INSERT OR IGNORE INTO ratings (analyst, filter_values, event_date, composite_figi, ticker) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {

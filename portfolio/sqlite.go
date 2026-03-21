@@ -148,7 +148,12 @@ func (a *Account) ToSQLite(path string) error {
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
-	defer dbTx.Rollback() //nolint:errcheck
+
+	defer func() {
+		if rollbackErr := dbTx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
 
 	// Create schema.
 	if _, err := dbTx.Exec(createSchema); err != nil {
