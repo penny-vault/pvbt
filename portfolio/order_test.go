@@ -283,6 +283,66 @@ var _ = Describe("Order", func() {
 		})
 	})
 
+	Describe("ExitTarget constructors", func() {
+		It("StopLossPrice sets AbsolutePrice and zero PercentOffset", func() {
+			et := portfolio.StopLossPrice(95.0)
+			Expect(et.AbsolutePrice).To(Equal(95.0))
+			Expect(et.PercentOffset).To(Equal(0.0))
+		})
+
+		It("StopLossPercent sets PercentOffset and zero AbsolutePrice", func() {
+			et := portfolio.StopLossPercent(5.0)
+			Expect(et.AbsolutePrice).To(Equal(0.0))
+			Expect(et.PercentOffset).To(Equal(5.0))
+		})
+
+		It("TakeProfitPrice sets AbsolutePrice and zero PercentOffset", func() {
+			et := portfolio.TakeProfitPrice(110.0)
+			Expect(et.AbsolutePrice).To(Equal(110.0))
+			Expect(et.PercentOffset).To(Equal(0.0))
+		})
+
+		It("TakeProfitPercent sets PercentOffset and zero AbsolutePrice", func() {
+			et := portfolio.TakeProfitPercent(10.0)
+			Expect(et.AbsolutePrice).To(Equal(0.0))
+			Expect(et.PercentOffset).To(Equal(10.0))
+		})
+	})
+
+	Describe("OCOLeg constructors", func() {
+		It("StopLeg sets OrderType to Stop and the given price", func() {
+			leg := portfolio.StopLeg(90.0)
+			Expect(leg.OrderType).To(Equal(broker.Stop))
+			Expect(leg.Price).To(Equal(90.0))
+		})
+
+		It("LimitLeg sets OrderType to Limit and the given price", func() {
+			leg := portfolio.LimitLeg(105.0)
+			Expect(leg.OrderType).To(Equal(broker.Limit))
+			Expect(leg.Price).To(Equal(105.0))
+		})
+	})
+
+	Describe("WithBracket modifier", func() {
+		It("implements OrderModifier", func() {
+			stopLoss := portfolio.StopLossPrice(90.0)
+			takeProfit := portfolio.TakeProfitPrice(115.0)
+			// compile-time interface check
+			var mod portfolio.OrderModifier = portfolio.WithBracket(stopLoss, takeProfit)
+			Expect(mod).ToNot(BeNil())
+		})
+	})
+
+	Describe("OCO modifier", func() {
+		It("implements OrderModifier", func() {
+			legA := portfolio.StopLeg(90.0)
+			legB := portfolio.LimitLeg(110.0)
+			// compile-time interface check
+			var mod portfolio.OrderModifier = portfolio.OCO(legA, legB)
+			Expect(mod).ToNot(BeNil())
+		})
+	})
+
 	DescribeTable("time-in-force modifiers",
 		func(mod portfolio.OrderModifier, expected broker.TimeInForce) {
 			acct.Order(context.Background(), testAsset, portfolio.Buy, 1, mod)
