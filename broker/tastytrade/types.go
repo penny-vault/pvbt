@@ -286,7 +286,7 @@ func mapTTStatus(status string) broker.OrderStatus {
 		return broker.OrderOpen
 	case "Filled":
 		return broker.OrderFilled
-	case "Cancelled", "Expired", "Rejected":
+	case "Cancelled", "Expired", "Rejected", "Removed", "Partially Removed":
 		return broker.OrderCancelled
 	default:
 		return broker.OrderOpen

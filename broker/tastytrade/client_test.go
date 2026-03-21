@@ -3,7 +3,6 @@ package tastytrade_test
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -282,50 +281,6 @@ var _ = Describe("apiClient", func() {
 			Expect(orders[1].Price).To(Equal(100.0))
 		})
 
-		It("paginates through multiple pages of orders", func() {
-			var requestCount atomic.Int32
-
-			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
-				mux.HandleFunc("GET /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
-					page := requestCount.Add(1)
-
-					Expect(req.URL.Query().Get("per-page")).To(Equal("200"))
-					if page == 1 {
-						Expect(req.URL.Query().Get("page-offset")).To(Equal("0"))
-					} else {
-						Expect(req.URL.Query().Get("page-offset")).To(Equal("200"))
-					}
-
-					writer.Header().Set("Content-Type", "application/json")
-
-					if page == 1 {
-						items := make([]map[string]any, 200)
-						for idx := range items {
-							items[idx] = map[string]any{
-								"id":     fmt.Sprintf("ORD-P1-%d", idx),
-								"status": "Live",
-							}
-						}
-						json.NewEncoder(writer).Encode(map[string]any{
-							"data": map[string]any{"items": items},
-						})
-					} else {
-						json.NewEncoder(writer).Encode(map[string]any{
-							"data": map[string]any{
-								"items": []map[string]any{
-									{"id": "ORD-P2-0", "status": "Filled"},
-								},
-							},
-						})
-					}
-				})
-			})
-
-			orders, err := client.GetOrders(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(orders).To(HaveLen(201))
-			Expect(requestCount.Load()).To(Equal(int32(2)))
-		})
 	})
 
 	Describe("Positions", func() {

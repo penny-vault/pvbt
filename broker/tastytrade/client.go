@@ -151,41 +151,27 @@ func (client *apiClient) replaceOrder(ctx context.Context, orderID string, order
 	return nil
 }
 
-// getOrders retrieves all orders for the account, paginating until all pages are fetched.
+// getOrders retrieves all orders for the account. The account-level
+// orders endpoint does not support offset pagination; it returns all
+// matching results in a single response.
 func (client *apiClient) getOrders(ctx context.Context) ([]orderResponse, error) {
-	var allOrders []orderResponse
+	endpoint := fmt.Sprintf("/accounts/%s/orders", client.accountID)
 
-	perPage := 200
-	offset := 0
+	var result ordersListResponse
 
-	for {
-		endpoint := fmt.Sprintf("/accounts/%s/orders?per-page=%d&page-offset=%d",
-			client.accountID, perPage, offset)
-
-		var result ordersListResponse
-
-		resp, err := client.resty.R().
-			SetContext(ctx).
-			SetResult(&result).
-			Get(endpoint)
-		if err != nil {
-			return nil, fmt.Errorf("get orders: %w", err)
-		}
-
-		if resp.IsError() {
-			return nil, NewHTTPError(resp.StatusCode(), resp.String())
-		}
-
-		allOrders = append(allOrders, result.Data.Items...)
-
-		if len(result.Data.Items) < perPage {
-			break
-		}
-
-		offset += perPage
+	resp, err := client.resty.R().
+		SetContext(ctx).
+		SetResult(&result).
+		Get(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("get orders: %w", err)
 	}
 
-	return allOrders, nil
+	if resp.IsError() {
+		return nil, NewHTTPError(resp.StatusCode(), resp.String())
+	}
+
+	return result.Data.Items, nil
 }
 
 // submitComplexOrder sends an OCO or OTOCO complex order.

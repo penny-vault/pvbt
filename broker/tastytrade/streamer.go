@@ -151,7 +151,12 @@ func (streamer *fillStreamer) run() {
 			streamer.mu.Unlock()
 
 			if currentConn != nil {
-				if writeErr := currentConn.WriteJSON(map[string]string{"action": "heartbeat"}); writeErr != nil {
+				heartbeatMsg := map[string]string{
+					"action":     "heartbeat",
+					"auth-token": streamer.client.sessionToken(),
+				}
+
+				if writeErr := currentConn.WriteJSON(heartbeatMsg); writeErr != nil {
 					continue
 				}
 			}
