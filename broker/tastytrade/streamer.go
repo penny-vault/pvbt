@@ -162,6 +162,7 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 
 	// Deduplicate by FillID.
 	streamer.mu.Lock()
+
 	_, alreadySeen := streamer.seenFills[event.FillID]
 	if !alreadySeen {
 		streamer.seenFills[event.FillID] = time.Now()
@@ -247,6 +248,7 @@ func (streamer *fillStreamer) pollMissedFills(ctx context.Context) {
 		}
 
 		streamer.mu.Lock()
+
 		_, alreadySeen := streamer.seenFills[order.ID]
 		if !alreadySeen {
 			streamer.seenFills[order.ID] = time.Now()

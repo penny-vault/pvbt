@@ -90,3 +90,18 @@ func (streamer *fillStreamer) ConnectStreamer(ctx context.Context) error {
 func (streamer *fillStreamer) CloseStreamer() error {
 	return streamer.close()
 }
+
+// --- Broker test exports ---
+
+// SetClientBaseURLForTest replaces the broker's internal client with one
+// pointing at the given URL and authenticates it using the test server's
+// /sessions and /customers/me/accounts endpoints.
+func SetClientBaseURLForTest(ttBroker *TastytradeBroker, baseURL string) {
+	ttBroker.client = newAPIClient(baseURL)
+}
+
+// AuthenticateClientForTest authenticates the broker's internal client
+// against whatever base URL it is currently configured for.
+func AuthenticateClientForTest(ttBroker *TastytradeBroker, ctx context.Context) {
+	_ = ttBroker.client.authenticate(ctx, "user@test.com", "secret")
+}
