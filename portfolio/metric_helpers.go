@@ -47,8 +47,15 @@ func withdrawalSustainable(
 	startBalance := equity[0]
 	balance := startBalance
 	startDate := times[0]
-	yearBoundary := startDate.AddDate(1, 0, 0)
+	yearBoundaryUnix := startDate.AddDate(1, 0, 0).Unix()
 	yearsElapsed := 0
+
+	// Pre-compute Unix timestamps for the time axis to avoid repeated
+	// time.Time.Before calls (which trigger timezone lookups).
+	unixTimes := make([]int64, len(times))
+	for idx, timestamp := range times {
+		unixTimes[idx] = timestamp.Unix()
+	}
 
 	for dayIdx := 1; dayIdx < len(equity); dayIdx++ {
 		// Apply daily return.
@@ -57,8 +64,8 @@ func withdrawalSustainable(
 			balance *= (1 + dailyReturn)
 		}
 
-		// Check for year boundary.
-		if !times[dayIdx].Before(yearBoundary) {
+		// Check for year boundary using pre-computed Unix timestamps.
+		if unixTimes[dayIdx] >= yearBoundaryUnix {
 			yearsElapsed++
 			inflationFactor := math.Pow(1+defaultInflationRate, float64(yearsElapsed))
 			withdrawal := rate * startBalance * inflationFactor
@@ -75,7 +82,7 @@ func withdrawalSustainable(
 				return false
 			}
 
-			yearBoundary = startDate.AddDate(yearsElapsed+1, 0, 0)
+			yearBoundaryUnix = startDate.AddDate(yearsElapsed+1, 0, 0).Unix()
 		}
 	}
 

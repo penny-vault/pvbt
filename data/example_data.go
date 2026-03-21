@@ -44,10 +44,7 @@ func ExampleData() (*TestProvider, AssetProvider) {
 
 	// Generate trading days (skip weekends). Timestamps use US Eastern
 	// at 16:00 (market close) to match tradecron schedule dates.
-	nyc, err := time.LoadLocation("America/New_York")
-	if err != nil {
-		panic("ExampleData: load America/New_York: " + err.Error())
-	}
+	nyc := eodLocation
 
 	start := time.Date(2024, time.January, 2, 16, 0, 0, 0, nyc)
 	end := time.Date(2024, time.June, 28, 16, 0, 0, 0, nyc)

@@ -309,10 +309,7 @@ func (df *DataFrame) ColCount() int { return len(df.assets) * len(df.metrics) }
 
 // Times returns a copy of the timestamp axis.
 func (df *DataFrame) Times() []time.Time {
-	out := make([]time.Time, len(df.times))
-	copy(out, df.times)
-
-	return out
+	return df.times
 }
 
 // AssetList returns a copy of the asset list.
