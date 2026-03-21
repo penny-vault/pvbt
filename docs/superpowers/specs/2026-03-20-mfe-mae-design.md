@@ -185,18 +185,18 @@ type TradeMetrics struct {
     MedianMFE    float64 // median MFE across all round trips
     MedianMAE    float64 // median MAE across all round trips
     EdgeRatio    float64 // average MFE / abs(average MAE)
-    CaptureRatio float64 // mean realized return / mean MFE
+    TradeCaptureRatio float64 // mean realized return / mean MFE
 }
 ```
 
-`CaptureRatio` is defined precisely as:
+`TradeCaptureRatio` is defined precisely as:
 `mean((exitPrice - entryPrice) / entryPrice) / mean(MFE)` across all
 completed trades. A value of 1.0 means the strategy captures all available
 favorable movement on average; lower values indicate premature exits.
 
 Each metric gets its own implementation file following the existing pattern:
 `average_mfe.go`, `average_mae.go`, `median_mfe.go`, `median_mae.go`,
-`edge_ratio.go`, `capture_ratio.go`. Each file defines an unexported struct
+`edge_ratio.go`, `trade_capture_ratio.go`. Each file defines an unexported struct
 implementing `PerformanceMetric`. All six are registered in
 `WithTradeMetrics()` and `WithAllMetrics()`.
 
