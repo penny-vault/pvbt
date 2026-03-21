@@ -1644,7 +1644,7 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		assets := []asset.Asset{portfolioAsset}
 		metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
 
-		row, err := data.NewDataFrame(timestamps, assets, metrics, data.Daily, []float64{total, benchVal, rfVal})
+		row, err := data.NewDataFrame(timestamps, assets, metrics, data.Daily, [][]float64{{total}, {benchVal}, {rfVal}})
 		if err != nil {
 			log.Error().Err(err).Msg("UpdatePrices: failed to create perfData")
 			return
