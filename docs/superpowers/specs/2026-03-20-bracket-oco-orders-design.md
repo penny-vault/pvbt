@@ -94,9 +94,9 @@ func LimitLeg(price float64) OCOLeg   // creates a Limit order leg
 
 ### Batch Expansion Mechanism
 
-`batch.Order()` gains a post-modifier expansion step. After the existing modifier type-switch runs, the method checks whether an `OCO` modifier was applied. If so, it clones the order, sets each clone's order type and price from the corresponding `OCOLeg`, tags both with matching group metadata, and appends both to `b.Orders` (instead of the single original).
+`batch.Order()` gains a post-modifier expansion step that runs **after** the existing type-switch and `hasLimit`/`hasStop` order-type derivation. The expansion step checks whether an `OCO` modifier was applied. If so, it discards the original order (whose `OrderType` was derived from the normal path) and instead creates two new `broker.Order` entries. Each clone gets its `OrderType` and price fields set directly from the corresponding `OCOLeg`, bypassing the `hasLimit`/`hasStop` derivation entirely. Both orders are tagged with matching group metadata and appended to `b.Orders`.
 
-For `WithBracket`, no expansion happens at batch-build time. The modifier records the exit targets on the entry order. Expansion into OCO legs is deferred to `DrainFills` when the entry fill price is known (for percentage targets) or to `ExecuteBatch` (for absolute price targets).
+For `WithBracket`, no expansion happens at batch-build time. The modifier records the exit targets on the entry order (the entry order itself goes through the normal `hasLimit`/`hasStop` derivation as usual). Expansion into OCO legs is deferred to `DrainFills` when the entry fill price is known (for percentage targets) or to `ExecuteBatch` (for absolute price targets). The deferred exit orders also set their `OrderType` and price fields directly from the exit target definitions, not through the modifier type-switch.
 
 ### Usage Examples
 
@@ -124,7 +124,7 @@ batch.Order(spy, portfolio.Sell, 100,
 
 ### Constraint: Batch-Only
 
-`WithBracket` and `OCO` modifiers are only supported through `batch.Order()`. The direct `Account.Order()` path does not support them and returns an error if either modifier is present. Strategies should use batches for all bracket/OCO orders, which is already the preferred submission path.
+`WithBracket` and `OCO` modifiers are only supported through `batch.Order()`. The direct `Account.Order()` path does not support them. If either modifier is detected in `Account.Order()`, it returns a hard error immediately (e.g., `fmt.Errorf("bracket/OCO modifiers require batch submission")`). It does not silently strip the modifier or proceed without it. Strategies should use batches for all bracket/OCO orders, which is already the preferred submission path.
 
 ## Broker Interface Changes
 
@@ -173,12 +173,19 @@ type Account struct {
 
 2. **ExecuteBatch**: Assigns group IDs (e.g., `group-<timestamp>-<idx>`) and order IDs to all orders including expanded OCO pairs. For brackets with percentage offsets, the exit legs are not yet fully formed -- they need the entry fill price. These are stored as deferred exits in the group. For brackets with absolute prices and for standalone OCO groups, all orders are ready and submitted (via `GroupSubmitter` or individual submit with fallback).
 
-3. **DrainFills**: When a fill arrives:
-   - Look up `fill.OrderID` in `pendingOrders` as today.
-   - If the filled order belongs to a group, check the group type:
-     - **Bracket entry filled**: Resolve percentage offsets using the fill price, create the two exit orders (stop loss and take profit), assign them order IDs, add them to `pendingOrders`, and submit them to the broker as an OCO group (via `GroupSubmitter.SubmitGroup` or individual `Submit` calls). This makes `DrainFills` a submission point for deferred bracket exits, not just a recording point.
-     - **OCO leg filled (fallback broker)**: Call `broker.Cancel` on each sibling order and remove them from `pendingOrders`.
-     - **OCO leg filled (GroupSubmitter broker)**: The broker already cancelled the sibling internally. The account removes all sibling order IDs from `pendingOrders` directly without calling `broker.Cancel`.
+3. **DrainFills**: The drain loop is split into two phases to avoid re-entrancy issues (the simulated broker's `Submit` synchronously pushes fills onto the same channel):
+
+   **Phase 1 -- Collect**: Non-blocking read loop drains all pending fills from the channel into a local slice. Record each fill as a transaction and update `pendingOrders` as today. Collect any deferred bracket exits that need submission (entry fills with pending exit targets).
+
+   **Phase 2 -- Submit deferred exits**: After the drain loop completes, iterate the collected deferred exits. For each:
+   - Resolve percentage offsets using the entry fill price.
+   - Create the two exit orders (stop loss and take profit), assign order IDs, add to `pendingOrders`.
+   - Submit to the broker as an OCO group (via `GroupSubmitter.SubmitGroup` or individual `Submit` calls).
+   - Any fills produced by these submissions are picked up on the next `DrainFills` call (at the next housekeeping step), not in this pass.
+
+   **Group handling during Phase 1**:
+   - **OCO leg filled (fallback broker)**: Call `broker.Cancel` on each sibling order and remove them from `pendingOrders`.
+   - **OCO leg filled (GroupSubmitter broker)**: The broker already cancelled the sibling internally. The account removes all sibling order IDs from `pendingOrders` directly without calling `broker.Cancel`.
    - Remove completed groups from `pendingGroups`.
 
 4. **CancelOpenOrders** (at frame boundary): Iterates `pendingOrders` and calls `broker.Cancel` for each. Also cleans up `pendingGroups` -- cancelling any order in a group cancels all members.
