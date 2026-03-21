@@ -701,6 +701,26 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 		errs = append(errs, err)
 	}
 
+	tradeMetrics.LongWinRate, err = a.PerformanceMetric(LongWinRate).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.ShortWinRate, err = a.PerformanceMetric(ShortWinRate).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.LongProfitFactor, err = a.PerformanceMetric(LongProfitFactor).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
+	tradeMetrics.ShortProfitFactor, err = a.PerformanceMetric(ShortProfitFactor).Value()
+	if err != nil {
+		errs = append(errs, err)
+	}
+
 	return tradeMetrics, errors.Join(errs...)
 }
 
