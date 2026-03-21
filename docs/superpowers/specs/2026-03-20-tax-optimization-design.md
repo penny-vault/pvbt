@@ -23,19 +23,24 @@ A new `LotSelection` type with four methods:
 
 - `FIFO` -- first in, first out (current behavior, remains the default)
 - `LIFO` -- last in, first out
-- `HighestCost` -- sell the lot with the highest cost basis first (maximizes realized losses)
-- `SpecificID` -- sell a specific lot by reference
+- `HighestCost` -- sell the lot with the highest cost basis first (produces the largest realized loss when the position is underwater)
+- `SpecificID` -- sell a specific lot by reference (requires adding an ID field to `TaxLot`)
 
-The account holds a default lot selection method set at construction time (defaults to `FIFO` for backwards compatibility). `broker.Order` gains an optional `LotSelection` field; when set, it overrides the account default for that order. The account's sell-recording logic switches on the method to determine which lots to consume.
+The account holds a default lot selection method set at construction time (defaults to `FIFO` for backwards compatibility). `broker.Order` gains an optional `LotSelection` field; when set, it overrides the account default for that order. A corresponding `WithLotSelection(method)` `OrderModifier` is added to `portfolio/order.go` so middleware can set lot selection through the standard `batch.Order()` API. The account's sell-recording logic switches on the method to determine which lots to consume.
 
 ### Wash Sale Tracking
 
-When `Record()` processes a buy transaction, it checks whether the same asset had a loss-generating sell within the prior 30 calendar days. If a wash sale is detected:
+IRS wash sale rules apply to a 61-day window: 30 days before through 30 days after a loss sale. In pvbt's chronological processing model, both directions are handled:
 
-- The disallowed loss is added to the new lot's cost basis
+- **Buy after loss sale:** When `Record()` processes a buy, it checks whether the same asset had a loss-generating sell within the prior 30 calendar days.
+- **Loss sale after buy:** When `Record()` processes a sell at a loss, it checks whether the same asset was bought within the prior 30 calendar days.
+
+In either case, if a wash sale is detected:
+
+- The disallowed loss is added to the replacement lot's cost basis
 - A `WashSaleRecord` is stored (original loss amount, disallowed amount, adjusted lot reference, dates)
 
-This is always-on. The wash sale window is tracked as a slice of recent loss sales per asset, pruned on each transaction.
+This is always-on. The wash sale window is tracked as a slice of recent loss sales and recent buys per asset, pruned on each transaction.
 
 ### TaxAware Interface
 
@@ -46,11 +51,12 @@ type TaxAware interface {
     WashSaleWindow(asset asset.Asset) []WashSaleRecord
     UnrealizedLots(asset asset.Asset) []TaxLot
     RealizedGainsYTD() (ltcg, stcg float64)
-    SetLotSelection(method LotSelection)
     RegisterSubstitution(original, substitute asset.Asset, until time.Time)
     ActiveSubstitutions() map[asset.Asset]Substitution
 }
 ```
+
+Note: `SetLotSelection` is not on this interface. The account-wide default is set at construction via `WithLotSelection()`, and per-order overrides use the `WithLotSelection` `OrderModifier` on individual orders. There is no need for middleware to mutate the account-wide default at runtime.
 
 `Account` implements both `Portfolio` and `TaxAware`. The tax middleware type-asserts the batch's portfolio reference to `TaxAware` to access tax-specific capabilities. Strategies and risk middleware only see `Portfolio`.
 
@@ -63,7 +69,9 @@ When the tax middleware swaps an asset for a correlated substitute (e.g., sell S
 - `Value()` is unaffected -- it returns a dollar total regardless of naming
 - `ActiveSubstitutions()` allows the middleware (or anything that type-asserts to `TaxAware`) to see through the mapping
 
-When the 30-day window expires, the middleware unregisters the substitution and injects swap-back orders.
+**Batch projection consistency:** Since `Batch.ProjectedHoldings()` starts from `Portfolio.Holdings()` (which returns the logical view) and then applies pending orders, tax-injected orders that reference the real substitute asset (IVV) could cause double-counting. To prevent this, orders injected by the tax middleware for substituted assets are tagged so that `ProjectedHoldings()` maps them through the substitution table. The substitute buy order for IVV is projected as SPY in the logical view.
+
+**Swap-back timing:** When the 30-day window expires, the middleware injects swap-back orders on the next batch it processes. The engine creates and processes batches through the middleware chain on every trading step, even when the strategy produces no orders, so expired substitutions are handled promptly.
 
 ## Tax Loss Harvester Middleware
 
@@ -86,15 +94,15 @@ type HarvesterConfig struct {
 2. If `GainOffsetOnly` is true, call `RealizedGainsYTD()` to check whether gains exist to offset; if no gains, return early
 3. For each position, call `UnrealizedLots()` to find lots with losses exceeding `LossThreshold`
 4. Call `WashSaleWindow()` to check whether selling would be pointless (repurchase within 30 days would trigger a wash sale) -- if a substitute is configured, proceed anyway
-5. Inject a sell order with `LotSelection: HighestCost` to maximize the realized loss, with `WithJustification` explaining the harvest (e.g., "tax-loss harvest: SPY down 8%, realized $2,400 loss")
-6. If a substitute is configured for the sold asset, inject a buy order for the substitute at the same dollar value, and call `RegisterSubstitution(original, substitute, until)` with a 30-day expiry
+5. Inject a sell order via `batch.Order()` with `WithLotSelection(HighestCost)` and `WithJustification` explaining the harvest (e.g., "tax-loss harvest: SPY down 8%, realized $2,400 loss")
+6. If a substitute is configured for the sold asset, inject a buy order for the substitute matching the dollar value of the lots actually sold (not the full position), and call `RegisterSubstitution(original, substitute, until)` with a 30-day expiry
 7. After 30 days, inject swap-back orders (sell substitute, buy original) and unregister the substitution
 
 If nothing is harvestable, the middleware does nothing silently -- no annotations, no justifications.
 
 ### Middleware Chain Ordering
 
-Tax middleware runs before risk middleware. The risk overlay may further adjust positions but should not override tax-motivated trades.
+Tax middleware runs before risk middleware. The risk overlay may further adjust positions but should not override tax-motivated trades. Ordering is the caller's responsibility via `Use()` call order.
 
 Recommended chain: `TaxLossHarvester -> VolatilityScaler -> MaxPositionSize -> DrawdownCircuitBreaker`
 
@@ -104,7 +112,7 @@ Tax drag measures the percentage of pre-tax return consumed by taxes from tradin
 
 **Formula:** `TaxDrag = EstimatedTaxFromTurnover / PreTaxReturn`
 
-Where estimated tax from turnover = `(0.25 * STCG) + (0.15 * LTCG)`, using the same rate assumptions as the existing `TaxCostRatio`.
+Where estimated tax from turnover = `(0.25 * STCG) + (0.15 * LTCG)`. These are the same rate assumptions used by `TaxCostRatio`; both metrics share the hardcoded rates and should be updated together if rates ever become configurable.
 
 Implemented as a new field on `TaxMetrics` and a corresponding metric computation function following the same pattern as `ltcg.go`, `stcg.go`, etc. Computed from the transaction log via `realizedGains()`.
 
@@ -114,7 +122,7 @@ Implemented as a new field on `TaxMetrics` and a corresponding metric computatio
 
 - `tax.go` -- `DataSource` interface (same as risk's), configuration types
 - `tax_loss_harvester.go` -- the middleware implementation
-- `profiles.go` -- convenience constructors (e.g., `tax.TaxEfficient(config)`)
+- `profiles.go` -- convenience constructors returning `[]portfolio.Middleware` for consistency with the risk package (e.g., `tax.TaxEfficient(config)` returns a single-element slice today but allows future composition)
 
 ### Account layer changes (`pvbt/portfolio/`)
 
