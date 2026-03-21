@@ -236,8 +236,8 @@ var _ = Describe("Margin Accounting", func() {
 			// Use a very high maintenance margin to trigger a deficiency.
 			// Cash = 20_000, short 100 at 150 => SMV = 15_000
 			// Equity = 20_000 - 15_000 = 5_000
-			// Required = 15_000 * (1 + 0.90) = 28_500
-			// Deficiency = 28_500 - 5_000 = 23_500
+			// Required = 15_000 * 0.90 = 13_500
+			// Deficiency = 13_500 - 5_000 = 8_500
 			acct := portfolio.New(
 				portfolio.WithCash(20_000, now),
 				portfolio.WithMaintenanceMargin(0.90),
@@ -254,7 +254,7 @@ var _ = Describe("Margin Accounting", func() {
 			df := buildDF(now, []asset.Asset{spy}, []float64{150}, []float64{150})
 			acct.UpdatePrices(df)
 
-			Expect(acct.MarginDeficiency()).To(BeNumerically("~", 23_500.0, 0.01))
+			Expect(acct.MarginDeficiency()).To(BeNumerically("~", 8_500.0, 0.01))
 		})
 	})
 })

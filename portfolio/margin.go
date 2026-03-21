@@ -93,7 +93,7 @@ func (a *Account) MarginDeficiency() float64 {
 		return 0
 	}
 
-	requiredEquity := smv * (1 + a.maintenanceMarginRate())
+	requiredEquity := smv * a.maintenanceMarginRate()
 	deficit := requiredEquity - a.Equity()
 
 	if deficit > 0 {
