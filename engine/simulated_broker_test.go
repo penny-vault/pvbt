@@ -26,7 +26,42 @@ import (
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 )
+
+// mockPortfolio implements portfolio.Portfolio for margin tests.
+type mockPortfolio struct {
+	positions        map[asset.Asset]float64
+	equity           float64
+	shortMarketValue float64
+}
+
+func (m *mockPortfolio) Position(a asset.Asset) float64      { return m.positions[a] }
+func (m *mockPortfolio) Equity() float64                     { return m.equity }
+func (m *mockPortfolio) ShortMarketValue() float64           { return m.shortMarketValue }
+func (m *mockPortfolio) Cash() float64                       { return 0 }
+func (m *mockPortfolio) Value() float64                      { return 0 }
+func (m *mockPortfolio) PositionValue(_ asset.Asset) float64 { return 0 }
+func (m *mockPortfolio) Holdings(_ func(asset.Asset, float64)) {}
+func (m *mockPortfolio) Transactions() []portfolio.Transaction { return nil }
+func (m *mockPortfolio) Prices() *data.DataFrame             { return nil }
+func (m *mockPortfolio) PerfData() *data.DataFrame           { return nil }
+func (m *mockPortfolio) PerformanceMetric(_ portfolio.PerformanceMetric) portfolio.PerformanceMetricQuery {
+	return portfolio.PerformanceMetricQuery{}
+}
+func (m *mockPortfolio) Summary() (portfolio.Summary, error)               { return portfolio.Summary{}, nil }
+func (m *mockPortfolio) RiskMetrics() (portfolio.RiskMetrics, error)        { return portfolio.RiskMetrics{}, nil }
+func (m *mockPortfolio) TaxMetrics() (portfolio.TaxMetrics, error)          { return portfolio.TaxMetrics{}, nil }
+func (m *mockPortfolio) TradeMetrics() (portfolio.TradeMetrics, error)      { return portfolio.TradeMetrics{}, nil }
+func (m *mockPortfolio) WithdrawalMetrics() (portfolio.WithdrawalMetrics, error) { return portfolio.WithdrawalMetrics{}, nil }
+func (m *mockPortfolio) SetMetadata(_, _ string)                           {}
+func (m *mockPortfolio) GetMetadata(_ string) string                       { return "" }
+func (m *mockPortfolio) Annotations() []portfolio.Annotation               { return nil }
+func (m *mockPortfolio) TradeDetails() []portfolio.TradeDetail              { return nil }
+func (m *mockPortfolio) LongMarketValue() float64                          { return 0 }
+func (m *mockPortfolio) MarginRatio() float64                              { return 0 }
+func (m *mockPortfolio) MarginDeficiency() float64                         { return 0 }
+func (m *mockPortfolio) BuyingPower() float64                              { return 0 }
 
 // mockPriceProvider implements broker.PriceProvider for tests.
 type mockPriceProvider struct {
@@ -136,6 +171,92 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(fill.Price).To(Equal(200.0))
 			Expect(fill.Qty).To(Equal(50.0))
 			Expect(fill.FilledAt).To(Equal(date))
+		})
+
+		It("rejects a short order when it would violate initial margin", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+
+			// Portfolio with low equity relative to proposed short value.
+			// Equity = 100, existing short value = 0, selling 10 shares @ 100 = 1000 short value.
+			// Margin ratio = 100/1000 = 0.10, below default 0.50 threshold.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{},
+				equity:           100,
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Sell,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Consistently(simBroker.Fills()).ShouldNot(Receive())
+		})
+
+		It("fills a short order when margin is sufficient", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+
+			// Equity = 10000, selling 10 shares @ 100 = 1000 short value.
+			// Margin ratio = 10000/1000 = 10.0, well above 0.50 threshold.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{},
+				equity:           10000,
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Sell,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Qty).To(Equal(10.0))
+			Expect(fill.Price).To(Equal(100.0))
+		})
+
+		It("does not margin-check sell orders that close long positions", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+
+			// Portfolio holds 20 shares long, selling 15 closes part of the long.
+			// currentPos(20) - qty(15) = 5 >= 0, so no margin check.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{aapl: 20},
+				equity:           50, // Very low equity -- would fail margin if checked.
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Sell,
+				Qty:       15,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Qty).To(Equal(15.0))
 		})
 
 		It("returns an error for an asset with no price", func() {

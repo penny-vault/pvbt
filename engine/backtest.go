@@ -201,6 +201,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	e.start = start
 	e.end = end
 
+	// Wire portfolio to simulated broker for margin checks.
+	if sb, ok := e.broker.(*SimulatedBroker); ok {
+		sb.SetPortfolio(acct)
+	}
+
 	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
 	if err := e.broker.Connect(ctx); err != nil {
 		return nil, fmt.Errorf("engine: broker connect: %w", err)
