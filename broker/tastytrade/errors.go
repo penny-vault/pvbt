@@ -8,11 +8,14 @@ import (
 )
 
 var (
-	ErrNotAuthenticated   = errors.New("tastytrade: not authenticated")
-	ErrMissingCredentials = errors.New("tastytrade: TASTYTRADE_USERNAME and TASTYTRADE_PASSWORD must be set")
-	ErrAccountNotFound    = errors.New("tastytrade: no accounts found")
-	ErrOrderRejected      = errors.New("tastytrade: order rejected")
-	ErrStreamDisconnected = errors.New("tastytrade: WebSocket disconnected")
+	ErrNotAuthenticated    = errors.New("tastytrade: not authenticated")
+	ErrMissingCredentials  = errors.New("tastytrade: TASTYTRADE_USERNAME and TASTYTRADE_PASSWORD must be set")
+	ErrAccountNotFound     = errors.New("tastytrade: no accounts found")
+	ErrOrderRejected       = errors.New("tastytrade: order rejected")
+	ErrStreamDisconnected  = errors.New("tastytrade: WebSocket disconnected")
+	ErrEmptyOrderGroup     = errors.New("tastytrade: SubmitGroup called with no orders")
+	ErrNoEntryOrder        = errors.New("tastytrade: OTOCO group has no entry order")
+	ErrMultipleEntryOrders = errors.New("tastytrade: OTOCO group has multiple entry orders")
 )
 
 // HTTPError represents an HTTP response with a non-2xx status code.
