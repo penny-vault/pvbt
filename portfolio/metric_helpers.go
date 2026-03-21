@@ -50,13 +50,6 @@ func withdrawalSustainable(
 	yearBoundaryUnix := startDate.AddDate(1, 0, 0).Unix()
 	yearsElapsed := 0
 
-	// Pre-compute Unix timestamps for the time axis to avoid repeated
-	// time.Time.Before calls (which trigger timezone lookups).
-	unixTimes := make([]int64, len(times))
-	for idx, timestamp := range times {
-		unixTimes[idx] = timestamp.Unix()
-	}
-
 	for dayIdx := 1; dayIdx < len(equity); dayIdx++ {
 		// Apply daily return.
 		if equity[dayIdx-1] > 0 {
@@ -64,8 +57,9 @@ func withdrawalSustainable(
 			balance *= (1 + dailyReturn)
 		}
 
-		// Check for year boundary using pre-computed Unix timestamps.
-		if unixTimes[dayIdx] >= yearBoundaryUnix {
+		// Check for year boundary. Unix() is a direct field access with no
+		// timezone lookup, unlike time.Time.Before which decomposes dates.
+		if times[dayIdx].Unix() >= yearBoundaryUnix {
 			yearsElapsed++
 			inflationFactor := math.Pow(1+defaultInflationRate, float64(yearsElapsed))
 			withdrawal := rate * startBalance * inflationFactor
