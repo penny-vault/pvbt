@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-03-22
+
 ### Added
 
 - Live trading now supports two new brokers: Alpaca and Charles Schwab.
@@ -109,7 +111,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.3.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/penny-vault/pvbt/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/penny-vault/pvbt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/penny-vault/pvbt/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/penny-vault/pvbt/releases/tag/v0.1.0
