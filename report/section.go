@@ -13,16 +13,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package terminal
+package report
 
-import (
-	"io"
+import "io"
 
-	"github.com/penny-vault/pvbt/report"
-)
+// Section is a single, self-contained block of report output. Concrete
+// implementations (Table, TimeSeries, MetricPairs, Text) each know how
+// to render themselves in one or more Formats.
+type Section interface {
+	// Type returns a machine-readable discriminator (e.g. "table").
+	Type() string
 
-// Render writes a plain-text backtest report to the given writer.
-// It delegates to the composable report's own Render method.
-func Render(rpt report.Report, writer io.Writer) error {
-	return rpt.Render(report.FormatText, writer)
+	// Name returns the human-readable section heading.
+	Name() string
+
+	// Render writes the section content in the requested format to w.
+	Render(format Format, w io.Writer) error
 }

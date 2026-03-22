@@ -13,16 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package terminal
+package report
 
-import (
-	"io"
+// Format identifies the output encoding for Section.Render.
+type Format string
 
-	"github.com/penny-vault/pvbt/report"
+const (
+	FormatText Format = "text"
+	FormatHTML Format = "html"
+	FormatJSON Format = "json"
 )
-
-// Render writes a plain-text backtest report to the given writer.
-// It delegates to the composable report's own Render method.
-func Render(rpt report.Report, writer io.Writer) error {
-	return rpt.Render(report.FormatText, writer)
-}

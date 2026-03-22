@@ -42,6 +42,7 @@ func Run(strategy engine.Strategy) {
 	rootCmd.AddCommand(newLiveCmd(strategy))
 	rootCmd.AddCommand(newSnapshotCmd(strategy))
 	rootCmd.AddCommand(newDescribeCmd(strategy))
+	rootCmd.AddCommand(newStudyCmd(strategy))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
