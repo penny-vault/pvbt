@@ -81,3 +81,18 @@ func (streamer *activityStreamer) ConnectStreamer(ctx context.Context) error {
 func (streamer *activityStreamer) CloseStreamer() error {
 	return streamer.close()
 }
+
+// --- Broker test exports ---
+
+// SetClientForTest sets the broker's internal client for testing.
+func SetClientForTest(schwabBroker *SchwabBroker, client *apiClient) {
+	schwabBroker.client = client
+}
+
+// SetAccountHashForTest sets the broker's account hash for testing.
+func SetAccountHashForTest(schwabBroker *SchwabBroker, hash string) {
+	schwabBroker.accountHash = hash
+	if schwabBroker.client != nil {
+		schwabBroker.client.accountHash = hash
+	}
+}
