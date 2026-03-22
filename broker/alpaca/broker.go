@@ -17,7 +17,6 @@ package alpaca
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -94,7 +93,9 @@ func (alpacaBroker *AlpacaBroker) Connect(ctx context.Context) error {
 		baseURL = paperBaseURL
 	}
 
-	alpacaBroker.client = newAPIClient(baseURL, apiKey, apiSecret)
+	if alpacaBroker.client == nil {
+		alpacaBroker.client = newAPIClient(baseURL, apiKey, apiSecret)
+	}
 
 	account, err := alpacaBroker.client.getAccount(ctx)
 	if err != nil {
@@ -235,11 +236,6 @@ func (alpacaBroker *AlpacaBroker) Replace(ctx context.Context, orderID string, o
 	// Non-mutable field changed: cancel and resubmit.
 	cancelErr := alpacaBroker.client.cancelOrder(ctx, orderID)
 	if cancelErr != nil {
-		var httpErr *broker.HTTPError
-		if errors.As(cancelErr, &httpErr) && httpErr.StatusCode == 422 {
-			return fmt.Errorf("alpaca: cancel for replace: %w", cancelErr)
-		}
-
 		return fmt.Errorf("alpaca: cancel for replace: %w", cancelErr)
 	}
 

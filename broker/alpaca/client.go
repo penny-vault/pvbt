@@ -47,7 +47,7 @@ func newAPIClient(baseURL, apiKey, apiSecret string) *apiClient {
 			return broker.IsTransient(err)
 		}
 
-		return resp.StatusCode() >= 500
+		return resp.StatusCode() == 429 || resp.StatusCode() >= 500
 	})
 
 	return &apiClient{

@@ -132,32 +132,10 @@ var _ = Describe("AlpacaBroker", func() {
 			})
 
 			alpacaBroker := alpaca.New()
-			// Override the client to point at our test server after Connect reads env vars.
-			// We need to test Connect itself, so we set env vars and let it create the client,
-			// but the base URL will be wrong. Instead, use SetClientForTest and call getAccount directly.
-			// Actually, Connect reads env vars and creates the client itself. We need a different approach.
-			// Let's test this by calling Connect with env vars set but the production URL won't work.
-			// Better approach: test that SetClientForTest + getAccount returns the right error.
+			alpaca.SetClientForTest(alpacaBroker, server.URL, "test-key", "test-secret")
 
-			// For this test, we'll construct the broker, set the client manually, then test the
-			// account validation logic. Since Connect creates its own client, we test the error
-			// path by verifying the account status check behavior.
-			alpacaBroker2 := alpaca.New()
-			alpaca.SetClientForTest(alpacaBroker2, server.URL, "test-key", "test-secret")
-
-			// We cannot call Connect directly since it will override our test client.
-			// Instead, verify via ConnectWithClient (which we don't have).
-			// The cleanest test is to just verify the error behavior at the broker level.
-			// Let's keep this simple and verify via an exported test helper.
-			_ = alpacaBroker // suppress unused
-
-			// Actually, the simplest approach: just test Connect end-to-end.
-			// We need to intercept the client creation. Since Connect reads env vars
-			// and creates the client with production URLs, we can't easily test the
-			// "account not active" path through Connect without modifying the code.
-			// Instead, we verify the behavior through the broker's internal logic.
-			// For now, skip this test case in favor of a more targeted unit test.
-			Expect(alpaca.ErrAccountNotActive).ToNot(BeNil())
+			err := alpacaBroker.Connect(ctx)
+			Expect(err).To(MatchError(alpaca.ErrAccountNotActive))
 		})
 	})
 
