@@ -9,14 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- The study runner framework lets you run a strategy multiple times with different configurations and synthesize the results into a single report. A concurrent worker pool executes runs in parallel, and parameter sweeps (`SweepRange`, `SweepDuration`, `SweepValues`, `SweepPresets`) are cross-producted with study configurations to produce the run matrix. Custom study types implement the `Study` interface to define what varies between runs and how to interpret the combined results.
-- The stress test study runs a strategy against named historical market scenarios (2008 Financial Crisis, COVID Crash, Dot-com Bust, 2022 Rate Hiking Cycle, 2015-2017 Low-Volatility Grind, 2011 Debt Ceiling Crisis) and computes per-scenario metrics including maximum drawdown, drawdown velocity, total return, and worst single-day return. The engine runs once over the full date range and the analysis slices the equity curve into scenario windows, avoiding redundant computation.
-- The CLI gains a `study stress-test [scenarios...|all]` subcommand that wires up the stress test study with progress logging and configurable output format.
-- `engine.ApplyParams` is now exported, enabling programmatic preset resolution and parameter application outside the CLI. It resolves named presets from strategy `suggest` tags, merges explicit parameter overrides, and handles asset and universe field resolution through the engine's asset provider.
+- Studies can now answer questions that a single backtest cannot: "how does my strategy hold up during the worst historical crises?" or "which parameter values produce the most consistent results?" The new `study` command runs a strategy across multiple configurations concurrently and produces a combined analysis report. Parameter sweeps let you vary lookback periods, universe composition, presets, or any other strategy parameter and see how each affects performance.
+- The first built-in study is the stress test (`study stress-test`), which evaluates a strategy against six named historical crises -- the 2008 Financial Crisis, COVID Crash, Dot-com Bust, 2022 Rate Hiking Cycle, 2015-2017 Low-Volatility Grind, and 2011 Debt Ceiling Crisis. It reports per-scenario drawdown, recovery speed, worst single day, and how the strategy performed relative to its benchmark during each episode. Custom scenarios can be added programmatically.
 
 ### Changed
 
-- **Breaking:** The report package was redesigned around composable primitives. Reports are now titled collections of renderable `Section` values (Table, TimeSeries, MetricPairs, Text), each knowing how to render itself in text, HTML, or JSON format. The `Summary()` builder replaces `Build()`, and the old monolithic `Report` struct with its fixed fields is gone. JSON output includes a type discriminator per section for frontend component mapping.
+- **Breaking:** Reports are now built from composable sections (tables, time series charts, metric pairs, and text blocks) rather than a fixed struct. Each section can render itself as terminal text or structured JSON, making reports extensible for new study types and consumable by web frontends. `report.Summary()` replaces `report.Build()`.
 
 ### Fixed
 
