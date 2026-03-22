@@ -61,3 +61,23 @@ func (client *apiClient) GetQuote(ctx context.Context, symbol string) (float64, 
 func (client *apiClient) GetUserPreference(ctx context.Context) (schwabUserPreference, error) {
 	return client.getUserPreference(ctx)
 }
+
+// --- Streamer test exports ---
+
+// ActivityStreamerForTestType is an exported alias.
+type ActivityStreamerForTestType = activityStreamer
+
+// NewActivityStreamerForTest creates an activityStreamer for testing.
+func NewActivityStreamerForTest(client *apiClient, fills chan broker.Fill, wsURL string, info schwabStreamerInfo, accountHash string, accessToken string) *activityStreamer {
+	return newActivityStreamer(client, fills, wsURL, info, accountHash, func() string { return accessToken })
+}
+
+// ConnectStreamer exposes connect for testing.
+func (streamer *activityStreamer) ConnectStreamer(ctx context.Context) error {
+	return streamer.connect(ctx)
+}
+
+// CloseStreamer exposes close for testing.
+func (streamer *activityStreamer) CloseStreamer() error {
+	return streamer.close()
+}
