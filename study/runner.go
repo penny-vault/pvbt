@@ -109,6 +109,11 @@ func (runner *Runner) runSingle(ctx context.Context, cfg RunConfig) RunResult {
 	opts := make([]engine.Option, len(runner.Options))
 	copy(opts, runner.Options)
 
+	// If the study implements EngineCustomizer, append per-run options.
+	if customizer, ok := runner.Study.(EngineCustomizer); ok {
+		opts = append(opts, customizer.EngineOptions(cfg)...)
+	}
+
 	if cfg.Deposit > 0 {
 		opts = append(opts, engine.WithInitialDeposit(cfg.Deposit))
 	}

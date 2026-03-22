@@ -107,10 +107,10 @@ Lives in `study/montecarlo`. Implements `Study` and `EngineCustomizer`.
 
 **Terminal Wealth Distribution** (Table) -- Percentile table of final portfolio values: P1, P5, P10, P25, P50, P75, P90, P95, P99. Includes mean, standard deviation, and historical result's percentile rank if available.
 
-**Confidence Intervals on Key Metrics** (Table) -- For CAGR, max drawdown, and Sharpe ratio: P5, P25, P50, P75, P95 across all paths. Historical value and its percentile rank if available. Metrics extracted via portfolio's `PerformanceMetric()` API.
+**Confidence Intervals on Key Metrics** (Table) -- For TWRR, max drawdown, and Sharpe ratio: P5, P25, P50, P75, P95 across all paths. Historical value and its percentile rank if available. Metrics extracted via portfolio's `Summary()` API.
 
 **Probability of Ruin** (MetricPairs) -- Percentage of paths where max drawdown exceeded the ruin threshold. Median max drawdown across all paths.
 
-**Historical Rank** (MetricPairs) -- Historical backtest's terminal value, CAGR, max drawdown, and Sharpe expressed as percentile rank among simulated paths. Skipped if no historical result provided.
+**Historical Rank** (MetricPairs) -- Historical backtest's terminal value, TWRR, max drawdown, and Sharpe expressed as percentile rank among simulated paths. Skipped if no historical result provided.
 
 **Summary Narrative** (Text) -- Brief interpretation, e.g., "85% of simulated paths were profitable. The historical result ranked in the 72nd percentile of terminal wealth, suggesting the strategy's performance was moderately above its expected range."

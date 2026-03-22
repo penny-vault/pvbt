@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live trading now supports two new brokers: Alpaca and Charles Schwab.
 - The new `study` command runs a strategy across multiple configurations and produces a combined analysis. Parameter sweeps vary lookback periods, universe composition, presets, or any other strategy parameter.
 - The first built-in study is `study stress-test`, which evaluates a strategy against 17 named historical crises from the 1973 oil embargo through the 2023 regional banking crisis.
+- Monte Carlo simulation distinguishes skill from luck by running a strategy against thousands of resampled price series.
 
 ### Changed
 
