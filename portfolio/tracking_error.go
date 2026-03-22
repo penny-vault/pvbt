@@ -51,21 +51,17 @@ func (trackingError) Compute(ctx context.Context, stats PortfolioStats, window *
 		return 0, nil
 	}
 
-	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
-	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+	pCol, bCol := alignedRemoveNaN(
+		rdf.Column(portfolioAsset, data.PortfolioEquity),
+		bdf.Column(portfolioAsset, data.PortfolioBenchmark),
+	)
 
-	// Compute active returns = portfolio returns - benchmark returns.
-	minLen := len(pCol)
-	if len(bCol) < minLen {
-		minLen = len(bCol)
-	}
-
-	if minLen < 2 {
+	if len(pCol) < 2 {
 		return 0, nil
 	}
 
-	arCol := make([]float64, minLen)
-	for idx := 0; idx < minLen; idx++ {
+	arCol := make([]float64, len(pCol))
+	for idx := range pCol {
 		arCol[idx] = pCol[idx] - bCol[idx]
 	}
 

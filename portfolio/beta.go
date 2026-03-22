@@ -51,14 +51,12 @@ func (beta) Compute(ctx context.Context, stats PortfolioStats, window *Period) (
 		return 0, nil
 	}
 
-	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
-	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+	pCol, bCol := alignedRemoveNaN(
+		rdf.Column(portfolioAsset, data.PortfolioEquity),
+		bdf.Column(portfolioAsset, data.PortfolioBenchmark),
+	)
 
-	if len(pCol) == 0 {
-		return 0, nil
-	}
-
-	if len(pCol) < 2 || len(bCol) < 2 {
+	if len(pCol) < 2 {
 		return 0, nil
 	}
 

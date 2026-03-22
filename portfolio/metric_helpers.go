@@ -32,6 +32,25 @@ func removeNaN(col []float64) []float64 {
 	return clean
 }
 
+// alignedRemoveNaN takes two parallel slices and returns copies with any
+// index where either value is NaN removed from both. The returned slices
+// are guaranteed to have the same length.
+func alignedRemoveNaN(colA, colB []float64) ([]float64, []float64) {
+	minLen := min(len(colA), len(colB))
+
+	cleanA := make([]float64, 0, minLen)
+	cleanB := make([]float64, 0, minLen)
+
+	for idx := range minLen {
+		if !math.IsNaN(colA[idx]) && !math.IsNaN(colB[idx]) {
+			cleanA = append(cleanA, colA[idx])
+			cleanB = append(cleanB, colB[idx])
+		}
+	}
+
+	return cleanA, cleanB
+}
+
 // defaultInflationRate is the assumed annual inflation rate for withdrawal
 // metric calculations.
 const defaultInflationRate = 0.03

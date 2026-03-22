@@ -84,18 +84,16 @@ func (activeReturn) ComputeSeries(ctx context.Context, stats PortfolioStats, win
 		return nil, nil
 	}
 
-	portR := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
-	benchR := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+	portR, benchR := alignedRemoveNaN(
+		rdf.Column(portfolioAsset, data.PortfolioEquity),
+		bdf.Column(portfolioAsset, data.PortfolioBenchmark),
+	)
 
-	count := len(portR)
-	if len(benchR) < count {
-		count = len(benchR)
-	}
-
-	if count == 0 {
+	if len(portR) == 0 {
 		return nil, nil
 	}
 
+	count := len(portR)
 	series := make([]float64, count)
 	cumPort := 1.0
 	cumBench := 1.0
