@@ -167,9 +167,9 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	result.SetMetadata(portfolio.MetaRunElapsed, elapsed.String())
 	result.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 	result.SetMetadata("run_id", fullID)
-	result.SetMetadata("strategy", strategy.Name())
-	result.SetMetadata("start", start.Format("2006-01-02"))
-	result.SetMetadata("end", end.Format("2006-01-02"))
+	result.SetMetadata(portfolio.MetaStrategyName, strategy.Name())
+	result.SetMetadata(portfolio.MetaRunStart, start.Format("2006-01-02"))
+	result.SetMetadata(portfolio.MetaRunEnd, end.Format("2006-01-02"))
 
 	params := strategyParams(strategy)
 	for k, v := range params {

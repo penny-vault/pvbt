@@ -283,12 +283,14 @@ func returnTableToSection(name string, table ReturnTable, hasBenchmark bool) *Ta
 // ---------------------------------------------------------------------------
 
 func annualReturnsToSection(annual AnnualReturns, hasBenchmark bool) *Table {
+	showBenchmark := hasBenchmark && len(annual.Benchmark) > 0
+
 	columns := []Column{
 		{Header: "Year", Format: "string", Align: "left"},
 		{Header: "Strategy", Format: "percent", Align: "right"},
 	}
 
-	if hasBenchmark && len(annual.Benchmark) > 0 {
+	if showBenchmark {
 		columns = append(columns,
 			Column{Header: "Benchmark", Format: "percent", Align: "right"},
 			Column{Header: "+/-", Format: "percent", Align: "right"},
@@ -305,7 +307,7 @@ func annualReturnsToSection(annual AnnualReturns, hasBenchmark bool) *Table {
 
 		row := []any{fmt.Sprintf("%d", year), stratVal}
 
-		if hasBenchmark && len(annual.Benchmark) > 0 {
+		if showBenchmark {
 			benchVal := math.NaN()
 			if idx < len(annual.Benchmark) {
 				benchVal = annual.Benchmark[idx]
@@ -408,7 +410,7 @@ func drawdownsToSection(drawdowns Drawdowns) *Table {
 	rows := make([][]any, len(drawdowns.Entries))
 	for idx, entry := range drawdowns.Entries {
 		endStr := entry.End.Format("2006-01-02")
-		if entry.End.Equal(time.Time{}) {
+		if entry.End.IsZero() {
 			endStr = "ongoing"
 		}
 

@@ -29,7 +29,7 @@ import (
 
 var (
 	spy = asset.Asset{CompositeFigi: "BBG000BDTBL9", Ticker: "SPY"}
-	bm  = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
+	benchmarkAsset = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 )
 
 // buildPriceDF constructs a single-timestamp DataFrame with MetricClose
@@ -79,11 +79,11 @@ func newAccountWithEquity(dates []time.Time, cash float64, opts ...portfolio.Opt
 func newAccountWithBenchmark(dates []time.Time, cash float64) *portfolio.Account {
 	acct := portfolio.New(
 		portfolio.WithCash(cash, dates[0]),
-		portfolio.WithBenchmark(bm),
+		portfolio.WithBenchmark(benchmarkAsset),
 	)
 
 	for _, date := range dates {
-		df := buildPriceDF(date, []asset.Asset{spy, bm}, []float64{100.0, 200.0})
+		df := buildPriceDF(date, []asset.Asset{spy, benchmarkAsset}, []float64{100.0, 200.0})
 		acct.UpdatePrices(df)
 	}
 
