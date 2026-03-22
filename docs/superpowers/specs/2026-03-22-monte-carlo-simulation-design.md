@@ -44,8 +44,8 @@ Construction parameters:
 - Random seed
 
 Behavior:
-- On data request, loads full historical dataset from the underlying provider for all requested assets
-- Converts prices to daily returns
+- On construction, receives the underlying provider, a `Resampler`, a random seed, and a pre-fetched historical `DataFrame` (shared across all paths -- see Section 5 for how this is managed)
+- On data request, converts the cached historical prices to daily returns
 - Passes returns through the configured `Resampler` to produce synthetic returns
 - Reconstructs prices from synthetic returns
 - Zeroes out dividends, splits, and all other corporate actions (these are meaningless in a resampled timeline)
@@ -79,6 +79,8 @@ This is the only change to the runner.
 
 Lives in `study/montecarlo`. Implements `Study` and `EngineCustomizer`.
 
+**Construction:** Receives the base data provider at construction time. Before generating configurations, the study pre-fetches the full historical dataset from the base provider once and caches it. This cached dataset is shared (read-only) across all simulation paths, avoiding 1000 redundant fetches of the same data.
+
 **Configuration:**
 
 | Parameter | Default | Description |
@@ -91,7 +93,7 @@ Lives in `study/montecarlo`. Implements `Study` and `EngineCustomizer`.
 
 **`Configurations()`** returns N `RunConfig` entries, one per simulation path. Each config is named "Path 1", "Path 2", etc. and carries `simulation_seed` in its metadata.
 
-**`EngineOptions(cfg)`** reads the seed from the config's metadata and returns a `WithDataProvider` option wrapping the base provider in a `ResamplingProvider` with that seed and the study's resampling method/block size.
+**`EngineOptions(cfg)`** reads the seed from the config's metadata and constructs a `ResamplingProvider` using the pre-cached historical data, the study's resampler, and the per-path seed. Returns a `WithDataProvider` option wrapping this provider.
 
 **Historical result:** Optionally provided at construction. If present, it is included in the analysis for percentile ranking. It is not re-run -- just compared against the simulated paths.
 
