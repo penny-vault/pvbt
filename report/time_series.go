@@ -54,10 +54,6 @@ func (ts *TimeSeries) Render(format Format, writer io.Writer) error {
 }
 
 func (ts *TimeSeries) renderText(writer io.Writer) error {
-	if _, err := fmt.Fprintf(writer, "%s\n", ts.SectionName); err != nil {
-		return err
-	}
-
 	for _, series := range ts.Series {
 		if _, err := fmt.Fprintf(writer, "  %s: %d points\n", series.Name, len(series.Values)); err != nil {
 			return err

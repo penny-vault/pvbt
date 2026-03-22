@@ -92,6 +92,29 @@ var _ = Describe("Section primitives", func() {
 			Expect(empty.Render(report.FormatText, &buf)).To(Succeed())
 			Expect(buf.String()).To(BeEmpty())
 		})
+
+		It("renders percent-format column values as percentages", func() {
+			percentTable := &report.Table{
+				SectionName: "Percent Test",
+				Columns: []report.Column{
+					{Header: "Label", Format: "string", Align: "left"},
+					{Header: "Return", Format: "percent", Align: "right"},
+				},
+				Rows: [][]any{
+					{"Strategy", 0.12},
+					{"Benchmark", -0.03},
+				},
+			}
+			var buf bytes.Buffer
+			Expect(percentTable.Render(report.FormatText, &buf)).To(Succeed())
+
+			output := buf.String()
+			Expect(output).To(ContainSubstring("12.00%"))
+			Expect(output).To(ContainSubstring("-3.00%"))
+			// Raw decimal values must not appear in the output.
+			Expect(output).NotTo(ContainSubstring("0.12"))
+			Expect(output).NotTo(ContainSubstring("-0.03"))
+		})
 	})
 
 	Describe("TimeSeries", func() {
@@ -128,12 +151,12 @@ var _ = Describe("Section primitives", func() {
 			Expect(section.Type()).To(Equal("time_series"))
 		})
 
-		It("renders text summary with series names and point counts", func() {
+		It("renders text summary with series names and point counts but no section header", func() {
 			var buf bytes.Buffer
 			Expect(ts.Render(report.FormatText, &buf)).To(Succeed())
 
 			output := buf.String()
-			Expect(output).To(ContainSubstring("Equity Curve"))
+			Expect(output).NotTo(ContainSubstring("Equity Curve"))
 			Expect(output).To(ContainSubstring("Portfolio: 2 points"))
 			Expect(output).To(ContainSubstring("Benchmark: 2 points"))
 		})

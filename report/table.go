@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 )
 
 // Column describes a single column in a Table section.
@@ -68,10 +69,10 @@ func (tbl *Table) renderText(writer io.Writer) error {
 	formatted := make([][]string, len(tbl.Rows))
 	for rowIdx, row := range tbl.Rows {
 		formatted[rowIdx] = make([]string, len(tbl.Columns))
-		for colIdx := range tbl.Columns {
+		for colIdx, col := range tbl.Columns {
 			cell := ""
 			if colIdx < len(row) {
-				cell = fmt.Sprintf("%v", row[colIdx])
+				cell = formatTableCell(row[colIdx], col.Format)
 			}
 
 			formatted[rowIdx][colIdx] = cell
@@ -81,23 +82,26 @@ func (tbl *Table) renderText(writer io.Writer) error {
 		}
 	}
 
-	// Build format strings per column.
-	fmts := make([]string, len(tbl.Columns))
-	for colIdx, col := range tbl.Columns {
-		switch col.Align {
+	// Build aligned cells using the computed column widths.
+	alignCell := func(text string, width int, align string) string {
+		switch align {
 		case "right":
-			fmts[colIdx] = fmt.Sprintf("%%%ds", widths[colIdx])
+			return fmt.Sprintf("%*s", width, text)
 		case "center":
-			fmts[colIdx] = fmt.Sprintf("%%%ds", widths[colIdx]) // center approximated as right
+			pad := width - len(text)
+			leftPad := pad / 2
+			rightPad := pad - leftPad
+
+			return strings.Repeat(" ", leftPad) + text + strings.Repeat(" ", rightPad)
 		default: // left
-			fmts[colIdx] = fmt.Sprintf("%%-%ds", widths[colIdx])
+			return fmt.Sprintf("%-*s", width, text)
 		}
 	}
 
 	// Header line.
 	headers := make([]string, len(tbl.Columns))
 	for colIdx, col := range tbl.Columns {
-		headers[colIdx] = fmt.Sprintf(fmts[colIdx], col.Header)
+		headers[colIdx] = alignCell(col.Header, widths[colIdx], col.Align)
 	}
 
 	if _, err := fmt.Fprintf(writer, "%s\n", strings.Join(headers, "  ")); err != nil {
@@ -117,8 +121,8 @@ func (tbl *Table) renderText(writer io.Writer) error {
 	// Data rows.
 	for _, row := range formatted {
 		cells := make([]string, len(tbl.Columns))
-		for colIdx := range tbl.Columns {
-			cells[colIdx] = fmt.Sprintf(fmts[colIdx], row[colIdx])
+		for colIdx, col := range tbl.Columns {
+			cells[colIdx] = alignCell(row[colIdx], widths[colIdx], col.Align)
 		}
 
 		if _, err := fmt.Fprintf(writer, "%s\n", strings.Join(cells, "  ")); err != nil {
@@ -127,6 +131,77 @@ func (tbl *Table) renderText(writer io.Writer) error {
 	}
 
 	return nil
+}
+
+// formatTableCell converts a raw cell value to its display string using the column format.
+func formatTableCell(value any, colFormat string) string {
+	switch colFormat {
+	case "percent":
+		switch typed := value.(type) {
+		case float64:
+			return fmt.Sprintf("%.2f%%", typed*100)
+		case float32:
+			return fmt.Sprintf("%.2f%%", float64(typed)*100)
+		}
+	case "currency":
+		var amount float64
+
+		switch typed := value.(type) {
+		case float64:
+			amount = typed
+		case float32:
+			amount = float64(typed)
+		case int:
+			amount = float64(typed)
+		case int64:
+			amount = float64(typed)
+		default:
+			return fmt.Sprintf("%v", value)
+		}
+
+		// Format with comma-separated thousands and two decimal places.
+		formatted := fmt.Sprintf("%.2f", amount)
+
+		// Insert commas into the integer part.
+		dotIdx := strings.Index(formatted, ".")
+		intPart := formatted[:dotIdx]
+		fracPart := formatted[dotIdx:]
+
+		negative := strings.HasPrefix(intPart, "-")
+		if negative {
+			intPart = intPart[1:]
+		}
+
+		var sb strings.Builder
+
+		for idx, digit := range intPart {
+			if idx > 0 && (len(intPart)-idx)%3 == 0 {
+				sb.WriteByte(',')
+			}
+
+			sb.WriteRune(digit)
+		}
+
+		prefix := "$"
+		if negative {
+			prefix = "-$"
+		}
+
+		return prefix + sb.String() + fracPart
+	case "number":
+		switch typed := value.(type) {
+		case float64:
+			return fmt.Sprintf("%g", typed)
+		case float32:
+			return fmt.Sprintf("%g", typed)
+		}
+	case "date":
+		if typed, ok := value.(time.Time); ok {
+			return typed.Format("2006-01-02")
+		}
+	}
+	// "string" format and any unrecognised format fall through to %v.
+	return fmt.Sprintf("%v", value)
 }
 
 func (tbl *Table) renderJSON(writer io.Writer) error {
