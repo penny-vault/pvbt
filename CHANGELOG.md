@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Breaking:** The DataFrame and metric computation internals were redesigned for performance. `NewDataFrame` accepts per-column slices instead of a flat slab, and metrics now compute against a `PortfolioStats` interface rather than a concrete `*Account`. These changes improve runtime by 9x and reduce memory by 14x over v0.3.0 -- a 20-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
+- **Breaking:** The DataFrame and metric computation internals were redesigned for performance. `NewDataFrame` accepts per-column slices instead of a flat slab, and metrics now compute against a `PortfolioStats` interface rather than a concrete `*Account`. These changes improve runtime by 9x and reduce memory by 14x over v0.3.0 -- a 30-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
 
 ## [0.3.0] - 2026-03-21
 
