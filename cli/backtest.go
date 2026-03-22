@@ -165,6 +165,8 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	elapsed := time.Since(startTime)
 
 	// Set metadata on the portfolio.
+	result.SetMetadata(portfolio.MetaRunElapsed, elapsed.String())
+	result.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 	result.SetMetadata("run_id", fullID)
 	result.SetMetadata("strategy", strategy.Name())
 	result.SetMetadata("start", start.Format("2006-01-02"))
@@ -181,18 +183,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	info := engine.DescribeStrategy(strategy)
-
-	steps := 0
-	if result.PerfData() != nil {
-		steps = result.PerfData().Len()
-	}
-
-	rpt, err := backtestReport.Build(result, info, backtestReport.RunMeta{
-		Elapsed:     elapsed,
-		Steps:       steps,
-		InitialCash: cash,
-	})
+	rpt, err := backtestReport.Build(acct)
 	if err != nil {
 		log.Warn().Err(err).Msg("some report metrics failed")
 	}

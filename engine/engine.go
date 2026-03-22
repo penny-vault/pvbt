@@ -58,7 +58,7 @@ type Engine struct {
 	warmup          int
 	benchmarkTicker string
 
-	account *portfolio.Account
+	account portfolio.PortfolioManager
 
 	// populated during initialization
 	assets         map[string]asset.Asset
@@ -93,7 +93,7 @@ func New(strategy Strategy, opts ...Option) *Engine {
 // If a snapshot is set, the account is restored from it; otherwise a fresh
 // account is created with the initial deposit. If no broker was provided
 // via WithBroker, a SimulatedBroker is created and stored on e.broker.
-func (e *Engine) createAccount(start time.Time) *portfolio.Account {
+func (e *Engine) createAccount(start time.Time) portfolio.PortfolioManager {
 	if e.broker == nil {
 		e.broker = NewSimulatedBroker()
 	}

@@ -34,7 +34,7 @@ import (
 // each scheduled time. The returned channel receives the portfolio after
 // each step; sends are non-blocking so a slow consumer does not block the loop.
 // Cancel the context to stop execution and close the channel.
-func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error) {
+func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager, error) {
 	// PHASE 1: INITIALIZATION
 
 	// 1. Load asset registry from assetProvider.
@@ -106,6 +106,29 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	liveInfo := DescribeStrategy(e.strategy)
+	if liveInfo.Name != "" {
+		acct.SetMetadata(portfolio.MetaStrategyName, liveInfo.Name)
+	}
+
+	if liveInfo.ShortCode != "" {
+		acct.SetMetadata(portfolio.MetaStrategyShortCode, liveInfo.ShortCode)
+	}
+
+	if liveInfo.Version != "" {
+		acct.SetMetadata(portfolio.MetaStrategyVersion, liveInfo.Version)
+	}
+
+	if liveInfo.Description != "" {
+		acct.SetMetadata(portfolio.MetaStrategyDesc, liveInfo.Description)
+	}
+
+	if liveInfo.Benchmark != "" {
+		acct.SetMetadata(portfolio.MetaStrategyBenchmark, liveInfo.Benchmark)
+	}
+
+	acct.SetMetadata(portfolio.MetaRunMode, "live")
+
 	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
 	e.cache = newDataCache(e.cacheMaxBytes)
 
@@ -145,7 +168,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.Portfolio, error
 
 	// PHASE 2: GOROUTINE
 
-	portfolioCh := make(chan portfolio.Portfolio, 1)
+	portfolioCh := make(chan portfolio.PortfolioManager, 1)
 
 	go func() {
 		defer close(portfolioCh)

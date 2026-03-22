@@ -82,7 +82,7 @@ func WithBenchmarkTicker(ticker string) Option {
 // WithAccount sets a pre-configured portfolio Account for the engine
 // to use. When set, this takes priority over WithInitialDeposit,
 // WithPortfolioSnapshot, and WithBroker.
-func WithAccount(acct *portfolio.Account) Option {
+func WithAccount(acct portfolio.PortfolioManager) Option {
 	return func(e *Engine) {
 		e.account = acct
 	}

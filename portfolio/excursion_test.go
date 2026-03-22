@@ -43,7 +43,8 @@ var _ = Describe("Clone", func() {
 		Expect(err).NotTo(HaveOccurred())
 		acct.UpdateExcursions(df)
 
-		clone := acct.Clone()
+		cloneIface := acct.Clone()
+		clone := cloneIface.(*portfolio.Account)
 
 		// Excursions should be independent copies
 		cloneExc := clone.Excursions()

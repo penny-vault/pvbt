@@ -127,7 +127,7 @@ func SetChildrenForTest(eng *Engine, entries []*childEntry) {
 }
 
 // NewChildEntryForTest constructs a childEntry for use in unit tests.
-func NewChildEntryForTest(name string, weight float64, account *portfolio.Account) *childEntry {
+func NewChildEntryForTest(name string, weight float64, account portfolio.PortfolioManager) *childEntry {
 	return &childEntry{
 		name:    name,
 		weight:  weight,

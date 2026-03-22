@@ -15,17 +15,14 @@
 
 // Package report builds structured view models from backtest results.
 //
-// [Build] takes a [portfolio.Portfolio], strategy metadata, and run
-// metadata, and produces a [Report] containing all the data needed to
-// render a backtest summary: header info, equity curve, return tables,
-// risk metrics, drawdown analysis, monthly return heatmap, and trade
-// statistics.
+// [Build] takes a [ReportablePortfolio] (composing [portfolio.Portfolio]
+// and [portfolio.PortfolioStats]) and produces a [Report] containing all
+// the data needed to render a backtest summary: header info, equity curve,
+// return tables, risk metrics, drawdown analysis, monthly return heatmap,
+// and trade statistics. Strategy and run metadata are read from the
+// portfolio's metadata map.
 //
-//	rpt, err := report.Build(result, strategyInfo, report.RunMeta{
-//	    Elapsed:     elapsed,
-//	    Steps:       steps,
-//	    InitialCash: 100000,
-//	})
+//	rpt, err := report.Build(acct)
 //
 // The Report struct is a pure view model with no rendering logic. It
 // can be passed to [terminal.Render] for styled terminal output, or

@@ -46,6 +46,17 @@ type PortfolioStats interface {
 	TaxLotsView(ctx context.Context) map[asset.Asset][]TaxLot
 	ShortLotsView(ctx context.Context, fn func(asset.Asset, []TaxLot))
 	PerfDataView(ctx context.Context) *data.DataFrame
+
+	// AnnualReturns computes calendar-year returns for the given metric
+	// column (e.g. PortfolioEquity, PortfolioBenchmark).
+	AnnualReturns(metric data.Metric) ([]int, []float64, error)
+
+	// DrawdownDetails returns the top-N drawdown periods sorted by depth.
+	DrawdownDetails(topN int) ([]DrawdownDetail, error)
+
+	// MonthlyReturns computes a year x month grid of returns for the
+	// given metric column.
+	MonthlyReturns(metric data.Metric) ([]int, [][]float64, error)
 }
 
 // BenchmarkTargetable is a marker interface for metrics that can be

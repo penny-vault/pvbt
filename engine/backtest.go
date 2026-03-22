@@ -166,6 +166,27 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	info := DescribeStrategy(e.strategy)
+	if info.Name != "" {
+		acct.SetMetadata(portfolio.MetaStrategyName, info.Name)
+	}
+
+	if info.ShortCode != "" {
+		acct.SetMetadata(portfolio.MetaStrategyShortCode, info.ShortCode)
+	}
+
+	if info.Version != "" {
+		acct.SetMetadata(portfolio.MetaStrategyVersion, info.Version)
+	}
+
+	if info.Description != "" {
+		acct.SetMetadata(portfolio.MetaStrategyDesc, info.Description)
+	}
+
+	if info.Benchmark != "" {
+		acct.SetMetadata(portfolio.MetaStrategyBenchmark, info.Benchmark)
+	}
+
 	// 7. Resolve DGS3MO as the system risk-free rate.
 	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
 	if rfErr != nil {
@@ -386,7 +407,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// 18b. Compute registered metrics only on strategy dates.
 		if step.isParentStrategy {
-			computeMetrics(acct, date, acct.RegisteredMetrics(), acct.AppendMetric)
+			if statsProvider, ok := acct.(portfolio.PortfolioStats); ok {
+				computeMetrics(statsProvider, date, acct.RegisteredMetrics(), acct.AppendMetric)
+			}
 		}
 
 		// 19. Evict old cache data.
@@ -394,6 +417,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	}
 
 	// PHASE 4: RETURN
+	acct.SetMetadata(portfolio.MetaRunMode, "backtest")
+	acct.SetMetadata(portfolio.MetaRunStart, start.Format(time.RFC3339))
+	acct.SetMetadata(portfolio.MetaRunEnd, end.Format(time.RFC3339))
+
 	return acct, nil
 }
 
@@ -401,7 +428,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 // for the given account on date. benchmark controls whether the benchmark asset
 // is included in the housekeeping data fetch; pass asset.Asset{} for child
 // accounts that have no benchmark.
-func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
 	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
 
 	var heldAssets []asset.Asset
@@ -520,7 +547,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct *portfolio.Account
 // in the price fetch; pass asset.Asset{} for child accounts. The risk-free
 // rate logic (DGS3MO yield to cumulative conversion) only runs when benchmark
 // is non-zero, matching the behavior of the parent account.
-func (eng *Engine) updateAccountPrices(ctx context.Context, acct *portfolio.Account, date time.Time, benchmark asset.Asset) error {
+func (eng *Engine) updateAccountPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	var priceAssets []asset.Asset
