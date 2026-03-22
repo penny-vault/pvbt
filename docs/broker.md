@@ -277,6 +277,37 @@ Authentication happens during `Connect()`. The session token is managed internal
 
 Fills are delivered via a WebSocket connection to tastytrade's account streamer. On disconnect, the broker reconnects with exponential backoff and polls for any fills missed during the outage. Duplicate fills are suppressed automatically.
 
+### Alpaca
+
+The `broker/alpaca` package implements `Broker` and `GroupSubmitter` for live and paper trading with Alpaca. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, fractional shares, and native OCO/bracket orders.
+
+```go
+import "github.com/penny-vault/pvbt/broker/alpaca"
+
+alphaBroker := alpaca.New()
+// or for paper trading:
+alphaBroker := alpaca.New(alpaca.WithPaper())
+// or with fractional shares:
+alphaBroker := alpaca.New(alpaca.WithFractionalShares())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(alphaBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Authentication uses environment variables:
+
+| Variable | Description |
+|----------|-------------|
+| `ALPACA_API_KEY` | Alpaca API key ID |
+| `ALPACA_API_SECRET` | Alpaca API secret key |
+
+Authentication happens during `Connect()`. API keys are stateless -- no session token management is required.
+
+Fills are delivered via a WebSocket connection to Alpaca's trade updates stream. On disconnect, the broker reconnects with exponential backoff and polls for any fills missed during the outage.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
