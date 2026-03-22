@@ -31,6 +31,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/montecarlo"
 	"github.com/penny-vault/pvbt/study/stress"
 )
 
@@ -284,6 +285,81 @@ var _ = Describe("Integration", func() {
 		}
 
 		Expect(foundScenarioSection).To(BeTrue(), "expected at least one MetricPairs scenario section")
+	})
+
+	It("runs a Monte Carlo simulation through the full runner pipeline", func() {
+		assetAlpha := asset.Asset{CompositeFigi: "FIGI-ALPHA", Ticker: "ALPHA"}
+		assetBeta := asset.Asset{CompositeFigi: "FIGI-BETA", Ticker: "BETA"}
+		testAssets := []asset.Asset{assetAlpha, assetBeta}
+
+		metrics := []data.Metric{
+			data.MetricClose,
+			data.AdjClose,
+			data.Dividend,
+			data.MetricHigh,
+			data.MetricLow,
+			data.SplitFactor,
+		}
+
+		// Create 60 days of synthetic daily data as the historical source for resampling.
+		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		numDays := 60
+		syntheticData := makeSyntheticDailyData(dataStart, numDays, testAssets, metrics)
+		assetProvider := &integrationAssetProvider{assets: testAssets}
+
+		endDate := dataStart.AddDate(0, 0, numDays-1)
+
+		mcStudy := montecarlo.New(syntheticData, metrics)
+		mcStudy.Simulations = 5
+		mcStudy.StartDate = dataStart
+		mcStudy.EndDate = endDate
+		mcStudy.InitialDeposit = 100_000.0
+
+		runner := &study.Runner{
+			Study: mcStudy,
+			NewStrategy: func() engine.Strategy {
+				return &buyAndHoldStrategy{targetAssets: testAssets}
+			},
+			Options: []engine.Option{
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			},
+			Workers: 2,
+		}
+
+		progressCh, resultCh, runErr := runner.Run(context.Background())
+		Expect(runErr).NotTo(HaveOccurred())
+		Expect(progressCh).NotTo(BeNil())
+		Expect(resultCh).NotTo(BeNil())
+
+		// Drain progress channel.
+		for range progressCh {
+		}
+
+		result := <-resultCh
+		Expect(result.Err).NotTo(HaveOccurred())
+
+		// All 5 runs should have succeeded with non-nil portfolios.
+		Expect(result.Runs).To(HaveLen(5))
+
+		for idx, run := range result.Runs {
+			Expect(run.Err).NotTo(HaveOccurred(), "run %d had an error", idx)
+			Expect(run.Portfolio).NotTo(BeNil(), "run %d has nil portfolio", idx)
+		}
+
+		// Verify report title and sections.
+		Expect(result.Report.Title).To(Equal("Monte Carlo Simulation"))
+		Expect(result.Report.Sections).NotTo(BeEmpty())
+
+		// Render in text format.
+		var textBuffer bytes.Buffer
+		Expect(result.Report.Render(report.FormatText, &textBuffer)).To(Succeed())
+		Expect(textBuffer.Len()).To(BeNumerically(">", 0))
+
+		// Render in JSON format.
+		var jsonBuffer bytes.Buffer
+		Expect(result.Report.Render(report.FormatJSON, &jsonBuffer)).To(Succeed())
+		Expect(jsonBuffer.String()).To(ContainSubstring(`"title"`))
 	})
 
 	It("calls EngineCustomizer.EngineOptions once per run config", func() {

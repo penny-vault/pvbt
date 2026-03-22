@@ -16,6 +16,7 @@
 package montecarlo
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -27,6 +28,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/rs/zerolog/log"
 )
 
 // portfolioAsset is the sentinel asset used to look up equity columns in the
@@ -72,7 +74,14 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 
 		summary, err := result.Portfolio.Summary()
 		if err != nil {
-			return report.Report{}, fmt.Errorf("computing summary for path %d: %w", idx, err)
+			// ErrNoRiskFreeRate and ErrNoBenchmark are configuration gaps, not data
+			// errors. Summary() still populates the non-Sharpe fields, so we accept
+			// the partial result and log a warning rather than aborting the analysis.
+			if errors.Is(err, portfolio.ErrNoRiskFreeRate) || errors.Is(err, portfolio.ErrNoBenchmark) {
+				log.Warn().Err(err).Int("path", idx).Msg("monte carlo: partial summary (risk-free rate or benchmark not configured)")
+			} else {
+				return report.Report{}, fmt.Errorf("computing summary for path %d: %w", idx, err)
+			}
 		}
 
 		summaries[idx] = summary
