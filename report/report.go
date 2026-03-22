@@ -18,11 +18,11 @@ package report
 import (
 	"fmt"
 	"math"
+	"strconv"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -31,6 +31,14 @@ import (
 var portfolioAsset = asset.Asset{
 	CompositeFigi: "_PORTFOLIO_",
 	Ticker:        "_PORTFOLIO_",
+}
+
+// ReportablePortfolio is the interface required by Build. It composes
+// read-only portfolio access with statistical queries needed for the
+// full report.
+type ReportablePortfolio interface {
+	portfolio.Portfolio
+	portfolio.PortfolioStats
 }
 
 // ---------------------------------------------------------------------------
@@ -51,13 +59,6 @@ type Report struct {
 	MonthlyReturns  MonthlyReturns
 	Trades          Trades
 	Warnings        []string
-}
-
-// RunMeta carries metadata about the backtest run itself.
-type RunMeta struct {
-	Elapsed     time.Duration
-	Steps       int
-	InitialCash float64
 }
 
 // Header contains the headline information for the report.
@@ -174,34 +175,40 @@ type Trades struct {
 // the results into the view model structs.
 // ---------------------------------------------------------------------------
 
-// Build constructs a Report view model from the given portfolio, strategy
-// description, and run metadata.
-func Build(acct portfolio.Portfolio, info engine.StrategyInfo, meta RunMeta) (Report, error) {
+// Build constructs a Report view model from the given portfolio.
+func Build(acct ReportablePortfolio) (Report, error) {
 	var warnings []string
 
 	perfData := acct.PerfData()
 
 	// Header -- always populated.
 	header := Header{
-		StrategyName:    info.Name,
-		StrategyVersion: info.Version,
-		Benchmark:       info.Benchmark,
-		InitialCash:     meta.InitialCash,
+		StrategyName:    acct.GetMetadata(portfolio.MetaStrategyName),
+		StrategyVersion: acct.GetMetadata(portfolio.MetaStrategyVersion),
+		Benchmark:       acct.GetMetadata(portfolio.MetaStrategyBenchmark),
 		FinalValue:      acct.Value(),
-		Elapsed:         meta.Elapsed,
-		Steps:           meta.Steps,
+	}
+
+	if cashStr := acct.GetMetadata(portfolio.MetaRunInitialCash); cashStr != "" {
+		if parsed, parseErr := strconv.ParseFloat(cashStr, 64); parseErr == nil {
+			header.InitialCash = parsed
+		}
+	}
+
+	if elapsedStr := acct.GetMetadata(portfolio.MetaRunElapsed); elapsedStr != "" {
+		if parsed, parseErr := time.ParseDuration(elapsedStr); parseErr == nil {
+			header.Elapsed = parsed
+		}
 	}
 
 	if perfData != nil && perfData.Len() > 0 {
 		header.StartDate = perfData.Start()
 		header.EndDate = perfData.End()
+		header.Steps = perfData.Len()
 	}
 
 	// Determine whether a benchmark is configured.
-	hasBenchmark := false
-	if concrete, ok := acct.(*portfolio.Account); ok {
-		hasBenchmark = concrete.Benchmark() != (asset.Asset{})
-	}
+	hasBenchmark := acct.Benchmark() != (asset.Asset{})
 
 	// Early exit when there is insufficient data for a full report.
 	if perfData == nil || perfData.Len() < 2 {
@@ -220,7 +227,7 @@ func Build(acct portfolio.Portfolio, info engine.StrategyInfo, meta RunMeta) (Re
 	}
 
 	// Equity curve.
-	report.EquityCurve = buildEquityCurve(perfData, meta.InitialCash)
+	report.EquityCurve = buildEquityCurve(perfData, header.InitialCash)
 
 	// Returns.
 	report.RecentReturns = buildRecentReturns(acct, hasBenchmark, &warnings)
@@ -423,14 +430,8 @@ func buildReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]strin
 	return result
 }
 
-func buildAnnualReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) AnnualReturns {
-	concrete, ok := acct.(*portfolio.Account)
-	if !ok {
-		*warnings = append(*warnings, "annual returns require *portfolio.Account")
-		return AnnualReturns{}
-	}
-
-	years, stratReturns, err := concrete.AnnualReturns(data.PortfolioEquity)
+func buildAnnualReturns(acct ReportablePortfolio, hasBenchmark bool, warnings *[]string) AnnualReturns {
+	years, stratReturns, err := acct.AnnualReturns(data.PortfolioEquity)
 	if err != nil {
 		*warnings = append(*warnings, fmt.Sprintf("annual returns (strategy): %v", err))
 		return AnnualReturns{}
@@ -442,7 +443,7 @@ func buildAnnualReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[
 	}
 
 	if hasBenchmark {
-		_, benchReturns, err := concrete.AnnualReturns(data.PortfolioBenchmark)
+		_, benchReturns, err := acct.AnnualReturns(data.PortfolioBenchmark)
 		if err != nil {
 			*warnings = append(*warnings, fmt.Sprintf("annual returns (benchmark): %v", err))
 		} else {
@@ -499,14 +500,8 @@ func buildRiskVsBenchmark(acct portfolio.Portfolio, warnings *[]string) RiskVsBe
 	}
 }
 
-func buildDrawdowns(acct portfolio.Portfolio, warnings *[]string) Drawdowns {
-	concrete, ok := acct.(*portfolio.Account)
-	if !ok {
-		*warnings = append(*warnings, "drawdown details require *portfolio.Account")
-		return Drawdowns{}
-	}
-
-	details, err := concrete.DrawdownDetails(5)
+func buildDrawdowns(acct ReportablePortfolio, warnings *[]string) Drawdowns {
+	details, err := acct.DrawdownDetails(5)
 	if err != nil {
 		*warnings = append(*warnings, fmt.Sprintf("drawdown details: %v", err))
 		return Drawdowns{}
@@ -526,14 +521,8 @@ func buildDrawdowns(acct portfolio.Portfolio, warnings *[]string) Drawdowns {
 	return Drawdowns{Entries: entries}
 }
 
-func buildMonthlyReturns(acct portfolio.Portfolio, warnings *[]string) MonthlyReturns {
-	concrete, ok := acct.(*portfolio.Account)
-	if !ok {
-		*warnings = append(*warnings, "monthly returns require *portfolio.Account")
-		return MonthlyReturns{}
-	}
-
-	years, grid, err := concrete.MonthlyReturns(data.PortfolioEquity)
+func buildMonthlyReturns(acct ReportablePortfolio, warnings *[]string) MonthlyReturns {
+	years, grid, err := acct.MonthlyReturns(data.PortfolioEquity)
 	if err != nil {
 		*warnings = append(*warnings, fmt.Sprintf("monthly returns: %v", err))
 		return MonthlyReturns{}

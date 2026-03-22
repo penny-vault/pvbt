@@ -79,14 +79,16 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("live mode failed: %w", err)
 	}
 
-	info := engine.DescribeStrategy(strategy)
-
 	for p := range ch {
 		p.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 
-		rpt, buildErr := backtestReport.Build(p, info, backtestReport.RunMeta{
-			InitialCash: cash,
-		})
+		reportable, ok := p.(backtestReport.ReportablePortfolio)
+		if !ok {
+			log.Warn().Msg("portfolio does not support full reporting")
+			continue
+		}
+
+		rpt, buildErr := backtestReport.Build(reportable)
 		if buildErr != nil {
 			log.Warn().Err(buildErr).Msg("some report metrics failed")
 		}

@@ -21,7 +21,6 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/report"
 )
@@ -98,19 +97,13 @@ func TestBuildHeader(t *testing.T) {
 
 	acct := newAccountWithEquity(dates, 10_000)
 
-	info := engine.StrategyInfo{
-		Name:      "TestStrategy",
-		Version:   "1.0",
-		Benchmark: "SPY",
-	}
+	acct.SetMetadata(portfolio.MetaStrategyName, "TestStrategy")
+	acct.SetMetadata(portfolio.MetaStrategyVersion, "1.0")
+	acct.SetMetadata(portfolio.MetaStrategyBenchmark, "SPY")
+	acct.SetMetadata(portfolio.MetaRunElapsed, (5 * time.Second).String())
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	meta := report.RunMeta{
-		Elapsed:     5 * time.Second,
-		Steps:       100,
-		InitialCash: 10_000,
-	}
-
-	rpt, err := report.Build(acct, info, meta)
+	rpt, err := report.Build(acct)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -139,8 +132,8 @@ func TestBuildHeader(t *testing.T) {
 		t.Errorf("expected Elapsed=5s, got %v", rpt.Header.Elapsed)
 	}
 
-	if rpt.Header.Steps != 100 {
-		t.Errorf("expected Steps=100, got %d", rpt.Header.Steps)
+	if rpt.Header.Steps != 3 {
+		t.Errorf("expected Steps=3, got %d", rpt.Header.Steps)
 	}
 
 	if rpt.Header.StartDate != dates[0] {
@@ -161,10 +154,10 @@ func TestBuildNoBenchmark(t *testing.T) {
 
 	acct := newAccountWithEquity(dates, 10_000)
 
-	info := engine.StrategyInfo{Name: "NoBench"}
-	meta := report.RunMeta{InitialCash: 10_000}
+	acct.SetMetadata(portfolio.MetaStrategyName, "NoBench")
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct, info, meta)
+	rpt, err := report.Build(acct)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -189,10 +182,11 @@ func TestBuildWithBenchmark(t *testing.T) {
 
 	acct := newAccountWithBenchmark(dates, 10_000)
 
-	info := engine.StrategyInfo{Name: "WithBench", Benchmark: "BENCH"}
-	meta := report.RunMeta{InitialCash: 10_000}
+	acct.SetMetadata(portfolio.MetaStrategyName, "WithBench")
+	acct.SetMetadata(portfolio.MetaStrategyBenchmark, "BENCH")
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct, info, meta)
+	rpt, err := report.Build(acct)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -206,10 +200,10 @@ func TestBuildInsufficientData(t *testing.T) {
 	// Case 1: nil perfData (no UpdatePrices called).
 	acct := portfolio.New(portfolio.WithCash(10_000, time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)))
 
-	info := engine.StrategyInfo{Name: "Empty"}
-	meta := report.RunMeta{InitialCash: 10_000}
+	acct.SetMetadata(portfolio.MetaStrategyName, "Empty")
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct, info, meta)
+	rpt, err := report.Build(acct)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -243,7 +237,10 @@ func TestBuildInsufficientData(t *testing.T) {
 	dates := []time.Time{time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)}
 	acctOne := newAccountWithEquity(dates, 10_000)
 
-	rptOne, err := report.Build(acctOne, info, meta)
+	acctOne.SetMetadata(portfolio.MetaStrategyName, "Empty")
+	acctOne.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
+
+	rptOne, err := report.Build(acctOne)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
@@ -270,10 +267,10 @@ func TestBuildEquityCurve(t *testing.T) {
 
 	acct := newAccountWithEquity(dates, 10_000)
 
-	info := engine.StrategyInfo{Name: "EC"}
-	meta := report.RunMeta{InitialCash: 10_000}
+	acct.SetMetadata(portfolio.MetaStrategyName, "EC")
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct, info, meta)
+	rpt, err := report.Build(acct)
 	if err != nil {
 		t.Fatalf("Build returned error: %v", err)
 	}
