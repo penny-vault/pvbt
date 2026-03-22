@@ -15,14 +15,14 @@ import (
 var _ = Describe("Errors", func() {
 	Describe("Sentinel errors", func() {
 		It("defines all expected sentinel errors", func() {
-			Expect(tastytrade.ErrNotAuthenticated).To(MatchError("tastytrade: not authenticated"))
-			Expect(tastytrade.ErrMissingCredentials).To(MatchError("tastytrade: TASTYTRADE_USERNAME and TASTYTRADE_PASSWORD must be set"))
-			Expect(tastytrade.ErrAccountNotFound).To(MatchError("tastytrade: no accounts found"))
-			Expect(tastytrade.ErrOrderRejected).To(MatchError("tastytrade: order rejected"))
-			Expect(tastytrade.ErrStreamDisconnected).To(MatchError("tastytrade: WebSocket disconnected"))
-			Expect(tastytrade.ErrEmptyOrderGroup).To(MatchError("tastytrade: SubmitGroup called with no orders"))
-			Expect(tastytrade.ErrNoEntryOrder).To(MatchError("tastytrade: OTOCO group has no entry order"))
-			Expect(tastytrade.ErrMultipleEntryOrders).To(MatchError("tastytrade: OTOCO group has multiple entry orders"))
+			Expect(tastytrade.ErrNotAuthenticated).To(MatchError("broker: not authenticated"))
+			Expect(tastytrade.ErrMissingCredentials).To(MatchError("broker: missing credentials"))
+			Expect(tastytrade.ErrAccountNotFound).To(MatchError("broker: account not found"))
+			Expect(tastytrade.ErrOrderRejected).To(MatchError("broker: order rejected"))
+			Expect(tastytrade.ErrStreamDisconnected).To(MatchError("broker: stream disconnected"))
+			Expect(tastytrade.ErrEmptyOrderGroup).To(MatchError("broker: empty order group"))
+			Expect(tastytrade.ErrNoEntryOrder).To(MatchError("broker: no entry order in group"))
+			Expect(tastytrade.ErrMultipleEntryOrders).To(MatchError("broker: multiple entry orders in group"))
 		})
 	})
 
