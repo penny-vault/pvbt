@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Added Alpaca as a live broker implementation, supporting commission-free trading with market, limit, stop, and stop-limit orders, OCO and bracket order groups, and optional fractional share support via the WithFractionalShares option. Promoted shared broker error sentinels so all broker implementations use a consistent error vocabulary.
+
 ### Fixed
 
 - Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer panic when portfolio and benchmark return columns contain NaN values at different positions. Independent NaN removal could produce mismatched slice lengths, triggering a crash in the statistics library.
