@@ -296,6 +296,10 @@ func buildConfidenceTable(summaries []portfolio.Summary) *report.Table {
 // buildRuinSection computes the probability of ruin -- the fraction of paths
 // whose max drawdown exceeded the ruin threshold.
 func buildRuinSection(summaries []portfolio.Summary, ruinThreshold float64) *report.MetricPairs {
+	if len(summaries) == 0 {
+		return &report.MetricPairs{SectionName: "Probability of Ruin", Metrics: nil}
+	}
+
 	ruinCount := 0
 	ddValues := make([]float64, len(summaries))
 
@@ -381,6 +385,10 @@ func buildHistoricalRank(equityCurves [][]float64, summaries []portfolio.Summary
 
 // buildMCSummaryText produces a brief narrative summarizing the simulation.
 func buildMCSummaryText(totalRuns int, successfulRuns int, summaries []portfolio.Summary, ruinThreshold float64) *report.Text {
+	if len(summaries) == 0 {
+		return &report.Text{SectionName: "Summary", Body: "No successful simulation paths to analyze."}
+	}
+
 	var sb strings.Builder
 
 	fmt.Fprintf(&sb, "Monte Carlo simulation completed: %d of %d paths succeeded.\n", successfulRuns, totalRuns)

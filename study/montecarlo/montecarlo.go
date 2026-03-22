@@ -25,6 +25,7 @@ import (
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/rs/zerolog/log"
 )
 
 // Compile-time interface checks.
@@ -107,11 +108,13 @@ func (mcs *MonteCarloStudy) Configurations(_ context.Context) ([]study.RunConfig
 func (mcs *MonteCarloStudy) EngineOptions(cfg study.RunConfig) []engine.Option {
 	seedStr, hasSeed := cfg.Metadata["simulation_seed"]
 	if !hasSeed {
+		log.Error().Str("config", cfg.Name).Msg("monte carlo config missing simulation_seed metadata")
 		return nil
 	}
 
 	seed, parseErr := strconv.ParseUint(seedStr, 10, 64)
 	if parseErr != nil {
+		log.Error().Err(parseErr).Str("config", cfg.Name).Str("seed", seedStr).Msg("monte carlo config has invalid simulation_seed")
 		return nil
 	}
 
