@@ -288,11 +288,7 @@ func (manager *tokenManager) startAuthFlow() error {
 }
 
 func (manager *tokenManager) startBackgroundRefresh() {
-	manager.refreshWg.Add(1)
-
-	go func() {
-		defer manager.refreshWg.Done()
-
+	manager.refreshWg.Go(func() {
 		ticker := time.NewTicker(refreshInterval)
 		defer ticker.Stop()
 
@@ -311,7 +307,7 @@ func (manager *tokenManager) startBackgroundRefresh() {
 				manager.mu.Unlock()
 			}
 		}
-	}()
+	})
 }
 
 func (manager *tokenManager) stopBackgroundRefresh() {
