@@ -48,22 +48,17 @@ func (alpha) Compute(ctx context.Context, stats PortfolioStats, window *Period) 
 		return 0, ErrNoRiskFreeRate
 	}
 
-	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
-	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
+	pCol, bCol := alignedRemoveNaN(
+		rdf.Column(portfolioAsset, data.PortfolioEquity),
+		bdf.Column(portfolioAsset, data.PortfolioBenchmark),
+	)
 
 	// Get risk-free returns for the window.
 	rfPctDF := pd.Window(window).Metrics(data.PortfolioRiskFree).Pct()
 	rCol := removeNaN(rfPctDF.Column(portfolioAsset, data.PortfolioRiskFree))
 
-	// Use the shortest common length.
-	minLen := len(pCol)
-	if len(bCol) < minLen {
-		minLen = len(bCol)
-	}
-
-	if len(rCol) < minLen {
-		minLen = len(rCol)
-	}
+	// Truncate to shortest common length across all three series.
+	minLen := min(len(pCol), len(rCol))
 
 	if minLen < 2 {
 		return 0, nil

@@ -49,21 +49,18 @@ func (downsideCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, w
 		return 0, nil
 	}
 
-	pCol := removeNaN(rdf.Column(portfolioAsset, data.PortfolioEquity))
-	bCol := removeNaN(bdf.Column(portfolioAsset, data.PortfolioBenchmark))
-
-	count := len(pCol)
-	if len(bCol) < count {
-		count = len(bCol)
-	}
+	pCol, bCol := alignedRemoveNaN(
+		rdf.Column(portfolioAsset, data.PortfolioEquity),
+		bdf.Column(portfolioAsset, data.PortfolioBenchmark),
+	)
 
 	// Filter periods where benchmark return < 0.
 	var downP, downB []float64
 
-	for ii := 0; ii < count; ii++ {
-		if bCol[ii] < 0 {
-			downP = append(downP, pCol[ii])
-			downB = append(downB, bCol[ii])
+	for idx := range pCol {
+		if bCol[idx] < 0 {
+			downP = append(downP, pCol[idx])
+			downB = append(downB, bCol[idx])
 		}
 	}
 

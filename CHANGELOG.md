@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer panic when portfolio and benchmark return columns contain NaN values at different positions. Independent NaN removal could produce mismatched slice lengths, triggering a crash in the statistics library.
+
 ### Changed
 
 - **Breaking:** The DataFrame and metric computation internals were redesigned for performance. `NewDataFrame` accepts per-column slices instead of a flat slab, and metrics now compute against a `PortfolioStats` interface rather than a concrete `*Account`. These changes improve runtime by 9x and reduce memory by 14x over v0.3.0 -- a 30-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
