@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The study runner framework lets you run a strategy multiple times with different configurations and synthesize the results into a single report. A concurrent worker pool executes runs in parallel, and parameter sweeps (`SweepRange`, `SweepDuration`, `SweepValues`, `SweepPresets`) are cross-producted with study configurations to produce the run matrix. Custom study types implement the `Study` interface to define what varies between runs and how to interpret the combined results.
+- The stress test study runs a strategy against named historical market scenarios (2008 Financial Crisis, COVID Crash, Dot-com Bust, 2022 Rate Hiking Cycle, 2015-2017 Low-Volatility Grind, 2011 Debt Ceiling Crisis) and computes per-scenario metrics including maximum drawdown, drawdown velocity, total return, and worst single-day return. The engine runs once over the full date range and the analysis slices the equity curve into scenario windows, avoiding redundant computation.
+- The CLI gains a `study stress-test [scenarios...|all]` subcommand that wires up the stress test study with progress logging and configurable output format.
+- `engine.ApplyParams` is now exported, enabling programmatic preset resolution and parameter application outside the CLI. It resolves named presets from strategy `suggest` tags, merges explicit parameter overrides, and handles asset and universe field resolution through the engine's asset provider.
+
+### Changed
+
+- **Breaking:** The report package was redesigned around composable primitives. Reports are now titled collections of renderable `Section` values (Table, TimeSeries, MetricPairs, Text), each knowing how to render itself in text, HTML, or JSON format. The `Summary()` builder replaces `Build()`, and the old monolithic `Report` struct with its fixed fields is gone. JSON output includes a type discriminator per section for frontend component mapping.
+
 ### Fixed
 
 - Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer panic when portfolio and benchmark return columns contain NaN values at different positions. Independent NaN removal could produce mismatched slice lengths, triggering a crash in the statistics library.
