@@ -16,6 +16,8 @@
 package report_test
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 	"time"
 
@@ -88,7 +90,7 @@ func newAccountWithBenchmark(dates []time.Time, cash float64) *portfolio.Account
 	return acct
 }
 
-func TestBuildHeader(t *testing.T) {
+func TestSummaryHeader(t *testing.T) {
 	dates := []time.Time{
 		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -103,49 +105,39 @@ func TestBuildHeader(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaRunElapsed, (5 * time.Second).String())
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct)
+	rpt, err := report.Summary(acct)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	if rpt.Header.StrategyName != "TestStrategy" {
-		t.Errorf("expected StrategyName=TestStrategy, got %q", rpt.Header.StrategyName)
+	// The title should be the strategy name.
+	if rpt.Title != "TestStrategy" {
+		t.Errorf("expected Title=TestStrategy, got %q", rpt.Title)
 	}
 
-	if rpt.Header.StrategyVersion != "1.0" {
-		t.Errorf("expected StrategyVersion=1.0, got %q", rpt.Header.StrategyVersion)
+	// Render and verify header content appears in text output.
+	var buf bytes.Buffer
+	if renderErr := rpt.Render(report.FormatText, &buf); renderErr != nil {
+		t.Fatalf("Render returned error: %v", renderErr)
 	}
 
-	if rpt.Header.Benchmark != "SPY" {
-		t.Errorf("expected Benchmark=SPY, got %q", rpt.Header.Benchmark)
-	}
+	output := buf.String()
 
-	if rpt.Header.InitialCash != 10_000 {
-		t.Errorf("expected InitialCash=10000, got %f", rpt.Header.InitialCash)
-	}
-
-	if rpt.Header.FinalValue != 10_000 {
-		t.Errorf("expected FinalValue=10000, got %f", rpt.Header.FinalValue)
-	}
-
-	if rpt.Header.Elapsed != 5*time.Second {
-		t.Errorf("expected Elapsed=5s, got %v", rpt.Header.Elapsed)
-	}
-
-	if rpt.Header.Steps != 3 {
-		t.Errorf("expected Steps=3, got %d", rpt.Header.Steps)
-	}
-
-	if rpt.Header.StartDate != dates[0] {
-		t.Errorf("expected StartDate=%v, got %v", dates[0], rpt.Header.StartDate)
-	}
-
-	if rpt.Header.EndDate != dates[2] {
-		t.Errorf("expected EndDate=%v, got %v", dates[2], rpt.Header.EndDate)
+	for _, expected := range []string{
+		"TestStrategy",
+		"1.0",
+		"SPY",
+		"2024-01-02",
+		"2024-01-04",
+		"$10000.00",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Errorf("expected output to contain %q, got:\n%s", expected, output)
+		}
 	}
 }
 
-func TestBuildNoBenchmark(t *testing.T) {
+func TestSummaryNoBenchmark(t *testing.T) {
 	dates := []time.Time{
 		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -157,23 +149,20 @@ func TestBuildNoBenchmark(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "NoBench")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct)
+	rpt, err := report.Summary(acct)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	if rpt.HasBenchmark {
-		t.Error("expected HasBenchmark=false for account without benchmark")
-	}
-
-	// RiskVsBenchmark should be zero value.
-	zero := report.RiskVsBenchmark{}
-	if rpt.RiskVsBenchmark != zero {
-		t.Errorf("expected zero RiskVsBenchmark, got %+v", rpt.RiskVsBenchmark)
+	// Should not have a "Risk vs Benchmark" section.
+	for _, section := range rpt.Sections {
+		if section.Name() == "Risk vs Benchmark" {
+			t.Error("expected no 'Risk vs Benchmark' section for account without benchmark")
+		}
 	}
 }
 
-func TestBuildWithBenchmark(t *testing.T) {
+func TestSummaryWithBenchmark(t *testing.T) {
 	dates := []time.Time{
 		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -186,79 +175,90 @@ func TestBuildWithBenchmark(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyBenchmark, "BENCH")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct)
+	rpt, err := report.Summary(acct)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	if !rpt.HasBenchmark {
-		t.Error("expected HasBenchmark=true for account with benchmark")
+	// Should have a "Risk vs Benchmark" section.
+	var buf bytes.Buffer
+	if renderErr := rpt.Render(report.FormatText, &buf); renderErr != nil {
+		t.Fatalf("Render returned error: %v", renderErr)
+	}
+
+	output := buf.String()
+	// Check the section names in the report directly since text rendering
+	// does not include section names as headings for MetricPairs.
+	foundRvB := false
+	for _, section := range rpt.Sections {
+		if section.Name() == "Risk vs Benchmark" {
+			foundRvB = true
+
+			break
+		}
+	}
+
+	if !foundRvB {
+		sectionNames := make([]string, len(rpt.Sections))
+		for idx, section := range rpt.Sections {
+			sectionNames[idx] = section.Name()
+		}
+
+		t.Errorf("expected 'Risk vs Benchmark' section, got sections: %v\noutput:\n%s", sectionNames, output)
 	}
 }
 
-func TestBuildInsufficientData(t *testing.T) {
+func TestSummaryInsufficientData(t *testing.T) {
 	// Case 1: nil perfData (no UpdatePrices called).
 	acct := portfolio.New(portfolio.WithCash(10_000, time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)))
 
 	acct.SetMetadata(portfolio.MetaStrategyName, "Empty")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct)
+	rpt, err := report.Summary(acct)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	if len(rpt.Warnings) == 0 {
-		t.Error("expected at least one warning for nil perfData")
+	var buf bytes.Buffer
+	if renderErr := rpt.Render(report.FormatText, &buf); renderErr != nil {
+		t.Fatalf("Render returned error: %v", renderErr)
 	}
 
-	found := false
-	for _, warning := range rpt.Warnings {
-		if warning == "insufficient data for full report" {
-			found = true
-			break
-		}
+	output := buf.String()
+	if !strings.Contains(output, "insufficient data for full report") {
+		t.Errorf("expected 'insufficient data for full report' warning, got:\n%s", output)
 	}
 
-	if !found {
-		t.Errorf("expected 'insufficient data for full report' warning, got %v", rpt.Warnings)
-	}
-
-	// Header should still be populated.
-	if rpt.Header.StrategyName != "Empty" {
-		t.Errorf("expected StrategyName=Empty, got %q", rpt.Header.StrategyName)
-	}
-
-	if rpt.Header.InitialCash != 10_000 {
-		t.Errorf("expected InitialCash=10000, got %f", rpt.Header.InitialCash)
+	// Header data should still be present.
+	if !strings.Contains(output, "Empty") {
+		t.Errorf("expected strategy name 'Empty' in output, got:\n%s", output)
 	}
 
 	// Case 2: only one data point (Len < 2).
 	dates := []time.Time{time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)}
 	acctOne := newAccountWithEquity(dates, 10_000)
 
-	acctOne.SetMetadata(portfolio.MetaStrategyName, "Empty")
+	acctOne.SetMetadata(portfolio.MetaStrategyName, "Single")
 	acctOne.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rptOne, err := report.Build(acctOne)
+	rptOne, err := report.Summary(acctOne)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	foundOne := false
-	for _, warning := range rptOne.Warnings {
-		if warning == "insufficient data for full report" {
-			foundOne = true
-			break
-		}
+	var bufOne bytes.Buffer
+	if renderErr := rptOne.Render(report.FormatText, &bufOne); renderErr != nil {
+		t.Fatalf("Render returned error: %v", renderErr)
 	}
 
-	if !foundOne {
-		t.Errorf("expected 'insufficient data for full report' warning for single-point data, got %v", rptOne.Warnings)
+	outputOne := bufOne.String()
+	if !strings.Contains(outputOne, "insufficient data for full report") {
+		t.Errorf("expected 'insufficient data for full report' warning for single-point data, got:\n%s", outputOne)
 	}
 }
 
-func TestBuildEquityCurve(t *testing.T) {
+func TestSummaryEquityCurve(t *testing.T) {
 	dates := []time.Time{
 		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
@@ -270,23 +270,52 @@ func TestBuildEquityCurve(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "EC")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Build(acct)
+	rpt, err := report.Summary(acct)
 	if err != nil {
-		t.Fatalf("Build returned error: %v", err)
+		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	if len(rpt.EquityCurve.Times) != 3 {
-		t.Errorf("expected 3 equity curve points, got %d", len(rpt.EquityCurve.Times))
-	}
+	// Find the Equity Curve section (TimeSeries type).
+	found := false
+	for _, section := range rpt.Sections {
+		if section.Name() == "Equity Curve" && section.Type() == "time_series" {
+			found = true
 
-	if len(rpt.EquityCurve.StrategyValues) != 3 {
-		t.Errorf("expected 3 strategy values, got %d", len(rpt.EquityCurve.StrategyValues))
-	}
-
-	// All equity values should be 10_000 since cash never changed.
-	for idx, val := range rpt.EquityCurve.StrategyValues {
-		if val != 10_000 {
-			t.Errorf("StrategyValues[%d] = %f, expected 10000", idx, val)
+			break
 		}
+	}
+
+	if !found {
+		t.Error("expected an 'Equity Curve' time_series section in the report")
+	}
+}
+
+func TestSummarySectionCount(t *testing.T) {
+	dates := []time.Time{
+		time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
+		time.Date(2024, 1, 4, 0, 0, 0, 0, time.UTC),
+	}
+
+	acct := newAccountWithEquity(dates, 10_000)
+
+	acct.SetMetadata(portfolio.MetaStrategyName, "Sections")
+	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
+
+	rpt, err := report.Summary(acct)
+	if err != nil {
+		t.Fatalf("Summary returned error: %v", err)
+	}
+
+	// Should have at minimum: Header, Equity Curve, Recent Returns, Returns,
+	// Annual Returns, Risk Metrics, Top Drawdowns, Monthly Returns,
+	// Trade Summary, plus possibly Recent Trades and Warnings.
+	if len(rpt.Sections) < 9 {
+		names := make([]string, len(rpt.Sections))
+		for idx, section := range rpt.Sections {
+			names[idx] = section.Name()
+		}
+
+		t.Errorf("expected at least 9 sections, got %d: %v", len(rpt.Sections), names)
 	}
 }

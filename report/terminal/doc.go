@@ -13,13 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package terminal renders backtest reports to styled terminal output.
+// Package terminal renders backtest reports to terminal output.
 //
-// [Render] takes a [report.Report] view model and writes a styled
-// summary to the provided [io.Writer] using lipgloss for formatting.
-// The output includes the strategy header, equity curve, return tables,
-// risk metrics, drawdown analysis, monthly return heatmap, and trade
-// statistics:
+// [Render] takes a [report.Report] and writes plain-text output to the
+// provided [io.Writer] by delegating to the report's composable rendering.
 //
 //	err := terminal.Render(rpt, os.Stdout)
 package terminal

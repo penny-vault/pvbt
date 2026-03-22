@@ -9,7 +9,6 @@ import (
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	backtestReport "github.com/penny-vault/pvbt/report"
-	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -88,12 +87,12 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 			continue
 		}
 
-		rpt, buildErr := backtestReport.Build(reportable)
+		rpt, buildErr := backtestReport.Summary(reportable)
 		if buildErr != nil {
 			log.Warn().Err(buildErr).Msg("some report metrics failed")
 		}
 
-		if renderErr := terminal.Render(rpt, os.Stdout); renderErr != nil {
+		if renderErr := rpt.Render(backtestReport.FormatText, os.Stdout); renderErr != nil {
 			return fmt.Errorf("rendering report: %w", renderErr)
 		}
 	}

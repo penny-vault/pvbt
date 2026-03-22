@@ -14,7 +14,6 @@ import (
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	backtestReport "github.com/penny-vault/pvbt/report"
-	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -183,12 +182,12 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	rpt, err := backtestReport.Build(acct)
+	rpt, err := backtestReport.Summary(acct)
 	if err != nil {
 		log.Warn().Err(err).Msg("some report metrics failed")
 	}
 
-	if err := terminal.Render(rpt, os.Stdout); err != nil {
+	if err := rpt.Render(backtestReport.FormatText, os.Stdout); err != nil {
 		return fmt.Errorf("rendering report: %w", err)
 	}
 

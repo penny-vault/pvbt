@@ -22,15 +22,15 @@ import (
 	"strings"
 )
 
-// ComposableReport is a titled collection of renderable sections.
-// Named ComposableReport during migration to coexist with the legacy Report struct.
-type ComposableReport struct {
+// Report is a titled collection of renderable sections.
+// Named Report during migration to coexist with the legacy Report struct.
+type Report struct {
 	Title    string
 	Sections []Section
 }
 
 // Render writes the report in the requested format to writer.
-func (rpt ComposableReport) Render(format Format, writer io.Writer) error {
+func (rpt Report) Render(format Format, writer io.Writer) error {
 	switch format {
 	case FormatJSON:
 		return rpt.renderJSON(writer)
@@ -41,7 +41,7 @@ func (rpt ComposableReport) Render(format Format, writer io.Writer) error {
 	}
 }
 
-func (rpt ComposableReport) renderJSON(writer io.Writer) error {
+func (rpt Report) renderJSON(writer io.Writer) error {
 	_, err := fmt.Fprintf(writer, `{"title":%s,"sections":[`, jsonString(rpt.Title))
 	if err != nil {
 		return err
@@ -76,7 +76,7 @@ func jsonString(str string) string {
 	return string(encoded)
 }
 
-func (rpt ComposableReport) renderText(writer io.Writer) error {
+func (rpt Report) renderText(writer io.Writer) error {
 	if _, err := fmt.Fprintf(writer, "\n  %s\n", rpt.Title); err != nil {
 		return err
 	}
@@ -87,6 +87,10 @@ func (rpt ComposableReport) renderText(writer io.Writer) error {
 
 	for _, section := range rpt.Sections {
 		if _, err := fmt.Fprintln(writer); err != nil {
+			return err
+		}
+
+		if _, err := fmt.Fprintf(writer, "  %s\n", section.Name()); err != nil {
 			return err
 		}
 

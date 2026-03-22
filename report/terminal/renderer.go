@@ -17,56 +17,12 @@ package terminal
 
 import (
 	"io"
-	"strings"
 
 	"github.com/penny-vault/pvbt/report"
 )
 
-// Render writes a lipgloss-styled backtest report to the given writer.
+// Render writes a plain-text backtest report to the given writer.
+// It delegates to the composable report's own Render method.
 func Render(rpt report.Report, writer io.Writer) error {
-	var builder strings.Builder
-
-	renderHeader(&builder, rpt.Header)
-
-	// Show warnings if any.
-	if len(rpt.Warnings) > 0 {
-		renderWarnings(&builder, rpt.Warnings)
-	}
-
-	// If there is no equity curve data, show header + warnings only.
-	if len(rpt.EquityCurve.StrategyValues) == 0 {
-		_, err := io.WriteString(writer, builder.String())
-		return err
-	}
-
-	// Full report sections.
-	renderEquityCurve(&builder, rpt.EquityCurve, rpt.HasBenchmark)
-	renderRecentReturns(&builder, rpt.RecentReturns, rpt.HasBenchmark)
-	renderReturns(&builder, rpt.Returns, rpt.HasBenchmark)
-	renderAnnualReturns(&builder, rpt.AnnualReturns, rpt.HasBenchmark)
-	renderRisk(&builder, rpt.Risk, rpt.HasBenchmark)
-
-	if rpt.HasBenchmark {
-		renderRiskVsBenchmark(&builder, rpt.RiskVsBenchmark)
-	}
-
-	renderDrawdowns(&builder, rpt.Drawdowns)
-	renderMonthlyReturns(&builder, rpt.MonthlyReturns)
-	renderTrades(&builder, rpt.Trades)
-
-	builder.WriteString("\n")
-
-	_, err := io.WriteString(writer, builder.String())
-
-	return err
-}
-
-// renderWarnings writes warning messages to the builder.
-func renderWarnings(builder *strings.Builder, warnings []string) {
-	builder.WriteString("\n")
-
-	for _, warning := range warnings {
-		builder.WriteString(negativeStyle.Render("  WARNING: " + warning))
-		builder.WriteString("\n")
-	}
+	return rpt.Render(report.FormatText, writer)
 }

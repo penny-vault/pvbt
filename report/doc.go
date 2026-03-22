@@ -13,21 +13,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package report builds structured view models from backtest results.
+// Package report builds structured, composable reports from backtest results.
 //
-// [Build] takes a [ReportablePortfolio] (composing [portfolio.Portfolio]
-// and [portfolio.PortfolioStats]) and produces a [Report] containing all
-// the data needed to render a backtest summary: header info, equity curve,
-// return tables, risk metrics, drawdown analysis, monthly return heatmap,
-// and trade statistics. Strategy and run metadata are read from the
-// portfolio's metadata map.
+// [Summary] takes a [ReportablePortfolio] (composing [portfolio.Portfolio]
+// and [portfolio.PortfolioStats]) and produces a [Report] containing
+// Section primitives (MetricPairs, Table, TimeSeries, Text) that together
+// form a complete backtest summary.
 //
-//	rpt, err := report.Build(acct)
+//	rpt, err := report.Summary(acct)
+//	rpt.Render(report.FormatText, os.Stdout)
 //
-// The Report struct is a pure view model with no rendering logic. It
-// can be passed to [terminal.Render] for styled terminal output, or
-// serialized to JSON for other consumers.
-//
-// [Report.Warnings] collects any issues encountered during report
-// generation, such as insufficient data for certain return windows.
+// The Report struct delegates rendering to each Section, supporting
+// FormatText, FormatJSON, and FormatHTML output formats.
 package report

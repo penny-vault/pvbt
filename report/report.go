@@ -18,7 +18,6 @@ package report
 import (
 	"fmt"
 	"math"
-	"strconv"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -42,37 +41,8 @@ type ReportablePortfolio interface {
 }
 
 // ---------------------------------------------------------------------------
-// View model types -- plain structs, no behavior.
+// Intermediate view model types used by the build* helpers and Summary.
 // ---------------------------------------------------------------------------
-
-// Report is the top-level view model for a backtest report.
-type Report struct {
-	Header          Header
-	HasBenchmark    bool
-	EquityCurve     EquityCurve
-	RecentReturns   ReturnTable
-	Returns         ReturnTable
-	AnnualReturns   AnnualReturns
-	Risk            Risk
-	RiskVsBenchmark RiskVsBenchmark
-	Drawdowns       Drawdowns
-	MonthlyReturns  MonthlyReturns
-	Trades          Trades
-	Warnings        []string
-}
-
-// Header contains the headline information for the report.
-type Header struct {
-	StrategyName    string
-	StrategyVersion string
-	Benchmark       string
-	StartDate       time.Time
-	EndDate         time.Time
-	InitialCash     float64
-	FinalValue      float64
-	Elapsed         time.Duration
-	Steps           int
-}
 
 // EquityCurve holds the time series for the strategy and benchmark equity.
 type EquityCurve struct {
@@ -167,95 +137,6 @@ type Trades struct {
 	Turnover          float64
 	PositivePeriods   float64
 	Trades            []TradeEntry
-}
-
-// ---------------------------------------------------------------------------
-// Build populates a Report from a portfolio, strategy info, and run metadata.
-// It does no math itself -- it delegates to portfolio metric APIs and maps
-// the results into the view model structs.
-// ---------------------------------------------------------------------------
-
-// Build constructs a Report view model from the given portfolio.
-func Build(acct ReportablePortfolio) (Report, error) {
-	var warnings []string
-
-	perfData := acct.PerfData()
-
-	// Header -- always populated.
-	header := Header{
-		StrategyName:    acct.GetMetadata(portfolio.MetaStrategyName),
-		StrategyVersion: acct.GetMetadata(portfolio.MetaStrategyVersion),
-		Benchmark:       acct.GetMetadata(portfolio.MetaStrategyBenchmark),
-		FinalValue:      acct.Value(),
-	}
-
-	if cashStr := acct.GetMetadata(portfolio.MetaRunInitialCash); cashStr != "" {
-		if parsed, parseErr := strconv.ParseFloat(cashStr, 64); parseErr == nil {
-			header.InitialCash = parsed
-		}
-	}
-
-	if elapsedStr := acct.GetMetadata(portfolio.MetaRunElapsed); elapsedStr != "" {
-		if parsed, parseErr := time.ParseDuration(elapsedStr); parseErr == nil {
-			header.Elapsed = parsed
-		}
-	}
-
-	if perfData != nil && perfData.Len() > 0 {
-		header.StartDate = perfData.Start()
-		header.EndDate = perfData.End()
-		header.Steps = perfData.Len()
-	}
-
-	// Determine whether a benchmark is configured.
-	hasBenchmark := acct.Benchmark() != (asset.Asset{})
-
-	// Early exit when there is insufficient data for a full report.
-	if perfData == nil || perfData.Len() < 2 {
-		warnings = append(warnings, "insufficient data for full report")
-
-		return Report{
-			Header:       header,
-			HasBenchmark: hasBenchmark,
-			Warnings:     warnings,
-		}, nil
-	}
-
-	report := Report{
-		Header:       header,
-		HasBenchmark: hasBenchmark,
-	}
-
-	// Equity curve.
-	report.EquityCurve = buildEquityCurve(perfData, header.InitialCash)
-
-	// Returns.
-	report.RecentReturns = buildRecentReturns(acct, hasBenchmark, &warnings)
-	report.Returns = buildReturns(acct, hasBenchmark, &warnings)
-
-	// Annual returns.
-	report.AnnualReturns = buildAnnualReturns(acct, hasBenchmark, &warnings)
-
-	// Risk metrics (strategy and benchmark).
-	report.Risk = buildRisk(acct, hasBenchmark, &warnings)
-
-	// Risk vs benchmark.
-	if hasBenchmark {
-		report.RiskVsBenchmark = buildRiskVsBenchmark(acct, &warnings)
-	}
-
-	// Drawdowns.
-	report.Drawdowns = buildDrawdowns(acct, &warnings)
-
-	// Monthly returns.
-	report.MonthlyReturns = buildMonthlyReturns(acct, &warnings)
-
-	// Trades.
-	report.Trades = buildTrades(acct, &warnings)
-
-	report.Warnings = warnings
-
-	return report, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 )
 
 // MetricPair is a single labelled metric with an optional comparison value.
@@ -72,6 +73,12 @@ func (mp *MetricPairs) renderText(writer io.Writer) error {
 }
 
 func formatMetricValue(value float64, metricFormat string) string {
+	// Label format embeds the display string after the "label:" prefix,
+	// ignoring the numeric Value field entirely.
+	if strings.HasPrefix(metricFormat, "label:") {
+		return strings.TrimPrefix(metricFormat, "label:")
+	}
+
 	switch metricFormat {
 	case "percent":
 		return fmt.Sprintf("%.2f%%", value*100)
@@ -79,6 +86,10 @@ func formatMetricValue(value float64, metricFormat string) string {
 		return fmt.Sprintf("%.0f days", value)
 	case "ratio":
 		return fmt.Sprintf("%.4f", value)
+	case "currency":
+		return fmt.Sprintf("$%.2f", value)
+	case "number":
+		return fmt.Sprintf("%.0f", value)
 	default:
 		return fmt.Sprintf("%g", value)
 	}
