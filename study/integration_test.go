@@ -156,6 +156,20 @@ func integrationStressStudy() *stress.StressTest {
 	return stress.New(scenarios)
 }
 
+// customizableStudy wraps an existing Study and also implements EngineCustomizer
+// so the runner integration test can verify EngineOptions is called per run.
+type customizableStudy struct {
+	study.Study
+	callCount int
+}
+
+var _ study.EngineCustomizer = (*customizableStudy)(nil)
+
+func (cs *customizableStudy) EngineOptions(_ study.RunConfig) []engine.Option {
+	cs.callCount++
+	return nil
+}
+
 var _ = Describe("Integration", func() {
 	It("stress test satisfies the Study interface", func() {
 		var iface study.Study = stress.New(nil)
@@ -270,5 +284,56 @@ var _ = Describe("Integration", func() {
 		}
 
 		Expect(foundScenarioSection).To(BeTrue(), "expected at least one MetricPairs scenario section")
+	})
+
+	It("calls EngineCustomizer.EngineOptions once per run config", func() {
+		assetAlpha := asset.Asset{CompositeFigi: "FIGI-ALPHA", Ticker: "ALPHA"}
+		assetBeta := asset.Asset{CompositeFigi: "FIGI-BETA", Ticker: "BETA"}
+		testAssets := []asset.Asset{assetAlpha, assetBeta}
+
+		metrics := []data.Metric{
+			data.MetricClose,
+			data.AdjClose,
+			data.Dividend,
+			data.MetricHigh,
+			data.MetricLow,
+			data.SplitFactor,
+		}
+
+		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		syntheticData := makeSyntheticDailyData(dataStart, 120, testAssets, metrics)
+		testProvider := data.NewTestProvider(metrics, syntheticData)
+		assetProvider := &integrationAssetProvider{assets: testAssets}
+
+		inner := integrationStressStudy()
+		wrapped := &customizableStudy{Study: inner}
+
+		runner := &study.Runner{
+			Study: wrapped,
+			NewStrategy: func() engine.Strategy {
+				return &buyAndHoldStrategy{targetAssets: testAssets}
+			},
+			Options: []engine.Option{
+				engine.WithDataProvider(testProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			},
+			Workers: 1,
+		}
+
+		progressCh, resultCh, runErr := runner.Run(context.Background())
+		Expect(runErr).NotTo(HaveOccurred())
+
+		// Drain progress channel.
+		for range progressCh {
+		}
+
+		result := <-resultCh
+		Expect(result.Err).NotTo(HaveOccurred())
+		Expect(result.Runs).To(HaveLen(1))
+		Expect(result.Runs[0].Err).NotTo(HaveOccurred())
+
+		// integrationStressStudy has one scenario, so EngineOptions should be called once.
+		Expect(wrapped.callCount).To(Equal(1))
 	})
 })
