@@ -17,6 +17,7 @@ package alpaca
 
 import (
 	"context"
+	"time"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -83,4 +84,32 @@ func (client *apiClient) GetPositions(ctx context.Context) ([]positionResponse, 
 // GetLatestTrade exposes getLatestTrade for testing.
 func (client *apiClient) GetLatestTrade(ctx context.Context, symbol string) (float64, error) {
 	return client.getLatestTrade(ctx, symbol)
+}
+
+// --- Fill streamer test exports ---
+
+// FillStreamerForTestType is an exported alias so the _test package can name the type.
+type FillStreamerForTestType = fillStreamer
+
+// NewFillStreamerForTest creates a fillStreamer for testing.
+func NewFillStreamerForTest(client *apiClient, fills chan broker.Fill, wsURL, apiKey, apiSecret string) *fillStreamer {
+	return &fillStreamer{
+		apiKey:    apiKey,
+		apiSecret: apiSecret,
+		fills:     fills,
+		wsURL:     wsURL,
+		seenFills: make(map[string]time.Time),
+		done:      make(chan struct{}),
+		client:    client,
+	}
+}
+
+// ConnectStreamer exposes connect for testing.
+func (streamer *fillStreamer) ConnectStreamer(ctx context.Context) error {
+	return streamer.connect(ctx)
+}
+
+// CloseStreamer exposes close for testing.
+func (streamer *fillStreamer) CloseStreamer() error {
+	return streamer.close()
 }
