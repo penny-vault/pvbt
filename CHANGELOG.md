@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Live trading now supports two new brokers: Alpaca and Charles Schwab.
 - The new `study` command runs a strategy across multiple configurations and produces a combined analysis. Parameter sweeps vary lookback periods, universe composition, presets, or any other strategy parameter.
 - The first built-in study is `study stress-test`, which evaluates a strategy against 17 named historical crises from the 1973 oil embargo through the 2023 regional banking crisis.
-- Monte Carlo simulation distinguishes skill from luck by running a strategy against thousands of resampled price series.
+- The new `study monte-carlo` study tests whether a strategy's performance is skill or luck by comparing it against thousands of randomized alternatives.
 
 ### Changed
 
@@ -29,16 +29,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The engine validates historical data coverage before a backtest begins, rejecting or adjusting runs when warmup data is insufficient.
 - New portfolio weighting methods: inverse volatility, market capitalization, and risk parity.
-- DataFrames expose a `Correlation` method for Pearson correlation between asset pairs.
+- `Correlation` method on DataFrames for computing Pearson correlation between asset pairs.
 - Weighting functions automatically fetch the additional data they need (e.g., market cap).
 - The `describe` command displays strategy name, schedule, parameters, and presets; `--json` produces machine-readable output.
 - The `--preset` flag selects a named parameter preset; the `--benchmark` flag sets the benchmark from the command line.
 - Portfolio middleware intercepts orders between strategy and broker for risk management, slippage modeling, and tax optimization without changing strategy code.
 - Built-in risk middleware enforces position size caps, drawdown circuit breakers, and position count limits. Pre-built profiles (`risk.Conservative`, `risk.Moderate`, `risk.Aggressive`) bundle common configurations.
 - Tax optimization middleware harvests losses, tracks wash sales with IRS-compliant basis adjustment, and swaps to correlated substitutes. Lot selection is configurable via `WithDefaultLotSelection` or per-order via `WithLotSelection`.
-- A tax drag metric measures the percentage of pre-tax return consumed by trading-related taxes.
+- New tax drag metric shows how much of a strategy's return is lost to trading-related taxes.
 - Meta-strategies allocate across child strategies declared as struct fields with `weight` tags.
-- MFE and MAE tracking measures how far prices moved for and against each position before exit.
+- Per-trade MFE and MAE tracking shows how much further each position could have run and how deep it went against you.
 - Live trading via tastytrade with WebSocket fill streaming and sandbox mode for paper trading.
 - Bracket and OCO order groups let strategies submit linked exit orders that activate or cancel automatically.
 - The simulated broker resolves intrabar bracket and OCO fills using high/low price data.
@@ -74,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Portable SQLite snapshots capture backtest data access for reproducible offline testing.
 - Index-based universes let strategies filter by index membership.
 - New metrics: ForwardPE, PEG, PriceToCashFlow, Beta, and `RiskAdjustedPct(n)`.
-- Cumulative risk-free rate series attached to DataFrames from engine Fetch and FetchAt.
+- DataFrames from engine Fetch and FetchAt include the cumulative risk-free rate for computing excess returns.
 
 ### Changed
 
