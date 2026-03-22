@@ -13,16 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package terminal
+package stress_test
 
 import (
-	"io"
+	"testing"
 
-	"github.com/penny-vault/pvbt/report"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/rs/zerolog/log"
 )
 
-// Render writes a plain-text backtest report to the given writer.
-// It delegates to the composable report's own Render method.
-func Render(rpt report.Report, writer io.Writer) error {
-	return rpt.Render(report.FormatText, writer)
+func TestStress(t *testing.T) {
+	RegisterFailHandler(Fail)
+	log.Logger = log.Output(GinkgoWriter)
+	RunSpecs(t, "Stress Suite")
 }
