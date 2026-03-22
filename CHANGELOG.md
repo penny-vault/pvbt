@@ -9,21 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added Alpaca as a live broker implementation, supporting commission-free trading with market, limit, stop, and stop-limit orders, OCO and bracket order groups, and optional fractional share support via the WithFractionalShares option. Promoted shared broker error sentinels so all broker implementations use a consistent error vocabulary.
+- Alpaca is now available as a live broker, supporting commission-free trading with market, limit, stop, and stop-limit orders, OCO and bracket order groups, and optional fractional share support via the `WithFractionalShares` option.
 - Studies can now answer questions that a single backtest cannot: "how does my strategy hold up during the worst historical crises?" or "which parameter values produce the most consistent results?" The new `study` command runs a strategy across multiple configurations concurrently and produces a combined analysis report. Parameter sweeps let you vary lookback periods, universe composition, presets, or any other strategy parameter and see how each affects performance.
-- The first built-in study is the stress test (`study stress-test`), which evaluates a strategy against six named historical crises -- 17 named historical episodes spanning five decades, from the 1973 oil embargo through the 2023 regional banking crisis. It reports per-scenario drawdown, recovery speed, worst single day, and how the strategy performed relative to its benchmark during each episode. Custom scenarios can be added programmatically.
+- The first built-in study is the stress test (`study stress-test`), which evaluates a strategy against 17 named historical episodes spanning five decades, from the 1973 oil embargo through the 2023 regional banking crisis. It reports per-scenario drawdown, recovery speed, worst single day, and how the strategy performed relative to its benchmark during each episode. Custom scenarios can be added programmatically.
 
 ### Changed
 
-- **Breaking:** Reports are now built from composable sections (tables, time series charts, metric pairs, and text blocks) rather than a fixed struct. Each section can render itself as terminal text or structured JSON, making reports extensible for new study types and consumable by web frontends. `report.Summary()` replaces `report.Build()`.
+- Backtests run approximately 9x faster and use 14x less memory than v0.3.0 -- a 30-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
+- **Breaking:** `NewDataFrame` now accepts one slice per column instead of a single combined slice, changing how strategies construct DataFrames directly.
 
 ### Fixed
 
-- Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer panic when portfolio and benchmark return columns contain NaN values at different positions. Independent NaN removal could produce mismatched slice lengths, triggering a crash in the statistics library.
-
-### Changed
-
-- **Breaking:** The DataFrame and metric computation internals were redesigned for performance. `NewDataFrame` accepts per-column slices instead of a flat slab, and metrics now compute against a `PortfolioStats` interface rather than a concrete `*Account`. These changes improve runtime by 9x and reduce memory by 14x over v0.3.0 -- a 30-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
+- Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer crash when portfolio and benchmark return series contain NaN values at different positions.
 
 ## [0.3.0] - 2026-03-21
 
