@@ -23,7 +23,6 @@ import (
 )
 
 // Report is a titled collection of renderable sections.
-// Named Report during migration to coexist with the legacy Report struct.
 type Report struct {
 	Title    string
 	Sections []Section

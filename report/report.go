@@ -32,7 +32,7 @@ var portfolioAsset = asset.Asset{
 	Ticker:        "_PORTFOLIO_",
 }
 
-// ReportablePortfolio is the interface required by Build. It composes
+// ReportablePortfolio is the interface required by Summary. It composes
 // read-only portfolio access with statistical queries needed for the
 // full report.
 type ReportablePortfolio interface {
