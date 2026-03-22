@@ -37,7 +37,7 @@ type MarginCallHandler interface {
 
 // checkAndHandleMarginCall checks if maintenance margin is breached and
 // handles via strategy handler or auto-liquidation.
-func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct *portfolio.Account, date time.Time) error {
+func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	deficiency := acct.MarginDeficiency()
 	if deficiency == 0 {
 		return nil
@@ -73,7 +73,7 @@ func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct *portfolio
 // them on the account via SetPrices (without recording an equity point).
 // This makes margin ratio calculations available before the full
 // updateAccountPrices call that records performance data.
-func (eng *Engine) setMarginPrices(ctx context.Context, acct *portfolio.Account, date time.Time) error {
+func (eng *Engine) setMarginPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	var heldAssets []asset.Asset
 
 	acct.Holdings(func(held asset.Asset, _ float64) {
@@ -96,7 +96,7 @@ func (eng *Engine) setMarginPrices(ctx context.Context, acct *portfolio.Account,
 
 // autoLiquidateShorts covers short positions proportionally to restore
 // maintenance margin.
-func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct *portfolio.Account, date time.Time) error {
+func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	deficiency := acct.MarginDeficiency()
 	if deficiency == 0 {
 		return nil

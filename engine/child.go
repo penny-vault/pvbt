@@ -33,7 +33,7 @@ type childEntry struct {
 	name     string  // from pvbt tag or lowercased field name
 	weight   float64 // from weight tag
 	schedule *tradecron.TradeCron
-	account  *portfolio.Account
+	account  portfolio.PortfolioManager
 	broker   *SimulatedBroker
 }
 
