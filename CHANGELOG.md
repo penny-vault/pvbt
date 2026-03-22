@@ -10,17 +10,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Live trading now supports two new brokers: Alpaca and Charles Schwab.
-- Studies can now answer questions that a single backtest cannot: "how does my strategy hold up during the worst historical crises?" or "which parameter values produce the most consistent results?" The new `study` command runs a strategy across multiple configurations concurrently and produces a combined analysis report. Parameter sweeps let you vary lookback periods, universe composition, presets, or any other strategy parameter and see how each affects performance.
-- The first built-in study is the stress test (`study stress-test`), which evaluates a strategy against 17 named historical episodes spanning five decades, from the 1973 oil embargo through the 2023 regional banking crisis. It reports per-scenario drawdown, recovery speed, worst single day, and how the strategy performed relative to its benchmark during each episode. Custom scenarios can be added programmatically.
+- The new `study` command runs a strategy across multiple configurations and produces a combined analysis. Parameter sweeps vary lookback periods, universe composition, presets, or any other strategy parameter.
+- The first built-in study is `study stress-test`, which evaluates a strategy against 17 named historical crises from the 1973 oil embargo through the 2023 regional banking crisis.
 
 ### Changed
 
-- Backtests run approximately 9x faster and use 14x less memory than v0.3.0 -- a 30-year backtest of Accelerating Dual Momentum now takes approximately 4 seconds.
-- **Breaking:** `NewDataFrame` now accepts one slice per column instead of a single combined slice, changing how strategies construct DataFrames directly.
+- Backtests run approximately 9x faster and use 14x less memory.
+- **Breaking:** `NewDataFrame` accepts per-column slices instead of a single combined slice.
 
 ### Fixed
 
-- Benchmark-relative metrics (beta, r-squared, alpha, tracking error, information ratio, downside/upside capture, and active return) no longer crash when portfolio and benchmark return series contain NaN values at different positions.
+- Benchmark-relative metrics no longer crash when portfolio and benchmark return series contain NaN values at different positions.
 
 ## [0.3.0] - 2026-03-21
 
