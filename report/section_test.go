@@ -18,6 +18,7 @@ package report_test
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -317,5 +318,56 @@ var _ = Describe("Section primitives", func() {
 			err := txt.Render(report.FormatHTML, &buf)
 			Expect(err).To(MatchError(ContainSubstring("unsupported format")))
 		})
+	})
+})
+
+var _ = Describe("ComposableReport", func() {
+	It("renders all sections in order for text format", func() {
+		rpt := report.ComposableReport{
+			Title: "Test Report",
+			Sections: []report.Section{
+				&report.Text{SectionName: "Intro", Body: "Hello"},
+				&report.Table{
+					SectionName: "Data",
+					Columns:     []report.Column{{Header: "X", Format: "number", Align: "right"}},
+					Rows:        [][]any{{1}},
+				},
+			},
+		}
+
+		var buf bytes.Buffer
+		Expect(rpt.Render(report.FormatText, &buf)).To(Succeed())
+		output := buf.String()
+		introIdx := strings.Index(output, "Hello")
+		// Table renders its column header "X", not the SectionName, in text output.
+		colHeaderIdx := strings.Index(output, "X")
+		Expect(introIdx).To(BeNumerically("<", colHeaderIdx))
+	})
+
+	It("renders JSON with title and sections array", func() {
+		rpt := report.ComposableReport{
+			Title: "JSON Test",
+			Sections: []report.Section{
+				&report.Text{SectionName: "Note", Body: "test"},
+			},
+		}
+
+		var buf bytes.Buffer
+		Expect(rpt.Render(report.FormatJSON, &buf)).To(Succeed())
+		Expect(buf.String()).To(ContainSubstring(`"title":"JSON Test"`))
+		Expect(buf.String()).To(ContainSubstring(`"sections":[`))
+	})
+
+	It("handles empty sections slice", func() {
+		rpt := report.ComposableReport{Title: "Empty"}
+		var buf bytes.Buffer
+		Expect(rpt.Render(report.FormatText, &buf)).To(Succeed())
+		Expect(buf.String()).To(ContainSubstring("Empty"))
+	})
+
+	It("returns error for unsupported format", func() {
+		rpt := report.ComposableReport{Title: "X"}
+		var buf bytes.Buffer
+		Expect(rpt.Render("invalid", &buf)).To(HaveOccurred())
 	})
 })
