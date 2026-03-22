@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Alpaca and Charles Schwab are now available as live brokers alongside tastytrade, giving strategies access to three brokerages with the same Broker interface. Alpaca offers commission-free trading with optional fractional share support. Schwab brings the largest US retail brokerage to pvbt with OAuth-based authentication and tax lot selection.
+- Live trading now supports two new brokers: Alpaca and Charles Schwab.
 - Studies can now answer questions that a single backtest cannot: "how does my strategy hold up during the worst historical crises?" or "which parameter values produce the most consistent results?" The new `study` command runs a strategy across multiple configurations concurrently and produces a combined analysis report. Parameter sweeps let you vary lookback periods, universe composition, presets, or any other strategy parameter and see how each affects performance.
 - The first built-in study is the stress test (`study stress-test`), which evaluates a strategy against 17 named historical episodes spanning five decades, from the 1973 oil embargo through the 2023 regional banking crisis. It reports per-scenario drawdown, recovery speed, worst single day, and how the strategy performed relative to its benchmark during each episode. Custom scenarios can be added programmatically.
 
