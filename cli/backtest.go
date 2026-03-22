@@ -165,6 +165,8 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	elapsed := time.Since(startTime)
 
 	// Set metadata on the portfolio.
+	result.SetMetadata(portfolio.MetaRunElapsed, elapsed.String())
+	result.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 	result.SetMetadata("run_id", fullID)
 	result.SetMetadata("strategy", strategy.Name())
 	result.SetMetadata("start", start.Format("2006-01-02"))

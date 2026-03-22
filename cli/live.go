@@ -7,6 +7,7 @@ import (
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 	backtestReport "github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/report/terminal"
 	"github.com/rs/zerolog/log"
@@ -81,6 +82,8 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 	info := engine.DescribeStrategy(strategy)
 
 	for p := range ch {
+		p.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
+
 		rpt, buildErr := backtestReport.Build(p, info, backtestReport.RunMeta{
 			InitialCash: cash,
 		})

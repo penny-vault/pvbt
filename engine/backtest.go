@@ -166,6 +166,23 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	info := DescribeStrategy(e.strategy)
+	if info.Name != "" {
+		acct.SetMetadata(portfolio.MetaStrategyName, info.Name)
+	}
+	if info.ShortCode != "" {
+		acct.SetMetadata(portfolio.MetaStrategyShortCode, info.ShortCode)
+	}
+	if info.Version != "" {
+		acct.SetMetadata(portfolio.MetaStrategyVersion, info.Version)
+	}
+	if info.Description != "" {
+		acct.SetMetadata(portfolio.MetaStrategyDesc, info.Description)
+	}
+	if info.Benchmark != "" {
+		acct.SetMetadata(portfolio.MetaStrategyBenchmark, info.Benchmark)
+	}
+
 	// 7. Resolve DGS3MO as the system risk-free rate.
 	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
 	if rfErr != nil {
@@ -396,6 +413,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	}
 
 	// PHASE 4: RETURN
+	acct.SetMetadata(portfolio.MetaRunMode, "backtest")
+	acct.SetMetadata(portfolio.MetaRunStart, start.Format(time.RFC3339))
+	acct.SetMetadata(portfolio.MetaRunEnd, end.Format(time.RFC3339))
+
 	return acct, nil
 }
 
