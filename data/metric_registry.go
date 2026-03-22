@@ -76,8 +76,6 @@ var metricRegistry = map[string]Metric{
 	"InvestedCapital": InvestedCapital, "InvestedCapitalAvg": InvestedCapitalAvg,
 	"TangibleAssetValue": TangibleAssetValue, "WorkingCapital": WorkingCapital,
 	"MarketCapFundamental": MarketCapFundamental,
-	// Economic
-	"Unemployment": Unemployment,
 }
 
 // MetricByName looks up a Metric constant by its registry name.

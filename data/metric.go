@@ -284,12 +284,6 @@ const (
 	MarketCapFundamental Metric = "MarketCapFundamental"
 )
 
-// Economic indicator metrics.
-const (
-	// Unemployment is the civilian unemployment rate.
-	Unemployment Metric = "Unemployment"
-)
-
 // Computed aggregate metrics.
 const (
 	// Count is the metric used by CountWhere to store per-timestep counts.
