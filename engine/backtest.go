@@ -170,15 +170,19 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	if info.Name != "" {
 		acct.SetMetadata(portfolio.MetaStrategyName, info.Name)
 	}
+
 	if info.ShortCode != "" {
 		acct.SetMetadata(portfolio.MetaStrategyShortCode, info.ShortCode)
 	}
+
 	if info.Version != "" {
 		acct.SetMetadata(portfolio.MetaStrategyVersion, info.Version)
 	}
+
 	if info.Description != "" {
 		acct.SetMetadata(portfolio.MetaStrategyDesc, info.Description)
 	}
+
 	if info.Benchmark != "" {
 		acct.SetMetadata(portfolio.MetaStrategyBenchmark, info.Benchmark)
 	}

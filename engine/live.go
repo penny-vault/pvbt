@@ -110,18 +110,23 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 	if liveInfo.Name != "" {
 		acct.SetMetadata(portfolio.MetaStrategyName, liveInfo.Name)
 	}
+
 	if liveInfo.ShortCode != "" {
 		acct.SetMetadata(portfolio.MetaStrategyShortCode, liveInfo.ShortCode)
 	}
+
 	if liveInfo.Version != "" {
 		acct.SetMetadata(portfolio.MetaStrategyVersion, liveInfo.Version)
 	}
+
 	if liveInfo.Description != "" {
 		acct.SetMetadata(portfolio.MetaStrategyDesc, liveInfo.Description)
 	}
+
 	if liveInfo.Benchmark != "" {
 		acct.SetMetadata(portfolio.MetaStrategyBenchmark, liveInfo.Benchmark)
 	}
+
 	acct.SetMetadata(portfolio.MetaRunMode, "live")
 
 	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
