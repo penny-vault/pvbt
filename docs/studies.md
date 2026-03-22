@@ -100,12 +100,23 @@ The stress test runs a strategy against named historical market scenarios and an
 
 | Scenario | Period |
 |----------|--------|
+| 1973-74 Oil Embargo Bear Market | Jan 1973 -- Oct 1974 |
+| Volcker Tightening | Jan 1980 -- Aug 1982 |
+| 1987 Black Monday | Oct 1987 -- Dec 1987 |
+| 1994 Bond Massacre | Feb 1994 -- Nov 1994 |
+| 1998 LTCM / Russian Crisis | Aug 1998 -- Oct 1998 |
+| Dot-com Bubble | Jan 1998 -- Mar 2000 |
+| Dot-com Bust | Mar 2000 -- Oct 2002 |
+| 9/11 | Sep 2001 -- Oct 2001 |
 | 2008 Financial Crisis | Sep 2008 -- Mar 2009 |
+| 2010 Flash Crash | May 2010 -- Jun 2010 |
+| Euro Debt Crisis | Apr 2010 -- Oct 2011 |
+| 2011 Debt Ceiling Crisis | Jul 2011 -- Oct 2011 |
+| 2015-2017 Low-Volatility Grind | Jan 2015 -- Dec 2017 |
+| 2018 Q4 Selloff | Oct 2018 -- Dec 2018 |
 | COVID Crash | Feb 2020 -- Mar 2020 |
 | 2022 Rate Hiking Cycle | Jan 2022 -- Oct 2022 |
-| Dot-com Bust | Mar 2000 -- Oct 2002 |
-| 2015-2017 Low-Volatility Grind | Jan 2015 -- Dec 2017 |
-| 2011 Debt Ceiling Crisis | Jul 2011 -- Oct 2011 |
+| 2023 Regional Banking Crisis | Mar 2023 -- May 2023 |
 
 The stress test runs the engine once over the full date range spanning all scenarios, then slices the equity curve into scenario windows for analysis. This avoids redundant engine runs when only the analysis window varies.
 
