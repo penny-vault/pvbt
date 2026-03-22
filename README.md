@@ -94,7 +94,7 @@ The engine runs in three phases:
 - [Data](docs/data.md) -- metrics, data providers, DataFrames, signals
 - [Portfolio](docs/portfolio.md) -- construction, order types, risk middleware, performance measurement
 - [Performance Metrics](docs/performance-metrics.md) -- 60+ metrics reference, custom metrics, MFE/MAE
-- [Broker](docs/broker.md) -- broker interface, tastytrade integration, order groups
+- [Broker](docs/broker.md) -- broker interface, tastytrade, Alpaca, and Schwab integrations, order groups
 - [Scheduling](docs/scheduling.md) -- tradecron syntax and schedule configuration
 - [Configuration](docs/configuration.md) -- struct tags, presets, and strategy parameterization
 

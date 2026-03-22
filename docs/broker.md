@@ -308,6 +308,36 @@ Authentication happens during `Connect()`. API keys are stateless -- no session 
 
 Fills are delivered via a WebSocket connection to Alpaca's trade updates stream. On disconnect, the broker reconnects with exponential backoff and polls for any fills missed during the outage.
 
+### Schwab
+
+The `broker/schwab` package implements `Broker` and `GroupSubmitter` for live trading with Charles Schwab. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, tax lot selection, and native OCO/bracket order groups via Schwab's nested `childOrderStrategies`.
+
+```go
+import "github.com/penny-vault/pvbt/broker/schwab"
+
+schwabBroker := schwab.New()
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(schwabBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Authentication uses environment variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `SCHWAB_CLIENT_ID` | yes | OAuth app client ID |
+| `SCHWAB_CLIENT_SECRET` | yes | OAuth app client secret |
+| `SCHWAB_CALLBACK_URL` | no | Registered OAuth callback URL (default: `https://127.0.0.1:5174`) |
+| `SCHWAB_TOKEN_FILE` | no | Path to persist OAuth tokens (default: `~/.config/pvbt/schwab-tokens.json`) |
+| `SCHWAB_ACCOUNT_NUMBER` | no | Plain-text account number; if unset, uses the first linked account |
+
+Schwab uses OAuth 2.0 with the authorization_code grant type. On first run, `Connect()` prints an authorization URL to the console. Open it in a browser, log in, and authorize the app -- a local HTTPS callback server captures the tokens automatically. The access token refreshes automatically every 25 minutes. The refresh token is persisted to disk and is valid for 7 days; after expiry, the browser authorization flow must be repeated.
+
+Fills are delivered via a WebSocket connection to Schwab's streaming API (`ACCT_ACTIVITY` service). On disconnect, the broker reconnects with exponential backoff and polls the REST orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
