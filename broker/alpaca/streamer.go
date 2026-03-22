@@ -28,9 +28,9 @@ import (
 
 const (
 	maxReconnectAttempts = 3
-	pruneThreshold      = 24 * time.Hour
-	authReadDeadline    = 10 * time.Second
-	pingInterval        = 30 * time.Second
+	pruneThreshold       = 24 * time.Hour
+	authReadDeadline     = 10 * time.Second
+	pingInterval         = 30 * time.Second
 )
 
 // wsMessage holds the result of a single WebSocket read.

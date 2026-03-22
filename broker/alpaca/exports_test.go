@@ -113,3 +113,20 @@ func (streamer *fillStreamer) ConnectStreamer(ctx context.Context) error {
 func (streamer *fillStreamer) CloseStreamer() error {
 	return streamer.close()
 }
+
+// --- Broker test exports ---
+
+// SetClientForTest replaces the broker's internal client with one
+// pointing at the given URL with the specified credentials.
+func SetClientForTest(alpacaBroker *AlpacaBroker, baseURL, apiKey, apiSecret string) {
+	alpacaBroker.client = newAPIClient(baseURL, apiKey, apiSecret)
+}
+
+// Exported error aliases for use in _test packages.
+var (
+	ErrMissingCredentials  = broker.ErrMissingCredentials
+	ErrAccountNotActive    = broker.ErrAccountNotActive
+	ErrEmptyOrderGroup     = broker.ErrEmptyOrderGroup
+	ErrNoEntryOrder        = broker.ErrNoEntryOrder
+	ErrMultipleEntryOrders = broker.ErrMultipleEntryOrders
+)
