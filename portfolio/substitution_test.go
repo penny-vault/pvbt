@@ -243,7 +243,8 @@ var _ = Describe("Substitution mapping", func() {
 			expiry := ts.AddDate(0, 1, 0)
 			acct.RegisterSubstitution(spy, ivv, expiry)
 
-			clone := acct.Clone()
+			cloneIface := acct.Clone()
+			clone := cloneIface.(*portfolio.Account)
 
 			// Register a new substitution on the original after cloning.
 			acct.RegisterSubstitution(qqq, qqqe, expiry)

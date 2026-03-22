@@ -24,10 +24,11 @@ import (
 	"github.com/penny-vault/pvbt/data"
 )
 
-// Ensure Account implements both interfaces at compile time.
+// Ensure Account implements all portfolio interfaces at compile time.
 var (
 	_ Portfolio        = (*Account)(nil)
 	_ PortfolioManager = (*Account)(nil)
+	_ PortfolioStats   = (*Account)(nil)
 )
 
 // Portfolio is the read-only interface that strategy code and middleware
@@ -142,6 +143,10 @@ type Portfolio interface {
 
 	// BuyingPower returns cash minus margin reserved for short positions.
 	BuyingPower() float64
+
+	// Benchmark returns the asset used as the performance benchmark
+	// for this portfolio.
+	Benchmark() asset.Asset
 }
 
 // PortfolioManager is the interface the engine uses to manage the
@@ -156,6 +161,8 @@ type Portfolio interface {
 // After UpdatePrices, calls to Portfolio.Value() and
 // Portfolio.PositionValue() reflect the latest prices.
 type PortfolioManager interface {
+	Portfolio
+
 	// Record appends a transaction to the log and updates the
 	// portfolio's cash balance and positions accordingly. The engine
 	// calls this for dividends, fees, deposits, withdrawals, and any
@@ -202,4 +209,41 @@ type PortfolioManager interface {
 	// CancelOpenOrders cancels all open or submitted orders and
 	// removes them from the pending-orders tracker.
 	CancelOpenOrders(ctx context.Context) error
+
+	// SetBenchmark sets the benchmark asset for performance comparison.
+	SetBenchmark(benchmark asset.Asset)
+
+	// SetRiskFreeValue sets the annualized risk-free rate used for
+	// risk-adjusted return calculations (Sharpe, Sortino, etc.).
+	SetRiskFreeValue(value float64)
+
+	// HasBroker returns true if a broker has been assigned to this
+	// portfolio manager.
+	HasBroker() bool
+
+	// ApplySplit adjusts holdings and tax lots for a stock split on the
+	// given asset at the given date with the provided split factor.
+	ApplySplit(ast asset.Asset, date time.Time, splitFactor float64) error
+
+	// BorrowRate returns the annualized borrow fee rate charged on
+	// short positions.
+	BorrowRate() float64
+
+	// RegisteredMetrics returns the list of performance metrics that
+	// have been registered with this portfolio.
+	RegisteredMetrics() []PerformanceMetric
+
+	// AppendMetric appends a computed metric row to the portfolio's
+	// metric history.
+	AppendMetric(row MetricRow)
+
+	// SetPrices replaces the current price data with the provided
+	// DataFrame. Unlike UpdatePrices, this does not record the
+	// portfolio value -- it only sets the price reference used by
+	// position valuation.
+	SetPrices(priceData *data.DataFrame)
+
+	// Clone returns a deep copy of the portfolio manager. The clone
+	// is independent: mutations to one do not affect the other.
+	Clone() PortfolioManager
 }

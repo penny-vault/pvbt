@@ -2197,7 +2197,7 @@ func (a *Account) CancelOpenOrders(ctx context.Context) error {
 // (the clone gets its own slice header but shares the underlying elements,
 // which is safe since appending to the clone's slice does not affect the
 // original).
-func (acct *Account) Clone() *Account {
+func (acct *Account) Clone() PortfolioManager {
 	holdings := make(map[asset.Asset]float64, len(acct.holdings))
 	for held, qty := range acct.holdings {
 		holdings[held] = qty

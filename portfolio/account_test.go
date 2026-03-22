@@ -823,7 +823,8 @@ var _ = Describe("Account.Clone", func() {
 		acct.SetMetadata("key", "original")
 		acct.Annotate(time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC), "signal", "0.5")
 
-		clone := acct.Clone()
+		cloneIface := acct.Clone()
+		clone := cloneIface.(*portfolio.Account)
 
 		clone.SetMetadata("key", "mutated")
 		clone.Annotate(time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC), "other", "1.0")
@@ -859,8 +860,9 @@ var _ = Describe("Account.Clone", func() {
 		Expect(acct.PendingOrderIDs()).NotTo(BeEmpty())
 
 		// Clone must not panic.
-		clone := acct.Clone()
-		Expect(clone).NotTo(BeNil())
+		cloneIface := acct.Clone()
+		Expect(cloneIface).NotTo(BeNil())
+		clone := cloneIface.(*portfolio.Account)
 
 		// Mutating the clone's pending orders must not affect the original.
 		for _, orderID := range clone.PendingOrderIDs() {
