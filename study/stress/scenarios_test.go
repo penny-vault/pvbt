@@ -27,9 +27,9 @@ import (
 )
 
 var _ = Describe("DefaultScenarios", func() {
-	It("returns exactly 6 named scenarios", func() {
+	It("returns exactly 17 named scenarios", func() {
 		scenarios := stress.DefaultScenarios()
-		Expect(scenarios).To(HaveLen(6))
+		Expect(scenarios).To(HaveLen(17))
 	})
 
 	It("includes all expected scenario names", func() {
@@ -41,12 +41,23 @@ var _ = Describe("DefaultScenarios", func() {
 		}
 
 		Expect(names).To(ContainElements(
+			"1973-74 Oil Embargo Bear Market",
+			"Volcker Tightening",
+			"1987 Black Monday",
+			"1994 Bond Massacre",
+			"1998 LTCM / Russian Crisis",
+			"Dot-com Bubble",
+			"Dot-com Bust",
+			"9/11",
 			"2008 Financial Crisis",
+			"2010 Flash Crash",
+			"Euro Debt Crisis",
+			"2011 Debt Ceiling Crisis",
+			"2015-2017 Low-Volatility Grind",
+			"2018 Q4 Selloff",
 			"COVID Crash",
 			"2022 Rate Hiking Cycle",
-			"Dot-com Bust",
-			"2015-2017 Low-Volatility Grind",
-			"2011 Debt Ceiling Crisis",
+			"2023 Regional Banking Crisis",
 		))
 	})
 
