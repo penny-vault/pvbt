@@ -25,4 +25,19 @@ const (
 	MomentumSignal      data.Metric = "Momentum"
 	VolatilitySignal    data.Metric = "Volatility"
 	EarningsYieldSignal data.Metric = "EarningsYield"
+
+	RSISignal data.Metric = "RSI"
+	ATRSignal data.Metric = "ATR"
+
+	MACDLineSignal       data.Metric = "MACDLine"
+	MACDSignalLineSignal data.Metric = "MACDSignalLine"
+	MACDHistogramSignal  data.Metric = "MACDHistogram"
+
+	BollingerUpperSignal  data.Metric = "BollingerUpper"
+	BollingerMiddleSignal data.Metric = "BollingerMiddle"
+	BollingerLowerSignal  data.Metric = "BollingerLower"
+
+	CrossoverFastSignal data.Metric = "CrossoverFast"
+	CrossoverSlowSignal data.Metric = "CrossoverSlow"
+	CrossoverSignal     data.Metric = "Crossover"
 )
