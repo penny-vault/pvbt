@@ -3,14 +3,16 @@ package tradier
 import (
 	"context"
 	"fmt"
+	"math"
+	"net/url"
 	"os"
+	"strconv"
 	"sync"
 
 	"github.com/penny-vault/pvbt/broker"
 )
 
 // TradierBroker implements broker.Broker for the Tradier brokerage.
-// Full implementation is in progress; this stub anchors the package types.
 type TradierBroker struct {
 	client      *apiClient
 	auth        *tokenManager
@@ -70,6 +72,11 @@ func (tb *TradierBroker) Connect(ctx context.Context) error {
 		return fmt.Errorf("tradier: connect: %w", modeErr)
 	}
 
+	accountID := os.Getenv("TRADIER_ACCOUNT_ID")
+	if accountID == "" {
+		return fmt.Errorf("tradier: connect: %w", ErrMissingCredentials)
+	}
+
 	callbackURL := tb.callbackURL
 	if callbackURL == "" {
 		callbackURL = os.Getenv("TRADIER_CALLBACK_URL")
@@ -105,7 +112,6 @@ func (tb *TradierBroker) Connect(ctx context.Context) error {
 		baseURL = sandboxBaseURL
 	}
 
-	accountID := os.Getenv("TRADIER_ACCOUNT_ID")
 	tb.client = newAPIClient(baseURL, tb.auth.accessToken(), accountID)
 
 	tb.auth.onRefresh = func(token string) {
@@ -160,25 +166,97 @@ func (tb *TradierBroker) Close() error {
 	}
 
 	if tb.streamer != nil {
-		return tb.streamer.close()
+		if closeErr := tb.streamer.close(); closeErr != nil {
+			return closeErr
+		}
 	}
+
+	close(tb.fills)
 
 	return nil
 }
 
 // Submit sends an order to Tradier.
+// If the order has Qty==0 and Amount>0, a quote is fetched first and the
+// quantity is derived via floor(Amount / price). An error is returned if the
+// resulting quantity is zero.
+// Short-sell and buy-to-cover detection is performed by checking existing
+// positions.
 func (tb *TradierBroker) Submit(ctx context.Context, order broker.Order) error {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
+
+	return tb.submitLocked(ctx, order)
+}
+
+// submitLocked is the internal implementation of Submit. It must be called
+// with tb.mu already held.
+func (tb *TradierBroker) submitLocked(ctx context.Context, order broker.Order) error {
+	// Handle dollar-amount orders.
+	if order.Qty == 0 && order.Amount > 0 {
+		price, quoteErr := tb.client.getQuote(ctx, order.Asset.Ticker)
+		if quoteErr != nil {
+			return fmt.Errorf("tradier: submit: get quote for dollar-amount order: %w", quoteErr)
+		}
+
+		qty := math.Floor(order.Amount / price)
+		if qty == 0 {
+			return fmt.Errorf("tradier: submit: dollar-amount order for %s results in zero shares at price %.4f", order.Asset.Ticker, price)
+		}
+
+		order.Qty = qty
+	}
 
 	params, paramsErr := toTradierOrderParams(order)
 	if paramsErr != nil {
 		return paramsErr
 	}
 
+	// Determine whether this is a short-sell or buy-to-cover.
+	positions, posErr := tb.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("tradier: submit: get positions for side detection: %w", posErr)
+	}
+
+	adjustedSide := detectSide(order.Side, order.Asset.Ticker, positions)
+	params.Set("side", adjustedSide)
+
 	_, submitErr := tb.client.submitOrder(ctx, params)
 
 	return submitErr
+}
+
+// detectSide returns the Tradier-specific side string, accounting for short
+// selling and buy-to-cover. It checks existing positions for the given ticker
+// to decide whether a sell is a short sale and whether a buy is covering.
+func detectSide(side broker.Side, ticker string, positions []tradierPositionResponse) string {
+	var currentQty float64
+
+	for _, pos := range positions {
+		if pos.Symbol == ticker {
+			currentQty = pos.Quantity
+			break
+		}
+	}
+
+	switch side {
+	case broker.Sell:
+		if currentQty <= 0 {
+			// No long position (or already short): this is a short sale.
+			return "sell_short"
+		}
+
+		return "sell"
+	case broker.Buy:
+		if currentQty < 0 {
+			// Existing short position: this is a buy-to-cover.
+			return "buy_to_cover"
+		}
+
+		return "buy"
+	default:
+		return "buy"
+	}
 }
 
 // Cancel requests cancellation of an open order.
@@ -189,10 +267,28 @@ func (tb *TradierBroker) Cancel(ctx context.Context, orderID string) error {
 	return tb.client.cancelOrder(ctx, orderID)
 }
 
-// Replace cancels and resubmits an order.
+// Replace modifies an existing order. If the new order changes the quantity,
+// Tradier's modify endpoint cannot handle it, so the original is cancelled and
+// a fresh order is submitted. For price/type/duration-only changes, the modify
+// endpoint is used directly.
 func (tb *TradierBroker) Replace(ctx context.Context, orderID string, order broker.Order) error {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
+
+	// Fetch the current order to check whether the quantity is changing.
+	existing, fetchErr := tb.findOrder(ctx, orderID)
+	if fetchErr != nil {
+		return fmt.Errorf("tradier: replace: look up order %s: %w", orderID, fetchErr)
+	}
+
+	if order.Qty != existing.Quantity {
+		// Tradier cannot change quantity via modify; cancel and resubmit.
+		if cancelErr := tb.client.cancelOrder(ctx, orderID); cancelErr != nil {
+			return fmt.Errorf("tradier: replace: cancel original order: %w", cancelErr)
+		}
+
+		return tb.submitLocked(ctx, order)
+	}
 
 	params, paramsErr := toTradierOrderParams(order)
 	if paramsErr != nil {
@@ -200,6 +296,23 @@ func (tb *TradierBroker) Replace(ctx context.Context, orderID string, order brok
 	}
 
 	return tb.client.modifyOrder(ctx, orderID, params)
+}
+
+// findOrder fetches the order list and returns the order with the given ID.
+// Must be called with tb.mu held.
+func (tb *TradierBroker) findOrder(ctx context.Context, orderID string) (tradierOrderResponse, error) {
+	orders, getErr := tb.client.getOrders(ctx)
+	if getErr != nil {
+		return tradierOrderResponse{}, getErr
+	}
+
+	for _, ord := range orders {
+		if fmt.Sprintf("%d", ord.ID) == orderID {
+			return ord, nil
+		}
+	}
+
+	return tradierOrderResponse{}, fmt.Errorf("tradier: order %s not found", orderID)
 }
 
 // Orders returns all orders for the current trading day.
@@ -257,4 +370,138 @@ func (tb *TradierBroker) Balance(ctx context.Context) (broker.Balance, error) {
 	}
 
 	return toBrokerBalance(rawBalance), nil
+}
+
+// SubmitGroup submits a contingent order group to Tradier.
+// GroupOCO maps to class=oco; GroupBracket maps to class=otoco.
+func (tb *TradierBroker) SubmitGroup(ctx context.Context, orders []broker.Order, groupType broker.GroupType) error {
+	if len(orders) == 0 {
+		return ErrEmptyOrderGroup
+	}
+
+	switch groupType {
+	case broker.GroupOCO:
+		return tb.submitOCO(ctx, orders)
+	case broker.GroupBracket:
+		return tb.submitBracket(ctx, orders)
+	default:
+		return fmt.Errorf("tradier: submit group: unsupported group type %d", groupType)
+	}
+}
+
+// submitOCO submits a one-cancels-other order group using Tradier's class=oco
+// multi-leg form encoding.
+func (tb *TradierBroker) submitOCO(ctx context.Context, orders []broker.Order) error {
+	params := url.Values{}
+	params.Set("class", "oco")
+
+	for ii, order := range orders {
+		duration, tifErr := mapTimeInForce(order.TimeInForce)
+		if tifErr != nil {
+			return tifErr
+		}
+
+		idx := strconv.Itoa(ii)
+		params.Set("symbol["+idx+"]", order.Asset.Ticker)
+		params.Set("side["+idx+"]", mapSide(order.Side))
+		params.Set("quantity["+idx+"]", strconv.FormatFloat(order.Qty, 'f', -1, 64))
+		params.Set("type["+idx+"]", mapOrderType(order.OrderType))
+		params.Set("duration["+idx+"]", duration)
+
+		if order.OrderType == broker.Limit || order.OrderType == broker.StopLimit {
+			params.Set("price["+idx+"]", strconv.FormatFloat(order.LimitPrice, 'f', -1, 64))
+		}
+
+		if order.OrderType == broker.Stop || order.OrderType == broker.StopLimit {
+			params.Set("stop["+idx+"]", strconv.FormatFloat(order.StopPrice, 'f', -1, 64))
+		}
+	}
+
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	_, submitErr := tb.client.submitOrder(ctx, params)
+
+	return submitErr
+}
+
+// submitBracket submits a bracket order group using Tradier's class=otoco
+// multi-leg form encoding. The entry leg must be at index 0, take-profit at
+// index 1, and stop-loss at index 2.
+func (tb *TradierBroker) submitBracket(ctx context.Context, orders []broker.Order) error {
+	// Validate: exactly one entry leg required.
+	entryIdx := -1
+
+	for ii, order := range orders {
+		if order.GroupRole == broker.RoleEntry {
+			if entryIdx != -1 {
+				return ErrMultipleEntryOrders
+			}
+
+			entryIdx = ii
+		}
+	}
+
+	if entryIdx == -1 {
+		return ErrNoEntryOrder
+	}
+
+	// Build the legs in OTOCO order: entry, take-profit, stop-loss.
+	legs := make([]broker.Order, 0, len(orders))
+	legs = append(legs, orders[entryIdx])
+
+	for _, order := range orders {
+		if order.GroupRole == broker.RoleTakeProfit {
+			legs = append(legs, order)
+		}
+	}
+
+	for _, order := range orders {
+		if order.GroupRole == broker.RoleStopLoss {
+			legs = append(legs, order)
+		}
+	}
+
+	// Append any remaining legs that have no assigned role (after the entry).
+	for ii, order := range orders {
+		if ii == entryIdx {
+			continue
+		}
+
+		if order.GroupRole != broker.RoleTakeProfit && order.GroupRole != broker.RoleStopLoss {
+			legs = append(legs, order)
+		}
+	}
+
+	params := url.Values{}
+	params.Set("class", "otoco")
+
+	for ii, order := range legs {
+		duration, tifErr := mapTimeInForce(order.TimeInForce)
+		if tifErr != nil {
+			return tifErr
+		}
+
+		idx := strconv.Itoa(ii)
+		params.Set("symbol["+idx+"]", order.Asset.Ticker)
+		params.Set("side["+idx+"]", mapSide(order.Side))
+		params.Set("quantity["+idx+"]", strconv.FormatFloat(order.Qty, 'f', -1, 64))
+		params.Set("type["+idx+"]", mapOrderType(order.OrderType))
+		params.Set("duration["+idx+"]", duration)
+
+		if order.OrderType == broker.Limit || order.OrderType == broker.StopLimit {
+			params.Set("price["+idx+"]", strconv.FormatFloat(order.LimitPrice, 'f', -1, 64))
+		}
+
+		if order.OrderType == broker.Stop || order.OrderType == broker.StopLimit {
+			params.Set("stop["+idx+"]", strconv.FormatFloat(order.StopPrice, 'f', -1, 64))
+		}
+	}
+
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	_, submitErr := tb.client.submitOrder(ctx, params)
+
+	return submitErr
 }

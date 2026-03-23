@@ -45,6 +45,13 @@ func MapTradierSide(side string) broker.Side {
 	return mapTradierSide(side)
 }
 
+// --- Broker test exports ---
+
+// SetClientForTest replaces the broker's internal client with one provided by the test.
+func SetClientForTest(tb *TradierBroker, client *apiClient) {
+	tb.client = client
+}
+
 // --- Client test exports ---
 
 // APIClientForTest is a type alias giving tests access to apiClient.
