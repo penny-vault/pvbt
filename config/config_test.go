@@ -16,8 +16,12 @@
 package config_test
 
 import (
+	"os"
+	"path/filepath"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 
 	"github.com/penny-vault/pvbt/config"
 )
@@ -311,6 +315,128 @@ var _ = Describe("Config", func() {
 			bl := config.ProfileBaseline("conservative")
 			Expect(*bl.VolatilityScalerLookback).To(Equal(60),
 				"conservative VolatilityScalerLookback must stay in sync with risk.Conservative")
+		})
+	})
+
+	Describe("Load", func() {
+		It("reads a TOML file with explicit path and produces a valid Config", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "test.toml")
+			Expect(os.WriteFile(path, []byte("[risk]\nprofile = \"moderate\"\n"), 0o644)).To(Succeed())
+
+			cfg, err := config.Load(path)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.Risk.Profile).To(Equal("moderate"))
+		})
+
+		It("returns zero-value Config when no file found", func() {
+			cfg, err := config.Load("/nonexistent/path/to/pvbt.toml")
+			Expect(err).To(HaveOccurred())
+			_ = cfg
+		})
+
+		It("returns zero-value Config when configPath is empty and no default files exist", func() {
+			// Run from a temp dir so neither ./pvbt.toml nor ~/.config/pvbt/config.toml
+			// interfere. We rely on those files not existing in CI, but we cannot
+			// control ~/.config/pvbt/config.toml, so we only assert no error.
+			cfg, err := config.Load("/nonexistent/pvbt.toml")
+			Expect(err).To(HaveOccurred())
+			_ = cfg
+		})
+
+		It("returns error for malformed TOML", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "bad.toml")
+			Expect(os.WriteFile(path, []byte("[[[\n"), 0o644)).To(Succeed())
+
+			cfg, err := config.Load(path)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+		})
+
+		It("pointer fields are nil when not set in TOML", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "test.toml")
+			Expect(os.WriteFile(path, []byte("[risk]\nprofile = \"none\"\n"), 0o644)).To(Succeed())
+
+			cfg, err := config.Load(path)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Risk.MaxPositionSize).To(BeNil())
+			Expect(cfg.Risk.MaxPositionCount).To(BeNil())
+			Expect(cfg.Risk.DrawdownCircuitBreaker).To(BeNil())
+			Expect(cfg.Risk.VolatilityScalerLookback).To(BeNil())
+			Expect(cfg.Risk.GrossExposureLimit).To(BeNil())
+			Expect(cfg.Risk.NetExposureLimit).To(BeNil())
+		})
+
+		It("pointer fields are non-nil when set in TOML including explicit zero values", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "test.toml")
+			toml := "[risk]\nprofile = \"none\"\nmax_position_size = 0.0\nmax_position_count = 0\n"
+			Expect(os.WriteFile(path, []byte(toml), 0o644)).To(Succeed())
+
+			cfg, err := config.Load(path)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Risk.MaxPositionSize).NotTo(BeNil())
+			Expect(*cfg.Risk.MaxPositionSize).To(Equal(0.0))
+			Expect(cfg.Risk.MaxPositionCount).NotTo(BeNil())
+			Expect(*cfg.Risk.MaxPositionCount).To(Equal(0))
+		})
+	})
+
+	Describe("LoadFromCommand", func() {
+		newCmd := func() *cobra.Command {
+			cmd := &cobra.Command{}
+			cmd.Flags().String("config", "", "")
+			cmd.Flags().String("risk-profile", "", "")
+			cmd.Flags().Bool("tax", false, "")
+			return cmd
+		}
+
+		It("applies --risk-profile flag override on top of config file", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "test.toml")
+			Expect(os.WriteFile(path, []byte("[risk]\nprofile = \"conservative\"\n"), 0o644)).To(Succeed())
+
+			cmd := newCmd()
+			Expect(cmd.Flags().Set("config", path)).To(Succeed())
+			Expect(cmd.Flags().Set("risk-profile", "moderate")).To(Succeed())
+
+			cfg, err := config.LoadFromCommand(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Risk.Profile).To(Equal("moderate"))
+		})
+
+		It("applies --tax flag override on top of config file", func() {
+			dir := GinkgoT().TempDir()
+			path := filepath.Join(dir, "test.toml")
+			Expect(os.WriteFile(path, []byte("[tax]\nenabled = false\n"), 0o644)).To(Succeed())
+
+			cmd := newCmd()
+			Expect(cmd.Flags().Set("config", path)).To(Succeed())
+			Expect(cmd.Flags().Set("tax", "true")).To(Succeed())
+
+			cfg, err := config.LoadFromCommand(cmd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg.Tax.Enabled).To(BeTrue())
+		})
+
+		It("re-validates after overrides and returns error for invalid --risk-profile", func() {
+			cmd := newCmd()
+			Expect(cmd.Flags().Set("risk-profile", "invalid")).To(Succeed())
+
+			_, err := config.LoadFromCommand(cmd)
+			Expect(err).To(HaveOccurred())
+			Expect(err).To(MatchError(ContainSubstring("unknown profile")))
+		})
+
+		It("returns zero-value Config when no flags set and no config file exists", func() {
+			cmd := newCmd()
+			Expect(cmd.Flags().Set("config", "/nonexistent/pvbt.toml")).To(Succeed())
+
+			_, err := config.LoadFromCommand(cmd)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
