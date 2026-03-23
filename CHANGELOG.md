@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strategies can use five new built-in signals: RSI, MACD, Bollinger Bands, moving average crossover, and ATR.
 - DataFrames support exponential moving averages via `Rolling(n).EMA()`.
 - Strategy authors can configure fill models on the simulated broker for more realistic backtesting (VWAP, spread-aware, market impact, slippage), composable via `WithFillModel`
+- Users can configure risk management rules and tax optimization through a TOML config file (`pvbt.toml`) and `--risk-profile`/`--tax` CLI flags, without modifying strategy code.
+- The `pvbt config` command displays the resolved middleware configuration after merging config file, profile defaults, and CLI flag overrides.
 
 ## [0.4.0] - 2026-03-22
 
