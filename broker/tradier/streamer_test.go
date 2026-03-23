@@ -99,6 +99,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				Event:            "order",
 				Status:           "filled",
 				AvgFillPrice:     150.50,
+				LastFillPrice:    150.50,
 				LastFillQuantity: 10.0,
 				TransactionDate:  "2026-03-22T15:30:00Z",
 			}
@@ -127,6 +128,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				Event:            "order",
 				Status:           "partially_filled",
 				AvgFillPrice:     99.00,
+				LastFillPrice:    99.00,
 				LastFillQuantity: 5.0,
 				TransactionDate:  "2026-03-22T16:00:00Z",
 			}
@@ -262,6 +264,8 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 							Status:           "filled",
 							AvgFillPrice:     55.50,
 							ExecQuantity:     7.0,
+							LastFillPrice:    55.50,
+							LastFillQuantity: 7.0,
 							TransactionDate:  "2026-03-22T18:00:00Z",
 						},
 					}
@@ -313,9 +317,11 @@ type tradierAccountEvent struct {
 
 // tradierOrderResponse is a local duplicate for use in test JSON construction.
 type tradierOrderResponse struct {
-	ID              int64   `json:"id"`
-	Status          string  `json:"status"`
-	AvgFillPrice    float64 `json:"avg_fill_price"`
-	ExecQuantity    float64 `json:"exec_quantity"`
-	TransactionDate string  `json:"transaction_date"`
+	ID                int64   `json:"id"`
+	Status            string  `json:"status"`
+	AvgFillPrice      float64 `json:"avg_fill_price"`
+	ExecQuantity      float64 `json:"exec_quantity"`
+	LastFillPrice     float64 `json:"last_fill_price"`
+	LastFillQuantity  float64 `json:"last_fill_quantity"`
+	TransactionDate   string  `json:"transaction_date"`
 }

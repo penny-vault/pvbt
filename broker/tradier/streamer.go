@@ -240,8 +240,8 @@ func (streamer *accountStreamer) pollForMissedFills() {
 
 		fill := broker.Fill{
 			OrderID:  orderID,
-			Price:    order.AvgFillPrice,
-			Qty:      order.ExecQuantity,
+			Price:    order.LastFillPrice,
+			Qty:      order.LastFillQuantity,
 			FilledAt: fillTime,
 		}
 
@@ -279,7 +279,7 @@ func (streamer *accountStreamer) processEvent(ev tradierAccountEvent) {
 
 	fill := broker.Fill{
 		OrderID:  orderID,
-		Price:    ev.AvgFillPrice,
+		Price:    ev.LastFillPrice,
 		Qty:      ev.LastFillQuantity,
 		FilledAt: fillTime,
 	}
@@ -381,8 +381,8 @@ func (streamer *accountStreamer) pollOrders(ctx context.Context) {
 
 		fill := broker.Fill{
 			OrderID:  orderID,
-			Price:    order.AvgFillPrice,
-			Qty:      order.ExecQuantity,
+			Price:    order.LastFillPrice,
+			Qty:      order.LastFillQuantity,
 			FilledAt: fillTime,
 		}
 

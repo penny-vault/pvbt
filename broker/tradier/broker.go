@@ -221,9 +221,25 @@ func (tb *TradierBroker) submitLocked(ctx context.Context, order broker.Order) e
 	adjustedSide := detectSide(order.Side, order.Asset.Ticker, positions)
 	params.Set("side", adjustedSide)
 
-	_, submitErr := tb.client.submitOrder(ctx, params)
+	orderID, submitErr := tb.client.submitOrder(ctx, params)
+	if submitErr != nil {
+		return fmt.Errorf("tradier: submit order: %w", submitErr)
+	}
 
-	return submitErr
+	// Tradier returns HTTP 200 even for downstream rejections. Verify the order
+	// was not immediately rejected by querying its status.
+	orders, ordersErr := tb.client.getOrders(ctx)
+	if ordersErr != nil {
+		return nil // order was placed; we just cannot verify status
+	}
+
+	for _, ord := range orders {
+		if fmt.Sprintf("%d", ord.ID) == orderID && ord.Status == "rejected" {
+			return fmt.Errorf("tradier: order %s rejected: %w", orderID, broker.ErrOrderRejected)
+		}
+	}
+
+	return nil
 }
 
 // detectSide returns the Tradier-specific side string, accounting for short

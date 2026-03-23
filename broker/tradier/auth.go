@@ -59,6 +59,7 @@ type tokenManager struct {
 	mu             sync.Mutex
 	stopRefresh    chan struct{}
 	refreshWg      sync.WaitGroup
+	stopOnce       sync.Once
 	listenerAddrCh chan string
 }
 
@@ -382,7 +383,9 @@ func (tm *tokenManager) startBackgroundRefresh() {
 // stopBackgroundRefresh signals the background refresh goroutine to stop and
 // waits for it to exit.
 func (tm *tokenManager) stopBackgroundRefresh() {
-	close(tm.stopRefresh)
+	tm.stopOnce.Do(func() {
+		close(tm.stopRefresh)
+	})
 	tm.refreshWg.Wait()
 }
 

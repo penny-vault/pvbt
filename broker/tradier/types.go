@@ -170,6 +170,10 @@ func toTradierOrderParams(order broker.Order) (url.Values, error) {
 		params.Set("price", strconv.FormatFloat(order.LimitPrice, 'f', -1, 64))
 	}
 
+	if order.Justification != "" {
+		params.Set("tag", order.Justification)
+	}
+
 	if order.OrderType == broker.Stop || order.OrderType == broker.StopLimit {
 		params.Set("stop", strconv.FormatFloat(order.StopPrice, 'f', -1, 64))
 	}
@@ -328,7 +332,7 @@ func mapTradierStatus(status string) broker.OrderStatus {
 		return broker.OrderPartiallyFilled
 	case "filled":
 		return broker.OrderFilled
-	case "expired", "canceled", "rejected":
+	case "expired", "canceled", "rejected", "pending_cancel":
 		return broker.OrderCancelled
 	default:
 		return broker.OrderOpen
