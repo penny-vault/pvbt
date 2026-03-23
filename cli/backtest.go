@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
+	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -40,6 +41,8 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
 	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
+	cmd.Flags().String("risk-profile", "", "Risk profile (conservative, moderate, aggressive, none)")
+	cmd.Flags().Bool("tax", false, "Enable tax optimization")
 
 	return cmd
 }
@@ -117,6 +120,11 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	applyStrategyFlags(cmd, strategy)
 
+	cfg, err := config.LoadFromCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	useTUI, err := cmd.Flags().GetBool("tui")
 	if err != nil {
 		return err
@@ -140,6 +148,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithAccount(acct),
+	}
+
+	if cfg.HasMiddleware() {
+		engineOpts = append(engineOpts, engine.WithMiddlewareConfig(*cfg))
 	}
 
 	benchmarkTicker, err := cmd.Flags().GetString("benchmark")
