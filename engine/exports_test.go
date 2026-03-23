@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -147,4 +148,20 @@ func NewChildEntryWithStrategyForTest(name string, weight float64, strategy Stra
 // SetEngineDateForTest sets the engine's currentDate for unit tests.
 func SetEngineDateForTest(eng *Engine, date time.Time) {
 	eng.currentDate = date
+}
+
+// BuildMiddlewareFromConfigForTest exposes buildMiddlewareFromConfig for testing.
+func BuildMiddlewareFromConfigForTest(eng *Engine) error {
+	return eng.buildMiddlewareFromConfig()
+}
+
+// EngineMiddlewareConfigForTest returns the engine's middlewareConfig for testing.
+func EngineMiddlewareConfigForTest(eng *Engine) *config.Config {
+	return eng.middlewareConfig
+}
+
+// SetAccountForTest sets the engine's account directly for unit tests that
+// need to inspect middleware registrations without running a full backtest.
+func SetAccountForTest(eng *Engine, acct portfolio.PortfolioManager) {
+	eng.account = acct
 }

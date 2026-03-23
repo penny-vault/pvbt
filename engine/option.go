@@ -17,6 +17,7 @@ package engine
 
 import (
 	"github.com/penny-vault/pvbt/broker"
+	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -103,5 +104,14 @@ func WithFillModel(base fill.BaseModel, adjusters ...fill.Adjuster) Option {
 	return func(e *Engine) {
 		e.fillBaseModel = base
 		e.fillAdjusters = adjusters
+	}
+}
+
+// WithMiddlewareConfig sets the middleware configuration. The engine
+// constructs risk and tax middleware from this config during initialization.
+// When set, config-driven middleware replaces any strategy-declared middleware.
+func WithMiddlewareConfig(cfg config.Config) Option {
+	return func(e *Engine) {
+		e.middlewareConfig = &cfg
 	}
 }
