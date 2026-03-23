@@ -52,7 +52,7 @@ type runAnalysis struct {
 
 // analyzeResults builds a report.Report from the results slice. It is the
 // shared implementation used by StressTest.Analyze.
-func analyzeResults(scenarios []Scenario, results []study.RunResult) (report.Report, error) {
+func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (report.Report, error) {
 	analyses := make([]runAnalysis, len(results))
 
 	for idx, result := range results {
@@ -82,7 +82,7 @@ func analyzeResults(scenarios []Scenario, results []study.RunResult) (report.Rep
 }
 
 // analyzeRun computes metrics for each scenario window for a single run result.
-func analyzeRun(scenarios []Scenario, result study.RunResult) runAnalysis {
+func analyzeRun(scenarios []study.Scenario, result study.RunResult) runAnalysis {
 	analysis := runAnalysis{runName: result.Config.Name}
 
 	if result.Err != nil {
@@ -108,7 +108,7 @@ func analyzeRun(scenarios []Scenario, result study.RunResult) runAnalysis {
 
 // computeScenarioMetrics slices the equity curve to the scenario window and
 // derives max drawdown, total return, and worst single-day return.
-func computeScenarioMetrics(scenario Scenario, perfData *data.DataFrame) scenarioMetrics {
+func computeScenarioMetrics(scenario study.Scenario, perfData *data.DataFrame) scenarioMetrics {
 	metrics := scenarioMetrics{scenarioName: scenario.Name}
 
 	if perfData == nil {
@@ -289,7 +289,7 @@ func buildRankingTable(analyses []runAnalysis) *report.Table {
 
 // buildScenarioMetricPairs constructs a MetricPairs section for a single
 // scenario, aggregating metrics across all runs.
-func buildScenarioMetricPairs(scenario Scenario, scenarioIdx int, analyses []runAnalysis) *report.MetricPairs {
+func buildScenarioMetricPairs(scenario study.Scenario, scenarioIdx int, analyses []runAnalysis) *report.MetricPairs {
 	pairs := make([]report.MetricPair, 0, len(analyses)*3)
 
 	for _, analysis := range analyses {
@@ -353,7 +353,7 @@ func buildScenarioMetricPairs(scenario Scenario, scenarioIdx int, analyses []run
 
 // buildSummaryText produces a brief narrative text section summarizing the
 // stress test results.
-func buildSummaryText(scenarios []Scenario, analyses []runAnalysis) *report.Text {
+func buildSummaryText(scenarios []study.Scenario, analyses []runAnalysis) *report.Text {
 	failedRuns := 0
 
 	for _, analysis := range analyses {

@@ -61,7 +61,11 @@ func newStressTestCmd(strategy engine.Strategy) *cobra.Command {
 func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) error {
 	ctx := log.Logger.WithContext(context.Background())
 
-	scenarios := resolveScenarios(args)
+	scenarios, err := resolveScenarios(args)
+	if err != nil {
+		return err
+	}
+
 	stressStudy := stress.New(scenarios)
 
 	provider, err := data.NewPVDataProvider(nil)
@@ -130,25 +134,15 @@ func strategyFactory(original engine.Strategy) func() engine.Strategy {
 	}
 }
 
-func resolveScenarios(args []string) []stress.Scenario {
+func resolveScenarios(args []string) ([]study.Scenario, error) {
 	if len(args) == 0 || (len(args) == 1 && args[0] == "all") {
-		return nil // nil triggers default scenarios
+		return nil, nil // nil triggers default scenarios in stress.New
 	}
 
-	defaults := stress.DefaultScenarios()
-
-	byName := make(map[string]stress.Scenario)
-	for _, scenario := range defaults {
-		byName[scenario.Name] = scenario
+	scenarios, err := study.ScenariosByName(args)
+	if err != nil {
+		return nil, fmt.Errorf("resolve scenarios: %w", err)
 	}
 
-	var selected []stress.Scenario
-
-	for _, name := range args {
-		if scenario, ok := byName[name]; ok {
-			selected = append(selected, scenario)
-		}
-	}
-
-	return selected
+	return scenarios, nil
 }
