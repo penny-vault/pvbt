@@ -10,12 +10,14 @@ Issue #15. Interactive Brokers is the institutional standard with the broadest m
 
 ## Cross-Broker Refactors
 
-These changes affect the shared `broker/` package and all existing broker implementations (Schwab, Alpaca, tastytrade):
+These changes affect the shared `broker/` package and all existing broker implementations (Schwab, Alpaca, tastytrade). They are executed as a prerequisite task before the IB-specific work begins.
 
-1. **New sentinel `broker.ErrRateLimited`** in `broker/errors.go`. Returned when the broker API responds with HTTP 429.
-2. **Rename `broker.IsTransient` to `broker.IsRetryableError`** across the codebase. Update all call sites in `broker/schwab/client.go`, `broker/alpaca/client.go`, `broker/tastytrade/client.go`, and all corresponding tests.
+1. **New sentinel `broker.ErrRateLimited`** in `broker/errors.go`. Returned when the broker API responds with HTTP 429. All existing brokers that currently return raw `HTTPError{StatusCode: 429}` are updated to wrap `broker.ErrRateLimited`.
+2. **Rename `broker.IsTransient` to `broker.IsRetryableError`** across the codebase. Update all call sites in `broker/schwab/client.go`, `broker/alpaca/client.go`, `broker/tastytrade/client.go`, `broker/tastytrade/errors.go`, and all corresponding tests.
 
 `broker.IsRetryableError` returns true for `broker.ErrRateLimited`, 5xx `HTTPError` values, and network errors (same logic as today, plus the new sentinel).
+
+Note: the Schwab design spec references `broker.IsTransient` and should be updated to reflect the rename after this refactor lands.
 
 ## Package Structure
 
@@ -30,6 +32,24 @@ New package `broker/ibkr/` with the following layout:
 | `types.go` | Request/response structs, mapping functions between IB and broker types |
 | `errors.go` | IB-specific error (`ErrConidNotFound`), uses shared broker errors |
 | `doc.go` | Package documentation |
+| `exports_test.go` | Exports internal symbols for white-box testing |
+
+## IBBroker Struct
+
+```go
+type IBBroker struct {
+    client    *apiClient
+    auth      Authenticator
+    streamer  *orderStreamer
+    fills     chan broker.Fill       // buffered at 1024, created in New()
+    accountID string                 // resolved during Connect
+    conidCache map[string]int64      // "{symbol}-{currency}" -> conid
+    seenFills  map[string]time.Time  // order ID + fill timestamp deduplication
+    mu        sync.Mutex             // protects concurrent order operations
+}
+```
+
+The fills channel is created in the `New()` constructor (buffered at 1024).
 
 ## Authentication
 
@@ -79,7 +99,7 @@ Connects to a running IB Client Portal Gateway process:
 
 1. Call `POST /iserver/auth/status` to verify active session
 2. If not authenticated, call `POST /iserver/reauthenticate` (user must have logged in via the gateway's web UI)
-3. Background `/tickle` every 55 seconds to keep the session alive
+3. Background `POST /tickle` every 55 seconds to keep the session alive
 4. `Decorate` is a no-op (gateway uses session cookies managed by the HTTP client's cookie jar)
 
 Environment variables:
@@ -92,13 +112,35 @@ Environment variables:
 
 Uses go-resty/v2 with:
 - Authenticator's `Decorate` called on each request via a request middleware
-- `rate.Limiter` from `golang.org/x/time/rate` set to 10 requests/second (IB's global limit)
+- `rate.Limiter` from `golang.org/x/time/rate` set to 9 req/s with burst of 1 (IB's limit is 10; headroom avoids penalty box)
 - Retry on `broker.IsRetryableError` with 3 attempts and exponential backoff
 - 15-second request timeout
 
 Base URL:
 - OAuth: `https://api.ibkr.com/v1/api`
-- Gateway: `https://localhost:5000/v1/portal`
+- Gateway: `https://localhost:5000/v1/api`
+
+## Endpoints Used
+
+| Method | Path | Purpose |
+|--------|------|---------|
+| GET | `/iserver/accounts` | List trading accounts (resolve account ID) |
+| POST | `/iserver/account/{id}/orders` | Place orders (single or bracket/OCA array) |
+| GET | `/iserver/account/orders` | List open orders |
+| POST | `/iserver/account/{id}/order/{orderId}` | Modify an open order |
+| DELETE | `/iserver/account/{id}/order/{orderId}` | Cancel an open order |
+| POST | `/iserver/reply/{replyId}` | Auto-confirm order prompts (gateway path) |
+| GET | `/portfolio/{id}/positions/0` | List positions (page 0) |
+| GET | `/portfolio/{id}/summary` | Account balance/summary |
+| POST | `/iserver/secdef/search` | Resolve ticker to conid |
+| GET | `/iserver/marketdata/snapshot` | Fetch quote for dollar-amount orders |
+| GET | `/iserver/account/trades` | List recent trades (reconnection fill recovery) |
+| POST | `/iserver/auth/status` | Check auth status (gateway) |
+| POST | `/iserver/reauthenticate` | Re-authenticate (gateway) |
+| POST | `/tickle` | Session keepalive (gateway) |
+| POST | `/oauth/request_token` | OAuth request token |
+| POST | `/oauth/access_token` | OAuth access token |
+| POST | `/oauth/live_session_token` | OAuth live session token (DH exchange) |
 
 ## Broker Methods
 
@@ -106,37 +148,37 @@ Base URL:
 
 1. Initialize authenticator (`Init`)
 2. Start authenticator keepalive goroutine
-3. Resolve account ID via `GET /accounts`
+3. Resolve account ID via `GET /iserver/accounts`
 4. Start WebSocket streamer
 5. Start rate limiter
 
 ### Submit
 
-1. If order has ticker but no conid, resolve via `GET /secdef?type=STK&symbol={ticker}&currency=USD`. Cache resolved conids in-memory for the session.
+1. If order has ticker but no conid, resolve via `POST /iserver/secdef/search` with `{symbol: "AAPL"}`. Cache resolved conids in-memory for the session.
 2. Map `broker.Order` to IB order request (see field mapping below)
-3. `POST /accounts/{id}/orders` with single-element array
+3. `POST /iserver/account/{id}/orders` with single-element order array
 4. If gateway path returns a confirmation prompt, auto-confirm via `POST /iserver/reply/{replyId}` with `{confirmed: true}`
 5. Return `broker.ErrOrderRejected` if the order is rejected after confirmation
 
 ### Cancel
 
-`DELETE /accounts/{id}/orders/{cOID}`
+`DELETE /iserver/account/{id}/order/{orderId}`
 
 ### Replace
 
-`PUT /accounts/{id}/orders/{cOID}` with full replacement order body. Maps `OrigCustomerOrderId` to the existing order's `cOID`.
+`POST /iserver/account/{id}/order/{orderId}` with modified order body.
 
 ### Orders
 
-`GET /accounts/{id}/orders` -- maps IB order status enum to `broker.OrderStatus`.
+`GET /iserver/account/orders` -- maps IB order status strings to `broker.OrderStatus`.
 
 ### Positions
 
-`GET /accounts/{id}/positions` -- maps to `broker.Position` (Qty, AvgOpenPrice from AverageCost, ContractId).
+`GET /portfolio/{id}/positions/0` -- maps to `broker.Position` (Qty from Position, AvgOpenPrice from AverageCost).
 
 ### Balance
 
-`GET /accounts/{id}/summary` -- maps Ledger/Summary fields to `broker.Balance` (CashBalance, NetLiquidatingValue, EquityBuyingPower from BuyingPower, MaintenanceReq from MaintMarginReq).
+`GET /portfolio/{id}/summary` -- maps to `broker.Balance` (CashBalance from cashbalance, NetLiquidatingValue from netliquidation, EquityBuyingPower from buyingpower, MaintenanceReq from maintmarginreq).
 
 ### Close
 
@@ -147,39 +189,45 @@ Base URL:
 
 ## Order Field Mapping
 
-| broker type | IB API field | Values |
+| broker type | IB API field | IB value |
 |---|---|---|
-| `OrderType` Market | `OrderType` | 1 |
-| `OrderType` Limit | `OrderType` | 2 |
-| `OrderType` Stop | `OrderType` | 3 |
-| `OrderType` StopLimit | `OrderType` | 4 |
-| `Side` Buy | `Side` | 1 |
-| `Side` Sell | `Side` | 2 |
-| `TimeInForce` Day | `TimeInForce` | 0 |
-| `TimeInForce` GTC | `TimeInForce` | 1 |
-| `TimeInForce` IOC | `TimeInForce` | 3 |
-| `TimeInForce` OnOpen | `TimeInForce` | 2 |
-| `TimeInForce` OnClose | `TimeInForce` | 7 |
-| `Qty` | `Quantity` | float64 |
-| `LimitPrice` | `Price` | float64 |
-| `StopPrice` | `AuxPrice` | float64 |
+| `OrderType` Market | `orderType` | `"MKT"` |
+| `OrderType` Limit | `orderType` | `"LMT"` |
+| `OrderType` Stop | `orderType` | `"STP"` |
+| `OrderType` StopLimit | `orderType` | `"STP_LIMIT"` |
+| `Side` Buy | `side` | `"BUY"` |
+| `Side` Sell | `side` | `"SELL"` |
+| `TimeInForce` Day | `tif` | `"DAY"` |
+| `TimeInForce` GTC | `tif` | `"GTC"` |
+| `TimeInForce` IOC | `tif` | `"IOC"` |
+| `TimeInForce` OnOpen | `tif` | `"OPG"` |
+| `TimeInForce` OnClose | `tif` | `"MOC"` |
+| `TimeInForce` GTD | `tif` | unsupported, return error |
+| `TimeInForce` FOK | `tif` | unsupported, return error |
+| `Qty` | `quantity` | float64 |
+| `LimitPrice` | `price` | float64 |
+| `StopPrice` | `auxPrice` | float64 |
+
+GTD and FOK are not supported by IB's Web API. Submitting an order with either returns an error wrapping `broker.ErrOrderRejected` with a descriptive message.
 
 ## Order Status Mapping
 
 | IB Status | broker.OrderStatus |
 |---|---|
-| New (0), PendingNew (A) | OrderSubmitted |
-| PartiallyFilled (1) | OrderPartiallyFilled |
-| Filled (2) | OrderFilled |
-| Canceled (4), Expired (C) | OrderCancelled |
-| Rejected (8) | OrderCancelled |
-| Replaced (5), PendingCancelReplace (6), PendingReplace (E) | OrderSubmitted |
+| `"PreSubmitted"` | OrderSubmitted |
+| `"Submitted"` | OrderOpen |
+| `"Filled"` | OrderFilled |
+| `"PartiallyFilled"` | OrderPartiallyFilled |
+| `"Cancelled"` | OrderCancelled |
+| `"Inactive"` | OrderCancelled |
+
+`"PreSubmitted"` means the order has been accepted but not yet working at the exchange. `"Submitted"` means it is live and working, hence `OrderOpen`. Partial fills are also delivered as `broker.Fill` events on the fills channel as they occur.
 
 ## GroupSubmitter
 
 ### Bracket Orders (GroupBracket)
 
-Submit parent + children as an array to `POST /accounts/{id}/orders`:
+Submit parent + children as an array to `POST /iserver/account/{id}/orders`:
 
 1. Find the entry-role order; return `broker.ErrNoEntryOrder` or `broker.ErrMultipleEntryOrders` on validation failure
 2. Assign a `cOID` to the entry order
@@ -188,7 +236,7 @@ Submit parent + children as an array to `POST /accounts/{id}/orders`:
 
 ### OCA Orders (GroupOCO)
 
-Submit all orders as an array with `isSingleGroup: true` on each order. IB cancels remaining orders when one fills.
+Submit all orders as an array. Each order includes an `ocaGroup` field (a shared group name string) and `ocaType: 1` (cancel remaining on fill). IB cancels the other orders in the group when one fills.
 
 ## WebSocket Streamer
 
@@ -198,23 +246,24 @@ Submit all orders as an array with `isSingleGroup: true` on each order. IB cance
 
 **Protocol:**
 - Send heartbeat (`tic`) every 10 seconds
-- Subscribe to order updates: `sor+{}`
-- Subscribe to trade updates: `str+{}`
+- Subscribe to order updates: send `sor+{}` (subscribe order)
 - Messages arrive as JSON with topic prefixes
 
 **Fill delivery:** When the streamer receives a fill or partial-fill event, it maps to a `broker.Fill` (OrderID, Price, Qty, FilledAt) and sends on the buffered (1024) fills channel.
 
+**Deduplication:** The `seenFills` map (`map[string]time.Time`) tracks fills by `"{orderID}-{fillTimestamp}"`. Entries older than 24 hours are pruned on each drain cycle.
+
 **Reconnection:** Exponential backoff (1s, 2s, 4s), max 3 attempts. On successful reconnect:
-1. Re-subscribe to order and trade topics
-2. Poll `GET /accounts/{id}/trades` for fills missed during disconnect
-3. Deduplicate by order ID + fill timestamp before sending to fills channel
+1. Re-subscribe to order topics
+2. Poll `GET /iserver/account/trades` for fills missed during disconnect
+3. Deduplicate before sending to fills channel
 
 ## Contract ID Resolution
 
 IB uses `conid` (contract ID) rather than ticker symbols for all order operations. The broker resolves tickers to conids on demand:
 
-1. On `Submit`, if the order specifies a ticker but no conid, call `GET /secdef?type=STK&symbol={ticker}&currency=USD`
-2. Cache the result in an in-memory map (`map[string]int64`, keyed by `"{symbol}-{currency}"`)
+1. On `Submit`, if the order specifies a ticker but no conid, call `POST /iserver/secdef/search` with `{symbol: "{ticker}"}`
+2. Cache the result in `conidCache` (`map[string]int64`, keyed by `"{symbol}-{currency}"`)
 3. Cache lives for the session duration (cleared on `Close`)
 4. Return `ErrConidNotFound` if the symbol cannot be resolved
 
@@ -222,7 +271,7 @@ IB uses `conid` (contract ID) rather than ticker symbols for all order operation
 
 IB does not support notional orders. When a `broker.Order` specifies an amount instead of quantity:
 
-1. Fetch a quote via `GET /marketdata/snapshot` for the order's conid
+1. Fetch a quote via `GET /iserver/marketdata/snapshot?conids={conid}&fields=31` (field 31 = last price)
 2. Compute quantity: `math.Floor(amount / lastPrice)`
 3. Submit with the computed quantity
 
@@ -230,7 +279,7 @@ IB does not support notional orders. When a `broker.Order` specifies an amount i
 
 IB enforces a global limit of 10 requests per second. Exceeding this results in HTTP 429 and a 15-minute IP penalty box.
 
-The client uses `golang.org/x/time/rate` with a limit of 9 req/s (leaving headroom) and burst of 1. All API calls acquire a token before sending. On 429, the client returns `broker.ErrRateLimited` (which `broker.IsRetryableError` considers retryable).
+The client uses `golang.org/x/time/rate` with a limit of 9 req/s and burst of 1 (leaving headroom). All API calls acquire a token before sending. On 429, the client returns `broker.ErrRateLimited` (which `broker.IsRetryableError` considers retryable).
 
 ## Errors
 
@@ -240,6 +289,7 @@ The client uses `golang.org/x/time/rate` with a limit of 9 req/s (leaving headro
 | Session/token expired | `broker.ErrNotAuthenticated` |
 | 429 rate limited | `broker.ErrRateLimited` |
 | Order rejected | `broker.ErrOrderRejected` |
+| GTD or FOK time-in-force used | `broker.ErrOrderRejected` (with descriptive message) |
 | No credentials provided | `broker.ErrMissingCredentials` |
 | No auth option specified | error from `New` constructor |
 | WebSocket disconnected | `broker.ErrStreamDisconnected` |
