@@ -27,8 +27,9 @@ const (
 
 // IBBroker implements broker.Broker for the Interactive Brokers brokerage.
 type IBBroker struct {
-	client *apiClient
-	fills  chan broker.Fill
+	client    *apiClient
+	fills     chan broker.Fill
+	accountID string
 }
 
 // Option configures an IBBroker.
@@ -37,7 +38,7 @@ type Option func(*IBBroker)
 // New creates a new IBBroker with the given options.
 func New(opts ...Option) *IBBroker {
 	ib := &IBBroker{
-		client: &apiClient{},
+		client: newAPIClient("", nil),
 		fills:  make(chan broker.Fill, fillChannelSize),
 	}
 
@@ -49,11 +50,17 @@ func New(opts ...Option) *IBBroker {
 }
 
 // Connect establishes a session with IB.
-func (ib *IBBroker) Connect(_ context.Context) error {
-	_ = ib.client.baseURL
+func (ib *IBBroker) Connect(ctx context.Context) error {
 	ib.client.pending = nil
 	ib.client.secdef = nil
 	ib.client.lastTrade = nil
+
+	accountID, resolveErr := ib.client.resolveAccount(ctx)
+	if resolveErr != nil {
+		return resolveErr
+	}
+
+	ib.accountID = accountID
 
 	return nil
 }
@@ -63,10 +70,50 @@ func (ib *IBBroker) Close() error {
 	return nil
 }
 
-// Submit sends an order to IB.
-func (ib *IBBroker) Submit(_ context.Context, order broker.Order) error {
-	_, err := toIBOrder(order, 0)
-	return err
+// Submit sends an order to IB. It resolves the ticker to a contract ID,
+// fetches a real-time snapshot for dollar-amount orders, submits the order,
+// and auto-confirms any warning replies from the gateway.
+func (ib *IBBroker) Submit(ctx context.Context, order broker.Order) error {
+	results, searchErr := ib.client.searchSecdef(ctx, order.Asset.Ticker)
+	if searchErr != nil {
+		return searchErr
+	}
+
+	if len(results) == 0 {
+		return ErrConidNotFound
+	}
+
+	conid := results[0].Conid
+
+	if order.Qty == 0 && order.Amount > 0 {
+		price, snapErr := ib.client.getSnapshot(ctx, conid)
+		if snapErr != nil {
+			return snapErr
+		}
+
+		order.Qty = order.Amount / price
+	}
+
+	ibOrder, mapErr := toIBOrder(order, conid)
+	if mapErr != nil {
+		return mapErr
+	}
+
+	replies, submitErr := ib.client.submitOrder(ctx, ib.accountID, []ibOrderRequest{ibOrder})
+	if submitErr != nil {
+		return submitErr
+	}
+
+	// Auto-confirm warning messages from the gateway.
+	for _, reply := range replies {
+		if reply.ReplyID != "" {
+			if _, confirmErr := ib.client.confirmReply(ctx, reply.ReplyID, true); confirmErr != nil {
+				return confirmErr
+			}
+		}
+	}
+
+	return nil
 }
 
 // Fills returns a channel on which fill reports are delivered.
@@ -75,33 +122,64 @@ func (ib *IBBroker) Fills() <-chan broker.Fill {
 }
 
 // Cancel requests cancellation of an open order.
-func (ib *IBBroker) Cancel(_ context.Context, _ string) error {
-	return nil
+func (ib *IBBroker) Cancel(ctx context.Context, orderID string) error {
+	return ib.client.cancelOrder(ctx, ib.accountID, orderID)
 }
 
 // Replace cancels an existing order and submits a replacement.
-func (ib *IBBroker) Replace(_ context.Context, _ string, order broker.Order) error {
-	_, err := toIBOrder(order, 0)
-	return err
+func (ib *IBBroker) Replace(ctx context.Context, orderID string, order broker.Order) error {
+	ibOrder, mapErr := toIBOrder(order, 0)
+	if mapErr != nil {
+		return mapErr
+	}
+
+	_, replaceErr := ib.client.replaceOrder(ctx, ib.accountID, orderID, ibOrder)
+
+	return replaceErr
 }
 
 // Orders returns all orders for the current trading day.
-func (ib *IBBroker) Orders(_ context.Context) ([]broker.Order, error) {
-	resp := ibOrderResponse{}
-	order := toBrokerOrder(resp)
+func (ib *IBBroker) Orders(ctx context.Context) ([]broker.Order, error) {
+	ibOrders, getErr := ib.client.getOrders(ctx)
+	if getErr != nil {
+		return nil, getErr
+	}
 
-	return []broker.Order{order}[:0], nil
+	orders := make([]broker.Order, 0, len(ibOrders))
+	for _, ibOrder := range ibOrders {
+		orders = append(orders, toBrokerOrder(ibOrder))
+	}
+
+	return orders, nil
 }
 
 // Positions returns all current positions in the account.
-func (ib *IBBroker) Positions(_ context.Context) ([]broker.Position, error) {
-	pos := ibPositionEntry{}
-	position := toBrokerPosition(pos)
+func (ib *IBBroker) Positions(ctx context.Context) ([]broker.Position, error) {
+	ibPositions, getErr := ib.client.getPositions(ctx, ib.accountID)
+	if getErr != nil {
+		return nil, getErr
+	}
 
-	return []broker.Position{position}[:0], nil
+	positions := make([]broker.Position, 0, len(ibPositions))
+	for _, pos := range ibPositions {
+		positions = append(positions, toBrokerPosition(pos))
+	}
+
+	return positions, nil
 }
 
 // Balance returns the current account balance.
-func (ib *IBBroker) Balance(_ context.Context) (broker.Balance, error) {
-	return toBrokerBalance(ibAccountSummary{}), nil
+func (ib *IBBroker) Balance(ctx context.Context) (broker.Balance, error) {
+	summary, getErr := ib.client.getBalance(ctx, ib.accountID)
+	if getErr != nil {
+		return broker.Balance{}, getErr
+	}
+
+	return toBrokerBalance(summary), nil
+}
+
+// PollTrades fetches recent executions from the IB API. This is used
+// to recover missed fills after a WebSocket reconnect.
+func (ib *IBBroker) PollTrades(ctx context.Context) ([]ibTradeEntry, error) {
+	return ib.client.getTrades(ctx)
 }
