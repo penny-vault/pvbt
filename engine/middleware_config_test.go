@@ -35,6 +35,60 @@ func ptrFloat64Config(v float64) *float64 { return &v }
 // ptrIntConfig returns a pointer to the given int value.
 func ptrIntConfig(v int) *int { return &v }
 
+// makeDrawdownTestData creates a DataFrame where prices rise for the first
+// half of nDays then fall to peakPrice*(1-drawdownFraction) for the second
+// half, producing a measurable portfolio drawdown when used with a full-
+// investment strategy.  All required metrics are included so the engine can
+// run a normal backtest.
+func makeDrawdownTestData(
+	start time.Time,
+	nDays int,
+	testAssets []asset.Asset,
+	metrics []data.Metric,
+	peakPrice float64,
+	drawdownFraction float64,
+) *data.DataFrame {
+	times := make([]time.Time, nDays)
+	for ii := range times {
+		day := start.AddDate(0, 0, ii)
+		times[ii] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+	}
+
+	nMetrics := len(metrics)
+	nAssets := len(testAssets)
+	cols := make([][]float64, nAssets*nMetrics)
+	for ci := range cols {
+		cols[ci] = make([]float64, nDays)
+	}
+
+	troughPrice := peakPrice * (1 - drawdownFraction)
+	midpoint := nDays / 2
+
+	for assetIdx := range testAssets {
+		for metricIdx, metric := range metrics {
+			colIdx := assetIdx*nMetrics + metricIdx
+			for dayIdx := range nDays {
+				switch metric {
+				case data.SplitFactor:
+					cols[colIdx][dayIdx] = 1.0
+				case data.Dividend:
+					cols[colIdx][dayIdx] = 0.0
+				default:
+					if dayIdx < midpoint {
+						cols[colIdx][dayIdx] = peakPrice
+					} else {
+						cols[colIdx][dayIdx] = troughPrice
+					}
+				}
+			}
+		}
+	}
+
+	df, err := data.NewDataFrame(times, testAssets, metrics, data.Daily, cols)
+	Expect(err).NotTo(HaveOccurred())
+	return df
+}
+
 // middlewareConfigStrategy is a strategy that tries to buy 100% of a single
 // asset, letting middleware cap the position.
 type middlewareConfigStrategy struct {
@@ -229,6 +283,232 @@ var _ = Describe("WithMiddlewareConfig", func() {
 				}
 			}
 			Expect(found).To(BeTrue(), "expected risk:max-position-size annotation from conservative profile")
+		})
+
+		It("registers DrawdownCircuitBreaker middleware when configured", func() {
+			// Build price data that rises then drops 30% to produce a drawdown
+			// large enough to trigger a 15% circuit-breaker threshold.
+			ddStart := time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC)
+			ddDF := makeDrawdownTestData(ddStart, 400, allAssets, allMetrics, 200.0, 0.30)
+			ddProvider := data.NewTestProvider(allMetrics, ddDF)
+
+			cfg := config.Config{
+				Risk: config.RiskConfig{
+					DrawdownCircuitBreaker: ptrFloat64Config(0.15),
+				},
+			}
+
+			strategy := &middlewareConfigStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(ddProvider),
+				engine.WithAssetProvider(assetProv),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithMiddlewareConfig(cfg),
+			)
+
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			engine.SetAccountForTest(eng, acct)
+			engine.BuildMiddlewareFromConfigForTest(eng)
+
+			// Use a date range that spans the peak and the trough so the
+			// circuit breaker has drawdown history to evaluate.
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// After prices drop 30% from peak, the 15% circuit-breaker fires
+			// and appends a "risk:drawdown-circuit-breaker" annotation.
+			annotations := acct.Annotations()
+			found := false
+			for _, ann := range annotations {
+				if ann.Key == "risk:drawdown-circuit-breaker" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected risk:drawdown-circuit-breaker annotation from config-driven middleware")
+		})
+
+		It("registers GrossExposureLimit middleware when configured", func() {
+			// Set a tight gross exposure limit (0.50) so that a 100% long
+			// position attempt triggers the limit and produces annotations.
+			cfg := config.Config{
+				Risk: config.RiskConfig{
+					GrossExposureLimit: ptrFloat64Config(0.50),
+				},
+			}
+
+			strategy := &middlewareConfigStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(testProvider),
+				engine.WithAssetProvider(assetProv),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithMiddlewareConfig(cfg),
+			)
+
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			engine.SetAccountForTest(eng, acct)
+			engine.BuildMiddlewareFromConfigForTest(eng)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			annotations := acct.Annotations()
+			found := false
+			for _, ann := range annotations {
+				if ann.Key == "risk:gross-exposure-limit" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected risk:gross-exposure-limit annotation from config-driven middleware")
+		})
+
+		It("registers NetExposureLimit middleware when configured", func() {
+			// Set a tight net exposure limit (0.50) so that a 100% long
+			// position attempt triggers the limit and produces annotations.
+			cfg := config.Config{
+				Risk: config.RiskConfig{
+					NetExposureLimit: ptrFloat64Config(0.50),
+				},
+			}
+
+			strategy := &middlewareConfigStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(testProvider),
+				engine.WithAssetProvider(assetProv),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithMiddlewareConfig(cfg),
+			)
+
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			engine.SetAccountForTest(eng, acct)
+			engine.BuildMiddlewareFromConfigForTest(eng)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			annotations := acct.Annotations()
+			found := false
+			for _, ann := range annotations {
+				if ann.Key == "risk:net-exposure-limit" {
+					found = true
+					break
+				}
+			}
+			Expect(found).To(BeTrue(), "expected risk:net-exposure-limit annotation from config-driven middleware")
+		})
+
+		It("applies middleware in the correct order", func() {
+			// Verify spec ordering: MaxPositionSize (step 2) must annotate
+			// before NetExposureLimit (step 5) within the same backtest run.
+			//
+			// Strategy targets 100% SPY.
+			// MaxPositionSize(0.10) caps the buy order to 10% of portfolio.
+			// NetExposureLimit(0.05) then sees the capped 10% order, which
+			// would push net exposure from 0% to 10% -- exceeding the 5%
+			// limit -- so it drops the order and annotates.
+			//
+			// Both middleware annotate on every rebalance.  The first
+			// MaxPositionSize annotation must appear before the first
+			// NetExposureLimit annotation.
+			cfg := config.Config{
+				Risk: config.RiskConfig{
+					MaxPositionSize:  ptrFloat64Config(0.10),
+					NetExposureLimit: ptrFloat64Config(0.05),
+				},
+			}
+
+			strategy := &middlewareConfigStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(testProvider),
+				engine.WithAssetProvider(assetProv),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithMiddlewareConfig(cfg),
+			)
+
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			engine.SetAccountForTest(eng, acct)
+			engine.BuildMiddlewareFromConfigForTest(eng)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// Find the first index of each annotation type.
+			annotations := acct.Annotations()
+
+			firstMaxPositionSize := -1
+			firstNetExposure := -1
+
+			for idx, ann := range annotations {
+				switch ann.Key {
+				case "risk:max-position-size":
+					if firstMaxPositionSize < 0 {
+						firstMaxPositionSize = idx
+					}
+				case "risk:net-exposure-limit":
+					if firstNetExposure < 0 {
+						firstNetExposure = idx
+					}
+				}
+			}
+
+			Expect(firstMaxPositionSize).To(BeNumerically(">", -1),
+				"expected at least one risk:max-position-size annotation")
+			Expect(firstNetExposure).To(BeNumerically(">", -1),
+				"expected at least one risk:net-exposure-limit annotation")
+
+			// MaxPositionSize runs before NetExposureLimit in the middleware
+			// chain, so its first annotation index must be lower.
+			Expect(firstMaxPositionSize).To(BeNumerically("<", firstNetExposure),
+				"MaxPositionSize must annotate before NetExposureLimit")
+		})
+
+		It("registers TaxLossHarvester middleware when tax is enabled", func() {
+			// Enable tax with a 5% loss threshold. There are no positions with
+			// unrealized losses in this synthetic backtest, so the harvester
+			// will not produce annotations -- but it must not cause errors.
+			cfg := config.Config{
+				Tax: config.TaxConfig{
+					Enabled:        true,
+					LossThreshold:  0.05,
+					GainOffsetOnly: false,
+				},
+			}
+
+			strategy := &middlewareConfigStrategy{target: spy}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(testProvider),
+				engine.WithAssetProvider(assetProv),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithMiddlewareConfig(cfg),
+			)
+
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			engine.SetAccountForTest(eng, acct)
+			engine.BuildMiddlewareFromConfigForTest(eng)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
 		})
 
 		It("clears existing middleware before applying config-driven stack", func() {

@@ -58,4 +58,10 @@
 // Or use a profile:
 //
 //	acct.Use(risk.Moderate()...)
+//
+// # Config-file approach
+//
+// Risk middleware can also be configured through a TOML config file
+// (pvbt.toml) or --risk-profile CLI flag without modifying Go code.
+// See docs/configuration.md for details.
 package risk

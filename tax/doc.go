@@ -45,4 +45,10 @@
 // Or use the convenience function:
 //
 //	acct.Use(tax.TaxEfficient(config)...)
+//
+// # Config-file approach
+//
+// Tax middleware can also be configured through a TOML config file
+// (pvbt.toml) or --tax CLI flag without modifying Go code.
+// See docs/configuration.md for details.
 package tax

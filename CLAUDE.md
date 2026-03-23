@@ -18,7 +18,7 @@ Tests use Ginkgo/Gomega (BDD style). Every package has a `*_suite_test.go` that 
 
 Changes to the public API are breaking and must appear in the changelog. Everything else is internal.
 
-**CLI surface** -- commands (`backtest`, `live`, `snapshot`, `study`, `describe`) and their flags (`--preset`, `--benchmark`, etc.)
+**CLI surface** -- commands (`backtest`, `live`, `snapshot`, `study`, `describe`, `config`) and their flags (`--preset`, `--benchmark`, `--config`, `--risk-profile`, `--tax`, etc.)
 
 **Strategy author surface:**
 - `Strategy` interface (`Name`, `Setup`, `Compute`) and `Descriptor` interface (`Describe`)
@@ -26,7 +26,7 @@ Changes to the public API are breaking and must appear in the changelog. Everyth
 - `Batch` (orders, annotations)
 - `DataFrame` (construction via `NewDataFrame`, querying, `Correlation`, `Covariance`, `Std`, etc.)
 - Broker options (`WithFractionalShares`, etc.)
-- Middleware configuration (`risk.Conservative`, `risk.Moderate`, `tax.TaxEfficient`, etc.)
+- Middleware configuration (`risk.Conservative`, `risk.Moderate`, `tax.TaxEfficient`, etc.) and TOML config file (`pvbt.toml`)
 - Weighting functions, universe declarations, parameter/preset definitions
 
 ## Code Conventions
