@@ -317,16 +317,8 @@ var _ = Describe("tokenManager", func() {
 				},
 			}
 			callbackReqURL := fmt.Sprintf("https://%s?code=test-auth-code%%40extra", callbackAddr)
-
-			// Retry the GET because the TLS server goroutine may not
-			// be accepting connections yet even though the listener is
-			// bound. This avoids flaky EOF failures in CI.
-			var resp *http.Response
-			Eventually(func() error {
-				var getErr error
-				resp, getErr = httpClient.Get(callbackReqURL)
-				return getErr
-			}, 5*time.Second, 100*time.Millisecond).Should(Succeed())
+			resp, reqErr := httpClient.Get(callbackReqURL)
+			Expect(reqErr).ToNot(HaveOccurred())
 			resp.Body.Close()
 
 			Eventually(authDone, 5*time.Second).Should(Receive(Not(HaveOccurred())))
