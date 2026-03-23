@@ -30,7 +30,7 @@ func newAPIClient(baseURL string) *apiClient {
 
 	httpClient.AddRetryCondition(func(resp *resty.Response, err error) bool {
 		if err != nil {
-			return IsTransient(err)
+			return IsRetryableError(err)
 		}
 
 		return resp.StatusCode() >= 500
