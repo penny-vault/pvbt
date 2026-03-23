@@ -35,6 +35,15 @@ type IBBroker struct {
 // Option configures an IBBroker.
 type Option func(*IBBroker)
 
+// WithGateway configures the broker to authenticate via the IB Client
+// Portal Gateway at the given base URL.
+func WithGateway(baseURL string) Option {
+	return func(ib *IBBroker) {
+		auth := newGatewayAuthenticator(baseURL)
+		ib.client = newAPIClient(baseURL, auth)
+	}
+}
+
 // New creates a new IBBroker with the given options.
 func New(opts ...Option) *IBBroker {
 	ib := &IBBroker{

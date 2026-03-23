@@ -3,6 +3,7 @@ package ibkr
 import (
 	"context"
 	"net/http"
+	"time"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -95,4 +96,26 @@ func (ac *apiClient) ConfirmReply(ctx context.Context, replyID string, confirmed
 
 func (ac *apiClient) GetTrades(ctx context.Context) ([]ibTradeEntry, error) {
 	return ac.getTrades(ctx)
+}
+
+// Gateway authenticator test helpers.
+
+func NewGatewayAuthenticatorForTest(baseURL string) *gatewayAuthenticator {
+	return newGatewayAuthenticator(baseURL)
+}
+
+func SetGatewayTickleIntervalForTest(auth *gatewayAuthenticator, interval time.Duration) {
+	auth.tickleInterval = interval
+}
+
+func (ga *gatewayAuthenticator) InitAuth(ctx context.Context) error {
+	return ga.Init(ctx)
+}
+
+func (ga *gatewayAuthenticator) DecorateRequest(req *http.Request) error {
+	return ga.Decorate(req)
+}
+
+func (ga *gatewayAuthenticator) RunKeepalive(ctx context.Context) {
+	ga.Keepalive(ctx)
 }
