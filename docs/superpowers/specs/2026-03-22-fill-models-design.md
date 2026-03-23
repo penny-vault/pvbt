@@ -42,21 +42,29 @@ type FillResult struct {
 
 `Partial` is true when a model (e.g., market impact) determines the order cannot be fully filled. `Quantity` is the actual filled amount, which may be less than requested.
 
-### FillModel Interface
+### Interfaces
+
+Base price models and adjusters have distinct interfaces reflecting their roles:
 
 ```go
-type FillModel interface {
-    Fill(order broker.Order, bar *data.DataFrame) (FillResult, error)
+type BaseModel interface {
+    Fill(ctx context.Context, order broker.Order, bar *data.DataFrame) (FillResult, error)
+}
+
+type Adjuster interface {
+    Adjust(ctx context.Context, order broker.Order, bar *data.DataFrame, current FillResult) (FillResult, error)
 }
 ```
 
+`BaseModel` produces the initial fill price and quantity. `Adjuster` receives the upstream result and modifies it. Both take `context.Context` for cancellation propagation and downstream data fetches.
+
 ### Pipeline
 
-The pipeline is itself a `FillModel`. It calls the base model first, then feeds its `FillResult` through each adjuster in sequence. Each adjuster receives the current result and the original bar data. If any model returns an error, the order is rejected (not silently degraded).
+The pipeline composes a `BaseModel` with zero or more `Adjuster`s. It calls the base model first, then feeds its `FillResult` through each adjuster in sequence. If any step returns an error, the order is rejected (not silently degraded).
 
 ### DataFetcher
 
-Models that need additional data beyond the current bar (e.g., VWAP requesting intraday bars) use a `DataFetcher` interface:
+Models that need additional data beyond the current bar (e.g., VWAP requesting intraday bars) accept a `DataFetcher` at construction time. This is the same narrow interface used elsewhere in the codebase for on-demand data access; the `fill` package defines its own copy to avoid importing `risk` or `engine`:
 
 ```go
 type DataFetcher interface {
@@ -65,7 +73,13 @@ type DataFetcher interface {
 }
 ```
 
-The `SimulatedBroker` injects this when it sets the price provider. Models that don't need it ignore it.
+The `SimulatedBroker` passes its `DataFetcher` to the pipeline via a `SetDataFetcher(DataFetcher)` method on the `Pipeline` type. The pipeline propagates it to any child model that implements the optional `DataFetcherAware` interface:
+
+```go
+type DataFetcherAware interface {
+    SetDataFetcher(DataFetcher)
+}
+```
 
 ## Base Price Models
 
@@ -87,7 +101,7 @@ Estimates volume-weighted average price. Data source priority:
 Applies half-spread cost directionally: buys fill at `price + halfSpread`, sells at `price - halfSpread`.
 
 Spread source priority:
-1. Real bid/ask from the bar (`MetricBid` / `MetricAsk`) if present
+1. Real bid/ask from the bar (`data.Bid` / `data.Ask`) if present
 2. Configured estimate via `SpreadBPS(bps int)` option
 3. Error if neither is available
 
@@ -100,9 +114,9 @@ Square-root impact model: `impact = coefficient * sqrt(orderShares / barVolume)`
 - If order volume exceeds a threshold relative to bar volume, the fill is partial
 
 Named presets with bundled coefficient and volume threshold:
-- `LargeCap` -- low coefficient, high volume threshold
-- `SmallCap` -- moderate coefficient, moderate threshold
-- `MicroCap` -- high coefficient, low threshold
+- `LargeCap` -- coefficient 0.1, partial fill above 5% of daily volume
+- `SmallCap` -- coefficient 0.3, partial fill above 2% of daily volume
+- `MicroCap` -- coefficient 0.5, partial fill above 1% of daily volume
 
 ### SlippageFill
 
@@ -111,13 +125,29 @@ Configurable fixed or percentage slippage, applied directionally (increases cost
 - `Slippage(fill.Percent(0.1))` -- percentage-based
 - `Slippage(fill.Fixed(0.05))` -- fixed dollar amount
 
+## Scope
+
+Fill models apply to **market orders only**. Stop-loss and take-profit orders handled by `EvaluatePending` continue to use their existing trigger-price logic (high/low evaluation). This avoids conflating two distinct concerns: fill realism for discretionary orders vs. bracket-order trigger mechanics.
+
+## Dollar-Amount Orders
+
+The `SimulatedBroker` currently converts dollar-amount orders (`Amount > 0, Qty == 0`) to share quantities using the close price. With fill models, quantity conversion moves **after** the base model runs: the base model determines the execution price, then the broker divides the dollar amount by that price to get the share quantity. The resulting quantity is then passed through any adjusters (e.g., market impact may further reduce it via partial fill).
+
+## Partial Fill Lifecycle
+
+When a fill model returns a partial fill:
+
+1. The broker emits a fill event for the executed portion at the fill price.
+2. The unfilled remainder becomes a pending order for the **next bar only**. On the next bar, the fill model runs again with the reduced quantity (market impact recalculates based on the smaller remaining size).
+3. If the remainder is still not fully filled after the second bar, it is cancelled. This prevents infinite pending orders. The cancellation is reported as a standard order cancellation event.
+
 ## Package Layout
 
 New package `fill` at the project root. Keeps fill logic separate from `broker` (interface definitions) and `engine` (SimulatedBroker implementation).
 
 ```
 fill/
-    fill.go          # FillModel, FillResult, Pipeline, DataFetcher
+    fill.go          # BaseModel, Adjuster, FillResult, Pipeline, DataFetcher
     close.go         # CloseFill
     vwap.go          # VWAPFill
     spread.go        # SpreadAware
@@ -127,11 +157,14 @@ fill/
 
 ## Changes to SimulatedBroker
 
-1. Add `fillModel FillModel` field, defaulting to `fill.Close()`
-2. Add `WithFillModel(base FillModel, adjusters ...FillModel) Option` constructor option
-3. In `Submit`, replace hardcoded close-price lookup with `fillModel.Fill(order, bar)`
-4. Handle partial fills from `FillResult`: emit a partial fill event and keep the remainder as a pending order
-5. After the price provider is set, call `SetDataFetcher` on the pipeline so VWAP and other models can request additional data
+1. Add `fillPipeline *fill.Pipeline` field, defaulting to a pipeline with `fill.Close()` and no adjusters
+2. Add `WithFillModel(base fill.BaseModel, adjusters ...fill.Adjuster) Option` constructor option
+3. In `Submit`, replace hardcoded close-price lookup with pipeline execution for market orders
+4. Handle partial fills from `FillResult`: emit a partial fill event and queue the remainder for the next bar
+5. After the price provider is set, call `pipeline.SetDataFetcher(...)` to propagate the fetcher to models that need it
+6. Move dollar-amount quantity conversion to after the base model determines the fill price
+
+This is a public API addition (`WithFillModel` option) that must appear in the changelog.
 
 ## Error Handling
 
