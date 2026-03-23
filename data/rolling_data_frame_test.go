@@ -167,8 +167,8 @@ var _ = Describe("RollingDataFrame", func() {
 		It("window >= column length produces all NaN except last for Mean", func() {
 			result := df.Rolling(10).Mean()
 			col := result.Column(aapl, data.Price)
-			for i := 0; i < 9; i++ {
-				Expect(math.IsNaN(col[i])).To(BeTrue())
+			for ii := range 9 {
+				Expect(math.IsNaN(col[ii])).To(BeTrue())
 			}
 			// Last element: mean(1..10) = 5.5
 			Expect(col[9]).To(BeNumerically("~", 5.5, 1e-10))
@@ -269,6 +269,82 @@ var _ = Describe("RollingDataFrame", func() {
 			Expect(math.IsNaN(col[2])).To(BeTrue()) // [1, 2, NaN]
 			Expect(math.IsNaN(col[3])).To(BeTrue()) // [2, NaN, 4]
 			Expect(math.IsNaN(col[4])).To(BeTrue()) // [NaN, 4, 5]
+		})
+
+		It("EMA computes exponential moving average", func() {
+			// Window=3, alpha=2/(3+1)=0.5
+			// Values: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+			// SMA seed (first 3): (1+2+3)/3 = 2.0
+			// idx 2: 2.0 (seed)
+			// idx 3: 0.5*4 + 0.5*2.0 = 3.0
+			// idx 4: 0.5*5 + 0.5*3.0 = 4.0
+			// idx 5: 0.5*6 + 0.5*4.0 = 5.0
+			// idx 6: 0.5*7 + 0.5*5.0 = 6.0
+			// idx 7: 0.5*8 + 0.5*6.0 = 7.0
+			// idx 8: 0.5*9 + 0.5*7.0 = 8.0
+			// idx 9: 0.5*10 + 0.5*8.0 = 9.0
+			result := df.Rolling(3).EMA()
+			Expect(result.Err()).NotTo(HaveOccurred())
+			col := result.Column(aapl, data.Price)
+
+			Expect(math.IsNaN(col[0])).To(BeTrue())
+			Expect(math.IsNaN(col[1])).To(BeTrue())
+			Expect(col[2]).To(BeNumerically("~", 2.0, 1e-10))
+			Expect(col[3]).To(BeNumerically("~", 3.0, 1e-10))
+			Expect(col[4]).To(BeNumerically("~", 4.0, 1e-10))
+			Expect(col[5]).To(BeNumerically("~", 5.0, 1e-10))
+			Expect(col[9]).To(BeNumerically("~", 9.0, 1e-10))
+		})
+
+		It("EMA window size 1 returns original values", func() {
+			// alpha = 2/(1+1) = 1.0, so EMA = current value
+			result := df.Rolling(1).EMA()
+			Expect(result.Err()).NotTo(HaveOccurred())
+			col := result.Column(aapl, data.Price)
+			for idx, val := range col {
+				Expect(val).To(Equal(float64(idx + 1)))
+			}
+		})
+
+		It("EMA works with multiple assets and metrics", func() {
+			base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, 5)
+			for idx := range times {
+				times[idx] = base.AddDate(0, 0, idx)
+			}
+
+			vals := [][]float64{
+				{10, 20, 30, 40, 50},        // AAPL Price
+				{100, 200, 300, 400, 500},   // GOOG Price
+			}
+			multi, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
+				[]data.Metric{data.Price}, data.Daily, vals)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Window=3, alpha=0.5
+			// AAPL: seed=(10+20+30)/3=20, idx3: 0.5*40+0.5*20=30, idx4: 0.5*50+0.5*30=40
+			// GOOG: seed=(100+200+300)/3=200, idx3: 0.5*400+0.5*200=300, idx4: 0.5*500+0.5*300=400
+			result := multi.Rolling(3).EMA()
+			Expect(result.Err()).NotTo(HaveOccurred())
+
+			aaplCol := result.Column(aapl, data.Price)
+			Expect(aaplCol[2]).To(BeNumerically("~", 20.0, 1e-10))
+			Expect(aaplCol[3]).To(BeNumerically("~", 30.0, 1e-10))
+			Expect(aaplCol[4]).To(BeNumerically("~", 40.0, 1e-10))
+
+			googCol := result.Column(goog, data.Price)
+			Expect(googCol[2]).To(BeNumerically("~", 200.0, 1e-10))
+			Expect(googCol[3]).To(BeNumerically("~", 300.0, 1e-10))
+			Expect(googCol[4]).To(BeNumerically("~", 400.0, 1e-10))
+		})
+
+		It("EMA first n-1 values are NaN", func() {
+			result := df.Rolling(5).EMA()
+			col := result.Column(aapl, data.Price)
+			for idx := range 4 {
+				Expect(math.IsNaN(col[idx])).To(BeTrue())
+			}
+			Expect(math.IsNaN(col[4])).To(BeFalse())
 		})
 	})
 })

@@ -29,6 +29,11 @@
 //   - [Momentum](ctx, u, period, metrics...): Percent change over a lookback period.
 //   - [EarningsYield](ctx, u, t...): Earnings per share divided by price.
 //   - [Volatility](ctx, u, period, metrics...): Rolling standard deviation of returns.
+//   - [RSI](ctx, u, period, metrics...): Relative Strength Index with Wilder smoothing.
+//   - [MACD](ctx, u, fast, slow, signalPeriod, metrics...): Moving average convergence divergence (line, signal, histogram).
+//   - [BollingerBands](ctx, u, period, numStdDev, metrics...): Upper, middle, and lower Bollinger Bands.
+//   - [Crossover](ctx, u, fastPeriod, slowPeriod, metrics...): Moving average crossover signal with fast/slow SMAs.
+//   - [ATR](ctx, u, period): Average True Range with Wilder smoothing.
 //
 // # Custom Signals
 //
