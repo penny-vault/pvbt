@@ -40,17 +40,17 @@ A validation scheme produces a list of splits. Each split defines a training dat
 ```go
 package study
 
-type Period struct {
+type DateRange struct {
     Start time.Time
     End   time.Time
 }
 
 type Split struct {
     Name     string // human-readable label, e.g. "Fold 3" or "Walk 2010-2012"
-    FullRange Period // bounding range for the engine run (Train.Start to Test.End)
-    Train    Period // training evaluation window (may overlap FullRange for KFold)
-    Test     Period // test evaluation window
-    Exclude  []Period // date ranges to exclude from train scoring (KFold test folds, overlapping scenarios)
+    FullRange DateRange // bounding range for the engine run (Train.Start to Test.End)
+    Train    DateRange // training evaluation window (may overlap FullRange for KFold)
+    Test     DateRange // test evaluation window
+    Exclude  []DateRange // date ranges to exclude from train scoring (KFold test folds, overlapping scenarios)
 }
 ```
 
@@ -63,7 +63,7 @@ The `Exclude` field handles two cases: (1) KFold, where the training range spans
 Simple single split. Everything before a cutoff date is training, everything after is test.
 
 ```go
-func TrainTest(start, cutoff, end time.Time) []Split
+func TrainTest(start, cutoff, end time.Time) ([]Split, error)
 ```
 
 Returns one `Split` with `Train: {start, cutoff}` and `Test: {cutoff, end}`.
@@ -73,7 +73,7 @@ Returns one `Split` with `Train: {start, cutoff}` and `Test: {cutoff, end}`.
 Divides a date range into k equal windows and rotates which is held out as test.
 
 ```go
-func KFold(start, end time.Time, folds int) []Split
+func KFold(start, end time.Time, folds int) ([]Split, error)
 ```
 
 Returns k splits. Each split's `FullRange` is `[start, end]`, `Test` is the held-out fold, `Train` is `[start, end]`, and `Exclude` contains the test fold's period. The engine runs the full range; `Analyze()` evaluates in-sample performance over `Train` minus `Exclude` dates.
@@ -83,7 +83,7 @@ Returns k splits. Each split's `FullRange` is `[start, end]`, `Test` is the held
 Expanding (or sliding) training window with a fixed-size test window that advances through time.
 
 ```go
-func WalkForward(start, end time.Time, minTrain, testLen, step time.Duration) []Split
+func WalkForward(start, end time.Time, minTrain, testLen, step time.Duration) ([]Split, error)
 ```
 
 Produces splits in chronological order. The first split trains on `[start, start+minTrain)` and tests on `[start+minTrain, start+minTrain+testLen)`. Each subsequent split advances the test window by `step`. Training expands to include all data before the test window.
@@ -95,7 +95,7 @@ An option for sliding (fixed-size) vs expanding training windows may be added la
 Uses named scenarios from the shared scenario library. Each split holds out one (or N) scenarios as the test set and evaluates training on everything else within a bounding date range.
 
 ```go
-func ScenarioLeaveNOut(scenarios []Scenario, boundStart, boundEnd time.Time, holdOut int) []Split
+func ScenarioLeaveNOut(scenarios []Scenario, boundStart, boundEnd time.Time, holdOut int) ([]Split, error)
 ```
 
 When `holdOut` is 1, this is leave-one-out cross-validation on named scenarios. `FullRange` is `[boundStart, boundEnd]`. The held-out scenario defines `Test`. `Train` spans `[boundStart, boundEnd]`. `Exclude` contains the held-out scenario period (and any other scenarios that overlap with it), so `Analyze()` can cleanly separate in-sample from out-of-sample scoring.
@@ -213,19 +213,21 @@ For Bayesian search, `TotalRuns` reflects the current batch only (the total is u
 
 ## Windowed Scoring
 
-The portfolio performance metric system (`PerformanceMetric()`) computes over the full equity curve. For validation, scoring must be restricted to specific date windows (train or test). The framework provides a `WindowedScore` function that:
+The portfolio performance metric system (`PerformanceMetric()`) computes over the full equity curve. For validation, scoring must be restricted to specific date windows (train or test).
 
-1. Extracts the equity curve DataFrame from `RunResult.Portfolio` via `PerfData()`.
-2. Slices it to the target date range using `DataFrame.Between(start, end)`.
-3. Computes the requested metric directly from the sliced equity values.
+The existing `PerformanceMetricQuery` supports relative windowing via `Window(period)` using `data.Period` (a relative lookback). This spec adds absolute date range support:
 
-This follows the same approach the stress test uses in `study/stress/analyze.go` -- direct computation from raw equity data rather than the `PerformanceMetric()` API. The computation logic is shared in a `study` package helper so both the stress test and optimization study can use it.
+```go
+// Added to portfolio/metric_query.go:
+func (q PerformanceMetricQuery) AbsoluteWindow(start, end time.Time) PerformanceMetricQuery
+```
+
+`AbsoluteWindow` restricts the metric computation to an absolute `[start, end]` date range within the equity curve. It slices the underlying data before computing the metric, using the same internal computation path as the existing `Window()` method.
+
+The `study` package wraps this with a convenience function:
 
 ```go
 package study
-
-// WindowedScore computes a metric over a date range within a portfolio's equity curve.
-func WindowedScore(portfolio report.ReportablePortfolio, window Period, metric Metric) float64
 
 type Metric int
 
@@ -236,9 +238,22 @@ const (
     MetricSortino
     MetricCalmar
 )
+
+// WindowedScore computes a metric over an absolute date range within a portfolio.
+func WindowedScore(portfolio report.ReportablePortfolio, window DateRange, metric Metric) float64
 ```
 
-If the window contains insufficient data for the metric (e.g., fewer than 2 data points), `WindowedScore` returns `math.NaN()`.
+`WindowedScore` calls `portfolio.PerformanceMetric(metric).AbsoluteWindow(window.Start, window.End).Value()`. If the window contains insufficient data, it returns `math.NaN()`.
+
+For in-sample scoring with `Exclude` ranges (KFold, ScenarioLeaveNOut), a variant is provided:
+
+```go
+// WindowedScoreExcluding computes a metric over a date range, excluding specified sub-ranges
+// from the computation. Used for KFold where the training window contains the test fold.
+func WindowedScoreExcluding(portfolio report.ReportablePortfolio, window DateRange, exclude []DateRange, metric Metric) float64
+```
+
+This slices the equity curve to `window`, removes data points falling within any `exclude` range, then computes the metric over the remaining data. The stress test's manual metric computation in `analyze.go` can be migrated to use `AbsoluteWindow` as well, consolidating all windowed metric logic in one place.
 
 ## Objective Functions and Runner Scoring
 
@@ -356,13 +371,15 @@ This decision is deferred to implementation. The `SearchStrategy` interface isol
 
 ## Implementation Order
 
-1. Extract scenarios from `study/stress/` into `study/`
-2. Update stress test to use `study.Scenario`
-3. Add `Period`, `Split`, and validation scheme functions to `study/`
-4. Extend `ParamSweep` with `Min()`/`Max()` methods
-5. Add `CombinationScore` type and `SearchStrategy` interface to `study/`
-6. Implement Grid and Random search strategies
-7. Update Runner to support `SearchStrategy`, `Splits`, and `Objective`
-8. Implement `study/optimize/` with `Analyze()` and report composition
-9. Add CLI `optimize` subcommand
-10. Implement Bayesian search strategy
+1. Add `AbsoluteWindow` to `PerformanceMetricQuery` in the portfolio package
+2. Extract scenarios from `study/stress/` into `study/`
+3. Update stress test to use `study.Scenario`
+4. Add `DateRange`, `Split`, and validation scheme functions to `study/`
+5. Add `Metric`, `WindowedScore`, and `WindowedScoreExcluding` to `study/`
+6. Extend `ParamSweep` with `Min()`/`Max()` methods and stored range bounds
+7. Add `CombinationScore` type and `SearchStrategy` interface to `study/`
+8. Implement Grid and Random search strategies
+9. Update Runner to support `SearchStrategy`, `Splits`, and `Objective`
+10. Implement `study/optimize/` with `Analyze()` and report composition
+11. Add CLI `optimize` subcommand
+12. Implement Bayesian search strategy
