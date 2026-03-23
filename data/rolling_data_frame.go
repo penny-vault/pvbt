@@ -232,3 +232,37 @@ func (r *RollingDataFrame) Percentile(percentile float64) *DataFrame {
 		return out
 	})
 }
+
+// EMA returns a DataFrame with the exponential moving average over the
+// window. The smoothing factor is alpha = 2 / (n + 1) where n is the
+// window size. The first n-1 rows are NaN. The EMA is seeded with the
+// simple moving average of the first n values.
+func (r *RollingDataFrame) EMA() *DataFrame {
+	if r.df.err != nil {
+		return WithErr(r.df.err)
+	}
+
+	return r.df.Apply(func(col []float64) []float64 {
+		out := make([]float64, len(col))
+		windowSize := r.window
+		alpha := 2.0 / float64(windowSize+1)
+
+		for idx := range col {
+			if idx < windowSize-1 {
+				out[idx] = math.NaN()
+
+				continue
+			}
+
+			if idx == windowSize-1 {
+				out[idx] = stat.Mean(col[:windowSize], nil)
+
+				continue
+			}
+
+			out[idx] = alpha*col[idx] + (1-alpha)*out[idx-1]
+		}
+
+		return out
+	})
+}
