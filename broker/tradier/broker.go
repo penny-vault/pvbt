@@ -3,6 +3,7 @@ package tradier
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 
 	"github.com/penny-vault/pvbt/broker"
@@ -11,12 +12,15 @@ import (
 // TradierBroker implements broker.Broker for the Tradier brokerage.
 // Full implementation is in progress; this stub anchors the package types.
 type TradierBroker struct {
-	client   *apiClient
-	streamer *activityStreamer
-	messages chan []byte
-	fills    chan broker.Fill
-	mu       sync.Mutex
-	sandbox  bool
+	client      *apiClient
+	auth        *tokenManager
+	streamer    *activityStreamer
+	messages    chan []byte
+	fills       chan broker.Fill
+	mu          sync.Mutex
+	sandbox     bool
+	tokenFile   string
+	callbackURL string
 }
 
 // Option configures a TradierBroker.
@@ -26,6 +30,20 @@ type Option func(*TradierBroker)
 func WithSandbox() Option {
 	return func(tb *TradierBroker) {
 		tb.sandbox = true
+	}
+}
+
+// WithTokenFile configures the path to the token persistence file.
+func WithTokenFile(path string) Option {
+	return func(tb *TradierBroker) {
+		tb.tokenFile = path
+	}
+}
+
+// WithCallbackURL configures the OAuth callback URL.
+func WithCallbackURL(callbackURL string) Option {
+	return func(tb *TradierBroker) {
+		tb.callbackURL = callbackURL
 	}
 }
 
@@ -47,14 +65,62 @@ func (tb *TradierBroker) Fills() <-chan broker.Fill {
 	return tb.fills
 }
 
-// Connect establishes a session with Tradier.
+// Connect establishes an authenticated session with Tradier.
 func (tb *TradierBroker) Connect(ctx context.Context) error {
+	mode, modeErr := detectAuthMode()
+	if modeErr != nil {
+		return fmt.Errorf("tradier: connect: %w", modeErr)
+	}
+
+	callbackURL := tb.callbackURL
+	if callbackURL == "" {
+		callbackURL = os.Getenv("TRADIER_CALLBACK_URL")
+	}
+
+	tokenFile := tb.tokenFile
+	if tokenFile == "" {
+		tokenFile = os.Getenv("TRADIER_TOKEN_FILE")
+	}
+
+	clientID := os.Getenv("TRADIER_CLIENT_ID")
+	clientSecret := os.Getenv("TRADIER_CLIENT_SECRET")
+
+	tb.auth = newTokenManager(mode, clientID, clientSecret, callbackURL, tokenFile)
+
+	// Attempt to load existing OAuth tokens (ignored in static mode).
+	if mode == authModeOAuth {
+		tokens, loadErr := loadTokens(tb.auth.tokenFile)
+		if loadErr == nil {
+			tb.auth.tokens = tokens
+		}
+	}
+
+	// Ensure we have a valid access token.
+	if ensureErr := tb.auth.ensureValidToken(); ensureErr != nil {
+		if authErr := tb.auth.startAuthFlow(); authErr != nil {
+			return fmt.Errorf("tradier: connect: %w", authErr)
+		}
+	}
+
 	baseURL := productionBaseURL
 	if tb.sandbox {
 		baseURL = sandboxBaseURL
 	}
 
-	tb.client = newAPIClient(baseURL, "", "")
+	accountID := os.Getenv("TRADIER_ACCOUNT_ID")
+	tb.client = newAPIClient(baseURL, tb.auth.accessToken(), accountID)
+
+	tb.auth.onRefresh = func(token string) {
+		tb.mu.Lock()
+		defer tb.mu.Unlock()
+
+		tb.client.setToken(token)
+	}
+
+	if mode == authModeOAuth {
+		tb.auth.startBackgroundRefresh()
+	}
+
 	tb.streamer = newActivityStreamer(tb.client, tb.fills)
 
 	if connectErr := tb.streamer.connect(ctx); connectErr != nil {
@@ -77,6 +143,10 @@ func (tb *TradierBroker) SetToken(token string) {
 
 // Close tears down the broker session.
 func (tb *TradierBroker) Close() error {
+	if tb.auth != nil {
+		tb.auth.stopBackgroundRefresh()
+	}
+
 	return nil
 }
 

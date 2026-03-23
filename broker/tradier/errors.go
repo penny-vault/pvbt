@@ -1,6 +1,10 @@
 package tradier
 
-import "github.com/penny-vault/pvbt/broker"
+import (
+	"errors"
+
+	"github.com/penny-vault/pvbt/broker"
+)
 
 var (
 	ErrMissingCredentials  = broker.ErrMissingCredentials
@@ -11,6 +15,7 @@ var (
 	ErrEmptyOrderGroup     = broker.ErrEmptyOrderGroup
 	ErrNoEntryOrder        = broker.ErrNoEntryOrder
 	ErrMultipleEntryOrders = broker.ErrMultipleEntryOrders
+	ErrTokenExpired        = errors.New("tradier: access token expired, re-authorization required")
 )
 
 // HTTPError is a type alias for broker.HTTPError.

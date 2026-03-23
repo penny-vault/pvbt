@@ -94,3 +94,77 @@ func (client *apiClient) GetQuote(ctx context.Context, symbol string) (float64, 
 func (client *apiClient) CreateStreamSession(ctx context.Context) (string, error) {
 	return client.createStreamSession(ctx)
 }
+
+// --- Auth test exports ---
+
+// AuthModeStatic and AuthModeOAuth expose the authMode constants for testing.
+const (
+	AuthModeStatic = authModeStatic
+	AuthModeOAuth  = authModeOAuth
+)
+
+// TokenStore is an exported alias for tokenStore, used in auth tests.
+type TokenStore = tokenStore
+
+// DetectAuthMode exposes detectAuthMode for testing.
+func DetectAuthMode() (authMode, error) {
+	return detectAuthMode()
+}
+
+// SaveTokens exposes saveTokens for testing.
+func SaveTokens(path string, store *tokenStore) error {
+	return saveTokens(path, store)
+}
+
+// LoadTokens exposes loadTokens for testing.
+func LoadTokens(path string) (*tokenStore, error) {
+	return loadTokens(path)
+}
+
+// NewTokenManagerForTest constructs a tokenManager for testing.
+func NewTokenManagerForTest(mode authMode, clientID, clientSecret, callbackURL, tokenFile string) *tokenManager {
+	return newTokenManager(mode, clientID, clientSecret, callbackURL, tokenFile)
+}
+
+// SetAuthBaseURL sets the authBaseURL on a tokenManager for testing.
+func SetAuthBaseURL(tm *tokenManager, baseURL string) {
+	tm.authBaseURL = baseURL
+}
+
+// SetListenerAddrCh sets the listenerAddrCh on a tokenManager for testing.
+func SetListenerAddrCh(tm *tokenManager, ch chan string) {
+	tm.listenerAddrCh = ch
+}
+
+// SetTokensForTest replaces the tokenStore on a tokenManager for testing.
+func (tm *tokenManager) SetTokensForTest(store *tokenStore) {
+	tm.tokens = store
+}
+
+// AccessToken exposes the accessToken method for testing.
+func (tm *tokenManager) AccessToken() string {
+	return tm.accessToken()
+}
+
+// EnsureValidToken exposes ensureValidToken for testing.
+func (tm *tokenManager) EnsureValidToken() error {
+	return tm.ensureValidToken()
+}
+
+// ExchangeAuthCode exposes exchangeAuthCode for testing.
+func (tm *tokenManager) ExchangeAuthCode(_ string, code string) error {
+	return tm.exchangeAuthCode(context.Background(), code)
+}
+
+// RefreshAccessToken exposes refreshAccessToken for testing.
+func (tm *tokenManager) RefreshAccessToken() error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+
+	return tm.refreshAccessToken()
+}
+
+// StartAuthFlow exposes startAuthFlow for testing.
+func (tm *tokenManager) StartAuthFlow() error {
+	return tm.startAuthFlow()
+}
