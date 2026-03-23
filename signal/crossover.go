@@ -44,15 +44,8 @@ func Crossover(ctx context.Context, assetUniverse universe.Universe, fastPeriod,
 		return data.WithErr(fmt.Errorf("Crossover: need at least 2 data points, got %d", df.Len()))
 	}
 
-	fastWindow := fastPeriod.N
-	if fastWindow > df.Len() {
-		fastWindow = df.Len()
-	}
-
-	slowWindow := slowPeriod.N
-	if slowWindow > df.Len() {
-		slowWindow = df.Len()
-	}
+	fastWindow := min(fastPeriod.N, df.Len())
+	slowWindow := min(slowPeriod.N, df.Len())
 
 	fastSMA := df.Rolling(fastWindow).Mean().Last().RenameMetric(metric, CrossoverFastSignal)
 	slowSMA := df.Rolling(slowWindow).Mean().Last().RenameMetric(metric, CrossoverSlowSignal)
