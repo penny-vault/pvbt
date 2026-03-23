@@ -1814,6 +1814,11 @@ func (a *Account) Use(middleware ...Middleware) {
 	a.middleware = append(a.middleware, middleware...)
 }
 
+// ClearMiddleware removes all registered middleware.
+func (a *Account) ClearMiddleware() {
+	a.middleware = nil
+}
+
 // NewBatch creates an empty Batch for the given timestamp, bound to this
 // account for position and price queries.
 func (a *Account) NewBatch(timestamp time.Time) *Batch {

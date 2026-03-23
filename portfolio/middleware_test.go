@@ -260,6 +260,42 @@ var _ = Describe("Middleware", func() {
 	})
 })
 
+var _ = Describe("ClearMiddleware", func() {
+	It("removes all registered middleware so subsequent batches run without middleware", func() {
+		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
+		t1 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+
+		mb := newMockBroker()
+		mb.submitFn = func(_ broker.Order) error { return nil }
+
+		acct := portfolio.New(portfolio.WithCash(100_000, t1), portfolio.WithBroker(mb))
+		df := buildDF(t1, []asset.Asset{spy}, []float64{100.0}, []float64{100.0})
+		acct.UpdatePrices(df)
+
+		// Register middleware that annotates every batch.
+		mw := &testMiddleware{removeBuy: true}
+		acct.Use(mw)
+
+		// Clear all middleware.
+		acct.ClearMiddleware()
+
+		batch := acct.NewBatch(t1)
+		batch.Order(context.Background(), spy, portfolio.Buy, 10)
+
+		err := acct.ExecuteBatch(context.Background(), batch)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Middleware was cleared, so it must not have been called.
+		Expect(mw.called).To(BeFalse())
+
+		// No middleware annotations should appear.
+		annotations := acct.Annotations()
+		for _, ann := range annotations {
+			Expect(ann.Key).NotTo(Equal("risk:test"))
+		}
+	})
+})
+
 var _ = Describe("Middleware annotation from middleware", func() {
 	It("middleware annotations flow through to portfolio", func() {
 		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
