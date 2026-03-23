@@ -26,6 +26,7 @@ import (
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -592,6 +593,190 @@ var _ = Describe("SimulatedBroker", func() {
 		})
 	})
 
+	Context("Fill pipeline integration", func() {
+		It("uses configured fill model instead of close price", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 150.0},
+				date:   date,
+			}, date)
+			simBroker.SetFillPipeline(fill.NewPipeline(&stubBaseModel{price: 200.0}, nil))
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Price).To(Equal(200.0))
+			Expect(ff.Qty).To(Equal(10.0))
+		})
+
+		It("defaults to close-price fill when no fill model is configured", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 150.0},
+				date:   date,
+			}, date)
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Price).To(Equal(150.0))
+			Expect(ff.Qty).To(Equal(10.0))
+		})
+
+		It("applies adjusters in order", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 150.0},
+				date:   date,
+			}, date)
+			simBroker.SetFillPipeline(fill.NewPipeline(
+				&stubBaseModel{price: 200.0},
+				[]fill.Adjuster{fill.Slippage(fill.Percent(0.01))},
+			))
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			// Buy slippage: 200 + 200*0.01 = 202
+			Expect(ff.Price).To(Equal(202.0))
+			Expect(ff.Qty).To(Equal(10.0))
+		})
+
+		It("handles partial fills from market impact", func() {
+			simBroker := engine.NewSimulatedBroker()
+			// Provide volume data for market impact adjuster.
+			simBroker.SetPriceProvider(&mockVolumePriceProvider{
+				close:  map[asset.Asset]float64{aapl: 100.0},
+				volume: map[asset.Asset]float64{aapl: 100.0}, // very low volume
+				date:   date,
+			}, date)
+			simBroker.SetFillPipeline(fill.NewPipeline(
+				fill.Close(),
+				[]fill.Adjuster{fill.MarketImpact(fill.LargeCap)},
+			))
+
+			// Order for 50 shares but volume is only 100, threshold is 5% = 5 shares max.
+			err := simBroker.Submit(context.Background(), broker.Order{
+				ID:        "partial-1",
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       50,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Qty).To(Equal(5.0)) // 100 * 0.05 = 5
+			Expect(ff.Price).To(BeNumerically(">", 100.0)) // price should be adjusted upward for buy
+		})
+
+		It("cancels partial fill remainder after second bar", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockVolumePriceProvider{
+				close:  map[asset.Asset]float64{aapl: 100.0},
+				volume: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+			simBroker.SetFillPipeline(fill.NewPipeline(
+				fill.Close(),
+				[]fill.Adjuster{fill.MarketImpact(fill.LargeCap)},
+			))
+
+			// Submit order for 50 shares, only 5 fill (5% of 100 volume).
+			err := simBroker.Submit(context.Background(), broker.Order{
+				ID:        "partial-cancel",
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       50,
+				OrderType: broker.Market,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Drain bar-1 partial fill.
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Qty).To(Equal(5.0))
+
+			// Bar 2: EvaluatePending processes remainder, still partial.
+			date2 := date.AddDate(0, 0, 1)
+			simBroker.SetPriceProvider(&mockVolumePriceProvider{
+				close:  map[asset.Asset]float64{aapl: 100.0},
+				volume: map[asset.Asset]float64{aapl: 100.0},
+				date:   date2,
+			}, date2)
+			simBroker.EvaluatePending()
+
+			// Should get another partial fill on bar 2.
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Qty).To(BeNumerically(">", 0))
+
+			// Bar 3: remainder should be cancelled (bars >= 2).
+			date3 := date.AddDate(0, 0, 2)
+			simBroker.SetPriceProvider(&mockVolumePriceProvider{
+				close:  map[asset.Asset]float64{aapl: 100.0},
+				volume: map[asset.Asset]float64{aapl: 100.0},
+				date:   date3,
+			}, date3)
+			simBroker.EvaluatePending()
+
+			// No more fills after cancellation.
+			Consistently(simBroker.Fills()).ShouldNot(Receive())
+		})
+
+		It("converts dollar-amount orders using base model price before adjusters", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 150.0},
+				date:   date,
+			}, date)
+			simBroker.SetFillPipeline(fill.NewPipeline(
+				&stubBaseModel{price: 200.0},
+				[]fill.Adjuster{fill.Slippage(fill.Percent(0.01))},
+			))
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Amount:    1000, // 1000/200 = 5 shares
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var ff broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&ff))
+			Expect(ff.Qty).To(Equal(5.0))
+			// Price should include slippage: 200 + 200*0.01 = 202
+			Expect(ff.Price).To(Equal(202.0))
+		})
+	})
+
 	Context("Broker lifecycle", func() {
 		It("calls Close on the broker when engine.Close() is called", func() {
 			mock := &mockLifecycleBroker{}
@@ -629,3 +814,41 @@ func (mock *mockLifecycleBroker) Replace(_ context.Context, _ string, _ broker.O
 func (mock *mockLifecycleBroker) Orders(_ context.Context) ([]broker.Order, error)      { return nil, nil }
 func (mock *mockLifecycleBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
 func (mock *mockLifecycleBroker) Balance(_ context.Context) (broker.Balance, error)     { return broker.Balance{}, nil }
+
+// stubBaseModel is a fill.BaseModel that always returns a fixed price.
+type stubBaseModel struct {
+	price float64
+}
+
+func (sb *stubBaseModel) Fill(_ context.Context, order broker.Order, _ *data.DataFrame) (fill.FillResult, error) {
+	return fill.FillResult{
+		Price:    sb.price,
+		Quantity: order.Qty,
+	}, nil
+}
+
+// mockVolumePriceProvider returns close and volume data for fill pipeline tests.
+type mockVolumePriceProvider struct {
+	close  map[asset.Asset]float64
+	volume map[asset.Asset]float64
+	date   time.Time
+}
+
+func (mv *mockVolumePriceProvider) Prices(_ context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
+	times := []time.Time{mv.date}
+	metrics := []data.Metric{data.MetricClose, data.Volume}
+
+	vals := make([]float64, len(assets)*2)
+	for idx, aa := range assets {
+		vals[idx*2+0] = mv.close[aa]
+		vals[idx*2+1] = mv.volume[aa]
+	}
+
+	numCols := len(assets) * len(metrics)
+	df, err := data.NewDataFrame(times, assets, metrics, data.Daily, data.SlabToColumns(vals, numCols, 1))
+	if err != nil {
+		return nil, err
+	}
+
+	return df, nil
+}
