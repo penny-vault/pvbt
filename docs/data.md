@@ -315,6 +315,7 @@ df.Rolling(20).Min()                // rolling min
 df.Rolling(20).Std()                // rolling standard deviation
 df.Rolling(20).Variance()           // rolling variance
 df.Rolling(20).Percentile(0.9)      // rolling 90th percentile
+df.Rolling(20).EMA()                // exponential moving average (alpha = 2/(n+1))
 ```
 
 Combine with `Metrics` to apply to a specific metric:
@@ -434,6 +435,11 @@ The input DataFrame must contain the metrics the signal needs. `Momentum` needs 
 | `Momentum(ctx, u, period, metrics...)` | Percent change over a lookback period |
 | `EarningsYield(ctx, u, t...)` | Earnings per share divided by price |
 | `Volatility(ctx, u, period, metrics...)` | Rolling standard deviation of returns |
+| `RSI(ctx, u, period, metrics...)` | Relative Strength Index (Wilder smoothing, 0--100) |
+| `MACD(ctx, u, fast, slow, signal, metrics...)` | MACD line, signal line, and histogram |
+| `BollingerBands(ctx, u, period, stddev, metrics...)` | Upper, middle, and lower bands |
+| `Crossover(ctx, u, fast, slow, metrics...)` | Fast/slow SMA crossover indicator (+1/--1) |
+| `ATR(ctx, u, period)` | Average True Range (Wilder smoothing) |
 
 ### Custom signals
 
