@@ -16,6 +16,8 @@
 package engine
 
 import (
+	"strings"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/risk"
@@ -74,8 +76,9 @@ func (e *Engine) buildMiddlewareFromConfig() error {
 		if len(cfg.Tax.Substitutes) > 0 {
 			harvesterCfg.Substitutes = make(map[asset.Asset]asset.Asset, len(cfg.Tax.Substitutes))
 			for fromTicker, toTicker := range cfg.Tax.Substitutes {
-				fromAsset := e.Asset(fromTicker)
-				toAsset := e.Asset(toTicker)
+				// Viper lowercases TOML keys; uppercase for ticker resolution.
+				fromAsset := e.Asset(strings.ToUpper(fromTicker))
+				toAsset := e.Asset(strings.ToUpper(toTicker))
 				harvesterCfg.Substitutes[fromAsset] = toAsset
 			}
 		}

@@ -1,0 +1,18 @@
+[risk]
+profile = "moderate"
+max_position_size = 0.15
+max_position_count = 20
+drawdown_circuit_breaker = 0.12
+volatility_scaler_lookback = 60
+gross_exposure_limit = 1.5
+net_exposure_limit = 1.0
+
+[tax]
+enabled = true
+loss_threshold = 0.05
+gain_offset_only = false
+
+[tax.substitutes]
+SPY = "VOO"
+QQQ = "QQQM"
+IWM = "VTWO"

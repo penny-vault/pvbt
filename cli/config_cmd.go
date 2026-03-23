@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 
 	"github.com/penny-vault/pvbt/config"
 	"github.com/spf13/cobra"
@@ -177,7 +178,7 @@ func printTaxSection(out *os.File, cfg *config.Config) {
 		sort.Strings(keys)
 
 		for _, k := range keys {
-			fmt.Fprintf(out, "    %s -> %s\n", k, tc.Substitutes[k])
+			fmt.Fprintf(out, "    %s -> %s\n", strings.ToUpper(k), tc.Substitutes[k])
 		}
 	}
 }

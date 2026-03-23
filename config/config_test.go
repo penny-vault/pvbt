@@ -492,4 +492,46 @@ var _ = Describe("Config", func() {
 			Expect(resolved.DrawdownCircuitBreaker).To(BeNil())
 		})
 	})
+
+	Describe("End-to-end loading from testdata/full.toml", func() {
+		It("loads the full config fixture correctly", func() {
+			cfg, err := config.Load("testdata/full.toml")
+			Expect(err).NotTo(HaveOccurred())
+
+			// Risk
+			Expect(cfg.Risk.Profile).To(Equal("moderate"))
+			Expect(cfg.Risk.MaxPositionSize).NotTo(BeNil())
+			Expect(*cfg.Risk.MaxPositionSize).To(Equal(0.15))
+			Expect(cfg.Risk.MaxPositionCount).NotTo(BeNil())
+			Expect(*cfg.Risk.MaxPositionCount).To(Equal(20))
+			Expect(cfg.Risk.DrawdownCircuitBreaker).NotTo(BeNil())
+			Expect(*cfg.Risk.DrawdownCircuitBreaker).To(Equal(0.12))
+			Expect(cfg.Risk.VolatilityScalerLookback).NotTo(BeNil())
+			Expect(*cfg.Risk.VolatilityScalerLookback).To(Equal(60))
+			Expect(cfg.Risk.GrossExposureLimit).NotTo(BeNil())
+			Expect(*cfg.Risk.GrossExposureLimit).To(Equal(1.5))
+			Expect(cfg.Risk.NetExposureLimit).NotTo(BeNil())
+			Expect(*cfg.Risk.NetExposureLimit).To(Equal(1.0))
+
+			// Tax
+			Expect(cfg.Tax.Enabled).To(BeTrue())
+			Expect(cfg.Tax.LossThreshold).To(Equal(0.05))
+			Expect(cfg.Tax.GainOffsetOnly).To(BeFalse())
+			// Viper lowercases TOML keys, so substitutes keys are lowercase.
+			Expect(cfg.Tax.Substitutes).To(HaveLen(3))
+			Expect(cfg.Tax.Substitutes["spy"]).To(Equal("VOO"))
+			Expect(cfg.Tax.Substitutes["qqq"]).To(Equal("QQQM"))
+			Expect(cfg.Tax.Substitutes["iwm"]).To(Equal("VTWO"))
+
+			// ResolveProfile should apply overrides
+			resolved := cfg.ResolveProfile()
+			Expect(*resolved.MaxPositionSize).To(Equal(0.15))
+			// DrawdownCircuitBreaker override (0.12) differs from moderate default (0.15)
+			Expect(*resolved.DrawdownCircuitBreaker).To(Equal(0.12))
+			// MaxPositionCount is added (not in moderate baseline)
+			Expect(*resolved.MaxPositionCount).To(Equal(20))
+
+			Expect(cfg.HasMiddleware()).To(BeTrue())
+		})
+	})
 })
