@@ -24,42 +24,42 @@ All signals follow the existing pattern: plain functions in the `signal` package
 ### RSI
 
 ```go
-func RSI(ctx context.Context, u universe.Universe, period int, metrics ...data.Metric) *data.DataFrame
+func RSI(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame
 ```
 
-Computes percentage changes, separates gains and losses, applies EMA smoothing over `period`, returns values 0-100. Output metric: `RSISignal`. Needs `period + 1` rows.
+Computes percentage changes, separates gains and losses, applies Wilder's smoothing (`alpha = 1/n`, not standard EMA) via `Apply()` over `period`, returns values 0-100. Output metric: `RSISignal`.
 
 ### MACD
 
 ```go
-func MACD(ctx context.Context, u universe.Universe, fast, slow, signalPeriod int, metrics ...data.Metric) *data.DataFrame
+func MACD(ctx context.Context, u universe.Universe, fast, slow, signalPeriod portfolio.Period, metrics ...data.Metric) *data.DataFrame
 ```
 
-Fast EMA minus slow EMA produces MACD line. EMA of MACD line produces signal line. Difference produces histogram. Output metrics: `MACDLineSignal`, `MACDSignalLineSignal`, `MACDHistogramSignal`. Needs `slow + signalPeriod` rows.
+Fast EMA minus slow EMA produces MACD line. EMA of MACD line produces signal line. Difference produces histogram. Output metrics: `MACDLineSignal`, `MACDSignalLineSignal`, `MACDHistogramSignal`.
 
 ### Bollinger Bands
 
 ```go
-func BollingerBands(ctx context.Context, u universe.Universe, period int, numStdDev float64, metrics ...data.Metric) *data.DataFrame
+func BollingerBands(ctx context.Context, u universe.Universe, period portfolio.Period, numStdDev float64, metrics ...data.Metric) *data.DataFrame
 ```
 
-Middle band = `Rolling(period).Mean()`. Upper/lower = middle +/- `numStdDev * Rolling(period).Std()`. Output metrics: `BollingerUpperSignal`, `BollingerMiddleSignal`, `BollingerLowerSignal`. Needs `period` rows.
+Middle band = `Rolling(n).Mean()`. Upper/lower = middle +/- `numStdDev * Rolling(n).Std()` where `n` is the number of rows in the window returned by `u.Window(ctx, period)`. Output metrics: `BollingerUpperSignal`, `BollingerMiddleSignal`, `BollingerLowerSignal`.
 
 ### Crossover
 
 ```go
-func Crossover(ctx context.Context, u universe.Universe, fastPeriod, slowPeriod int, metrics ...data.Metric) *data.DataFrame
+func Crossover(ctx context.Context, u universe.Universe, fastPeriod, slowPeriod portfolio.Period, metrics ...data.Metric) *data.DataFrame
 ```
 
-Computes SMA for both periods. Crossover indicator: +1 when fast > slow, -1 when fast < slow. Output metrics: `CrossoverFastSignal`, `CrossoverSlowSignal`, `CrossoverSignal`. Needs `slowPeriod` rows.
+Computes SMA for both periods. Crossover indicator: +1 when fast > slow, -1 when fast < slow. Output metrics: `CrossoverFastSignal`, `CrossoverSlowSignal`, `CrossoverSignal`.
 
 ### ATR
 
 ```go
-func ATR(ctx context.Context, u universe.Universe, period int) *data.DataFrame
+func ATR(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame
 ```
 
-No `metrics` parameter -- always uses High, Low, Close. True Range = max(high-low, |high-prevClose|, |low-prevClose|). EMA of True Range over `period`. Output metric: `ATRSignal`. Needs `period + 1` rows.
+No `metrics` parameter -- always uses High, Low, Close. True Range = max(high-low, |high-prevClose|, |low-prevClose|). Smoothed with Wilder's method (`alpha = 1/n`) via full-column `Apply()`, same as RSI. Output metric: `ATRSignal`.
 
 ## Constants
 
@@ -119,7 +119,9 @@ Tests use Ginkgo/Gomega with `mockDataSource` from `helpers_test.go`.
 
 ## Design Decisions
 
-- **Textbook defaults only:** RSI uses Wilder's EMA, MACD uses EMA, Bollinger uses SMA. No option to swap. Non-standard variants can be composed from DataFrame primitives.
+- **`portfolio.Period` for all lookback parameters:** Matches the existing signal convention. `Window()` handles calendar-to-bar conversion; signals use the row count of the returned DataFrame for rolling window sizes.
+- **Textbook defaults only:** RSI uses Wilder's smoothing (`alpha = 1/n`), MACD uses standard EMA (`alpha = 2/(n+1)`), Bollinger uses SMA. No option to swap. Non-standard variants can be composed from DataFrame primitives.
+- **RSI and ATR use Wilder's smoothing, not `Rolling(n).EMA()`:** Wilder's smoothing factor (`alpha = 1/n`) differs from standard EMA (`alpha = 2/(n+1)`). Both RSI and ATR compute it via full-column `Apply()` with internal running state, rather than calling the `EMA()` method.
 - **Explicit parameters, no hidden defaults:** All lookback periods are required arguments.
 - **Multi-output signals return multi-metric DataFrames:** MACD, Bollinger Bands, and Crossover each return a single DataFrame with multiple metric columns rather than separate functions.
 - **EMA is a public DataFrame operation:** Added to `RollingDataFrame` so strategy authors can use it directly, keeping signal implementations thin.
