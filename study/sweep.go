@@ -32,6 +32,8 @@ type ParamSweep struct {
 	field    string
 	values   []string
 	isPreset bool
+	min      string
+	max      string
 }
 
 // Field returns the name of the parameter field being swept.
@@ -43,6 +45,12 @@ func (ps ParamSweep) Values() []string { return ps.values }
 // IsPreset reports whether this sweep varies named presets rather than a single field.
 func (ps ParamSweep) IsPreset() bool { return ps.isPreset }
 
+// Min returns the string-encoded lower bound of the sweep range, or empty for discrete sweeps.
+func (ps ParamSweep) Min() string { return ps.min }
+
+// Max returns the string-encoded upper bound of the sweep range, or empty for discrete sweeps.
+func (ps ParamSweep) Max() string { return ps.max }
+
 // SweepRange generates values from min to max (inclusive) with the given step.
 func SweepRange[T Numeric](field string, min, max, step T) ParamSweep {
 	var values []string
@@ -50,7 +58,7 @@ func SweepRange[T Numeric](field string, min, max, step T) ParamSweep {
 		values = append(values, fmt.Sprintf("%v", val))
 	}
 
-	return ParamSweep{field: field, values: values}
+	return ParamSweep{field: field, values: values, min: fmt.Sprintf("%v", min), max: fmt.Sprintf("%v", max)}
 }
 
 // SweepDuration generates duration values from min to max with the given step.
@@ -60,7 +68,7 @@ func SweepDuration(field string, min, max, step time.Duration) ParamSweep {
 		values = append(values, val.String())
 	}
 
-	return ParamSweep{field: field, values: values}
+	return ParamSweep{field: field, values: values, min: min.String(), max: max.String()}
 }
 
 // SweepValues provides explicit string values for a field.

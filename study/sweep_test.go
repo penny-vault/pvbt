@@ -73,6 +73,29 @@ var _ = Describe("ParamSweep", func() {
 	})
 })
 
+var _ = Describe("ParamSweep Min/Max", func() {
+	It("returns min and max for SweepRange", func() {
+		sweep := study.SweepRange("lookback", 3.0, 24.0, 1.0)
+		Expect(sweep.Min()).To(Equal("3"))
+		Expect(sweep.Max()).To(Equal("24"))
+	})
+	It("returns min and max for SweepDuration", func() {
+		sweep := study.SweepDuration("hold", time.Hour, 24*time.Hour, time.Hour)
+		Expect(sweep.Min()).To(Equal(time.Hour.String()))
+		Expect(sweep.Max()).To(Equal((24 * time.Hour).String()))
+	})
+	It("returns empty for SweepValues", func() {
+		sweep := study.SweepValues("universe", "SPY,TLT", "QQQ,SHY")
+		Expect(sweep.Min()).To(BeEmpty())
+		Expect(sweep.Max()).To(BeEmpty())
+	})
+	It("returns empty for SweepPresets", func() {
+		sweep := study.SweepPresets("Classic", "Modern")
+		Expect(sweep.Min()).To(BeEmpty())
+		Expect(sweep.Max()).To(BeEmpty())
+	})
+})
+
 var _ = Describe("CrossProduct", func() {
 	It("cross-products base configs with sweeps", func() {
 		base := []study.RunConfig{
