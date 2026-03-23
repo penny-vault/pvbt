@@ -17,14 +17,16 @@ A composable `FillModel` abstraction plugged into the existing `SimulatedBroker`
 Strategy authors compose them in a pipeline:
 
 ```go
-engine.NewSimulatedBroker(
-    broker.WithFillModel(
+engine.New(strategy,
+    engine.WithFillModel(
         fill.VWAP(),
         fill.SpreadAware(fill.SpreadBPS(10)),
         fill.MarketImpact(fill.SmallCap),
     ),
 )
 ```
+
+`WithFillModel` is an `engine.Option`. The engine passes the fill pipeline to the `SimulatedBroker` during initialization. If `WithBroker` is used (user supplies their own broker), `WithFillModel` is silently ignored.
 
 If no fill model is configured, behavior is unchanged (fill at close).
 
