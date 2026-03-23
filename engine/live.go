@@ -106,6 +106,13 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	// 6b. Apply config-driven middleware if provided.
+	if e.middlewareConfig != nil {
+		if err := e.buildMiddlewareFromConfig(); err != nil {
+			return nil, fmt.Errorf("engine: building middleware from config: %w", err)
+		}
+	}
+
 	liveInfo := DescribeStrategy(e.strategy)
 	if liveInfo.Name != "" {
 		acct.SetMetadata(portfolio.MetaStrategyName, liveInfo.Name)
