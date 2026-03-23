@@ -103,31 +103,6 @@ func (client *apiClient) modifyOrder(ctx context.Context, orderID string, params
 	return nil
 }
 
-func (client *apiClient) getOrder(ctx context.Context, orderID string) (tradierOrderResponse, error) {
-	resp, reqErr := client.resty.R().
-		SetContext(ctx).
-		Get(fmt.Sprintf("/accounts/%s/orders/%s", client.accountID, orderID))
-	if reqErr != nil {
-		return tradierOrderResponse{}, fmt.Errorf("tradier: get order: %w", reqErr)
-	}
-
-	if resp.IsError() {
-		return tradierOrderResponse{}, broker.NewHTTPError(resp.StatusCode(), resp.String())
-	}
-
-	var wrapper tradierOrderWrapper
-	if unmarshalErr := json.Unmarshal(resp.Body(), &wrapper); unmarshalErr != nil {
-		return tradierOrderResponse{}, fmt.Errorf("tradier: decode order response: %w", unmarshalErr)
-	}
-
-	var order tradierOrderResponse
-	if unmarshalErr := json.Unmarshal(wrapper.Order, &order); unmarshalErr != nil {
-		return tradierOrderResponse{}, fmt.Errorf("tradier: decode order: %w", unmarshalErr)
-	}
-
-	return order, nil
-}
-
 func (client *apiClient) getOrders(ctx context.Context) ([]tradierOrderResponse, error) {
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).

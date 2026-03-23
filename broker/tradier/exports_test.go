@@ -95,6 +95,28 @@ func (client *apiClient) CreateStreamSession(ctx context.Context) (string, error
 	return client.createStreamSession(ctx)
 }
 
+// --- Streamer test exports ---
+
+// NewAccountStreamerForTest creates an accountStreamer for testing.
+func NewAccountStreamerForTest(client *apiClient, fills chan broker.Fill, wsEndpoint string, sessionID string, sandbox bool) *accountStreamer {
+	return newAccountStreamer(client, fills, wsEndpoint, sessionID, sandbox)
+}
+
+// ConnectStreamer exposes connect for testing.
+func (streamer *accountStreamer) ConnectStreamer(ctx context.Context) error {
+	return streamer.connect(ctx)
+}
+
+// CloseStreamer exposes close for testing.
+func (streamer *accountStreamer) CloseStreamer() error {
+	return streamer.close()
+}
+
+// StartPollingForTest exposes startPolling for testing.
+func (streamer *accountStreamer) StartPollingForTest(ctx context.Context) {
+	streamer.startPolling(ctx)
+}
+
 // --- Auth test exports ---
 
 // AuthModeStatic and AuthModeOAuth expose the authMode constants for testing.

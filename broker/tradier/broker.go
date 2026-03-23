@@ -14,8 +14,7 @@ import (
 type TradierBroker struct {
 	client      *apiClient
 	auth        *tokenManager
-	streamer    *activityStreamer
-	messages    chan []byte
+	streamer    *accountStreamer
 	fills       chan broker.Fill
 	mu          sync.Mutex
 	sandbox     bool
@@ -50,8 +49,7 @@ func WithCallbackURL(callbackURL string) Option {
 // New creates a new TradierBroker.
 func New(opts ...Option) *TradierBroker {
 	tb := &TradierBroker{
-		fills:    make(chan broker.Fill, 1024),
-		messages: make(chan []byte, 256),
+		fills: make(chan broker.Fill, 1024),
 	}
 	for _, opt := range opts {
 		opt(tb)
@@ -121,13 +119,27 @@ func (tb *TradierBroker) Connect(ctx context.Context) error {
 		tb.auth.startBackgroundRefresh()
 	}
 
-	tb.streamer = newActivityStreamer(tb.client, tb.fills)
-
-	if connectErr := tb.streamer.connect(ctx); connectErr != nil {
-		return connectErr
+	wsEndpoint := productionWSURL
+	if tb.sandbox {
+		wsEndpoint = sandboxWSURL
 	}
 
-	go tb.streamer.listen(ctx, tb.messages)
+	if tb.sandbox {
+		// Sandbox does not support the WebSocket events API; use polling.
+		tb.streamer = newAccountStreamer(tb.client, tb.fills, wsEndpoint, "", true)
+		tb.streamer.startPolling(ctx)
+	} else {
+		sessionID, sessionErr := tb.client.createStreamSession(ctx)
+		if sessionErr != nil {
+			return fmt.Errorf("tradier: connect: create stream session: %w", sessionErr)
+		}
+
+		tb.streamer = newAccountStreamer(tb.client, tb.fills, wsEndpoint, sessionID, false)
+
+		if connectErr := tb.streamer.connect(ctx); connectErr != nil {
+			return connectErr
+		}
+	}
 
 	return nil
 }
@@ -145,6 +157,10 @@ func (tb *TradierBroker) SetToken(token string) {
 func (tb *TradierBroker) Close() error {
 	if tb.auth != nil {
 		tb.auth.stopBackgroundRefresh()
+	}
+
+	if tb.streamer != nil {
+		return tb.streamer.close()
 	}
 
 	return nil

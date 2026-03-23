@@ -35,10 +35,6 @@ type tradierOrderResponse struct {
 	Tag               string  `json:"tag"`
 }
 
-type tradierOrderWrapper struct {
-	Order json.RawMessage `json:"order"`
-}
-
 type tradierOrdersWrapper struct {
 	Orders struct {
 		Order json.RawMessage `json:"order"`
