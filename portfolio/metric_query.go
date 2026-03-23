@@ -127,6 +127,7 @@ func (query PerformanceMetricQuery) Benchmark() PerformanceMetricQuery {
 func (query PerformanceMetricQuery) AbsoluteWindow(start, end time.Time) PerformanceMetricQuery {
 	query.absStart = &start
 	query.absEnd = &end
+
 	return query
 }
 
