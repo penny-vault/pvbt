@@ -323,6 +323,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		// Evaluate pending bracket/OCO orders against intrabar prices.
 		if sb, ok := e.broker.(*SimulatedBroker); ok {
 			sb.SetPriceProvider(e, date)
+			sb.SetDataFetcher(e)
 			sb.EvaluatePending()
 		}
 

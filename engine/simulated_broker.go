@@ -24,11 +24,19 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/rs/zerolog"
 )
 
 const fillChannelSize = 1024
+
+// partialRemainder tracks an order that was partially filled and is
+// waiting to be retried on the next bar.
+type partialRemainder struct {
+	order broker.Order
+	bars  int // how many bars this remainder has been pending
+}
 
 // SimulatedBroker fills all orders at the close price for backtesting.
 // The engine sets a PriceProvider and date before each Compute step.
@@ -40,14 +48,18 @@ type SimulatedBroker struct {
 	groups            map[string][]string // groupID -> orderIDs
 	portfolio         portfolio.Portfolio
 	initialMarginRate float64
+	fillPipeline      *fill.Pipeline
+	partialRemainders map[string]partialRemainder
 }
 
 // NewSimulatedBroker creates a SimulatedBroker with no price provider set.
 func NewSimulatedBroker() *SimulatedBroker {
 	return &SimulatedBroker{
-		fills:   make(chan broker.Fill, fillChannelSize),
-		pending: make(map[string]broker.Order),
-		groups:  make(map[string][]string),
+		fills:             make(chan broker.Fill, fillChannelSize),
+		pending:           make(map[string]broker.Order),
+		groups:            make(map[string][]string),
+		fillPipeline:      fill.NewPipeline(fill.Close(), nil),
+		partialRemainders: make(map[string]partialRemainder),
 	}
 }
 
@@ -65,6 +77,16 @@ func (b *SimulatedBroker) SetPortfolio(p portfolio.Portfolio) {
 // SetInitialMarginRate sets the initial margin rate for short sells.
 func (b *SimulatedBroker) SetInitialMarginRate(rate float64) {
 	b.initialMarginRate = rate
+}
+
+// SetFillPipeline replaces the default close-price fill pipeline.
+func (b *SimulatedBroker) SetFillPipeline(pp *fill.Pipeline) {
+	b.fillPipeline = pp
+}
+
+// SetDataFetcher propagates a DataFetcher to the fill pipeline's models.
+func (b *SimulatedBroker) SetDataFetcher(df fill.DataFetcher) {
+	b.fillPipeline.SetDataFetcher(df)
 }
 
 func (b *SimulatedBroker) Connect(_ context.Context) error { return nil }
@@ -95,31 +117,40 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 		return fmt.Errorf("simulated broker: fetching price for %s: %w", order.Asset.Ticker, err)
 	}
 
-	price := df.Value(order.Asset, data.MetricClose)
-	if math.IsNaN(price) || price == 0 {
-		return fmt.Errorf("simulated broker: no price for %s (%s)",
-			order.Asset.Ticker, order.Asset.CompositeFigi)
+	// Phase 1: Base model determines the price.
+	baseResult, baseErr := b.fillPipeline.FillBase(ctx, order, df)
+	if baseErr != nil {
+		return fmt.Errorf("simulated broker: fill model: %w", baseErr)
 	}
 
-	qty := order.Qty
+	// Convert dollar-amount orders between base and adjusters.
+	qty := baseResult.Quantity
 	if qty == 0 && order.Amount > 0 {
-		qty = math.Floor(order.Amount / price)
+		qty = math.Floor(order.Amount / baseResult.Price)
 	}
 
 	if qty == 0 {
 		return nil
 	}
 
+	baseResult.Quantity = qty
+
+	// Phase 2: Run adjusters on the result with computed quantity.
+	result, adjErr := b.fillPipeline.Adjust(ctx, order, df, baseResult)
+	if adjErr != nil {
+		return fmt.Errorf("simulated broker: fill adjuster: %w", adjErr)
+	}
+
 	// Check initial margin for short-opening sells.
 	if order.Side == broker.Sell && b.portfolio != nil {
 		currentPos := b.portfolio.Position(order.Asset)
-		if currentPos-qty < 0 {
-			shortIncrease := qty
+		if currentPos-result.Quantity < 0 {
+			shortIncrease := result.Quantity
 			if currentPos > 0 {
-				shortIncrease = qty - currentPos
+				shortIncrease = result.Quantity - currentPos
 			}
 
-			newShortValue := b.portfolio.ShortMarketValue() + shortIncrease*price
+			newShortValue := b.portfolio.ShortMarketValue() + shortIncrease*result.Price
 			equity := b.portfolio.Equity()
 
 			initialRate := b.initialMarginRate
@@ -141,9 +172,24 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 
 	b.fills <- broker.Fill{
 		OrderID:  order.ID,
-		Price:    price,
-		Qty:      qty,
+		Price:    result.Price,
+		Qty:      result.Quantity,
 		FilledAt: b.date,
+	}
+
+	// Handle partial fills: queue remainder for next bar.
+	if result.Partial {
+		remainderQty := qty - result.Quantity
+		if remainderQty > 0 {
+			remainderOrder := order
+			remainderOrder.Qty = remainderQty
+			remainderOrder.Amount = 0
+
+			b.partialRemainders[order.ID] = partialRemainder{
+				order: remainderOrder,
+				bars:  1,
+			}
+		}
 	}
 
 	return nil
@@ -195,7 +241,14 @@ func (b *SimulatedBroker) SubmitGroup(ctx context.Context, orders []broker.Order
 // take-profit. If only take-profit triggers, fill at limit price and cancel
 // stop-loss. Falls back to close price when high/low are unavailable.
 func (b *SimulatedBroker) EvaluatePending() {
-	if b.prices == nil || len(b.pending) == 0 {
+	if b.prices == nil {
+		return
+	}
+
+	if len(b.pending) == 0 {
+		// No bracket orders, but still process partial remainders.
+		b.evaluatePartialRemainders()
+
 		return
 	}
 
@@ -352,6 +405,64 @@ func (b *SimulatedBroker) EvaluatePending() {
 			}
 
 			delete(b.groups, groupID)
+		}
+	}
+
+	// Process partial fill remainders from prior bars.
+	b.evaluatePartialRemainders()
+}
+
+// evaluatePartialRemainders retries partial fill remainders from prior bars.
+// After two bars without a full fill, the remainder is cancelled.
+func (b *SimulatedBroker) evaluatePartialRemainders() {
+	if b.prices == nil || len(b.partialRemainders) == 0 {
+		return
+	}
+
+	ctx := context.Background()
+
+	for orderID, pr := range b.partialRemainders {
+		// Cancel remainder after it has been pending for 2 bars.
+		if pr.bars >= 2 {
+			delete(b.partialRemainders, orderID)
+
+			continue
+		}
+
+		df, err := b.prices.Prices(ctx, pr.order.Asset)
+		if err != nil {
+			continue
+		}
+
+		result, fillErr := b.fillPipeline.Fill(ctx, pr.order, df)
+		if fillErr != nil {
+			continue
+		}
+
+		if result.Quantity > 0 {
+			b.fills <- broker.Fill{
+				OrderID:  orderID,
+				Price:    result.Price,
+				Qty:      result.Quantity,
+				FilledAt: b.date,
+			}
+		}
+
+		if !result.Partial {
+			delete(b.partialRemainders, orderID)
+		} else {
+			remainderQty := pr.order.Qty - result.Quantity
+			if remainderQty > 0 {
+				updatedOrder := pr.order
+				updatedOrder.Qty = remainderQty
+
+				b.partialRemainders[orderID] = partialRemainder{
+					order: updatedOrder,
+					bars:  pr.bars + 1,
+				}
+			} else {
+				delete(b.partialRemainders, orderID)
+			}
 		}
 	}
 }

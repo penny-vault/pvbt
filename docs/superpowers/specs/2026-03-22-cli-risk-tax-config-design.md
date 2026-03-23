@@ -6,7 +6,7 @@
 
 ## Overview
 
-Users configure risk management rules and tax optimization strategies through a TOML config file and optional CLI flags, without modifying strategy code. The engine reads this configuration and wires the appropriate middleware at startup.
+Users configure risk management rules and tax optimization strategies through a TOML config file and optional CLI flags, without modifying strategy code. The engine reads this configuration and constructs the appropriate middleware at startup.
 
 ## Config File Loading
 
@@ -28,7 +28,9 @@ profile = "moderate"              # conservative | moderate | aggressive | none
 max_position_size = 0.15          # override profile default
 max_position_count = 20           # override or add rule not in profile
 drawdown_circuit_breaker = 0.12   # override profile default
-volatility_scaler_lookback = 60   # enable volatility scaler (requires data source)
+volatility_scaler_lookback = 60   # enable volatility scaler
+gross_exposure_limit = 1.5        # max gross exposure as multiple of NAV
+net_exposure_limit = 1.0          # max net exposure as multiple of NAV
 
 [tax]
 enabled = true
@@ -49,15 +51,17 @@ Setting `profile = "none"` disables all risk middleware unless individual rules 
 
 Profile baselines:
 
-| Profile | max_position_size | max_position_count | drawdown_circuit_breaker | volatility_scaler_lookback |
-|---|---|---|---|---|
-| conservative | 0.20 | - | 0.10 | 60 |
-| moderate | 0.25 | - | 0.15 | - |
-| aggressive | 0.35 | - | 0.25 | - |
+| Profile | max_position_size | drawdown_circuit_breaker | volatility_scaler_lookback |
+|---|---|---|---|
+| conservative | 0.20 | 0.10 | 60 |
+| moderate | 0.25 | 0.15 | - |
+| aggressive | 0.35 | 0.25 | - |
 
 ### Tax configuration
 
-`[tax]` controls the tax loss harvester. When `enabled = true`, the harvester is added to the middleware stack with the specified parameters. The `[tax.substitutes]` table maps original ticker to substitute ticker; these are resolved to `asset.Asset` values via the engine's asset provider at initialization.
+`[tax]` controls the tax loss harvester. When `enabled = true`, the harvester is added to the middleware stack with the specified parameters. If `loss_threshold` is not set, it defaults to 0.05 (5%).
+
+The `[tax.substitutes]` table maps original ticker to substitute ticker. The engine resolves these to `asset.Asset` values via its asset provider during initialization.
 
 ## CLI Flags
 
@@ -66,7 +70,7 @@ Only the most common knobs get cobra flags. Everything else is config-file-only:
 - `--risk-profile` (string) -- shorthand for the risk profile
 - `--tax` (bool) -- enable/disable tax optimization
 
-These bind to Viper so they override config file values.
+These bind to Viper so they override config file values. The `--config` flag is registered as a persistent flag on the root command so it is available to all subcommands.
 
 ## New Package: `config`
 
@@ -86,45 +90,76 @@ type RiskConfig struct {
     MaxPositionCount         *int     // nil = use profile default
     DrawdownCircuitBreaker   *float64 // nil = use profile default
     VolatilityScalerLookback *int     // nil = use profile default
+    GrossExposureLimit       *float64 // nil = not applied
+    NetExposureLimit         *float64 // nil = not applied
 }
 
 // TaxConfig holds tax middleware settings.
 type TaxConfig struct {
     Enabled        bool
-    LossThreshold  float64
+    LossThreshold  float64           // defaults to 0.05 if not set
     GainOffsetOnly bool
-    Substitutes    map[string]string // ticker -> ticker, resolved to assets at engine init
+    Substitutes    map[string]string // ticker -> ticker, resolved to assets by engine
 }
 ```
 
 Pointer fields distinguish "not set" (nil, defer to profile) from "explicitly set to zero."
 
-`Load(cmd *cobra.Command) (*Config, error)` initializes Viper, binds flags, reads the config file, and unmarshals into the `Config` struct. It returns an error for unknown profile names or invalid values (negative thresholds, etc.).
+The config package provides two loading functions:
+
+- `Load(configPath string) (*Config, error)` -- loads from a specific file path (or searches the default locations if empty). Used by the engine in programmatic/test contexts.
+- `LoadFromCommand(cmd *cobra.Command) (*Config, error)` -- binds Viper to cobra flags, then delegates to `Load`. Used by the CLI layer.
+
+Both return an error for unknown profile names or invalid values (negative thresholds, position size > 1.0, etc.).
 
 ## Engine Integration
 
 New engine option: `WithMiddlewareConfig(cfg config.Config)`.
 
-During engine initialization, after the data source is available, the engine:
+The config struct is a recipe, not a set of constructed middleware. The engine constructs all middleware instances during initialization, after its data source is available. The config package never touches middleware objects.
 
-1. Resolves the risk profile to its base set of middleware.
+During engine initialization the engine:
+
+1. Resolves the risk profile to its baseline parameter set.
 2. Applies overrides from explicitly-set config values (non-nil pointer fields).
-3. Builds tax middleware if enabled, injecting the engine's data source automatically.
-4. Resolves `Substitutes` ticker strings to `asset.Asset` via the asset provider.
-5. Registers all middleware on the account via `acct.Use(...)`.
+3. Constructs risk middleware instances in a fixed order (see Middleware Ordering below), passing the engine's data source to `VolatilityScaler` when needed.
+4. If tax is enabled, resolves `Substitutes` ticker strings to `asset.Asset` via the asset provider, then constructs the `TaxLossHarvester` with the engine's data source.
+5. Registers all constructed middleware on the account via `acct.Use(...)`.
+
+### Replacement semantics
+
+When `WithMiddlewareConfig` is present, the engine owns the entire middleware stack. If `WithAccount` is also provided, the engine uses that account for cash, metrics, and broker configuration but takes over middleware registration -- any middleware already on the account is cleared before config-driven middleware is applied. If `WithAccount` is not provided, the engine constructs the account internally as it does today.
+
+If `WithMiddlewareConfig` is not provided, behavior is unchanged from today -- no middleware is added by the engine.
+
+There is no merging between config-driven and strategy-declared middleware. Config fully replaces strategy middleware when present.
 
 ### Precedence
 
-CLI flag > config file > strategy code > profile defaults
+For determining parameter values within the config system:
 
-Config-driven middleware replaces any strategy-declared middleware when config is present. If no risk/tax config exists (no config file, no flags), no middleware is added and behavior is unchanged from today.
+CLI flag > config file > profile defaults
+
+### Middleware Ordering
+
+When the engine constructs risk middleware from config, it registers them in this fixed order:
+
+1. `VolatilityScaler` (if enabled -- must run before position sizing)
+2. `MaxPositionSize` (if enabled)
+3. `MaxPositionCount` (if enabled)
+4. `GrossExposureLimit` (if enabled)
+5. `NetExposureLimit` (if enabled)
+6. `DrawdownCircuitBreaker` (if enabled -- runs last as a circuit breaker)
+7. Tax middleware (always runs after all risk middleware)
+
+This matches the ordering used by the existing risk profiles where volatility scaling runs before position limits.
 
 ## CLI Integration
 
-In `runBacktest` and `runLive`, after creating the account and before creating the engine:
+In `runBacktest` and `runLive`, config is loaded and appended to `engineOpts` before calling `engine.New`:
 
 ```go
-cfg, err := config.Load(cmd)
+cfg, err := config.LoadFromCommand(cmd)
 if err != nil {
     return fmt.Errorf("load config: %w", err)
 }
@@ -132,7 +167,7 @@ if err != nil {
 engineOpts = append(engineOpts, engine.WithMiddlewareConfig(*cfg))
 ```
 
-The `--config` flag is registered on the root command so it is available to all subcommands.
+The `--config`, `--risk-profile`, and `--tax` flags are registered in `Run()` as persistent flags on the root command.
 
 ## `pvbt config` Subcommand
 
@@ -155,7 +190,7 @@ Tax:
     QQQ -> QQQM
 ```
 
-This lets users verify their middleware setup without running a backtest.
+Fields where the effective value differs from the profile default are annotated with `(override)`. Fields using the profile's value are annotated with `(profile default)`. Fields added beyond the profile (not present in the profile baseline) are annotated with `(added)`.
 
 ## Error Handling
 

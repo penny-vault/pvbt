@@ -18,6 +18,7 @@ package portfolio
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
@@ -103,6 +104,8 @@ type PerformanceMetricQuery struct {
 	metric    PerformanceMetric
 	window    *Period
 	benchmark bool
+	absStart  *time.Time
+	absEnd    *time.Time
 }
 
 // Window sets the lookback period for the metric computation.
@@ -115,6 +118,16 @@ func (query PerformanceMetricQuery) Window(period Period) PerformanceMetricQuery
 // equity curve instead of the portfolio equity curve.
 func (query PerformanceMetricQuery) Benchmark() PerformanceMetricQuery {
 	query.benchmark = true
+	return query
+}
+
+// AbsoluteWindow restricts the metric computation to the inclusive date
+// range [start, end]. The underlying PortfolioStats is wrapped in a
+// windowedStats that filters all DataFrame-returning methods to this range.
+func (query PerformanceMetricQuery) AbsoluteWindow(start, end time.Time) PerformanceMetricQuery {
+	query.absStart = &start
+	query.absEnd = &end
+
 	return query
 }
 
@@ -141,14 +154,29 @@ func (query PerformanceMetricQuery) Series() (*data.DataFrame, error) {
 // resolveStats returns the PortfolioStats to compute against. When the
 // benchmark flag is set it verifies the metric supports benchmark
 // targeting, then returns a view account with the benchmark equity curve.
+// When absStart/absEnd are set, the returned stats are wrapped in a
+// windowedStats that restricts DataFrames to the given date range.
 func (query PerformanceMetricQuery) resolveStats() (PortfolioStats, error) {
+	var stats PortfolioStats
+
 	if !query.benchmark {
-		return query.account, nil
+		stats = query.account
+	} else {
+		if _, ok := query.metric.(BenchmarkTargetable); !ok {
+			return nil, ErrBenchmarkNotSupported
+		}
+
+		bv, err := query.account.benchmarkView()
+		if err != nil {
+			return nil, err
+		}
+
+		stats = bv
 	}
 
-	if _, ok := query.metric.(BenchmarkTargetable); !ok {
-		return nil, ErrBenchmarkNotSupported
+	if query.absStart != nil && query.absEnd != nil {
+		stats = newWindowedStats(stats, *query.absStart, *query.absEnd)
 	}
 
-	return query.account.benchmarkView()
+	return stats, nil
 }

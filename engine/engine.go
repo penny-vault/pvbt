@@ -25,6 +25,7 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
 	"github.com/penny-vault/pvbt/universe"
@@ -57,6 +58,8 @@ type Engine struct {
 	dateRangeMode   DateRangeMode
 	warmup          int
 	benchmarkTicker string
+	fillBaseModel   fill.BaseModel
+	fillAdjusters   []fill.Adjuster
 
 	account portfolio.PortfolioManager
 
@@ -95,7 +98,12 @@ func New(strategy Strategy, opts ...Option) *Engine {
 // via WithBroker, a SimulatedBroker is created and stored on e.broker.
 func (e *Engine) createAccount(start time.Time) portfolio.PortfolioManager {
 	if e.broker == nil {
-		e.broker = NewSimulatedBroker()
+		sb := NewSimulatedBroker()
+		if e.fillBaseModel != nil {
+			sb.SetFillPipeline(fill.NewPipeline(e.fillBaseModel, e.fillAdjusters))
+		}
+
+		e.broker = sb
 	}
 
 	// Use pre-configured account if provided.
@@ -747,6 +755,9 @@ var _ data.DataSource = (*Engine)(nil)
 
 // Compile-time check that Engine implements broker.PriceProvider.
 var _ broker.PriceProvider = (*Engine)(nil)
+
+// Compile-time check that Engine implements fill.DataFetcher.
+var _ fill.DataFetcher = (*Engine)(nil)
 
 // ForwardFillTo extends a DataFrame by copying the last row's values forward
 // to the target date, spaced according to the DataFrame's frequency. Returns
