@@ -54,7 +54,7 @@ func (tb *TradierBroker) Connect(ctx context.Context) error {
 		baseURL = sandboxBaseURL
 	}
 
-	tb.client = newAPIClient(baseURL, "")
+	tb.client = newAPIClient(baseURL, "", "")
 	tb.streamer = newActivityStreamer(tb.client, tb.fills)
 
 	if connectErr := tb.streamer.connect(ctx); connectErr != nil {
@@ -64,6 +64,15 @@ func (tb *TradierBroker) Connect(ctx context.Context) error {
 	go tb.streamer.listen(ctx, tb.messages)
 
 	return nil
+}
+
+// SetToken updates the authentication token used for all API requests.
+// It is called by the authentication layer after a token is obtained or refreshed.
+func (tb *TradierBroker) SetToken(token string) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	tb.client.setToken(token)
 }
 
 // Close tears down the broker session.
@@ -104,9 +113,7 @@ func (tb *TradierBroker) Replace(ctx context.Context, orderID string, order brok
 		return paramsErr
 	}
 
-	_, replaceErr := tb.client.replaceOrder(ctx, orderID, params)
-
-	return replaceErr
+	return tb.client.modifyOrder(ctx, orderID, params)
 }
 
 // Orders returns all orders for the current trading day.

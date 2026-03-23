@@ -25,12 +25,12 @@ func newActivityStreamer(client *apiClient, fills chan broker.Fill) *activityStr
 }
 
 func (streamer *activityStreamer) connect(ctx context.Context) error {
-	session, sessionErr := streamer.client.createSession(ctx)
+	sessionID, sessionErr := streamer.client.createStreamSession(ctx)
 	if sessionErr != nil {
 		return sessionErr
 	}
 
-	streamer.wsURL = session.Stream.URL
+	streamer.wsURL = sessionID
 
 	return nil
 }

@@ -22,7 +22,7 @@ type apiClient struct {
 	accessToken string
 }
 
-func newAPIClient(baseURL, accessToken string) *apiClient {
+func newAPIClient(baseURL, accessToken, accountID string) *apiClient {
 	httpClient := resty.New().
 		SetBaseURL(baseURL).
 		SetRetryCount(3).
@@ -43,7 +43,14 @@ func newAPIClient(baseURL, accessToken string) *apiClient {
 	return &apiClient{
 		resty:       httpClient,
 		accessToken: accessToken,
+		accountID:   accountID,
 	}
+}
+
+// setToken updates the authentication token used by the client.
+func (client *apiClient) setToken(token string) {
+	client.accessToken = token
+	client.resty.SetAuthToken(token)
 }
 
 func (client *apiClient) submitOrder(ctx context.Context, params url.Values) (string, error) {
@@ -80,23 +87,20 @@ func (client *apiClient) cancelOrder(ctx context.Context, orderID string) error 
 	return nil
 }
 
-func (client *apiClient) replaceOrder(ctx context.Context, orderID string, params url.Values) (string, error) {
-	var wrapper tradierOrderSubmitResponse
-
+func (client *apiClient) modifyOrder(ctx context.Context, orderID string, params url.Values) error {
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
 		SetFormDataFromValues(params).
-		SetResult(&wrapper).
 		Put(fmt.Sprintf("/accounts/%s/orders/%s", client.accountID, orderID))
 	if reqErr != nil {
-		return "", fmt.Errorf("tradier: replace order: %w", reqErr)
+		return fmt.Errorf("tradier: modify order: %w", reqErr)
 	}
 
 	if resp.IsError() {
-		return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
+		return broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
-	return fmt.Sprintf("%d", wrapper.Order.ID), nil
+	return nil
 }
 
 func (client *apiClient) getOrder(ctx context.Context, orderID string) (tradierOrderResponse, error) {
@@ -201,20 +205,20 @@ func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, 
 	return wrapper.Quotes.Quote.Last, nil
 }
 
-func (client *apiClient) createSession(ctx context.Context) (tradierSessionResponse, error) {
+func (client *apiClient) createStreamSession(ctx context.Context) (string, error) {
 	var result tradierSessionResponse
 
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
 		SetResult(&result).
-		Post("/markets/events/session")
+		Post("/accounts/events/session")
 	if reqErr != nil {
-		return tradierSessionResponse{}, fmt.Errorf("tradier: create session: %w", reqErr)
+		return "", fmt.Errorf("tradier: create stream session: %w", reqErr)
 	}
 
 	if resp.IsError() {
-		return tradierSessionResponse{}, broker.NewHTTPError(resp.StatusCode(), resp.String())
+		return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
-	return result, nil
+	return result.Stream.SessionID, nil
 }
