@@ -166,6 +166,13 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	// 6b. Apply config-driven middleware if provided.
+	if e.middlewareConfig != nil {
+		if err := e.buildMiddlewareFromConfig(); err != nil {
+			return nil, fmt.Errorf("engine: building middleware from config: %w", err)
+		}
+	}
+
 	info := DescribeStrategy(e.strategy)
 	if info.Name != "" {
 		acct.SetMetadata(portfolio.MetaStrategyName, info.Name)

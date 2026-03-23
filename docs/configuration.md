@@ -129,3 +129,69 @@ pvbt adm backtest --preset Classic
 ```
 
 This populates strategy fields from the matching `suggest` tag values before running.
+
+## Middleware configuration
+
+Risk management and tax optimization middleware can be configured through a TOML config file or CLI flags, without modifying strategy code.
+
+### Config file
+
+The engine searches for configuration in this order:
+
+1. `--config path/to/file.toml` (explicit flag)
+2. `./pvbt.toml` (working directory)
+3. `~/.config/pvbt/config.toml`
+
+Example `pvbt.toml`:
+
+```toml
+[risk]
+profile = "moderate"              # conservative | moderate | aggressive | none
+max_position_size = 0.15          # override profile default
+max_position_count = 20           # add a rule not in the profile
+drawdown_circuit_breaker = 0.12   # override profile default
+volatility_scaler_lookback = 60   # enable volatility scaler
+gross_exposure_limit = 1.5        # max gross exposure as multiple of NAV
+net_exposure_limit = 1.0          # max net exposure as multiple of NAV
+
+[tax]
+enabled = true
+loss_threshold = 0.05
+gain_offset_only = false
+
+[tax.substitutes]
+SPY = "VOO"
+QQQ = "QQQM"
+```
+
+### Risk profiles
+
+Three built-in profiles provide baseline risk rules:
+
+| Profile | max_position_size | drawdown_circuit_breaker | volatility_scaler_lookback |
+|---|---|---|---|
+| conservative | 0.20 | 0.10 | 60 |
+| moderate | 0.25 | 0.15 | - |
+| aggressive | 0.35 | 0.25 | - |
+
+Setting a profile provides defaults. Explicitly set parameters override profile values, and parameters not in the profile can be added (e.g., `max_position_count = 20` with a `moderate` profile). Setting `profile = "none"` disables all risk middleware unless individual rules are configured.
+
+### CLI flags
+
+The `--risk-profile` and `--tax` flags are available on the `backtest` and `live` commands:
+
+```
+pvbt adm backtest --risk-profile moderate
+pvbt adm backtest --tax
+```
+
+CLI flags override config file values. The `--config` flag is available on all commands.
+
+### Viewing resolved configuration
+
+The `config` subcommand displays the effective configuration after merging config file, profile defaults, and CLI flag overrides:
+
+```
+pvbt adm config
+pvbt adm config --risk-profile conservative
+```

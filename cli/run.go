@@ -21,6 +21,7 @@ func Run(strategy engine.Strategy) {
 	}
 
 	rootCmd.PersistentFlags().String("log-level", "info", "Log level (debug, info, warn, error)")
+	rootCmd.PersistentFlags().String("config", "", "Path to config file (default: ./pvbt.toml or ~/.config/pvbt/config.toml)")
 
 	if err := viper.BindPFlag("log-level", rootCmd.PersistentFlags().Lookup("log-level")); err != nil {
 		log.Fatal().Err(err).Msg("failed to bind log-level flag")
@@ -43,6 +44,7 @@ func Run(strategy engine.Strategy) {
 	rootCmd.AddCommand(newSnapshotCmd(strategy))
 	rootCmd.AddCommand(newDescribeCmd(strategy))
 	rootCmd.AddCommand(newStudyCmd(strategy))
+	rootCmd.AddCommand(newConfigCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

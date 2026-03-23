@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -27,6 +28,8 @@ func newLiveCmd(strategy engine.Strategy) *cobra.Command {
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
 	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
+	cmd.Flags().String("risk-profile", "", "Risk profile (conservative, moderate, aggressive, none)")
+	cmd.Flags().Bool("tax", false, "Enable tax optimization")
 
 	return cmd
 }
@@ -45,6 +48,11 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	applyStrategyFlags(cmd, strategy)
 
+	cfg, err := config.LoadFromCommand(cmd)
+	if err != nil {
+		return fmt.Errorf("load config: %w", err)
+	}
+
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {
 		return fmt.Errorf("create data provider: %w", err)
@@ -54,6 +62,10 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithInitialDeposit(cash),
+	}
+
+	if cfg.HasMiddleware() {
+		engineOpts = append(engineOpts, engine.WithMiddlewareConfig(*cfg))
 	}
 
 	benchmarkTicker, err := cmd.Flags().GetString("benchmark")

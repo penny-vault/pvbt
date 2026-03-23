@@ -24,6 +24,7 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
+	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -51,15 +52,16 @@ type Engine struct {
 	riskFreeIndex      map[time.Time]int // date -> index into riskFreeValues, built once during init
 
 	// configuration (set via options, used during init)
-	cacheMaxBytes   int64
-	initialDeposit  float64
-	broker          broker.Broker
-	snapshot        portfolio.PortfolioSnapshot
-	dateRangeMode   DateRangeMode
-	warmup          int
-	benchmarkTicker string
-	fillBaseModel   fill.BaseModel
-	fillAdjusters   []fill.Adjuster
+	cacheMaxBytes    int64
+	initialDeposit   float64
+	broker           broker.Broker
+	snapshot         portfolio.PortfolioSnapshot
+	dateRangeMode    DateRangeMode
+	warmup           int
+	benchmarkTicker  string
+	fillBaseModel    fill.BaseModel
+	fillAdjusters    []fill.Adjuster
+	middlewareConfig *config.Config
 
 	account portfolio.PortfolioManager
 

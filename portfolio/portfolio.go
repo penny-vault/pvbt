@@ -188,6 +188,11 @@ type PortfolioManager interface {
 	// are submitted to the broker.
 	Use(middleware ...Middleware)
 
+	// ClearMiddleware removes all registered middleware from the processing
+	// chain. The engine calls this when config-driven middleware replaces
+	// strategy-declared middleware.
+	ClearMiddleware()
+
 	// NewBatch creates an empty Batch for the given timestamp, bound
 	// to this portfolio for position and price queries.
 	NewBatch(timestamp time.Time) *Batch
