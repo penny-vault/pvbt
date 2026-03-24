@@ -168,5 +168,95 @@ var _ = Describe("TradeCron", func() {
 				Expect(got).To(Equal(want))
 			})
 		})
+
+		Context("when November 30 falls on a weekend (no early close)", func() {
+			BeforeEach(func() {
+				// No holidays — just a plain weekend at month boundary.
+				tradecron.SetMarketHolidays(nil)
+			})
+
+			DescribeTable("fires exactly once per month across the Nov-Dec boundary",
+				func(year int, wantNovDay int, wantDecDay int) {
+					tc, err := tradecron.New("@monthend", tradecron.RegularHours)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Start just after October's month-end close.
+					forDate := time.Date(year, time.October, 1, 0, 0, 0, 0, nyc)
+
+					// Collect the next three month-end dates (Oct, Nov, Dec).
+					var dates []time.Time
+					for range 3 {
+						next := tc.Next(forDate)
+						dates = append(dates, next)
+						forDate = next.Add(time.Nanosecond)
+					}
+
+					// November's month-end should be on wantNovDay.
+					Expect(dates[1].Month()).To(Equal(time.November))
+					Expect(dates[1].Day()).To(Equal(wantNovDay))
+
+					// December's month-end should be on wantDecDay, NOT the
+					// first trading day of December.
+					Expect(dates[2].Month()).To(Equal(time.December))
+					Expect(dates[2].Day()).To(Equal(wantDecDay))
+				},
+				// Years where Nov 30 is a weekend.
+				Entry("2008: Nov 30 is Sunday", 2008, 28, 31),
+				Entry("2013: Nov 30 is Saturday", 2013, 29, 31),
+				Entry("2014: Nov 30 is Sunday", 2014, 28, 31),
+				Entry("2019: Nov 30 is Saturday", 2019, 29, 31),
+				Entry("2024: Nov 30 is Saturday", 2024, 29, 31),
+				Entry("2025: Nov 30 is Sunday", 2025, 28, 31),
+			)
+		})
+
+		Context("when November 30 falls on a weekend WITH Thanksgiving holidays", func() {
+			DescribeTable("fires exactly once per month across the Nov-Dec boundary",
+				func(year int, thanksgivingDay int, wantNovDay int, wantDecDay int) {
+					tradecron.SetMarketHolidays([]tradecron.MarketHoliday{
+						{
+							Date:       time.Date(year, time.November, thanksgivingDay, 0, 0, 0, 0, nyc),
+							EarlyClose: false,
+							CloseTime:  0,
+						},
+						{
+							Date:       time.Date(year, time.November, thanksgivingDay+1, 0, 0, 0, 0, nyc),
+							EarlyClose: true,
+							CloseTime:  1300,
+						},
+					})
+
+					tc, err := tradecron.New("@monthend", tradecron.RegularHours)
+					Expect(err).NotTo(HaveOccurred())
+
+					// Start at beginning of October.
+					forDate := time.Date(year, time.October, 1, 0, 0, 0, 0, nyc)
+
+					// Collect the next three month-end dates (Oct, Nov, Dec).
+					var dates []time.Time
+					for range 3 {
+						next := tc.Next(forDate)
+						dates = append(dates, next)
+						forDate = next.Add(time.Nanosecond)
+					}
+
+					// November's month-end should fire on the early close day.
+					Expect(dates[1].Month()).To(Equal(time.November))
+					Expect(dates[1].Day()).To(Equal(wantNovDay))
+
+					// December's month-end should be end of December, NOT
+					// the first trading day of December.
+					Expect(dates[2].Month()).To(Equal(time.December))
+					Expect(dates[2].Day()).To(Equal(wantDecDay))
+				},
+				// Thanksgiving day, last Nov trading day, last Dec trading day.
+				Entry("2008: Thanksgiving Nov 27", 2008, 27, 28, 31),
+				Entry("2013: Thanksgiving Nov 28", 2013, 28, 29, 31),
+				Entry("2014: Thanksgiving Nov 27", 2014, 27, 28, 31),
+				Entry("2019: Thanksgiving Nov 28", 2019, 28, 29, 31),
+				Entry("2024: Thanksgiving Nov 28", 2024, 28, 29, 31),
+				Entry("2025: Thanksgiving Nov 27", 2025, 27, 28, 31),
+			)
+		})
 	})
 })
