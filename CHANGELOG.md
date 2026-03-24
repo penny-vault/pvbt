@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Users can configure risk management rules and tax optimization through a TOML config file (`pvbt.toml`) and `--risk-profile`/`--tax` CLI flags, without modifying strategy code.
 - The `pvbt config` command displays the resolved middleware configuration after merging config file, profile defaults, and CLI flag overrides.
 - Users can now trade through Tradier with support for market, limit, stop, and stop-limit orders, OCO and bracket groups, and real-time fill streaming.
+- Users can now trade through Interactive Brokers using either OAuth or the Client Portal Gateway for authentication
+
+### Changed
+
+- `broker.IsTransient` is renamed to `broker.IsRetryableError` and a new `broker.ErrRateLimited` sentinel error is available for all brokers
 
 ## [0.4.0] - 2026-03-22
 
