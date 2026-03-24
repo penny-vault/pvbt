@@ -317,11 +317,11 @@ type tradierAccountEvent struct {
 
 // tradierOrderResponse is a local duplicate for use in test JSON construction.
 type tradierOrderResponse struct {
-	ID                int64   `json:"id"`
-	Status            string  `json:"status"`
-	AvgFillPrice      float64 `json:"avg_fill_price"`
-	ExecQuantity      float64 `json:"exec_quantity"`
-	LastFillPrice     float64 `json:"last_fill_price"`
-	LastFillQuantity  float64 `json:"last_fill_quantity"`
-	TransactionDate   string  `json:"transaction_date"`
+	ID               int64   `json:"id"`
+	Status           string  `json:"status"`
+	AvgFillPrice     float64 `json:"avg_fill_price"`
+	ExecQuantity     float64 `json:"exec_quantity"`
+	LastFillPrice    float64 `json:"last_fill_price"`
+	LastFillQuantity float64 `json:"last_fill_quantity"`
+	TransactionDate  string  `json:"transaction_date"`
 }

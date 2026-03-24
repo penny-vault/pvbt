@@ -20,8 +20,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strategy parameter flags accept range syntax (`--lookback=3:24:1`) to define sweep ranges directly from the command line.
 - Named historical scenarios are now available to all study types, not just stress tests.
 
+- The `pvbt library` TUI shows strategy descriptions and GitHub README content rendered with styled markdown, and supports searching strategies by name or description.
+- Strategies can be uninstalled from the library TUI with inline confirmation.
+
 ### Changed
 
+- The `pvbt discover`, `pvbt list`, and `pvbt remove` commands are replaced by `pvbt library`, with `list` and `remove` as subcommands.
 - `broker.IsTransient` is renamed to `broker.IsRetryableError` and a new `broker.ErrRateLimited` sentinel error is available for all brokers
 
 ## [0.4.0] - 2026-03-22

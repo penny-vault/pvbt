@@ -258,12 +258,22 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 
 	server := &http.Server{Handler: mux}
 
+	// Wrap the listener so we can signal when the server's accept loop is
+	// ready. Without this, the address can be published before Serve enters
+	// its accept loop, causing connection attempts to fail with EOF.
+	ready := make(chan struct{})
+	wrapped := &readyListener{Listener: listener, ready: ready}
+
 	go func() {
-		serveErr := server.Serve(listener)
+		serveErr := server.Serve(wrapped)
 		if serveErr != nil && serveErr != http.ErrServerClosed {
 			fmt.Printf("auth callback server error: %v\n", serveErr)
 		}
 	}()
+
+	// Wait for the server to enter its accept loop before publishing the
+	// address, so callers can connect immediately.
+	<-ready
 
 	if manager.listenerAddrCh != nil {
 		manager.listenerAddrCh <- actualAddr
@@ -320,6 +330,24 @@ func (manager *tokenManager) accessToken() string {
 	defer manager.mu.Unlock()
 
 	return manager.tokens.AccessToken
+}
+
+// readyListener wraps a net.Listener and closes the ready channel on the
+// first Accept call, signaling that the server has entered its accept loop.
+type readyListener struct {
+	net.Listener
+	ready    chan struct{}
+	readOnce sync.Once
+}
+
+func (rl *readyListener) Accept() (net.Conn, error) {
+	rl.readOnce.Do(func() {
+		close(rl.ready)
+	})
+
+	conn, err := rl.Listener.Accept()
+
+	return conn, err
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {

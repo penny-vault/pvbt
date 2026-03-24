@@ -318,9 +318,9 @@ var _ = Describe("tokenManager", func() {
 			}
 			callbackReqURL := fmt.Sprintf("https://%s?code=test-auth-code%%40extra", callbackAddr)
 
-			// Retry the GET until the TLS server is ready to accept connections.
-			// The listener address is published before ServeTLS enters its accept
-			// loop, so the first attempt can hit EOF.
+			// The server signals readiness after entering its accept loop, but
+			// under heavy load (e.g., full suite with -race) the first
+			// connection attempt can still fail. Retry with a generous timeout.
 			Eventually(func() error {
 				resp, getErr := httpClient.Get(callbackReqURL)
 				if getErr != nil {
@@ -329,7 +329,7 @@ var _ = Describe("tokenManager", func() {
 				resp.Body.Close()
 
 				return nil
-			}, 5*time.Second, 50*time.Millisecond).Should(Succeed())
+			}, 5*time.Second, 100*time.Millisecond).Should(Succeed())
 
 			Eventually(authDone, 5*time.Second).Should(Receive(Not(HaveOccurred())))
 			Expect(manager.tokens.AccessToken).To(Equal("auth-flow-access"))
