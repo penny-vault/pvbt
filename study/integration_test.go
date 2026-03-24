@@ -145,7 +145,7 @@ func makeSyntheticDailyData(startDate time.Time, numDays int, testAssets []asset
 // integrationStressStudy wraps stress.StressTest with custom short scenarios
 // so data requirements stay small.
 func integrationStressStudy() *stress.StressTest {
-	scenarios := []stress.Scenario{
+	scenarios := []study.Scenario{
 		{
 			Name:        "Short Drawdown",
 			Description: "A short custom scenario for integration testing",

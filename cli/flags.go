@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/universe"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -191,6 +192,67 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 				Msg("strategy field type not supported by applyStrategyFlags")
 		}
 	}
+}
+
+// parseRangeFlag checks whether value contains min:max:step range syntax.
+// If the value parses as three colon-separated floats, it returns a
+// study.ParamSweep for the named field and true. Otherwise it returns
+// the zero value and false.
+func parseRangeFlag(field, value string) (study.ParamSweep, bool) {
+	parts := strings.SplitN(value, ":", 3)
+	if len(parts) != 3 {
+		return study.ParamSweep{}, false
+	}
+
+	minVal, err1 := strconv.ParseFloat(parts[0], 64)
+	maxVal, err2 := strconv.ParseFloat(parts[1], 64)
+	stepVal, err3 := strconv.ParseFloat(parts[2], 64)
+
+	if err1 != nil || err2 != nil || err3 != nil {
+		return study.ParamSweep{}, false
+	}
+
+	return study.SweepRange(field, minVal, maxVal, stepVal), true
+}
+
+// collectParamSweeps walks the strategy's exported fields, reads each
+// corresponding flag's string value, and returns the subset that use
+// range syntax (min:max:step).
+func collectParamSweeps(cmd *cobra.Command, strategy engine.Strategy) []study.ParamSweep {
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
+		return nil
+	}
+
+	var sweeps []study.ParamSweep
+
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
+		if !field.IsExported() {
+			continue
+		}
+
+		name := field.Tag.Get("pvbt")
+		if name == "" {
+			name = toKebabCase(field.Name)
+		}
+
+		fl := cmd.Flags().Lookup(name)
+		if fl == nil {
+			continue
+		}
+
+		if sweep, ok := parseRangeFlag(name, fl.Value.String()); ok {
+			sweeps = append(sweeps, sweep)
+		}
+	}
+
+	return sweeps
 }
 
 // toKebabCase converts a PascalCase or camelCase name to kebab-case.

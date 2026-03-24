@@ -55,8 +55,8 @@ func (ms *mockStudy) Analyze(results []study.RunResult) (report.Report, error) {
 // (it will never actually run in these tests).
 type mockStrategy struct{}
 
-func (ms *mockStrategy) Name() string                      { return "mock-strategy" }
-func (ms *mockStrategy) Setup(_ *engine.Engine)             {}
+func (ms *mockStrategy) Name() string           { return "mock-strategy" }
+func (ms *mockStrategy) Setup(_ *engine.Engine) {}
 func (ms *mockStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }

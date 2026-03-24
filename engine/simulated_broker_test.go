@@ -37,33 +37,41 @@ type mockPortfolio struct {
 	shortMarketValue float64
 }
 
-func (m *mockPortfolio) Position(a asset.Asset) float64      { return m.positions[a] }
-func (m *mockPortfolio) Equity() float64                     { return m.equity }
-func (m *mockPortfolio) ShortMarketValue() float64           { return m.shortMarketValue }
-func (m *mockPortfolio) Cash() float64                       { return 0 }
-func (m *mockPortfolio) Value() float64                      { return 0 }
-func (m *mockPortfolio) PositionValue(_ asset.Asset) float64 { return 0 }
+func (m *mockPortfolio) Position(a asset.Asset) float64        { return m.positions[a] }
+func (m *mockPortfolio) Equity() float64                       { return m.equity }
+func (m *mockPortfolio) ShortMarketValue() float64             { return m.shortMarketValue }
+func (m *mockPortfolio) Cash() float64                         { return 0 }
+func (m *mockPortfolio) Value() float64                        { return 0 }
+func (m *mockPortfolio) PositionValue(_ asset.Asset) float64   { return 0 }
 func (m *mockPortfolio) Holdings(_ func(asset.Asset, float64)) {}
 func (m *mockPortfolio) Transactions() []portfolio.Transaction { return nil }
-func (m *mockPortfolio) Prices() *data.DataFrame             { return nil }
-func (m *mockPortfolio) PerfData() *data.DataFrame           { return nil }
+func (m *mockPortfolio) Prices() *data.DataFrame               { return nil }
+func (m *mockPortfolio) PerfData() *data.DataFrame             { return nil }
 func (m *mockPortfolio) PerformanceMetric(_ portfolio.PerformanceMetric) portfolio.PerformanceMetricQuery {
 	return portfolio.PerformanceMetricQuery{}
 }
-func (m *mockPortfolio) Summary() (portfolio.Summary, error)               { return portfolio.Summary{}, nil }
-func (m *mockPortfolio) RiskMetrics() (portfolio.RiskMetrics, error)        { return portfolio.RiskMetrics{}, nil }
-func (m *mockPortfolio) TaxMetrics() (portfolio.TaxMetrics, error)          { return portfolio.TaxMetrics{}, nil }
-func (m *mockPortfolio) TradeMetrics() (portfolio.TradeMetrics, error)      { return portfolio.TradeMetrics{}, nil }
-func (m *mockPortfolio) WithdrawalMetrics() (portfolio.WithdrawalMetrics, error) { return portfolio.WithdrawalMetrics{}, nil }
-func (m *mockPortfolio) SetMetadata(_, _ string)                           {}
-func (m *mockPortfolio) GetMetadata(_ string) string                       { return "" }
-func (m *mockPortfolio) Annotations() []portfolio.Annotation               { return nil }
-func (m *mockPortfolio) TradeDetails() []portfolio.TradeDetail              { return nil }
-func (m *mockPortfolio) LongMarketValue() float64                          { return 0 }
-func (m *mockPortfolio) MarginRatio() float64                              { return 0 }
-func (m *mockPortfolio) MarginDeficiency() float64                         { return 0 }
-func (m *mockPortfolio) BuyingPower() float64                              { return 0 }
-func (m *mockPortfolio) Benchmark() asset.Asset                            { return asset.Asset{} }
+func (m *mockPortfolio) Summary() (portfolio.Summary, error) { return portfolio.Summary{}, nil }
+func (m *mockPortfolio) RiskMetrics() (portfolio.RiskMetrics, error) {
+	return portfolio.RiskMetrics{}, nil
+}
+func (m *mockPortfolio) TaxMetrics() (portfolio.TaxMetrics, error) {
+	return portfolio.TaxMetrics{}, nil
+}
+func (m *mockPortfolio) TradeMetrics() (portfolio.TradeMetrics, error) {
+	return portfolio.TradeMetrics{}, nil
+}
+func (m *mockPortfolio) WithdrawalMetrics() (portfolio.WithdrawalMetrics, error) {
+	return portfolio.WithdrawalMetrics{}, nil
+}
+func (m *mockPortfolio) SetMetadata(_, _ string)               {}
+func (m *mockPortfolio) GetMetadata(_ string) string           { return "" }
+func (m *mockPortfolio) Annotations() []portfolio.Annotation   { return nil }
+func (m *mockPortfolio) TradeDetails() []portfolio.TradeDetail { return nil }
+func (m *mockPortfolio) LongMarketValue() float64              { return 0 }
+func (m *mockPortfolio) MarginRatio() float64                  { return 0 }
+func (m *mockPortfolio) MarginDeficiency() float64             { return 0 }
+func (m *mockPortfolio) BuyingPower() float64                  { return 0 }
+func (m *mockPortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
 
 // mockPriceProvider implements broker.PriceProvider for tests.
 type mockPriceProvider struct {
@@ -692,7 +700,7 @@ var _ = Describe("SimulatedBroker", func() {
 
 			var ff broker.Fill
 			Eventually(simBroker.Fills()).Should(Receive(&ff))
-			Expect(ff.Qty).To(Equal(5.0)) // 100 * 0.05 = 5
+			Expect(ff.Qty).To(Equal(5.0))                  // 100 * 0.05 = 5
 			Expect(ff.Price).To(BeNumerically(">", 100.0)) // price should be adjusted upward for buy
 		})
 
@@ -805,15 +813,19 @@ func (mock *mockLifecycleBroker) Close() error {
 	return nil
 }
 
-func (mock *mockLifecycleBroker) Submit(_ context.Context, _ broker.Order) error        { return nil }
-func (mock *mockLifecycleBroker) Fills() <-chan broker.Fill                              { return nil }
-func (mock *mockLifecycleBroker) Cancel(_ context.Context, _ string) error               { return nil }
+func (mock *mockLifecycleBroker) Submit(_ context.Context, _ broker.Order) error { return nil }
+func (mock *mockLifecycleBroker) Fills() <-chan broker.Fill                      { return nil }
+func (mock *mockLifecycleBroker) Cancel(_ context.Context, _ string) error       { return nil }
 func (mock *mockLifecycleBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
 	return nil
 }
-func (mock *mockLifecycleBroker) Orders(_ context.Context) ([]broker.Order, error)      { return nil, nil }
-func (mock *mockLifecycleBroker) Positions(_ context.Context) ([]broker.Position, error) { return nil, nil }
-func (mock *mockLifecycleBroker) Balance(_ context.Context) (broker.Balance, error)     { return broker.Balance{}, nil }
+func (mock *mockLifecycleBroker) Orders(_ context.Context) ([]broker.Order, error) { return nil, nil }
+func (mock *mockLifecycleBroker) Positions(_ context.Context) ([]broker.Position, error) {
+	return nil, nil
+}
+func (mock *mockLifecycleBroker) Balance(_ context.Context) (broker.Balance, error) {
+	return broker.Balance{}, nil
+}
 
 // stubBaseModel is a fill.BaseModel that always returns a fixed price.
 type stubBaseModel struct {

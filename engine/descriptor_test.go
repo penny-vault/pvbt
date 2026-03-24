@@ -30,7 +30,7 @@ import (
 // skipped by StrategyParameters and hydrateFields.
 type childStub struct{}
 
-func (stub *childStub) Name() string { return "child" }
+func (stub *childStub) Name() string           { return "child" }
 func (stub *childStub) Setup(_ *engine.Engine) {}
 func (stub *childStub) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
@@ -45,7 +45,7 @@ type parentWithChild struct {
 	Child    *childStub `pvbt:"child" weight:"0.50"`
 }
 
-func (parent *parentWithChild) Name() string { return "parentWithChild" }
+func (parent *parentWithChild) Name() string           { return "parentWithChild" }
 func (parent *parentWithChild) Setup(_ *engine.Engine) {}
 func (parent *parentWithChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
@@ -57,7 +57,7 @@ type descriptorStrategy struct {
 	Tickers  string `pvbt:"tickers" desc:"Asset tickers" default:"SPY,QQQ" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
 }
 
-func (s *descriptorStrategy) Name() string { return "DescriptorTest" }
+func (s *descriptorStrategy) Name() string           { return "DescriptorTest" }
 func (s *descriptorStrategy) Setup(_ *engine.Engine) {}
 func (s *descriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
@@ -79,7 +79,7 @@ type plainStrategy struct {
 	Window int `pvbt:"window" desc:"Rolling window" default:"12"`
 }
 
-func (s *plainStrategy) Name() string { return "PlainTest" }
+func (s *plainStrategy) Name() string           { return "PlainTest" }
 func (s *plainStrategy) Setup(_ *engine.Engine) {}
 func (s *plainStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil

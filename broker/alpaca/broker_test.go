@@ -39,10 +39,10 @@ var _ = Describe("AlpacaBroker", func() {
 			writer.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(writer).Encode(map[string]any{
 				"id":                 "acct-001",
-				"status":            "ACTIVE",
-				"cash":              "25000",
-				"equity":            "50000",
-				"buying_power":      "45000",
+				"status":             "ACTIVE",
+				"cash":               "25000",
+				"equity":             "50000",
+				"buying_power":       "45000",
 				"maintenance_margin": "5000",
 			})
 		})
@@ -448,13 +448,13 @@ var _ = Describe("AlpacaBroker", func() {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode([]map[string]any{
 						{
-							"id":           "ORD-LIST-1",
-							"status":       "new",
-							"type":         "limit",
-							"side":         "buy",
-							"symbol":       "GOOG",
-							"qty":          "15",
-							"limit_price":  "140.50",
+							"id":            "ORD-LIST-1",
+							"status":        "new",
+							"type":          "limit",
+							"side":          "buy",
+							"symbol":        "GOOG",
+							"qty":           "15",
+							"limit_price":   "140.50",
 							"time_in_force": "day",
 						},
 					})
@@ -480,10 +480,10 @@ var _ = Describe("AlpacaBroker", func() {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode([]map[string]any{
 						{
-							"symbol":                "NVDA",
-							"qty":                   "200",
-							"avg_entry_price":       "450",
-							"current_price":         "475",
+							"symbol":                 "NVDA",
+							"qty":                    "200",
+							"avg_entry_price":        "450",
+							"current_price":          "475",
 							"unrealized_intraday_pl": "1250",
 						},
 					})

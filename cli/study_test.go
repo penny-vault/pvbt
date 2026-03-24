@@ -23,7 +23,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/study/stress"
+	"github.com/penny-vault/pvbt/study"
 )
 
 var _ = Describe("study command", func() {
@@ -105,30 +105,34 @@ var _ = Describe("strategyFactory", func() {
 })
 
 var _ = Describe("resolveScenarios", func() {
-	It("returns nil for empty args", func() {
-		result := resolveScenarios([]string{})
+	It("returns nil, nil for empty args", func() {
+		result, err := resolveScenarios([]string{})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(BeNil())
 	})
 
-	It("returns nil for 'all' arg", func() {
-		result := resolveScenarios([]string{"all"})
+	It("returns nil, nil for 'all' arg", func() {
+		result, err := resolveScenarios([]string{"all"})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(BeNil())
 	})
 
 	It("filters scenarios by name", func() {
-		defaults := stress.DefaultScenarios()
+		defaults := study.AllScenarios()
 		if len(defaults) == 0 {
 			Skip("no default scenarios defined")
 		}
 
 		firstName := defaults[0].Name
-		result := resolveScenarios([]string{firstName})
+		result, err := resolveScenarios([]string{firstName})
+		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(HaveLen(1))
 		Expect(result[0].Name).To(Equal(firstName))
 	})
 
-	It("ignores unknown scenario names", func() {
-		result := resolveScenarios([]string{"nonexistent-scenario-xyz"})
-		Expect(result).To(BeEmpty())
+	It("returns an error for unknown scenario names", func() {
+		_, err := resolveScenarios([]string{"nonexistent-scenario-xyz"})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("nonexistent-scenario-xyz"))
 	})
 })

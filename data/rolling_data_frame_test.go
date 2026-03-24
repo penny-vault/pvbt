@@ -204,9 +204,9 @@ var _ = Describe("RollingDataFrame", func() {
 			}
 
 			vals := [][]float64{
-				{1, 2, 3, 4, 5},             // AAPL Price
-				{10, 20, 30, 40, 50},         // AAPL Volume
-				{100, 200, 300, 400, 500},    // GOOG Price
+				{1, 2, 3, 4, 5},                // AAPL Price
+				{10, 20, 30, 40, 50},           // AAPL Volume
+				{100, 200, 300, 400, 500},      // GOOG Price
 				{1000, 2000, 3000, 4000, 5000}, // GOOG Volume
 			}
 			multi, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
@@ -314,8 +314,8 @@ var _ = Describe("RollingDataFrame", func() {
 			}
 
 			vals := [][]float64{
-				{10, 20, 30, 40, 50},        // AAPL Price
-				{100, 200, 300, 400, 500},   // GOOG Price
+				{10, 20, 30, 40, 50},      // AAPL Price
+				{100, 200, 300, 400, 500}, // GOOG Price
 			}
 			multi, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 				[]data.Metric{data.Price}, data.Daily, vals)

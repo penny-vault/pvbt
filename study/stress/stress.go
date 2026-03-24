@@ -26,17 +26,17 @@ import (
 // range that spans all configured stress scenarios and then slicing the
 // resulting equity curve into per-scenario windows for analysis.
 type StressTest struct {
-	scenarios []Scenario
+	scenarios []study.Scenario
 }
 
 // Ensure StressTest satisfies the study.Study interface at compile time.
 var _ study.Study = (*StressTest)(nil)
 
 // New creates a StressTest using the provided scenarios. If scenarios is empty
-// or nil, DefaultScenarios() is used.
-func New(scenarios []Scenario) *StressTest {
+// or nil, study.AllScenarios() is used.
+func New(scenarios []study.Scenario) *StressTest {
 	if len(scenarios) == 0 {
-		scenarios = DefaultScenarios()
+		scenarios = study.AllScenarios()
 	}
 
 	return &StressTest{scenarios: scenarios}

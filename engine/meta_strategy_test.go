@@ -38,7 +38,7 @@ type spyOnlyStrategy struct {
 }
 
 func (s *spyOnlyStrategy) Name() string           { return "spyOnly" }
-func (s *spyOnlyStrategy) Setup(_ *engine.Engine)  {}
+func (s *spyOnlyStrategy) Setup(_ *engine.Engine) {}
 func (s *spyOnlyStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -87,7 +87,7 @@ type tltOnlyStrategy struct {
 }
 
 func (s *tltOnlyStrategy) Name() string           { return "tltOnly" }
-func (s *tltOnlyStrategy) Setup(_ *engine.Engine)  {}
+func (s *tltOnlyStrategy) Setup(_ *engine.Engine) {}
 func (s *tltOnlyStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -138,7 +138,7 @@ type testMetaStrategy struct {
 }
 
 func (s *testMetaStrategy) Name() string           { return "testMeta" }
-func (s *testMetaStrategy) Setup(_ *engine.Engine)  {}
+func (s *testMetaStrategy) Setup(_ *engine.Engine) {}
 func (s *testMetaStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -159,7 +159,7 @@ type testMetaStrategyWithOverride struct {
 }
 
 func (s *testMetaStrategyWithOverride) Name() string           { return "testMetaOverride" }
-func (s *testMetaStrategyWithOverride) Setup(_ *engine.Engine)  {}
+func (s *testMetaStrategyWithOverride) Setup(_ *engine.Engine) {}
 func (s *testMetaStrategyWithOverride) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -189,7 +189,7 @@ type testMetaStrategyWithChildCheck struct {
 }
 
 func (s *testMetaStrategyWithChildCheck) Name() string           { return "testMetaChildCheck" }
-func (s *testMetaStrategyWithChildCheck) Setup(_ *engine.Engine)  {}
+func (s *testMetaStrategyWithChildCheck) Setup(_ *engine.Engine) {}
 func (s *testMetaStrategyWithChildCheck) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -314,7 +314,7 @@ var _ = Describe("MetaStrategy", func() {
 			// Parent portfolio should hold underlying assets (SPY and/or TLT).
 			spyPosition := fund.Position(spy)
 			tltPosition := fund.Position(tlt)
-			Expect(spyPosition + tltPosition).To(BeNumerically(">", 0),
+			Expect(spyPosition+tltPosition).To(BeNumerically(">", 0),
 				"expected parent portfolio to hold SPY and/or TLT, got SPY=%.0f TLT=%.0f", spyPosition, tltPosition)
 
 			// Verify transactions were recorded.

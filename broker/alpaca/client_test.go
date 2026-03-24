@@ -243,10 +243,10 @@ var _ = Describe("apiClient", func() {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode([]map[string]any{
 						{
-							"symbol":                "AAPL",
-							"qty":                   "100",
-							"avg_entry_price":       "150.25",
-							"current_price":         "155.00",
+							"symbol":                 "AAPL",
+							"qty":                    "100",
+							"avg_entry_price":        "150.25",
+							"current_price":          "155.00",
 							"unrealized_intraday_pl": "475.00",
 						},
 					})

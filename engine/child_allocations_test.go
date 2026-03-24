@@ -95,10 +95,10 @@ func buildPricedAccount(date time.Time, cashBalance float64, positions map[asset
 
 var _ = Describe("ChildAllocations", func() {
 	var (
-		testDate  time.Time
-		spyAsset  asset.Asset
-		shyAsset  asset.Asset
-		tltAsset  asset.Asset
+		testDate time.Time
+		spyAsset asset.Asset
+		shyAsset asset.Asset
+		tltAsset asset.Asset
 	)
 
 	BeforeEach(func() {

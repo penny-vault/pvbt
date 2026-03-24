@@ -41,14 +41,14 @@ type fakePortfolio struct {
 }
 
 // Portfolio interface methods.
-func (fp *fakePortfolio) Cash() float64                                             { return 0 }
-func (fp *fakePortfolio) Value() float64                                            { return fp.portfolioVal }
-func (fp *fakePortfolio) Position(_ asset.Asset) float64                            { return 0 }
-func (fp *fakePortfolio) PositionValue(_ asset.Asset) float64                       { return 0 }
-func (fp *fakePortfolio) Holdings(_ func(asset.Asset, float64))                     {}
-func (fp *fakePortfolio) Transactions() []portfolio.Transaction                     { return nil }
-func (fp *fakePortfolio) Prices() *data.DataFrame                                   { return nil }
-func (fp *fakePortfolio) PerfData() *data.DataFrame                                 { return fp.perfData }
+func (fp *fakePortfolio) Cash() float64                         { return 0 }
+func (fp *fakePortfolio) Value() float64                        { return fp.portfolioVal }
+func (fp *fakePortfolio) Position(_ asset.Asset) float64        { return 0 }
+func (fp *fakePortfolio) PositionValue(_ asset.Asset) float64   { return 0 }
+func (fp *fakePortfolio) Holdings(_ func(asset.Asset, float64)) {}
+func (fp *fakePortfolio) Transactions() []portfolio.Transaction { return nil }
+func (fp *fakePortfolio) Prices() *data.DataFrame               { return nil }
+func (fp *fakePortfolio) PerfData() *data.DataFrame             { return fp.perfData }
 func (fp *fakePortfolio) PerformanceMetric(_ portfolio.PerformanceMetric) portfolio.PerformanceMetricQuery {
 	return portfolio.PerformanceMetricQuery{}
 }
@@ -65,17 +65,17 @@ func (fp *fakePortfolio) TradeMetrics() (portfolio.TradeMetrics, error) {
 func (fp *fakePortfolio) WithdrawalMetrics() (portfolio.WithdrawalMetrics, error) {
 	return portfolio.WithdrawalMetrics{}, nil
 }
-func (fp *fakePortfolio) SetMetadata(_, _ string)          {}
-func (fp *fakePortfolio) GetMetadata(_ string) string      { return "" }
-func (fp *fakePortfolio) Annotations() []portfolio.Annotation { return nil }
+func (fp *fakePortfolio) SetMetadata(_, _ string)               {}
+func (fp *fakePortfolio) GetMetadata(_ string) string           { return "" }
+func (fp *fakePortfolio) Annotations() []portfolio.Annotation   { return nil }
 func (fp *fakePortfolio) TradeDetails() []portfolio.TradeDetail { return nil }
-func (fp *fakePortfolio) Equity() float64                   { return 0 }
-func (fp *fakePortfolio) LongMarketValue() float64          { return 0 }
-func (fp *fakePortfolio) ShortMarketValue() float64         { return 0 }
-func (fp *fakePortfolio) MarginRatio() float64              { return 0 }
-func (fp *fakePortfolio) MarginDeficiency() float64         { return 0 }
-func (fp *fakePortfolio) BuyingPower() float64              { return 0 }
-func (fp *fakePortfolio) Benchmark() asset.Asset            { return asset.Asset{} }
+func (fp *fakePortfolio) Equity() float64                       { return 0 }
+func (fp *fakePortfolio) LongMarketValue() float64              { return 0 }
+func (fp *fakePortfolio) ShortMarketValue() float64             { return 0 }
+func (fp *fakePortfolio) MarginRatio() float64                  { return 0 }
+func (fp *fakePortfolio) MarginDeficiency() float64             { return 0 }
+func (fp *fakePortfolio) BuyingPower() float64                  { return 0 }
+func (fp *fakePortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
 
 // PortfolioStats interface methods.
 func (fp *fakePortfolio) Returns(_ context.Context, _ *portfolio.Period) *data.DataFrame { return nil }
@@ -98,7 +98,7 @@ func (fp *fakePortfolio) TaxLotsView(_ context.Context) map[asset.Asset][]portfo
 	return nil
 }
 func (fp *fakePortfolio) ShortLotsView(_ context.Context, _ func(asset.Asset, []portfolio.TaxLot)) {}
-func (fp *fakePortfolio) PerfDataView(_ context.Context) *data.DataFrame { return nil }
+func (fp *fakePortfolio) PerfDataView(_ context.Context) *data.DataFrame                           { return nil }
 func (fp *fakePortfolio) AnnualReturns(_ data.Metric) ([]int, []float64, error) {
 	return nil, nil, nil
 }

@@ -21,11 +21,14 @@ import (
 	"os"
 	"reflect"
 	"runtime"
+	"strings"
+	"time"
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/optimize"
 	"github.com/penny-vault/pvbt/study/stress"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -38,6 +41,7 @@ func newStudyCmd(strategy engine.Strategy) *cobra.Command {
 	}
 
 	cmd.AddCommand(newStressTestCmd(strategy))
+	cmd.AddCommand(newOptimizeCmd(strategy))
 
 	return cmd
 }
@@ -61,7 +65,11 @@ func newStressTestCmd(strategy engine.Strategy) *cobra.Command {
 func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) error {
 	ctx := log.Logger.WithContext(context.Background())
 
-	scenarios := resolveScenarios(args)
+	scenarios, err := resolveScenarios(args)
+	if err != nil {
+		return err
+	}
+
 	stressStudy := stress.New(scenarios)
 
 	provider, err := data.NewPVDataProvider(nil)
@@ -130,25 +138,368 @@ func strategyFactory(original engine.Strategy) func() engine.Strategy {
 	}
 }
 
-func resolveScenarios(args []string) []stress.Scenario {
+func resolveScenarios(args []string) ([]study.Scenario, error) {
 	if len(args) == 0 || (len(args) == 1 && args[0] == "all") {
-		return nil // nil triggers default scenarios
+		return nil, nil // nil triggers default scenarios in stress.New
 	}
 
-	defaults := stress.DefaultScenarios()
-
-	byName := make(map[string]stress.Scenario)
-	for _, scenario := range defaults {
-		byName[scenario.Name] = scenario
+	scenarios, err := study.ScenariosByName(args)
+	if err != nil {
+		return nil, fmt.Errorf("resolve scenarios: %w", err)
 	}
 
-	var selected []stress.Scenario
+	return scenarios, nil
+}
 
-	for _, name := range args {
-		if scenario, ok := byName[name]; ok {
-			selected = append(selected, scenario)
+// parseSimpleDuration parses a human-readable duration string such as
+// "5y", "6m", or "30d". It supports y (years as 365 days), m (months as
+// 30 days), d (days), h (hours), and falls back to time.ParseDuration for
+// formats like "72h".
+func parseSimpleDuration(input string) (time.Duration, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return 0, fmt.Errorf("empty duration string")
+	}
+
+	// Try standard Go duration parsing first (handles "72h", "30m", etc.).
+	if dur, err := time.ParseDuration(input); err == nil {
+		return dur, nil
+	}
+
+	unit := input[len(input)-1:]
+	numStr := input[:len(input)-1]
+
+	var multiplier time.Duration
+
+	switch unit {
+	case "y":
+		multiplier = 365 * 24 * time.Hour
+	case "m":
+		multiplier = 30 * 24 * time.Hour
+	case "d":
+		multiplier = 24 * time.Hour
+	default:
+		return 0, fmt.Errorf("unrecognised duration %q: use a number followed by y, m, or d (e.g. 5y, 6m, 30d)", input)
+	}
+
+	var count int
+
+	if _, err := fmt.Sscanf(numStr, "%d", &count); err != nil {
+		return 0, fmt.Errorf("parse duration %q: %w", input, err)
+	}
+
+	return time.Duration(count) * multiplier, nil
+}
+
+// parseMetric maps a flag string to the corresponding study.Metric constant.
+func parseMetric(metricStr string) (study.Metric, error) {
+	switch strings.ToLower(strings.TrimSpace(metricStr)) {
+	case "sharpe":
+		return study.MetricSharpe, nil
+	case "cagr":
+		return study.MetricCAGR, nil
+	case "max-drawdown", "maxdrawdown":
+		return study.MetricMaxDrawdown, nil
+	case "sortino":
+		return study.MetricSortino, nil
+	case "calmar":
+		return study.MetricCalmar, nil
+	default:
+		return 0, fmt.Errorf("unknown metric %q: choose from sharpe, cagr, max-drawdown, sortino, calmar", metricStr)
+	}
+}
+
+// newOptimizeCmd builds the "study optimize" subcommand.
+func newOptimizeCmd(strategy engine.Strategy) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "optimize",
+		Short: "Search for the best strategy parameters using cross-validation",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runOptimize(cmd, strategy)
+		},
+	}
+
+	cmd.Flags().String("search", "grid", "Search strategy (grid, random)")
+	cmd.Flags().String("metric", "sharpe", "Objective metric (sharpe, cagr, max-drawdown, sortino, calmar)")
+	cmd.Flags().String("validation", "train-test", "Validation scheme (train-test, kfold, walk-forward, scenario)")
+	cmd.Flags().Int("folds", 5, "Number of folds for kfold validation")
+	cmd.Flags().String("train-end", "", "Cutoff date for train/test split (YYYY-MM-DD)")
+	cmd.Flags().String("min-train", "5y", "Minimum training window for walk-forward (e.g. 5y, 18m)")
+	cmd.Flags().String("test-len", "2y", "Test window length for walk-forward (e.g. 2y, 6m)")
+	cmd.Flags().String("step", "1y", "Step size for walk-forward (e.g. 1y, 6m)")
+	cmd.Flags().Int("samples", 100, "Number of random samples (random search only)")
+	cmd.Flags().Int("workers", runtime.GOMAXPROCS(0), "Number of concurrent workers")
+	cmd.Flags().Int("top", 10, "Number of top parameter combinations to include in the report")
+	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("scenarios", "", "Comma-separated scenario names for scenario validation")
+	cmd.Flags().Int("holdout", 1, "Number of scenarios to hold out per split (scenario validation)")
+
+	registerStrategyFlags(cmd, strategy)
+
+	return cmd
+}
+
+func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
+	ctx := log.Logger.WithContext(context.Background())
+
+	// --- metric ---
+	metricStr, err := cmd.Flags().GetString("metric")
+	if err != nil {
+		return fmt.Errorf("get --metric: %w", err)
+	}
+
+	metric, err := parseMetric(metricStr)
+	if err != nil {
+		return err
+	}
+
+	// --- validation splits ---
+	validationStr, err := cmd.Flags().GetString("validation")
+	if err != nil {
+		return fmt.Errorf("get --validation: %w", err)
+	}
+
+	splits, err := buildSplits(cmd, validationStr)
+	if err != nil {
+		return err
+	}
+
+	// --- parameter sweeps from strategy flags ---
+	sweeps := collectParamSweeps(cmd, strategy)
+
+	// --- search strategy ---
+	searchStr, err := cmd.Flags().GetString("search")
+	if err != nil {
+		return fmt.Errorf("get --search: %w", err)
+	}
+
+	samples, err := cmd.Flags().GetInt("samples")
+	if err != nil {
+		return fmt.Errorf("get --samples: %w", err)
+	}
+
+	var searchStrategy study.SearchStrategy
+
+	switch strings.ToLower(strings.TrimSpace(searchStr)) {
+	case "grid":
+		searchStrategy = study.NewGrid(sweeps...)
+	case "random":
+		searchStrategy = study.NewRandom(sweeps, samples, time.Now().UnixNano())
+	default:
+		return fmt.Errorf("unknown search strategy %q: choose from grid, random", searchStr)
+	}
+
+	// --- optimizer ---
+	topN, err := cmd.Flags().GetInt("top")
+	if err != nil {
+		return fmt.Errorf("get --top: %w", err)
+	}
+
+	optimizer := optimize.New(splits,
+		optimize.WithObjective(metric),
+		optimize.WithTopN(topN),
+	)
+
+	// --- data provider ---
+	provider, err := data.NewPVDataProvider(nil)
+	if err != nil {
+		return fmt.Errorf("create data provider: %w", err)
+	}
+
+	opts := []engine.Option{
+		engine.WithDataProvider(provider),
+		engine.WithAssetProvider(provider),
+	}
+
+	workers, err := cmd.Flags().GetInt("workers")
+	if err != nil {
+		return fmt.Errorf("get --workers: %w", err)
+	}
+
+	runner := &study.Runner{
+		Study:          optimizer,
+		NewStrategy:    strategyFactory(strategy),
+		Options:        opts,
+		Workers:        workers,
+		SearchStrategy: searchStrategy,
+		Splits:         splits,
+		Objective:      metric,
+	}
+
+	progressCh, resultCh, err := runner.Run(ctx)
+	if err != nil {
+		return err
+	}
+
+	for prog := range progressCh {
+		switch prog.Status {
+		case study.RunStarted:
+			log.Info().Str("run", prog.RunName).Int("index", prog.RunIndex).Int("total", prog.TotalRuns).Msg("started")
+		case study.RunCompleted:
+			log.Info().Str("run", prog.RunName).Msg("completed")
+		case study.RunFailed:
+			log.Warn().Str("run", prog.RunName).Err(prog.Err).Msg("failed")
 		}
 	}
 
-	return selected
+	result := <-resultCh
+	if result.Err != nil {
+		return fmt.Errorf("optimize study failed: %w", result.Err)
+	}
+
+	formatStr, err := cmd.Flags().GetString("format")
+	if err != nil {
+		return fmt.Errorf("get --format: %w", err)
+	}
+
+	return result.Report.Render(report.Format(formatStr), os.Stdout)
+}
+
+// buildSplits constructs the cross-validation splits based on the --validation flag.
+func buildSplits(cmd *cobra.Command, validationStr string) ([]study.Split, error) {
+	switch strings.ToLower(strings.TrimSpace(validationStr)) {
+	case "train-test":
+		return buildTrainTestSplits(cmd)
+	case "kfold":
+		return buildKFoldSplits(cmd)
+	case "walk-forward":
+		return buildWalkForwardSplits(cmd)
+	case "scenario":
+		return buildScenarioSplits(cmd)
+	default:
+		return nil, fmt.Errorf("unknown validation scheme %q: choose from train-test, kfold, walk-forward, scenario", validationStr)
+	}
+}
+
+// buildTrainTestSplits builds a single train/test split.
+// It requires --train-end and infers the outer range from the splits full range.
+// Because the optimizer's Configurations method determines the date range from
+// splits, we need sensible defaults. If --train-end is not supplied we fall back
+// to a default split spanning 10y of history ending today.
+func buildTrainTestSplits(cmd *cobra.Command) ([]study.Split, error) {
+	trainEndStr, err := cmd.Flags().GetString("train-end")
+	if err != nil {
+		return nil, fmt.Errorf("get --train-end: %w", err)
+	}
+
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	end := now
+
+	var cutoff time.Time
+	if trainEndStr != "" {
+		cutoff, err = time.Parse("2006-01-02", trainEndStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse --train-end %q: %w", trainEndStr, err)
+		}
+	} else {
+		// Default: 80% train, 20% test over 10 years.
+		start := now.AddDate(-10, 0, 0)
+		cutoff = start.Add(time.Duration(float64(end.Sub(start)) * 0.8))
+	}
+
+	start := cutoff.AddDate(-8, 0, 0) // provide some training history
+
+	splits, err := study.TrainTest(start, cutoff, end)
+	if err != nil {
+		return nil, fmt.Errorf("build train/test split: %w", err)
+	}
+
+	return splits, nil
+}
+
+// buildKFoldSplits builds k-fold splits over a default 10-year window.
+func buildKFoldSplits(cmd *cobra.Command) ([]study.Split, error) {
+	folds, err := cmd.Flags().GetInt("folds")
+	if err != nil {
+		return nil, fmt.Errorf("get --folds: %w", err)
+	}
+
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	start := now.AddDate(-10, 0, 0)
+
+	splits, err := study.KFold(start, now, folds)
+	if err != nil {
+		return nil, fmt.Errorf("build k-fold splits: %w", err)
+	}
+
+	return splits, nil
+}
+
+// buildWalkForwardSplits builds walk-forward splits over a default 15-year window.
+func buildWalkForwardSplits(cmd *cobra.Command) ([]study.Split, error) {
+	minTrainStr, err := cmd.Flags().GetString("min-train")
+	if err != nil {
+		return nil, fmt.Errorf("get --min-train: %w", err)
+	}
+
+	testLenStr, err := cmd.Flags().GetString("test-len")
+	if err != nil {
+		return nil, fmt.Errorf("get --test-len: %w", err)
+	}
+
+	stepStr, err := cmd.Flags().GetString("step")
+	if err != nil {
+		return nil, fmt.Errorf("get --step: %w", err)
+	}
+
+	minTrain, err := parseSimpleDuration(minTrainStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse --min-train: %w", err)
+	}
+
+	testLen, err := parseSimpleDuration(testLenStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse --test-len: %w", err)
+	}
+
+	step, err := parseSimpleDuration(stepStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse --step: %w", err)
+	}
+
+	now := time.Now().UTC().Truncate(24 * time.Hour)
+	start := now.AddDate(-15, 0, 0)
+
+	splits, err := study.WalkForward(start, now, minTrain, testLen, step)
+	if err != nil {
+		return nil, fmt.Errorf("build walk-forward splits: %w", err)
+	}
+
+	return splits, nil
+}
+
+// buildScenarioSplits builds scenario leave-n-out splits.
+func buildScenarioSplits(cmd *cobra.Command) ([]study.Split, error) {
+	scenariosStr, err := cmd.Flags().GetString("scenarios")
+	if err != nil {
+		return nil, fmt.Errorf("get --scenarios: %w", err)
+	}
+
+	holdout, err := cmd.Flags().GetInt("holdout")
+	if err != nil {
+		return nil, fmt.Errorf("get --holdout: %w", err)
+	}
+
+	var scenarios []study.Scenario
+
+	if scenariosStr == "" {
+		scenarios = study.AllScenarios()
+	} else {
+		names := strings.Split(scenariosStr, ",")
+		for idx := range names {
+			names[idx] = strings.TrimSpace(names[idx])
+		}
+
+		scenarios, err = study.ScenariosByName(names)
+		if err != nil {
+			return nil, fmt.Errorf("resolve --scenarios: %w", err)
+		}
+	}
+
+	splits, err := study.ScenarioLeaveNOut(scenarios, holdout)
+	if err != nil {
+		return nil, fmt.Errorf("build scenario splits: %w", err)
+	}
+
+	return splits, nil
 }

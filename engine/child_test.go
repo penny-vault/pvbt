@@ -36,7 +36,7 @@ type simpleChild struct {
 }
 
 func (sc *simpleChild) Name() string           { return "SimpleChild" }
-func (sc *simpleChild) Setup(_ *engine.Engine)  {}
+func (sc *simpleChild) Setup(_ *engine.Engine) {}
 func (sc *simpleChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -50,7 +50,7 @@ type parentSingleChild struct {
 }
 
 func (p *parentSingleChild) Name() string           { return "ParentSingle" }
-func (p *parentSingleChild) Setup(_ *engine.Engine)  {}
+func (p *parentSingleChild) Setup(_ *engine.Engine) {}
 func (p *parentSingleChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -61,7 +61,7 @@ type parentNoWeight struct {
 }
 
 func (p *parentNoWeight) Name() string           { return "ParentNoWeight" }
-func (p *parentNoWeight) Setup(_ *engine.Engine)  {}
+func (p *parentNoWeight) Setup(_ *engine.Engine) {}
 func (p *parentNoWeight) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -72,7 +72,7 @@ type parentNilChild struct {
 }
 
 func (p *parentNilChild) Name() string           { return "ParentNil" }
-func (p *parentNilChild) Setup(_ *engine.Engine)  {}
+func (p *parentNilChild) Setup(_ *engine.Engine) {}
 func (p *parentNilChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -84,7 +84,7 @@ type parentOverweight struct {
 }
 
 func (p *parentOverweight) Name() string           { return "ParentOverweight" }
-func (p *parentOverweight) Setup(_ *engine.Engine)  {}
+func (p *parentOverweight) Setup(_ *engine.Engine) {}
 func (p *parentOverweight) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -96,7 +96,7 @@ type parentValidWeight struct {
 }
 
 func (p *parentValidWeight) Name() string           { return "ParentValid" }
-func (p *parentValidWeight) Setup(_ *engine.Engine)  {}
+func (p *parentValidWeight) Setup(_ *engine.Engine) {}
 func (p *parentValidWeight) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -107,7 +107,7 @@ type parentWithPreset struct {
 }
 
 func (p *parentWithPreset) Name() string           { return "ParentPreset" }
-func (p *parentWithPreset) Setup(_ *engine.Engine)  {}
+func (p *parentWithPreset) Setup(_ *engine.Engine) {}
 func (p *parentWithPreset) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -118,7 +118,7 @@ type parentWithParams struct {
 }
 
 func (p *parentWithParams) Name() string           { return "ParentParams" }
-func (p *parentWithParams) Setup(_ *engine.Engine)  {}
+func (p *parentWithParams) Setup(_ *engine.Engine) {}
 func (p *parentWithParams) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -129,7 +129,7 @@ type parentPresetThenParams struct {
 }
 
 func (p *parentPresetThenParams) Name() string           { return "ParentPresetParams" }
-func (p *parentPresetThenParams) Setup(_ *engine.Engine)  {}
+func (p *parentPresetThenParams) Setup(_ *engine.Engine) {}
 func (p *parentPresetThenParams) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -140,7 +140,7 @@ type parentBadPreset struct {
 }
 
 func (p *parentBadPreset) Name() string           { return "ParentBadPreset" }
-func (p *parentBadPreset) Setup(_ *engine.Engine)  {}
+func (p *parentBadPreset) Setup(_ *engine.Engine) {}
 func (p *parentBadPreset) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -151,7 +151,7 @@ type cyclicParent struct {
 }
 
 func (cp *cyclicParent) Name() string           { return "CyclicParent" }
-func (cp *cyclicParent) Setup(_ *engine.Engine)  {}
+func (cp *cyclicParent) Setup(_ *engine.Engine) {}
 func (cp *cyclicParent) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -162,7 +162,7 @@ type innerChild struct {
 }
 
 func (ic *innerChild) Name() string           { return "InnerChild" }
-func (ic *innerChild) Setup(_ *engine.Engine)  {}
+func (ic *innerChild) Setup(_ *engine.Engine) {}
 func (ic *innerChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -173,7 +173,7 @@ type middleChild struct {
 }
 
 func (mc *middleChild) Name() string           { return "MiddleChild" }
-func (mc *middleChild) Setup(_ *engine.Engine)  {}
+func (mc *middleChild) Setup(_ *engine.Engine) {}
 func (mc *middleChild) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -184,7 +184,7 @@ type parentRecursive struct {
 }
 
 func (p *parentRecursive) Name() string           { return "ParentRecursive" }
-func (p *parentRecursive) Setup(_ *engine.Engine)  {}
+func (p *parentRecursive) Setup(_ *engine.Engine) {}
 func (p *parentRecursive) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }
@@ -195,7 +195,7 @@ type parentNoTag struct {
 }
 
 func (p *parentNoTag) Name() string           { return "ParentNoTag" }
-func (p *parentNoTag) Setup(_ *engine.Engine)  {}
+func (p *parentNoTag) Setup(_ *engine.Engine) {}
 func (p *parentNoTag) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }

@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	spy = asset.Asset{CompositeFigi: "BBG000BDTBL9", Ticker: "SPY"}
+	spy            = asset.Asset{CompositeFigi: "BBG000BDTBL9", Ticker: "SPY"}
 	benchmarkAsset = asset.Asset{CompositeFigi: "BENCH", Ticker: "BENCH"}
 )
 

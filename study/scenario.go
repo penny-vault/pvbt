@@ -13,9 +13,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package stress
+package study
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Scenario describes a historical market stress period with a name, description,
 // and the date range over which the stress event occurred.
@@ -26,9 +29,8 @@ type Scenario struct {
 	End         time.Time
 }
 
-// DefaultScenarios returns the built-in set of historical market stress scenarios
-// used when no custom scenarios are provided to New.
-func DefaultScenarios() []Scenario {
+// AllScenarios returns the built-in set of historical market stress scenarios.
+func AllScenarios() []Scenario {
 	return []Scenario{
 		{
 			Name:        "1973-74 Oil Embargo Bear Market",
@@ -133,4 +135,29 @@ func DefaultScenarios() []Scenario {
 			End:         time.Date(2023, 5, 31, 0, 0, 0, 0, time.UTC),
 		},
 	}
+}
+
+// ScenariosByName returns the subset of AllScenarios matching the given names,
+// preserving the order of the names slice. It returns an error if any name is
+// not found in AllScenarios.
+func ScenariosByName(names []string) ([]Scenario, error) {
+	all := AllScenarios()
+
+	byName := make(map[string]Scenario, len(all))
+	for _, scenario := range all {
+		byName[scenario.Name] = scenario
+	}
+
+	selected := make([]Scenario, 0, len(names))
+
+	for _, name := range names {
+		scenario, ok := byName[name]
+		if !ok {
+			return nil, fmt.Errorf("scenario not found: %q", name)
+		}
+
+		selected = append(selected, scenario)
+	}
+
+	return selected, nil
 }

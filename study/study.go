@@ -51,11 +51,13 @@ type RunResult struct {
 
 // Progress is sent on a channel as runs execute.
 type Progress struct {
-	RunName   string
-	RunIndex  int
-	TotalRuns int
-	Status    RunStatus
-	Err       error
+	RunName    string
+	RunIndex   int
+	TotalRuns  int
+	BatchIndex int
+	BatchSize  int
+	Status     RunStatus
+	Err        error
 }
 
 // Result is sent on a channel when the study completes.

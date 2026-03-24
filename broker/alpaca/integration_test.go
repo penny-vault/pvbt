@@ -15,9 +15,9 @@ import (
 
 var _ = Describe("Integration", Label("integration"), func() {
 	var (
-		ctx           context.Context
-		cancel        context.CancelFunc
-		alpacaBroker  *alpaca.AlpacaBroker
+		ctx          context.Context
+		cancel       context.CancelFunc
+		alpacaBroker *alpaca.AlpacaBroker
 	)
 
 	BeforeEach(func() {
