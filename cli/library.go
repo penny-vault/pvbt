@@ -241,7 +241,7 @@ func (model libraryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleListKey processes key events in browsing state.
 func (model libraryModel) handleListKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch {
-	case keyMsg.Type == tea.KeyCtrlC:
+	case keyMsg.Type == tea.KeyCtrlC, keyMsg.Type == tea.KeyEsc:
 		return model, tea.Quit
 
 	case keyMsg.Type == tea.KeyRunes && len(keyMsg.Runes) == 1 && keyMsg.Runes[0] == 'q':
@@ -583,7 +583,7 @@ func (model libraryModel) listView() string {
 	if model.state == libStateConfirmUninst {
 		fmt.Fprintf(&sb, "  Uninstall %s? y/n", model.uninstallTarget)
 	} else {
-		sb.WriteString(libFooterStyle.Render("  j/k: move  space: select  enter: detail  i: install  u: uninstall  /: filter  q: quit"))
+		sb.WriteString(libFooterStyle.Render("  j/k: move  space: select  enter: detail  i: install  u: uninstall  /: filter  esc/q: quit"))
 	}
 
 	sb.WriteString("\n")
