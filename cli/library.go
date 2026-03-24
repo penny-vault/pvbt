@@ -91,24 +91,25 @@ type libUninstallResultMsg struct {
 
 // libraryModel is the bubbletea model for the library TUI.
 type libraryModel struct {
-	state           string
-	items           []libraryItem
-	categories      []string
-	cursor          int
-	width           int
-	height          int
-	filter          string
-	filtering       bool
-	forceRefresh    bool
-	cacheDir        string
-	libDir          string
-	results         []libInstallResultMsg
-	err             error
-	detailIndex     int
-	viewport        viewport.Model
-	readmeCache     map[string]string
-	uninstallTarget string
-	shortCodes      map[string]string
+	state            string
+	items            []libraryItem
+	categories       []string
+	cursor           int
+	width            int
+	height           int
+	filter           string
+	filtering        bool
+	forceRefresh     bool
+	cacheDir         string
+	libDir           string
+	results          []libInstallResultMsg
+	err              error
+	detailIndex      int
+	viewport         viewport.Model
+	readmeCache      map[string]string
+	uninstallTarget  string
+	shortCodes       map[string]string
+	pendingInstalled []library.InstalledStrategy
 }
 
 // newLibraryModel creates a new libraryModel with sensible defaults.
@@ -177,6 +178,12 @@ func (model libraryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model.buildItems(typedMsg.listings)
 		model.state = libStateBrowsing
 
+		// Apply any installed data that arrived before listings.
+		if model.pendingInstalled != nil {
+			model.markInstalled(model.pendingInstalled)
+			model.pendingInstalled = nil
+		}
+
 		return model, nil
 
 	case libInstalledMsg:
@@ -184,7 +191,12 @@ func (model libraryModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			log.Warn().Err(typedMsg.err).Msg("failed to list installed strategies")
 		}
 
-		model.markInstalled(typedMsg.installed)
+		if len(model.items) == 0 {
+			// Listings haven't arrived yet; stash for later.
+			model.pendingInstalled = typedMsg.installed
+		} else {
+			model.markInstalled(typedMsg.installed)
+		}
 
 		return model, nil
 
@@ -528,10 +540,13 @@ func (model libraryModel) listView() string {
 			nameStr := fmt.Sprintf("%-30s", item.listing.Owner+"/"+item.listing.Name)
 			stars := libStarsStyle.Render(fmt.Sprintf("*%d", item.listing.Stars))
 
-			// Truncate description.
+			// Truncate description to fill remaining terminal width.
 			desc := item.listing.Description
 
-			maxDesc := 40
+			// prefix(2) + space + checkbox(3) + space + name(30) + space + stars(~6) + 2 spaces = ~45 fixed
+			fixedWidth := 47
+			maxDesc := max(model.width-fixedWidth, 20)
+
 			if len(desc) > maxDesc {
 				desc = desc[:maxDesc-3] + "..."
 			}
@@ -580,9 +595,6 @@ func (model libraryModel) listView() string {
 func (model libraryModel) detailView() string {
 	var sb strings.Builder
 
-	sb.WriteString(libFooterStyle.Render("  esc: back  space: select  i: install"))
-	sb.WriteString("\n\n")
-
 	item := model.items[model.detailIndex]
 
 	// Status line.
@@ -610,17 +622,24 @@ func (model libraryModel) detailView() string {
 		status,
 	)
 
-	boxWidth := model.width - 4
-	if boxWidth < 40 {
-		boxWidth = 40
-	}
+	boxWidth := max(model.width-4, 40)
 
 	box := libMetaBoxStyle.Width(boxWidth).Render(metaContent)
 	sb.WriteString(box)
 	sb.WriteString("\n\n")
 
-	// README viewport.
-	sb.WriteString(model.viewport.View())
+	// README viewport or loading indicator.
+	cacheKey := item.listing.Owner + "/" + item.listing.Name
+	if _, cached := model.readmeCache[cacheKey]; !cached {
+		sb.WriteString("  Loading README...")
+	} else {
+		sb.WriteString(model.viewport.View())
+	}
+
+	sb.WriteString("\n")
+
+	// Footer with navigation hints.
+	sb.WriteString(libFooterStyle.Render("  esc: back  space: select  i: install  j/k: scroll"))
 	sb.WriteString("\n")
 
 	return sb.String()
