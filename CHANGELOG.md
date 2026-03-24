@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `pvbt config` command displays the resolved middleware configuration after merging config file, profile defaults, and CLI flag overrides.
 - Users can now trade through Tradier with support for market, limit, stop, and stop-limit orders, OCO and bracket groups, and real-time fill streaming.
 - Users can now trade through Interactive Brokers using either OAuth or the Client Portal Gateway for authentication
+- The new `study optimize` command searches for the best strategy parameters using grid, random, or Bayesian search with out-of-sample validation. Validation schemes include simple train/test splits, k-fold cross-validation, walk-forward analysis, and scenario-based leave-N-out using the shared historical scenario library.
+- Strategy parameter flags accept range syntax (`--lookback=3:24:1`) to define sweep ranges directly from the command line.
+- Named historical scenarios are now available to all study types, not just stress tests.
 
 ### Changed
 
