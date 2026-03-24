@@ -77,8 +77,8 @@ func Install(ctx context.Context, libDir string, cloneURL string) (*InstalledStr
 		return nil, fmt.Errorf("go build failed: %s: %w", string(output), err)
 	}
 
-	// Run <binary> describe to get strategy metadata.
-	describeCmd := exec.CommandContext(ctx, binPath, "describe")
+	// Run <binary> describe --json to get strategy metadata.
+	describeCmd := exec.CommandContext(ctx, binPath, "describe", "--json")
 
 	describeOutput, err := describeCmd.Output()
 	if err != nil {
