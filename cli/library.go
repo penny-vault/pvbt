@@ -690,7 +690,7 @@ func newLibraryCmd() *cobra.Command {
 			mdl := newLibraryModel("", "", refresh)
 			program := tea.NewProgram(mdl, tea.WithAltScreen())
 
-			_, runErr := program.Run()
+			finalModel, runErr := program.Run()
 
 			// Restore logger and flush buffered logs.
 			log.Logger = savedLogger
@@ -701,6 +701,11 @@ func newLibraryCmd() *cobra.Command {
 
 			if runErr != nil {
 				return fmt.Errorf("running library TUI: %w", runErr)
+			}
+
+			// Print install/error results after the alt screen has cleared.
+			if final, ok := finalModel.(libraryModel); ok && final.state == libStateDone {
+				fmt.Fprint(cmd.OutOrStdout(), final.doneView())
 			}
 
 			return nil
