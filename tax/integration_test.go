@@ -47,7 +47,7 @@ func newEchoFillBroker(prices map[asset.Asset]float64) *echoFillBroker {
 
 func (b *echoFillBroker) Connect(_ context.Context) error { return nil }
 func (b *echoFillBroker) Close() error                    { return nil }
-func (b *echoFillBroker) Fills() <-chan broker.Fill        { return b.fillCh }
+func (b *echoFillBroker) Fills() <-chan broker.Fill       { return b.fillCh }
 
 func (b *echoFillBroker) Submit(_ context.Context, order broker.Order) error {
 	price, ok := b.prices[order.Asset]
@@ -74,7 +74,7 @@ func (b *echoFillBroker) Submit(_ context.Context, order broker.Order) error {
 	return nil
 }
 
-func (b *echoFillBroker) Cancel(_ context.Context, _ string) error   { return nil }
+func (b *echoFillBroker) Cancel(_ context.Context, _ string) error { return nil }
 func (b *echoFillBroker) Replace(_ context.Context, _ string, _ broker.Order) error {
 	return nil
 }

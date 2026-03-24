@@ -32,7 +32,7 @@ type applyParamsStrategy struct {
 	Label    string  `pvbt:"label" desc:"Label" default:"default"`
 }
 
-func (ap *applyParamsStrategy) Name() string          { return "ApplyParamsTest" }
+func (ap *applyParamsStrategy) Name() string           { return "ApplyParamsTest" }
 func (ap *applyParamsStrategy) Setup(_ *engine.Engine) {}
 func (ap *applyParamsStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
@@ -46,7 +46,7 @@ type noDescriptorStrategy struct {
 	Window int `pvbt:"window" desc:"Rolling window" default:"12"`
 }
 
-func (nd *noDescriptorStrategy) Name() string          { return "NoDescriptor" }
+func (nd *noDescriptorStrategy) Name() string           { return "NoDescriptor" }
 func (nd *noDescriptorStrategy) Setup(_ *engine.Engine) {}
 func (nd *noDescriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil

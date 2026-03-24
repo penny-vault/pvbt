@@ -167,7 +167,7 @@ var _ = Describe("Analyze", func() {
 
 	Describe("with empty results", func() {
 		It("returns a valid report with expected section types", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rpt.Title).NotTo(BeEmpty())
@@ -211,7 +211,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("groups by combination ID", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -221,7 +221,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("ranks combos with better OOS scores first", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -243,7 +243,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("produces a best combo detail table", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -253,7 +253,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("produces an overfitting check table", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -280,7 +280,7 @@ var _ = Describe("Analyze", func() {
 
 	Describe("with results missing metadata", func() {
 		It("ignores results without _combination_id", func() {
-			opt := optimize.New(splits)
+			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			results := []study.RunResult{
 				{
 					Config: study.RunConfig{

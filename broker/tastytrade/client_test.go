@@ -292,10 +292,10 @@ var _ = Describe("apiClient", func() {
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
-									"symbol":                  "AAPL",
-									"quantity":                100.0,
-									"average-open-price":      150.25,
-									"mark-price":              155.00,
+									"symbol":                   "AAPL",
+									"quantity":                 100.0,
+									"average-open-price":       150.25,
+									"mark-price":               155.00,
 									"realized-day-gain-effect": 50.00,
 								},
 							},
@@ -320,10 +320,10 @@ var _ = Describe("apiClient", func() {
 					writer.Header().Set("Content-Type", "application/json")
 					json.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
-							"cash-balance":             25000.50,
-							"net-liquidating-value":    50000.00,
-							"equity-buying-power":      45000.00,
-							"maintenance-requirement":  5000.00,
+							"cash-balance":            25000.50,
+							"net-liquidating-value":   50000.00,
+							"equity-buying-power":     45000.00,
+							"maintenance-requirement": 5000.00,
 						},
 					})
 				})

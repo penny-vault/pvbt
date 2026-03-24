@@ -314,7 +314,7 @@ type presetStrategy struct {
 }
 
 func (s *presetStrategy) Name() string           { return "presetTest" }
-func (s *presetStrategy) Setup(_ *engine.Engine)  {}
+func (s *presetStrategy) Setup(_ *engine.Engine) {}
 func (s *presetStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
 	return nil
 }

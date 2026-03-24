@@ -179,7 +179,7 @@ type riskTestStrategy struct {
 }
 
 func (s *riskTestStrategy) Name() string           { return "risk-test" }
-func (s *riskTestStrategy) Setup(_ *engine.Engine)  {}
+func (s *riskTestStrategy) Setup(_ *engine.Engine) {}
 func (s *riskTestStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{
 		Schedule:  "@monthend",
@@ -232,7 +232,7 @@ type bracketStrategy struct {
 	tpPct     float64
 }
 
-func (s *bracketStrategy) Name() string       { return "bracket-test" }
+func (s *bracketStrategy) Name() string           { return "bracket-test" }
 func (s *bracketStrategy) Setup(_ *engine.Engine) {}
 func (s *bracketStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
@@ -734,9 +734,9 @@ var _ = Describe("Backtest", func() {
 				vals[0*numDays+dayIdx] = row.close // MetricClose
 				vals[1*numDays+dayIdx] = row.close // AdjClose
 				vals[2*numDays+dayIdx] = 0.0       // Dividend
-				vals[3*numDays+dayIdx] = row.high   // MetricHigh
-				vals[4*numDays+dayIdx] = row.low    // MetricLow
-				vals[5*numDays+dayIdx] = 1.0        // SplitFactor: no split
+				vals[3*numDays+dayIdx] = row.high  // MetricHigh
+				vals[4*numDays+dayIdx] = row.low   // MetricLow
+				vals[5*numDays+dayIdx] = 1.0       // SplitFactor: no split
 			}
 
 			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, data.SlabToColumns(vals, len(assets)*len(bracketMetrics), numDays))
@@ -758,10 +758,10 @@ var _ = Describe("Backtest", func() {
 			//   today's prices. close=97, high=101, low=93 -> stop triggers (93 <= 95)
 			// Day 3 (Thu 2024-01-04): padding day
 			rows := []struct{ close, high, low float64 }{
-				{100, 102, 98},  // Day 0: entry fills at close=100
-				{99, 101, 97},   // Day 1: bracket exits created; no trigger
-				{97, 101, 93},   // Day 2: stop triggers (low 93 <= stop 95)
-				{98, 99, 96},    // Day 3: padding
+				{100, 102, 98}, // Day 0: entry fills at close=100
+				{99, 101, 97},  // Day 1: bracket exits created; no trigger
+				{97, 101, 93},  // Day 2: stop triggers (low 93 <= stop 95)
+				{98, 99, 96},   // Day 3: padding
 			}
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -1041,8 +1041,8 @@ var _ = Describe("Backtest", func() {
 			// Long asset: price rises from 100 to ~110 over the period.
 			// Short asset: price drops from 100 to ~90 over the period (profitable short).
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
-				longPrice := 100.0 + float64(dayIdx)*0.5    // rises: 100, 100.5, 101, ...
-				shortPrice := 100.0 - float64(dayIdx)*0.5   // drops: 100, 99.5, 99, ...
+				longPrice := 100.0 + float64(dayIdx)*0.5  // rises: 100, 100.5, 101, ...
+				shortPrice := 100.0 - float64(dayIdx)*0.5 // drops: 100, 99.5, 99, ...
 				longHigh := longPrice + 2.0
 				longLow := longPrice - 2.0
 				shortHigh := shortPrice + 2.0
@@ -1052,12 +1052,12 @@ var _ = Describe("Backtest", func() {
 				// Asset 1 (short) columns: Close, AdjClose, Dividend, High, Low, SplitFactor
 				// Column index = (assetIdx*nMetrics + metricIdx)*nDays + dayIdx
 				// Long asset (index 0)
-				vals[(0*nMetrics+0)*nDays+dayIdx] = longPrice  // Close
-				vals[(0*nMetrics+1)*nDays+dayIdx] = longPrice  // AdjClose
-				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend
-				vals[(0*nMetrics+3)*nDays+dayIdx] = longHigh   // High
-				vals[(0*nMetrics+4)*nDays+dayIdx] = longLow    // Low
-				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor
+				vals[(0*nMetrics+0)*nDays+dayIdx] = longPrice // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = longPrice // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0       // Dividend
+				vals[(0*nMetrics+3)*nDays+dayIdx] = longHigh  // High
+				vals[(0*nMetrics+4)*nDays+dayIdx] = longLow   // Low
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0       // SplitFactor
 
 				// Short asset (index 1)
 				vals[(1*nMetrics+0)*nDays+dayIdx] = shortPrice // Close

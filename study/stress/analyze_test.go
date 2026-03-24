@@ -81,12 +81,12 @@ func buildFakePortfolio(dates []time.Time, equityValues []float64) *fakePortfoli
 
 var _ = Describe("Analyze", func() {
 	var (
-		scenarios  []stress.Scenario
+		scenarios  []study.Scenario
 		stressTest *stress.StressTest
 	)
 
 	BeforeEach(func() {
-		scenarios = []stress.Scenario{
+		scenarios = []study.Scenario{
 			{
 				Name:        "Downturn",
 				Description: "Test downturn",

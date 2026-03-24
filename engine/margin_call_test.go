@@ -38,7 +38,7 @@ type marginShortStrategy struct {
 }
 
 func (s *marginShortStrategy) Name() string           { return "marginShort" }
-func (s *marginShortStrategy) Setup(_ *engine.Engine)  {}
+func (s *marginShortStrategy) Setup(_ *engine.Engine) {}
 func (s *marginShortStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -62,7 +62,7 @@ type marginCallHandlerStrategy struct {
 }
 
 func (s *marginCallHandlerStrategy) Name() string           { return "marginCallHandler" }
-func (s *marginCallHandlerStrategy) Setup(_ *engine.Engine)  {}
+func (s *marginCallHandlerStrategy) Setup(_ *engine.Engine) {}
 func (s *marginCallHandlerStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
 }
@@ -117,12 +117,12 @@ var _ = Describe("Margin Call", func() {
 
 		for dayIdx := 0; dayIdx < nDays; dayIdx++ {
 			price := startPrice + priceStep*float64(dayIdx)
-			vals[0*nDays+dayIdx] = price // Close
-			vals[1*nDays+dayIdx] = price // AdjClose
-			vals[2*nDays+dayIdx] = 0.0   // Dividend
+			vals[0*nDays+dayIdx] = price       // Close
+			vals[1*nDays+dayIdx] = price       // AdjClose
+			vals[2*nDays+dayIdx] = 0.0         // Dividend
 			vals[3*nDays+dayIdx] = price + 2.0 // High
 			vals[4*nDays+dayIdx] = price - 2.0 // Low
-			vals[5*nDays+dayIdx] = 1.0   // SplitFactor
+			vals[5*nDays+dayIdx] = 1.0         // SplitFactor
 		}
 
 		numCols := 1 * len(allMetrics)

@@ -90,9 +90,9 @@ var _ = Describe("ResamplingProvider", func() {
 
 	Describe("Fetch", func() {
 		var (
-			provider    *data.ResamplingProvider
-			req         data.DataRequest
-			outMetrics  []data.Metric
+			provider   *data.ResamplingProvider
+			req        data.DataRequest
+			outMetrics []data.Metric
 		)
 
 		BeforeEach(func() {

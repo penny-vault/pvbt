@@ -231,8 +231,8 @@ var _ = Describe("Types", Label("translation"), func() {
 				{"Cancelled", broker.OrderCancelled},
 				{"Expired", broker.OrderCancelled},
 				{"Rejected", broker.OrderCancelled},
-			{"Removed", broker.OrderCancelled},
-			{"Partially Removed", broker.OrderCancelled},
+				{"Removed", broker.OrderCancelled},
+				{"Partially Removed", broker.OrderCancelled},
 			} {
 				resp := orderResponse{Status: tc.ttStatus}
 				result := toBrokerOrder(resp)

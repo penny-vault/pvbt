@@ -328,7 +328,7 @@ var _ = Describe("DataFrame", func() {
 		It("Assets view is structurally independent", func() {
 			narrowed := df.Assets(aapl)
 			Expect(narrowed.ColCount()).To(Equal(2)) // 1 asset * 2 metrics
-			Expect(df.ColCount()).To(Equal(4))        // 2 assets * 2 metrics
+			Expect(df.ColCount()).To(Equal(4))       // 2 assets * 2 metrics
 		})
 
 		It("Metrics narrows to requested metrics", func() {
@@ -1418,11 +1418,11 @@ var _ = Describe("DataFrame", func() {
 			// SPY.Volume: 100,200,300,400,500  EFA.Volume: 50,50,50,50,50  VOO.Volume: 10,20,30,40,50
 			vals := [][]float64{
 				{1, 2, 3, 4, 5},           // SPY.Price
-				{100, 200, 300, 400, 500},  // SPY.Volume
-				{2, 4, 6, 8, 10},           // EFA.Price
-				{50, 50, 50, 50, 50},       // EFA.Volume
-				{10, 9, 8, 7, 6},           // VOO.Price
-				{10, 20, 30, 40, 50},       // VOO.Volume
+				{100, 200, 300, 400, 500}, // SPY.Volume
+				{2, 4, 6, 8, 10},          // EFA.Price
+				{50, 50, 50, 50, 50},      // EFA.Volume
+				{10, 9, 8, 7, 6},          // VOO.Price
+				{10, 20, 30, 40, 50},      // VOO.Volume
 			}
 			var err error
 			covDF, err = data.NewDataFrame(t, []asset.Asset{spy, efa, voo}, []data.Metric{data.Price, data.Volume}, data.Daily, vals)

@@ -62,7 +62,7 @@ var _ = Describe("Integration", func() {
 			makeResult("combo-c", 0, paramsC, acctC),
 		}
 
-		opt := optimize.New(splits, optimize.WithObjective(study.MetricSharpe))
+		opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 		rpt, analyzeErr := opt.Analyze(results)
 
 		Expect(analyzeErr).NotTo(HaveOccurred())

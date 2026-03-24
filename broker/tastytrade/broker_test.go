@@ -505,10 +505,10 @@ var _ = Describe("TastytradeBroker", func() {
 							"items": []map[string]any{
 								{
 									"symbol":                   "NVDA",
-									"quantity":                  200.0,
-									"average-open-price":        450.0,
-									"mark-price":                475.0,
-									"realized-day-gain-effect":  1250.0,
+									"quantity":                 200.0,
+									"average-open-price":       450.0,
+									"mark-price":               475.0,
+									"realized-day-gain-effect": 1250.0,
 								},
 							},
 						},

@@ -31,12 +31,12 @@ func cannedSearchResponse(repos []map[string]interface{}) string {
 
 func makeRepo(name, owner, description, cloneURL string, stars int, topics []string, updatedAt string) map[string]interface{} {
 	return map[string]interface{}{
-		"name":        name,
-		"description": description,
-		"clone_url":   cloneURL,
+		"name":             name,
+		"description":      description,
+		"clone_url":        cloneURL,
 		"stargazers_count": stars,
-		"updated_at":  updatedAt,
-		"topics":      topics,
+		"updated_at":       updatedAt,
+		"topics":           topics,
 		"owner": map[string]interface{}{
 			"login": owner,
 		},
@@ -110,9 +110,9 @@ var _ = Describe("Search", func() {
 
 	Context("caching behavior", func() {
 		var (
-			server      *httptest.Server
+			server       *httptest.Server
 			requestCount atomic.Int32
-			repos       []map[string]interface{}
+			repos        []map[string]interface{}
 		)
 
 		BeforeEach(func() {
