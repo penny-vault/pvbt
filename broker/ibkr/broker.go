@@ -44,6 +44,16 @@ func WithGateway(baseURL string) Option {
 	}
 }
 
+// WithOAuth configures the broker to authenticate via IB's OAuth flow
+// using the given consumer key and RSA private key file.
+func WithOAuth(baseURL, consumerKey, keyFile string) Option {
+	return func(ib *IBBroker) {
+		auth := newOAuthAuthenticator(consumerKey, keyFile)
+		auth.baseURL = baseURL
+		ib.client = newAPIClient(baseURL, auth)
+	}
+}
+
 // New creates a new IBBroker with the given options.
 func New(opts ...Option) *IBBroker {
 	ib := &IBBroker{

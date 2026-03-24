@@ -119,3 +119,30 @@ func (ga *gatewayAuthenticator) DecorateRequest(req *http.Request) error {
 func (ga *gatewayAuthenticator) RunKeepalive(ctx context.Context) {
 	ga.Keepalive(ctx)
 }
+
+// OAuth authenticator test helpers.
+
+func NewOAuthAuthenticatorForTest(consumerKey, keyFile string) *oauthAuthenticator {
+	return newOAuthAuthenticator(consumerKey, keyFile)
+}
+
+func NewOAuthAuthenticatorForTestWithToken(consumerKey, accessToken, sessionToken string) *oauthAuthenticator {
+	return &oauthAuthenticator{
+		consumerKey:       consumerKey,
+		accessToken:       accessToken,
+		accessTokenSecret: "test-secret",
+		liveSessionToken:  []byte(sessionToken),
+	}
+}
+
+func SetOAuthBaseURLForTest(auth *oauthAuthenticator, baseURL string) {
+	auth.baseURL = baseURL
+}
+
+func (oa *oauthAuthenticator) InitAuth(ctx context.Context) error {
+	return oa.Init(ctx)
+}
+
+func (oa *oauthAuthenticator) DecorateRequest(req *http.Request) error {
+	return oa.Decorate(req)
+}

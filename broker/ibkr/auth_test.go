@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"time"
 
@@ -96,6 +98,53 @@ var _ = Describe("Auth", func() {
 			DeferCleanup(keepaliveCancel)
 
 			Eventually(func() int32 { return tickleCalls.Load() }, 2*time.Second).Should(BeNumerically(">=", 2))
+		})
+	})
+
+	Describe("OAuthAuthenticator", func() {
+		It("loads signing key from file", func() {
+			keyFile := filepath.Join(GinkgoT().TempDir(), "test-key.pem")
+			Expect(os.WriteFile(keyFile, testRSAKeyPEM, 0600)).To(Succeed())
+
+			auth := ibkr.NewOAuthAuthenticatorForTest("test-consumer", keyFile)
+			Expect(auth).ToNot(BeNil())
+		})
+
+		It("performs request token exchange on Init", func() {
+			keyFile := filepath.Join(GinkgoT().TempDir(), "test-key.pem")
+			Expect(os.WriteFile(keyFile, testRSAKeyPEM, 0600)).To(Succeed())
+
+			mux := http.NewServeMux()
+			mux.HandleFunc("POST /oauth/request_token", func(writer http.ResponseWriter, req *http.Request) {
+				json.NewEncoder(writer).Encode(map[string]string{
+					"oauth_token": "req-token-123",
+				})
+			})
+			mux.HandleFunc("POST /oauth/access_token", func(writer http.ResponseWriter, req *http.Request) {
+				json.NewEncoder(writer).Encode(map[string]string{
+					"oauth_token":        "access-token-456",
+					"oauth_token_secret": "secret-789",
+				})
+			})
+			mux.HandleFunc("POST /oauth/live_session_token", func(writer http.ResponseWriter, req *http.Request) {
+				json.NewEncoder(writer).Encode(map[string]string{
+					"diffie_hellman_response":      "ZGgtcmVzcG9uc2U=",
+					"live_session_token_signature": "lst-sig",
+				})
+			})
+			server := httptest.NewServer(mux)
+			DeferCleanup(server.Close)
+
+			auth := ibkr.NewOAuthAuthenticatorForTest("test-consumer", keyFile)
+			ibkr.SetOAuthBaseURLForTest(auth, server.URL)
+			Expect(auth.InitAuth(ctx)).To(Succeed())
+		})
+
+		It("decorates requests with OAuth signature", func() {
+			auth := ibkr.NewOAuthAuthenticatorForTestWithToken("test-consumer", "access-token", "session-token")
+			req, _ := http.NewRequest("GET", "https://api.ibkr.com/v1/api/iserver/accounts", nil)
+			Expect(auth.DecorateRequest(req)).To(Succeed())
+			Expect(req.Header.Get("Authorization")).To(HavePrefix("OAuth"))
 		})
 	})
 })
