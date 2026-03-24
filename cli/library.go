@@ -540,18 +540,7 @@ func (model libraryModel) listView() string {
 			nameStr := fmt.Sprintf("%-30s", item.listing.Owner+"/"+item.listing.Name)
 			stars := libStarsStyle.Render(fmt.Sprintf("*%d", item.listing.Stars))
 
-			// Truncate description to fill remaining terminal width.
-			desc := item.listing.Description
-
-			// prefix(2) + space + checkbox(3) + space + name(30) + space + stars(~6) + 2 spaces = ~45 fixed
-			fixedWidth := 47
-			maxDesc := max(model.width-fixedWidth, 20)
-
-			if len(desc) > maxDesc {
-				desc = desc[:maxDesc-3] + "..."
-			}
-
-			line := fmt.Sprintf("%s %s %s %s  %s", prefix, checkbox, nameStr, stars, desc)
+			line := fmt.Sprintf("%s %s %s %s", prefix, checkbox, nameStr, stars)
 			if item.installed {
 				line = libInstalledStyle.Render(line)
 			}
