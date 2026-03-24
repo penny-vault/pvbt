@@ -147,7 +147,7 @@ var _ = Describe("Integration", func() {
 			makeResult("combo-b", 1, paramsB, acctB2),
 		}
 
-		opt := optimize.New(allSplits)
+		opt := optimize.New(allSplits, optimize.WithObjective(study.MetricCAGR))
 		rpt, analyzeErr := opt.Analyze(results)
 
 		Expect(analyzeErr).NotTo(HaveOccurred())
