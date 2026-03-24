@@ -1084,8 +1084,10 @@ Append to `cli/library_test.go`:
 			model.items[0].selected = true
 			model.state = libStateDetail
 			model.detailIndex = 0
-			_, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+			updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'i'}})
+			resultModel := updated.(libraryModel)
 			Expect(cmd).NotTo(BeNil())
+			Expect(resultModel.state).To(Equal(libStateInstalling))
 		})
 
 		It("populates viewport with README content on message", func() {
@@ -1229,7 +1231,12 @@ func (model libraryModel) handleDetailKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd
 		return model, nil
 
 	case keyMsg.Type == tea.KeyRunes && len(keyMsg.Runes) == 1 && keyMsg.Runes[0] == 'i':
-		return model, model.installSelected()
+		cmd := model.installSelected()
+		if cmd != nil {
+			model.state = libStateInstalling
+		}
+
+		return model, cmd
 
 	default:
 		// Pass through to viewport for scrolling
