@@ -146,3 +146,25 @@ func (oa *oauthAuthenticator) InitAuth(ctx context.Context) error {
 func (oa *oauthAuthenticator) DecorateRequest(req *http.Request) error {
 	return oa.Decorate(req)
 }
+
+// Order streamer test helpers.
+
+func NewOrderStreamerForTest(fills chan broker.Fill, wsURL string) *orderStreamer {
+	return newOrderStreamer(fills, wsURL, nil)
+}
+
+func NewOrderStreamerForTestWithTrades(fills chan broker.Fill, wsURL string, tradesFn func(ctx context.Context) ([]ibTradeEntry, error)) *orderStreamer {
+	return newOrderStreamer(fills, wsURL, tradesFn)
+}
+
+func SetStreamerHeartbeatForTest(streamer *orderStreamer, interval time.Duration) {
+	streamer.heartbeatInterval = interval
+}
+
+func (streamer *orderStreamer) ConnectStreamer(ctx context.Context) error {
+	return streamer.connect(ctx)
+}
+
+func (streamer *orderStreamer) CloseStreamer() error {
+	return streamer.close()
+}

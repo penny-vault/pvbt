@@ -17,6 +17,7 @@ package ibkr
 
 import (
 	"context"
+	"strings"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -29,6 +30,7 @@ const (
 type IBBroker struct {
 	client    *apiClient
 	fills     chan broker.Fill
+	streamer  *orderStreamer
 	accountID string
 }
 
@@ -68,7 +70,7 @@ func New(opts ...Option) *IBBroker {
 	return ib
 }
 
-// Connect establishes a session with IB.
+// Connect establishes a session with IB and starts the order streamer.
 func (ib *IBBroker) Connect(ctx context.Context) error {
 	ib.client.pending = nil
 	ib.client.secdef = nil
@@ -81,11 +83,22 @@ func (ib *IBBroker) Connect(ctx context.Context) error {
 
 	ib.accountID = accountID
 
+	wsURL := toWebSocketURL(ib.client.resty.BaseURL)
+	ib.streamer = newOrderStreamer(ib.fills, wsURL, ib.PollTrades)
+
+	if connectErr := ib.streamer.connect(ctx); connectErr != nil {
+		return connectErr
+	}
+
 	return nil
 }
 
-// Close tears down the broker session.
+// Close tears down the broker session and stops the order streamer.
 func (ib *IBBroker) Close() error {
+	if ib.streamer != nil {
+		return ib.streamer.close()
+	}
+
 	return nil
 }
 
@@ -201,4 +214,13 @@ func (ib *IBBroker) Balance(ctx context.Context) (broker.Balance, error) {
 // to recover missed fills after a WebSocket reconnect.
 func (ib *IBBroker) PollTrades(ctx context.Context) ([]ibTradeEntry, error) {
 	return ib.client.getTrades(ctx)
+}
+
+// toWebSocketURL converts an HTTP base URL to its WebSocket equivalent,
+// appending the /v1/api/ws path used by the IB Client Portal Gateway.
+func toWebSocketURL(baseURL string) string {
+	wsURL := strings.Replace(baseURL, "https://", "wss://", 1)
+	wsURL = strings.Replace(wsURL, "http://", "ws://", 1)
+
+	return wsURL + "/v1/api/ws"
 }
