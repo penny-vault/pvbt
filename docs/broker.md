@@ -250,7 +250,7 @@ The daily fee for each short lot is `(annualized rate / 252) * current market va
 
 ### tastytrade
 
-The `broker/tastytrade` package implements `Broker` and `GroupSubmitter` for live trading with tastytrade. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, and native OCO/bracket (OTOCO) order groups.
+The `broker/tastytrade` package enables live trading through tastytrade. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, and OCO/bracket (OTOCO) order groups.
 
 ```go
 import "github.com/penny-vault/pvbt/broker/tastytrade"
@@ -279,7 +279,7 @@ Fills are delivered via a WebSocket connection to tastytrade's account streamer.
 
 ### Alpaca
 
-The `broker/alpaca` package implements `Broker` and `GroupSubmitter` for live and paper trading with Alpaca. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, fractional shares, and native OCO/bracket orders.
+The `broker/alpaca` package enables live and paper trading through Alpaca. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, fractional shares, and OCO/bracket order groups.
 
 ```go
 import "github.com/penny-vault/pvbt/broker/alpaca"
@@ -310,7 +310,7 @@ Fills are delivered via a WebSocket connection to Alpaca's trade updates stream.
 
 ### Schwab
 
-The `broker/schwab` package implements `Broker` and `GroupSubmitter` for live trading with Charles Schwab. It supports equities, all four order types (Market, Limit, Stop, StopLimit), dollar-amount orders, tax lot selection, and native OCO/bracket order groups via Schwab's nested `childOrderStrategies`.
+The `broker/schwab` package enables live trading through Charles Schwab. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, tax lot selection, and OCO/bracket order groups.
 
 ```go
 import "github.com/penny-vault/pvbt/broker/schwab"
