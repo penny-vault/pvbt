@@ -142,6 +142,100 @@ scenarios := []stress.Scenario{
 stressStudy := stress.New(scenarios)
 ```
 
+## Parameter optimization study
+
+Parameter optimization evaluates strategy parameter combinations across cross-validation splits and ranks them by out-of-sample performance. Each combination is scored on the test portion of each split; the final rank is the mean score across all splits. This guards against overfitting by ensuring parameters are selected on data the strategy did not train on.
+
+### Validation schemes
+
+| Scheme | Description |
+|--------|-------------|
+| `train-test` | A single split: parameters optimized on [start, cutoff] and evaluated on [cutoff, end]. |
+| `kfold` | The date range is divided into k equal folds. Each fold is held out once as the test set; the strategy is trained on the remaining folds. The mean test score determines the rank. |
+| `walk-forward` | An expanding window that advances through time. Each split trains on [start, trainEnd] and tests on [trainEnd, trainEnd+testLen]. The window advances by `step` on each iteration. |
+| `scenario` | The scenario leave-n-out scheme holds out n historical market scenarios as the test set and trains on the rest. All C(N, n) combinations are evaluated. |
+
+### Search strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `grid` | Exhaustively evaluates all combinations of the supplied parameter sweeps. Use when the search space is small. |
+| `random` | Samples a fixed number of combinations at random from the sweep ranges. Faster than grid when the space is large. |
+| `bayesian` | Uses a Gaussian process surrogate model and Expected Improvement acquisition to guide the search toward promising regions after an initial random exploration phase. |
+
+### CLI usage
+
+```
+./adm study optimize [flags]
+pvbt study optimize --strategy=adm [flags]
+```
+
+#### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--search` | `grid` | Search strategy: `grid`, `random`. |
+| `--metric` | `sharpe` | Objective metric: `sharpe`, `cagr`, `max-drawdown`, `sortino`, `calmar`. |
+| `--validation` | `train-test` | Validation scheme: `train-test`, `kfold`, `walk-forward`, `scenario`. |
+| `--folds` | `5` | Number of folds for `kfold` validation. |
+| `--train-end` | _(80% of last 10 years)_ | Cutoff date for `train-test` split (`YYYY-MM-DD`). |
+| `--min-train` | `5y` | Minimum training window for `walk-forward` (e.g. `5y`, `18m`). |
+| `--test-len` | `2y` | Test window length for `walk-forward` (e.g. `2y`, `6m`). |
+| `--step` | `1y` | Step size for `walk-forward` (e.g. `1y`, `6m`). |
+| `--samples` | `100` | Number of random samples (`random` search only). |
+| `--workers` | GOMAXPROCS | Number of concurrent engine runs. |
+| `--top` | `10` | Number of top combinations to include in the report. |
+| `--format` | `text` | Output format: `text`, `json`. |
+| `--scenarios` | _(all built-in)_ | Comma-separated scenario names for `scenario` validation. |
+| `--holdout` | `1` | Number of scenarios to hold out per split (`scenario` validation). |
+
+Strategy parameter flags are registered automatically from the strategy struct. Pass a range using `min:max:step` syntax to sweep that parameter:
+
+```
+./adm study optimize --lookback=5:30:5 --validation=walk-forward
+```
+
+Non-range values are applied as fixed overrides and are not swept.
+
+### Programmatic usage
+
+```go
+splits, err := study.WalkForward(start, end, 5*365*24*time.Hour, 2*365*24*time.Hour, 365*24*time.Hour)
+if err != nil {
+    return err
+}
+
+optimizer := optimize.New(splits,
+    optimize.WithObjective(study.MetricSharpe),
+    optimize.WithTopN(10),
+)
+
+runner := &study.Runner{
+    Study:          optimizer,
+    NewStrategy:    func() engine.Strategy { return &adm.Strategy{} },
+    Options: []engine.Option{
+        engine.WithDataProvider(provider),
+        engine.WithAssetProvider(provider),
+    },
+    Workers:        8,
+    SearchStrategy: study.NewBayesian(sweeps, seed),
+    Splits:         splits,
+    Objective:      study.MetricSharpe,
+}
+
+progressCh, resultCh, err := runner.Run(ctx)
+```
+
+The `SearchStrategy` and `Sweeps` fields on `Runner` are mutually exclusive. When `SearchStrategy` is set, the runner calls `Next` in a loop, executing each batch and feeding scores back to guide the next iteration.
+
+### Report output
+
+The optimization report includes a ranked table of parameter combinations with their mean train and test scores across all splits, equity curves for the top N combinations on the test periods, and per-split score breakdowns.
+
+## Walk-forward validation
+
+Walk-forward validation is a special case of parameter optimization that uses only the `walk-forward` validation scheme. It is available as a `--validation=walk-forward` option to `study optimize` rather than a separate command. See the parameter optimization section above for flags and usage.
+
 ## Future study types
 
 The following study types are planned to build on this framework:
@@ -150,6 +244,3 @@ The following study types are planned to build on this framework:
 - Tax analysis -- compare tax-efficient vs standard execution
 - Factor analysis -- decompose returns into factor exposures
 - Regime analysis -- identify market regimes and per-regime behavior
-- Walk-forward validation -- rolling in-sample/out-of-sample testing
-- Parameter optimization -- systematic parameter search
-- Monte Carlo simulation -- randomized return sequences

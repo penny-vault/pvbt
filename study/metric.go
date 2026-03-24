@@ -29,11 +29,16 @@ import (
 type Metric int
 
 const (
-	MetricSharpe      Metric = iota
-	MetricCAGR        Metric = iota
+	// MetricSharpe scores a portfolio by its annualised Sharpe ratio.
+	MetricSharpe Metric = iota
+	// MetricCAGR scores a portfolio by its compound annual growth rate.
+	MetricCAGR Metric = iota
+	// MetricMaxDrawdown scores a portfolio by its maximum drawdown (lower is better; negate if maximising).
 	MetricMaxDrawdown Metric = iota
-	MetricSortino     Metric = iota
-	MetricCalmar      Metric = iota
+	// MetricSortino scores a portfolio by its Sortino ratio.
+	MetricSortino Metric = iota
+	// MetricCalmar scores a portfolio by its Calmar ratio.
+	MetricCalmar Metric = iota
 )
 
 // performanceMetric maps a Metric constant to the corresponding
