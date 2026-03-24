@@ -296,7 +296,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				TotalCash:     10000.0,
 				MarketValue:   40000.0,
 				Margin: tradier.TradierMarginBalance{
-					StockBuyingPower:    80000.0,
+					StockBuyingPower:   80000.0,
 					CurrentRequirement: 5000.0,
 				},
 			}

@@ -38,10 +38,10 @@ func ToBrokerBalance(summary ibAccountSummary) broker.Balance {
 // noopAuthenticator satisfies Authenticator for tests that do not need auth.
 type noopAuthenticator struct{}
 
-func (na *noopAuthenticator) Init(_ context.Context) error    { return nil }
-func (na *noopAuthenticator) Decorate(_ *http.Request) error  { return nil }
-func (na *noopAuthenticator) Keepalive(_ context.Context)     {}
-func (na *noopAuthenticator) Close() error                    { return nil }
+func (na *noopAuthenticator) Init(_ context.Context) error   { return nil }
+func (na *noopAuthenticator) Decorate(_ *http.Request) error { return nil }
+func (na *noopAuthenticator) Keepalive(_ context.Context)    {}
+func (na *noopAuthenticator) Close() error                   { return nil }
 
 // NewAPIClientForTest creates an apiClient pointed at the given base URL
 // with a no-op authenticator and retries disabled (so error tests are fast).

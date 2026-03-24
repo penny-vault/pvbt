@@ -16,16 +16,23 @@
 package cli
 
 import (
+	"bytes"
 	"context"
+	"fmt"
+	"os"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/penny-vault/pvbt/library"
 	"github.com/penny-vault/pvbt/registry"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"github.com/spf13/cobra"
 )
 
 // State constants for the library TUI.
@@ -84,24 +91,24 @@ type libUninstallResultMsg struct {
 
 // libraryModel is the bubbletea model for the library TUI.
 type libraryModel struct {
-	state          string
-	items          []libraryItem
-	categories     []string
-	cursor         int
-	width          int
-	height         int
-	filter         string
-	filtering      bool
-	forceRefresh   bool
-	cacheDir       string
-	libDir         string
-	results        []libInstallResultMsg
-	err            error
-	detailIndex    int
-	viewport       viewport.Model
-	readmeCache    map[string]string
+	state           string
+	items           []libraryItem
+	categories      []string
+	cursor          int
+	width           int
+	height          int
+	filter          string
+	filtering       bool
+	forceRefresh    bool
+	cacheDir        string
+	libDir          string
+	results         []libInstallResultMsg
+	err             error
+	detailIndex     int
+	viewport        viewport.Model
+	readmeCache     map[string]string
 	uninstallTarget string
-	shortCodes     map[string]string
+	shortCodes      map[string]string
 }
 
 // newLibraryModel creates a new libraryModel with sensible defaults.
@@ -395,6 +402,7 @@ func (model libraryModel) handleDetailKey(keyMsg tea.KeyMsg) (tea.Model, tea.Cmd
 
 	// Pass remaining keys to viewport for scrolling.
 	var cmd tea.Cmd
+
 	model.viewport, cmd = model.viewport.Update(keyMsg)
 
 	return model, cmd
@@ -426,9 +434,316 @@ func (model libraryModel) handleConfirmUninstallKey(keyMsg tea.KeyMsg) (tea.Mode
 	return model, nil
 }
 
+// Style definitions for the library TUI.
+var (
+	libTitleStyle      = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("63"))
+	libCategoryStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("39"))
+	libInstalledStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	libCursorStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("205")).Bold(true)
+	libStarsStyle      = lipgloss.NewStyle().Foreground(lipgloss.Color("220"))
+	libSelectedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("82"))
+	libFooterStyle     = lipgloss.NewStyle().Foreground(lipgloss.Color("241"))
+	libInstallRowStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("82"))
+	libMetaBoxStyle    = lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).Padding(0, 1)
+)
+
 // View renders the library TUI.
 func (model libraryModel) View() string {
+	switch model.state {
+	case libStateLoading:
+		return "\n  Loading strategies from GitHub...\n"
+	case libStateBrowsing, libStateConfirmUninst:
+		return model.listView()
+	case libStateDetail:
+		return model.detailView()
+	case libStateInstalling:
+		return "\n  Installing selected strategies...\n"
+	case libStateDone:
+		return model.doneView()
+	}
+
 	return ""
+}
+
+// listView renders the browsable strategy list.
+func (model libraryModel) listView() string {
+	var sb strings.Builder
+
+	// Header.
+	header := libTitleStyle.Render("pvbt library")
+	if numSelected := model.selectedCount(); numSelected > 0 {
+		header += fmt.Sprintf(" (%d selected)", numSelected)
+	}
+
+	sb.WriteString(header)
+	sb.WriteString("\n")
+
+	// Filter bar.
+	if model.filtering {
+		fmt.Fprintf(&sb, "/: %s_\n", model.filter)
+	} else if model.filter != "" {
+		fmt.Fprintf(&sb, "filter: %s (/ to edit, esc to clear)\n", model.filter)
+	}
+
+	sb.WriteString("\n")
+
+	// Group visible items by category.
+	visible := model.visibleItems()
+	categoryItems := make(map[string][]int)
+
+	for _, itemIdx := range visible {
+		cat := model.items[itemIdx].category
+		categoryItems[cat] = append(categoryItems[cat], itemIdx)
+	}
+
+	visiblePos := 0
+
+	for _, cat := range model.categories {
+		itemIndices, hasCategoryItems := categoryItems[cat]
+		if !hasCategoryItems {
+			continue
+		}
+
+		sb.WriteString(libCategoryStyle.Render(fmt.Sprintf("  %s", cat)))
+		sb.WriteString("\n")
+
+		for _, itemIdx := range itemIndices {
+			item := model.items[itemIdx]
+
+			// Cursor prefix.
+			prefix := "  "
+			if visiblePos == model.cursor {
+				prefix = libCursorStyle.Render("> ")
+			}
+
+			// Checkbox.
+			checkbox := "[ ]"
+			if item.installed {
+				checkbox = "[+]"
+			} else if item.selected {
+				checkbox = libSelectedStyle.Render("[x]")
+			}
+
+			// Name and stars.
+			nameStr := fmt.Sprintf("%-30s", item.listing.Owner+"/"+item.listing.Name)
+			stars := libStarsStyle.Render(fmt.Sprintf("*%d", item.listing.Stars))
+
+			// Truncate description.
+			desc := item.listing.Description
+
+			maxDesc := 40
+			if len(desc) > maxDesc {
+				desc = desc[:maxDesc-3] + "..."
+			}
+
+			line := fmt.Sprintf("%s %s %s %s  %s", prefix, checkbox, nameStr, stars, desc)
+			if item.installed {
+				line = libInstalledStyle.Render(line)
+			}
+
+			sb.WriteString(line)
+			sb.WriteString("\n")
+
+			visiblePos++
+		}
+	}
+
+	// Install row.
+	if numSelected := model.selectedCount(); numSelected > 0 {
+		sb.WriteString("\n")
+
+		prefix := "  "
+		if model.isOnInstallRow() {
+			prefix = libCursorStyle.Render("> ")
+		}
+
+		sb.WriteString(prefix)
+		sb.WriteString(libInstallRowStyle.Render(fmt.Sprintf("Install selected (%d)", numSelected)))
+		sb.WriteString("\n")
+	}
+
+	sb.WriteString("\n")
+
+	// Footer.
+	if model.state == libStateConfirmUninst {
+		fmt.Fprintf(&sb, "  Uninstall %s? y/n", model.uninstallTarget)
+	} else {
+		sb.WriteString(libFooterStyle.Render("  j/k: move  space: select  enter: detail  i: install  u: uninstall  /: filter  q: quit"))
+	}
+
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// detailView renders the detail page for a single strategy.
+func (model libraryModel) detailView() string {
+	var sb strings.Builder
+
+	sb.WriteString(libFooterStyle.Render("  esc: back  space: select  i: install"))
+	sb.WriteString("\n\n")
+
+	item := model.items[model.detailIndex]
+
+	// Status line.
+	status := "not installed"
+	if item.installed {
+		status = "installed"
+	} else if item.selected {
+		status = "selected"
+	}
+
+	// Categories.
+	cats := strings.Join(item.listing.Categories, ", ")
+	if cats == "" {
+		cats = "uncategorized"
+	}
+
+	// Build metadata content.
+	metaContent := fmt.Sprintf(
+		"%s  %s\n%s\nUpdated: %s  Categories: %s\nStatus: %s",
+		libTitleStyle.Render(item.listing.Owner+"/"+item.listing.Name),
+		libStarsStyle.Render(fmt.Sprintf("*%d", item.listing.Stars)),
+		item.listing.Description,
+		item.listing.UpdatedAt,
+		cats,
+		status,
+	)
+
+	boxWidth := model.width - 4
+	if boxWidth < 40 {
+		boxWidth = 40
+	}
+
+	box := libMetaBoxStyle.Width(boxWidth).Render(metaContent)
+	sb.WriteString(box)
+	sb.WriteString("\n\n")
+
+	// README viewport.
+	sb.WriteString(model.viewport.View())
+	sb.WriteString("\n")
+
+	return sb.String()
+}
+
+// doneView renders the installation results or error.
+func (model libraryModel) doneView() string {
+	if model.err != nil {
+		return fmt.Sprintf("\n  Error: %v\n", model.err)
+	}
+
+	if len(model.results) == 0 {
+		return "\n  No strategies were installed.\n"
+	}
+
+	var sb strings.Builder
+
+	sb.WriteString("\n  Installation results:\n\n")
+
+	for _, result := range model.results {
+		if result.err != nil {
+			fmt.Fprintf(&sb, "  FAIL  %s: %v\n", result.repoName, result.err)
+		} else {
+			fmt.Fprintf(&sb, "  OK    %s\n", result.repoName)
+		}
+	}
+
+	return sb.String()
+}
+
+// newLibraryCmd creates the cobra command for "pvbt library".
+func newLibraryCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "library",
+		Short: "Browse, install, and manage strategies from the pvbt registry",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			refresh, flagErr := cmd.Flags().GetBool("refresh")
+			if flagErr != nil {
+				return fmt.Errorf("reading refresh flag: %w", flagErr)
+			}
+
+			// Redirect zerolog to a buffer while the TUI runs.
+			var logBuffer bytes.Buffer
+
+			savedLogger := log.Logger
+			log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: &logBuffer}).With().Timestamp().Logger()
+
+			mdl := newLibraryModel("", "", refresh)
+			program := tea.NewProgram(mdl, tea.WithAltScreen())
+
+			_, runErr := program.Run()
+
+			// Restore logger and flush buffered logs.
+			log.Logger = savedLogger
+
+			if logBuffer.Len() > 0 {
+				_, _ = os.Stderr.Write(logBuffer.Bytes())
+			}
+
+			if runErr != nil {
+				return fmt.Errorf("running library TUI: %w", runErr)
+			}
+
+			return nil
+		},
+	}
+
+	cmd.Flags().Bool("refresh", false, "Force refresh of strategy listings from GitHub")
+
+	cmd.AddCommand(newLibraryListCmd())
+	cmd.AddCommand(newLibraryRemoveCmd())
+
+	return cmd
+}
+
+// newLibraryListCmd creates the "pvbt library list" subcommand.
+func newLibraryListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "list",
+		Short: "List installed strategies",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			strategies, listErr := library.List(library.DefaultLibDir())
+			if listErr != nil {
+				return fmt.Errorf("list strategies: %w", listErr)
+			}
+
+			if len(strategies) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No strategies installed. Use 'pvbt library' to find strategies.")
+				return nil
+			}
+
+			writer := tabwriter.NewWriter(cmd.OutOrStdout(), 0, 0, 2, ' ', 0)
+			fmt.Fprintln(writer, "SHORT-CODE\tVERSION\tREPO")
+
+			for _, strategy := range strategies {
+				fmt.Fprintf(writer, "%s\t%s\t%s/%s\n",
+					strategy.ShortCode, strategy.Version,
+					strategy.RepoOwner, strategy.RepoName)
+			}
+
+			return writer.Flush()
+		},
+	}
+}
+
+// newLibraryRemoveCmd creates the "pvbt library remove" subcommand.
+func newLibraryRemoveCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "remove <short-code>",
+		Short: "Remove an installed strategy",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			shortCode := args[0]
+
+			if removeErr := library.Remove(library.DefaultLibDir(), shortCode); removeErr != nil {
+				return removeErr
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed strategy %q\n", shortCode)
+
+			return nil
+		},
+	}
 }
 
 // buildItems groups listings by their first category and sorts categories alphabetically.
