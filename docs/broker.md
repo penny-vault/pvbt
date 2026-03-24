@@ -338,6 +338,49 @@ Schwab uses OAuth 2.0 with the authorization_code grant type. On first run, `Con
 
 Fills are delivered via a WebSocket connection to Schwab's streaming API (`ACCT_ACTIVITY` service). On disconnect, the broker reconnects with exponential backoff and polls the REST orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
 
+### Tradier
+
+The `broker/tradier` package enables live and paper trading through Tradier. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, and OCO/bracket (OTOCO) order groups.
+
+```go
+import "github.com/penny-vault/pvbt/broker/tradier"
+
+tradierBroker := tradier.New()
+// or for paper trading:
+tradierBroker := tradier.New(tradier.WithSandbox())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(tradierBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Tradier supports two authentication modes. The broker auto-detects which to use based on environment variables.
+
+**API access token** (individual developers): Set `TRADIER_ACCESS_TOKEN` with a long-lived token from the Tradier developer portal. Individual tokens never expire.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRADIER_ACCESS_TOKEN` | yes | Long-lived API access token |
+| `TRADIER_ACCOUNT_ID` | yes | Account number to trade |
+
+**OAuth 2.0** (partner/multi-user apps): Set `TRADIER_CLIENT_ID` and `TRADIER_CLIENT_SECRET`. On first run, `Connect()` prints an authorization URL to the console. Open it in a browser, log in, and authorize the app -- a local HTTPS callback server captures the tokens automatically. Access tokens expire in 24 hours. Refresh tokens (available only to approved Tradier Partners) are used automatically when present; without one, the browser flow must be repeated after 24 hours.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRADIER_CLIENT_ID` | yes | OAuth app client ID |
+| `TRADIER_CLIENT_SECRET` | yes | OAuth app client secret |
+| `TRADIER_ACCOUNT_ID` | yes | Account number to trade |
+| `TRADIER_CALLBACK_URL` | no | OAuth callback URL (default: `https://127.0.0.1:5174`) |
+| `TRADIER_TOKEN_FILE` | no | Path to persist OAuth tokens (default: `~/.config/pvbt/tradier-tokens.json`) |
+
+Day and GTC durations are supported. IOC, FOK, GTD, OnOpen, and OnClose are not supported by Tradier and return an error.
+
+Tradier's sandbox environment provides paper trading with simulated fills. Account event streaming is not available in sandbox mode; the broker falls back to polling the orders endpoint every 2 seconds.
+
+Fills are delivered via a WebSocket connection to Tradier's account events streamer. On disconnect, the broker reconnects with exponential backoff and polls the REST orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
 ### Interactive Brokers
 
 The `broker/ibkr` package enables live trading through Interactive Brokers. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, and bracket and OCA order groups. Two ways to authenticate are available: OAuth for users with registered consumer keys, and the Client Portal Gateway for everyone else.
