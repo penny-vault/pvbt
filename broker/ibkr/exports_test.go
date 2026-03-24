@@ -52,6 +52,14 @@ func NewAPIClientForTest(baseURL string) *apiClient {
 	return ac
 }
 
+func SetClientForTest(ib *IBBroker, client *apiClient) {
+	ib.client = client
+}
+
+func SetAccountIDForTest(ib *IBBroker, accountID string) {
+	ib.accountID = accountID
+}
+
 // Method wrappers to expose unexported client methods to tests.
 
 func (ac *apiClient) ResolveAccount(ctx context.Context) (string, error) {

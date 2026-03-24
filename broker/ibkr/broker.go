@@ -17,21 +17,26 @@ package ibkr
 
 import (
 	"context"
+	"fmt"
+	"math"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/penny-vault/pvbt/broker"
 )
 
 const (
-	fillChannelSize = 1024
+	fillChannelSize  = 1024
+	ocaTypeCancelAll = 1
 )
 
 // IBBroker implements broker.Broker for the Interactive Brokers brokerage.
 type IBBroker struct {
-	client    *apiClient
-	fills     chan broker.Fill
-	streamer  *orderStreamer
-	accountID string
+	client     *apiClient
+	fills      chan broker.Fill
+	streamer   *orderStreamer
+	accountID  string
+	conidCache map[string]int64
 }
 
 // Option configures an IBBroker.
@@ -59,8 +64,9 @@ func WithOAuth(baseURL, consumerKey, keyFile string) Option {
 // New creates a new IBBroker with the given options.
 func New(opts ...Option) *IBBroker {
 	ib := &IBBroker{
-		client: newAPIClient("", nil),
-		fills:  make(chan broker.Fill, fillChannelSize),
+		client:     newAPIClient("", nil),
+		fills:      make(chan broker.Fill, fillChannelSize),
+		conidCache: make(map[string]int64),
 	}
 
 	for _, opt := range opts {
@@ -102,20 +108,36 @@ func (ib *IBBroker) Close() error {
 	return nil
 }
 
+// resolveConid looks up the contract ID for a ticker, returning a cached
+// value when available. If the symbol is unknown, ErrConidNotFound is returned.
+func (ib *IBBroker) resolveConid(ctx context.Context, ticker string) (int64, error) {
+	if conid, cached := ib.conidCache[ticker]; cached {
+		return conid, nil
+	}
+
+	results, searchErr := ib.client.searchSecdef(ctx, ticker)
+	if searchErr != nil {
+		return 0, searchErr
+	}
+
+	if len(results) == 0 {
+		return 0, ErrConidNotFound
+	}
+
+	conid := results[0].Conid
+	ib.conidCache[ticker] = conid
+
+	return conid, nil
+}
+
 // Submit sends an order to IB. It resolves the ticker to a contract ID,
 // fetches a real-time snapshot for dollar-amount orders, submits the order,
 // and auto-confirms any warning replies from the gateway.
 func (ib *IBBroker) Submit(ctx context.Context, order broker.Order) error {
-	results, searchErr := ib.client.searchSecdef(ctx, order.Asset.Ticker)
-	if searchErr != nil {
-		return searchErr
+	conid, resolveErr := ib.resolveConid(ctx, order.Asset.Ticker)
+	if resolveErr != nil {
+		return resolveErr
 	}
-
-	if len(results) == 0 {
-		return ErrConidNotFound
-	}
-
-	conid := results[0].Conid
 
 	if order.Qty == 0 && order.Amount > 0 {
 		price, snapErr := ib.client.getSnapshot(ctx, conid)
@@ -123,7 +145,7 @@ func (ib *IBBroker) Submit(ctx context.Context, order broker.Order) error {
 			return snapErr
 		}
 
-		order.Qty = order.Amount / price
+		order.Qty = math.Floor(order.Amount / price)
 	}
 
 	ibOrder, mapErr := toIBOrder(order, conid)
@@ -208,6 +230,123 @@ func (ib *IBBroker) Balance(ctx context.Context) (broker.Balance, error) {
 	}
 
 	return toBrokerBalance(summary), nil
+}
+
+// SubmitGroup submits a group of orders as a native bracket or OCA order.
+func (ib *IBBroker) SubmitGroup(ctx context.Context, orders []broker.Order, groupType broker.GroupType) error {
+	if len(orders) == 0 {
+		return broker.ErrEmptyOrderGroup
+	}
+
+	switch groupType {
+	case broker.GroupBracket:
+		return ib.submitBracket(ctx, orders)
+	case broker.GroupOCO:
+		return ib.submitOCA(ctx, orders)
+	default:
+		return fmt.Errorf("ibkr: unsupported group type %d", groupType)
+	}
+}
+
+// submitBracket submits a bracket order group. The entry order receives a
+// client order ID (cOID), and each child (stop-loss / take-profit) references
+// the entry via parentId.
+func (ib *IBBroker) submitBracket(ctx context.Context, orders []broker.Order) error {
+	// Validate: exactly one entry order.
+	entryIdx := -1
+
+	for idx, order := range orders {
+		if order.GroupRole == broker.RoleEntry {
+			if entryIdx >= 0 {
+				return broker.ErrMultipleEntryOrders
+			}
+
+			entryIdx = idx
+		}
+	}
+
+	if entryIdx < 0 {
+		return broker.ErrNoEntryOrder
+	}
+
+	entryCOID := uuid.New().String()
+
+	ibOrders := make([]ibOrderRequest, 0, len(orders))
+
+	for idx, order := range orders {
+		conid, resolveErr := ib.resolveConid(ctx, order.Asset.Ticker)
+		if resolveErr != nil {
+			return resolveErr
+		}
+
+		ibReq, mapErr := toIBOrder(order, conid)
+		if mapErr != nil {
+			return mapErr
+		}
+
+		if idx == entryIdx {
+			ibReq.COID = entryCOID
+		} else {
+			ibReq.ParentId = entryCOID
+		}
+
+		ibOrders = append(ibOrders, ibReq)
+	}
+
+	replies, submitErr := ib.client.submitOrder(ctx, ib.accountID, ibOrders)
+	if submitErr != nil {
+		return submitErr
+	}
+
+	for _, reply := range replies {
+		if reply.ReplyID != "" {
+			if _, confirmErr := ib.client.confirmReply(ctx, reply.ReplyID, true); confirmErr != nil {
+				return confirmErr
+			}
+		}
+	}
+
+	return nil
+}
+
+// submitOCA submits a One-Cancels-All order group. All orders share the same
+// ocaGroup identifier and ocaType=1 (cancel remaining).
+func (ib *IBBroker) submitOCA(ctx context.Context, orders []broker.Order) error {
+	ocaGroup := uuid.New().String()
+
+	ibOrders := make([]ibOrderRequest, 0, len(orders))
+
+	for _, order := range orders {
+		conid, resolveErr := ib.resolveConid(ctx, order.Asset.Ticker)
+		if resolveErr != nil {
+			return resolveErr
+		}
+
+		ibReq, mapErr := toIBOrder(order, conid)
+		if mapErr != nil {
+			return mapErr
+		}
+
+		ibReq.OcaGroup = ocaGroup
+		ibReq.OcaType = ocaTypeCancelAll
+
+		ibOrders = append(ibOrders, ibReq)
+	}
+
+	replies, submitErr := ib.client.submitOrder(ctx, ib.accountID, ibOrders)
+	if submitErr != nil {
+		return submitErr
+	}
+
+	for _, reply := range replies {
+		if reply.ReplyID != "" {
+			if _, confirmErr := ib.client.confirmReply(ctx, reply.ReplyID, true); confirmErr != nil {
+				return confirmErr
+			}
+		}
+	}
+
+	return nil
 }
 
 // PollTrades fetches recent executions from the IB API. This is used
