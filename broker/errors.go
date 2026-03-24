@@ -17,6 +17,7 @@ var (
 	ErrNoEntryOrder        = errors.New("broker: no entry order in group")
 	ErrMultipleEntryOrders = errors.New("broker: multiple entry orders in group")
 	ErrOrderRejected       = errors.New("broker: order rejected")
+	ErrRateLimited         = errors.New("broker: rate limited")
 )
 
 // HTTPError represents an HTTP response with a non-2xx status code.
@@ -34,12 +35,16 @@ func NewHTTPError(statusCode int, message string) *HTTPError {
 	return &HTTPError{StatusCode: statusCode, Message: message}
 }
 
-// IsTransient returns true if the error is a transient failure that should
+// IsRetryableError returns true if the error is a transient failure that should
 // be retried (network errors, HTTP 429, HTTP 5xx). Returns false for permanent
 // failures (HTTP 4xx, order rejections, auth errors).
-func IsTransient(err error) bool {
+func IsRetryableError(err error) bool {
 	if err == nil {
 		return false
+	}
+
+	if errors.Is(err, ErrRateLimited) {
+		return true
 	}
 
 	var httpErr *HTTPError
@@ -59,7 +64,7 @@ func IsTransient(err error) bool {
 
 	var urlErr *url.Error
 	if errors.As(err, &urlErr) {
-		return IsTransient(urlErr.Err)
+		return IsRetryableError(urlErr.Err)
 	}
 
 	return false

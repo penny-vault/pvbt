@@ -19,5 +19,5 @@ type HTTPError = broker.HTTPError
 // NewHTTPError creates an HTTPError with the given status code and message.
 var NewHTTPError = broker.NewHTTPError
 
-// IsTransient returns true if the error is a transient failure that should be retried.
-var IsTransient = broker.IsTransient
+// IsRetryableError returns true if the error is a transient failure that should be retried.
+var IsRetryableError = broker.IsRetryableError

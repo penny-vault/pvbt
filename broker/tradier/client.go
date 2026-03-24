@@ -34,7 +34,7 @@ func newAPIClient(baseURL, accessToken, accountID string) *apiClient {
 
 	httpClient.AddRetryCondition(func(resp *resty.Response, retryErr error) bool {
 		if retryErr != nil {
-			return broker.IsTransient(retryErr)
+			return broker.IsRetryableError(retryErr)
 		}
 
 		return resp.StatusCode() >= 500 || resp.StatusCode() == 429
