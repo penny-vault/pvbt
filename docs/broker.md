@@ -338,6 +338,50 @@ Schwab uses OAuth 2.0 with the authorization_code grant type. On first run, `Con
 
 Fills are delivered via a WebSocket connection to Schwab's streaming API (`ACCT_ACTIVITY` service). On disconnect, the broker reconnects with exponential backoff and polls the REST orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
 
+### Interactive Brokers
+
+The `broker/ibkr` package enables live trading through Interactive Brokers. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, and bracket and OCA order groups. Two ways to authenticate are available: OAuth for users with registered consumer keys, and the Client Portal Gateway for everyone else.
+
+```go
+import "github.com/penny-vault/pvbt/broker/ibkr"
+
+// Using the Client Portal Gateway (requires gateway process running):
+ibBroker := ibkr.New(ibkr.WithGateway("https://localhost:5000"))
+
+// Using OAuth:
+ibBroker := ibkr.New(ibkr.WithOAuth(ibkr.OAuthConfig{
+    ConsumerKey: "your-consumer-key",
+    KeyFile:     "/path/to/signing-key.pem",
+}))
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(ibBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+**Gateway authentication** requires a running IB Client Portal Gateway process. The user must log in through the gateway's web UI before starting the strategy. The broker verifies the session on `Connect()` and keeps it alive with periodic tickle requests.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IBKR_GATEWAY_URL` | no | Gateway URL (default: `https://localhost:5000`) |
+
+**OAuth authentication** uses IB's OAuth 1.0a-style signing flow with RSA-SHA256 and a Diffie-Hellman live session token exchange. Consumer keys are managed through IB's Self Service Portal.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `IBKR_CONSUMER_KEY` | yes | OAuth consumer key |
+| `IBKR_SIGNING_KEY_FILE` | yes | Path to RSA signing key (PEM, PKCS#8) |
+| `IBKR_ACCESS_TOKEN` | no | Pre-existing access token (skip token exchange) |
+| `IBKR_ACCESS_TOKEN_SECRET` | no | Pre-existing access token secret |
+
+IB uses contract IDs (`conid`) rather than ticker symbols for order operations. The broker resolves tickers to conids automatically via `/iserver/secdef/search` and caches results for the session. GTD and FOK time-in-force values are not supported by IB's Web API and return an error.
+
+Fills are delivered via a WebSocket connection. On disconnect, the broker reconnects with exponential backoff and polls the trades endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
+IB enforces a global rate limit of 10 requests per second; the client stays under this with a built-in rate limiter.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
