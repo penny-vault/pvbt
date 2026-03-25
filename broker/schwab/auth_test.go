@@ -283,33 +283,37 @@ var _ = Describe("tokenManager", func() {
 			}))
 			DeferCleanup(tokenServer.Close)
 
+			// Create the TLS listener up front so it is bound and accepting
+			// at the kernel level before startAuthFlowServer is called.
+			// This eliminates the race between server startup and the test
+			// client's first connection attempt that caused CI flakes.
+			tlsCert, certErr := generateSelfSignedCert()
+			Expect(certErr).ToNot(HaveOccurred())
+
+			tlsListener, listenErr := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
+				Certificates: []tls.Certificate{tlsCert},
+			})
+			Expect(listenErr).ToNot(HaveOccurred())
+			// No DeferCleanup needed: http.Server.Serve closes the listener on return.
+
+			callbackAddr := tlsListener.Addr().String()
+
 			manager := &tokenManager{
 				clientID:     "test-id",
 				clientSecret: "test-secret",
-				callbackURL:  "https://127.0.0.1:0",
+				callbackURL:  fmt.Sprintf("https://%s", callbackAddr),
 				tokenFile:    tokenPath,
 				authBaseURL:  tokenServer.URL,
 				tokens:       &tokenStore{},
+				testListener: tlsListener,
 			}
 
 			authDone := make(chan error, 1)
-			addrCh := make(chan string, 1)
-			manager.listenerAddrCh = addrCh
 
 			go func() {
 				_, startErr := manager.startAuthFlowServer()
 				authDone <- startErr
 			}()
-
-			var callbackAddr string
-			Eventually(func() string {
-				select {
-				case addr := <-addrCh:
-					callbackAddr = addr
-				default:
-				}
-				return callbackAddr
-			}, 5*time.Second).ShouldNot(BeEmpty())
 
 			httpClient := &http.Client{
 				Transport: &http.Transport{
@@ -318,9 +322,6 @@ var _ = Describe("tokenManager", func() {
 			}
 			callbackReqURL := fmt.Sprintf("https://%s?code=test-auth-code%%40extra", callbackAddr)
 
-			// The server signals readiness after entering its accept loop, but
-			// under heavy load (e.g., full suite with -race) the first
-			// connection attempt can still fail. Retry with a generous timeout.
 			Eventually(func() error {
 				resp, getErr := httpClient.Get(callbackReqURL)
 				if getErr != nil {
@@ -329,7 +330,7 @@ var _ = Describe("tokenManager", func() {
 				resp.Body.Close()
 
 				return nil
-			}, 5*time.Second, 100*time.Millisecond).Should(Succeed())
+			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
 
 			Eventually(authDone, 5*time.Second).Should(Receive(Not(HaveOccurred())))
 			Expect(manager.tokens.AccessToken).To(Equal("auth-flow-access"))
