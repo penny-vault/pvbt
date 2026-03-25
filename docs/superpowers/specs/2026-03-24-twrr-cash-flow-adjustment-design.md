@@ -57,8 +57,9 @@ At each subsequent timestamp `t` with equity value `e`:
    movements alone, before the external flow changed it. When `flow` is zero,
    `preFlowEquity == e`.
 3. Compute sub-period return: `r = preFlowEquity / subPeriodStart - 1`.
-4. If a flow occurred, update `subPeriodStart = e` (the new starting value
-   includes the flow). Otherwise `subPeriodStart` is unchanged.
+4. Update `subPeriodStart = e`. On flow days this resets the base to
+   post-flow equity; on non-flow days it advances to the current equity
+   so the next day's return is a single-period return, not cumulative.
 
 ### Compute (Scalar)
 
