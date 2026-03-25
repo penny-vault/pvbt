@@ -86,35 +86,36 @@ func monthSeq(start time.Time, n int) []time.Time {
 }
 
 // buildAccountFromEquity creates an Account whose equity curve matches the
-// given values exactly using deposit/withdrawal transactions.
+// given values exactly using dividend/fee transactions (invisible to TWRR's
+// cash flow filter, which only considers deposits/withdrawals).
 func buildAccountFromEquity(equityValues []float64) *portfolio.Account {
 	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-	a := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
+	aa := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
 	start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 	dates := daySeq(start, len(equityValues))
 
-	for i, v := range equityValues {
-		if i > 0 {
-			diff := v - equityValues[i-1]
+	for ii, vv := range equityValues {
+		if ii > 0 {
+			diff := vv - equityValues[ii-1]
 			if diff > 0 {
-				a.Record(portfolio.Transaction{
-					Date:   dates[i],
-					Type:   asset.DepositTransaction,
+				aa.Record(portfolio.Transaction{
+					Date:   dates[ii],
+					Type:   asset.DividendTransaction,
 					Amount: diff,
 				})
 			} else if diff < 0 {
-				a.Record(portfolio.Transaction{
-					Date:   dates[i],
-					Type:   asset.WithdrawalTransaction,
+				aa.Record(portfolio.Transaction{
+					Date:   dates[ii],
+					Type:   asset.FeeTransaction,
 					Amount: diff,
 				})
 			}
 		}
-		df := buildDF(dates[i], []asset.Asset{spy}, []float64{450}, []float64{448})
-		a.UpdatePrices(df)
+		df := buildDF(dates[ii], []asset.Asset{spy}, []float64{450}, []float64{448})
+		aa.UpdatePrices(df)
 	}
 
-	return a
+	return aa
 }
 
 // buildAccountWithRF creates an Account with both equity curve and
