@@ -23,8 +23,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/engine"
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // fakeOptStudy implements study.Study for search-path testing.

@@ -23,7 +23,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 var _ = Describe("Section primitives", func() {

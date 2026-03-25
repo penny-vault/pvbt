@@ -23,8 +23,8 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // portfolioAsset is the sentinel asset used to look up equity columns in the

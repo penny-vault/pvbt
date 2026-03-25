@@ -25,8 +25,8 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // portfolioEquityAsset mirrors the sentinel used by portfolio/account.go to

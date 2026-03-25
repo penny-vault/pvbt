@@ -23,7 +23,7 @@ import (
 	"sync"
 
 	"github.com/penny-vault/pvbt/engine"
-	"github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // Runner holds study configuration and executes the study.

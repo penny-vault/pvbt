@@ -18,7 +18,7 @@ package terminal
 import (
 	"io"
 
-	"github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // Render writes a plain-text backtest report to the given writer.

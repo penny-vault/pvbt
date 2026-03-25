@@ -20,7 +20,7 @@ import (
 	"math"
 
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // Metric identifies a performance metric used to score a portfolio over a

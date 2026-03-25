@@ -13,7 +13,7 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	backtestReport "github.com/penny-vault/pvbt/report"
+	backtestReport "github.com/penny-vault/pvbt/study/report"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"

@@ -19,8 +19,8 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/penny-vault/pvbt/report"
-	"github.com/penny-vault/pvbt/report/terminal"
+	"github.com/penny-vault/pvbt/study/report"
+	"github.com/penny-vault/pvbt/study/report/terminal"
 )
 
 func TestRenderDoesNotPanic(t *testing.T) {

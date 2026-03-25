@@ -18,8 +18,8 @@ package stress
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // StressTest implements study.Study by running a strategy over the full date
