@@ -47,20 +47,19 @@ type tokenStore struct {
 }
 
 type tokenManager struct {
-	mode           authMode
-	staticToken    string
-	clientID       string
-	clientSecret   string
-	callbackURL    string
-	tokenFile      string
-	authBaseURL    string
-	tokens         *tokenStore
-	onRefresh      func(token string)
-	mu             sync.Mutex
-	stopRefresh    chan struct{}
-	refreshWg      sync.WaitGroup
-	stopOnce       sync.Once
-	listenerAddrCh chan string
+	mode         authMode
+	staticToken  string
+	clientID     string
+	clientSecret string
+	callbackURL  string
+	tokenFile    string
+	authBaseURL  string
+	tokens       *tokenStore
+	onRefresh    func(token string)
+	mu           sync.Mutex
+	stopRefresh  chan struct{}
+	refreshWg    sync.WaitGroup
+	stopOnce     sync.Once
 }
 
 // detectAuthMode inspects environment variables to determine how the broker
@@ -279,18 +278,11 @@ func (tm *tokenManager) authorizationURL() string {
 // callback server, prints the authorization URL, waits for the redirect, and
 // exchanges the code for tokens.
 func (tm *tokenManager) startAuthFlow() error {
-	_, flowErr := tm.startAuthFlowServer()
-	return flowErr
-}
-
-// startAuthFlowServer is the internal implementation of startAuthFlow that also
-// returns the listener address (used by tests).
-func (tm *tokenManager) startAuthFlowServer() (string, error) {
 	parsedURL, parseErr := url.Parse(tm.callbackURL)
 	if parseErr != nil {
 		fallback, fallbackErr := url.Parse(defaultCallbackURL)
 		if fallbackErr != nil {
-			return "", fmt.Errorf("tradier: parse fallback callback URL: %w", fallbackErr)
+			return fmt.Errorf("tradier: parse fallback callback URL: %w", fallbackErr)
 		}
 
 		parsedURL = fallback
@@ -300,7 +292,7 @@ func (tm *tokenManager) startAuthFlowServer() (string, error) {
 
 	tlsCert, certErr := generateSelfSignedCert()
 	if certErr != nil {
-		return "", fmt.Errorf("tradier: generate TLS cert: %w", certErr)
+		return fmt.Errorf("tradier: generate TLS cert: %w", certErr)
 	}
 
 	codeChan := make(chan string, 1)
@@ -323,7 +315,7 @@ func (tm *tokenManager) startAuthFlowServer() (string, error) {
 		Certificates: []tls.Certificate{tlsCert},
 	})
 	if listenErr != nil {
-		return "", fmt.Errorf("tradier: listen on %s: %w", listenAddr, listenErr)
+		return fmt.Errorf("tradier: listen on %s: %w", listenAddr, listenErr)
 	}
 
 	actualAddr := listener.Addr().String()
@@ -338,21 +330,13 @@ func (tm *tokenManager) startAuthFlowServer() (string, error) {
 		}
 	}()
 
-	if tm.listenerAddrCh != nil {
-		tm.listenerAddrCh <- actualAddr
-	}
-
 	log.Info().Str("url", tm.authorizationURL()).Msg("tradier: open the following URL in your browser to authorize")
 
 	code := <-codeChan
 
 	server.Close()
 
-	if exchangeErr := tm.exchangeAuthCode(context.Background(), code); exchangeErr != nil {
-		return actualAddr, exchangeErr
-	}
-
-	return actualAddr, nil
+	return tm.exchangeAuthCode(context.Background(), code)
 }
 
 // startBackgroundRefresh launches a goroutine that proactively refreshes the

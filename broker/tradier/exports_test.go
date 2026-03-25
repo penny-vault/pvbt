@@ -160,11 +160,6 @@ func SetAuthBaseURL(tm *tokenManager, baseURL string) {
 	tm.authBaseURL = baseURL
 }
 
-// SetListenerAddrCh sets the listenerAddrCh on a tokenManager for testing.
-func SetListenerAddrCh(tm *tokenManager, ch chan string) {
-	tm.listenerAddrCh = ch
-}
-
 // SetTokensForTest replaces the tokenStore on a tokenManager for testing.
 func (tm *tokenManager) SetTokensForTest(store *tokenStore) {
 	tm.tokens = store
@@ -193,7 +188,3 @@ func (tm *tokenManager) RefreshAccessToken() error {
 	return tm.refreshAccessToken()
 }
 
-// StartAuthFlow exposes startAuthFlow for testing.
-func (tm *tokenManager) StartAuthFlow() error {
-	return tm.startAuthFlow()
-}

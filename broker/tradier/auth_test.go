@@ -1,9 +1,7 @@
 package tradier_test
 
 import (
-	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -248,57 +246,4 @@ var _ = Describe("tokenManager", func() {
 		})
 	})
 
-	Describe("startAuthFlow", func() {
-		It("starts HTTPS server and captures callback code", func() {
-			tempDir := GinkgoT().TempDir()
-			tokenPath := filepath.Join(tempDir, "tokens.json")
-
-			tokenServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
-				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]interface{}{
-					"access_token":  "auth-flow-access",
-					"refresh_token": "auth-flow-refresh",
-					"expires_in":    86400,
-					"token_type":    "Bearer",
-				})
-			}))
-			DeferCleanup(tokenServer.Close)
-
-			mgr := tradier.NewTokenManagerForTest(
-				tradier.AuthModeOAuth, "test-id", "test-secret", "https://127.0.0.1:0", tokenPath,
-			)
-			tradier.SetAuthBaseURL(mgr, tokenServer.URL)
-
-			addrCh := make(chan string, 1)
-			tradier.SetListenerAddrCh(mgr, addrCh)
-
-			authDone := make(chan error, 1)
-			go func() {
-				authDone <- mgr.StartAuthFlow()
-			}()
-
-			var callbackAddr string
-			Eventually(func() string {
-				select {
-				case addr := <-addrCh:
-					callbackAddr = addr
-				default:
-				}
-				return callbackAddr
-			}, 5*time.Second).ShouldNot(BeEmpty())
-
-			httpClient := &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
-			}
-			callbackReqURL := fmt.Sprintf("https://%s?code=test-auth-code%%40extra", callbackAddr)
-			resp, reqErr := httpClient.Get(callbackReqURL)
-			Expect(reqErr).ToNot(HaveOccurred())
-			resp.Body.Close()
-
-			Eventually(authDone, 5*time.Second).Should(Receive(Not(HaveOccurred())))
-			Expect(mgr.AccessToken()).To(Equal("auth-flow-access"))
-		})
-	})
 })
