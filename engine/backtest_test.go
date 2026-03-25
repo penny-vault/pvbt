@@ -250,6 +250,31 @@ func (s *bracketStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portf
 	return nil
 }
 
+// buyOnceStrategy buys a fixed number of shares on the first Compute
+// call and then does nothing. Used to establish a long position for
+// broker transaction sync tests.
+type buyOnceStrategy struct {
+	target asset.Asset
+	qty    float64
+	bought bool
+}
+
+func (s *buyOnceStrategy) Name() string { return "buy-once" }
+
+func (s *buyOnceStrategy) Setup(_ *engine.Engine) {}
+
+func (s *buyOnceStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *buyOnceStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	if !s.bought {
+		s.bought = true
+		return batch.Order(ctx, s.target, portfolio.Buy, s.qty)
+	}
+	return nil
+}
+
 // shortOnceStrategy sells (shorts) a fixed number of shares on the
 // first Compute call and then does nothing. This leaves a short
 // position open for housekeeping to process borrow fees and dividends.
@@ -1225,6 +1250,166 @@ var _ = Describe("Backtest", func() {
 			// (division by zero). This is the correct behavior.
 			Expect(math.IsNaN(tradeMetrics.ShortProfitFactor)).To(BeTrue(),
 				"ShortProfitFactor should be NaN when there are no losing short trades")
+		})
+	})
+
+	Context("broker transaction sync", func() {
+		It("applies dividends and splits through broker transaction sync", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-SYNC1", Ticker: "SYNC1"}
+			syncAssets := []asset.Asset{testStock}
+			syncProvider := &mockAssetProvider{assets: syncAssets}
+
+			syncMetrics := []data.Metric{
+				data.MetricClose, data.AdjClose, data.Dividend,
+				data.MetricHigh, data.MetricLow, data.SplitFactor,
+			}
+			nDays := 15
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			// 1 asset x 6 metrics x 15 days
+			// The split fires on calendar day 9 (Jan 10); post-split price
+			// appears from day 10 onward.
+			nMetrics := len(syncMetrics)
+			vals := make([]float64, nDays*len(syncAssets)*nMetrics)
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				closePrice := 100.0
+				if dayIdx >= 10 {
+					closePrice = 50.0 // post-split price
+				}
+				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend: none by default
+				vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0 // High
+				vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0 // Low
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor: no split by default
+			}
+			// $2.00 dividend on day 4 (Jan 5, Friday -- a trading day).
+			// By this point the strategy has already bought 100 shares on Jan 1.
+			vals[(0*nMetrics+2)*nDays+4] = 2.00
+			// 2-for-1 split on day 9 (Jan 10, Wednesday -- a trading day).
+			vals[(0*nMetrics+5)*nDays+9] = 2.0
+
+			syncDF, dfErr := data.NewDataFrame(times, syncAssets, syncMetrics, data.Daily,
+				data.SlabToColumns(vals, len(syncAssets)*nMetrics, nDays))
+			Expect(dfErr).NotTo(HaveOccurred())
+			syncDataProvider := data.NewTestProvider(syncMetrics, syncDF)
+
+			acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+			strategy := &buyOnceStrategy{target: testStock, qty: 100}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(syncDataProvider),
+				engine.WithAssetProvider(syncProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+
+			// Verify exactly one dividend transaction with amount $200.
+			var divTxns []portfolio.Transaction
+			for _, tx := range txns {
+				if tx.Type == asset.DividendTransaction && tx.Asset == testStock {
+					divTxns = append(divTxns, tx)
+				}
+			}
+			Expect(divTxns).To(HaveLen(1), "expected exactly one dividend transaction")
+			Expect(divTxns[0].Amount).To(BeNumerically("~", 200.0, 0.01),
+				"dividend amount should be 100 shares * $2.00 = $200")
+
+			// Verify position is 200 shares after the 2-for-1 split.
+			Expect(fund.Position(testStock)).To(BeNumerically("~", 200.0, 0.01),
+				"position should be 200 shares after 2-for-1 split")
+		})
+
+		It("liquidates delisted positions", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-SYNC2", Ticker: "SYNC2"}
+			delistAssets := []asset.Asset{testStock}
+			delistProvider := &mockAssetProvider{assets: delistAssets}
+
+			delistMetrics := []data.Metric{
+				data.MetricClose, data.AdjClose, data.Dividend,
+				data.MetricHigh, data.MetricLow, data.SplitFactor,
+			}
+			nDays := 15
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			nMetrics := len(delistMetrics)
+			vals := make([]float64, nDays*len(delistAssets)*nMetrics)
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				closePrice := 100.0
+				if dayIdx >= 8 {
+					closePrice = math.NaN() // simulates delisting
+				}
+				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend
+				if !math.IsNaN(closePrice) {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0 // High
+					vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0 // Low
+				} else {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = math.NaN() // High
+					vals[(0*nMetrics+4)*nDays+dayIdx] = math.NaN() // Low
+				}
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0 // SplitFactor
+			}
+
+			delistDF, dfErr := data.NewDataFrame(times, delistAssets, delistMetrics, data.Daily,
+				data.SlabToColumns(vals, len(delistAssets)*nMetrics, nDays))
+			Expect(dfErr).NotTo(HaveOccurred())
+			delistDataProvider := data.NewTestProvider(delistMetrics, delistDF)
+
+			acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+			strategy := &buyOnceStrategy{target: testStock, qty: 50}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(delistDataProvider),
+				engine.WithAssetProvider(delistProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+
+			// Verify a sell transaction exists with "delisted" in the justification.
+			var delistSellTxns []portfolio.Transaction
+			for _, tx := range txns {
+				if tx.Type == asset.SellTransaction && tx.Asset == testStock {
+					delistSellTxns = append(delistSellTxns, tx)
+				}
+			}
+			Expect(delistSellTxns).NotTo(BeEmpty(), "expected a sell transaction for delisted asset")
+			hasDelisted := false
+			for _, tx := range delistSellTxns {
+				if tx.Justification != "" {
+					hasDelisted = true
+				}
+			}
+			Expect(hasDelisted).To(BeTrue(), "expected at least one sell transaction with delisted justification")
+
+			// Verify position is 0 after delisting.
+			Expect(fund.Position(testStock)).To(BeNumerically("==", 0),
+				"position should be zero after delisting liquidation")
 		})
 	})
 })
