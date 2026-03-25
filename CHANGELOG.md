@@ -24,12 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strategies can be uninstalled from the library TUI with inline confirmation.
 
 - Backtests automatically liquidate positions in delisted assets at the last known price instead of silently holding them with stale data.
-- Stochastic Oscillator (fast and slow), Williams %R, and CCI signals are now available in the signal package for identifying overbought/oversold conditions.
-- Strategies can use Keltner Channel and Donchian Channel volatility signals to adapt position sizing and stops to current market volatility.
-
-### Fixed
-
-- `DataFrame.Assets()` deduplicates when the same asset is passed more than once.
+- Strategies can identify overbought/oversold conditions with new Stochastic Oscillator (fast and slow), Williams %R, CCI, Keltner Channel, and Donchian Channel signals and adapt position sizing and stops to current market volatility.
 
 ### Changed
 
@@ -39,6 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `DataFrame.Assets()` deduplicates when the same asset is passed more than once.
 - TWRR now correctly eliminates the effect of deposits and withdrawals instead of counting them as investment returns.
 
 ## [0.4.0] - 2026-03-22
@@ -65,7 +61,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The engine validates historical data coverage before a backtest begins, rejecting or adjusting runs when warmup data is insufficient.
 - New portfolio weighting methods: inverse volatility, market capitalization, and risk parity.
-- `Correlation` method on DataFrames for computing Pearson correlation between asset pairs.
+- Strategies can compute Pearson correlation between asset pairs to inform diversification and pair-trading decisions.
 - Weighting functions automatically fetch the additional data they need (e.g., market cap).
 - The `describe` command displays strategy name, schedule, parameters, and presets; `--json` produces machine-readable output.
 - The `--preset` flag selects a named parameter preset; the `--benchmark` flag sets the benchmark from the command line.
@@ -73,11 +69,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built-in risk middleware enforces position size caps, drawdown circuit breakers, and position count limits. Pre-built profiles (`risk.Conservative`, `risk.Moderate`, `risk.Aggressive`) bundle common configurations.
 - Tax optimization middleware harvests losses, tracks wash sales with IRS-compliant basis adjustment, and swaps to correlated substitutes. Lot selection is configurable via `WithDefaultLotSelection` or per-order via `WithLotSelection`.
 - New tax drag metric shows how much of a strategy's return is lost to trading-related taxes.
-- Meta-strategies allocate across child strategies declared as struct fields with `weight` tags.
+- Strategy authors can compose multiple strategies into a single portfolio-of-strategies that allocates capital across them with configurable weights.
 - Per-trade MFE and MAE tracking shows how much further each position could have run and how deep it went against you.
 - Live trading via tastytrade with WebSocket fill streaming and sandbox mode for paper trading.
 - Bracket and OCO order groups let strategies submit linked exit orders that activate or cancel automatically.
-- The simulated broker resolves intrabar bracket and OCO fills using high/low price data.
+- Bracket and OCO orders fill within the same bar during backtests when high/low data shows the trigger price was reached.
 - Short selling with proper cost basis tracking, margin accounting (Reg T defaults), borrow fees, and dividend obligations.
 - Margin call handling via the optional `MarginCallHandler` interface, with automatic proportional liquidation as the default.
 - Stock splits adjust position quantities and tax lot prices automatically.
