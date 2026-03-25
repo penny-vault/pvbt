@@ -18,8 +18,8 @@ package optimize
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // Ensure Optimizer satisfies the study.Study interface at compile time.

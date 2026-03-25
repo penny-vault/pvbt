@@ -26,9 +26,9 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/montecarlo"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // fakePortfolio implements report.ReportablePortfolio with predetermined values

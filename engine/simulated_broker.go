@@ -24,7 +24,6 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/rs/zerolog"
 )
@@ -50,7 +49,7 @@ type SimulatedBroker struct {
 	initialMarginRate float64
 	borrowRate        float64
 	lastPrices        map[asset.Asset]float64
-	fillPipeline      *fill.Pipeline
+	fillPipeline      *broker.Pipeline
 	partialRemainders map[string]partialRemainder
 }
 
@@ -61,7 +60,7 @@ func NewSimulatedBroker() *SimulatedBroker {
 		pending:           make(map[string]broker.Order),
 		groups:            make(map[string][]string),
 		lastPrices:        make(map[asset.Asset]float64),
-		fillPipeline:      fill.NewPipeline(fill.Close(), nil),
+		fillPipeline:      broker.NewPipeline(broker.FillAtClose(), nil),
 		partialRemainders: make(map[string]partialRemainder),
 	}
 }
@@ -88,12 +87,12 @@ func (b *SimulatedBroker) SetBorrowRate(rate float64) {
 }
 
 // SetFillPipeline replaces the default close-price fill pipeline.
-func (b *SimulatedBroker) SetFillPipeline(pp *fill.Pipeline) {
+func (b *SimulatedBroker) SetFillPipeline(pp *broker.Pipeline) {
 	b.fillPipeline = pp
 }
 
 // SetDataFetcher propagates a DataFetcher to the fill pipeline's models.
-func (b *SimulatedBroker) SetDataFetcher(df fill.DataFetcher) {
+func (b *SimulatedBroker) SetDataFetcher(df broker.DataFetcher) {
 	b.fillPipeline.SetDataFetcher(df)
 }
 

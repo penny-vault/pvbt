@@ -29,8 +29,8 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/engine/middleware/risk"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/risk"
 )
 
 // mockAssetProvider implements data.AssetProvider for tests.
@@ -1281,12 +1281,12 @@ var _ = Describe("Backtest", func() {
 				if dayIdx >= 10 {
 					closePrice = 50.0 // post-split price
 				}
-				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice // Close
-				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice // AdjClose
-				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend: none by default
+				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice       // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice       // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0              // Dividend: none by default
 				vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0 // High
 				vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0 // Low
-				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor: no split by default
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0              // SplitFactor: no split by default
 			}
 			// $2.00 dividend on day 4 (Jan 5, Friday -- a trading day).
 			// By this point the strategy has already bought 100 shares on Jan 1.

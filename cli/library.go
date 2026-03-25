@@ -29,7 +29,6 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/penny-vault/pvbt/library"
-	"github.com/penny-vault/pvbt/registry"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -47,7 +46,7 @@ const (
 
 // libraryItem represents a single strategy listing in the library TUI.
 type libraryItem struct {
-	listing   registry.Listing
+	listing   library.Listing
 	selected  bool
 	installed bool
 	category  string
@@ -55,7 +54,7 @@ type libraryItem struct {
 
 // libListingsMsg is sent when strategy listings have been fetched.
 type libListingsMsg struct {
-	listings []registry.Listing
+	listings []library.Listing
 	err      error
 }
 
@@ -760,7 +759,7 @@ func newLibraryRemoveCmd() *cobra.Command {
 }
 
 // buildItems groups listings by their first category and sorts categories alphabetically.
-func (model *libraryModel) buildItems(listings []registry.Listing) {
+func (model *libraryModel) buildItems(listings []library.Listing) {
 	model.items = make([]libraryItem, 0, len(listings))
 	categorySet := make(map[string]bool)
 
@@ -892,7 +891,7 @@ func (model libraryModel) renderMarkdown(content string) string {
 
 // installSelected creates a command that installs all selected strategies.
 func (model libraryModel) installSelected() tea.Cmd {
-	var toInstall []registry.Listing
+	var toInstall []library.Listing
 
 	for _, item := range model.items {
 		if item.selected && !item.installed {
@@ -928,13 +927,13 @@ func libFetchListings(cacheDir string, forceRefresh bool) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 
-		opts := registry.SearchOptions{
+		opts := library.SearchOptions{
 			CacheDir:     cacheDir,
 			BaseURL:      "https://api.github.com",
 			ForceRefresh: forceRefresh,
 		}
 
-		listings, err := registry.Search(ctx, opts)
+		listings, err := library.Search(ctx, opts)
 
 		return libListingsMsg{listings: listings, err: err}
 	}
@@ -953,7 +952,7 @@ func libFetchInstalled(libDir string) tea.Cmd {
 func libFetchReadme(owner, repo string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		content, err := registry.FetchREADME(ctx, owner, repo, registry.ReadmeOptions{})
+		content, err := library.FetchREADME(ctx, owner, repo, library.ReadmeOptions{})
 		cacheKey := owner + "/" + repo
 
 		return libReadmeMsg{key: cacheKey, content: content, err: err}

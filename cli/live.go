@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	backtestReport "github.com/penny-vault/pvbt/report"
+	backtestReport "github.com/penny-vault/pvbt/study/report"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +47,7 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	applyStrategyFlags(cmd, strategy)
 
-	cfg, err := config.LoadFromCommand(cmd)
+	cfg, err := loadMiddlewareConfigFromCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

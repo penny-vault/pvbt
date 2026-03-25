@@ -19,7 +19,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/penny-vault/pvbt/report"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // RunStatus represents the state of a single run within a study.

@@ -21,8 +21,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/penny-vault/pvbt/report"
 	"github.com/penny-vault/pvbt/study"
+	"github.com/penny-vault/pvbt/study/report"
 )
 
 // comboResult holds per-split scores for a single parameter combination.
