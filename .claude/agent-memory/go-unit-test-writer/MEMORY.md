@@ -62,5 +62,5 @@
 - gonum stat.Quantile with LinInterp uses N*p indexing, NOT (N-1)*p
 - NewDataFrame(nil, []asset.Asset{a}, []data.Metric{m}, nil) is valid (T=0, A=1, M=1)
 - BeforeEach rebuilds fixtures per It block; no need to restore mutated data
-- Assets(aapl, aapl) does NOT deduplicate
+- Assets(aapl, aapl) deduplicates; each asset appears at most once
 - test_provider.go has compile-time check: var _ BatchProvider = (*TestProvider)(nil)
