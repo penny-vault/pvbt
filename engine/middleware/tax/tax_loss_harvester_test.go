@@ -25,8 +25,8 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/engine/middleware/tax"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/tax"
 )
 
 // buyLot records a buy transaction for the given asset.
