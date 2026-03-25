@@ -71,23 +71,23 @@ type Account struct {
 	initialMargin     float64
 	maintenanceMargin float64
 	borrowRate        float64
-	dfCache            map[dfCacheKey]*data.DataFrame
-	seenTransactions   map[string]struct{}
+	dfCache           map[dfCacheKey]*data.DataFrame
+	seenTransactions  map[string]struct{}
 }
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
 	acct := &Account{
-		holdings:        make(map[asset.Asset]float64),
-		taxLots:         make(map[asset.Asset][]TaxLot),
-		shortLots:       make(map[asset.Asset][]TaxLot),
-		recentLossSales: make(map[asset.Asset][]recentLossSale),
-		recentBuys:      make(map[asset.Asset][]recentBuy),
-		metadata:        make(map[string]string),
-		pendingOrders:   make(map[string]broker.Order),
-		pendingGroups:   make(map[string]*broker.OrderGroup),
-		deferredExits:   make(map[string]OrderGroupSpec),
-		substitutions:   make(map[asset.Asset]Substitution),
+		holdings:         make(map[asset.Asset]float64),
+		taxLots:          make(map[asset.Asset][]TaxLot),
+		shortLots:        make(map[asset.Asset][]TaxLot),
+		recentLossSales:  make(map[asset.Asset][]recentLossSale),
+		recentBuys:       make(map[asset.Asset][]recentBuy),
+		metadata:         make(map[string]string),
+		pendingOrders:    make(map[string]broker.Order),
+		pendingGroups:    make(map[string]*broker.OrderGroup),
+		deferredExits:    make(map[string]OrderGroupSpec),
+		substitutions:    make(map[asset.Asset]Substitution),
 		excursions:       make(map[asset.Asset]ExcursionRecord),
 		seenTransactions: make(map[string]struct{}),
 	}

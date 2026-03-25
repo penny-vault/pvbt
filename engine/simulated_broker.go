@@ -502,6 +502,7 @@ func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]brok
 	}
 
 	var heldAssets []asset.Asset
+
 	b.portfolio.Holdings(func(ast asset.Asset, _ float64) {
 		heldAssets = append(heldAssets, ast)
 	})
@@ -551,6 +552,7 @@ func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]brok
 		b.lastPrices[ast] = closePrice
 
 		splitFactor := df.ValueAt(ast, data.SplitFactor, b.date)
+
 		hasSplit := !math.IsNaN(splitFactor) && splitFactor != 1.0
 		if hasSplit {
 			txns = append(txns, broker.Transaction{
@@ -568,7 +570,9 @@ func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]brok
 			if hasSplit {
 				divQty = qty * splitFactor
 			}
+
 			amount := divPerShare * divQty
+
 			justification := ""
 			if qty < 0 {
 				justification = fmt.Sprintf("short dividend obligation: %s ex-date %s",

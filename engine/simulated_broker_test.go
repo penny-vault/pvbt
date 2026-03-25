@@ -38,12 +38,12 @@ type mockPortfolio struct {
 	shortMarketValue float64
 }
 
-func (m *mockPortfolio) Position(a asset.Asset) float64        { return m.positions[a] }
-func (m *mockPortfolio) Equity() float64                       { return m.equity }
-func (m *mockPortfolio) ShortMarketValue() float64             { return m.shortMarketValue }
-func (m *mockPortfolio) Cash() float64                         { return 0 }
-func (m *mockPortfolio) Value() float64                        { return 0 }
-func (m *mockPortfolio) PositionValue(_ asset.Asset) float64   { return 0 }
+func (m *mockPortfolio) Position(a asset.Asset) float64      { return m.positions[a] }
+func (m *mockPortfolio) Equity() float64                     { return m.equity }
+func (m *mockPortfolio) ShortMarketValue() float64           { return m.shortMarketValue }
+func (m *mockPortfolio) Cash() float64                       { return 0 }
+func (m *mockPortfolio) Value() float64                      { return 0 }
+func (m *mockPortfolio) PositionValue(_ asset.Asset) float64 { return 0 }
 func (m *mockPortfolio) Holdings(fn func(asset.Asset, float64)) {
 	for ast, qty := range m.positions {
 		fn(ast, qty)
