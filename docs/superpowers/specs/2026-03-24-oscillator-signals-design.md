@@ -81,16 +81,11 @@ Output metric: `CCISignal`. Range: unbounded. The constant 0.015 is hardcoded (L
 
 ## New Metric Constants
 
-Added to `signal/signal.go`:
+Each constant is defined in its respective signal file (not `signal/signal.go`):
 
-```go
-StochasticKSignal     data.Metric = "StochasticK"
-StochasticDSignal     data.Metric = "StochasticD"
-StochasticSlowKSignal data.Metric = "StochasticSlowK"
-StochasticSlowDSignal data.Metric = "StochasticSlowD"
-WilliamsRSignal       data.Metric = "WilliamsR"
-CCISignal             data.Metric = "CCI"
-```
+- `signal/stochastic.go`: `StochasticKSignal`, `StochasticDSignal`, `StochasticSlowKSignal`, `StochasticSlowDSignal`
+- `signal/williams_r.go`: `WilliamsRSignal`
+- `signal/cci.go`: `CCISignal`
 
 ## Implementation Approach
 
@@ -128,7 +123,7 @@ This matches ATR's approach rather than the `df.Apply()` approach used by RSI, b
 
 | File | Change |
 |------|--------|
-| `signal/signal.go` | Add 6 new metric constants |
+| `signal/signal.go` | No changes (new constants live in their respective signal files) |
 | `signal/doc.go` | Add new signals to the package doc list |
 | `docs/data.md` | Remove signals section (lines 410-456), replace with link to `docs/signals.md` |
 | `CHANGELOG.md` | Entry under "Added" |
