@@ -24,27 +24,31 @@ func StochasticFast(ctx context.Context, assetUniverse universe.Universe, period
 Computes the Fast Stochastic Oscillator for each asset.
 
 - %K = (Close - Lowest Low over period) / (Highest High over period - Lowest Low over period) * 100
-- %D = 3-period SMA of %K
+- %D = 3-period SMA of %K (the 3-period smoothing is the universal convention and is hardcoded)
 
 Output metrics: `StochasticKSignal`, `StochasticDSignal`. Range: 0-100. Division by zero (Highest High == Lowest Low) produces NaN.
 
 Uses `data.MergeColumns` for the two-metric output, following the MACD/Bollinger pattern.
 
+**Data requirements:** Computing %D requires %K values for 3 bars, so the function internally fetches `period.N + 2` bars of data to produce 3 rolling %K values for the SMA. The `period` parameter controls the lookback for %K itself. Minimum data: `period.N + 2` rows.
+
 ### StochasticSlow
 
 ```go
-func StochasticSlow(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period, smoothing int) *data.DataFrame
+func StochasticSlow(ctx context.Context, assetUniverse universe.Universe, period, smoothing portfolio.Period) *data.DataFrame
 ```
 
 Computes the Slow Stochastic Oscillator for each asset.
 
 - Raw %K = same formula as Fast %K
 - Slow %K = SMA of Raw %K over `smoothing` bars
-- Slow %D = 3-period SMA of Slow %K
+- Slow %D = 3-period SMA of Slow %K (hardcoded, same convention as Fast)
 
 Output metrics: `StochasticSlowKSignal`, `StochasticSlowDSignal`. Range: 0-100. Division by zero produces NaN.
 
-The `smoothing` parameter controls the %K smoothing window (commonly 3).
+The `smoothing` parameter controls the %K smoothing window (commonly `data.Days(3)`). Typed as `portfolio.Period` for consistency with other signal parameters.
+
+**Data requirements:** The function internally fetches `period.N + smoothing.N + 2` bars to produce enough Slow %K values for the 3-period %D SMA. Minimum data: `period.N + smoothing.N + 2` rows.
 
 ### WilliamsR
 
@@ -92,8 +96,8 @@ CCISignal             data.Metric = "CCI"
 
 Each signal follows the ATR pattern for multi-metric data access:
 
-1. Fetch High, Low, Close via `assetUniverse.Window(ctx, period, data.MetricHigh, data.MetricLow, data.MetricClose)`
-2. Validate minimum data points (at least 2 rows)
+1. Fetch High, Low, Close via `assetUniverse.Window(ctx, adjustedPeriod, data.MetricHigh, data.MetricLow, data.MetricClose)` where `adjustedPeriod` accounts for the extra bars needed by SMA smoothing (see per-signal data requirements above)
+2. Validate minimum data points (per-signal minimum: Williams %R and CCI need `period.N` rows; StochasticFast needs `period.N + 2`; StochasticSlow needs `period.N + smoothing.N + 2`)
 3. Iterate over assets using `df.Column(asset, metric)` for direct `[]float64` access
 4. Compute per-asset, store results in column slices
 5. Construct result DataFrame via `data.NewDataFrame` for single-metric signals or `data.MergeColumns` for multi-metric signals (Stochastic)
@@ -143,8 +147,9 @@ Test cases per signal:
 - **Happy path:** known input prices with hand-verified expected output
 - **Minimum data:** exactly 2 data points
 - **Insufficient data:** fewer than 2 data points returns error
-- **Flat market:** all prices identical (division-by-zero case produces NaN for Stochastic/Williams %R)
+- **Flat market:** all prices identical (division-by-zero case produces NaN for Stochastic, Williams %R, and CCI)
 - **Multi-asset:** verify per-asset independence
+- **StochasticSlow with non-default smoothing:** verify correctness with smoothing values other than 3 (e.g., 5)
 
 ## Documentation
 
