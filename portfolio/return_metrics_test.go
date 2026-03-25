@@ -107,6 +107,188 @@ var _ = Describe("Return Metrics", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
+
+		It("isolates market growth from deposit-driven equity changes", func() {
+			// Day 0: deposit 10000, equity = 10000
+			// Day 1: organic growth +1000, equity = 11000 (no deposit)
+			// Day 2: deposit 5000 + organic growth +1000, equity = 17000
+			//
+			// Sub-period 1 (day 0->1): no flow
+			//   preFlowEquity = 11000, return = 11000/10000 - 1 = 0.10
+			// Sub-period 2 (day 1->2): flow = 5000 (deposit)
+			//   preFlowEquity = 17000 - 5000 = 12000, return = 12000/11000 - 1
+			//   subPeriodStart resets to 17000
+			// TWRR = (11000/10000) * (12000/11000) - 1 = 12000/10000 - 1 = 0.20
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+
+			aa := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df0)
+
+			// Day 1: organic growth +1000
+			aa.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df1)
+
+			// Day 2: deposit 5000 + organic growth +1000
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DepositTransaction,
+				Amount: 5000,
+			})
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df2)
+
+			result, err := aa.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 0.20, 1e-9))
+		})
+
+		It("handles withdrawals correctly", func() {
+			// Day 0: deposit 10000, equity = 10000
+			// Day 1: market loss -1000, equity = 9000
+			// Day 2: withdrawal 3000 + market gain +1000, equity = 7000
+			//
+			// Sub-period 1 (day 0->1): no flow
+			//   preFlowEquity = 9000, return = 9000/10000 - 1 = -0.10
+			// Sub-period 2 (day 1->2): flow = -3000 (withdrawal)
+			//   preFlowEquity = 7000 - (-3000) = 10000, return = 10000/9000 - 1
+			// TWRR = (9000/10000) * (10000/9000) - 1 = 0.0
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+
+			aa := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df0)
+
+			// Day 1: market loss -1000
+			aa.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.FeeTransaction,
+				Amount: -1000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df1)
+
+			// Day 2: withdrawal 3000 + market gain +1000
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.WithdrawalTransaction,
+				Amount: -3000,
+			})
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df2)
+
+			result, err := aa.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
+		})
+
+		It("produces correct cumulative series with external flows", func() {
+			// Same scenario as "isolates market growth from deposit-driven equity changes"
+			// Day 0: deposit 10000, equity = 10000
+			// Day 1: organic growth +1000, equity = 11000
+			// Day 2: deposit 5000 + organic growth +1000, equity = 17000
+			//
+			// cum[0] = (11000/10000) - 1 = 0.10
+			// cum[1] = (11000/10000) * (12000/11000) - 1 = 0.20
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+
+			aa := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df0)
+
+			aa.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df1)
+
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DepositTransaction,
+				Amount: 5000,
+			})
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df2)
+
+			seriesDF, err := aa.PerformanceMetric(portfolio.TWRR).Series()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(seriesDF.Len()).To(Equal(2))
+			series := seriesDF.Column(perfAsset, data.PortfolioEquity)
+			Expect(series[0]).To(BeNumerically("~", 0.10, 1e-9))
+			Expect(series[1]).To(BeNumerically("~", 0.20, 1e-9))
+		})
+
+		It("diverges from MWRR when deposit timing matters", func() {
+			// Day 0: deposit 10000, equity = 10000
+			// Day 183: market grew 20% (+2000), then deposit 10000, equity = 22000
+			// Day 367: market dropped 10% (-2200), equity = 19800
+			//
+			// TWRR = (12000/10000) * (19800/22000) - 1 = 1.2 * 0.9 - 1 = 0.08
+			// MWRR will be lower (more money exposed to the loss)
+			dates := []time.Time{
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2024, 7, 3, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC),
+			}
+
+			aa := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df0)
+
+			// Day 183: market grew 20% (+2000), then deposit 10000
+			aa.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.DividendTransaction,
+				Amount: 2000,
+			})
+			aa.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.DepositTransaction,
+				Amount: 10_000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df1)
+
+			// Day 367: market dropped 10% (-2200)
+			aa.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.FeeTransaction,
+				Amount: -2200,
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			aa.UpdatePrices(df2)
+
+			twrr, err := aa.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(twrr).To(BeNumerically("~", 0.08, 1e-9))
+
+			mwrr, err := aa.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(mwrr).To(BeNumerically("<", twrr),
+				"MWRR should be lower than TWRR when more capital is exposed to losses")
+		})
 	})
 
 	Describe("MWRR", func() {
