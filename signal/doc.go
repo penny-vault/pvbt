@@ -34,6 +34,10 @@
 //   - [BollingerBands](ctx, u, period, numStdDev, metrics...): Upper, middle, and lower Bollinger Bands.
 //   - [Crossover](ctx, u, fastPeriod, slowPeriod, metrics...): Moving average crossover signal with fast/slow SMAs.
 //   - [ATR](ctx, u, period): Average True Range with Wilder smoothing.
+//   - [StochasticFast](ctx, u, period): Fast Stochastic Oscillator (%K and %D).
+//   - [StochasticSlow](ctx, u, period, smoothing): Slow Stochastic Oscillator (smoothed %K and %D).
+//   - [WilliamsR](ctx, u, period): Williams %R momentum oscillator (-100 to 0).
+//   - [CCI](ctx, u, period): Commodity Channel Index (unbounded).
 //
 // # Custom Signals
 //

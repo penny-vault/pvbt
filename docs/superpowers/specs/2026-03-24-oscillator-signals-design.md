@@ -48,7 +48,7 @@ Output metrics: `StochasticSlowKSignal`, `StochasticSlowDSignal`. Range: 0-100. 
 
 The `smoothing` parameter controls the %K smoothing window (commonly `portfolio.Days(3)`). Typed as `portfolio.Period` for consistency with other signal parameters.
 
-**Data requirements:** The function internally fetches `period.N + smoothing.N + 2` bars to produce enough Slow %K values for the 3-period %D SMA. Minimum data: `period.N + smoothing.N + 2` rows.
+**Data requirements:** The function internally fetches `period.N + smoothing.N + 1` bars to produce enough Slow %K values for the 3-period %D SMA. Minimum data: `period.N + smoothing.N + 1` rows.
 
 ### WilliamsR
 
@@ -92,7 +92,7 @@ Each constant is defined in its respective signal file (not `signal/signal.go`):
 Each signal follows the ATR pattern for multi-metric data access:
 
 1. Fetch High, Low, Close via `assetUniverse.Window(ctx, adjustedPeriod, data.MetricHigh, data.MetricLow, data.MetricClose)` where `adjustedPeriod` accounts for the extra bars needed by SMA smoothing (see per-signal data requirements above)
-2. Validate minimum data points (per-signal minimum: Williams %R and CCI need `period.N` rows; StochasticFast needs `period.N + 2`; StochasticSlow needs `period.N + smoothing.N + 2`)
+2. Validate minimum data points (per-signal minimum: Williams %R and CCI need `period.N` rows; StochasticFast needs `period.N + 2`; StochasticSlow needs `period.N + smoothing.N + 1`)
 3. Iterate over assets using `df.Column(asset, metric)` for direct `[]float64` access
 4. Compute per-asset, store results in column slices
 5. Construct result DataFrame via `data.NewDataFrame` for single-metric signals or `data.MergeColumns` for multi-metric signals (Stochastic)
