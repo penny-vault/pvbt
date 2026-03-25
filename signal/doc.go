@@ -40,6 +40,11 @@
 //   - [StochasticSlow](ctx, u, period, smoothing): Slow Stochastic Oscillator (smoothed %K and %D).
 //   - [WilliamsR](ctx, u, period): Williams %R momentum oscillator (-100 to 0).
 //   - [CCI](ctx, u, period): Commodity Channel Index (unbounded).
+//   - [OBV](ctx, u, period): On-Balance Volume (cumulative).
+//   - [VWMA](ctx, u, period): Volume-Weighted Moving Average.
+//   - [AccumulationDistribution](ctx, u, period): Accumulation/Distribution line (cumulative).
+//   - [CMF](ctx, u, period): Chaikin Money Flow (-1 to 1).
+//   - [MFI](ctx, u, period): Money Flow Index (0 to 100).
 //
 // # Custom Signals
 //

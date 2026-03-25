@@ -24,6 +24,11 @@ Signals are plain functions. There is no registration, no interface to implement
 | `StochasticSlow` | `(ctx, u, period, smoothing)` | Slow Stochastic Oscillator (smoothed %K and %D, 0--100) |
 | `WilliamsR` | `(ctx, u, period)` | Williams %R momentum oscillator (-100 to 0) |
 | `CCI` | `(ctx, u, period)` | Commodity Channel Index (unbounded) |
+| `OBV` | `(ctx, u, period)` | On-Balance Volume (cumulative) |
+| `VWMA` | `(ctx, u, period)` | Volume-Weighted Moving Average |
+| `AccumulationDistribution` | `(ctx, u, period)` | Accumulation/Distribution line (cumulative) |
+| `CMF` | `(ctx, u, period)` | Chaikin Money Flow (-1 to 1) |
+| `MFI` | `(ctx, u, period)` | Money Flow Index (0 to 100) |
 
 ## Signal reference
 
@@ -254,6 +259,103 @@ df := signal.CCI(ctx, u, portfolio.Days(20))
 **Output metric:** `CCISignal`
 
 **Value range:** Unbounded. Values above +100 suggest overbought conditions; values below -100 suggest oversold conditions.
+
+---
+
+### Volume
+
+#### OBV
+
+Computes On-Balance Volume, a cumulative indicator that adds volume on up-close bars and subtracts volume on down-close bars. Rising OBV confirms an uptrend; divergence between OBV and price warns of potential reversal.
+
+```go
+df := signal.OBV(ctx, u, portfolio.Days(50))
+```
+
+**Signature:** `OBV(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window
+
+**Output metric:** `OBVSignal`
+
+**Value range:** Unbounded; the absolute level is less meaningful than the direction and trend of the series.
+
+---
+
+#### VWMA
+
+Computes the Volume-Weighted Moving Average. Unlike a simple moving average, VWMA gives more weight to bars with higher volume. Price trading above the VWMA suggests buying pressure dominates over the period.
+
+```go
+df := signal.VWMA(ctx, u, portfolio.Days(20))
+```
+
+**Signature:** `VWMA(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window
+
+**Output metric:** `VWMASignal`
+
+**Value range:** Values are in price units.
+
+---
+
+#### AccumulationDistribution
+
+Computes the Accumulation/Distribution line, a cumulative volume indicator that uses the close position within the high-low range to weight volume. A close near the high adds volume (accumulation); a close near the low subtracts volume (distribution).
+
+```go
+df := signal.AccumulationDistribution(ctx, u, portfolio.Days(50))
+```
+
+**Signature:** `AccumulationDistribution(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window
+
+**Output metric:** `AccumulationDistributionSignal`
+
+**Value range:** Unbounded; the direction and trend of the series matter more than the absolute level.
+
+---
+
+#### CMF
+
+Computes Chaikin Money Flow. CMF is the ratio of cumulative Money Flow Volume to cumulative volume over a fixed window, measuring buying and selling pressure over the period.
+
+```go
+df := signal.CMF(ctx, u, portfolio.Days(21))
+```
+
+**Signature:** `CMF(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window (conventionally 20 or 21 bars)
+
+**Output metric:** `CMFSignal`
+
+**Value range:** -1 to +1. Positive values indicate buying pressure; negative values indicate selling pressure.
+
+---
+
+#### MFI
+
+Computes the Money Flow Index, a volume-weighted RSI. MFI classifies money flow as positive or negative based on the direction of the typical price relative to the prior period.
+
+```go
+df := signal.MFI(ctx, u, portfolio.Days(14))
+```
+
+**Signature:** `MFI(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window (conventionally 14 bars)
+
+**Output metric:** `MFISignal`
+
+**Value range:** 0 to 100. Values above 80 are conventionally considered overbought; values below 20 are considered oversold.
 
 ---
 
