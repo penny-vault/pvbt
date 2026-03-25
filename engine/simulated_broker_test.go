@@ -17,6 +17,7 @@ package engine_test
 
 import (
 	"context"
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -43,7 +44,11 @@ func (m *mockPortfolio) ShortMarketValue() float64             { return m.shortM
 func (m *mockPortfolio) Cash() float64                         { return 0 }
 func (m *mockPortfolio) Value() float64                        { return 0 }
 func (m *mockPortfolio) PositionValue(_ asset.Asset) float64   { return 0 }
-func (m *mockPortfolio) Holdings(_ func(asset.Asset, float64)) {}
+func (m *mockPortfolio) Holdings(fn func(asset.Asset, float64)) {
+	for ast, qty := range m.positions {
+		fn(ast, qty)
+	}
+}
 func (m *mockPortfolio) Transactions() []portfolio.Transaction { return nil }
 func (m *mockPortfolio) Prices() *data.DataFrame               { return nil }
 func (m *mockPortfolio) PerfData() *data.DataFrame             { return nil }
@@ -124,6 +129,15 @@ func (m *mockHLPriceProvider) Prices(_ context.Context, assets ...asset.Asset) (
 		return nil, err
 	}
 	return df, nil
+}
+
+// mockDFPriceProvider implements broker.PriceProvider returning a pre-built DataFrame.
+type mockDFPriceProvider struct {
+	df *data.DataFrame
+}
+
+func (m *mockDFPriceProvider) Prices(_ context.Context, _ ...asset.Asset) (*data.DataFrame, error) {
+	return m.df, nil
 }
 
 // Compile-time interface checks.
@@ -793,6 +807,176 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(mock.closeCalled).To(BeFalse())
 			Expect(eng.Close()).To(Succeed())
 			Expect(mock.closeCalled).To(BeTrue())
+		})
+	})
+
+	Context("Transactions", func() {
+		It("returns dividend transactions from data provider", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions: map[asset.Asset]float64{aapl: 100},
+			})
+
+			metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
+			// close=150, adjClose=150, dividend=1.50, splitFactor=1.0
+			vals := []float64{150.0, 150.0, 1.50, 1.0}
+			numCols := 1 * len(metrics)
+			df, dfErr := data.NewDataFrame(
+				[]time.Time{date},
+				[]asset.Asset{aapl},
+				metrics,
+				data.Daily,
+				data.SlabToColumns(vals, numCols, 1),
+			)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			simBroker.SetPriceProvider(&mockDFPriceProvider{df: df}, date)
+
+			txns, err := simBroker.Transactions(context.Background(), time.Time{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var divTxn broker.Transaction
+			for _, txn := range txns {
+				if txn.Type == asset.DividendTransaction {
+					divTxn = txn
+				}
+			}
+
+			Expect(divTxn.Type).To(Equal(asset.DividendTransaction))
+			Expect(divTxn.Amount).To(BeNumerically("~", 150.0, 0.01))
+			Expect(divTxn.Qty).To(Equal(100.0))
+			Expect(divTxn.Price).To(Equal(1.50))
+		})
+
+		It("returns split transactions from data provider", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions: map[asset.Asset]float64{aapl: 100},
+			})
+
+			metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
+			// close=75, adjClose=75, dividend=0, splitFactor=2.0 (2-for-1 split)
+			vals := []float64{75.0, 75.0, 0.0, 2.0}
+			numCols := 1 * len(metrics)
+			df, dfErr := data.NewDataFrame(
+				[]time.Time{date},
+				[]asset.Asset{aapl},
+				metrics,
+				data.Daily,
+				data.SlabToColumns(vals, numCols, 1),
+			)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			simBroker.SetPriceProvider(&mockDFPriceProvider{df: df}, date)
+
+			txns, err := simBroker.Transactions(context.Background(), time.Time{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var splitTxn broker.Transaction
+			for _, txn := range txns {
+				if txn.Type == asset.SplitTransaction {
+					splitTxn = txn
+				}
+			}
+
+			Expect(splitTxn.Type).To(Equal(asset.SplitTransaction))
+			Expect(splitTxn.Price).To(Equal(2.0))
+		})
+
+		It("returns borrow fee transactions for short positions", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions: map[asset.Asset]float64{aapl: -50},
+			})
+			simBroker.SetBorrowRate(0.10) // 10% annualized
+
+			metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
+			// close=100, adjClose=100, dividend=0, splitFactor=1.0
+			vals := []float64{100.0, 100.0, 0.0, 1.0}
+			numCols := 1 * len(metrics)
+			df, dfErr := data.NewDataFrame(
+				[]time.Time{date},
+				[]asset.Asset{aapl},
+				metrics,
+				data.Daily,
+				data.SlabToColumns(vals, numCols, 1),
+			)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			simBroker.SetPriceProvider(&mockDFPriceProvider{df: df}, date)
+
+			txns, err := simBroker.Transactions(context.Background(), time.Time{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var feeTxn broker.Transaction
+			for _, txn := range txns {
+				if txn.Type == asset.FeeTransaction {
+					feeTxn = txn
+				}
+			}
+
+			// Daily fee = |50| * 100 * (0.10 / 252) = 1.984...
+			expectedFee := 50.0 * 100.0 * (0.10 / 252.0)
+			Expect(feeTxn.Type).To(Equal(asset.FeeTransaction))
+			Expect(feeTxn.Amount).To(BeNumerically("~", -expectedFee, 0.001))
+		})
+
+		It("liquidates position when asset is delisted", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions: map[asset.Asset]float64{aapl: 100},
+			})
+
+			// First call: valid price to populate lastPrices.
+			metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
+			vals1 := []float64{150.0, 150.0, 0.0, 1.0}
+			numCols := 1 * len(metrics)
+			df1, dfErr := data.NewDataFrame(
+				[]time.Time{date},
+				[]asset.Asset{aapl},
+				metrics,
+				data.Daily,
+				data.SlabToColumns(vals1, numCols, 1),
+			)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			simBroker.SetPriceProvider(&mockDFPriceProvider{df: df1}, date)
+
+			txns1, err := simBroker.Transactions(context.Background(), time.Time{})
+			Expect(err).NotTo(HaveOccurred())
+			// No delist on first call.
+			for _, txn := range txns1 {
+				Expect(txn.Type).NotTo(Equal(asset.SellTransaction))
+			}
+
+			// Second call: NaN price signals delisting.
+			date2 := date.AddDate(0, 0, 1)
+			vals2 := []float64{math.NaN(), math.NaN(), 0.0, 1.0}
+			df2, dfErr := data.NewDataFrame(
+				[]time.Time{date2},
+				[]asset.Asset{aapl},
+				metrics,
+				data.Daily,
+				data.SlabToColumns(vals2, numCols, 1),
+			)
+			Expect(dfErr).NotTo(HaveOccurred())
+
+			simBroker.SetPriceProvider(&mockDFPriceProvider{df: df2}, date2)
+
+			txns2, err := simBroker.Transactions(context.Background(), time.Time{})
+			Expect(err).NotTo(HaveOccurred())
+
+			var delistTxn broker.Transaction
+			for _, txn := range txns2 {
+				if txn.Type == asset.SellTransaction {
+					delistTxn = txn
+				}
+			}
+
+			Expect(delistTxn.Type).To(Equal(asset.SellTransaction))
+			Expect(delistTxn.Price).To(Equal(150.0))
+			Expect(delistTxn.Amount).To(BeNumerically("~", 15000.0, 0.01))
+			Expect(delistTxn.Justification).To(ContainSubstring("delisted"))
 		})
 	})
 })
