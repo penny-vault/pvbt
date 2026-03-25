@@ -46,7 +46,7 @@ Computes the Slow Stochastic Oscillator for each asset.
 
 Output metrics: `StochasticSlowKSignal`, `StochasticSlowDSignal`. Range: 0-100. Division by zero produces NaN.
 
-The `smoothing` parameter controls the %K smoothing window (commonly `data.Days(3)`). Typed as `portfolio.Period` for consistency with other signal parameters.
+The `smoothing` parameter controls the %K smoothing window (commonly `portfolio.Days(3)`). Typed as `portfolio.Period` for consistency with other signal parameters.
 
 **Data requirements:** The function internally fetches `period.N + smoothing.N + 2` bars to produce enough Slow %K values for the 3-period %D SMA. Minimum data: `period.N + smoothing.N + 2` rows.
 
@@ -60,7 +60,7 @@ Computes Williams %R for each asset.
 
 - %R = (Highest High over period - Close) / (Highest High over period - Lowest Low over period) * -100
 
-Output metric: `WilliamsRSignal`. Range: -100 to 0. Division by zero produces NaN.
+Output metric: `WilliamsRSignal`. Range: -100 to 0. Division by zero produces NaN. Minimum data: `period.N` rows.
 
 Fully independent implementation from Stochastic despite the mathematical relationship.
 
@@ -77,7 +77,7 @@ Computes the Commodity Channel Index for each asset.
 - Mean Deviation = mean of |Typical Price - SMA| over period
 - CCI = (Typical Price - SMA) / (0.015 * Mean Deviation)
 
-Output metric: `CCISignal`. Range: unbounded. The constant 0.015 is hardcoded (Lambert's convention). Division by zero (Mean Deviation == 0) produces NaN.
+Output metric: `CCISignal`. Range: unbounded. The constant 0.015 is hardcoded (Lambert's convention). Division by zero (Mean Deviation == 0) produces NaN. Minimum data: `period.N` rows.
 
 ## New Metric Constants
 
@@ -145,8 +145,8 @@ Each test file uses Ginkgo/Gomega following the existing signal test pattern:
 Test cases per signal:
 
 - **Happy path:** known input prices with hand-verified expected output
-- **Minimum data:** exactly 2 data points
-- **Insufficient data:** fewer than 2 data points returns error
+- **Minimum data:** exactly the per-signal minimum number of rows (see each signal's data requirements)
+- **Insufficient data:** one fewer than the per-signal minimum returns error
 - **Flat market:** all prices identical (division-by-zero case produces NaN for Stochastic, Williams %R, and CCI)
 - **Multi-asset:** verify per-asset independence
 - **StochasticSlow with non-default smoothing:** verify correctness with smoothing values other than 3 (e.g., 5)
