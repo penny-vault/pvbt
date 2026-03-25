@@ -29,8 +29,8 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/engine/middleware/risk"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/risk"
 )
 
 // mockAssetProvider implements data.AssetProvider for tests.

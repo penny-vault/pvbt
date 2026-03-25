@@ -21,8 +21,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/engine/middleware/risk"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/risk"
 )
 
 var _ = Describe("Profiles", func() {
