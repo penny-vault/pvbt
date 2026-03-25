@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Backtests automatically liquidate positions in delisted assets at the last known price instead of silently holding them with stale data.
 - Stochastic Oscillator (fast and slow), Williams %R, and CCI signals are now available in the signal package for identifying overbought/oversold conditions.
+- Strategies can use Keltner Channel and Donchian Channel volatility signals to adapt position sizing and stops to current market volatility.
 
 ### Changed
 
