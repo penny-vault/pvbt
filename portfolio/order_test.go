@@ -70,6 +70,9 @@ func (m *mockBroker) Positions(_ context.Context) ([]broker.Position, error) { r
 func (m *mockBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
+func (m *mockBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}
 
 func (m *mockBroker) Fills() <-chan broker.Fill {
 	return m.fillCh
@@ -243,7 +246,7 @@ var _ = Describe("Order", func() {
 		txns := acct.Transactions()
 		buyCount := 0
 		for _, tx := range txns {
-			if tx.Type == portfolio.BuyTransaction {
+			if tx.Type == asset.BuyTransaction {
 				buyCount++
 			}
 		}
@@ -261,7 +264,7 @@ var _ = Describe("Order", func() {
 		// Only the initial deposit transaction should exist.
 		txns := acct.Transactions()
 		Expect(txns).To(HaveLen(1))
-		Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
+		Expect(txns[0].Type).To(Equal(asset.DepositTransaction))
 	})
 
 	Context("edge cases", func() {

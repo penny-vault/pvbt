@@ -57,7 +57,7 @@ func buildPricedAccount(date time.Time, cashBalance float64, positions map[asset
 		acct.Record(portfolio.Transaction{
 			Date:   date,
 			Asset:  posAsset,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    posValue,
 			Price:  1.0,
 			Amount: -posValue, // cash decreases by posValue

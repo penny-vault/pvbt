@@ -425,10 +425,10 @@ func buildTrades(acct portfolio.Portfolio, warnings *[]string) Trades {
 
 	for _, txn := range transactions {
 		switch txn.Type {
-		case portfolio.BuyTransaction, portfolio.SellTransaction:
+		case asset.BuyTransaction, asset.SellTransaction:
 			totalTransactions++
 
-			if txn.Type == portfolio.SellTransaction {
+			if txn.Type == asset.SellTransaction {
 				roundTrips++
 			}
 

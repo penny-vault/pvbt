@@ -232,6 +232,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// Wire portfolio to simulated broker for margin checks.
 	if sb, ok := e.broker.(*SimulatedBroker); ok {
 		sb.SetPortfolio(acct)
+		sb.SetBorrowRate(acct.BorrowRate())
 	}
 
 	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).
@@ -437,114 +438,21 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 // is included in the housekeeping data fetch; pass asset.Asset{} for child
 // accounts that have no benchmark.
 func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
-	housekeepMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.SplitFactor}
-
-	var heldAssets []asset.Asset
-
-	acct.Holdings(func(a asset.Asset, _ float64) {
-		heldAssets = append(heldAssets, a)
-	})
-
-	var housekeepAssets []asset.Asset
-
-	housekeepAssets = append(housekeepAssets, heldAssets...)
-	if benchmark != (asset.Asset{}) {
-		housekeepAssets = append(housekeepAssets, benchmark)
-	}
-
-	var housekeepDF *data.DataFrame
-
-	if len(housekeepAssets) > 0 {
-		var fetchErr error
-
-		housekeepDF, fetchErr = eng.Fetch(ctx, housekeepAssets, portfolio.Days(1), housekeepMetrics)
-		if fetchErr != nil {
-			return fmt.Errorf("engine: housekeeping fetch on %v: %w", date, fetchErr)
-		}
-	}
-
-	// Drain fills from previous step (before splits and dividends).
+	// Drain fills from previous step (before syncing transactions).
 	if acct.HasBroker() {
 		if drainErr := acct.DrainFills(ctx); drainErr != nil {
 			return fmt.Errorf("engine: drain fills on %v: %w", date, drainErr)
 		}
 	}
 
-	// Apply stock splits before dividends (dividend values are post-split).
-	if housekeepDF != nil {
-		for _, heldAsset := range heldAssets {
-			splitFactor := housekeepDF.ValueAt(heldAsset, data.SplitFactor, date)
-			if math.IsNaN(splitFactor) || splitFactor == 1.0 {
-				continue
-			}
-
-			if err := acct.ApplySplit(heldAsset, date, splitFactor); err != nil {
-				return fmt.Errorf("engine: apply split for %s on %v: %w", heldAsset.Ticker, date, err)
-			}
-		}
+	// Sync broker-reported transactions (dividends, splits, borrow fees).
+	brokerTxns, txnErr := eng.broker.Transactions(ctx, date.Add(-24*time.Hour))
+	if txnErr != nil {
+		return fmt.Errorf("engine: broker transactions on %v: %w", date, txnErr)
 	}
 
-	// Record borrow fees for short positions.
-	if housekeepDF != nil {
-		borrowRate := acct.BorrowRate()
-		for _, heldAsset := range heldAssets {
-			qty := acct.Position(heldAsset)
-			if qty >= 0 {
-				continue
-			}
-
-			closePrice := housekeepDF.ValueAt(heldAsset, data.MetricClose, date)
-			if math.IsNaN(closePrice) || closePrice == 0 {
-				continue
-			}
-
-			dailyFee := math.Abs(qty) * closePrice * (borrowRate / 252.0)
-			acct.Record(portfolio.Transaction{
-				Date:          date,
-				Asset:         heldAsset,
-				Type:          portfolio.FeeTransaction,
-				Amount:        -dailyFee,
-				Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
-			})
-		}
-	}
-
-	// Record dividends for held assets.
-	if housekeepDF != nil {
-		for _, heldAsset := range heldAssets {
-			qty := acct.Position(heldAsset)
-			if qty == 0 {
-				continue
-			}
-
-			divPerShare := housekeepDF.ValueAt(heldAsset, data.Dividend, date)
-			if math.IsNaN(divPerShare) || divPerShare <= 0 {
-				continue
-			}
-
-			if qty > 0 {
-				// Long position: receive dividend.
-				acct.Record(portfolio.Transaction{
-					Date:   date,
-					Asset:  heldAsset,
-					Type:   portfolio.DividendTransaction,
-					Amount: divPerShare * qty,
-					Qty:    qty,
-					Price:  divPerShare,
-				})
-			} else {
-				// Short position: owe dividend.
-				acct.Record(portfolio.Transaction{
-					Date:          date,
-					Asset:         heldAsset,
-					Type:          portfolio.DividendTransaction,
-					Amount:        divPerShare * qty, // negative (qty is negative)
-					Qty:           qty,
-					Price:         divPerShare,
-					Justification: fmt.Sprintf("short dividend obligation: %s ex-date %s", heldAsset.Ticker, date.Format("2006-01-02")),
-				})
-			}
-		}
+	if syncErr := acct.SyncTransactions(brokerTxns); syncErr != nil {
+		return fmt.Errorf("engine: sync transactions on %v: %w", date, syncErr)
 	}
 
 	return nil

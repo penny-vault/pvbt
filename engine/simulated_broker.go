@@ -48,6 +48,8 @@ type SimulatedBroker struct {
 	groups            map[string][]string // groupID -> orderIDs
 	portfolio         portfolio.Portfolio
 	initialMarginRate float64
+	borrowRate        float64
+	lastPrices        map[asset.Asset]float64
 	fillPipeline      *fill.Pipeline
 	partialRemainders map[string]partialRemainder
 }
@@ -58,6 +60,7 @@ func NewSimulatedBroker() *SimulatedBroker {
 		fills:             make(chan broker.Fill, fillChannelSize),
 		pending:           make(map[string]broker.Order),
 		groups:            make(map[string][]string),
+		lastPrices:        make(map[asset.Asset]float64),
 		fillPipeline:      fill.NewPipeline(fill.Close(), nil),
 		partialRemainders: make(map[string]partialRemainder),
 	}
@@ -77,6 +80,11 @@ func (b *SimulatedBroker) SetPortfolio(p portfolio.Portfolio) {
 // SetInitialMarginRate sets the initial margin rate for short sells.
 func (b *SimulatedBroker) SetInitialMarginRate(rate float64) {
 	b.initialMarginRate = rate
+}
+
+// SetBorrowRate sets the annualized borrow fee rate for short positions.
+func (b *SimulatedBroker) SetBorrowRate(rate float64) {
+	b.borrowRate = rate
 }
 
 // SetFillPipeline replaces the default close-price fill pipeline.
@@ -486,4 +494,117 @@ func (b *SimulatedBroker) Positions(_ context.Context) ([]broker.Position, error
 
 func (b *SimulatedBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
+}
+
+func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]broker.Transaction, error) {
+	if b.prices == nil || b.portfolio == nil {
+		return nil, nil
+	}
+
+	var heldAssets []asset.Asset
+
+	b.portfolio.Holdings(func(ast asset.Asset, _ float64) {
+		heldAssets = append(heldAssets, ast)
+	})
+
+	if len(heldAssets) == 0 {
+		return nil, nil
+	}
+
+	df, err := b.prices.Prices(ctx, heldAssets...)
+	if err != nil {
+		return nil, fmt.Errorf("simulated broker: fetching housekeeping prices: %w", err)
+	}
+
+	var txns []broker.Transaction
+
+	for _, ast := range heldAssets {
+		qty := b.portfolio.Position(ast)
+		if qty == 0 {
+			continue
+		}
+
+		closePrice := df.ValueAt(ast, data.MetricClose, b.date)
+		if math.IsNaN(closePrice) || closePrice == 0 {
+			if lastPrice, ok := b.lastPrices[ast]; ok && lastPrice > 0 {
+				amount := lastPrice * math.Abs(qty)
+				if qty < 0 {
+					amount = -amount
+				}
+
+				txns = append(txns, broker.Transaction{
+					ID:            fmt.Sprintf("sim-delist-%s-%s", ast.CompositeFigi, b.date.Format("2006-01-02")),
+					Date:          b.date,
+					Asset:         ast,
+					Type:          asset.SellTransaction,
+					Qty:           qty,
+					Price:         lastPrice,
+					Amount:        amount,
+					Justification: fmt.Sprintf("delisted: %s liquidated at last known price $%.2f", ast.Ticker, lastPrice),
+				})
+
+				delete(b.lastPrices, ast)
+			}
+
+			continue
+		}
+
+		b.lastPrices[ast] = closePrice
+
+		splitFactor := df.ValueAt(ast, data.SplitFactor, b.date)
+
+		hasSplit := !math.IsNaN(splitFactor) && splitFactor != 1.0
+		if hasSplit {
+			txns = append(txns, broker.Transaction{
+				ID:    fmt.Sprintf("sim-split-%s-%s", ast.CompositeFigi, b.date.Format("2006-01-02")),
+				Date:  b.date,
+				Asset: ast,
+				Type:  asset.SplitTransaction,
+				Price: splitFactor,
+			})
+		}
+
+		divPerShare := df.ValueAt(ast, data.Dividend, b.date)
+		if !math.IsNaN(divPerShare) && divPerShare > 0 {
+			divQty := qty
+			if hasSplit {
+				divQty = qty * splitFactor
+			}
+
+			amount := divPerShare * divQty
+
+			justification := ""
+			if qty < 0 {
+				justification = fmt.Sprintf("short dividend obligation: %s ex-date %s",
+					ast.Ticker, b.date.Format("2006-01-02"))
+			}
+
+			txns = append(txns, broker.Transaction{
+				ID:            fmt.Sprintf("sim-div-%s-%s", ast.CompositeFigi, b.date.Format("2006-01-02")),
+				Date:          b.date,
+				Asset:         ast,
+				Type:          asset.DividendTransaction,
+				Qty:           divQty,
+				Price:         divPerShare,
+				Amount:        amount,
+				Justification: justification,
+			})
+		}
+
+		if qty < 0 && b.borrowRate > 0 {
+			if !math.IsNaN(closePrice) && closePrice != 0 {
+				dailyFee := math.Abs(qty) * closePrice * (b.borrowRate / 252.0)
+				txns = append(txns, broker.Transaction{
+					ID:            fmt.Sprintf("sim-fee-%s-%s", ast.CompositeFigi, b.date.Format("2006-01-02")),
+					Date:          b.date,
+					Asset:         ast,
+					Type:          asset.FeeTransaction,
+					Amount:        -dailyFee,
+					Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", ast.Ticker, b.borrowRate*100),
+				})
+			}
+		}
+	}
+
+	return txns, nil
 }

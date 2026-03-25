@@ -47,7 +47,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: -10_000.0,
@@ -63,7 +63,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    50,
 			Price:  120.0,
 			Amount: 6_000.0,
@@ -73,7 +73,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 9, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    50,
 			Price:  130.0,
 			Amount: 6_500.0,
@@ -103,7 +103,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: -10_000.0,
@@ -119,7 +119,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    50,
 			Price:  130.0,
 			Amount: 6_500.0,
@@ -155,7 +155,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: -10_000.0,
@@ -171,7 +171,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:      time.Date(2023, 4, 1, 0, 0, 0, 0, time.UTC),
 			Asset:     spy,
-			Type:      portfolio.DividendTransaction,
+			Type:      asset.DividendTransaction,
 			Amount:    500.0,
 			Qualified: true,
 		})
@@ -180,7 +180,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:      time.Date(2023, 7, 1, 0, 0, 0, 0, time.UTC),
 			Asset:     spy,
-			Type:      portfolio.DividendTransaction,
+			Type:      asset.DividendTransaction,
 			Amount:    300.0,
 			Qualified: false,
 		})
@@ -204,7 +204,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: -10_000.0,
@@ -220,7 +220,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: 10_000.0,
@@ -244,7 +244,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  100.0,
 			Amount: -10_000.0,
@@ -260,7 +260,7 @@ var _ = Describe("TaxDrag", func() {
 		a.Record(portfolio.Transaction{
 			Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    100,
 			Price:  80.0,
 			Amount: 8_000.0,

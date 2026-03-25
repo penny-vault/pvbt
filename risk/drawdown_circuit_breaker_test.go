@@ -66,13 +66,13 @@ var _ = Describe("DrawdownCircuitBreaker", func() {
 				if diff > 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   dates[idx],
-						Type:   portfolio.DepositTransaction,
+						Type:   asset.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   dates[idx],
-						Type:   portfolio.WithdrawalTransaction,
+						Type:   asset.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}
@@ -112,7 +112,7 @@ var _ = Describe("DrawdownCircuitBreaker", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   dates[0],
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    qty,
 			Price:  price,
 			Amount: -(price * qty),
@@ -126,13 +126,13 @@ var _ = Describe("DrawdownCircuitBreaker", func() {
 				if diff > 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   dates[idx],
-						Type:   portfolio.DepositTransaction,
+						Type:   asset.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   dates[idx],
-						Type:   portfolio.WithdrawalTransaction,
+						Type:   asset.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}

@@ -45,7 +45,7 @@ var _ = Describe("SQLite", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   t0,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  450.0,
 				Amount: -4500.0,
@@ -74,7 +74,7 @@ var _ = Describe("SQLite", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   t2,
 				Asset:  spy,
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Qty:    0,
 				Price:  0,
 				Amount: 15.0,
@@ -211,7 +211,7 @@ var _ = Describe("SQLite", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2025, 3, 10, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    5,
 				Price:  500.0,
 				Amount: -2500.0,
@@ -242,7 +242,7 @@ var _ = Describe("SQLite", func() {
 			acct.Record(portfolio.Transaction{
 				Date:          time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:         asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"},
-				Type:          portfolio.BuyTransaction,
+				Type:          asset.BuyTransaction,
 				Qty:           10,
 				Price:         500,
 				Amount:        -5000,
@@ -252,7 +252,7 @@ var _ = Describe("SQLite", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 16, 0, 0, 0, 0, time.UTC),
 				Asset:  asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"},
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    5,
 				Price:  510,
 				Amount: 2550,

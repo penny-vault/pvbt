@@ -72,22 +72,24 @@ type Account struct {
 	maintenanceMargin float64
 	borrowRate        float64
 	dfCache           map[dfCacheKey]*data.DataFrame
+	seenTransactions  map[string]struct{}
 }
 
 // New creates an Account with the given options.
 func New(opts ...Option) *Account {
 	acct := &Account{
-		holdings:        make(map[asset.Asset]float64),
-		taxLots:         make(map[asset.Asset][]TaxLot),
-		shortLots:       make(map[asset.Asset][]TaxLot),
-		recentLossSales: make(map[asset.Asset][]recentLossSale),
-		recentBuys:      make(map[asset.Asset][]recentBuy),
-		metadata:        make(map[string]string),
-		pendingOrders:   make(map[string]broker.Order),
-		pendingGroups:   make(map[string]*broker.OrderGroup),
-		deferredExits:   make(map[string]OrderGroupSpec),
-		substitutions:   make(map[asset.Asset]Substitution),
-		excursions:      make(map[asset.Asset]ExcursionRecord),
+		holdings:         make(map[asset.Asset]float64),
+		taxLots:          make(map[asset.Asset][]TaxLot),
+		shortLots:        make(map[asset.Asset][]TaxLot),
+		recentLossSales:  make(map[asset.Asset][]recentLossSale),
+		recentBuys:       make(map[asset.Asset][]recentBuy),
+		metadata:         make(map[string]string),
+		pendingOrders:    make(map[string]broker.Order),
+		pendingGroups:    make(map[string]*broker.OrderGroup),
+		deferredExits:    make(map[string]OrderGroupSpec),
+		substitutions:    make(map[asset.Asset]Substitution),
+		excursions:       make(map[asset.Asset]ExcursionRecord),
+		seenTransactions: make(map[string]struct{}),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -116,7 +118,7 @@ func WithCash(amount float64, date time.Time) Option {
 		a.cash = amount
 		a.transactions = append(a.transactions, Transaction{
 			Date:   date,
-			Type:   DepositTransaction,
+			Type:   asset.DepositTransaction,
 			Amount: amount,
 		})
 	}
@@ -342,16 +344,16 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 		select {
 		case fill := <-fillCh:
 			var (
-				txType TransactionType
+				txType asset.TransactionType
 				amount float64
 			)
 
 			switch side {
 			case Buy:
-				txType = BuyTransaction
+				txType = asset.BuyTransaction
 				amount = -(fill.Price * fill.Qty)
 			case Sell:
-				txType = SellTransaction
+				txType = asset.SellTransaction
 				amount = fill.Price * fill.Qty
 			}
 
@@ -756,7 +758,7 @@ func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
 // and tax lots accordingly. It also performs wash sale detection on both
 // buy and sell transactions.
 func (a *Account) Record(txn Transaction) {
-	if txn.Type == DividendTransaction {
+	if txn.Type == asset.DividendTransaction {
 		txn.Qualified = a.isDividendQualified(txn.Asset, txn.Date)
 	}
 
@@ -764,10 +766,15 @@ func (a *Account) Record(txn Transaction) {
 	a.pruneWashSaleTracking(txn.Date)
 
 	a.transactions = append(a.transactions, txn)
+
+	if txn.ID != "" {
+		a.seenTransactions[txn.ID] = struct{}{}
+	}
+
 	a.cash += txn.Amount
 
 	switch txn.Type {
-	case BuyTransaction:
+	case asset.BuyTransaction:
 		a.holdings[txn.Asset] += txn.Qty
 
 		// Phase 1: Cover short lots (if any exist).
@@ -880,7 +887,7 @@ func (a *Account) Record(txn Transaction) {
 			delete(a.shortLots, txn.Asset)
 			delete(a.excursions, txn.Asset)
 		}
-	case SellTransaction:
+	case asset.SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
 
 		method := txn.LotSelection
@@ -991,6 +998,41 @@ func (a *Account) Record(txn Transaction) {
 			delete(a.excursions, txn.Asset)
 		}
 	}
+}
+
+// SyncTransactions applies broker-reported transactions to the account,
+// skipping any that have already been recorded (by ID).
+func (a *Account) SyncTransactions(txns []broker.Transaction) error {
+	for _, bt := range txns {
+		if _, seen := a.seenTransactions[bt.ID]; seen {
+			continue
+		}
+
+		// Splits require special handling -- they adjust holdings and
+		// tax lots rather than just recording a cash event.
+		if bt.Type == asset.SplitTransaction {
+			if err := a.ApplySplit(bt.Asset, bt.Date, bt.Price); err != nil {
+				return fmt.Errorf("sync transactions: %w", err)
+			}
+
+			a.seenTransactions[bt.ID] = struct{}{}
+
+			continue
+		}
+
+		a.Record(Transaction{
+			ID:            bt.ID,
+			Date:          bt.Date,
+			Asset:         bt.Asset,
+			Type:          bt.Type,
+			Qty:           bt.Qty,
+			Price:         bt.Price,
+			Amount:        bt.Amount,
+			Justification: bt.Justification,
+		})
+	}
+
+	return nil
 }
 
 // WashSaleRecords returns all wash sale records detected during the
@@ -1715,7 +1757,7 @@ func (a *Account) ApplySplit(ast asset.Asset, date time.Time, splitFactor float6
 	a.transactions = append(a.transactions, Transaction{
 		Date:          date,
 		Asset:         ast,
-		Type:          SplitTransaction,
+		Type:          asset.SplitTransaction,
 		Qty:           newQty,
 		Price:         splitFactor,
 		Amount:        0,
@@ -1976,16 +2018,16 @@ func (a *Account) drainFillsFromChannel() {
 			}
 
 			var (
-				txType TransactionType
+				txType asset.TransactionType
 				amount float64
 			)
 
 			switch order.Side {
 			case broker.Buy:
-				txType = BuyTransaction
+				txType = asset.BuyTransaction
 				amount = -(fill.Price * fill.Qty)
 			case broker.Sell:
-				txType = SellTransaction
+				txType = asset.SellTransaction
 				amount = fill.Price * fill.Qty
 			}
 
@@ -2281,6 +2323,11 @@ func (acct *Account) Clone() PortfolioManager {
 	tradeDetailsCopy := make([]TradeDetail, len(acct.tradeDetails))
 	copy(tradeDetailsCopy, acct.tradeDetails)
 
+	seenTxns := make(map[string]struct{}, len(acct.seenTransactions))
+	for id := range acct.seenTransactions {
+		seenTxns[id] = struct{}{}
+	}
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -2307,6 +2354,7 @@ func (acct *Account) Clone() PortfolioManager {
 		deferredExits:     deferredExits,
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
+		seenTransactions:  seenTxns,
 	}
 
 	if acct.perfData != nil {

@@ -323,7 +323,7 @@ var _ = Describe("MetaStrategy", func() {
 
 			hasBuy := false
 			for _, txn := range txns {
-				if txn.Type == portfolio.BuyTransaction {
+				if txn.Type == asset.BuyTransaction {
 					hasBuy = true
 					break
 				}
@@ -411,7 +411,7 @@ var _ = Describe("MetaStrategy", func() {
 
 			hasBuy := false
 			for _, txn := range txns {
-				if txn.Type == portfolio.BuyTransaction {
+				if txn.Type == asset.BuyTransaction {
 					hasBuy = true
 					break
 				}

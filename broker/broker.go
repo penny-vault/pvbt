@@ -59,6 +59,12 @@ type Broker interface {
 
 	// Balance returns the current account balance.
 	Balance(ctx context.Context) (Balance, error)
+
+	// Transactions returns account activity (dividends, splits, fees, etc.)
+	// since the given time. The engine calls this during housekeeping to sync
+	// broker-side events into the portfolio. Implementations must return
+	// stable IDs so the portfolio can deduplicate across calls.
+	Transactions(ctx context.Context, since time.Time) ([]Transaction, error)
 }
 
 // Side indicates a buy or sell direction at the broker level.
@@ -154,6 +160,34 @@ type Balance struct {
 	NetLiquidatingValue float64
 	EquityBuyingPower   float64
 	MaintenanceReq      float64
+}
+
+// Transaction represents an account activity entry from the broker.
+// The engine syncs these into the portfolio's transaction log.
+type Transaction struct {
+	// ID uniquely identifies this transaction for deduplication.
+	ID string
+
+	// Date is when the activity occurred.
+	Date time.Time
+
+	// Asset is the asset involved.
+	Asset asset.Asset
+
+	// Type identifies the kind of event.
+	Type asset.TransactionType
+
+	// Qty is the number of shares involved (for splits: the new quantity).
+	Qty float64
+
+	// Price is the per-unit value (for dividends: per-share amount; for splits: the split factor).
+	Price float64
+
+	// Amount is the total cash impact (positive = credit, negative = debit).
+	Amount float64
+
+	// Justification is an optional explanation.
+	Justification string
 }
 
 // GroupType identifies the kind of contingent order group.

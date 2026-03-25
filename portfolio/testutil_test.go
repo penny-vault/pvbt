@@ -99,13 +99,13 @@ func buildAccountFromEquity(equityValues []float64) *portfolio.Account {
 			if diff > 0 {
 				a.Record(portfolio.Transaction{
 					Date:   dates[i],
-					Type:   portfolio.DepositTransaction,
+					Type:   asset.DepositTransaction,
 					Amount: diff,
 				})
 			} else if diff < 0 {
 				a.Record(portfolio.Transaction{
 					Date:   dates[i],
-					Type:   portfolio.WithdrawalTransaction,
+					Type:   asset.WithdrawalTransaction,
 					Amount: diff,
 				})
 			}
@@ -132,7 +132,7 @@ func buildAccountWithRF(spyPrices, bilPrices []float64) *portfolio.Account {
 	acct.Record(portfolio.Transaction{
 		Date:   times[0],
 		Asset:  spy,
-		Type:   portfolio.BuyTransaction,
+		Type:   asset.BuyTransaction,
 		Qty:    5,
 		Price:  spyPrices[0],
 		Amount: -5 * spyPrices[0],

@@ -248,6 +248,10 @@ type PortfolioManager interface {
 	// position valuation.
 	SetPrices(priceData *data.DataFrame)
 
+	// SyncTransactions applies broker-reported transactions (dividends, splits,
+	// fees) to the portfolio, deduplicating by transaction ID.
+	SyncTransactions(txns []broker.Transaction) error
+
 	// Clone returns a deep copy of the portfolio manager. The clone
 	// is independent: mutations to one do not affect the other.
 	Clone() PortfolioManager

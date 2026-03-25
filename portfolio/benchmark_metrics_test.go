@@ -30,13 +30,13 @@ func benchAcct(eqCurve, bmPrices, rfPrices []float64) *portfolio.Account {
 			if diff > 0 {
 				a.Record(portfolio.Transaction{
 					Date:   dates[i],
-					Type:   portfolio.DepositTransaction,
+					Type:   asset.DepositTransaction,
 					Amount: diff,
 				})
 			} else {
 				a.Record(portfolio.Transaction{
 					Date:   dates[i],
-					Type:   portfolio.WithdrawalTransaction,
+					Type:   asset.WithdrawalTransaction,
 					Amount: diff,
 				})
 			}

@@ -43,7 +43,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150,
 				Amount: 0, // cash already accounted for
@@ -71,7 +71,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    50,
 				Price:  200,
 				Amount: 0,
@@ -95,7 +95,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300,
 				Amount: -3000,
@@ -112,7 +112,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  250,
 				Amount: 0,
@@ -137,7 +137,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  aapl,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  200,
 				Amount: -2000,
@@ -145,7 +145,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  150,
 				Amount: 3000,
@@ -168,7 +168,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150,
 				Amount: 0,
@@ -197,7 +197,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150,
 				Amount: 0,
@@ -219,7 +219,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150,
 				Amount: 0,
@@ -245,7 +245,7 @@ var _ = Describe("Margin Accounting", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   now,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150,
 				Amount: 0,

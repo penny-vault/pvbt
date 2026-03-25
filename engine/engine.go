@@ -633,7 +633,10 @@ func (e *Engine) Close() error {
 // High and low are needed by EvaluatePending for intrabar bracket order
 // evaluation.
 func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
-	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{data.MetricClose, data.MetricHigh, data.MetricLow})
+	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{
+		data.MetricClose, data.MetricHigh, data.MetricLow,
+		data.Dividend, data.SplitFactor,
+	})
 }
 
 // PredictedPortfolio runs the strategy's Compute against a shadow copy of the

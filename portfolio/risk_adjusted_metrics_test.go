@@ -49,7 +49,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    5,
 			Price:  spyPrices[0],
 			Amount: -5 * spyPrices[0],

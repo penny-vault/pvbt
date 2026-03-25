@@ -223,7 +223,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -240,7 +240,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -271,7 +271,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -292,7 +292,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  100,
 				Amount: -2_000,
@@ -310,7 +310,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -360,7 +360,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    1,
 				Price:  100,
 				Amount: -100,
@@ -393,7 +393,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  200,
 				Amount: -2_000,
@@ -411,7 +411,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  200,
 				Amount: -2_000,
@@ -454,7 +454,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    50,
 				Price:  100,
 				Amount: -5_000,
@@ -486,7 +486,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    40,
 				Price:  100,
 				Amount: -4_000,
@@ -494,7 +494,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  aapl,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  200,
 				Amount: -2_000,
@@ -641,7 +641,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -700,7 +700,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100,
 				Amount: -1_000,
@@ -764,7 +764,7 @@ var _ = Describe("Batch", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    50,
 				Price:  100,
 				Amount: 5_000,

@@ -61,7 +61,7 @@ var _ = Describe("MaxPositionSize", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  ast,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    qty,
 				Price:  price,
 				Amount: -(price * qty),
@@ -80,7 +80,7 @@ var _ = Describe("MaxPositionSize", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   ts,
 			Asset:  ast,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    shortQty,
 			Price:  price,
 			Amount: 0, // cash already accounted for

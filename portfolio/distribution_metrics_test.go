@@ -33,13 +33,13 @@ var _ = Describe("Distribution Metrics", func() {
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.DepositTransaction,
+						Type:   asset.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
 						Date:   dates[i],
-						Type:   portfolio.WithdrawalTransaction,
+						Type:   asset.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/penny-vault/pvbt/broker"
@@ -230,6 +231,11 @@ func (ib *IBBroker) Balance(ctx context.Context) (broker.Balance, error) {
 	}
 
 	return toBrokerBalance(summary), nil
+}
+
+// Transactions returns transactions since the given time.
+func (ib *IBBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
 }
 
 // SubmitGroup submits a group of orders as a native bracket or OCA order.

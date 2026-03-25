@@ -95,19 +95,19 @@ CREATE INDEX idx_annotations_timestamp ON annotations(timestamp);
 
 // transactionTypeToString maps a TransactionType to its lowercase string
 // representation for storage.
-func transactionTypeToString(txnType TransactionType) string {
+func transactionTypeToString(txnType asset.TransactionType) string {
 	switch txnType {
-	case BuyTransaction:
+	case asset.BuyTransaction:
 		return "buy"
-	case SellTransaction:
+	case asset.SellTransaction:
 		return "sell"
-	case DividendTransaction:
+	case asset.DividendTransaction:
 		return "dividend"
-	case FeeTransaction:
+	case asset.FeeTransaction:
 		return "fee"
-	case DepositTransaction:
+	case asset.DepositTransaction:
 		return "deposit"
-	case WithdrawalTransaction:
+	case asset.WithdrawalTransaction:
 		return "withdrawal"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(txnType))
@@ -115,20 +115,20 @@ func transactionTypeToString(txnType TransactionType) string {
 }
 
 // stringToTransactionType maps a lowercase string back to a TransactionType.
-func stringToTransactionType(str string) (TransactionType, error) {
+func stringToTransactionType(str string) (asset.TransactionType, error) {
 	switch str {
 	case "buy":
-		return BuyTransaction, nil
+		return asset.BuyTransaction, nil
 	case "sell":
-		return SellTransaction, nil
+		return asset.SellTransaction, nil
 	case "dividend":
-		return DividendTransaction, nil
+		return asset.DividendTransaction, nil
 	case "fee":
-		return FeeTransaction, nil
+		return asset.FeeTransaction, nil
 	case "deposit":
-		return DepositTransaction, nil
+		return asset.DepositTransaction, nil
 	case "withdrawal":
-		return WithdrawalTransaction, nil
+		return asset.WithdrawalTransaction, nil
 	default:
 		return 0, fmt.Errorf("unknown transaction type: %q", str)
 	}

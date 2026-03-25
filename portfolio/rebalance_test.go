@@ -29,7 +29,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-func filterTransactions(txns []portfolio.Transaction, txType portfolio.TransactionType) []portfolio.Transaction {
+func filterTransactions(txns []portfolio.Transaction, txType asset.TransactionType) []portfolio.Transaction {
 	var result []portfolio.Transaction
 	for _, tx := range txns {
 		if tx.Type == txType {
@@ -261,7 +261,7 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		txns := acct.Transactions()
-		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		buyTxns := filterTransactions(txns, asset.BuyTransaction)
 		Expect(buyTxns).NotTo(BeEmpty())
 		Expect(buyTxns[0].Justification).To(Equal("momentum crossover signal"))
 	})
@@ -291,7 +291,7 @@ var _ = Describe("RebalanceTo", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		txns := acct.Transactions()
-		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		buyTxns := filterTransactions(txns, asset.BuyTransaction)
 		Expect(buyTxns).NotTo(BeEmpty())
 		Expect(buyTxns[0].Justification).To(BeEmpty())
 	})
@@ -466,7 +466,7 @@ var _ = Describe("Order WithJustification", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		txns := acct.Transactions()
-		buyTxns := filterTransactions(txns, portfolio.BuyTransaction)
+		buyTxns := filterTransactions(txns, asset.BuyTransaction)
 		Expect(buyTxns).NotTo(BeEmpty())
 		Expect(buyTxns[0].Justification).To(Equal("price below 200-day MA"))
 	})

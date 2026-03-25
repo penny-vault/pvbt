@@ -16,65 +16,20 @@
 package portfolio
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
-)
-
-// String returns a human-readable name for the transaction type.
-func (t TransactionType) String() string {
-	switch t {
-	case BuyTransaction:
-		return "Buy"
-	case SellTransaction:
-		return "Sell"
-	case DividendTransaction:
-		return "Dividend"
-	case FeeTransaction:
-		return "Fee"
-	case DepositTransaction:
-		return "Deposit"
-	case WithdrawalTransaction:
-		return "Withdrawal"
-	case SplitTransaction:
-		return "Split"
-	default:
-		return fmt.Sprintf("TransactionType(%d)", int(t))
-	}
-}
-
-// TransactionType identifies the kind of portfolio event recorded in the
-// transaction log.
-type TransactionType int
-
-const (
-	// BuyTransaction records a purchase of an asset.
-	BuyTransaction TransactionType = iota
-
-	// SellTransaction records a sale of an asset.
-	SellTransaction
-
-	// DividendTransaction records a dividend payment received.
-	DividendTransaction
-
-	// FeeTransaction records a fee or commission charged.
-	FeeTransaction
-
-	// DepositTransaction records cash added to the portfolio.
-	DepositTransaction
-
-	// WithdrawalTransaction records cash removed from the portfolio.
-	WithdrawalTransaction
-
-	// SplitTransaction records a stock split adjustment.
-	SplitTransaction
 )
 
 // Transaction is a single entry in the portfolio's transaction log. Every
 // event that changes the portfolio's cash balance or holdings produces a
 // transaction: trades, dividends, fees, deposits, and withdrawals.
 type Transaction struct {
+	// ID uniquely identifies this transaction for deduplication. Set when
+	// the transaction originates from a broker sync. Empty for transactions
+	// created directly by the engine (buys, sells from strategy execution).
+	ID string
+
 	// Date is when the transaction occurred.
 	Date time.Time
 
@@ -83,7 +38,7 @@ type Transaction struct {
 	Asset asset.Asset
 
 	// Type identifies the kind of event.
-	Type TransactionType
+	Type asset.TransactionType
 
 	// Qty is the number of shares or units involved. Zero for cash-only
 	// events like fees, deposits, and withdrawals.

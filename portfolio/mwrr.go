@@ -20,6 +20,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -61,7 +62,7 @@ func (mwrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (
 
 	for _, txn := range stats.TransactionsView(ctx) {
 		switch txn.Type {
-		case DepositTransaction:
+		case asset.DepositTransaction:
 			// From investor perspective, deposits are outflows (negative).
 			txnDate := txn.Date
 			if txnDate.IsZero() {
@@ -69,7 +70,7 @@ func (mwrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (
 			}
 
 			flows = append(flows, cashFlow{date: txnDate, amount: -txn.Amount})
-		case WithdrawalTransaction:
+		case asset.WithdrawalTransaction:
 			// Withdrawals have negative Amount in the tx log; from investor
 			// perspective they are inflows (positive), so negate again.
 			txnDate := txn.Date

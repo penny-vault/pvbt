@@ -85,6 +85,9 @@ func (b *echoFillBroker) Positions(_ context.Context) ([]broker.Position, error)
 func (b *echoFillBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
+func (b *echoFillBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}
 
 var _ broker.Broker = (*echoFillBroker)(nil)
 

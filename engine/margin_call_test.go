@@ -182,7 +182,7 @@ var _ = Describe("Margin Call", func() {
 			hasMarginCover := false
 
 			for _, txn := range txns {
-				if txn.Type == portfolio.BuyTransaction && txn.Justification == "margin call auto-liquidation" {
+				if txn.Type == asset.BuyTransaction && txn.Justification == "margin call auto-liquidation" {
 					hasMarginCover = true
 
 					break

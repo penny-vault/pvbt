@@ -195,15 +195,15 @@
 // # Transaction Log
 //
 // Every event that changes the portfolio produces a [Transaction]. The
-// Type field identifies the kind of event using one of six
-// [TransactionType] constants:
+// Type field identifies the kind of event using one of the
+// [asset.TransactionType] constants:
 //
-//   - [BuyTransaction]: purchase of an asset.
-//   - [SellTransaction]: sale of an asset.
-//   - [DividendTransaction]: dividend payment received.
-//   - [FeeTransaction]: fee or commission charged.
-//   - [DepositTransaction]: cash added to the portfolio.
-//   - [WithdrawalTransaction]: cash removed from the portfolio.
+//   - [asset.BuyTransaction]: purchase of an asset.
+//   - [asset.SellTransaction]: sale of an asset.
+//   - [asset.DividendTransaction]: dividend payment received.
+//   - [asset.FeeTransaction]: fee or commission charged.
+//   - [asset.DepositTransaction]: cash added to the portfolio.
+//   - [asset.WithdrawalTransaction]: cash removed from the portfolio.
 //
 // The Qualified flag on a [Transaction] indicates whether a dividend meets
 // the IRS 60-day holding period requirement for preferential tax rates.

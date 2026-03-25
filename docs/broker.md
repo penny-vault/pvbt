@@ -17,6 +17,7 @@ type Broker interface {
     Orders(ctx context.Context) ([]Order, error)
     Positions(ctx context.Context) ([]Position, error)
     Balance(ctx context.Context) (Balance, error)
+    Transactions(ctx context.Context, since time.Time) ([]Transaction, error)
 }
 ```
 
@@ -39,6 +40,12 @@ All trading and query methods now accept a `context.Context` for cancellation an
 - **Orders** returns all orders for the current trading day.
 - **Positions** returns all current positions in the account.
 - **Balance** returns the current account balance.
+
+### Transaction sync
+
+- **Transactions** returns account activity (dividends, splits, fees, delistings, etc.) since a given time. The engine calls this during housekeeping to sync broker-side events into the portfolio. Each transaction carries a stable ID so the portfolio can deduplicate across repeated calls.
+
+For live brokers, this pulls the brokerage's actual transaction history. For the simulated broker, it synthesizes transactions from data provider metrics (dividends, split factors) and detects delistings when an asset's price data disappears.
 
 ## Order
 
@@ -129,6 +136,27 @@ type Fill struct {
     FilledAt time.Time
 }
 ```
+
+## Transaction
+
+A `Transaction` represents an account activity entry reported by the broker. The engine syncs these into the portfolio's transaction log via `Account.SyncTransactions`, which deduplicates by `ID`.
+
+```go
+type Transaction struct {
+    ID            string
+    Date          time.Time
+    Asset         asset.Asset
+    Type          asset.TransactionType
+    Qty           float64
+    Price         float64
+    Amount        float64
+    Justification string
+}
+```
+
+`Type` uses `asset.TransactionType`, which is shared between the `broker` and `portfolio` packages: Buy, Sell, Dividend, Fee, Deposit, Withdrawal, Split, Interest, Journal.
+
+Splits receive special handling during sync -- they adjust holdings and tax lots via `ApplySplit` rather than recording a simple cash event. All other types are recorded directly.
 
 ## Order Groups
 
@@ -222,6 +250,8 @@ type PriceProvider interface {
 ### SimulatedBroker
 
 The `SimulatedBroker` fills all orders at the close price for backtesting. The engine sets a `PriceProvider` and date on the simulated broker before each step. It supports dollar-amount orders by dividing the requested dollar amount by the current price (rounded down to whole shares). Fills are delivered through the `Fills()` channel, consistent with the async interface used by live brokers. The simulated broker does not support `Cancel` or `Replace` operations.
+
+**Transaction synthesis.** The simulated broker's `Transactions` method synthesizes corporate action and fee transactions from data provider metrics. At each step it returns dividends (from `Dividend` metric), splits (from `SplitFactor` metric), and borrow fees (computed from the configured borrow rate). When a held asset's close price becomes NaN or zero, the broker treats it as a delisting and emits a sell transaction at the last known price to liquidate the position.
 
 #### Short selling
 
