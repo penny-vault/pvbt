@@ -24,28 +24,29 @@ var _ = Describe("Return Metrics", func() {
 	})
 
 	// buildReturnAccount creates an account with the given equity curve.
-	// It uses DepositTransaction (positive) and WithdrawalTransaction
-	// (negative) to move cash so equity = cash.
+	// It uses DividendTransaction (positive) and FeeTransaction (negative)
+	// to move cash so equity = cash. These transaction types are invisible
+	// to the TWRR flow filter, which only looks at deposits/withdrawals.
 	buildReturnAccount := func(dates []time.Time, equity []float64) *portfolio.Account {
 		a := portfolio.New(portfolio.WithCash(equity[0], time.Time{}))
-		for i, d := range dates {
-			if i > 0 {
-				diff := equity[i] - equity[i-1]
+		for ii, dd := range dates {
+			if ii > 0 {
+				diff := equity[ii] - equity[ii-1]
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
-						Date:   d,
-						Type:   asset.DepositTransaction,
+						Date:   dd,
+						Type:   asset.DividendTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
-						Date:   d,
-						Type:   asset.WithdrawalTransaction,
+						Date:   dd,
+						Type:   asset.FeeTransaction,
 						Amount: diff,
 					})
 				}
 			}
-			df := buildDF(d, []asset.Asset{spy}, []float64{100}, []float64{100})
+			df := buildDF(dd, []asset.Asset{spy}, []float64{100}, []float64{100})
 			a.UpdatePrices(df)
 		}
 		return a
@@ -141,27 +142,18 @@ var _ = Describe("Return Metrics", func() {
 			Expect(result).To(BeNumerically("~", expected, 1e-9))
 		})
 
-		It("differs from TWRR when there is a mid-stream deposit", func() {
+		It("agrees with MWRR when deposits produce no market growth", func() {
 			// Day 0: deposit 10000, equity=10000
 			// Day 183 (Jul 3): deposit 500 + deposit 5000 -> equity 15500
 			// Day 367 (Jan 3 next year): deposit 1000 -> equity 16500
 			//
-			// MWRR flows (from MWRR source):
-			//   Initial deposit: -10000 at t0 (Jan 2 2024), date is zero so mapped to times[0]
-			//   Deposit 500: -500 at t1 (Jul 3 2024)
-			//   Deposit 5000: -5000 at t1 (Jul 3 2024)
-			//   Deposit 1000: -1000 at t2 (Jan 3 2025)
-			//   Terminal value: +16500 at t2 (Jan 3 2025)
-			//
-			// Days from t0: d0=0, d1=183, d2=367
-			// NPV(r) = -10000 - 500/(1+r)^(183/365) - 5000/(1+r)^(183/365)
-			//          - 1000/(1+r)^(367/365) + 16500/(1+r)^(367/365)
-			//
 			// Total deposits: 10000 + 500 + 5000 + 1000 = 16500
 			// Terminal value: 16500
-			// Since total cash in equals terminal value, the investor earned
-			// zero return. At r=0: NPV = -10000 - 500 - 5000 - 1000 + 16500 = 0.
-			// Therefore MWRR = 0.
+			// All equity growth comes from deposits, not market returns.
+			//
+			// TWRR strips deposits from the equity curve, so each sub-period
+			// return is 0. MWRR also sees zero return because total cash in
+			// equals terminal value. Both metrics correctly report 0.
 			dates := []time.Time{
 				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2024, 7, 3, 0, 0, 0, 0, time.UTC),
@@ -205,14 +197,11 @@ var _ = Describe("Return Metrics", func() {
 			twrrResult, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
 
-			// TWRR = (15500/10000)*(16500/15500) - 1 = 1.65 - 1 = 0.65
-			// TWRR naively treats deposit-driven equity growth as returns.
-			Expect(twrrResult).To(BeNumerically("~", 0.65, 1e-9))
+			// TWRR = 0.0 because deposits are stripped; no market growth occurred.
+			Expect(twrrResult).To(BeNumerically("~", 0.0, 1e-9))
 
 			// MWRR = 0.0 because total deposits (16500) equal terminal value (16500).
-			// The investor put in exactly what they got out -- zero investment return.
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
-			Expect(result).NotTo(BeNumerically("~", twrrResult, 0.01))
 		})
 
 		It("returns 0 for a single data point", func() {
@@ -394,13 +383,15 @@ var _ = Describe("Return Metrics", func() {
 			//
 			// Timeline (quarterly over 1 year):
 			//   Day 0 (Jan 2 2024): deposit 10000, buy 100@100. Cash=0. Eq=10000.
-			//   Day 1 (Jul 2 2024): price=110. Eq=11000.
-			//     Then deposit 10000, buy 90@110 (cost=9900). Cash=100, holdings=190.
+			//   Day 1 (Jul 2 2024): deposit 10000, buy 90@110 (cost=9900).
+			//     Cash=100, holdings=190. UpdatePrices at 110: Eq=100+190*110=21000.
 			//   Day 2 (Jan 2 2025): price=150. Eq=100+190*150=28600.
 			//
-			// Equity: [10000, 11000, 28600]
-			// TWRR = (11000/10000)*(28600/11000) - 1 = 28600/10000 - 1 = 1.86
-			//   (inflated because TWRR implementation counts deposit as return)
+			// Equity: [10000, 21000, 28600]
+			// TWRR strips the deposit:
+			//   r1 = (21000-10000)/10000 = 0.10 (market moved 100->110)
+			//   r2 = 28600/21000 - 1 = 0.3619
+			//   TWRR = 1.10 * (28600/21000) - 1 = 1573/1050 - 1
 			//
 			// MWRR flows:
 			//   -10000 at Jan 2 2024 (initial deposit, zero date -> times[0])
@@ -418,37 +409,30 @@ var _ = Describe("Return Metrics", func() {
 
 			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
-			df0 := buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100})
-			a.UpdatePrices(df0)
+			a.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
-			df1 := buildDF(d1, []asset.Asset{spy}, []float64{110}, []float64{110})
-			a.UpdatePrices(df1)
-
-			// Deposit and buy more before the rally.
+			// Deposit and buy more before the rally, then snapshot equity.
 			a.Record(portfolio.Transaction{
 				Date:   d1,
 				Type:   asset.DepositTransaction,
 				Amount: 10000,
 			})
 			recordBuy(a, spy, d1, 90, 110) // cost = 9900, cash = 100
+			a.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
-			df2 := buildDF(d2, []asset.Asset{spy}, []float64{150}, []float64{150})
-			a.UpdatePrices(df2)
+			a.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{150}, []float64{150}))
 
-			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 11000, 28600}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 21000, 28600}))
 
+			// TWRR = 1.10 * (28600/21000) - 1 = 1573/1050 - 1
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(twrrVal).To(BeNumerically("~", 1.86, 1e-9))
+			Expect(twrrVal).To(BeNumerically("~", 1573.0/1050.0-1, 1e-9))
 
 			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(mwrrVal).To(BeNumerically(">", 0.0))
 
-			// Compare to the "deposit before decline" test below. We capture
-			// the rally MWRR here and verify it exceeds the decline MWRR in
-			// the next test via a shared variable pattern. Instead, we verify
-			// that MWRR is meaningfully positive -- the investor timed well.
 			// The annualized asset return over 366 days (leap year) is:
 			//   assetCAGR = (150/100)^(365/366) - 1
 			// MWRR should exceed this because money was added before the rally.
@@ -461,12 +445,15 @@ var _ = Describe("Return Metrics", func() {
 			//
 			// Timeline:
 			//   Day 0 (Jan 2 2024): deposit 10000, buy 100@100. Cash=0. Eq=10000.
-			//   Day 1 (Jul 2 2024): price=110. Eq=11000.
-			//     Then deposit 10000, buy 90@110 (cost=9900). Cash=100, holdings=190.
+			//   Day 1 (Jul 2 2024): deposit 10000, buy 90@110 (cost=9900).
+			//     Cash=100, holdings=190. UpdatePrices at 110: Eq=100+190*110=21000.
 			//   Day 2 (Jan 2 2025): price=90. Eq=100+190*90=17200.
 			//
-			// Equity: [10000, 11000, 17200]
-			// TWRR = 17200/10000 - 1 = 0.72
+			// Equity: [10000, 21000, 17200]
+			// TWRR strips the deposit:
+			//   r1 = (21000-10000)/10000 = 0.10 (market moved 100->110)
+			//   r2 = 17200/21000 - 1
+			//   TWRR = 1.1 * (17200/21000) - 1
 			//
 			// MWRR flows:
 			//   -10000 at Jan 2 2024
@@ -484,28 +471,25 @@ var _ = Describe("Return Metrics", func() {
 
 			a := portfolio.New(portfolio.WithCash(10000, time.Time{}))
 			recordBuy(a, spy, d0, 100, 100)
-			df0 := buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100})
-			a.UpdatePrices(df0)
+			a.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
-			df1 := buildDF(d1, []asset.Asset{spy}, []float64{110}, []float64{110})
-			a.UpdatePrices(df1)
-
-			// Deposit and buy more before the decline.
+			// Deposit and buy more before the decline, then snapshot equity.
 			a.Record(portfolio.Transaction{
 				Date:   d1,
 				Type:   asset.DepositTransaction,
 				Amount: 10000,
 			})
 			recordBuy(a, spy, d1, 90, 110)
+			a.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
-			df2 := buildDF(d2, []asset.Asset{spy}, []float64{90}, []float64{90})
-			a.UpdatePrices(df2)
+			a.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{90}, []float64{90}))
 
-			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 11000, 17200}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 21000, 17200}))
 
+			// TWRR = 1.1 * (17200/21000) - 1
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(twrrVal).To(BeNumerically("~", 0.72, 1e-9))
+			Expect(twrrVal).To(BeNumerically("~", 1.1*17200.0/21000.0-1, 1e-9))
 
 			mwrrVal, err := a.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -521,21 +505,18 @@ var _ = Describe("Return Metrics", func() {
 			//
 			// Timeline:
 			//   Day 0 (Jan 2 2024): deposit 10000, buy 100@100. Cash=0. Eq=10000.
-			//   Day 1 (Apr 2 2024): price=120. Eq=12000.
-			//     Sell 50@120 (proceeds=6000). Cash=6000, holdings=50.
+			//   Day 1 (Apr 2 2024): sell 50@120 (proceeds=6000). Cash=6000, holdings=50.
 			//     Withdraw 5000. Cash=1000, holdings=50.
+			//     UpdatePrices at 120: Eq=1000+50*120=7000.
 			//   Day 2 (Jul 2 2024): price=130. Eq=1000+50*130=7500.
 			//   Day 3 (Jan 2 2025): price=140. Eq=1000+50*140=8000.
 			//
-			// Equity: [10000, 12000, 7500, 8000]
-			// TWRR = (12000/10000)*(7500/12000)*(8000/7500) - 1
-			//      = 1.2 * 0.625 * (8000/7500) - 1
-			//      = 1.2 * 0.625 * (16/15) - 1
-			//      = 0.8 - 1 = -0.2
-			//
-			// Note: TWRR sees the withdrawal as a negative return (equity drops
-			// from 12000 to 7500), which includes both the withdrawal effect
-			// and any price change.
+			// Equity: [10000, 7000, 7500, 8000]
+			// TWRR strips the withdrawal (-5000):
+			//   r1 = (7000-(-5000))/10000 - 1 = 12000/10000 - 1 = 0.20
+			//   r2 = 7500/7000 - 1
+			//   r3 = 8000/7500 - 1
+			//   TWRR = 1.2 * (7500/7000) * (8000/7500) - 1 = 1.2 * 8/7 - 1
 			//
 			// MWRR flows:
 			//   -10000 at Jan 2 2024 (initial deposit)
@@ -551,27 +532,24 @@ var _ = Describe("Return Metrics", func() {
 			recordBuy(a, spy, d0, 100, 100)
 			a.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
-			a.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
-
-			// Sell 50 shares at 120, then withdraw 5000.
+			// Sell 50 shares at 120, then withdraw 5000, then snapshot equity.
 			recordSell(a, spy, d1, 50, 120)
 			a.Record(portfolio.Transaction{
 				Date:   d1,
 				Type:   asset.WithdrawalTransaction,
 				Amount: -5000,
 			})
+			a.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
 
 			a.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{130}, []float64{130}))
 			a.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{140}, []float64{140}))
 
-			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 7500, 8000}))
+			Expect(a.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 7000, 7500, 8000}))
 
+			// TWRR = 1.2 * (7500/7000) * (8000/7500) - 1 = 1.2 * 8/7 - 1
 			twrrVal, err := a.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
-			// TWRR = 1.2 * (7500/12000) * (8000/7500) - 1
-			//      = 1.2 * 0.625 * (16/15) - 1
-			//      = 0.8 - 1 = -0.2
-			Expect(twrrVal).To(BeNumerically("~", -0.2, 1e-9))
+			Expect(twrrVal).To(BeNumerically("~", 1.2*8.0/7.0-1, 1e-9))
 
 			// MWRR: investor put in 10000, took out 5000 midway, left with 8000.
 			// Net gain = 5000 + 8000 - 10000 = 3000 (positive).
@@ -591,16 +569,16 @@ var _ = Describe("Return Metrics", func() {
 			//
 			// Account A:
 			//   d0: deposit 10000, buy 100@100. Cash=0. Eq=10000.
-			//   d1: price=120. Eq=12000.
-			//     Deposit 10000, buy 83@120 (cost=9960). Cash=40, holdings=183.
+			//   d1: deposit 10000, buy 83@120 (cost=9960). Cash=40, holdings=183.
+			//     UpdatePrices at 120: Eq=40+183*120=22000.
 			//   d2: price=140. Eq=40+183*140=25660.
 			//   d3: price=110. Eq=40+183*110=20170.
 			//
 			// Account B:
 			//   d0: deposit 10000, buy 100@100. Cash=0. Eq=10000.
 			//   d1: price=120. Eq=12000.
-			//   d2: price=140. Eq=14000.
-			//     Deposit 10000, buy 71@140 (cost=9940). Cash=60, holdings=171.
+			//   d2: deposit 10000, buy 71@140 (cost=9940). Cash=60, holdings=171.
+			//     UpdatePrices at 140: Eq=60+171*140=24000.
 			//   d3: price=110. Eq=60+171*110=18870.
 
 			d0 := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
@@ -613,15 +591,15 @@ var _ = Describe("Return Metrics", func() {
 			recordBuy(acctA, spy, d0, 100, 100)
 			acctA.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
-			acctA.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
 			acctA.Record(portfolio.Transaction{Date: d1, Type: asset.DepositTransaction, Amount: 10000})
 			recordBuy(acctA, spy, d1, 83, 120) // cost=9960, cash=40, holdings=183
+			acctA.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
 
 			acctA.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{140}, []float64{140}))
 			acctA.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
-			// Equity A: [10000, 12000, 25660, 20170]
-			Expect(acctA.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 25660, 20170}))
+			// Equity A: [10000, 22000, 25660, 20170]
+			Expect(acctA.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 22000, 25660, 20170}))
 
 			// --- Account B: deposit late (d2, before the decline) ---
 			acctB := portfolio.New(portfolio.WithCash(10000, time.Time{}))
@@ -629,15 +607,15 @@ var _ = Describe("Return Metrics", func() {
 			acctB.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
 			acctB.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
-			acctB.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{140}, []float64{140}))
 
 			acctB.Record(portfolio.Transaction{Date: d2, Type: asset.DepositTransaction, Amount: 10000})
 			recordBuy(acctB, spy, d2, 71, 140) // cost=9940, cash=60, holdings=171
+			acctB.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{140}, []float64{140}))
 
 			acctB.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{110}, []float64{110}))
 
-			// Equity B: [10000, 12000, 14000, 18870]
-			Expect(acctB.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 14000, 18870}))
+			// Equity B: [10000, 12000, 24000, 18870]
+			Expect(acctB.PerfData().Column(perfAsset, data.PortfolioEquity)).To(Equal([]float64{10000, 12000, 24000, 18870}))
 
 			mwrrA, err := acctA.PerformanceMetric(portfolio.MWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
@@ -659,17 +637,19 @@ var _ = Describe("Return Metrics", func() {
 			// later (closer to the loss) with lower terminal value. MWRR(A) > MWRR(B).
 			Expect(mwrrA).To(BeNumerically(">", mwrrB))
 
-			// Verify TWRR values match hand-traced expectations.
+			// TWRR strips deposits, so both accounts reflect the same underlying
+			// asset performance (100->110 = 10% over the full period).
 			twrrA, err := acctA.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
 			twrrB, err := acctB.PerformanceMetric(portfolio.TWRR).Value()
 			Expect(err).NotTo(HaveOccurred())
 
-			// TWRR A = product telescopes to 20170/10000 - 1 = 1.017
-			Expect(twrrA).To(BeNumerically("~", 1.017, 1e-9))
+			// TWRR A = 1.2 * (25660/22000) * (20170/25660) - 1 = 1.2 * 20170/22000 - 1
+			Expect(twrrA).To(BeNumerically("~", 1.2*20170.0/22000.0-1, 1e-9))
 
-			// TWRR B = product telescopes to 18870/10000 - 1 = 0.887
-			Expect(twrrB).To(BeNumerically("~", 0.887, 1e-9))
+			// TWRR B = (12000/10000) * (24000-10000)/12000 * (18870/24000) - 1
+			//        = 1.2 * (14000/12000) * (18870/24000) - 1
+			Expect(twrrB).To(BeNumerically("~", 1.2*14000.0/12000.0*18870.0/24000.0-1, 1e-9))
 		})
 
 		It("correctly tracks equity when buying and selling multiple times", func() {
