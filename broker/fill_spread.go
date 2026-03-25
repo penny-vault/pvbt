@@ -1,11 +1,10 @@
-package fill
+package broker
 
 import (
 	"context"
 	"fmt"
 	"math"
 
-	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -39,7 +38,7 @@ func SpreadAware(opts ...SpreadOption) Adjuster {
 	return sa
 }
 
-func (sa *spreadAdjuster) Adjust(_ context.Context, order broker.Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
+func (sa *spreadAdjuster) Adjust(_ context.Context, order Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
 	bidVal := bar.Value(order.Asset, data.Bid)
 	askVal := bar.Value(order.Asset, data.Ask)
 
@@ -47,7 +46,7 @@ func (sa *spreadAdjuster) Adjust(_ context.Context, order broker.Order, bar *dat
 
 	if hasBidAsk {
 		price := askVal
-		if order.Side == broker.Sell {
+		if order.Side == Sell {
 			price = bidVal
 		}
 
@@ -62,7 +61,7 @@ func (sa *spreadAdjuster) Adjust(_ context.Context, order broker.Order, bar *dat
 		halfSpread := current.Price * float64(sa.bps) / 10000.0
 		price := current.Price + halfSpread
 
-		if order.Side == broker.Sell {
+		if order.Side == Sell {
 			price = current.Price - halfSpread
 		}
 

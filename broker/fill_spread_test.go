@@ -1,4 +1,4 @@
-package fill_test
+package broker_test
 
 import (
 	"context"
@@ -10,20 +10,19 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 )
 
 var _ = Describe("SpreadAware", func() {
 	var (
 		aapl    asset.Asset
 		date    time.Time
-		initial fill.FillResult
+		initial broker.FillResult
 	)
 
 	BeforeEach(func() {
 		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
 		date = time.Date(2025, 6, 15, 16, 0, 0, 0, time.UTC)
-		initial = fill.FillResult{Price: 100.0, Quantity: 50, Partial: true}
+		initial = broker.FillResult{Price: 100.0, Quantity: 50, Partial: true}
 	})
 
 	Context("when bid and ask are present in the bar", func() {
@@ -33,7 +32,7 @@ var _ = Describe("SpreadAware", func() {
 				data.Bid:         99.50,
 				data.Ask:         100.50,
 			})
-			adj := fill.SpreadAware()
+			adj := broker.SpreadAware()
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 50}
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
@@ -48,7 +47,7 @@ var _ = Describe("SpreadAware", func() {
 				data.Bid:         99.50,
 				data.Ask:         100.50,
 			})
-			adj := fill.SpreadAware()
+			adj := broker.SpreadAware()
 			order := broker.Order{Asset: aapl, Side: broker.Sell, Qty: 50}
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
@@ -63,7 +62,7 @@ var _ = Describe("SpreadAware", func() {
 			bar := buildBar(date, aapl, map[data.Metric]float64{
 				data.MetricClose: 100.0,
 			})
-			adj := fill.SpreadAware(fill.SpreadBPS(20)) // 20 bps = 0.20%
+			adj := broker.SpreadAware(broker.SpreadBPS(20)) // 20 bps = 0.20%
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 50}
 
 			// halfSpread = 100.0 * 20 / 10000 = 0.20
@@ -77,7 +76,7 @@ var _ = Describe("SpreadAware", func() {
 			bar := buildBar(date, aapl, map[data.Metric]float64{
 				data.MetricClose: 100.0,
 			})
-			adj := fill.SpreadAware(fill.SpreadBPS(20))
+			adj := broker.SpreadAware(broker.SpreadBPS(20))
 			order := broker.Order{Asset: aapl, Side: broker.Sell, Qty: 50}
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
@@ -90,7 +89,7 @@ var _ = Describe("SpreadAware", func() {
 			bar := buildBar(date, aapl, map[data.Metric]float64{
 				data.MetricClose: 200.0, // close differs from current.Price
 			})
-			adj := fill.SpreadAware(fill.SpreadBPS(10)) // 10 bps
+			adj := broker.SpreadAware(broker.SpreadBPS(10)) // 10 bps
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 50}
 			// current.Price is 100.0 (from initial), not 200.0
 			// halfSpread = 100.0 * 10 / 10000 = 0.10
@@ -107,7 +106,7 @@ var _ = Describe("SpreadAware", func() {
 			bar := buildBar(date, aapl, map[data.Metric]float64{
 				data.MetricClose: 100.0,
 			})
-			adj := fill.SpreadAware() // no BPS configured
+			adj := broker.SpreadAware() // no BPS configured
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 50}
 
 			_, err := adj.Adjust(context.Background(), order, bar, initial)
@@ -123,7 +122,7 @@ var _ = Describe("SpreadAware", func() {
 			data.Bid:         99.50,
 			data.Ask:         100.50,
 		})
-		adj := fill.SpreadAware()
+		adj := broker.SpreadAware()
 		order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 50}
 
 		result, err := adj.Adjust(context.Background(), order, bar, initial)

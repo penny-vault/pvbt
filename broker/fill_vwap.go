@@ -1,4 +1,4 @@
-package fill
+package broker
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"math"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -27,7 +26,7 @@ func (vf *vwapFill) SetDataFetcher(fetcher DataFetcher) {
 	vf.fetcher = fetcher
 }
 
-func (vf *vwapFill) Fill(ctx context.Context, order broker.Order, bar *data.DataFrame) (FillResult, error) {
+func (vf *vwapFill) Fill(ctx context.Context, order Order, bar *data.DataFrame) (FillResult, error) {
 	// Try true VWAP from intraday data when a fetcher is available.
 	if vf.fetcher != nil {
 		price, ok := vf.intradayVWAP(ctx, order, bar)
@@ -53,7 +52,7 @@ func (vf *vwapFill) Fill(ctx context.Context, order broker.Order, bar *data.Data
 
 // intradayVWAP fetches intraday bars and computes sum(typicalPrice_i * volume_i) / sum(volume_i).
 // Returns the VWAP and true on success, or 0 and false on failure.
-func (vf *vwapFill) intradayVWAP(ctx context.Context, order broker.Order, bar *data.DataFrame) (float64, bool) {
+func (vf *vwapFill) intradayVWAP(ctx context.Context, order Order, bar *data.DataFrame) (float64, bool) {
 	times := bar.Times()
 	if len(times) == 0 {
 		return 0, false
@@ -93,7 +92,7 @@ func (vf *vwapFill) intradayVWAP(ctx context.Context, order broker.Order, bar *d
 }
 
 // typicalPrice computes (High + Low + Close) / 3 from the daily bar.
-func typicalPrice(order broker.Order, bar *data.DataFrame) (float64, error) {
+func typicalPrice(order Order, bar *data.DataFrame) (float64, error) {
 	high := bar.Value(order.Asset, data.MetricHigh)
 	low := bar.Value(order.Asset, data.MetricLow)
 	closePrice := bar.Value(order.Asset, data.MetricClose)

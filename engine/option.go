@@ -19,7 +19,6 @@ import (
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -100,7 +99,7 @@ func WithDateRangeMode(mode DateRangeMode) Option {
 
 // WithFillModel configures the fill model used by the SimulatedBroker.
 // If WithBroker is used, the fill model is silently ignored.
-func WithFillModel(base fill.BaseModel, adjusters ...fill.Adjuster) Option {
+func WithFillModel(base broker.BaseModel, adjusters ...broker.Adjuster) Option {
 	return func(e *Engine) {
 		e.fillBaseModel = base
 		e.fillAdjusters = adjusters

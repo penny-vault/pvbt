@@ -27,7 +27,6 @@ import (
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
-	"github.com/penny-vault/pvbt/fill"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -622,7 +621,7 @@ var _ = Describe("SimulatedBroker", func() {
 				prices: map[asset.Asset]float64{aapl: 150.0},
 				date:   date,
 			}, date)
-			simBroker.SetFillPipeline(fill.NewPipeline(&stubBaseModel{price: 200.0}, nil))
+			simBroker.SetFillPipeline(broker.NewPipeline(&stubBaseModel{price: 200.0}, nil))
 
 			err := simBroker.Submit(context.Background(), broker.Order{
 				Asset:     aapl,
@@ -667,9 +666,9 @@ var _ = Describe("SimulatedBroker", func() {
 				prices: map[asset.Asset]float64{aapl: 150.0},
 				date:   date,
 			}, date)
-			simBroker.SetFillPipeline(fill.NewPipeline(
+			simBroker.SetFillPipeline(broker.NewPipeline(
 				&stubBaseModel{price: 200.0},
-				[]fill.Adjuster{fill.Slippage(fill.Percent(0.01))},
+				[]broker.Adjuster{broker.Slippage(broker.Percent(0.01))},
 			))
 
 			err := simBroker.Submit(context.Background(), broker.Order{
@@ -696,9 +695,9 @@ var _ = Describe("SimulatedBroker", func() {
 				volume: map[asset.Asset]float64{aapl: 100.0}, // very low volume
 				date:   date,
 			}, date)
-			simBroker.SetFillPipeline(fill.NewPipeline(
-				fill.Close(),
-				[]fill.Adjuster{fill.MarketImpact(fill.LargeCap)},
+			simBroker.SetFillPipeline(broker.NewPipeline(
+				broker.FillAtClose(),
+				[]broker.Adjuster{broker.MarketImpact(broker.LargeCap)},
 			))
 
 			// Order for 50 shares but volume is only 100, threshold is 5% = 5 shares max.
@@ -725,9 +724,9 @@ var _ = Describe("SimulatedBroker", func() {
 				volume: map[asset.Asset]float64{aapl: 100.0},
 				date:   date,
 			}, date)
-			simBroker.SetFillPipeline(fill.NewPipeline(
-				fill.Close(),
-				[]fill.Adjuster{fill.MarketImpact(fill.LargeCap)},
+			simBroker.SetFillPipeline(broker.NewPipeline(
+				broker.FillAtClose(),
+				[]broker.Adjuster{broker.MarketImpact(broker.LargeCap)},
 			))
 
 			// Submit order for 50 shares, only 5 fill (5% of 100 volume).
@@ -777,9 +776,9 @@ var _ = Describe("SimulatedBroker", func() {
 				prices: map[asset.Asset]float64{aapl: 150.0},
 				date:   date,
 			}, date)
-			simBroker.SetFillPipeline(fill.NewPipeline(
+			simBroker.SetFillPipeline(broker.NewPipeline(
 				&stubBaseModel{price: 200.0},
-				[]fill.Adjuster{fill.Slippage(fill.Percent(0.01))},
+				[]broker.Adjuster{broker.Slippage(broker.Percent(0.01))},
 			))
 
 			err := simBroker.Submit(context.Background(), broker.Order{
@@ -1014,13 +1013,13 @@ func (mock *mockLifecycleBroker) Transactions(_ context.Context, _ time.Time) ([
 	return nil, nil
 }
 
-// stubBaseModel is a fill.BaseModel that always returns a fixed price.
+// stubBaseModel is a broker.BaseModel that always returns a fixed price.
 type stubBaseModel struct {
 	price float64
 }
 
-func (sb *stubBaseModel) Fill(_ context.Context, order broker.Order, _ *data.DataFrame) (fill.FillResult, error) {
-	return fill.FillResult{
+func (sb *stubBaseModel) Fill(_ context.Context, order broker.Order, _ *data.DataFrame) (broker.FillResult, error) {
+	return broker.FillResult{
 		Price:    sb.price,
 		Quantity: order.Qty,
 	}, nil

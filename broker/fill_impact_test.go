@@ -1,4 +1,4 @@
-package fill_test
+package broker_test
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 )
 
 var _ = Describe("MarketImpact", func() {
@@ -36,9 +35,9 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: qty}
-			adj := fill.MarketImpact(fill.LargeCap)
+			adj := broker.MarketImpact(broker.LargeCap)
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
 
@@ -49,7 +48,7 @@ var _ = Describe("MarketImpact", func() {
 			// participation = 10_000 / 1_000_000 = 0.01
 			// impact = 0.1 * sqrt(0.01) = 0.1 * 0.1 = 0.01
 			// expected price = 150 * (1 + 0.01) = 151.5
-			expectedPrice := price * (1.0 + fill.LargeCap.Coefficient*math.Sqrt(qty/volume))
+			expectedPrice := price * (1.0 + broker.LargeCap.Coefficient*math.Sqrt(qty/volume))
 			Expect(result.Price).To(BeNumerically("~", expectedPrice, 1e-9))
 		})
 	})
@@ -65,21 +64,21 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: qty}
-			adj := fill.MarketImpact(fill.SmallCap)
+			adj := broker.MarketImpact(broker.SmallCap)
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Partial).To(BeTrue())
 
-			cappedQty := math.Floor(volume * fill.SmallCap.PartialThreshold)
+			cappedQty := math.Floor(volume * broker.SmallCap.PartialThreshold)
 			Expect(result.Quantity).To(Equal(cappedQty))
 
 			// recompute participation with capped quantity
 			participation := cappedQty / volume
-			impact := fill.SmallCap.Coefficient * math.Sqrt(participation)
+			impact := broker.SmallCap.Coefficient * math.Sqrt(participation)
 			expectedPrice := price * (1.0 + impact)
 			Expect(result.Price).To(BeNumerically("~", expectedPrice, 1e-9))
 		})
@@ -95,11 +94,11 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: qty}
 
-			largeCap := fill.MarketImpact(fill.LargeCap)
-			microCap := fill.MarketImpact(fill.MicroCap)
+			largeCap := broker.MarketImpact(broker.LargeCap)
+			microCap := broker.MarketImpact(broker.MicroCap)
 
 			largeResult, err := largeCap.Adjust(context.Background(), order, bar, initial)
 			Expect(err).NotTo(HaveOccurred())
@@ -121,16 +120,16 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: qty}
-			adj := fill.MarketImpact(fill.LargeCap)
+			adj := broker.MarketImpact(broker.LargeCap)
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
 
 			Expect(err).NotTo(HaveOccurred())
 
 			participation := qty / volume
-			impact := fill.LargeCap.Coefficient * math.Sqrt(participation)
+			impact := broker.LargeCap.Coefficient * math.Sqrt(participation)
 			expectedPrice := price * (1.0 + impact)
 			Expect(result.Price).To(BeNumerically("~", expectedPrice, 1e-9))
 			Expect(result.Price).To(BeNumerically(">", price))
@@ -147,16 +146,16 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Sell, Qty: qty}
-			adj := fill.MarketImpact(fill.LargeCap)
+			adj := broker.MarketImpact(broker.LargeCap)
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
 
 			Expect(err).NotTo(HaveOccurred())
 
 			participation := qty / volume
-			impact := fill.LargeCap.Coefficient * math.Sqrt(participation)
+			impact := broker.LargeCap.Coefficient * math.Sqrt(participation)
 			expectedPrice := price * (1.0 - impact)
 			Expect(result.Price).To(BeNumerically("~", expectedPrice, 1e-9))
 			Expect(result.Price).To(BeNumerically("<", price))
@@ -169,9 +168,9 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: 150.0,
 				data.Volume:      0,
 			})
-			initial := fill.FillResult{Price: 150.0, Quantity: 100}
+			initial := broker.FillResult{Price: 150.0, Quantity: 100}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 100}
-			adj := fill.MarketImpact(fill.LargeCap)
+			adj := broker.MarketImpact(broker.LargeCap)
 
 			_, err := adj.Adjust(context.Background(), order, bar, initial)
 
@@ -184,9 +183,9 @@ var _ = Describe("MarketImpact", func() {
 			bar := buildBar(date, aapl, map[data.Metric]float64{
 				data.MetricClose: 150.0,
 			})
-			initial := fill.FillResult{Price: 150.0, Quantity: 100}
+			initial := broker.FillResult{Price: 150.0, Quantity: 100}
 			order := broker.Order{Asset: aapl, Side: broker.Buy, Qty: 100}
-			adj := fill.MarketImpact(fill.LargeCap)
+			adj := broker.MarketImpact(broker.LargeCap)
 
 			_, err := adj.Adjust(context.Background(), order, bar, initial)
 
@@ -205,16 +204,16 @@ var _ = Describe("MarketImpact", func() {
 				data.MetricClose: price,
 				data.Volume:      volume,
 			})
-			initial := fill.FillResult{Price: price, Quantity: qty}
+			initial := broker.FillResult{Price: price, Quantity: qty}
 			order := broker.Order{Asset: aapl, Side: broker.Sell, Qty: qty}
-			adj := fill.MarketImpact(fill.SmallCap)
+			adj := broker.MarketImpact(broker.SmallCap)
 
 			result, err := adj.Adjust(context.Background(), order, bar, initial)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Partial).To(BeTrue())
 			Expect(result.Quantity).To(BeNumerically("<", qty))
-			Expect(result.Quantity).To(Equal(math.Floor(volume * fill.SmallCap.PartialThreshold)))
+			Expect(result.Quantity).To(Equal(math.Floor(volume * broker.SmallCap.PartialThreshold)))
 		})
 	})
 })

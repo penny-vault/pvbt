@@ -1,4 +1,4 @@
-package fill_test
+package broker_test
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 )
 
 // mockDataFetcher returns pre-configured intraday DataFrames.
@@ -41,7 +40,7 @@ var _ = Describe("VWAPFill", func() {
 			data.MetricLow:   145.0,
 			data.MetricClose: 150.0,
 		})
-		model := fill.VWAP()
+		model := broker.VWAP()
 
 		result, err := model.Fill(context.Background(), broker.Order{Asset: aapl, Qty: 100}, bar)
 
@@ -56,8 +55,8 @@ var _ = Describe("VWAPFill", func() {
 			data.MetricLow:   145.0,
 			data.MetricClose: 150.0,
 		})
-		model := fill.VWAP()
-		model.(fill.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
+		model := broker.VWAP()
+		model.(broker.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
 			err: fmt.Errorf("no intraday data"),
 		})
 
@@ -69,7 +68,7 @@ var _ = Describe("VWAPFill", func() {
 
 	It("returns an error when no OHLC data is available", func() {
 		bar := buildBar(date, aapl, map[data.Metric]float64{})
-		model := fill.VWAP()
+		model := broker.VWAP()
 
 		_, err := model.Fill(context.Background(), broker.Order{Asset: aapl, Qty: 100}, bar)
 
@@ -111,8 +110,8 @@ var _ = Describe("VWAPFill", func() {
 		intradayDF, err := data.NewDataFrame(times, assets, metrics, data.Tick, columns)
 		Expect(err).NotTo(HaveOccurred())
 
-		model := fill.VWAP()
-		model.(fill.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
+		model := broker.VWAP()
+		model.(broker.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
 			df: intradayDF,
 		})
 
@@ -145,8 +144,8 @@ var _ = Describe("VWAPFill", func() {
 		intradayDF, err := data.NewDataFrame(times, assets, metrics, data.Tick, columns)
 		Expect(err).NotTo(HaveOccurred())
 
-		model := fill.VWAP()
-		model.(fill.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
+		model := broker.VWAP()
+		model.(broker.DataFetcherAware).SetDataFetcher(&mockDataFetcher{
 			df: intradayDF,
 		})
 

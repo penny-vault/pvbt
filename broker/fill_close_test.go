@@ -1,4 +1,4 @@
-package fill_test
+package broker_test
 
 import (
 	"context"
@@ -11,7 +11,6 @@ import (
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
-	"github.com/penny-vault/pvbt/fill"
 )
 
 var _ = Describe("CloseFill", func() {
@@ -27,7 +26,7 @@ var _ = Describe("CloseFill", func() {
 
 	It("fills at the close price", func() {
 		bar := buildBar(date, aapl, map[data.Metric]float64{data.MetricClose: 150.0})
-		model := fill.Close()
+		model := broker.FillAtClose()
 
 		result, err := model.Fill(context.Background(), broker.Order{Asset: aapl, Qty: 100}, bar)
 
@@ -39,7 +38,7 @@ var _ = Describe("CloseFill", func() {
 
 	It("returns an error when close price is zero", func() {
 		bar := buildBar(date, aapl, map[data.Metric]float64{data.MetricClose: 0})
-		model := fill.Close()
+		model := broker.FillAtClose()
 
 		_, err := model.Fill(context.Background(), broker.Order{Asset: aapl, Qty: 100}, bar)
 
@@ -48,7 +47,7 @@ var _ = Describe("CloseFill", func() {
 
 	It("returns an error when close price is NaN", func() {
 		bar := buildBar(date, aapl, map[data.Metric]float64{data.MetricClose: math.NaN()})
-		model := fill.Close()
+		model := broker.FillAtClose()
 
 		_, err := model.Fill(context.Background(), broker.Order{Asset: aapl, Qty: 50}, bar)
 

@@ -1,11 +1,10 @@
-package fill
+package broker
 
 import (
 	"context"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -18,12 +17,12 @@ type FillResult struct {
 
 // BaseModel produces the initial fill price from market data.
 type BaseModel interface {
-	Fill(ctx context.Context, order broker.Order, bar *data.DataFrame) (FillResult, error)
+	Fill(ctx context.Context, order Order, bar *data.DataFrame) (FillResult, error)
 }
 
 // Adjuster modifies a FillResult produced by a BaseModel or prior Adjuster.
 type Adjuster interface {
-	Adjust(ctx context.Context, order broker.Order, bar *data.DataFrame, current FillResult) (FillResult, error)
+	Adjust(ctx context.Context, order Order, bar *data.DataFrame, current FillResult) (FillResult, error)
 }
 
 // DataFetcher provides on-demand data access for models that need more than the current bar.
@@ -48,7 +47,7 @@ func NewPipeline(base BaseModel, adjusters []Adjuster) *Pipeline {
 }
 
 // Fill runs the base model then each adjuster in sequence.
-func (pp *Pipeline) Fill(ctx context.Context, order broker.Order, bar *data.DataFrame) (FillResult, error) {
+func (pp *Pipeline) Fill(ctx context.Context, order Order, bar *data.DataFrame) (FillResult, error) {
 	result, err := pp.FillBase(ctx, order, bar)
 	if err != nil {
 		return FillResult{}, err
@@ -58,12 +57,12 @@ func (pp *Pipeline) Fill(ctx context.Context, order broker.Order, bar *data.Data
 }
 
 // FillBase runs only the base model and returns its result.
-func (pp *Pipeline) FillBase(ctx context.Context, order broker.Order, bar *data.DataFrame) (FillResult, error) {
+func (pp *Pipeline) FillBase(ctx context.Context, order Order, bar *data.DataFrame) (FillResult, error) {
 	return pp.base.Fill(ctx, order, bar)
 }
 
 // Adjust runs all adjusters in sequence on the given FillResult.
-func (pp *Pipeline) Adjust(ctx context.Context, order broker.Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
+func (pp *Pipeline) Adjust(ctx context.Context, order Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
 	result := current
 
 	for _, adj := range pp.adjusters {

@@ -1,11 +1,10 @@
-package fill
+package broker
 
 import (
 	"context"
 	"fmt"
 	"math"
 
-	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -38,7 +37,7 @@ func MarketImpact(preset ImpactPreset) Adjuster {
 	return &marketImpactAdjuster{preset: preset}
 }
 
-func (mi *marketImpactAdjuster) Adjust(_ context.Context, order broker.Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
+func (mi *marketImpactAdjuster) Adjust(_ context.Context, order Order, bar *data.DataFrame, current FillResult) (FillResult, error) {
 	volume := bar.Value(order.Asset, data.Volume)
 	if math.IsNaN(volume) || volume <= 0 {
 		return FillResult{}, fmt.Errorf("market impact adjuster: volume data is unavailable or zero for %s", order.Asset.Ticker)
@@ -57,7 +56,7 @@ func (mi *marketImpactAdjuster) Adjust(_ context.Context, order broker.Order, ba
 	impact := mi.preset.Coefficient * math.Sqrt(participation)
 
 	adjustedPrice := current.Price * (1.0 + impact)
-	if order.Side == broker.Sell {
+	if order.Side == Sell {
 		adjustedPrice = current.Price * (1.0 - impact)
 	}
 

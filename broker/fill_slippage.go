@@ -1,9 +1,8 @@
-package fill
+package broker
 
 import (
 	"context"
 
-	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -36,11 +35,11 @@ func Slippage(opt SlippageOption) Adjuster {
 	return &slippageAdjuster{option: opt}
 }
 
-func (sa *slippageAdjuster) Adjust(_ context.Context, order broker.Order, _ *data.DataFrame, current FillResult) (FillResult, error) {
+func (sa *slippageAdjuster) Adjust(_ context.Context, order Order, _ *data.DataFrame, current FillResult) (FillResult, error) {
 	delta := sa.option(current.Price)
 
 	adjusted := current.Price
-	if order.Side == broker.Buy {
+	if order.Side == Buy {
 		adjusted += delta
 	} else {
 		adjusted -= delta
