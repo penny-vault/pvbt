@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Backtests automatically liquidate positions in delisted assets at the last known price instead of silently holding them with stale data.
 - Stochastic Oscillator (fast and slow), Williams %R, and CCI signals are now available in the signal package for identifying overbought/oversold conditions.
 
+### Fixed
+
+- `DataFrame.Assets()` deduplicates when the same asset is passed more than once.
+
 ### Changed
 
 - **Breaking:** Transaction type constants (`BuyTransaction`, `SellTransaction`, etc.) moved from the `portfolio` package to `asset`.
