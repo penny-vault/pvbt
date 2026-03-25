@@ -26,6 +26,9 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+// ATRSignal is the metric name for ATR signal output.
+const ATRSignal data.Metric = "ATR"
+
 // ATR computes the Average True Range for each asset in the universe using
 // Wilder's smoothing method. It always uses High, Low, and Close metrics.
 // Returns a single-row DataFrame with ATRSignal.

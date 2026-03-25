@@ -24,6 +24,15 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+const (
+	// CrossoverFastSignal is the metric name for the fast moving average.
+	CrossoverFastSignal data.Metric = "CrossoverFast"
+	// CrossoverSlowSignal is the metric name for the slow moving average.
+	CrossoverSlowSignal data.Metric = "CrossoverSlow"
+	// CrossoverSignal is the metric name for the crossover signal.
+	CrossoverSignal data.Metric = "Crossover"
+)
+
 // Crossover computes a moving-average crossover signal for each asset in the
 // universe. It fetches data over slowPeriod, computes a fast SMA (fastPeriod.N
 // bars) and a slow SMA (slowPeriod.N bars), and returns +1 when fast > slow and

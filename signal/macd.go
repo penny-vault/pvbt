@@ -25,6 +25,15 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+const (
+	// MACDLineSignal is the metric name for the MACD line output.
+	MACDLineSignal data.Metric = "MACDLine"
+	// MACDSignalLineSignal is the metric name for the MACD signal line output.
+	MACDSignalLineSignal data.Metric = "MACDSignalLine"
+	// MACDHistogramSignal is the metric name for the MACD histogram output.
+	MACDHistogramSignal data.Metric = "MACDHistogram"
+)
+
 // MACD computes the Moving Average Convergence/Divergence indicator for each
 // asset in the universe. It returns a single-row DataFrame with three metrics:
 // MACDLineSignal (fast EMA - slow EMA), MACDSignalLineSignal (EMA of MACD
