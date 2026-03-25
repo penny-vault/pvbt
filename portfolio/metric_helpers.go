@@ -18,6 +18,8 @@ package portfolio
 import (
 	"math"
 	"time"
+
+	"github.com/penny-vault/pvbt/asset"
 )
 
 // removeNaN returns a copy of col with all NaN values removed.
@@ -182,7 +184,7 @@ func roundTrips(details []TradeDetail, txns []Transaction) ([]roundTrip, float64
 	var totalSellValue float64
 
 	for _, txn := range txns {
-		if txn.Type == SellTransaction {
+		if txn.Type == asset.SellTransaction {
 			totalSellValue += txn.Price * txn.Qty
 		}
 	}
@@ -205,13 +207,13 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 	for _, txn := range txns {
 		key := txn.Asset.CompositeFigi
 		switch txn.Type {
-		case BuyTransaction:
+		case asset.BuyTransaction:
 			lots[key] = append(lots[key], lot{
 				date:  txn.Date,
 				qty:   txn.Qty,
 				price: txn.Price,
 			})
-		case SellTransaction:
+		case asset.SellTransaction:
 			remaining := txn.Qty
 			lotList := lots[key]
 
@@ -241,7 +243,7 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 			}
 
 			lots[key] = lotList[lotIdx:]
-		case DividendTransaction:
+		case asset.DividendTransaction:
 			if txn.Qualified {
 				qualDiv += txn.Amount
 			} else {

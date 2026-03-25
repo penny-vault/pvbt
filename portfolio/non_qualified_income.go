@@ -18,6 +18,7 @@ package portfolio
 import (
 	"context"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -36,7 +37,7 @@ func (nonQualifiedIncome) Compute(ctx context.Context, stats PortfolioStats, _ *
 	var total float64
 
 	for _, tx := range stats.TransactionsView(ctx) {
-		if tx.Type == DividendTransaction && !tx.Qualified {
+		if tx.Type == asset.DividendTransaction && !tx.Qualified {
 			total += tx.Amount
 		}
 	}

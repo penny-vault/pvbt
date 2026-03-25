@@ -502,7 +502,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 			acct.Record(portfolio.Transaction{
 				Date:          date,
 				Asset:         heldAsset,
-				Type:          portfolio.FeeTransaction,
+				Type:          asset.FeeTransaction,
 				Amount:        -dailyFee,
 				Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
 			})
@@ -527,7 +527,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 				acct.Record(portfolio.Transaction{
 					Date:   date,
 					Asset:  heldAsset,
-					Type:   portfolio.DividendTransaction,
+					Type:   asset.DividendTransaction,
 					Amount: divPerShare * qty,
 					Qty:    qty,
 					Price:  divPerShare,
@@ -537,7 +537,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 				acct.Record(portfolio.Transaction{
 					Date:          date,
 					Asset:         heldAsset,
-					Type:          portfolio.DividendTransaction,
+					Type:          asset.DividendTransaction,
 					Amount:        divPerShare * qty, // negative (qty is negative)
 					Qty:           qty,
 					Price:         divPerShare,

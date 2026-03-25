@@ -36,7 +36,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 				growth := price * 0.0002
 				a.Record(portfolio.Transaction{
 					Date:   date,
-					Type:   portfolio.DepositTransaction,
+					Type:   asset.DepositTransaction,
 					Amount: growth,
 				})
 				price += growth
@@ -75,7 +75,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 				growth := 10_000.0 * 0.0002
 				a.Record(portfolio.Transaction{
 					Date:   date,
-					Type:   portfolio.DepositTransaction,
+					Type:   asset.DepositTransaction,
 					Amount: growth,
 				})
 			}
@@ -100,7 +100,7 @@ var _ = Describe("Withdrawal Metrics", func() {
 				loss := price * 0.005
 				a.Record(portfolio.Transaction{
 					Date:   date,
-					Type:   portfolio.WithdrawalTransaction,
+					Type:   asset.WithdrawalTransaction,
 					Amount: -loss,
 				})
 				price -= loss

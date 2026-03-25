@@ -397,7 +397,7 @@ var _ = Describe("Backtest", func() {
 			txns := fund.Transactions()
 			hasBuy := false
 			for _, tx := range txns {
-				if tx.Type == portfolio.BuyTransaction {
+				if tx.Type == asset.BuyTransaction {
 					hasBuy = true
 					break
 				}
@@ -703,7 +703,7 @@ var _ = Describe("Backtest", func() {
 			txns := fund.Transactions()
 			hasSell := false
 			for _, tx := range txns {
-				if tx.Type == portfolio.SellTransaction {
+				if tx.Type == asset.SellTransaction {
 					hasSell = true
 					break
 				}
@@ -790,7 +790,7 @@ var _ = Describe("Backtest", func() {
 			txns := fund.Transactions()
 			hasSellAt95 := false
 			for _, txn := range txns {
-				if txn.Type == portfolio.SellTransaction && txn.Asset == testStock && txn.Price == 95.0 {
+				if txn.Type == asset.SellTransaction && txn.Asset == testStock && txn.Price == 95.0 {
 					hasSellAt95 = true
 					break
 				}
@@ -843,7 +843,7 @@ var _ = Describe("Backtest", func() {
 			txns := fund.Transactions()
 			hasSellAtTP := false
 			for _, txn := range txns {
-				if txn.Type == portfolio.SellTransaction && txn.Asset == testStock {
+				if txn.Type == asset.SellTransaction && txn.Asset == testStock {
 					// Allow small floating-point tolerance on the TP price.
 					diff := txn.Price - 110.0
 					if diff < 0 {
@@ -914,7 +914,7 @@ var _ = Describe("Backtest", func() {
 			feeCount := 0
 			totalFees := 0.0
 			for _, tx := range txns {
-				if tx.Type == portfolio.FeeTransaction {
+				if tx.Type == asset.FeeTransaction {
 					feeCount++
 					totalFees += tx.Amount // negative
 				}
@@ -929,7 +929,7 @@ var _ = Describe("Backtest", func() {
 			expectedDailyFee := 100.0 * 100.0 * (borrowRate / 252.0)
 			// Each fee transaction should match this amount (negated).
 			for _, tx := range txns {
-				if tx.Type == portfolio.FeeTransaction {
+				if tx.Type == asset.FeeTransaction {
 					Expect(tx.Amount).To(BeNumerically("~", -expectedDailyFee, 0.01))
 					Expect(tx.Justification).To(ContainSubstring("borrow fee"))
 					Expect(tx.Justification).To(ContainSubstring("10.00%"))
@@ -994,7 +994,7 @@ var _ = Describe("Backtest", func() {
 			txns := fund.Transactions()
 			var shortDivTxns []portfolio.Transaction
 			for _, tx := range txns {
-				if tx.Type == portfolio.DividendTransaction && tx.Amount < 0 {
+				if tx.Type == asset.DividendTransaction && tx.Amount < 0 {
 					shortDivTxns = append(shortDivTxns, tx)
 				}
 			}
@@ -1113,10 +1113,10 @@ var _ = Describe("Backtest", func() {
 			hasSellShort := false
 			hasCoverBuy := false
 			for _, tx := range txns {
-				if tx.Asset == shortStock && tx.Type == portfolio.SellTransaction {
+				if tx.Asset == shortStock && tx.Type == asset.SellTransaction {
 					hasSellShort = true
 				}
-				if tx.Asset == shortStock && tx.Type == portfolio.BuyTransaction {
+				if tx.Asset == shortStock && tx.Type == asset.BuyTransaction {
 					hasCoverBuy = true
 				}
 			}
@@ -1137,7 +1137,7 @@ var _ = Describe("Backtest", func() {
 			feeCount := 0
 			totalFees := 0.0
 			for _, tx := range txns {
-				if tx.Type == portfolio.FeeTransaction {
+				if tx.Type == asset.FeeTransaction {
 					feeCount++
 					totalFees += tx.Amount
 				}
@@ -1152,7 +1152,7 @@ var _ = Describe("Backtest", func() {
 			// ---------------------------------------------------------------
 			var shortDivTxns []portfolio.Transaction
 			for _, tx := range txns {
-				if tx.Type == portfolio.DividendTransaction && tx.Amount < 0 {
+				if tx.Type == asset.DividendTransaction && tx.Amount < 0 {
 					shortDivTxns = append(shortDivTxns, tx)
 				}
 			}

@@ -308,7 +308,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 					acct.Record(portfolio.Transaction{
 						Date:          e.currentDate,
 						Asset:         heldAsset,
-						Type:          portfolio.FeeTransaction,
+						Type:          asset.FeeTransaction,
 						Amount:        -dailyFee,
 						Justification: fmt.Sprintf("borrow fee: %s %.2f%% annualized", heldAsset.Ticker, borrowRate*100),
 					})
@@ -333,7 +333,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 						acct.Record(portfolio.Transaction{
 							Date:   e.currentDate,
 							Asset:  heldAsset,
-							Type:   portfolio.DividendTransaction,
+							Type:   asset.DividendTransaction,
 							Amount: divPerShare * qty,
 							Qty:    qty,
 							Price:  divPerShare,
@@ -343,7 +343,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 						acct.Record(portfolio.Transaction{
 							Date:          e.currentDate,
 							Asset:         heldAsset,
-							Type:          portfolio.DividendTransaction,
+							Type:          asset.DividendTransaction,
 							Amount:        divPerShare * qty, // negative (qty is negative)
 							Qty:           qty,
 							Price:         divPerShare,

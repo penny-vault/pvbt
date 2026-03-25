@@ -44,7 +44,7 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			txns := a.Transactions()
 			Expect(txns).To(HaveLen(1))
-			Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
+			Expect(txns[0].Type).To(Equal(asset.DepositTransaction))
 			Expect(txns[0].Amount).To(Equal(10_000.0))
 		})
 
@@ -103,7 +103,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Amount: 50.0,
 			})
 			Expect(a.Cash()).To(Equal(10_050.0))
@@ -114,7 +114,7 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
-				Type:   portfolio.FeeTransaction,
+				Type:   asset.FeeTransaction,
 				Amount: -25.0,
 			})
 			Expect(a.Cash()).To(Equal(9_975.0))
@@ -124,7 +124,7 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 5_000.0,
 			})
 			Expect(a.Cash()).To(Equal(15_000.0))
@@ -134,7 +134,7 @@ var _ = Describe("Account", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
-				Type:   portfolio.WithdrawalTransaction,
+				Type:   asset.WithdrawalTransaction,
 				Amount: -3_000.0,
 			})
 			Expect(a.Cash()).To(Equal(7_000.0))
@@ -145,7 +145,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -159,7 +159,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -167,7 +167,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    5,
 				Price:  320.0,
 				Amount: 1_600.0,
@@ -183,7 +183,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150.0,
 				Amount: 15000.0,
@@ -220,7 +220,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    50,
 				Price:  140.0,
 				Amount: -7000.0,
@@ -230,7 +230,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    80,
 				Price:  150.0,
 				Amount: 12000.0,
@@ -271,7 +271,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    100,
 				Price:  150.0,
 				Amount: 15000.0,
@@ -281,7 +281,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    100,
 				Price:  140.0,
 				Amount: -14000.0,
@@ -314,7 +314,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    50,
 				Price:  150.0,
 				Amount: 7500.0,
@@ -324,7 +324,7 @@ var _ = Describe("Account", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
 				Asset:  testAsset,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    80,
 				Price:  140.0,
 				Amount: -11200.0,
@@ -380,7 +380,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   t1,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -451,7 +451,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   t1,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    5,
 				Price:  400.0,
 				Amount: -2_000.0,
@@ -550,7 +550,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   t1,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -636,7 +636,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -644,7 +644,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  bil,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  50.0,
 				Amount: -1_000.0,
@@ -667,7 +667,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   t1,
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -696,7 +696,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -712,7 +712,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  300.0,
 				Amount: -3_000.0,
@@ -720,7 +720,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  320.0,
 				Amount: 3_200.0,
@@ -745,7 +745,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -755,7 +755,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    5,
 				Price:  120.0,
 				Amount: -600.0,
@@ -765,7 +765,7 @@ var _ = Describe("Account", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    12,
 				Price:  150.0,
 				Amount: 1_800.0,
@@ -787,7 +787,7 @@ var _ = Describe("Account", func() {
 			// Verify cash is 0 and the transaction exists but has 0 amount.
 			Expect(a.Cash()).To(Equal(0.0))
 			Expect(txns).To(HaveLen(1))
-			Expect(txns[0].Type).To(Equal(portfolio.DepositTransaction))
+			Expect(txns[0].Type).To(Equal(asset.DepositTransaction))
 			Expect(txns[0].Amount).To(Equal(0.0))
 		})
 	})
@@ -804,7 +804,7 @@ var _ = Describe("Account.Clone", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  500,
 			Amount: -50_000,
@@ -965,16 +965,16 @@ var _ = Describe("CancelOpenOrders group cleanup", func() {
 
 var _ = Describe("TransactionType", func() {
 	It("returns correct string for each type", func() {
-		Expect(portfolio.BuyTransaction.String()).To(Equal("Buy"))
-		Expect(portfolio.SellTransaction.String()).To(Equal("Sell"))
-		Expect(portfolio.DividendTransaction.String()).To(Equal("Dividend"))
-		Expect(portfolio.FeeTransaction.String()).To(Equal("Fee"))
-		Expect(portfolio.DepositTransaction.String()).To(Equal("Deposit"))
-		Expect(portfolio.WithdrawalTransaction.String()).To(Equal("Withdrawal"))
+		Expect(asset.BuyTransaction.String()).To(Equal("Buy"))
+		Expect(asset.SellTransaction.String()).To(Equal("Sell"))
+		Expect(asset.DividendTransaction.String()).To(Equal("Dividend"))
+		Expect(asset.FeeTransaction.String()).To(Equal("Fee"))
+		Expect(asset.DepositTransaction.String()).To(Equal("Deposit"))
+		Expect(asset.WithdrawalTransaction.String()).To(Equal("Withdrawal"))
 	})
 
 	It("returns a formatted string for unknown transaction types", func() {
-		t := portfolio.TransactionType(99)
+		t := asset.TransactionType(99)
 		Expect(t.String()).To(Equal("TransactionType(99)"))
 	})
 })
@@ -1063,7 +1063,7 @@ var _ = Describe("Summary", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    5,
 			Price:  spyPrices[0],
 			Amount: -5 * spyPrices[0],
@@ -1193,7 +1193,7 @@ var _ = Describe("RiskMetrics", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    5,
 			Price:  spyPrices[0],
 			Amount: -5 * spyPrices[0],
@@ -1341,7 +1341,7 @@ var _ = Describe("WithdrawalMetrics", func() {
 				growth := price * 0.0002
 				acct.Record(portfolio.Transaction{
 					Date:   date,
-					Type:   portfolio.DividendTransaction,
+					Type:   asset.DividendTransaction,
 					Amount: growth,
 				})
 				price += growth
@@ -1419,7 +1419,7 @@ var _ = Describe("Window", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   times[0],
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    5,
 			Price:  spyPrices[0],
 			Amount: -5 * spyPrices[0],
@@ -1803,7 +1803,7 @@ var _ = Describe("ApplySplit", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   date,
 			Asset:  acme,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  200,
 			Amount: -20_000,
@@ -1822,7 +1822,7 @@ var _ = Describe("ApplySplit", func() {
 
 		txns := acct.Transactions()
 		lastTxn := txns[len(txns)-1]
-		Expect(lastTxn.Type).To(Equal(portfolio.SplitTransaction))
+		Expect(lastTxn.Type).To(Equal(asset.SplitTransaction))
 		Expect(lastTxn.Qty).To(Equal(200.0))
 		Expect(lastTxn.Price).To(Equal(2.0))
 		Expect(lastTxn.Amount).To(Equal(0.0))
@@ -1834,7 +1834,7 @@ var _ = Describe("ApplySplit", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   date,
 			Asset:  acme,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    100,
 			Price:  200,
 			Amount: 20_000,
@@ -1863,7 +1863,7 @@ var _ = Describe("ApplySplit", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   date,
 			Asset:  acme,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    100,
 			Price:  200,
 			Amount: -20_000,

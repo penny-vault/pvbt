@@ -34,13 +34,13 @@ var _ = Describe("Return Metrics", func() {
 				if diff > 0 {
 					a.Record(portfolio.Transaction{
 						Date:   d,
-						Type:   portfolio.DepositTransaction,
+						Type:   asset.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					a.Record(portfolio.Transaction{
 						Date:   d,
-						Type:   portfolio.WithdrawalTransaction,
+						Type:   asset.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}
@@ -129,7 +129,7 @@ var _ = Describe("Return Metrics", func() {
 			// Organic growth via dividend (not an external cash flow for MWRR).
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Amount: 1000,
 			})
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -177,12 +177,12 @@ var _ = Describe("Return Metrics", func() {
 			// Day 183: deposit 500 then deposit 5000 -> equity 15500
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 500,
 			})
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 5000,
 			})
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -191,7 +191,7 @@ var _ = Describe("Return Metrics", func() {
 			// Day 367: deposit 1000 -> equity 16500
 			a.Record(portfolio.Transaction{
 				Date:   dates[2],
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 1000,
 			})
 			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -236,7 +236,7 @@ var _ = Describe("Return Metrics", func() {
 
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Amount: 1000,
 			})
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -266,7 +266,7 @@ var _ = Describe("Return Metrics", func() {
 
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Amount: 1500,
 			})
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -300,7 +300,7 @@ var _ = Describe("Return Metrics", func() {
 			// Simulate loss via negative dividend (fee/expense).
 			a.Record(portfolio.Transaction{
 				Date:   dates[1],
-				Type:   portfolio.DividendTransaction,
+				Type:   asset.DividendTransaction,
 				Amount: -2000,
 			})
 			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -327,7 +327,7 @@ var _ = Describe("Return Metrics", func() {
 		a.Record(portfolio.Transaction{
 			Date:   d,
 			Asset:  ast,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    qty,
 			Price:  price,
 			Amount: -(price * qty),
@@ -340,7 +340,7 @@ var _ = Describe("Return Metrics", func() {
 		a.Record(portfolio.Transaction{
 			Date:   d,
 			Asset:  ast,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    qty,
 			Price:  price,
 			Amount: price * qty,
@@ -427,7 +427,7 @@ var _ = Describe("Return Metrics", func() {
 			// Deposit and buy more before the rally.
 			a.Record(portfolio.Transaction{
 				Date:   d1,
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 10000,
 			})
 			recordBuy(a, spy, d1, 90, 110) // cost = 9900, cash = 100
@@ -493,7 +493,7 @@ var _ = Describe("Return Metrics", func() {
 			// Deposit and buy more before the decline.
 			a.Record(portfolio.Transaction{
 				Date:   d1,
-				Type:   portfolio.DepositTransaction,
+				Type:   asset.DepositTransaction,
 				Amount: 10000,
 			})
 			recordBuy(a, spy, d1, 90, 110)
@@ -557,7 +557,7 @@ var _ = Describe("Return Metrics", func() {
 			recordSell(a, spy, d1, 50, 120)
 			a.Record(portfolio.Transaction{
 				Date:   d1,
-				Type:   portfolio.WithdrawalTransaction,
+				Type:   asset.WithdrawalTransaction,
 				Amount: -5000,
 			})
 
@@ -614,7 +614,7 @@ var _ = Describe("Return Metrics", func() {
 			acctA.UpdatePrices(buildDF(d0, []asset.Asset{spy}, []float64{100}, []float64{100}))
 
 			acctA.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
-			acctA.Record(portfolio.Transaction{Date: d1, Type: portfolio.DepositTransaction, Amount: 10000})
+			acctA.Record(portfolio.Transaction{Date: d1, Type: asset.DepositTransaction, Amount: 10000})
 			recordBuy(acctA, spy, d1, 83, 120) // cost=9960, cash=40, holdings=183
 
 			acctA.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{140}, []float64{140}))
@@ -631,7 +631,7 @@ var _ = Describe("Return Metrics", func() {
 			acctB.UpdatePrices(buildDF(d1, []asset.Asset{spy}, []float64{120}, []float64{120}))
 			acctB.UpdatePrices(buildDF(d2, []asset.Asset{spy}, []float64{140}, []float64{140}))
 
-			acctB.Record(portfolio.Transaction{Date: d2, Type: portfolio.DepositTransaction, Amount: 10000})
+			acctB.Record(portfolio.Transaction{Date: d2, Type: asset.DepositTransaction, Amount: 10000})
 			recordBuy(acctB, spy, d2, 71, 140) // cost=9940, cash=60, holdings=171
 
 			acctB.UpdatePrices(buildDF(d3, []asset.Asset{spy}, []float64{110}, []float64{110}))
@@ -740,13 +740,13 @@ var _ = Describe("Return Metrics", func() {
 					if diff > 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   portfolio.DepositTransaction,
+							Type:   asset.DepositTransaction,
 							Amount: diff,
 						})
 					} else if diff < 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   portfolio.WithdrawalTransaction,
+							Type:   asset.WithdrawalTransaction,
 							Amount: diff,
 						})
 					}

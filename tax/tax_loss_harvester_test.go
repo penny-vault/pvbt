@@ -34,7 +34,7 @@ func buyLot(acct *portfolio.Account, ast asset.Asset, date time.Time, price, qty
 	acct.Record(portfolio.Transaction{
 		Date:   date,
 		Asset:  ast,
-		Type:   portfolio.BuyTransaction,
+		Type:   asset.BuyTransaction,
 		Qty:    qty,
 		Price:  price,
 		Amount: -(price * qty),
@@ -46,7 +46,7 @@ func sellLot(acct *portfolio.Account, ast asset.Asset, date time.Time, price, qt
 	acct.Record(portfolio.Transaction{
 		Date:   date,
 		Asset:  ast,
-		Type:   portfolio.SellTransaction,
+		Type:   asset.SellTransaction,
 		Qty:    qty,
 		Price:  price,
 		Amount: price * qty,

@@ -27,7 +27,7 @@ var _ = Describe("Clone", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  acme,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    10,
 			Price:  100.0,
 			Amount: -1_000.0,
@@ -83,7 +83,7 @@ var _ = Describe("WithPortfolioSnapshot", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  acme,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    10,
 			Price:  100.0,
 			Amount: -1_000.0,
@@ -118,7 +118,7 @@ var _ = Describe("WithPortfolioSnapshot", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  acme,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    10,
 			Price:  100.0,
 			Amount: -1_000.0,
@@ -138,7 +138,7 @@ var _ = Describe("WithPortfolioSnapshot", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 			Asset:  acme,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    10,
 			Price:  110.0,
 			Amount: 1_100.0,
@@ -172,7 +172,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -193,7 +193,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -202,7 +202,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    5,
 				Price:  110.0,
 				Amount: -550.0,
@@ -220,7 +220,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -248,7 +248,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -287,7 +287,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -328,7 +328,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -349,7 +349,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  110.0,
 				Amount: 1_100.0,
@@ -377,7 +377,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  100.0,
 				Amount: -2_000.0,
@@ -397,7 +397,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  110.0,
 				Amount: 1_100.0,
@@ -420,7 +420,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -429,7 +429,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  102.0,
 				Amount: 1_020.0,
@@ -454,7 +454,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -470,7 +470,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  110.0,
 				Amount: 1_100.0,
@@ -480,7 +480,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  50.0,
 				Amount: -1_000.0,
@@ -496,7 +496,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  45.0,
 				Amount: 900.0,
@@ -574,7 +574,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -583,7 +583,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  120.0,
 				Amount: 1_200.0,
@@ -599,7 +599,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  100.0,
 				Amount: -2_000.0,
@@ -608,7 +608,7 @@ var _ = Describe("ExcursionRecord", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  120.0,
 				Amount: 1_200.0,

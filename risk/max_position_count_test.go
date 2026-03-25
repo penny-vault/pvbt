@@ -77,7 +77,7 @@ var _ = Describe("MaxPositionCount", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   ts,
 					Asset:  ast,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    qtys[idx],
 					Price:  prices[idx],
 					Amount: -(prices[idx] * qtys[idx]),

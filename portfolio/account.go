@@ -116,7 +116,7 @@ func WithCash(amount float64, date time.Time) Option {
 		a.cash = amount
 		a.transactions = append(a.transactions, Transaction{
 			Date:   date,
-			Type:   DepositTransaction,
+			Type:   asset.DepositTransaction,
 			Amount: amount,
 		})
 	}
@@ -342,16 +342,16 @@ func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Sid
 		select {
 		case fill := <-fillCh:
 			var (
-				txType TransactionType
+				txType asset.TransactionType
 				amount float64
 			)
 
 			switch side {
 			case Buy:
-				txType = BuyTransaction
+				txType = asset.BuyTransaction
 				amount = -(fill.Price * fill.Qty)
 			case Sell:
-				txType = SellTransaction
+				txType = asset.SellTransaction
 				amount = fill.Price * fill.Qty
 			}
 
@@ -756,7 +756,7 @@ func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
 // and tax lots accordingly. It also performs wash sale detection on both
 // buy and sell transactions.
 func (a *Account) Record(txn Transaction) {
-	if txn.Type == DividendTransaction {
+	if txn.Type == asset.DividendTransaction {
 		txn.Qualified = a.isDividendQualified(txn.Asset, txn.Date)
 	}
 
@@ -767,7 +767,7 @@ func (a *Account) Record(txn Transaction) {
 	a.cash += txn.Amount
 
 	switch txn.Type {
-	case BuyTransaction:
+	case asset.BuyTransaction:
 		a.holdings[txn.Asset] += txn.Qty
 
 		// Phase 1: Cover short lots (if any exist).
@@ -880,7 +880,7 @@ func (a *Account) Record(txn Transaction) {
 			delete(a.shortLots, txn.Asset)
 			delete(a.excursions, txn.Asset)
 		}
-	case SellTransaction:
+	case asset.SellTransaction:
 		a.holdings[txn.Asset] -= txn.Qty
 
 		method := txn.LotSelection
@@ -1715,7 +1715,7 @@ func (a *Account) ApplySplit(ast asset.Asset, date time.Time, splitFactor float6
 	a.transactions = append(a.transactions, Transaction{
 		Date:          date,
 		Asset:         ast,
-		Type:          SplitTransaction,
+		Type:          asset.SplitTransaction,
 		Qty:           newQty,
 		Price:         splitFactor,
 		Amount:        0,
@@ -1976,16 +1976,16 @@ func (a *Account) drainFillsFromChannel() {
 			}
 
 			var (
-				txType TransactionType
+				txType asset.TransactionType
 				amount float64
 			)
 
 			switch order.Side {
 			case broker.Buy:
-				txType = BuyTransaction
+				txType = asset.BuyTransaction
 				amount = -(fill.Price * fill.Qty)
 			case broker.Sell:
-				txType = SellTransaction
+				txType = asset.SellTransaction
 				amount = fill.Price * fill.Qty
 			}
 

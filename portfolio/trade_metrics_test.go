@@ -33,7 +33,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -41,7 +41,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  120.0,
 				Amount: 1_200.0,
@@ -51,7 +51,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  50.0,
 				Amount: -1_000.0,
@@ -59,7 +59,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  45.0,
 				Amount: 900.0,
@@ -69,7 +69,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    5,
 				Price:  200.0,
 				Amount: -1_000.0,
@@ -77,7 +77,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 5, 16, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    5,
 				Price:  210.0,
 				Amount: 1_050.0,
@@ -135,7 +135,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -143,7 +143,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  120.0,
 				Amount: 1_200.0,
@@ -167,7 +167,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -224,7 +224,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -237,7 +237,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 3, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: 1_000.0,
@@ -263,7 +263,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -271,7 +271,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  90.0,
 				Amount: 900.0,
@@ -281,7 +281,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  50.0,
 				Amount: -1_000.0,
@@ -289,7 +289,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  widg,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  40.0,
 				Amount: 800.0,
@@ -313,7 +313,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -321,7 +321,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: 1_000.0,
@@ -348,7 +348,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  200.0,
 				Amount: -2_000.0,
@@ -358,7 +358,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC),
 				Asset:  aapl,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  150.0,
 				Amount: -3_000.0,
@@ -368,7 +368,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
 				Asset:  spy,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  220.0,
 				Amount: 2_200.0,
@@ -378,7 +378,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  aapl,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    20,
 				Price:  140.0,
 				Amount: 2_800.0,
@@ -404,7 +404,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -412,7 +412,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  120.0,
 				Amount: 1_200.0,
@@ -436,7 +436,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    10,
 				Price:  100.0,
 				Amount: -1_000.0,
@@ -444,7 +444,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  80.0,
 				Amount: 800.0,
@@ -497,7 +497,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    20,
 				Price:  100.0,
 				Amount: -2_000.0,
@@ -507,7 +507,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 11, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  110.0,
 				Amount: 1_100.0,
@@ -517,7 +517,7 @@ var _ = Describe("TradeMetrics", func() {
 			a.Record(portfolio.Transaction{
 				Date:   time.Date(2024, 1, 21, 0, 0, 0, 0, time.UTC),
 				Asset:  acme,
-				Type:   portfolio.SellTransaction,
+				Type:   asset.SellTransaction,
 				Qty:    10,
 				Price:  90.0,
 				Amount: 900.0,
@@ -543,7 +543,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    10,
 					Price:  100.0,
 					Amount: -1_000.0,
@@ -551,7 +551,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    10,
 					Price:  120.0,
 					Amount: 1_200.0,
@@ -561,7 +561,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  widg,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    20,
 					Price:  50.0,
 					Amount: -1_000.0,
@@ -569,7 +569,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  widg,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    20,
 					Price:  45.0,
 					Amount: 900.0,
@@ -579,7 +579,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 5, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    50,
 					Price:  150.0,
 					Amount: 7_500.0,
@@ -587,7 +587,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 5, 20, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    50,
 					Price:  140.0,
 					Amount: -7_000.0,
@@ -597,7 +597,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  widg,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    20,
 					Price:  40.0,
 					Amount: 800.0,
@@ -605,7 +605,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC),
 					Asset:  widg,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    20,
 					Price:  50.0,
 					Amount: -1_000.0,
@@ -659,7 +659,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    10,
 					Price:  100.0,
 					Amount: -1_000.0,
@@ -667,7 +667,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 31, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    10,
 					Price:  120.0,
 					Amount: 1_200.0,
@@ -691,7 +691,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.SellTransaction,
+					Type:   asset.SellTransaction,
 					Qty:    50,
 					Price:  150.0,
 					Amount: 7_500.0,
@@ -699,7 +699,7 @@ var _ = Describe("TradeMetrics", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   time.Date(2024, 1, 20, 0, 0, 0, 0, time.UTC),
 					Asset:  acme,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    50,
 					Price:  140.0,
 					Amount: -7_000.0,

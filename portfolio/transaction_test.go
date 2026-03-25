@@ -18,12 +18,11 @@ package portfolio_test
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/penny-vault/pvbt/portfolio"
+	"github.com/penny-vault/pvbt/asset"
 )
 
 var _ = Describe("TransactionType", func() {
 	It("returns Split for SplitTransaction", func() {
-		Expect(portfolio.SplitTransaction.String()).To(Equal("Split"))
+		Expect(asset.SplitTransaction.String()).To(Equal("Split"))
 	})
 })

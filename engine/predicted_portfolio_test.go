@@ -110,7 +110,7 @@ var _ = Describe("PredictedPortfolio", func() {
 		transactions := predictedPortfolio.Transactions()
 		hasBuy := false
 		for _, tx := range transactions {
-			if tx.Type == portfolio.BuyTransaction {
+			if tx.Type == asset.BuyTransaction {
 				hasBuy = true
 				break
 			}
@@ -193,7 +193,7 @@ var _ = Describe("PredictedPortfolio", func() {
 
 		transactions := predictedPortfolio.Transactions()
 		for _, tx := range transactions {
-			if tx.Type == portfolio.BuyTransaction {
+			if tx.Type == asset.BuyTransaction {
 				Expect(tx.Justification).To(Equal("always buy SPY"), "buy transactions should have justification")
 			}
 		}

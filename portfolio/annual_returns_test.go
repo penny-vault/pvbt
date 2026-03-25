@@ -30,13 +30,13 @@ var _ = Describe("AnnualReturns", func() {
 				if diff > 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   date,
-						Type:   portfolio.DepositTransaction,
+						Type:   asset.DepositTransaction,
 						Amount: diff,
 					})
 				} else if diff < 0 {
 					acct.Record(portfolio.Transaction{
 						Date:   date,
-						Type:   portfolio.WithdrawalTransaction,
+						Type:   asset.WithdrawalTransaction,
 						Amount: diff,
 					})
 				}

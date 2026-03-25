@@ -53,7 +53,7 @@ var _ = Describe("WithLotSelection modifier", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   timestamp,
 			Asset:  spy,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    10,
 			Price:  150.0,
 			Amount: -1500.0,

@@ -151,7 +151,7 @@ var _ = Describe("VolatilityScaler", func() {
 				acct.Record(portfolio.Transaction{
 					Date:   ts,
 					Asset:  ast,
-					Type:   portfolio.BuyTransaction,
+					Type:   asset.BuyTransaction,
 					Qty:    pos.qty,
 					Price:  pos.price,
 					Amount: -(pos.price * pos.qty),

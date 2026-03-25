@@ -63,13 +63,13 @@ func buildAccountFromEquity(dates []time.Time, equityValues []float64) *portfoli
 			if diff > 0 {
 				acct.Record(portfolio.Transaction{
 					Date:   dates[idx],
-					Type:   portfolio.DepositTransaction,
+					Type:   asset.DepositTransaction,
 					Amount: diff,
 				})
 			} else if diff < 0 {
 				acct.Record(portfolio.Transaction{
 					Date:   dates[idx],
-					Type:   portfolio.WithdrawalTransaction,
+					Type:   asset.WithdrawalTransaction,
 					Amount: diff,
 				})
 			}

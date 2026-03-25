@@ -62,7 +62,7 @@ var _ = Describe("Exposure Limits", func() {
 			acct.Record(portfolio.Transaction{
 				Date:   ts,
 				Asset:  ast,
-				Type:   portfolio.BuyTransaction,
+				Type:   asset.BuyTransaction,
 				Qty:    qty,
 				Price:  price,
 				Amount: -(price * qty),
@@ -85,7 +85,7 @@ var _ = Describe("Exposure Limits", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   ts,
 			Asset:  longAsset,
-			Type:   portfolio.BuyTransaction,
+			Type:   asset.BuyTransaction,
 			Qty:    longQty,
 			Price:  longPrice,
 			Amount: -(longPrice * longQty),
@@ -95,7 +95,7 @@ var _ = Describe("Exposure Limits", func() {
 		acct.Record(portfolio.Transaction{
 			Date:   ts,
 			Asset:  shortAsset,
-			Type:   portfolio.SellTransaction,
+			Type:   asset.SellTransaction,
 			Qty:    shortQty,
 			Price:  shortPrice,
 			Amount: 0,
