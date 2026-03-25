@@ -1,4 +1,4 @@
-package registry_test
+package library_test
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/registry"
+	"github.com/penny-vault/pvbt/library"
 )
 
 var _ = Describe("FetchREADME", func() {
@@ -28,8 +28,8 @@ var _ = Describe("FetchREADME", func() {
 		}))
 		defer server.Close()
 
-		opts := registry.ReadmeOptions{BaseURL: server.URL}
-		content, err := registry.FetchREADME(ctx, "alice", "momentum", opts)
+		opts := library.ReadmeOptions{BaseURL: server.URL}
+		content, err := library.FetchREADME(ctx, "alice", "momentum", opts)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(content).To(Equal(readmeContent))
 	})
@@ -41,15 +41,15 @@ var _ = Describe("FetchREADME", func() {
 		}))
 		defer server.Close()
 
-		opts := registry.ReadmeOptions{BaseURL: server.URL}
-		_, err := registry.FetchREADME(ctx, "alice", "missing", opts)
+		opts := library.ReadmeOptions{BaseURL: server.URL}
+		_, err := library.FetchREADME(ctx, "alice", "missing", opts)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("404"))
 	})
 
 	It("returns error on network failure", func() {
-		opts := registry.ReadmeOptions{BaseURL: "http://127.0.0.1:1"}
-		_, err := registry.FetchREADME(ctx, "alice", "repo", opts)
+		opts := library.ReadmeOptions{BaseURL: "http://127.0.0.1:1"}
+		_, err := library.FetchREADME(ctx, "alice", "repo", opts)
 		Expect(err).To(HaveOccurred())
 	})
 })

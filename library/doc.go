@@ -13,9 +13,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package library manages installation, listing, and removal of pvbt
-// strategy plugins. Each installed strategy is a standalone Go binary
-// cloned from a Git repository, built locally, and indexed by short-code.
+// Package library manages discovery, installation, listing, and removal of
+// pvbt strategy plugins.
+//
+// # Registry Discovery
+//
+// [Search] queries the GitHub Search API for repositories tagged with the
+// pvbt-strategy topic and returns a slice of [Listing] structs. Results
+// are cached locally for one hour; stale cache is used as a fallback on
+// network errors.
+//
+//	listings, err := library.Search(ctx, library.SearchOptions{
+//	    CacheDir: library.DefaultCacheDir(),
+//	})
+//
+// Each [Listing] contains the repository name, owner, description, clone
+// URL, star count, and last-updated timestamp. Pass the CloneURL to
+// [Install] to install a discovered strategy.
 //
 // # Installation
 //
@@ -25,7 +39,7 @@
 //
 //	strategy, err := library.Install(ctx, library.DefaultLibDir(), cloneURL)
 //
-// # Discovery
+// # Installed Strategies
 //
 // [List] returns all installed strategies by scanning the library
 // directory. [Lookup] finds a single strategy by short-code:

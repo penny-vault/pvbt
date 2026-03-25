@@ -1,4 +1,4 @@
-package registry_test
+package library_test
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/registry"
+	"github.com/penny-vault/pvbt/library"
 )
 
 // cannedSearchResponse builds a GitHub Search API JSON response with the given repos.
@@ -83,12 +83,12 @@ var _ = Describe("Search", func() {
 			}))
 			defer server.Close()
 
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir: cacheDir,
 				BaseURL:  server.URL,
 			}
 
-			listings, err := registry.Search(ctx, opts)
+			listings, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(listings).To(HaveLen(2))
 
@@ -134,19 +134,19 @@ var _ = Describe("Search", func() {
 		})
 
 		It("returns cached results without hitting server when cache is fresh", func() {
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir: cacheDir,
 				BaseURL:  server.URL,
 			}
 
 			// First call populates cache
-			firstResult, err := registry.Search(ctx, opts)
+			firstResult, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(firstResult).To(HaveLen(1))
 			Expect(requestCount.Load()).To(Equal(int32(1)))
 
 			// Second call should use cache
-			secondResult, err := registry.Search(ctx, opts)
+			secondResult, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(secondResult).To(HaveLen(1))
 			Expect(requestCount.Load()).To(Equal(int32(1))) // no additional request
@@ -154,9 +154,9 @@ var _ = Describe("Search", func() {
 
 		It("fetches fresh data when cache is stale", func() {
 			// Write a cache file with an old timestamp
-			staleCache := registry.CachedResults{
+			staleCache := library.CachedResults{
 				Timestamp: time.Now().Add(-2 * time.Hour),
-				Listings: []registry.Listing{
+				Listings: []library.Listing{
 					{Name: "old-strat", Owner: "old-owner"},
 				},
 			}
@@ -165,12 +165,12 @@ var _ = Describe("Search", func() {
 			err = os.WriteFile(filepath.Join(cacheDir, "discover.json"), cacheData, 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir: cacheDir,
 				BaseURL:  server.URL,
 			}
 
-			listings, err := registry.Search(ctx, opts)
+			listings, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requestCount.Load()).To(Equal(int32(1))) // server was hit
 			Expect(listings).To(HaveLen(1))
@@ -178,19 +178,19 @@ var _ = Describe("Search", func() {
 		})
 
 		It("ignores fresh cache when ForceRefresh is set", func() {
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir:     cacheDir,
 				BaseURL:      server.URL,
 				ForceRefresh: true,
 			}
 
 			// First call populates cache
-			_, err := registry.Search(ctx, opts)
+			_, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requestCount.Load()).To(Equal(int32(1)))
 
 			// Second call with ForceRefresh should hit server again
-			listings, err := registry.Search(ctx, opts)
+			listings, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requestCount.Load()).To(Equal(int32(2)))
 			Expect(listings).To(HaveLen(1))
@@ -200,9 +200,9 @@ var _ = Describe("Search", func() {
 	Context("network error handling", func() {
 		It("falls back to stale cache on network error", func() {
 			// Write a stale cache
-			staleCache := registry.CachedResults{
+			staleCache := library.CachedResults{
 				Timestamp: time.Now().Add(-2 * time.Hour),
-				Listings: []registry.Listing{
+				Listings: []library.Listing{
 					{Name: "cached-strat", Owner: "cached-owner", Description: "from cache"},
 				},
 			}
@@ -211,24 +211,24 @@ var _ = Describe("Search", func() {
 			err = os.WriteFile(filepath.Join(cacheDir, "discover.json"), cacheData, 0o644)
 			Expect(err).NotTo(HaveOccurred())
 
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir: cacheDir,
 				BaseURL:  "http://127.0.0.1:1", // unreachable
 			}
 
-			listings, err := registry.Search(ctx, opts)
+			listings, err := library.Search(ctx, opts)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(listings).To(HaveLen(1))
 			Expect(listings[0].Name).To(Equal("cached-strat"))
 		})
 
 		It("returns error on network error with no cache", func() {
-			opts := registry.SearchOptions{
+			opts := library.SearchOptions{
 				CacheDir: cacheDir,
 				BaseURL:  "http://127.0.0.1:1", // unreachable
 			}
 
-			_, err := registry.Search(ctx, opts)
+			_, err := library.Search(ctx, opts)
 			Expect(err).To(HaveOccurred())
 		})
 	})

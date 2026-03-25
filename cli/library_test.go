@@ -23,13 +23,12 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/penny-vault/pvbt/library"
-	"github.com/penny-vault/pvbt/registry"
 )
 
 var _ = Describe("libraryModel", func() {
 	var model libraryModel
 
-	sampleListings := []registry.Listing{
+	sampleListings := []library.Listing{
 		{Name: "momentum", Owner: "alice", Description: "A momentum strategy", Categories: []string{"trend"}, CloneURL: "https://github.com/alice/momentum.git", Stars: 10},
 		{Name: "value-pick", Owner: "bob", Description: "A value strategy", Categories: []string{"fundamental"}, CloneURL: "https://github.com/bob/value-pick.git", Stars: 5},
 		{Name: "mean-revert", Owner: "charlie", Description: "Mean reversion", Categories: []string{"trend"}, CloneURL: "https://github.com/charlie/mean-revert.git", Stars: 8},
@@ -84,9 +83,9 @@ var _ = Describe("libraryModel", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
 			model.items = []libraryItem{
-				{listing: registry.Listing{Name: "strat1", Description: "first"}},
-				{listing: registry.Listing{Name: "strat2", Description: "second"}},
-				{listing: registry.Listing{Name: "strat3", Description: "third"}},
+				{listing: library.Listing{Name: "strat1", Description: "first"}},
+				{listing: library.Listing{Name: "strat2", Description: "second"}},
+				{listing: library.Listing{Name: "strat3", Description: "third"}},
 			}
 		})
 
@@ -193,9 +192,9 @@ var _ = Describe("libraryModel", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
 			model.items = []libraryItem{
-				{listing: registry.Listing{Name: "momentum", Description: "A momentum strategy"}},
-				{listing: registry.Listing{Name: "value-pick", Description: "A value strategy"}},
-				{listing: registry.Listing{Name: "mean-revert", Description: "Mean reversion momentum"}},
+				{listing: library.Listing{Name: "momentum", Description: "A momentum strategy"}},
+				{listing: library.Listing{Name: "value-pick", Description: "A value strategy"}},
+				{listing: library.Listing{Name: "mean-revert", Description: "Mean reversion momentum"}},
 			}
 		})
 
@@ -257,8 +256,8 @@ var _ = Describe("libraryModel", func() {
 			model.width = 80
 			model.height = 24
 			model.items = []libraryItem{
-				{listing: registry.Listing{Name: "momentum", Owner: "alice", Description: "A momentum strategy"}},
-				{listing: registry.Listing{Name: "value-pick", Owner: "bob", Description: "A value strategy"}},
+				{listing: library.Listing{Name: "momentum", Owner: "alice", Description: "A momentum strategy"}},
+				{listing: library.Listing{Name: "value-pick", Owner: "bob", Description: "A value strategy"}},
 			}
 		})
 
@@ -364,8 +363,8 @@ var _ = Describe("libraryModel", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
 			model.items = []libraryItem{
-				{listing: registry.Listing{Name: "momentum", Owner: "alice"}, installed: true},
-				{listing: registry.Listing{Name: "value-pick", Owner: "bob"}, installed: false},
+				{listing: library.Listing{Name: "momentum", Owner: "alice"}, installed: true},
+				{listing: library.Listing{Name: "value-pick", Owner: "bob"}, installed: false},
 			}
 			model.shortCodes["momentum"] = "mom"
 		})
