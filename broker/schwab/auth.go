@@ -40,17 +40,17 @@ type tokenStore struct {
 }
 
 type tokenManager struct {
-	clientID       string
-	clientSecret   string
-	callbackURL    string
-	tokenFile      string
-	authBaseURL    string
-	tokens         *tokenStore
-	onRefresh      func(token string)
-	mu             sync.Mutex
-	stopRefresh    chan struct{}
-	refreshWg      sync.WaitGroup
-	listenerAddrCh chan string
+	clientID     string
+	clientSecret string
+	callbackURL  string
+	tokenFile    string
+	authBaseURL  string
+	tokens       *tokenStore
+	onRefresh    func(token string)
+	mu           sync.Mutex
+	stopRefresh  chan struct{}
+	refreshWg    sync.WaitGroup
+	testListener net.Listener // if non-nil, startAuthFlowServer uses this instead of creating one
 }
 
 func newTokenManager(clientID, clientSecret, callbackURL, tokenFile string) *tokenManager {
@@ -222,13 +222,6 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 		parsedURL = fallback
 	}
 
-	listenAddr := parsedURL.Host
-
-	tlsCert, certErr := generateSelfSignedCert()
-	if certErr != nil {
-		return "", fmt.Errorf("generate TLS cert: %w", certErr)
-	}
-
 	codeChan := make(chan string, 1)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", func(writer http.ResponseWriter, req *http.Request) {
@@ -245,11 +238,24 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 		codeChan <- decodedCode
 	})
 
-	listener, listenErr := tls.Listen("tcp", listenAddr, &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-	})
-	if listenErr != nil {
-		return "", fmt.Errorf("listen on %s: %w", listenAddr, listenErr)
+	listener := manager.testListener
+
+	if listener == nil {
+		listenAddr := parsedURL.Host
+
+		tlsCert, certErr := generateSelfSignedCert()
+		if certErr != nil {
+			return "", fmt.Errorf("generate TLS cert: %w", certErr)
+		}
+
+		created, listenErr := tls.Listen("tcp", listenAddr, &tls.Config{
+			Certificates: []tls.Certificate{tlsCert},
+		})
+		if listenErr != nil {
+			return "", fmt.Errorf("listen on %s: %w", listenAddr, listenErr)
+		}
+
+		listener = created
 	}
 
 	actualAddr := listener.Addr().String()
@@ -258,26 +264,12 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 
 	server := &http.Server{Handler: mux}
 
-	// Wrap the listener so we can signal when the server's accept loop is
-	// ready. Without this, the address can be published before Serve enters
-	// its accept loop, causing connection attempts to fail with EOF.
-	ready := make(chan struct{})
-	wrapped := &readyListener{Listener: listener, ready: ready}
-
 	go func() {
-		serveErr := server.Serve(wrapped)
+		serveErr := server.Serve(listener)
 		if serveErr != nil && serveErr != http.ErrServerClosed {
 			fmt.Printf("auth callback server error: %v\n", serveErr)
 		}
 	}()
-
-	// Wait for the server to enter its accept loop before publishing the
-	// address, so callers can connect immediately.
-	<-ready
-
-	if manager.listenerAddrCh != nil {
-		manager.listenerAddrCh <- actualAddr
-	}
 
 	fmt.Printf("\nOpen the following URL in your browser to authorize:\n\n  %s\n\nWaiting for callback...\n", manager.authorizationURL())
 
@@ -330,24 +322,6 @@ func (manager *tokenManager) accessToken() string {
 	defer manager.mu.Unlock()
 
 	return manager.tokens.AccessToken
-}
-
-// readyListener wraps a net.Listener and closes the ready channel on the
-// first Accept call, signaling that the server has entered its accept loop.
-type readyListener struct {
-	net.Listener
-	ready    chan struct{}
-	readOnce sync.Once
-}
-
-func (rl *readyListener) Accept() (net.Conn, error) {
-	rl.readOnce.Do(func() {
-		close(rl.ready)
-	})
-
-	conn, err := rl.Listener.Accept()
-
-	return conn, err
 }
 
 func generateSelfSignedCert() (tls.Certificate, error) {
