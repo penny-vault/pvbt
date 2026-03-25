@@ -24,6 +24,15 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+const (
+	// BollingerUpperSignal is the metric name for the upper Bollinger Band.
+	BollingerUpperSignal data.Metric = "BollingerUpper"
+	// BollingerMiddleSignal is the metric name for the middle Bollinger Band.
+	BollingerMiddleSignal data.Metric = "BollingerMiddle"
+	// BollingerLowerSignal is the metric name for the lower Bollinger Band.
+	BollingerLowerSignal data.Metric = "BollingerLower"
+)
+
 // BollingerBands computes the Bollinger Bands (upper, middle, lower) for each
 // asset in the universe over the given period. numStdDev controls how many
 // standard deviations wide the bands are. Returns a single-row DataFrame with

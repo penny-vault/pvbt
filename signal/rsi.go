@@ -25,6 +25,9 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+// RSISignal is the metric name for RSI signal output.
+const RSISignal data.Metric = "RSI"
+
 // RSI computes the Relative Strength Index for each asset in the universe
 // using Wilder's smoothing method. The period controls the lookback window;
 // rsiPeriod = period.N - 1 price changes are used. Returns a single-row

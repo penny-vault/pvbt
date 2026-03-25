@@ -24,6 +24,9 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+// MomentumSignal is the metric name for momentum signal output.
+const MomentumSignal data.Metric = "Momentum"
+
 // Momentum computes the percent change over the given period for each
 // asset in the universe. Returns a single-row DataFrame with one column
 // per asset containing the momentum score.

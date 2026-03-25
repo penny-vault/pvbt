@@ -24,6 +24,9 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+// EarningsYieldSignal is the metric name for earnings yield signal output.
+const EarningsYieldSignal data.Metric = "EarningsYield"
+
 // EarningsYield computes earnings per share divided by price for each
 // asset in the universe. Returns a single-row DataFrame with one column
 // per asset containing the earnings yield.

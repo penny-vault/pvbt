@@ -25,6 +25,9 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
+// VolatilitySignal is the metric name for volatility signal output.
+const VolatilitySignal data.Metric = "Volatility"
+
 // Volatility computes the rolling standard deviation of returns over
 // the given period for each asset in the universe. Returns a single-row
 // DataFrame with one column per asset containing the volatility score.
