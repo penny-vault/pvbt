@@ -1788,6 +1788,107 @@ var _ = Describe("Window", func() {
 	})
 })
 
+var _ = Describe("SyncTransactions", func() {
+	var (
+		spy asset.Asset
+	)
+
+	BeforeEach(func() {
+		spy = asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+	})
+
+	It("applies broker dividend transactions to the account", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+
+		// Establish a holding so the dividend has context.
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  spy,
+			Type:   asset.BuyTransaction,
+			Qty:    100,
+			Price:  400,
+			Amount: -40_000,
+		})
+
+		divDate := time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC)
+		err := acct.SyncTransactions([]broker.Transaction{
+			{
+				ID:     "div-001",
+				Date:   divDate,
+				Asset:  spy,
+				Type:   asset.DividendTransaction,
+				Qty:    100,
+				Price:  1.50,
+				Amount: 150.0,
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		txns := acct.Transactions()
+		// deposit + buy + dividend = 3
+		Expect(txns).To(HaveLen(3))
+
+		divTxn := txns[2]
+		Expect(divTxn.Type).To(Equal(asset.DividendTransaction))
+		Expect(divTxn.Amount).To(Equal(150.0))
+		Expect(divTxn.ID).To(Equal("div-001"))
+		Expect(acct.Cash()).To(BeNumerically("~", 10_150.0, 0.01))
+	})
+
+	It("deduplicates transactions by ID", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+
+		feeTxn := broker.Transaction{
+			ID:     "fee-001",
+			Date:   date,
+			Type:   asset.FeeTransaction,
+			Amount: -25.0,
+		}
+
+		err := acct.SyncTransactions([]broker.Transaction{feeTxn})
+		Expect(err).NotTo(HaveOccurred())
+
+		// Sync the same transaction again.
+		err = acct.SyncTransactions([]broker.Transaction{feeTxn})
+		Expect(err).NotTo(HaveOccurred())
+
+		txns := acct.Transactions()
+		// deposit + one fee = 2 (not 3)
+		Expect(txns).To(HaveLen(2))
+		Expect(acct.Cash()).To(BeNumerically("~", 49_975.0, 0.01))
+	})
+
+	It("applies broker split transactions to account holdings", func() {
+		date := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+		acct := portfolio.New(portfolio.WithCash(50_000, date))
+
+		// Establish a 100-share position.
+		acct.Record(portfolio.Transaction{
+			Date:   date,
+			Asset:  spy,
+			Type:   asset.BuyTransaction,
+			Qty:    100,
+			Price:  400,
+			Amount: -40_000,
+		})
+
+		splitDate := time.Date(2024, 7, 15, 0, 0, 0, 0, time.UTC)
+		err := acct.SyncTransactions([]broker.Transaction{
+			{
+				ID:    "split-001",
+				Date:  splitDate,
+				Asset: spy,
+				Type:  asset.SplitTransaction,
+				Price: 2.0, // 2-for-1 split factor
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(acct.Position(spy)).To(Equal(200.0))
+	})
+})
+
 var _ = Describe("ApplySplit", func() {
 	var (
 		acme asset.Asset

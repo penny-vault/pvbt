@@ -71,7 +71,8 @@ type Account struct {
 	initialMargin     float64
 	maintenanceMargin float64
 	borrowRate        float64
-	dfCache           map[dfCacheKey]*data.DataFrame
+	dfCache            map[dfCacheKey]*data.DataFrame
+	seenTransactions   map[string]struct{}
 }
 
 // New creates an Account with the given options.
@@ -87,7 +88,8 @@ func New(opts ...Option) *Account {
 		pendingGroups:   make(map[string]*broker.OrderGroup),
 		deferredExits:   make(map[string]OrderGroupSpec),
 		substitutions:   make(map[asset.Asset]Substitution),
-		excursions:      make(map[asset.Asset]ExcursionRecord),
+		excursions:       make(map[asset.Asset]ExcursionRecord),
+		seenTransactions: make(map[string]struct{}),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -764,6 +766,11 @@ func (a *Account) Record(txn Transaction) {
 	a.pruneWashSaleTracking(txn.Date)
 
 	a.transactions = append(a.transactions, txn)
+
+	if txn.ID != "" {
+		a.seenTransactions[txn.ID] = struct{}{}
+	}
+
 	a.cash += txn.Amount
 
 	switch txn.Type {
@@ -991,6 +998,41 @@ func (a *Account) Record(txn Transaction) {
 			delete(a.excursions, txn.Asset)
 		}
 	}
+}
+
+// SyncTransactions applies broker-reported transactions to the account,
+// skipping any that have already been recorded (by ID).
+func (a *Account) SyncTransactions(txns []broker.Transaction) error {
+	for _, bt := range txns {
+		if _, seen := a.seenTransactions[bt.ID]; seen {
+			continue
+		}
+
+		// Splits require special handling -- they adjust holdings and
+		// tax lots rather than just recording a cash event.
+		if bt.Type == asset.SplitTransaction {
+			if err := a.ApplySplit(bt.Asset, bt.Date, bt.Price); err != nil {
+				return fmt.Errorf("sync transactions: %w", err)
+			}
+
+			a.seenTransactions[bt.ID] = struct{}{}
+
+			continue
+		}
+
+		a.Record(Transaction{
+			ID:            bt.ID,
+			Date:          bt.Date,
+			Asset:         bt.Asset,
+			Type:          bt.Type,
+			Qty:           bt.Qty,
+			Price:         bt.Price,
+			Amount:        bt.Amount,
+			Justification: bt.Justification,
+		})
+	}
+
+	return nil
 }
 
 // WashSaleRecords returns all wash sale records detected during the
@@ -2281,6 +2323,11 @@ func (acct *Account) Clone() PortfolioManager {
 	tradeDetailsCopy := make([]TradeDetail, len(acct.tradeDetails))
 	copy(tradeDetailsCopy, acct.tradeDetails)
 
+	seenTxns := make(map[string]struct{}, len(acct.seenTransactions))
+	for id := range acct.seenTransactions {
+		seenTxns[id] = struct{}{}
+	}
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -2307,6 +2354,7 @@ func (acct *Account) Clone() PortfolioManager {
 		deferredExits:     deferredExits,
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
+		seenTransactions:  seenTxns,
 	}
 
 	if acct.perfData != nil {
