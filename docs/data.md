@@ -409,51 +409,7 @@ momentum := prices.RiskAdjustedPct(1).MulScalar(100)
 
 ## Signals
 
-Signals are reusable computations that derive new time series from market data -- prices, volume, fundamentals, economic indicators. They live in the `signal` package as plain functions. Each signal takes a universe and returns a new DataFrame with one column per asset containing the computed score.
-
-Signals operate on market data, not portfolio state. A signal like `signal.Momentum(ctx, u, portfolio.Months(12))` produces the same output regardless of what the portfolio holds or how it has traded. This is the key distinction from portfolio metrics (see [Portfolio - Performance measurement](portfolio.md#performance-measurement)), which operate on the returns and transactions of a specific portfolio and change based on the portfolio's particular trading history.
-
-```go
-mom3 := signal.Momentum(ctx, riskOn, portfolio.Months(3))
-mom6 := signal.Momentum(ctx, riskOn, portfolio.Months(6))
-mom12 := signal.Momentum(ctx, riskOn, portfolio.Months(12))
-
-composite := mom3.Add(mom6).Add(mom12).DivScalar(3)
-if err := composite.Err(); err != nil {
-    // handle error
-}
-```
-
-Signals name a concept. `signal.EarningsYield(ctx, u)` is clearer than `df.Metrics(data.EPS).Div(df.Metrics(data.Price))`, even though they compute the same thing. Because signals return DataFrames, they compose through DataFrame arithmetic.
-
-The input DataFrame must contain the metrics the signal needs. `Momentum` needs price data. `EarningsYield` needs EPS and price. If a required metric is missing, the signal returns a DataFrame with `.Err()` set.
-
-### Built-in signals
-
-| Signal | Description |
-|--------|-------------|
-| `Momentum(ctx, u, period, metrics...)` | Percent change over a lookback period |
-| `EarningsYield(ctx, u, t...)` | Earnings per share divided by price |
-| `Volatility(ctx, u, period, metrics...)` | Rolling standard deviation of returns |
-| `RSI(ctx, u, period, metrics...)` | Relative Strength Index (Wilder smoothing, 0--100) |
-| `MACD(ctx, u, fast, slow, signal, metrics...)` | MACD line, signal line, and histogram |
-| `BollingerBands(ctx, u, period, stddev, metrics...)` | Upper, middle, and lower bands |
-| `Crossover(ctx, u, fast, slow, metrics...)` | Fast/slow SMA crossover indicator (+1/--1) |
-| `ATR(ctx, u, period)` | Average True Range (Wilder smoothing) |
-
-### Custom signals
-
-A signal is any function that takes a universe and returns a DataFrame:
-
-```go
-func BookToPrice(ctx context.Context, u universe.Universe) *data.DataFrame {
-    df, err := u.At(ctx, u.CurrentDate(), data.BookValue, data.Price)
-    if err != nil {
-        return data.WithErr(err)
-    }
-    // ... manual computation like EarningsYield ...
-}
-```
+See the [Signal Reference](signals.md) for a complete guide to built-in and custom signals.
 
 ## Frequency and aggregation
 
