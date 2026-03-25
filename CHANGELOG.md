@@ -23,8 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The `pvbt library` TUI shows strategy descriptions and GitHub README content rendered with styled markdown, and supports searching strategies by name or description.
 - Strategies can be uninstalled from the library TUI with inline confirmation.
 
+- Backtests automatically liquidate positions in delisted assets at the last known price instead of silently holding them with stale data.
+
 ### Changed
 
+- **Breaking:** Transaction type constants (`BuyTransaction`, `SellTransaction`, etc.) moved from the `portfolio` package to `asset`.
 - The `pvbt discover`, `pvbt list`, and `pvbt remove` commands are replaced by `pvbt library`, with `list` and `remove` as subcommands.
 - `broker.IsTransient` is renamed to `broker.IsRetryableError` and a new `broker.ErrRateLimited` sentinel error is available for all brokers
 
