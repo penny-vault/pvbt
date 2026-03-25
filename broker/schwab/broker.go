@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"time"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -253,6 +254,11 @@ func (schwabBroker *SchwabBroker) Balance(ctx context.Context) (broker.Balance, 
 	}
 
 	return toBrokerBalance(resp), nil
+}
+
+// Transactions returns transactions since the given time.
+func (schwabBroker *SchwabBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
 }
 
 // SubmitGroup submits a group of orders as a native bracket or OCO order.

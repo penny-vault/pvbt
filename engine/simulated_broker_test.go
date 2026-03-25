@@ -826,6 +826,9 @@ func (mock *mockLifecycleBroker) Positions(_ context.Context) ([]broker.Position
 func (mock *mockLifecycleBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
+func (mock *mockLifecycleBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}
 
 // stubBaseModel is a fill.BaseModel that always returns a fixed price.
 type stubBaseModel struct {

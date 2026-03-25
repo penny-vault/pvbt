@@ -70,6 +70,9 @@ func (m *mockBroker) Positions(_ context.Context) ([]broker.Position, error) { r
 func (m *mockBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
+func (m *mockBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}
 
 func (m *mockBroker) Fills() <-chan broker.Fill {
 	return m.fillCh

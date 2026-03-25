@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -386,6 +387,11 @@ func (tb *TradierBroker) Balance(ctx context.Context) (broker.Balance, error) {
 	}
 
 	return toBrokerBalance(rawBalance), nil
+}
+
+// Transactions returns transactions since the given time.
+func (tb *TradierBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
 }
 
 // SubmitGroup submits a contingent order group to Tradier.

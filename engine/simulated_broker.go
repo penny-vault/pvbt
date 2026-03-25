@@ -487,3 +487,7 @@ func (b *SimulatedBroker) Positions(_ context.Context) ([]broker.Position, error
 func (b *SimulatedBroker) Balance(_ context.Context) (broker.Balance, error) {
 	return broker.Balance{}, nil
 }
+
+func (b *SimulatedBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}

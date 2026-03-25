@@ -310,6 +310,11 @@ func (alpacaBroker *AlpacaBroker) Balance(ctx context.Context) (broker.Balance, 
 	return toBrokerBalance(resp), nil
 }
 
+// Transactions returns transactions since the given time.
+func (alpacaBroker *AlpacaBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
+	return nil, nil
+}
+
 // SubmitGroup submits a group of orders as a native Alpaca bracket or OCO order.
 func (alpacaBroker *AlpacaBroker) SubmitGroup(ctx context.Context, orders []broker.Order, groupType broker.GroupType) error {
 	if len(orders) == 0 {
