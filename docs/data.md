@@ -214,7 +214,7 @@ df.Source()                         // the DataSource that created this DataFram
 ### Narrowing and filtering
 
 ```go
-df.Assets(aapl, goog)               // only these assets
+df.Assets(aapl, goog)               // only these assets (duplicates are removed)
 df.Metrics(data.Price)              // only this metric
 df.Between(start, end)              // only this time range
 df.Drop(math.NaN())                 // remove timestamps with NaN values

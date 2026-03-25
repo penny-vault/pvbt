@@ -526,6 +526,7 @@ func (df *DataFrame) Table() string {
 // -- Narrowing and filtering -------------------------------------------------
 
 // Assets returns a new DataFrame containing only the specified assets.
+// Duplicate assets are silently deduplicated; each asset appears at most once.
 func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 	if df.err != nil {
 		return WithErr(df.err)
@@ -538,10 +539,17 @@ func (df *DataFrame) Assets(assets ...asset.Asset) *DataFrame {
 		matchedIdx []int
 	)
 
-	for _, a := range assets {
-		if idx, ok := df.assetIndex[a.CompositeFigi]; ok {
+	seen := make(map[string]bool, len(assets))
+
+	for _, aa := range assets {
+		if seen[aa.CompositeFigi] {
+			continue
+		}
+
+		if idx, ok := df.assetIndex[aa.CompositeFigi]; ok {
 			matched = append(matched, df.assets[idx])
 			matchedIdx = append(matchedIdx, idx)
+			seen[aa.CompositeFigi] = true
 		}
 	}
 

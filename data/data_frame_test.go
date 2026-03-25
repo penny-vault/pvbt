@@ -362,10 +362,10 @@ var _ = Describe("DataFrame", func() {
 			Expect(narrowed.Value(goog, data.Volume)).To(Equal(2800.0))
 		})
 
-		It("Assets with duplicate arguments includes duplicates", func() {
-			// The implementation does not deduplicate, so AAPL appears twice.
+		It("Assets with duplicate arguments deduplicates", func() {
 			narrowed := df.Assets(aapl, aapl)
-			Expect(narrowed.ColCount()).To(Equal(4)) // 2 copies of AAPL * 2 metrics
+			Expect(narrowed.ColCount()).To(Equal(2)) // 1 copy of AAPL * 2 metrics
+			Expect(narrowed.Value(aapl, data.Price)).To(Equal(104.0))
 		})
 
 		It("Between returns inclusive time range", func() {
