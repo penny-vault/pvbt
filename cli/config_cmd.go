@@ -6,7 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/penny-vault/pvbt/config"
+	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/engine/middleware/risk"
 	"github.com/spf13/cobra"
 )
 
@@ -26,14 +27,14 @@ func newConfigCmd() *cobra.Command {
 }
 
 func runConfig(cmd *cobra.Command) error {
-	configPath, err := cmd.Flags().GetString("config")
+	cfgPath, err := cmd.Flags().GetString("config")
 	if err != nil {
 		return fmt.Errorf("config: get --config flag: %w", err)
 	}
 
-	filePath := config.ConfigFilePath(configPath)
+	filePath := configFilePath(cfgPath)
 
-	cfg, err := config.LoadFromCommand(cmd)
+	cfg, err := loadMiddlewareConfigFromCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("config: %w", err)
 	}
@@ -54,7 +55,7 @@ func runConfig(cmd *cobra.Command) error {
 	return nil
 }
 
-func printRiskSection(out *os.File, cfg *config.Config) {
+func printRiskSection(out *os.File, cfg *engine.MiddlewareConfig) {
 	rc := cfg.Risk
 
 	// Determine if anything risk-related is configured.
@@ -76,8 +77,8 @@ func printRiskSection(out *os.File, cfg *config.Config) {
 		fmt.Fprintf(out, "  profile: %s\n", rc.Profile)
 	}
 
-	resolved := cfg.ResolveProfile()
-	baseline := config.ProfileBaseline(rc.Profile)
+	resolved := cfg.Risk.Resolve()
+	baseline := risk.ProfileBaseline(rc.Profile)
 
 	printFloat64Field(out, "max_position_size", resolved.MaxPositionSize, baseline.MaxPositionSize, rc.MaxPositionSize, hasProfile)
 	printIntField(out, "max_position_count", resolved.MaxPositionCount, baseline.MaxPositionCount, rc.MaxPositionCount, hasProfile)
@@ -151,7 +152,7 @@ func annotationInt(baselineVal, overrideVal *int) string {
 	return "profile default"
 }
 
-func printTaxSection(out *os.File, cfg *config.Config) {
+func printTaxSection(out *os.File, cfg *engine.MiddlewareConfig) {
 	tc := cfg.Tax
 
 	if !tc.Enabled && tc.LossThreshold == 0 && !tc.GainOffsetOnly && len(tc.Substitutes) == 0 {

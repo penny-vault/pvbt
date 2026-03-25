@@ -24,7 +24,6 @@ import (
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
-	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
@@ -60,7 +59,7 @@ type Engine struct {
 	benchmarkTicker  string
 	fillBaseModel    broker.BaseModel
 	fillAdjusters    []broker.Adjuster
-	middlewareConfig *config.Config
+	middlewareConfig *MiddlewareConfig
 
 	account portfolio.PortfolioManager
 

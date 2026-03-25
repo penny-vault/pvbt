@@ -23,9 +23,10 @@ import (
 	. "github.com/onsi/gomega"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/engine/middleware/risk"
+	"github.com/penny-vault/pvbt/engine/middleware/tax"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -110,12 +111,74 @@ func (s *middlewareConfigStrategy) Compute(ctx context.Context, eng *engine.Engi
 	})
 }
 
+var _ = Describe("HasMiddleware", func() {
+	It("returns false for a zero-value config", func() {
+		cfg := engine.MiddlewareConfig{}
+		Expect(cfg.HasMiddleware()).To(BeFalse())
+	})
+
+	DescribeTable("returns true when a RiskConfig pointer field is set",
+		func(makeCfg func() engine.MiddlewareConfig) {
+			cfg := makeCfg()
+			Expect(cfg.HasMiddleware()).To(BeTrue())
+		},
+		Entry("MaxPositionSize", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{MaxPositionSize: ptrFloat64Config(0.25)}}
+		}),
+		Entry("MaxPositionCount", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{MaxPositionCount: ptrIntConfig(5)}}
+		}),
+		Entry("DrawdownCircuitBreaker", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{DrawdownCircuitBreaker: ptrFloat64Config(0.15)}}
+		}),
+		Entry("VolatilityScalerLookback", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{VolatilityScalerLookback: ptrIntConfig(60)}}
+		}),
+		Entry("GrossExposureLimit", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{GrossExposureLimit: ptrFloat64Config(1.0)}}
+		}),
+		Entry("NetExposureLimit", func() engine.MiddlewareConfig {
+			return engine.MiddlewareConfig{Risk: risk.RiskConfig{NetExposureLimit: ptrFloat64Config(0.5)}}
+		}),
+	)
+
+	DescribeTable("returns true for named risk profiles",
+		func(profile string) {
+			cfg := engine.MiddlewareConfig{Risk: risk.RiskConfig{Profile: profile}}
+			Expect(cfg.HasMiddleware()).To(BeTrue())
+		},
+		Entry("conservative", "conservative"),
+		Entry("moderate", "moderate"),
+		Entry("aggressive", "aggressive"),
+	)
+
+	It("returns false when profile is none with no overrides", func() {
+		cfg := engine.MiddlewareConfig{Risk: risk.RiskConfig{Profile: "none"}}
+		Expect(cfg.HasMiddleware()).To(BeFalse())
+	})
+
+	It("returns true when tax is enabled", func() {
+		cfg := engine.MiddlewareConfig{Tax: tax.TaxConfig{Enabled: true}}
+		Expect(cfg.HasMiddleware()).To(BeTrue())
+	})
+
+	It("returns true when profile is none but an override is set", func() {
+		cfg := engine.MiddlewareConfig{
+			Risk: risk.RiskConfig{
+				Profile:         "none",
+				MaxPositionSize: ptrFloat64Config(0.30),
+			},
+		}
+		Expect(cfg.HasMiddleware()).To(BeTrue())
+	})
+})
+
 var _ = Describe("WithMiddlewareConfig", func() {
 	Context("option storage", func() {
 		It("stores the config on the engine", func() {
 			limit := 0.25
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					MaxPositionSize: &limit,
 				},
 			}
@@ -163,8 +226,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		})
 
 		It("registers MaxPositionSize middleware when configured", func() {
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					MaxPositionSize: ptrFloat64Config(0.25),
 				},
 			}
@@ -209,8 +272,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 			twoDF := makeDailyTestData(dataStart, 400, twoAssets, allMetrics)
 			twoProvider := data.NewTestProvider(allMetrics, twoDF)
 
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					MaxPositionCount: ptrIntConfig(1),
 				},
 			}
@@ -247,8 +310,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		})
 
 		It("registers conservative profile middleware", func() {
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					Profile: "conservative",
 				},
 			}
@@ -292,8 +355,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 			ddDF := makeDrawdownTestData(ddStart, 400, allAssets, allMetrics, 200.0, 0.30)
 			ddProvider := data.NewTestProvider(allMetrics, ddDF)
 
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					DrawdownCircuitBreaker: ptrFloat64Config(0.15),
 				},
 			}
@@ -335,8 +398,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		It("registers GrossExposureLimit middleware when configured", func() {
 			// Set a tight gross exposure limit (0.50) so that a 100% long
 			// position attempt triggers the limit and produces annotations.
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					GrossExposureLimit: ptrFloat64Config(0.50),
 				},
 			}
@@ -374,8 +437,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		It("registers NetExposureLimit middleware when configured", func() {
 			// Set a tight net exposure limit (0.50) so that a 100% long
 			// position attempt triggers the limit and produces annotations.
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					NetExposureLimit: ptrFloat64Config(0.50),
 				},
 			}
@@ -411,20 +474,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		})
 
 		It("applies middleware in the correct order", func() {
-			// Verify spec ordering: MaxPositionSize (step 2) must annotate
-			// before NetExposureLimit (step 5) within the same backtest run.
-			//
-			// Strategy targets 100% SPY.
-			// MaxPositionSize(0.10) caps the buy order to 10% of portfolio.
-			// NetExposureLimit(0.05) then sees the capped 10% order, which
-			// would push net exposure from 0% to 10% -- exceeding the 5%
-			// limit -- so it drops the order and annotates.
-			//
-			// Both middleware annotate on every rebalance.  The first
-			// MaxPositionSize annotation must appear before the first
-			// NetExposureLimit annotation.
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					MaxPositionSize:  ptrFloat64Config(0.10),
 					NetExposureLimit: ptrFloat64Config(0.05),
 				},
@@ -468,20 +519,12 @@ var _ = Describe("WithMiddlewareConfig", func() {
 			Expect(hasNetExposure).To(BeTrue(),
 				"expected at least one risk:net-exposure-limit annotation")
 
-			// The logical outcome is verified by the annotations: both
-			// middleware fired, meaning MaxPositionSize capped the order
-			// first, then NetExposureLimit saw it exceeded the 5% limit.
-			// Annotation recording order within a batch is non-deterministic
-			// (map iteration), so we verify presence, not index order.
 			_ = fund // used above for nil check
 		})
 
 		It("registers TaxLossHarvester middleware when tax is enabled", func() {
-			// Enable tax with a 5% loss threshold. There are no positions with
-			// unrealized losses in this synthetic backtest, so the harvester
-			// will not produce annotations -- but it must not cause errors.
-			cfg := config.Config{
-				Tax: config.TaxConfig{
+			cfg := engine.MiddlewareConfig{
+				Tax: tax.TaxConfig{
 					Enabled:        true,
 					LossThreshold:  0.05,
 					GainOffsetOnly: false,
@@ -509,10 +552,8 @@ var _ = Describe("WithMiddlewareConfig", func() {
 		})
 
 		It("clears existing middleware before applying config-driven stack", func() {
-			// Pre-install a DrawdownCircuitBreaker on the account; then
-			// buildMiddlewareFromConfig with only MaxPositionSize should remove it.
-			cfg := config.Config{
-				Risk: config.RiskConfig{
+			cfg := engine.MiddlewareConfig{
+				Risk: risk.RiskConfig{
 					MaxPositionSize: ptrFloat64Config(0.50),
 				},
 			}
@@ -549,7 +590,6 @@ var _ = Describe("WithMiddlewareConfig", func() {
 				}
 			}
 			// There should be some annotations but not double the expected number.
-			// The exact count depends on how many rebalances fired; just check > 0.
 			Expect(count).To(BeNumerically(">", 0))
 		})
 	})

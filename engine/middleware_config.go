@@ -16,6 +16,7 @@
 package engine
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -24,11 +25,57 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
+// MiddlewareConfig holds the complete middleware configuration for a run.
+type MiddlewareConfig struct {
+	Risk risk.RiskConfig
+	Tax  tax.TaxConfig
+}
+
+// ValidateAndApplyDefaults checks that all configuration values are within
+// acceptable bounds and fills in defaults where needed.
+func (cfg *MiddlewareConfig) ValidateAndApplyDefaults() error {
+	if err := cfg.Risk.Validate(); err != nil {
+		return fmt.Errorf("risk config: %w", err)
+	}
+
+	if err := cfg.Tax.ApplyDefaults(); err != nil {
+		return fmt.Errorf("tax config: %w", err)
+	}
+
+	return nil
+}
+
+// HasMiddleware reports whether the configuration results in any middleware
+// being applied. It returns false only when profile is "none" (or empty) and
+// no individual risk overrides are set and tax is disabled.
+func (cfg *MiddlewareConfig) HasMiddleware() bool {
+	if cfg.Tax.Enabled {
+		return true
+	}
+
+	rc := cfg.Risk
+
+	if rc.Profile != "" && rc.Profile != "none" {
+		return true
+	}
+	// profile is "" or "none" -- check for explicit overrides
+	if rc.MaxPositionSize != nil ||
+		rc.MaxPositionCount != nil ||
+		rc.DrawdownCircuitBreaker != nil ||
+		rc.VolatilityScalerLookback != nil ||
+		rc.GrossExposureLimit != nil ||
+		rc.NetExposureLimit != nil {
+		return true
+	}
+
+	return false
+}
+
 // buildMiddlewareFromConfig constructs risk and tax middleware from the
 // engine's middleware config and registers them on the account.
 func (e *Engine) buildMiddlewareFromConfig() error {
 	cfg := e.middlewareConfig
-	resolved := cfg.ResolveProfile()
+	resolved := cfg.Risk.Resolve()
 
 	var middlewares []portfolio.Middleware
 

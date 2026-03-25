@@ -13,17 +13,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package config holds the configuration types and validation logic for
-// risk and tax middleware that can be specified via CLI flags or config file.
-package config
+package risk
 
 import "fmt"
-
-// Config holds the complete middleware configuration for a run.
-type Config struct {
-	Risk RiskConfig
-	Tax  TaxConfig
-}
 
 // RiskConfig holds risk middleware configuration parameters.
 type RiskConfig struct {
@@ -36,18 +28,6 @@ type RiskConfig struct {
 	NetExposureLimit         *float64 `mapstructure:"net_exposure_limit"`
 }
 
-// TaxConfig holds tax-loss harvesting middleware configuration.
-type TaxConfig struct {
-	Enabled        bool              `mapstructure:"enabled"`
-	LossThreshold  float64           `mapstructure:"loss_threshold"`
-	GainOffsetOnly bool              `mapstructure:"gain_offset_only"`
-	Substitutes    map[string]string `mapstructure:"substitutes"`
-}
-
-// DefaultLossThreshold is applied when tax harvesting is enabled and no
-// explicit threshold is set.
-const DefaultLossThreshold = 0.05
-
 // validProfiles is the set of recognized risk profile names.
 var validProfiles = map[string]bool{
 	"":             true,
@@ -57,21 +37,8 @@ var validProfiles = map[string]bool{
 	"none":         true,
 }
 
-// ValidateAndApplyDefaults checks that all configuration values are within
-// acceptable bounds and fills in defaults where needed.
-func (cfg *Config) ValidateAndApplyDefaults() error {
-	if err := cfg.Risk.validate(); err != nil {
-		return fmt.Errorf("risk config: %w", err)
-	}
-
-	if err := cfg.Tax.applyDefaults(); err != nil {
-		return fmt.Errorf("tax config: %w", err)
-	}
-
-	return nil
-}
-
-func (rc *RiskConfig) validate() error {
+// Validate checks that all configuration values are within acceptable bounds.
+func (rc *RiskConfig) Validate() error {
 	if !validProfiles[rc.Profile] {
 		return fmt.Errorf("unknown profile %q: must be one of conservative, moderate, aggressive, none, or empty", rc.Profile)
 	}
@@ -103,36 +70,70 @@ func (rc *RiskConfig) validate() error {
 	return nil
 }
 
-func (tc *TaxConfig) applyDefaults() error {
-	if tc.Enabled && tc.LossThreshold == 0 {
-		tc.LossThreshold = DefaultLossThreshold
-	}
+// ptrFloat64 returns a pointer to the given float64 value.
+func ptrFloat64(val float64) *float64 { return &val }
 
-	return nil
+// ptrInt returns a pointer to the given int value.
+func ptrInt(val int) *int { return &val }
+
+// ProfileBaseline returns the canonical RiskConfig baseline for a named
+// profile. The values here must stay in sync with the risk profile functions
+// (Conservative, Moderate, Aggressive). An empty name or "none" returns a
+// zero RiskConfig.
+func ProfileBaseline(name string) RiskConfig {
+	switch name {
+	case "conservative":
+		return RiskConfig{
+			Profile:                  "conservative",
+			MaxPositionSize:          ptrFloat64(0.20),
+			DrawdownCircuitBreaker:   ptrFloat64(0.10),
+			VolatilityScalerLookback: ptrInt(60),
+		}
+	case "moderate":
+		return RiskConfig{
+			Profile:                "moderate",
+			MaxPositionSize:        ptrFloat64(0.25),
+			DrawdownCircuitBreaker: ptrFloat64(0.15),
+		}
+	case "aggressive":
+		return RiskConfig{
+			Profile:                "aggressive",
+			MaxPositionSize:        ptrFloat64(0.35),
+			DrawdownCircuitBreaker: ptrFloat64(0.25),
+		}
+	default:
+		return RiskConfig{Profile: name}
+	}
 }
 
-// HasMiddleware reports whether the configuration results in any middleware
-// being applied. It returns false only when profile is "none" (or empty) and
-// no individual risk overrides are set and tax is disabled.
-func (cfg *Config) HasMiddleware() bool {
-	if cfg.Tax.Enabled {
-		return true
+// Resolve merges the profile baseline with any explicit overrides from rc.
+// Non-nil override fields take precedence over the baseline.
+func (rc *RiskConfig) Resolve() RiskConfig {
+	baseline := ProfileBaseline(rc.Profile)
+
+	if rc.MaxPositionSize != nil {
+		baseline.MaxPositionSize = rc.MaxPositionSize
 	}
 
-	rc := cfg.Risk
-
-	if rc.Profile != "" && rc.Profile != "none" {
-		return true
-	}
-	// profile is "" or "none" — check for explicit overrides
-	if rc.MaxPositionSize != nil ||
-		rc.MaxPositionCount != nil ||
-		rc.DrawdownCircuitBreaker != nil ||
-		rc.VolatilityScalerLookback != nil ||
-		rc.GrossExposureLimit != nil ||
-		rc.NetExposureLimit != nil {
-		return true
+	if rc.MaxPositionCount != nil {
+		baseline.MaxPositionCount = rc.MaxPositionCount
 	}
 
-	return false
+	if rc.DrawdownCircuitBreaker != nil {
+		baseline.DrawdownCircuitBreaker = rc.DrawdownCircuitBreaker
+	}
+
+	if rc.VolatilityScalerLookback != nil {
+		baseline.VolatilityScalerLookback = rc.VolatilityScalerLookback
+	}
+
+	if rc.GrossExposureLimit != nil {
+		baseline.GrossExposureLimit = rc.GrossExposureLimit
+	}
+
+	if rc.NetExposureLimit != nil {
+		baseline.NetExposureLimit = rc.NetExposureLimit
+	}
+
+	return baseline
 }

@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -156,7 +155,7 @@ func BuildMiddlewareFromConfigForTest(eng *Engine) error {
 }
 
 // EngineMiddlewareConfigForTest returns the engine's middlewareConfig for testing.
-func EngineMiddlewareConfigForTest(eng *Engine) *config.Config {
+func EngineMiddlewareConfigForTest(eng *Engine) *MiddlewareConfig {
 	return eng.middlewareConfig
 }
 

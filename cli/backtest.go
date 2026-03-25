@@ -10,7 +10,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
-	"github.com/penny-vault/pvbt/config"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -120,7 +119,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	applyStrategyFlags(cmd, strategy)
 
-	cfg, err := config.LoadFromCommand(cmd)
+	cfg, err := loadMiddlewareConfigFromCommand(cmd)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}

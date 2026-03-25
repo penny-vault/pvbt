@@ -13,7 +13,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package config
+package cli
 
 import (
 	"errors"
@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/penny-vault/pvbt/engine"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -39,11 +40,11 @@ func candidatePaths() []string {
 	}
 }
 
-// Load reads a TOML config file from configPath and returns a validated Config.
-// If configPath is empty, Load searches ./pvbt.toml then
-// ~/.config/pvbt/config.toml. If no file is found, a zero-value Config is
-// returned without error. All errors are wrapped with context.
-func Load(configPath string) (*Config, error) {
+// loadMiddlewareConfig reads a TOML config file from configPath and returns a
+// validated MiddlewareConfig. If configPath is empty, it searches ./pvbt.toml
+// then ~/.config/pvbt/config.toml. If no file is found, a zero-value
+// MiddlewareConfig is returned without error.
+func loadMiddlewareConfig(configPath string) (*engine.MiddlewareConfig, error) {
 	vp := viper.New()
 	vp.SetConfigType("toml")
 
@@ -60,7 +61,7 @@ func Load(configPath string) (*Config, error) {
 		}
 
 		if found == "" {
-			return &Config{}, nil
+			return &engine.MiddlewareConfig{}, nil
 		}
 
 		vp.SetConfigFile(found)
@@ -70,7 +71,7 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("load config: read file: %w", err)
 	}
 
-	cfg := &Config{}
+	cfg := &engine.MiddlewareConfig{}
 	if err := vp.Unmarshal(cfg); err != nil {
 		return nil, fmt.Errorf("load config: unmarshal: %w", err)
 	}
@@ -82,16 +83,16 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
-// LoadFromCommand loads config from the --config flag on cmd, then applies any
-// --risk-profile and --tax flag overrides that were explicitly set by the user.
-// Re-validation is performed after overrides are applied.
-func LoadFromCommand(cmd *cobra.Command) (*Config, error) {
+// loadMiddlewareConfigFromCommand loads config from the --config flag on cmd,
+// then applies any --risk-profile and --tax flag overrides that were explicitly
+// set by the user. Re-validation is performed after overrides are applied.
+func loadMiddlewareConfigFromCommand(cmd *cobra.Command) (*engine.MiddlewareConfig, error) {
 	configPath, err := cmd.Flags().GetString("config")
 	if err != nil {
 		return nil, fmt.Errorf("load config from command: get --config flag: %w", err)
 	}
 
-	cfg, err := Load(configPath)
+	cfg, err := loadMiddlewareConfig(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -121,11 +122,11 @@ func LoadFromCommand(cmd *cobra.Command) (*Config, error) {
 	return cfg, nil
 }
 
-// ConfigFilePath returns the path of the config file that would be loaded for
-// the given configPath argument. If configPath is non-empty it is returned as-is
-// when the file exists. If configPath is empty the same search order as Load is
-// used. An empty string is returned when no file is found.
-func ConfigFilePath(configPath string) string {
+// configFilePath returns the path of the config file that would be loaded for
+// the given configPath argument. If configPath is non-empty it is returned
+// as-is when the file exists. If configPath is empty the same search order as
+// loadMiddlewareConfig is used. An empty string is returned when no file is found.
+func configFilePath(configPath string) string {
 	if configPath != "" {
 		if _, err := os.Stat(configPath); errors.Is(err, os.ErrNotExist) {
 			return ""
