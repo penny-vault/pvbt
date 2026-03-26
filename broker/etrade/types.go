@@ -14,22 +14,6 @@ import (
 
 // --- E*TRADE API response types ---
 
-type etradeAccountListResponse struct {
-	AccountListResponse struct {
-		Accounts struct {
-			Account []etradeAccount `json:"Account"`
-		} `json:"Accounts"`
-	} `json:"AccountListResponse"`
-}
-
-type etradeAccount struct {
-	AccountID     string `json:"accountId"`
-	AccountIDKey  string `json:"accountIdKey"`
-	AccountMode   string `json:"accountMode"`
-	AccountType   string `json:"accountType"`
-	AccountStatus string `json:"accountStatus"`
-}
-
 type etradeBalanceResponse struct {
 	BalanceResponse struct {
 		Cash        float64               `json:"totalAccountValue"`

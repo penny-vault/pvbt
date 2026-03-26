@@ -91,9 +91,11 @@ func (op *orderPoller) poll(ctx context.Context) error {
 
 		op.mu.Lock()
 		alreadySeen := op.seenFills[fillKey]
+
 		if !alreadySeen {
 			op.seenFills[fillKey] = true
 		}
+
 		op.mu.Unlock()
 
 		if alreadySeen {

@@ -205,6 +205,16 @@ func SetClientForTest(eb *EtradeBroker, client *apiClient) {
 	eb.client = client
 }
 
+// IsSandbox returns whether the broker is configured for the sandbox environment.
+func IsSandbox(eb *EtradeBroker) bool {
+	return eb.sandbox
+}
+
+// DetectAction exposes detectAction for testing.
+func DetectAction(side broker.Side, ticker string, positions []etradePosition) string {
+	return detectAction(side, ticker, positions)
+}
+
 // Streamer test exports
 
 // NewOrderPollerForTest exposes newOrderPoller for testing.

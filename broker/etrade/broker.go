@@ -2,10 +2,10 @@ package etrade
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/penny-vault/pvbt/broker"
@@ -18,28 +18,43 @@ const (
 
 // EtradeBroker implements broker.Broker for the E*TRADE brokerage.
 type EtradeBroker struct {
-	auth       *tokenManager
-	client     *apiClient
-	accountID  string
-	apiBaseURL string
-	fills      chan broker.Fill
+	client      *apiClient
+	auth        *tokenManager
+	poller      *orderPoller
+	fills       chan broker.Fill
+	mu          sync.Mutex
+	sandbox     bool
+	tokenFile   string
+	callbackURL string
 }
 
 // Option configures an EtradeBroker.
 type Option func(*EtradeBroker)
 
-// New creates a new EtradeBroker with the given options.
-// It reads ETRADE_CONSUMER_KEY and ETRADE_CONSUMER_SECRET from the environment.
-func New(opts ...Option) *EtradeBroker {
-	consumerKey := os.Getenv("ETRADE_CONSUMER_KEY")
-	consumerSecret := os.Getenv("ETRADE_CONSUMER_SECRET")
-
-	eb := &EtradeBroker{
-		auth:       newTokenManager(consumerKey, consumerSecret, "", ""),
-		apiBaseURL: defaultAPIBaseURL,
-		fills:      make(chan broker.Fill, 64),
+// WithSandbox configures the broker to target the E*TRADE sandbox environment.
+func WithSandbox() Option {
+	return func(eb *EtradeBroker) {
+		eb.sandbox = true
 	}
+}
 
+// WithTokenFile configures the path to the token persistence file.
+func WithTokenFile(path string) Option {
+	return func(eb *EtradeBroker) {
+		eb.tokenFile = path
+	}
+}
+
+// WithCallbackURL configures the OAuth callback URL.
+func WithCallbackURL(callbackURL string) Option {
+	return func(eb *EtradeBroker) {
+		eb.callbackURL = callbackURL
+	}
+}
+
+// New creates a new EtradeBroker with the given options.
+func New(opts ...Option) *EtradeBroker {
+	eb := &EtradeBroker{fills: make(chan broker.Fill, 1024)}
 	for _, opt := range opts {
 		opt(eb)
 	}
@@ -47,143 +62,180 @@ func New(opts ...Option) *EtradeBroker {
 	return eb
 }
 
-// WithSandbox configures the broker to target the E*TRADE sandbox environment.
-func WithSandbox() Option {
-	return func(eb *EtradeBroker) {
-		eb.apiBaseURL = sandboxAPIBaseURL
-	}
+// Fills returns the channel on which fill reports are delivered.
+func (eb *EtradeBroker) Fills() <-chan broker.Fill {
+	return eb.fills
 }
 
-// WithAccountID sets the E*TRADE account ID to use.
-func WithAccountID(id string) Option {
-	return func(eb *EtradeBroker) {
-		eb.accountID = id
-	}
-}
-
-// Connect establishes a session with E*TRADE. If no access token is stored on
-// disk, it starts the interactive OAuth 1.0a authorization flow.
+// Connect establishes an authenticated session with E*TRADE. It reads
+// credentials from environment variables, loads any existing tokens, attempts
+// renewal, and falls back to the interactive auth flow when necessary.
 func (eb *EtradeBroker) Connect(ctx context.Context) error {
-	tokenPath := expandHome(eb.auth.tokenFile)
+	consumerKey := os.Getenv("ETRADE_CONSUMER_KEY")
+	consumerSecret := os.Getenv("ETRADE_CONSUMER_SECRET")
+	accountIDKey := os.Getenv("ETRADE_ACCOUNT_ID_KEY")
 
-	existing, loadErr := loadTokens(tokenPath)
+	if consumerKey == "" || consumerSecret == "" || accountIDKey == "" {
+		return fmt.Errorf("etrade: connect: %w", broker.ErrMissingCredentials)
+	}
+
+	callbackURL := eb.callbackURL
+	if callbackURL == "" {
+		callbackURL = os.Getenv("ETRADE_CALLBACK_URL")
+	}
+
+	tokenFile := eb.tokenFile
+	if tokenFile == "" {
+		tokenFile = os.Getenv("ETRADE_TOKEN_FILE")
+	}
+
+	eb.auth = newTokenManager(consumerKey, consumerSecret, callbackURL, tokenFile)
+
+	// Attempt to load existing tokens.
+	existing, loadErr := loadTokens(expandHome(eb.auth.tokenFile))
 	if loadErr == nil {
 		eb.auth.creds.AccessToken = existing.AccessToken
 		eb.auth.creds.AccessSecret = existing.AccessSecret
-	} else {
+	}
+
+	// Try to renew; if that fails, run the interactive auth flow.
+	if renewErr := eb.auth.renewAccessToken(); renewErr != nil {
 		if authErr := eb.auth.startAuthFlow(); authErr != nil {
 			return fmt.Errorf("etrade: connect: auth flow: %w", authErr)
 		}
 	}
 
-	eb.auth.startBackgroundRenewal()
+	baseURL := defaultAPIBaseURL
+	if eb.sandbox {
+		baseURL = sandboxAPIBaseURL
+	}
 
-	// Initialize the API client with the current credentials.
-	eb.client = newAPIClient(eb.apiBaseURL, &eb.auth.creds, "")
+	eb.client = newAPIClient(baseURL, &eb.auth.creds, accountIDKey)
 
 	// Keep client credentials in sync when the token manager refreshes.
 	eb.auth.onRefresh = func(creds oauthCredentials) {
 		eb.client.setCreds(&creds)
 	}
 
-	// Resolve the accountIdKey by listing accounts.
-	accountIDKey, resolveErr := eb.resolveAccountIDKey(ctx)
-	if resolveErr != nil {
-		return fmt.Errorf("etrade: connect: resolve account: %w", resolveErr)
-	}
+	eb.auth.startBackgroundRenewal()
 
-	eb.client.accountIDKey = accountIDKey
+	eb.poller = newOrderPoller(eb.client, eb.fills)
+	eb.poller.start(ctx)
 
 	return nil
 }
 
-// resolveAccountIDKey queries the account list and returns the accountIdKey for
-// the configured accountID.
-func (eb *EtradeBroker) resolveAccountIDKey(ctx context.Context) (string, error) {
-	resp, reqErr := eb.client.resty.R().
-		SetContext(ctx).
-		Get("/v1/accounts/list.json")
-	if reqErr != nil {
-		return "", fmt.Errorf("list accounts: %w", reqErr)
-	}
-
-	if resp.IsError() {
-		return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
-	}
-
-	var result etradeAccountListResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
-		return "", fmt.Errorf("list accounts: decode: %w", unmarshalErr)
-	}
-
-	key := accountListToIDKey(result, eb.accountID)
-	if key == "" {
-		return "", fmt.Errorf("account %q not found", eb.accountID)
-	}
-
-	return key, nil
-}
-
-// Close tears down the broker session.
+// Close tears down the broker session and releases resources.
 func (eb *EtradeBroker) Close() error {
-	eb.auth.stopBackgroundRenewal()
+	if eb.auth != nil {
+		eb.auth.stopBackgroundRenewal()
+	}
+
+	if eb.poller != nil {
+		eb.poller.stop()
+	}
 
 	return nil
 }
 
-// Submit sends an order to E*TRADE.
+// Submit sends an order to E*TRADE using a preview-then-place flow.
+// If Qty is 0 and Amount > 0, a quote is fetched and qty = floor(Amount/price).
+// An error is returned if the resulting quantity is zero.
+// The order action (BUY/SELL/SELL_SHORT/BUY_TO_COVER) is determined by
+// comparing the requested side against existing positions.
 func (eb *EtradeBroker) Submit(ctx context.Context, order broker.Order) error {
-	// When a dollar amount is provided instead of a share quantity, look up the
-	// current price to compute the quantity.
-	qty := order.Qty
-	if qty == 0 && order.Amount > 0 {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	// Dollar-amount conversion.
+	if order.Qty == 0 && order.Amount > 0 {
 		price, quoteErr := eb.client.getQuote(ctx, order.Asset.Ticker)
 		if quoteErr != nil {
-			return fmt.Errorf("etrade: submit order: get quote for %s: %w", order.Asset.Ticker, quoteErr)
+			return fmt.Errorf("etrade: submit: get quote for %s: %w", order.Asset.Ticker, quoteErr)
 		}
 
-		qty = math.Floor(order.Amount / price)
+		qty := math.Floor(order.Amount / price)
 		if qty == 0 {
-			return nil
+			return fmt.Errorf("etrade: submit: dollar-amount order for %s results in zero shares at price %.4f", order.Asset.Ticker, price)
 		}
+
+		order.Qty = qty
 	}
 
-	order.Qty = qty
+	// Detect the correct order action from current positions.
+	positions, posErr := eb.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("etrade: submit: get positions for side detection: %w", posErr)
+	}
+
+	action := detectAction(order.Side, order.Asset.Ticker, positions)
 
 	req, buildErr := toEtradeOrderRequest(order)
 	if buildErr != nil {
 		return buildErr
 	}
 
+	// Override the orderAction in the first instrument leg.
+	if len(req.Order) > 0 && len(req.Order[0].Instrument) > 0 {
+		req.Order[0].Instrument[0].OrderAction = action
+	}
+
 	previewID, previewErr := eb.client.previewOrder(ctx, req)
 	if previewErr != nil {
-		return fmt.Errorf("etrade: submit order: preview: %w", previewErr)
+		return fmt.Errorf("etrade: submit: preview: %w", previewErr)
 	}
 
 	_, placeErr := eb.client.placeOrder(ctx, req, previewID)
 	if placeErr != nil {
-		return fmt.Errorf("etrade: submit order: place: %w", placeErr)
+		return fmt.Errorf("etrade: submit: place: %w", placeErr)
 	}
 
 	return nil
 }
 
-// Fills returns the fills channel.
-func (eb *EtradeBroker) Fills() <-chan broker.Fill {
-	return eb.fills
+// detectAction returns the E*TRADE order action string based on the requested
+// side and any existing position for the ticker.
+func detectAction(side broker.Side, ticker string, positions []etradePosition) string {
+	var currentQty float64
+
+	for _, pos := range positions {
+		if pos.Product.Symbol == ticker {
+			currentQty = pos.Quantity
+			break
+		}
+	}
+
+	switch side {
+	case broker.Sell:
+		if currentQty <= 0 {
+			return "SELL_SHORT"
+		}
+
+		return "SELL"
+	case broker.Buy:
+		if currentQty < 0 {
+			return "BUY_TO_COVER"
+		}
+
+		return "BUY"
+	default:
+		return "BUY"
+	}
 }
 
 // Cancel requests cancellation of an open order.
 func (eb *EtradeBroker) Cancel(ctx context.Context, orderID string) error {
-	if cancelErr := eb.client.cancelOrder(ctx, orderID); cancelErr != nil {
-		return fmt.Errorf("etrade: cancel order: %w", cancelErr)
-	}
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
 
-	return nil
+	return eb.client.cancelOrder(ctx, orderID)
 }
 
-// Replace cancels an existing order and submits a replacement.
+// Replace modifies an existing order via the E*TRADE change/preview + change/place flow.
 func (eb *EtradeBroker) Replace(ctx context.Context, orderID string, order broker.Order) error {
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
 	req, buildErr := toEtradeOrderRequest(order)
 	if buildErr != nil {
 		return buildErr
@@ -191,12 +243,12 @@ func (eb *EtradeBroker) Replace(ctx context.Context, orderID string, order broke
 
 	previewID, previewErr := eb.client.previewModifyOrder(ctx, orderID, req)
 	if previewErr != nil {
-		return fmt.Errorf("etrade: replace order: preview: %w", previewErr)
+		return fmt.Errorf("etrade: replace: preview: %w", previewErr)
 	}
 
 	_, placeErr := eb.client.placeModifyOrder(ctx, orderID, req, previewID)
 	if placeErr != nil {
-		return fmt.Errorf("etrade: replace order: place: %w", placeErr)
+		return fmt.Errorf("etrade: replace: place: %w", placeErr)
 	}
 
 	return nil
@@ -204,29 +256,43 @@ func (eb *EtradeBroker) Replace(ctx context.Context, orderID string, order broke
 
 // Orders returns all orders for the current trading day.
 func (eb *EtradeBroker) Orders(ctx context.Context) ([]broker.Order, error) {
-	details, fetchErr := eb.client.getOrders(ctx)
-	if fetchErr != nil {
-		return nil, fmt.Errorf("etrade: orders: %w", fetchErr)
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	rawOrders, err := eb.client.getOrders(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	orders := make([]broker.Order, 0, len(details))
-	for _, detail := range details {
-		orders = append(orders, toBrokerOrder(detail))
+	orders := make([]broker.Order, len(rawOrders))
+	for ii, raw := range rawOrders {
+		orders[ii] = toBrokerOrder(raw)
 	}
 
 	return orders, nil
 }
 
-// Positions returns all current positions in the account.
+// Positions returns all current positions in the account, fetching a mark
+// price quote for each position.
 func (eb *EtradeBroker) Positions(ctx context.Context) ([]broker.Position, error) {
-	rawPositions, fetchErr := eb.client.getPositions(ctx)
-	if fetchErr != nil {
-		return nil, fmt.Errorf("etrade: positions: %w", fetchErr)
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	rawPositions, err := eb.client.getPositions(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	positions := make([]broker.Position, 0, len(rawPositions))
-	for _, pos := range rawPositions {
-		positions = append(positions, toBrokerPosition(pos))
+	positions := make([]broker.Position, len(rawPositions))
+	for ii, raw := range rawPositions {
+		positions[ii] = toBrokerPosition(raw)
+
+		quote, quoteErr := eb.client.getQuote(ctx, raw.Product.Symbol)
+		if quoteErr != nil {
+			return nil, fmt.Errorf("etrade: get quote for %s: %w", raw.Product.Symbol, quoteErr)
+		}
+
+		positions[ii].MarkPrice = quote
 	}
 
 	return positions, nil
@@ -234,39 +300,33 @@ func (eb *EtradeBroker) Positions(ctx context.Context) ([]broker.Position, error
 
 // Balance returns the current account balance.
 func (eb *EtradeBroker) Balance(ctx context.Context) (broker.Balance, error) {
-	resp, fetchErr := eb.client.getBalance(ctx)
-	if fetchErr != nil {
-		return broker.Balance{}, fmt.Errorf("etrade: balance: %w", fetchErr)
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	rawBalance, err := eb.client.getBalance(ctx)
+	if err != nil {
+		return broker.Balance{}, err
 	}
 
-	return toBrokerBalance(resp), nil
+	return toBrokerBalance(rawBalance), nil
 }
 
 // Transactions returns account activity since the given time.
 func (eb *EtradeBroker) Transactions(ctx context.Context, since time.Time) ([]broker.Transaction, error) {
-	rawTxns, fetchErr := eb.client.getTransactions(ctx, since)
-	if fetchErr != nil {
-		return nil, fmt.Errorf("etrade: transactions: %w", fetchErr)
+	eb.mu.Lock()
+	defer eb.mu.Unlock()
+
+	rawTxns, err := eb.client.getTransactions(ctx, since)
+	if err != nil {
+		return nil, err
 	}
 
-	txns := make([]broker.Transaction, 0, len(rawTxns))
-	for _, txn := range rawTxns {
-		txns = append(txns, toBrokerTransaction(txn))
+	txns := make([]broker.Transaction, len(rawTxns))
+	for ii, raw := range rawTxns {
+		txns[ii] = toBrokerTransaction(raw)
 	}
 
 	return txns, nil
-}
-
-// accountListToIDKey returns the accountIdKey from an account list response.
-// Used by Connect to resolve the account ID key.
-func accountListToIDKey(resp etradeAccountListResponse, accountID string) string {
-	for _, acct := range resp.AccountListResponse.Accounts.Account {
-		if acct.AccountID == accountID {
-			return acct.AccountIDKey
-		}
-	}
-
-	return ""
 }
 
 // quoteFromResponse extracts the last trade price from a quote response.
