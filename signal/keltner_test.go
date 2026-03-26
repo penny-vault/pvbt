@@ -47,12 +47,12 @@ var _ = Describe("KeltnerChannels", func() {
 			times[ii] = now.AddDate(0, 0, ii-4)
 		}
 		vals := [][]float64{
-			{101, 103, 102, 105, 104},  // AAPL High
-			{99, 101, 100, 103, 102},   // AAPL Low
-			{100, 102, 101, 104, 103},  // AAPL Close
-			{202, 206, 204, 210, 208},  // GOOG High
-			{198, 202, 200, 206, 204},  // GOOG Low
-			{200, 204, 202, 208, 206},  // GOOG Close
+			{101, 103, 102, 105, 104}, // AAPL High
+			{99, 101, 100, 103, 102},  // AAPL Low
+			{100, 102, 101, 104, 103}, // AAPL Close
+			{202, 206, 204, 210, 208}, // GOOG High
+			{198, 202, 200, 206, 204}, // GOOG Low
+			{200, 204, 202, 208, 206}, // GOOG Close
 		}
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 			[]data.Metric{data.MetricHigh, data.MetricLow, data.MetricClose},
