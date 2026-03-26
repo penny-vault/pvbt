@@ -73,10 +73,13 @@ var _ = Describe("Volatility", func() {
 		Expect(result.Value(aapl, signal.VolatilitySignal)).To(BeNumerically("~", expectedStd, 1e-10))
 	})
 
-	It("uses custom metric when provided", func() {
+	It("uses custom metric when provided and produces the correct volatility value", func() {
+		// Prices: [50, 55, 52, 58]
+		// Returns (Pct(1)): NaN, 0.10, -3/55, 6/52
+		// After Drop(NaN): r0=0.10, r1=(52-55)/55=-3/55, r2=(58-52)/52=6/52
 		times := make([]time.Time, 4)
-		for i := range times {
-			times[i] = now.AddDate(0, 0, i-3)
+		for ii := range times {
+			times[ii] = now.AddDate(0, 0, ii-3)
 		}
 		vals := [][]float64{{50, 55, 52, 58}}
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.AdjClose}, data.Daily, vals)
@@ -88,6 +91,27 @@ var _ = Describe("Volatility", func() {
 		result := signal.Volatility(ctx, u, portfolio.Days(3), data.AdjClose)
 		Expect(result.Err()).NotTo(HaveOccurred())
 		Expect(result.MetricList()).To(Equal([]data.Metric{signal.VolatilitySignal}))
+
+		// Hand-compute expected std dev of the three returns.
+		returns := []float64{
+			(55.0 - 50.0) / 50.0,
+			(52.0 - 55.0) / 55.0,
+			(58.0 - 52.0) / 52.0,
+		}
+		mean := 0.0
+		for _, r := range returns {
+			mean += r
+		}
+		mean /= float64(len(returns))
+		variance := 0.0
+		for _, r := range returns {
+			dd := r - mean
+			variance += dd * dd
+		}
+		variance /= float64(len(returns) - 1)
+		expectedStd := math.Sqrt(variance)
+
+		Expect(result.Value(aapl, signal.VolatilitySignal)).To(BeNumerically("~", expectedStd, 1e-10))
 	})
 
 	It("returns error on degenerate window (fewer than 3 rows)", func() {

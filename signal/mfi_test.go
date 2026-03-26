@@ -3,6 +3,7 @@ package signal_test
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -197,6 +198,31 @@ var _ = Describe("MFI", func() {
 		result := signal.MFI(ctx, uu, portfolio.Days(1))
 		Expect(result.Err()).NotTo(HaveOccurred())
 		Expect(result.Value(aapl, signal.MFISignal)).To(BeNumerically("~", 100.0, 1e-10))
+	})
+
+	It("returns NaN when all typical prices are equal (both flows are zero)", func() {
+		// All bars have identical H/L/C => TP is constant => neither posFlow nor negFlow accumulates.
+		highs := []float64{10, 10, 10}
+		lows := []float64{8, 8, 8}
+		closes := []float64{9, 9, 9}
+		volumes := []float64{1000, 2000, 3000}
+
+		times := make([]time.Time, 3)
+		for ii := range times {
+			times[ii] = now.AddDate(0, 0, ii-2)
+		}
+
+		vals := [][]float64{highs, lows, closes, volumes}
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl},
+			[]data.Metric{data.MetricHigh, data.MetricLow, data.MetricClose, data.Volume}, data.Daily, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.MFI(ctx, uu, portfolio.Days(2))
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(math.IsNaN(result.Value(aapl, signal.MFISignal))).To(BeTrue())
 	})
 
 	It("returns error on insufficient data", func() {

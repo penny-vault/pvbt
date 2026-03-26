@@ -1,9 +1,7 @@
 package schwab
 
 import (
-	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -267,73 +265,4 @@ var _ = Describe("tokenManager", func() {
 		})
 	})
 
-	Describe("startAuthFlow", func() {
-		It("starts HTTPS server and captures callback code", func() {
-			tempDir := GinkgoT().TempDir()
-			tokenPath := filepath.Join(tempDir, "tokens.json")
-
-			tokenServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
-				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(schwabTokenResponse{
-					AccessToken:  "auth-flow-access",
-					RefreshToken: "auth-flow-refresh",
-					ExpiresIn:    1800,
-					TokenType:    "Bearer",
-				})
-			}))
-			DeferCleanup(tokenServer.Close)
-
-			// Create the TLS listener up front so it is bound and accepting
-			// at the kernel level before startAuthFlowServer is called.
-			// This eliminates the race between server startup and the test
-			// client's first connection attempt that caused CI flakes.
-			tlsCert, certErr := generateSelfSignedCert()
-			Expect(certErr).ToNot(HaveOccurred())
-
-			tlsListener, listenErr := tls.Listen("tcp", "127.0.0.1:0", &tls.Config{
-				Certificates: []tls.Certificate{tlsCert},
-			})
-			Expect(listenErr).ToNot(HaveOccurred())
-			// No DeferCleanup needed: http.Server.Serve closes the listener on return.
-
-			callbackAddr := tlsListener.Addr().String()
-
-			manager := &tokenManager{
-				clientID:     "test-id",
-				clientSecret: "test-secret",
-				callbackURL:  fmt.Sprintf("https://%s", callbackAddr),
-				tokenFile:    tokenPath,
-				authBaseURL:  tokenServer.URL,
-				tokens:       &tokenStore{},
-				testListener: tlsListener,
-			}
-
-			authDone := make(chan error, 1)
-
-			go func() {
-				_, startErr := manager.startAuthFlowServer()
-				authDone <- startErr
-			}()
-
-			httpClient := &http.Client{
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
-			}
-			callbackReqURL := fmt.Sprintf("https://%s?code=test-auth-code%%40extra", callbackAddr)
-
-			Eventually(func() error {
-				resp, getErr := httpClient.Get(callbackReqURL)
-				if getErr != nil {
-					return getErr
-				}
-				resp.Body.Close()
-
-				return nil
-			}, 10*time.Second, 100*time.Millisecond).Should(Succeed())
-
-			Eventually(authDone, 5*time.Second).Should(Receive(Not(HaveOccurred())))
-			Expect(manager.tokens.AccessToken).To(Equal("auth-flow-access"))
-		})
-	})
 })

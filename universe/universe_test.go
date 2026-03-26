@@ -74,12 +74,13 @@ var _ = Describe("Static Universe", func() {
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
 			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl, goog}, ds)
 
-			_, err := staticUniverse.Window(context.Background(), portfolio.Months(3), data.MetricClose)
+			result, err := staticUniverse.Window(context.Background(), portfolio.Months(3), data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ds.fetchCalled).To(BeTrue())
-			Expect(ds.fetchAssets).To(HaveLen(2))
+			Expect(ds.fetchAssets).To(ConsistOf(aapl, goog))
 			Expect(ds.fetchPeriod).To(Equal(portfolio.Months(3)))
+			Expect(result).To(BeIdenticalTo(emptyDF))
 		})
 
 		It("returns an error when no data source is set", func() {
@@ -109,10 +110,12 @@ var _ = Describe("Static Universe", func() {
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
 			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
 
-			_, err := staticUniverse.At(context.Background(), now, data.MetricClose)
+			result, err := staticUniverse.At(context.Background(), now, data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ds.fetchCalled).To(BeTrue())
+			Expect(ds.fetchAssets).To(ConsistOf(aapl))
+			Expect(result).To(BeIdenticalTo(emptyDF))
 		})
 	})
 })

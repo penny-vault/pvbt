@@ -18,6 +18,7 @@ package signal
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/penny-vault/pvbt/data"
@@ -58,10 +59,15 @@ func EarningsYield(ctx context.Context, assetUniverse universe.Universe, t ...ti
 	times := df.Times()
 	resultData := make([]float64, len(assets))
 
-	for i, a := range assets {
-		eps := df.ValueAt(a, data.EarningsPerShare, times[0])
-		price := df.ValueAt(a, data.Price, times[0])
-		resultData[i] = eps / price
+	for idx, aa := range assets {
+		eps := df.ValueAt(aa, data.EarningsPerShare, times[0])
+		price := df.ValueAt(aa, data.Price, times[0])
+
+		if price == 0 {
+			resultData[idx] = math.NaN()
+		} else {
+			resultData[idx] = eps / price
+		}
 	}
 
 	// Each asset is one column, one metric (EarningsYieldSignal), one timestamp.

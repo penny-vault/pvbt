@@ -88,6 +88,16 @@ var _ = Describe("DonchianChannels", func() {
 		Expect(result.Value(aapl, signal.DonchianMiddleSignal)).To(BeNumerically("~", 10.5, 1e-10))
 	})
 
+	It("returns error when DataFrame is empty", func() {
+		df, _ := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.DonchianChannels(ctx, uu, portfolio.Days(0))
+		Expect(result.Err()).To(HaveOccurred())
+		Expect(result.Err().Error()).To(ContainSubstring("DonchianChannels"))
+	})
+
 	It("propagates fetch error to Err", func() {
 		ds := &errorDataSource{err: errors.New("data unavailable")}
 		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)

@@ -34,33 +34,6 @@ func buildDF(t time.Time, assets []asset.Asset, closes, adjCloses []float64) *da
 	return df
 }
 
-// buildMultiDF builds a multi-timestamp DataFrame with MetricClose and AdjClose.
-// closeSeries and adjCloseSeries are indexed [time][asset].
-// Data is arranged into column-major order as required by NewDataFrame.
-func buildMultiDF(times []time.Time, assets []asset.Asset, closeSeries, adjCloseSeries [][]float64) *data.DataFrame {
-	// Column-major: each (asset, metric) column is T contiguous values.
-	// Column order: (a0,close), (a0,adjClose), (a1,close), (a1,adjClose), ...
-	cols := make([][]float64, 0, len(assets)*2)
-	for ai := range assets {
-		closeCol := make([]float64, len(times))
-		adjCol := make([]float64, len(times))
-		for ti := range times {
-			closeCol[ti] = closeSeries[ti][ai]
-			adjCol[ti] = adjCloseSeries[ti][ai]
-		}
-		cols = append(cols, closeCol, adjCol)
-	}
-	df, err := data.NewDataFrame(
-		times,
-		assets,
-		[]data.Metric{data.MetricClose, data.AdjClose},
-		data.Daily,
-		cols,
-	)
-	Expect(err).NotTo(HaveOccurred())
-	return df
-}
-
 // daySeq returns n weekday timestamps starting from start.
 // Weekends are skipped.
 func daySeq(start time.Time, n int) []time.Time {
@@ -71,16 +44,6 @@ func daySeq(start time.Time, n int) []time.Time {
 			out = append(out, d)
 		}
 		d = d.AddDate(0, 0, 1)
-	}
-	return out
-}
-
-// monthSeq returns n monthly timestamps starting from start,
-// each one month apart.
-func monthSeq(start time.Time, n int) []time.Time {
-	out := make([]time.Time, 0, n)
-	for i := range n {
-		out = append(out, start.AddDate(0, i, 0))
 	}
 	return out
 }

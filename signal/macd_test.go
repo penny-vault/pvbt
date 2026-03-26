@@ -101,6 +101,50 @@ var _ = Describe("MACD", func() {
 		Expect(histogram).To(BeNumerically("~", macdLine-signalLine, 1e-10))
 	})
 
+	It("produces exact numeric output for hand-calculable inputs", func() {
+		// Prices: [2, 4, 6, 8, 10]; fast=2, slow=3, signal=2.
+		// EMA seed is SMA of first window values; alpha=2/(n+1).
+		//
+		// Fast EMA (alpha=2/3, window=2):
+		//   idx=0: NaN
+		//   idx=1: mean(2,4) = 3
+		//   idx=2: (2/3)*6 + (1/3)*3 = 5
+		//   idx=3: (2/3)*8 + (1/3)*5 = 7
+		//   idx=4: (2/3)*10 + (1/3)*7 = 9
+		//
+		// Slow EMA (alpha=1/2, window=3):
+		//   idx=0: NaN, idx=1: NaN
+		//   idx=2: mean(2,4,6) = 4
+		//   idx=3: (1/2)*8 + (1/2)*4 = 6
+		//   idx=4: (1/2)*10 + (1/2)*6 = 8
+		//
+		// MACD line (fast-slow, after Drop NaN): [1, 1, 1]
+		//
+		// Signal EMA (alpha=2/3, window=2) of [1,1,1]:
+		//   idx=0: NaN
+		//   idx=1: mean(1,1) = 1
+		//   idx=2: (2/3)*1 + (1/3)*1 = 1
+		//
+		// Last values: MACDLine=1, SignalLine=1, Histogram=0.
+		prices := []float64{2, 4, 6, 8, 10}
+		times := make([]time.Time, len(prices))
+		for ii := range times {
+			times[ii] = now.AddDate(0, 0, ii-len(prices)+1)
+		}
+		vals := [][]float64{prices}
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.MACD(ctx, uu, portfolio.Days(2), portfolio.Days(3), portfolio.Days(2))
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(result.Value(aapl, signal.MACDLineSignal)).To(BeNumerically("~", 1.0, 1e-10))
+		Expect(result.Value(aapl, signal.MACDSignalLineSignal)).To(BeNumerically("~", 1.0, 1e-10))
+		Expect(result.Value(aapl, signal.MACDHistogramSignal)).To(BeNumerically("~", 0.0, 1e-10))
+	})
+
 	It("uses custom metric when provided", func() {
 		prices := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 		times := make([]time.Time, len(prices))

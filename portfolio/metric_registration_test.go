@@ -25,7 +25,11 @@ import (
 var _ = Describe("MetricRegistration", func() {
 	It("registers all metrics by default when none specified", func() {
 		acct := portfolio.New()
-		Expect(len(acct.RegisteredMetrics())).To(BeNumerically(">", 30))
+		names := metricNames(acct.RegisteredMetrics())
+		Expect(names).To(ContainElements(
+			"TWRR", "MWRR", "Sharpe", "Sortino", "Calmar", "MaxDrawdown", "StdDev",
+			"Beta", "Alpha", "CAGR", "WinRate", "ProfitFactor", "ValueAtRisk",
+		))
 	})
 
 	It("registers an individual metric", func() {
