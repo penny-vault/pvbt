@@ -29,6 +29,11 @@ Signals are plain functions. There is no registration, no interface to implement
 | `AccumulationDistribution` | `(ctx, u, period)` | Accumulation/Distribution line (cumulative) |
 | `CMF` | `(ctx, u, period)` | Chaikin Money Flow (-1 to 1) |
 | `MFI` | `(ctx, u, period)` | Money Flow Index (0 to 100) |
+| `ZScore` | `(ctx, u, period, metrics...)` | Z-score of current value relative to rolling mean (unbounded) |
+| `HurstRS` | `(ctx, u, period)` | Hurst exponent via Rescaled Range analysis (0 to 1) |
+| `HurstDFA` | `(ctx, u, period)` | Hurst exponent via Detrended Fluctuation Analysis (0 to 1) |
+| `PairsResidual` | `(ctx, u, period, refUniverse)` | Z-score of OLS regression residuals vs reference assets |
+| `PairsRatio` | `(ctx, u, period, refUniverse)` | Z-score of price ratio vs reference assets |
 
 ## Signal reference
 
@@ -356,6 +361,108 @@ df := signal.MFI(ctx, u, portfolio.Days(14))
 **Output metric:** `MFISignal`
 
 **Value range:** 0 to 100. Values above 80 are conventionally considered overbought; values below 20 are considered oversold.
+
+---
+
+### Mean reversion
+
+#### ZScore
+
+Computes the z-score of each asset's current value relative to its rolling mean over the lookback window. A z-score measures how many standard deviations the current observation is above or below the mean: z = (current - mean) / stddev.
+
+```go
+df := signal.ZScore(ctx, u, portfolio.Days(20))
+```
+
+**Signature:** `ZScore(ctx context.Context, u universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window for computing the rolling mean and standard deviation
+- `metrics` — optional; defaults to `data.MetricClose`
+
+**Output metric:** `ZScoreSignal`
+
+**Value range:** Unbounded. Positive values indicate the current price is above the rolling mean; negative values indicate it is below. Returns an error on a constant series (zero standard deviation) or when there is insufficient data.
+
+---
+
+#### HurstRS
+
+Computes the Hurst exponent using Rescaled Range (R/S) analysis. The R/S statistic is computed at multiple sub-period sizes and regressed against log(n) to estimate the Hurst exponent.
+
+```go
+df := signal.HurstRS(ctx, u, portfolio.Days(60))
+```
+
+**Signature:** `HurstRS(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window; at least ~20 data points are required for a reliable estimate
+
+**Output metric:** `HurstRSSignal`
+
+**Value range:** 0 to 1. H < 0.5 indicates mean-reverting behavior, H = 0.5 indicates a random walk, and H > 0.5 indicates trending behavior.
+
+---
+
+#### HurstDFA
+
+Computes the Hurst exponent using Detrended Fluctuation Analysis (DFA). DFA builds a cumulative deviation profile, fits linear trends per segment, and computes the RMS fluctuation as a function of segment size. This method is more robust to short-term correlations than R/S analysis.
+
+```go
+df := signal.HurstDFA(ctx, u, portfolio.Days(60))
+```
+
+**Signature:** `HurstDFA(ctx context.Context, u universe.Universe, period portfolio.Period) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window; at least ~20 data points are required for a reliable estimate
+
+**Output metric:** `HurstDFASignal`
+
+**Value range:** 0 to 1. Interpretation is the same as `HurstRS`: H < 0.5 is mean-reverting, H = 0.5 is a random walk, H > 0.5 is trending.
+
+---
+
+#### PairsResidual
+
+Computes the z-score of OLS regression residuals between each primary asset and each reference asset over the lookback window. For each (primary, reference) pair, the signal runs a linear regression of returns and z-scores the residuals to identify divergence.
+
+```go
+df := signal.PairsResidual(ctx, u, portfolio.Days(60), refUniverse)
+residuals := df.Metrics(signal.PairsResidualSignal("SPY"))
+```
+
+**Signature:** `PairsResidual(ctx context.Context, u universe.Universe, period portfolio.Period, refUniverse universe.Universe) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window for the regression and z-score calculation
+- `refUniverse` — universe of reference assets to regress against
+
+**Output metrics:** One metric per reference asset, named `PairsResidual_{Ticker}` (e.g. `PairsResidual_SPY`).
+
+**Value range:** Unbounded. Positive values indicate the primary asset is rich relative to the reference; negative values indicate it is cheap.
+
+---
+
+#### PairsRatio
+
+Computes the z-score of the price ratio between each primary asset and each reference asset over the lookback window. This is a simpler alternative to `PairsResidual` that does not require a regression.
+
+```go
+df := signal.PairsRatio(ctx, u, portfolio.Days(60), refUniverse)
+ratio := df.Metrics(signal.PairsRatioSignal("SPY"))
+```
+
+**Signature:** `PairsRatio(ctx context.Context, u universe.Universe, period portfolio.Period, refUniverse universe.Universe) *data.DataFrame`
+
+**Parameters:**
+- `period` — lookback window for the z-score calculation
+- `refUniverse` — universe of reference assets to compare against
+
+**Output metrics:** One metric per reference asset, named `PairsRatio_{Ticker}` (e.g. `PairsRatio_SPY`).
+
+**Value range:** Unbounded. Positive values indicate the primary asset is rich relative to the reference; negative values indicate it is cheap. Interpretation is the same as `PairsResidual` but uses a simpler ratio rather than regression residuals.
 
 ---
 
