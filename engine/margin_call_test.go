@@ -99,7 +99,7 @@ var _ = Describe("Margin Call", func() {
 	BeforeEach(func() {
 		testStock = asset.Asset{CompositeFigi: "FIGI-MRGN", Ticker: "MRGN"}
 		assetProvider = &mockAssetProvider{assets: []asset.Asset{testStock}}
-		allMetrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+		allMetrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 	})
 
 	// makeMarginTestData creates a DataFrame where the stock starts at
@@ -123,6 +123,7 @@ var _ = Describe("Margin Call", func() {
 			vals[3*nDays+dayIdx] = price + 2.0 // High
 			vals[4*nDays+dayIdx] = price - 2.0 // Low
 			vals[5*nDays+dayIdx] = 1.0         // SplitFactor
+			vals[6*nDays+dayIdx] = 1_000_000.0 // Volume
 		}
 
 		numCols := 1 * len(allMetrics)

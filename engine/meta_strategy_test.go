@@ -271,7 +271,7 @@ var _ = Describe("MetaStrategy", func() {
 		tlt = asset.Asset{CompositeFigi: "FIGI-TLT", Ticker: "TLT"}
 		allAssets = []asset.Asset{spy, tlt}
 		assetProvider = &mockAssetProvider{assets: allAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 
 		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		dataFrame := makeLowPriceTestData(dataStart, 400, allAssets, metrics)
