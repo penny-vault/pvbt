@@ -7,22 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-03-25
+
 ### Added
 
 - Strategies can use five new built-in signals: RSI, MACD, Bollinger Bands, moving average crossover, and ATR.
 - DataFrames support exponential moving averages via `Rolling(n).EMA()`.
-- Strategy authors can configure fill models on the simulated broker for more realistic backtesting (VWAP, spread-aware, market impact, slippage), composable via `WithFillModel`
+- Strategy authors can configure fill models on the simulated broker for more realistic backtesting (VWAP, spread-aware, market impact, slippage), composable via `WithFillModel`.
 - Users can configure risk management rules and tax optimization through a TOML config file (`pvbt.toml`) and `--risk-profile`/`--tax` CLI flags, without modifying strategy code.
 - The `pvbt config` command displays the resolved middleware configuration after merging config file, profile defaults, and CLI flag overrides.
 - Users can now trade through Tradier with support for market, limit, stop, and stop-limit orders, OCO and bracket groups, and real-time fill streaming.
-- Users can now trade through Interactive Brokers using either OAuth or the Client Portal Gateway for authentication
+- Users can now trade through Interactive Brokers using either OAuth or the Client Portal Gateway for authentication.
 - The new `study optimize` command searches for the best strategy parameters using grid, random, or Bayesian search with out-of-sample validation. Validation schemes include simple train/test splits, k-fold cross-validation, walk-forward analysis, and scenario-based leave-N-out using the shared historical scenario library.
 - Strategy parameter flags accept range syntax (`--lookback=3:24:1`) to define sweep ranges directly from the command line.
 - Named historical scenarios are now available to all study types, not just stress tests.
-
 - The `pvbt library` TUI shows strategy descriptions and GitHub README content rendered with styled markdown, and supports searching strategies by name or description.
 - Strategies can be uninstalled from the library TUI with inline confirmation.
-
 - Backtests automatically liquidate positions in delisted assets at the last known price instead of silently holding them with stale data.
 - Strategies can identify overbought/oversold conditions with new Stochastic Oscillator (fast and slow), Williams %R, CCI, Keltner Channel, and Donchian Channel signals and adapt position sizing and stops to current market volatility.
 - Volume signals (OBV, VWMA, Accumulation/Distribution, Chaikin Money Flow, and Money Flow Index) confirm price moves and detect accumulation/distribution patterns.
@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Breaking:** Transaction type constants (`BuyTransaction`, `SellTransaction`, etc.) moved from the `portfolio` package to `asset`.
 - The `pvbt discover`, `pvbt list`, and `pvbt remove` commands are replaced by `pvbt library`, with `list` and `remove` as subcommands.
-- `broker.IsTransient` is renamed to `broker.IsRetryableError` and a new `broker.ErrRateLimited` sentinel error is available for all brokers
+- `broker.IsTransient` is renamed to `broker.IsRetryableError` and a new `broker.ErrRateLimited` sentinel error is available for all brokers.
 
 ### Fixed
 
@@ -142,7 +142,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.4.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/penny-vault/pvbt/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/penny-vault/pvbt/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/penny-vault/pvbt/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/penny-vault/pvbt/compare/v0.1.0...v0.2.0
