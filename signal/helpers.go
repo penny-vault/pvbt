@@ -38,6 +38,7 @@ func zScore(values []float64) (float64, error) {
 	mean := sum / float64(nn)
 
 	sumSq := 0.0
+
 	for _, vv := range values {
 		diff := vv - mean
 		sumSq += diff * diff
