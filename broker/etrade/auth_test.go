@@ -88,7 +88,7 @@ var _ = Describe("OAuth 1.0a auth", func() {
 		})
 
 		It("is deterministic: same inputs produce same output", func() {
-			args := []interface{}{
+			args := []any{
 				"GET", "https://api.etrade.com/oauth/request_token",
 				"key", "secret", "", "", "nonce", "1234",
 			}

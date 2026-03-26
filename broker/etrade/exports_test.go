@@ -1,6 +1,7 @@
 package etrade
 
 import (
+	"context"
 	"net/url"
 	"time"
 
@@ -142,4 +143,64 @@ func LoadTokens(path string) (*oauthCredentials, error) {
 // ExpandHome exposes expandHome for testing.
 func ExpandHome(path string) string {
 	return expandHome(path)
+}
+
+// Client test exports
+
+// APIClientForTest is a type alias for apiClient for test access.
+type APIClientForTest = apiClient
+
+// NewAPIClientForTest exposes newAPIClient for testing.
+func NewAPIClientForTest(baseURL string, creds *oauthCredentials, accountIDKey string) *apiClient {
+	return newAPIClient(baseURL, creds, accountIDKey)
+}
+
+// GetBalance exposes getBalance for testing.
+func (cl *apiClient) GetBalance(ctx context.Context) (etradeBalanceResponse, error) {
+	return cl.getBalance(ctx)
+}
+
+// GetPositions exposes getPositions for testing.
+func (cl *apiClient) GetPositions(ctx context.Context) ([]etradePosition, error) {
+	return cl.getPositions(ctx)
+}
+
+// GetOrders exposes getOrders for testing.
+func (cl *apiClient) GetOrders(ctx context.Context) ([]etradeOrderDetail, error) {
+	return cl.getOrders(ctx)
+}
+
+// GetQuote exposes getQuote for testing.
+func (cl *apiClient) GetQuote(ctx context.Context, symbol string) (float64, error) {
+	return cl.getQuote(ctx, symbol)
+}
+
+// GetTransactions exposes getTransactions for testing.
+func (cl *apiClient) GetTransactions(ctx context.Context, since time.Time) ([]etradeTransaction, error) {
+	return cl.getTransactions(ctx, since)
+}
+
+// PreviewOrder exposes previewOrder for testing.
+func (cl *apiClient) PreviewOrder(ctx context.Context, req etradePreviewRequest) (int64, error) {
+	return cl.previewOrder(ctx, req)
+}
+
+// PlaceOrder exposes placeOrder for testing.
+func (cl *apiClient) PlaceOrder(ctx context.Context, req etradePreviewRequest, previewID int64) (int64, error) {
+	return cl.placeOrder(ctx, req, previewID)
+}
+
+// CancelOrder exposes cancelOrder for testing.
+func (cl *apiClient) CancelOrder(ctx context.Context, orderID string) error {
+	return cl.cancelOrder(ctx, orderID)
+}
+
+// SetCreds exposes setCreds for testing.
+func (cl *apiClient) SetCreds(creds *oauthCredentials) {
+	cl.setCreds(creds)
+}
+
+// SetClientForTest sets the apiClient on an EtradeBroker for testing.
+func SetClientForTest(eb *EtradeBroker, client *apiClient) {
+	eb.client = client
 }
