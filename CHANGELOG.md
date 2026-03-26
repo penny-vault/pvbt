@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Users can now trade through E*TRADE (Morgan Stanley) using OAuth 1.0a authentication, with support for market, limit, stop, and stop-limit orders.
+- Mean reversion signals: Z-Score, Hurst exponent (R/S and DFA variants), and pairs trading signals (PairsResidual, PairsRatio) for identifying stretched conditions and pair relationships (#27)
 
 ## [0.5.0] - 2026-03-25
 
