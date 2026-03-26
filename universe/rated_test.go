@@ -136,11 +136,12 @@ var _ = Describe("Rated Universe", func() {
 			u := universe.NewRated(provider, "analyst1", filter)
 			u.SetDataSource(ds)
 
-			_, err := u.Window(context.Background(), portfolio.Months(3), data.MetricClose)
+			result, err := u.Window(context.Background(), portfolio.Months(3), data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.fetchCalled).To(BeTrue())
-			Expect(ds.fetchAssets).To(HaveLen(2))
+			Expect(ds.fetchAssets).To(ConsistOf(aapl, goog))
 			Expect(ds.fetchPeriod).To(Equal(portfolio.Months(3)))
+			Expect(result).To(BeIdenticalTo(emptyDF))
 		})
 
 		It("returns an error when no data source is set", func() {
@@ -162,9 +163,11 @@ var _ = Describe("Rated Universe", func() {
 			u := universe.NewRated(provider, "analyst1", filter)
 			u.SetDataSource(ds)
 
-			_, err := u.At(context.Background(), now, data.MetricClose)
+			result, err := u.At(context.Background(), now, data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.fetchCalled).To(BeTrue())
+			Expect(ds.fetchAssets).To(ConsistOf(aapl))
+			Expect(result).To(BeIdenticalTo(emptyDF))
 		})
 
 		It("returns an error when no data source is set", func() {

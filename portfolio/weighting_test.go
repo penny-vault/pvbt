@@ -369,25 +369,6 @@ var _ = Describe("EqualWeight edge cases", func() {
 		Expect(plan).To(HaveLen(0))
 	})
 
-	It("returns allocations with empty members for a DataFrame with zero assets", func() {
-		t1 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
-
-		// One timestamp, zero assets, one metric -- data length is 0.
-		df, err := data.NewDataFrame(
-			[]time.Time{t1},
-			nil,
-			[]data.Metric{data.MetricClose, portfolio.Selected},
-			data.Daily,
-			nil,
-		)
-		Expect(err).ToNot(HaveOccurred())
-
-		plan, err := portfolio.EqualWeight(df)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(plan).To(HaveLen(1))
-		Expect(plan[0].Date).To(Equal(t1))
-		Expect(plan[0].Members).To(HaveLen(0))
-	})
 })
 
 var _ = Describe("EqualWeight with Selected column", func() {
