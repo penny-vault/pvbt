@@ -32,4 +32,8 @@ var (
 	ErrStreamDisconnected = broker.ErrStreamDisconnected
 	ErrRateLimited        = broker.ErrRateLimited
 	ErrOrderRejected      = broker.ErrOrderRejected
+
+	// ErrTokenExpired is returned when the access token has expired and no
+	// refresh token is available.
+	ErrTokenExpired = errors.New("webull: access token expired, re-authorization required")
 )

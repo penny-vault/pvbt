@@ -6,6 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
 	"github.com/penny-vault/pvbt/broker/webull"
 )
 
@@ -86,6 +87,40 @@ var _ = Describe("Auth", func() {
 			_, _, signature, _, _, _ := webull.ExtractSignatureHeaders(req)
 			// HMAC-SHA1 base64 is always 28 characters
 			Expect(len(signature)).To(Equal(28))
+		})
+	})
+
+	Describe("oauthSigner", func() {
+		It("sets the Authorization Bearer header", func() {
+			sign := webull.NewOAuthSignerForTest("test-access-token")
+			req, _ := http.NewRequest(http.MethodGet, "https://api.webull.com/v1/test", nil)
+			Expect(sign.Sign(req)).To(Succeed())
+			Expect(req.Header.Get("Authorization")).To(Equal("Bearer test-access-token"))
+		})
+	})
+
+	Describe("tokenManager", func() {
+		var tokenFile string
+
+		BeforeEach(func() {
+			tmpFile, tmpErr := os.CreateTemp("", "webull-token-*.json")
+			Expect(tmpErr).ToNot(HaveOccurred())
+			tokenFile = tmpFile.Name()
+			tmpFile.Close()
+		})
+
+		AfterEach(func() {
+			os.Remove(tokenFile)
+		})
+
+		It("saves and loads tokens from disk", func() {
+			tm := webull.NewTokenManagerForTest("cid", "csecret", "https://127.0.0.1:5174", tokenFile, "https://example.com")
+			tm.SetTokensForTest("access-123", "refresh-456")
+			Expect(tm.SaveTokensExport()).To(Succeed())
+
+			tm2 := webull.NewTokenManagerForTest("cid", "csecret", "https://127.0.0.1:5174", tokenFile, "https://example.com")
+			Expect(tm2.LoadTokensExport()).To(Succeed())
+			Expect(tm2.AccessTokenExport()).To(Equal("access-123"))
 		})
 	})
 })

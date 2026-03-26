@@ -2,6 +2,7 @@ package webull
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/penny-vault/pvbt/broker"
 )
@@ -42,3 +43,54 @@ var (
 	AuthModeDirect = authModeDirect
 	AuthModeOAuth  = authModeOAuth
 )
+
+// NewOAuthSignerForTest creates an oauthSigner with a pre-set access token.
+func NewOAuthSignerForTest(accessToken string) signer {
+	return &oauthSigner{
+		tokenMgr: &tokenManager{
+			tokens: &tokenStore{
+				AccessToken:     accessToken,
+				AccessExpiresAt: time.Now().Add(30 * time.Minute),
+			},
+		},
+	}
+}
+
+// NewTokenManagerForTest creates a tokenManager pointing at a custom auth URL.
+func NewTokenManagerForTest(clientID, clientSecret, callbackURL, tokenFile, authBaseURL string) *TokenManagerExport {
+	return newTokenManager(authModeOAuth, clientID, clientSecret, callbackURL, tokenFile, authBaseURL)
+}
+
+// TokenManagerExport is an exported alias for tokenManager.
+type TokenManagerExport = tokenManager
+
+// LoadTokensExport exposes loadTokens for testing.
+func (tm *TokenManagerExport) LoadTokensExport() error {
+	return tm.loadTokens()
+}
+
+// SaveTokensExport exposes saveTokens for testing.
+func (tm *TokenManagerExport) SaveTokensExport() error {
+	return tm.saveTokens()
+}
+
+// AccessTokenExport returns the current access token for assertions.
+func (tm *TokenManagerExport) AccessTokenExport() string {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	if tm.tokens == nil {
+		return ""
+	}
+	return tm.tokens.AccessToken
+}
+
+// SetTokensForTest sets tokens directly for testing.
+func (tm *TokenManagerExport) SetTokensForTest(access, refresh string) {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	tm.tokens = &tokenStore{
+		AccessToken:     access,
+		RefreshToken:    refresh,
+		AccessExpiresAt: time.Now().Add(30 * time.Minute),
+	}
+}
