@@ -50,7 +50,6 @@ type tokenManager struct {
 	mu           sync.Mutex
 	stopRefresh  chan struct{}
 	refreshWg    sync.WaitGroup
-	testListener net.Listener // if non-nil, startAuthFlowServer uses this instead of creating one
 }
 
 func newTokenManager(clientID, clientSecret, callbackURL, tokenFile string) *tokenManager {
@@ -211,15 +210,22 @@ func (manager *tokenManager) authorizationURL() string {
 	)
 }
 
-func (manager *tokenManager) startAuthFlowServer() (string, error) {
+func (manager *tokenManager) startAuthFlow() error {
 	parsedURL, parseErr := url.Parse(manager.callbackURL)
 	if parseErr != nil {
 		fallback, fallbackErr := url.Parse(defaultCallbackURL)
 		if fallbackErr != nil {
-			return "", fmt.Errorf("parse fallback callback URL: %w", fallbackErr)
+			return fmt.Errorf("parse fallback callback URL: %w", fallbackErr)
 		}
 
 		parsedURL = fallback
+	}
+
+	listenAddr := parsedURL.Host
+
+	tlsCert, certErr := generateSelfSignedCert()
+	if certErr != nil {
+		return fmt.Errorf("generate TLS cert: %w", certErr)
 	}
 
 	codeChan := make(chan string, 1)
@@ -238,28 +244,14 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 		codeChan <- decodedCode
 	})
 
-	listener := manager.testListener
-
-	if listener == nil {
-		listenAddr := parsedURL.Host
-
-		tlsCert, certErr := generateSelfSignedCert()
-		if certErr != nil {
-			return "", fmt.Errorf("generate TLS cert: %w", certErr)
-		}
-
-		created, listenErr := tls.Listen("tcp", listenAddr, &tls.Config{
-			Certificates: []tls.Certificate{tlsCert},
-		})
-		if listenErr != nil {
-			return "", fmt.Errorf("listen on %s: %w", listenAddr, listenErr)
-		}
-
-		listener = created
+	listener, listenErr := tls.Listen("tcp", listenAddr, &tls.Config{
+		Certificates: []tls.Certificate{tlsCert},
+	})
+	if listenErr != nil {
+		return fmt.Errorf("listen on %s: %w", listenAddr, listenErr)
 	}
 
 	actualAddr := listener.Addr().String()
-
 	manager.callbackURL = fmt.Sprintf("https://%s", actualAddr)
 
 	server := &http.Server{Handler: mux}
@@ -277,16 +269,7 @@ func (manager *tokenManager) startAuthFlowServer() (string, error) {
 
 	server.Close()
 
-	if exchangeErr := manager.exchangeAuthCode(code); exchangeErr != nil {
-		return actualAddr, exchangeErr
-	}
-
-	return actualAddr, nil
-}
-
-func (manager *tokenManager) startAuthFlow() error {
-	_, flowErr := manager.startAuthFlowServer()
-	return flowErr
+	return manager.exchangeAuthCode(code)
 }
 
 func (manager *tokenManager) startBackgroundRefresh() {
