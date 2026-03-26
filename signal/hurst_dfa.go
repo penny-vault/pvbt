@@ -136,6 +136,7 @@ func hurstDFA(prices []float64) (float64, error) {
 
 			// Compute RMS of detrended values.
 			rmsSum := 0.0
+
 			for jj := range ss {
 				detrended := segment[jj] - (intercept + slope*float64(jj))
 				rmsSum += detrended * detrended
