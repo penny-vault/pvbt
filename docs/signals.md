@@ -430,7 +430,7 @@ Computes the z-score of OLS regression residuals between each primary asset and 
 
 ```go
 df := signal.PairsResidual(ctx, u, portfolio.Days(60), refUniverse)
-residuals := df.Metrics(signal.PairsResidualSignal("SPY"))
+residuals := df.Metrics("PairsResidual_SPY")
 ```
 
 **Signature:** `PairsResidual(ctx context.Context, u universe.Universe, period portfolio.Period, refUniverse universe.Universe) *data.DataFrame`
@@ -451,7 +451,7 @@ Computes the z-score of the price ratio between each primary asset and each refe
 
 ```go
 df := signal.PairsRatio(ctx, u, portfolio.Days(60), refUniverse)
-ratio := df.Metrics(signal.PairsRatioSignal("SPY"))
+ratio := df.Metrics("PairsRatio_SPY")
 ```
 
 **Signature:** `PairsRatio(ctx context.Context, u universe.Universe, period portfolio.Period, refUniverse universe.Universe) *data.DataFrame`
