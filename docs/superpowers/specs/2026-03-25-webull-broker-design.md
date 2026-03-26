@@ -120,7 +120,7 @@ If the gRPC stream disconnects, the goroutine reconnects with exponential backof
 
 ### Deduplication
 
-Fills are tracked by order ID + fill quantity. If a reconnect poll returns a fill already delivered via the stream, it is suppressed.
+Fills are tracked by order ID + cumulative filled quantity. The broker compares the cumulative filled quantity from a poll response against what has already been delivered. If the cumulative quantity has not increased, the fill is suppressed. If it has increased, a new `broker.Fill` is sent for the delta.
 
 ### Shutdown
 
