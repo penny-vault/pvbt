@@ -40,10 +40,10 @@ var _ = Describe("DonchianChannels", func() {
 			times[ii] = now.AddDate(0, 0, ii-4)
 		}
 		vals := [][]float64{
-			{12, 15, 11, 14, 13},       // AAPL High
-			{9, 10, 8, 11, 10},         // AAPL Low
-			{120, 150, 110, 140, 130},  // GOOG High
-			{90, 100, 80, 110, 100},    // GOOG Low
+			{12, 15, 11, 14, 13},      // AAPL High
+			{9, 10, 8, 11, 10},        // AAPL Low
+			{120, 150, 110, 140, 130}, // GOOG High
+			{90, 100, 80, 110, 100},   // GOOG Low
 		}
 		df, err := data.NewDataFrame(times, []asset.Asset{aapl, goog},
 			[]data.Metric{data.MetricHigh, data.MetricLow}, data.Daily, vals)

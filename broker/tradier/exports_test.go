@@ -187,4 +187,3 @@ func (tm *tokenManager) RefreshAccessToken() error {
 
 	return tm.refreshAccessToken()
 }
-

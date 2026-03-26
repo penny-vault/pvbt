@@ -2,6 +2,8 @@ package etrade
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"time"
 
 	"github.com/penny-vault/pvbt/broker"
@@ -9,15 +11,22 @@ import (
 
 // EtradeBroker implements broker.Broker for the E*TRADE brokerage.
 type EtradeBroker struct {
-	fills chan broker.Fill
+	auth      *tokenManager
+	accountID string
+	fills     chan broker.Fill
 }
 
 // Option configures an EtradeBroker.
 type Option func(*EtradeBroker)
 
 // New creates a new EtradeBroker with the given options.
+// It reads ETRADE_CONSUMER_KEY and ETRADE_CONSUMER_SECRET from the environment.
 func New(opts ...Option) *EtradeBroker {
+	consumerKey := os.Getenv("ETRADE_CONSUMER_KEY")
+	consumerSecret := os.Getenv("ETRADE_CONSUMER_SECRET")
+
 	eb := &EtradeBroker{
+		auth:  newTokenManager(consumerKey, consumerSecret, "", ""),
 		fills: make(chan broker.Fill, 64),
 	}
 
@@ -33,17 +42,41 @@ func WithSandbox() Option {
 	return func(_ *EtradeBroker) {}
 }
 
-// Connect establishes a session with E*TRADE.
+// WithAccountID sets the E*TRADE account ID to use.
+func WithAccountID(id string) Option {
+	return func(eb *EtradeBroker) {
+		eb.accountID = id
+	}
+}
+
+// Connect establishes a session with E*TRADE. If no access token is stored on
+// disk, it starts the interactive OAuth 1.0a authorization flow.
 func (eb *EtradeBroker) Connect(_ context.Context) error {
+	tokenPath := expandHome(eb.auth.tokenFile)
+
+	existing, loadErr := loadTokens(tokenPath)
+	if loadErr == nil {
+		eb.auth.creds.AccessToken = existing.AccessToken
+		eb.auth.creds.AccessSecret = existing.AccessSecret
+	} else {
+		if authErr := eb.auth.startAuthFlow(); authErr != nil {
+			return fmt.Errorf("etrade: connect: auth flow: %w", authErr)
+		}
+	}
+
+	eb.auth.startBackgroundRenewal()
+
 	var resp etradeAccountListResponse
 
-	_ = accountListToIDKey(resp, "")
+	_ = accountListToIDKey(resp, eb.accountID)
 
 	return nil
 }
 
 // Close tears down the broker session.
 func (eb *EtradeBroker) Close() error {
+	eb.auth.stopBackgroundRenewal()
+
 	return nil
 }
 

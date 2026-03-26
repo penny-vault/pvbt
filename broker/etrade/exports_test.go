@@ -1,6 +1,7 @@
 package etrade
 
 import (
+	"net/url"
 	"time"
 
 	"github.com/penny-vault/pvbt/broker"
@@ -78,4 +79,67 @@ func FormatDate(tt time.Time) string {
 // ParseDate exposes parseDate for testing.
 func ParseDate(ss string) (time.Time, error) {
 	return parseDate(ss)
+}
+
+// Auth test exports
+
+// BuildAuthHeader exposes buildAuthHeader for testing.
+func BuildAuthHeader(method, rawURL, consumerKey, consumerSecret, token, tokenSecret, nonce, timestamp string, extraParams url.Values) string {
+	return buildAuthHeader(method, rawURL, consumerKey, consumerSecret, token, tokenSecret, nonce, timestamp, extraParams)
+}
+
+// PercentEncode exposes percentEncode for testing.
+func PercentEncode(ss string) string {
+	return percentEncode(ss)
+}
+
+// NewTokenManagerForTest exposes newTokenManager for testing.
+func NewTokenManagerForTest(consumerKey, consumerSecret, callbackURL, tokenFile string) *tokenManager {
+	return newTokenManager(consumerKey, consumerSecret, callbackURL, tokenFile)
+}
+
+// SetAuthBaseURL sets the authBaseURL field on a tokenManager for testing.
+func SetAuthBaseURL(tm *tokenManager, baseURL string) {
+	tm.authBaseURL = baseURL
+}
+
+// TokenManagerForTest is a type alias for tokenManager for test access.
+type TokenManagerForTest = tokenManager
+
+// OAuthCredentials is a type alias for oauthCredentials for test access.
+type OAuthCredentials = oauthCredentials
+
+// RequestToken exposes requestToken for testing.
+func (tm *tokenManager) RequestToken() (string, string, error) {
+	return tm.requestToken()
+}
+
+// ExchangeAccessToken exposes exchangeAccessToken for testing.
+func (tm *tokenManager) ExchangeAccessToken(requestToken, requestSecret, verifier string) error {
+	return tm.exchangeAccessToken(requestToken, requestSecret, verifier)
+}
+
+// RenewAccessToken exposes renewAccessToken for testing.
+func (tm *tokenManager) RenewAccessToken() error {
+	return tm.renewAccessToken()
+}
+
+// Creds returns the current oauthCredentials for testing.
+func (tm *tokenManager) Creds() oauthCredentials {
+	return tm.creds
+}
+
+// SaveTokens exposes saveTokens for testing.
+func SaveTokens(path string, creds *oauthCredentials) error {
+	return saveTokens(path, creds)
+}
+
+// LoadTokens exposes loadTokens for testing.
+func LoadTokens(path string) (*oauthCredentials, error) {
+	return loadTokens(path)
+}
+
+// ExpandHome exposes expandHome for testing.
+func ExpandHome(path string) string {
+	return expandHome(path)
 }
