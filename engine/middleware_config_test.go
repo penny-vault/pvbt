@@ -217,7 +217,7 @@ var _ = Describe("WithMiddlewareConfig", func() {
 			allAssets = []asset.Asset{spy}
 			allMetrics = []data.Metric{
 				data.MetricClose, data.AdjClose, data.Dividend,
-				data.MetricHigh, data.MetricLow, data.SplitFactor,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
 			}
 			dataStart = time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			testDF = makeDailyTestData(dataStart, 400, allAssets, allMetrics)

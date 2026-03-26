@@ -127,6 +127,8 @@ func makeSyntheticDailyData(startDate time.Time, numDays int, testAssets []asset
 					vals[colStart+dayIdx] = basePrice + 1.0
 				case data.MetricLow:
 					vals[colStart+dayIdx] = basePrice - 1.0
+				case data.Volume:
+					vals[colStart+dayIdx] = 1000000
 				default:
 					// MetricClose and AdjClose get the same base price.
 					vals[colStart+dayIdx] = basePrice
@@ -198,6 +200,7 @@ var _ = Describe("Integration", func() {
 			data.Dividend,
 			data.MetricHigh,
 			data.MetricLow,
+			data.Volume,
 			data.SplitFactor,
 		}
 
@@ -298,6 +301,7 @@ var _ = Describe("Integration", func() {
 			data.Dividend,
 			data.MetricHigh,
 			data.MetricLow,
+			data.Volume,
 			data.SplitFactor,
 		}
 
@@ -373,6 +377,7 @@ var _ = Describe("Integration", func() {
 			data.Dividend,
 			data.MetricHigh,
 			data.MetricLow,
+			data.Volume,
 			data.SplitFactor,
 		}
 
