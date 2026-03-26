@@ -204,3 +204,25 @@ func (cl *apiClient) SetCreds(creds *oauthCredentials) {
 func SetClientForTest(eb *EtradeBroker, client *apiClient) {
 	eb.client = client
 }
+
+// Streamer test exports
+
+// NewOrderPollerForTest exposes newOrderPoller for testing.
+func NewOrderPollerForTest(client *apiClient, fills chan broker.Fill) *orderPoller {
+	return newOrderPoller(client, fills)
+}
+
+// Poll exposes poll for testing.
+func (op *orderPoller) Poll(ctx context.Context) error {
+	return op.poll(ctx)
+}
+
+// Start exposes start for testing.
+func (op *orderPoller) Start(ctx context.Context) {
+	op.start(ctx)
+}
+
+// Stop exposes stop for testing.
+func (op *orderPoller) Stop() {
+	op.stop()
+}
