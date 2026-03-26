@@ -455,6 +455,42 @@ Fills are delivered via a WebSocket connection. On disconnect, the broker reconn
 
 IB enforces a global rate limit of 10 requests per second; the client stays under this with a built-in rate limiter.
 
+### E\*TRADE
+
+The `broker/etrade` package enables live and paper trading through E\*TRADE (Morgan Stanley). It supports equities with market, limit, stop, and stop-limit orders and dollar-amount orders. E\*TRADE's API does not support contingent orders (OCO, bracket); the account layer manages group cancellation for this broker.
+
+```go
+import "github.com/penny-vault/pvbt/broker/etrade"
+
+etradeBroker := etrade.New()
+// or for paper trading:
+etradeBroker := etrade.New(etrade.WithSandbox())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(etradeBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Authentication uses OAuth 1.0a with HMAC-SHA1 signed requests:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ETRADE_CONSUMER_KEY` | yes | OAuth 1.0a consumer key from the E\*TRADE developer portal |
+| `ETRADE_CONSUMER_SECRET` | yes | OAuth 1.0a consumer secret |
+| `ETRADE_ACCOUNT_ID_KEY` | yes | Account ID key (from the List Accounts API, not the display account number) |
+| `ETRADE_CALLBACK_URL` | no | OAuth callback URL (default: out-of-band) |
+| `ETRADE_TOKEN_FILE` | no | Path to persist OAuth tokens (default: `~/.config/pvbt/etrade-tokens.json`) |
+
+On first run, `Connect()` prints an authorization URL to the console. Open it in a browser, log in, and authorize the app -- a local HTTPS callback server captures the verifier automatically. E\*TRADE access tokens expire at midnight US Eastern time every day and go inactive after 2 hours without API activity. The broker renews the token every 90 minutes to prevent inactivity timeout; after midnight expiry, the browser authorization flow must be repeated.
+
+E\*TRADE requires a preview step before placing any order. The broker handles this transparently -- `Submit` calls preview, extracts the preview ID, then immediately places the order.
+
+Day, GTC, GTD, IOC, and FOK durations are supported. OnOpen and OnClose are not supported and return an error.
+
+Fills are detected by polling the orders endpoint every 2 seconds. Duplicate fills are suppressed automatically.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
