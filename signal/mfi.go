@@ -18,6 +18,7 @@ package signal
 import (
 	"context"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/penny-vault/pvbt/data"
@@ -83,7 +84,9 @@ func MFI(ctx context.Context, assetUniverse universe.Universe, period portfolio.
 
 		var mfiVal float64
 
-		if negFlow == 0 {
+		if posFlow == 0 && negFlow == 0 {
+			mfiVal = math.NaN()
+		} else if negFlow == 0 {
 			mfiVal = 100.0
 		} else if posFlow == 0 {
 			mfiVal = 0.0

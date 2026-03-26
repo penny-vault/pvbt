@@ -3,6 +3,7 @@ package signal_test
 import (
 	"context"
 	"errors"
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -94,6 +95,25 @@ var _ = Describe("EarningsYield", func() {
 		result := signal.EarningsYield(ctx, u)
 		Expect(result.Err()).To(HaveOccurred())
 		Expect(result.Err().Error()).To(ContainSubstring("Price"))
+	})
+
+	It("returns NaN when price is zero", func() {
+		// EPS=5, Price=0: division by zero should produce NaN, not +Inf.
+		times := []time.Time{now}
+		vals := [][]float64{
+			{5}, // AAPL/EarningsPerShare
+			{0}, // AAPL/Price = 0
+		}
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl},
+			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.EarningsYield(ctx, u)
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(math.IsNaN(result.Value(aapl, signal.EarningsYieldSignal))).To(BeTrue())
 	})
 
 	It("propagates fetch error to Err", func() {

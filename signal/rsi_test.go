@@ -72,6 +72,28 @@ var _ = Describe("RSI", func() {
 		Expect(result.Value(aapl, signal.RSISignal)).To(BeNumerically("~", 100.0, 1e-10))
 	})
 
+	It("returns RSI of 0 when all changes are losses", func() {
+		// Monotonically decreasing prices: all changes are negative, avgGain=0, RSI=0.
+		prices := make([]float64, 15)
+		for ii := range prices {
+			prices[ii] = float64(24 - ii)
+		}
+		times := make([]time.Time, len(prices))
+		for ii := range times {
+			times[ii] = now.AddDate(0, 0, ii-len(prices)+1)
+		}
+		vals := [][]float64{prices}
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.RSI(ctx, uu, portfolio.Days(14))
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(result.Value(aapl, signal.RSISignal)).To(BeNumerically("~", 0.0, 1e-10))
+	})
+
 	It("uses custom metric when provided", func() {
 		prices := []float64{44, 44.34, 44.09, 43.61, 44.33, 44.83, 45.10, 45.42, 45.84, 46.08, 45.89, 46.03, 45.61, 46.28, 46.28}
 		times := make([]time.Time, len(prices))

@@ -97,6 +97,27 @@ var _ = Describe("Crossover", func() {
 		Expect(result.Value(aapl, signal.CrossoverSignal)).To(BeNumerically("~", 1.0, 1e-10))
 	})
 
+	It("returns -1 signal when fast SMA equals slow SMA", func() {
+		// Prices: [10,20,30]; fast=Days(3), slow=Days(3) => same window, same SMA.
+		// fast == slow => crossoverVal = -1 (not strictly greater).
+		times := make([]time.Time, 3)
+		for ii := range times {
+			times[ii] = now.AddDate(0, 0, ii-2)
+		}
+		vals := [][]float64{{10, 20, 30}}
+		df, err := data.NewDataFrame(times, []asset.Asset{aapl}, []data.Metric{data.MetricClose}, data.Daily, vals)
+		Expect(err).NotTo(HaveOccurred())
+
+		ds := &mockDataSource{currentDate: now, fetchResult: df}
+		uu := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
+
+		result := signal.Crossover(ctx, uu, portfolio.Days(3), portfolio.Days(3))
+		Expect(result.Err()).NotTo(HaveOccurred())
+		Expect(result.Value(aapl, signal.CrossoverFastSignal)).To(BeNumerically("~",
+			result.Value(aapl, signal.CrossoverSlowSignal), 1e-10))
+		Expect(result.Value(aapl, signal.CrossoverSignal)).To(BeNumerically("~", -1.0, 1e-10))
+	})
+
 	It("returns error on degenerate window (fewer than 2 rows)", func() {
 		times := []time.Time{now}
 		vals := [][]float64{{100}}
