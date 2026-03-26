@@ -123,7 +123,7 @@ func toTSOrder(order broker.Order, accountID string) (tsOrderRequest, error) {
 	tsOrder := tsOrderRequest{
 		AccountID:   accountID,
 		Symbol:      order.Asset.Ticker,
-		Quantity:    strconv.FormatFloat(order.Qty, 'f', -1, 64),
+		Quantity:    formatQty(order.Qty),
 		OrderType:   mapOrderType(order.OrderType),
 		TradeAction: mapSide(order.Side),
 		TimeInForce: tsTimeInForce{Duration: tif},
