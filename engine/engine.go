@@ -418,14 +418,15 @@ func (e *Engine) sliceRiskFree(timestamps []time.Time) []float64 {
 }
 
 // fetchRange is the shared implementation for Fetch and FetchAt.
-// It checks the per-column cache, bulk-fetches misses grouped by
+// It checks the chunk-level slab cache, bulk-fetches misses grouped by
 // calendar-year chunk, and assembles the result.
 func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics []data.Metric, rangeStart, rangeEnd time.Time) (*data.DataFrame, error) {
 	log := zerolog.Ctx(ctx)
 
 	years := chunkYears(rangeStart, rangeEnd)
 
-	// Identify cache misses grouped by chunk year.
+	// --- 1. Miss detection ---------------------------------------------------
+	// For each year chunk, collect (asset, metric) pairs not yet cached.
 	type chunkMiss struct {
 		assets  map[string]asset.Asset // figi -> asset
 		metrics map[data.Metric]bool
@@ -434,27 +435,30 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	misses := make(map[int64]*chunkMiss)
 
 	for _, year := range years {
+		chunk := e.cache.getChunk(year)
+
 		for _, assetItem := range assets {
 			for _, metric := range metrics {
-				key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-				if _, ok := e.cache.get(key); !ok {
-					cacheMiss, exists := misses[year]
-					if !exists {
-						cacheMiss = &chunkMiss{
-							assets:  make(map[string]asset.Asset),
-							metrics: make(map[data.Metric]bool),
-						}
-						misses[year] = cacheMiss
-					}
-
-					cacheMiss.assets[assetItem.CompositeFigi] = assetItem
-					cacheMiss.metrics[metric] = true
+				if chunk != nil && chunk.hasColumn(assetItem.CompositeFigi, metric) {
+					continue
 				}
+
+				cacheMiss, exists := misses[year]
+				if !exists {
+					cacheMiss = &chunkMiss{
+						assets:  make(map[string]asset.Asset),
+						metrics: make(map[data.Metric]bool),
+					}
+					misses[year] = cacheMiss
+				}
+
+				cacheMiss.assets[assetItem.CompositeFigi] = assetItem
+				cacheMiss.metrics[metric] = true
 			}
 		}
 	}
 
-	// Fetch misses: one bulk call per chunk year.
+	// --- 2. Fetch misses -----------------------------------------------------
 	for year, cacheMiss := range misses {
 		missAssets := make([]asset.Asset, 0, len(cacheMiss.assets))
 		for _, assetItem := range cacheMiss.assets {
@@ -481,128 +485,135 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 			return nil, err
 		}
 
-		// Decompose the DataFrame into individual columns and cache them.
-		// For empty results, cache empty entries so we don't re-fetch.
-		dfTimes := df.Times()
-		if len(dfTimes) == 0 {
-			empty := &colCacheEntry{}
-
-			for _, assetItem := range missAssets {
-				for _, metric := range missMetrics {
-					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-					e.cache.put(key, empty)
-				}
-			}
+		chunk := e.cache.getChunk(year)
+		if chunk == nil {
+			chunk = newChunkEntry(year, missAssets, missMetrics)
+			e.cache.putChunk(year, chunk)
 		} else {
-			for _, assetItem := range df.AssetList() {
-				for _, metric := range df.MetricList() {
-					col := df.Column(assetItem, metric)
-					if col == nil {
-						continue
-					}
-
-					colCopy := make([]float64, len(col))
-					copy(colCopy, col)
-
-					timesCopy := make([]time.Time, len(dfTimes))
-					copy(timesCopy, dfTimes)
-
-					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-					e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
-				}
-			}
+			oldBytes := chunk.bytes
+			chunk.expand(missAssets, missMetrics)
+			e.cache.curBytes = e.cache.curBytes - oldBytes + chunk.bytes
 		}
-	}
 
-	// Assemble the requested DataFrame from cached columns.
-	// Build the union time axis.
-	timeSet := make(map[int64]time.Time)
+		// Scatter provider results into the chunk slab.
+		dfTimes := df.Times()
+		for _, provAsset := range df.AssetList() {
+			aIdx, aOK := chunk.assetIdx[provAsset.CompositeFigi]
+			if !aOK {
+				continue
+			}
 
-	for _, year := range years {
-		for _, assetItem := range assets {
-			for _, metric := range metrics {
-				key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-
-				entry, ok := e.cache.get(key)
-				if !ok {
+			for _, provMetric := range df.MetricList() {
+				mIdx, mOK := chunk.metricIdx[provMetric]
+				if !mOK {
 					continue
 				}
 
-				for _, t := range entry.times {
-					timeSet[t.Unix()] = t
+				col := df.Column(provAsset, provMetric)
+				if col == nil {
+					continue
+				}
+
+				for ii, ts := range dfTimes {
+					day := chunk.dayOffset(ts.In(nyc).Unix())
+					if day < 0 {
+						continue
+					}
+
+					chunk.set(day, aIdx, mIdx, col[ii])
+					chunk.times[day] = ts
 				}
 			}
 		}
 	}
 
-	if len(timeSet) == 0 {
+	// --- 3. Assembly ---------------------------------------------------------
+	// Walk day offsets in the requested range across year chunks. First pass
+	// collects timestamps and (chunk, day) pairs; second pass fills a
+	// column-major slab compatible with SlabToColumns.
+
+	type dayRef struct {
+		chunk *chunkEntry
+		day   int
+	}
+
+	numMetrics := len(metrics)
+	numCols := len(assets) * numMetrics
+
+	// Pre-estimate capacity: ~252 trading days per year.
+	estDays := len(years) * 260
+	resultTimes := make([]time.Time, 0, estDays)
+	dayRefs := make([]dayRef, 0, estDays)
+
+	for _, year := range years {
+		chunk := e.cache.getChunk(year)
+		if chunk == nil {
+			continue
+		}
+
+		// --- 4. Day range computation ----------------------------------------
+		startDay := chunk.dayOffset(rangeStart.In(nyc).Unix())
+		if startDay < 0 {
+			startDay = 0
+		}
+
+		endDay := chunk.dayOffset(rangeEnd.In(nyc).Unix())
+		if endDay < 0 {
+			endDay = daysPerChunk - 1
+		}
+
+		for day := startDay; day <= endDay; day++ {
+			if chunk.times[day].IsZero() {
+				continue // no provider data (weekend/holiday)
+			}
+
+			resultTimes = append(resultTimes, chunk.times[day])
+			dayRefs = append(dayRefs, dayRef{chunk: chunk, day: day})
+		}
+	}
+
+	if len(resultTimes) == 0 {
 		return data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 	}
 
-	// Sort times.
-	unionTimes := make([]time.Time, 0, len(timeSet))
-	for _, t := range timeSet {
-		unionTimes = append(unionTimes, t)
+	// Build column-major slab: slab[colIdx*numTimes + tIdx].
+	numTimes := len(resultTimes)
+
+	resultSlab := make([]float64, numTimes*numCols)
+	for ii := range resultSlab {
+		resultSlab[ii] = math.NaN()
 	}
 
-	sort.Slice(unionTimes, func(i, j int) bool {
-		return unionTimes[i].Before(unionTimes[j])
-	})
+	for tIdx, dr := range dayRefs {
+		for aPos, assetItem := range assets {
+			aIdx, aOK := dr.chunk.assetIdx[assetItem.CompositeFigi]
 
-	// Build time index.
-	timeIdx := make(map[int64]int, len(unionTimes))
-	for i, t := range unionTimes {
-		timeIdx[t.Unix()] = i
-	}
+			for mPos, metric := range metrics {
+				colIdx := aPos*numMetrics + mPos
 
-	// Allocate slab and fill with NaN.
-	numTimes := len(unionTimes)
-	numMetrics := len(metrics)
-
-	slab := make([]float64, numTimes*len(assets)*numMetrics)
-	for i := range slab {
-		slab[i] = math.NaN()
-	}
-
-	// Scatter cached values into slab.
-	for aIdx, a := range assets {
-		for mIdx, m := range metrics {
-			colStart := (aIdx*numMetrics + mIdx) * numTimes
-
-			for _, year := range years {
-				key := colCacheKey{figi: a.CompositeFigi, metric: m, chunkStart: year}
-
-				entry, ok := e.cache.get(key)
-				if !ok {
-					continue
-				}
-
-				for ii, t := range entry.times {
-					ti, ok := timeIdx[t.Unix()]
-					if !ok {
-						continue
+				if aOK {
+					mIdx, mOK := dr.chunk.metricIdx[metric]
+					if mOK {
+						resultSlab[colIdx*numTimes+tIdx] = dr.chunk.values[dr.chunk.valueIndex(dr.day, aIdx, mIdx)]
 					}
-
-					slab[colStart+ti] = entry.values[ii]
 				}
 			}
 		}
 	}
 
-	assembled, err := data.NewDataFrame(unionTimes, assets, metrics, data.Daily,
-		data.SlabToColumns(slab, len(assets)*len(metrics), len(unionTimes)))
+	assembled, err := data.NewDataFrame(resultTimes, assets, metrics, data.Daily,
+		data.SlabToColumns(resultSlab, numCols, numTimes))
 	if err != nil {
 		return nil, fmt.Errorf("engine: assemble cached data: %w", err)
 	}
 
-	result := assembled.Between(rangeStart, rangeEnd)
 	log.Debug().
-		Int("len", result.Len()).
-		Int("assets", len(result.AssetList())).
-		Int("metrics", len(result.MetricList())).
+		Int("len", assembled.Len()).
+		Int("assets", len(assembled.AssetList())).
+		Int("metrics", len(assembled.MetricList())).
 		Msg("engine.Fetch final result")
 
-	return result, nil
+	return assembled, nil
 }
 
 // Close releases all resources held by the engine, including closing
