@@ -71,7 +71,7 @@ func (rk *Risk) Type() string { return "risk" }
 func (rk *Risk) Name() string { return "Risk Metrics" }
 
 func (rk *Risk) Render(format Format, writer io.Writer) error {
-	return riskToMetricPairs(*rk, rk.hasBenchmark).Render(format, writer)
+	return riskToMetricPairs(*rk, rk.HasBenchmark).Render(format, writer)
 }
 
 // ---------------------------------------------------------------------------

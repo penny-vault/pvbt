@@ -16,33 +16,35 @@
 package report
 
 import (
-	"fmt"
-	"math"
 	"time"
 
-	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// portfolioAsset mirrors the unexported var in portfolio/account.go so that
-// we can look up columns in the perfData DataFrame.
-var portfolioAsset = asset.Asset{
-	CompositeFigi: "_PORTFOLIO_",
-	Ticker:        "_PORTFOLIO_",
-}
-
-// ReportablePortfolio is the interface required by Summary. It composes
-// read-only portfolio access with statistical queries needed for the
-// full report.
+// ReportablePortfolio is the interface required by the summary builder.
+// It composes read-only portfolio access with statistical queries needed
+// for the full report.
 type ReportablePortfolio interface {
 	portfolio.Portfolio
 	portfolio.PortfolioStats
 }
 
 // ---------------------------------------------------------------------------
-// Intermediate view model types used by the build* helpers and Summary.
+// View model types -- plain structs shared by builders and renderers.
 // ---------------------------------------------------------------------------
+
+// Header contains the headline information for the report.
+type Header struct {
+	StrategyName    string
+	StrategyVersion string
+	Benchmark       string
+	StartDate       time.Time
+	EndDate         time.Time
+	InitialCash     float64
+	FinalValue      float64
+	Elapsed         time.Duration
+	Steps           int
+}
 
 // EquityCurve holds the time series for the strategy and benchmark equity.
 type EquityCurve struct {
@@ -70,7 +72,7 @@ type AnnualReturns struct {
 // Risk holds paired (strategy, benchmark) risk metrics.
 // Each [2]float64 is {Strategy, Benchmark}.
 type Risk struct {
-	hasBenchmark      bool
+	HasBenchmark      bool
 	MaxDrawdown       [2]float64
 	Volatility        [2]float64
 	DownsideDeviation [2]float64
@@ -139,385 +141,4 @@ type Trades struct {
 	Turnover          float64
 	PositivePeriods   float64
 	Trades            []TradeEntry
-}
-
-// ---------------------------------------------------------------------------
-// Section builders
-// ---------------------------------------------------------------------------
-
-func buildEquityCurve(perfData *data.DataFrame, initialCash float64) EquityCurve {
-	times := perfData.Times()
-	strategyValues := perfData.Column(portfolioAsset, data.PortfolioEquity)
-	benchmarkRaw := perfData.Column(portfolioAsset, data.PortfolioBenchmark)
-
-	// Copy strategy values.
-	stratCopy := make([]float64, len(strategyValues))
-	copy(stratCopy, strategyValues)
-
-	// Normalize benchmark to initial cash.
-	var benchNorm []float64
-	if len(benchmarkRaw) > 0 && benchmarkRaw[0] != 0 {
-		benchNorm = make([]float64, len(benchmarkRaw))
-
-		scale := initialCash / benchmarkRaw[0]
-		for idx, val := range benchmarkRaw {
-			benchNorm[idx] = val * scale
-		}
-	}
-
-	timesCopy := make([]time.Time, len(times))
-	copy(timesCopy, times)
-
-	return EquityCurve{
-		Times:           timesCopy,
-		StrategyValues:  stratCopy,
-		BenchmarkValues: benchNorm,
-	}
-}
-
-func buildRecentReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
-	oneDay := portfolio.Days(1)
-	oneWeek := portfolio.Days(7)
-	oneMonth := portfolio.Months(1)
-	wtd := portfolio.WTD()
-	mtd := portfolio.MTD()
-	ytd := portfolio.YTD()
-
-	type periodDef struct {
-		label  string
-		window portfolio.Period
-	}
-
-	defs := []periodDef{
-		{"1D", oneDay},
-		{"1W", oneWeek},
-		{"1M", oneMonth},
-		{"WTD", wtd},
-		{"MTD", mtd},
-		{"YTD", ytd},
-	}
-
-	pd := acct.PerfData()
-
-	result := ReturnTable{
-		Periods:   make([]string, len(defs)),
-		Strategy:  make([]float64, len(defs)),
-		Benchmark: make([]float64, len(defs)),
-	}
-
-	if pd != nil && pd.Len() > 0 {
-		result.AsOf = pd.End()
-	}
-
-	for idx, def := range defs {
-		result.Periods[idx] = def.label
-		result.Strategy[idx] = metricValWindow(acct, portfolio.TWRR, def.window, warnings)
-
-		if hasBenchmark {
-			result.Benchmark[idx] = metricValBenchmarkWindow(acct, portfolio.TWRR, def.window, warnings)
-		} else {
-			result.Benchmark[idx] = math.NaN()
-		}
-	}
-
-	return result
-}
-
-func buildReturns(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) ReturnTable {
-	perfData := acct.PerfData()
-
-	var backtestStart, backtestEnd time.Time
-
-	if perfData != nil && perfData.Len() > 0 {
-		backtestStart = perfData.Start()
-		backtestEnd = perfData.End()
-	}
-
-	backtestYears := backtestEnd.Sub(backtestStart).Hours() / 24 / 365.25
-
-	type periodDef struct {
-		label        string
-		window       *portfolio.Period
-		nominalYears float64
-	}
-
-	oneYear := portfolio.Years(1)
-	threeYears := portfolio.Years(3)
-	fiveYears := portfolio.Years(5)
-	tenYears := portfolio.Years(10)
-
-	defs := []periodDef{
-		{"1Y", &oneYear, 1},
-		{"3Y", &threeYears, 3},
-		{"5Y", &fiveYears, 5},
-		{"10Y", &tenYears, 10},
-		{"Since Inception", nil, 0},
-	}
-
-	result := ReturnTable{
-		AsOf:      backtestEnd,
-		Periods:   make([]string, len(defs)),
-		Strategy:  make([]float64, len(defs)),
-		Benchmark: make([]float64, len(defs)),
-	}
-
-	for idx, def := range defs {
-		result.Periods[idx] = def.label
-
-		// N/A detection: check if the backtest covers the requested period.
-		if def.window != nil {
-			windowStart := def.window.Before(backtestEnd)
-			if windowStart.Before(backtestStart) {
-				result.Strategy[idx] = math.NaN()
-				result.Benchmark[idx] = math.NaN()
-
-				continue
-			}
-		}
-
-		// Compute TWRR.
-		var stratTWRR, benchTWRR float64
-
-		if def.window != nil {
-			stratTWRR = metricValWindow(acct, portfolio.TWRR, *def.window, warnings)
-		} else {
-			stratTWRR = metricVal(acct, portfolio.TWRR, warnings)
-		}
-
-		if hasBenchmark {
-			if def.window != nil {
-				benchTWRR = metricValBenchmarkWindow(acct, portfolio.TWRR, *def.window, warnings)
-			} else {
-				benchTWRR = metricValBenchmark(acct, portfolio.TWRR, warnings)
-			}
-		} else {
-			benchTWRR = math.NaN()
-		}
-
-		// Annualize.
-		years := def.nominalYears
-		if years == 0 {
-			years = backtestYears
-		}
-
-		// For backtests shorter than 1 year, Since Inception shows raw TWRR.
-		if def.window == nil && backtestYears < 1.0 {
-			result.Strategy[idx] = stratTWRR
-			result.Benchmark[idx] = benchTWRR
-		} else {
-			result.Strategy[idx] = annualizeTWRR(stratTWRR, years)
-			result.Benchmark[idx] = annualizeTWRR(benchTWRR, years)
-		}
-	}
-
-	return result
-}
-
-func buildAnnualReturns(acct ReportablePortfolio, hasBenchmark bool, warnings *[]string) AnnualReturns {
-	years, stratReturns, err := acct.AnnualReturns(data.PortfolioEquity)
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("annual returns (strategy): %v", err))
-		return AnnualReturns{}
-	}
-
-	result := AnnualReturns{
-		Years:    years,
-		Strategy: stratReturns,
-	}
-
-	if hasBenchmark {
-		_, benchReturns, err := acct.AnnualReturns(data.PortfolioBenchmark)
-		if err != nil {
-			*warnings = append(*warnings, fmt.Sprintf("annual returns (benchmark): %v", err))
-		} else {
-			result.Benchmark = benchReturns
-		}
-	}
-
-	return result
-}
-
-func buildRisk(acct portfolio.Portfolio, hasBenchmark bool, warnings *[]string) Risk {
-	risk := Risk{}
-
-	type riskField struct {
-		target *[2]float64
-		metric portfolio.PerformanceMetric
-	}
-
-	fields := []riskField{
-		{&risk.MaxDrawdown, portfolio.MaxDrawdown},
-		{&risk.Volatility, portfolio.StdDev},
-		{&risk.DownsideDeviation, portfolio.DownsideDeviation},
-		{&risk.Sharpe, portfolio.Sharpe},
-		{&risk.Sortino, portfolio.Sortino},
-		{&risk.Calmar, portfolio.Calmar},
-		{&risk.UlcerIndex, portfolio.UlcerIndex},
-		{&risk.ValueAtRisk, portfolio.ValueAtRisk},
-		{&risk.Skewness, portfolio.Skewness},
-		{&risk.ExcessKurtosis, portfolio.ExcessKurtosis},
-	}
-
-	for _, field := range fields {
-		field.target[0] = metricVal(acct, field.metric, warnings)
-		if hasBenchmark {
-			field.target[1] = metricValBenchmark(acct, field.metric, warnings)
-		} else {
-			field.target[1] = math.NaN()
-		}
-	}
-
-	return risk
-}
-
-func buildRiskVsBenchmark(acct portfolio.Portfolio, warnings *[]string) RiskVsBenchmark {
-	return RiskVsBenchmark{
-		Beta:             metricVal(acct, portfolio.Beta, warnings),
-		Alpha:            metricVal(acct, portfolio.Alpha, warnings),
-		RSquared:         metricVal(acct, portfolio.RSquared, warnings),
-		TrackingError:    metricVal(acct, portfolio.TrackingError, warnings),
-		InformationRatio: metricVal(acct, portfolio.InformationRatio, warnings),
-		Treynor:          metricVal(acct, portfolio.Treynor, warnings),
-		UpsideCapture:    metricVal(acct, portfolio.UpsideCaptureRatio, warnings),
-		DownsideCapture:  metricVal(acct, portfolio.DownsideCaptureRatio, warnings),
-	}
-}
-
-func buildDrawdowns(acct ReportablePortfolio, warnings *[]string) Drawdowns {
-	details, err := acct.DrawdownDetails(5)
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("drawdown details: %v", err))
-		return Drawdowns{}
-	}
-
-	entries := make([]DrawdownEntry, len(details))
-	for idx, detail := range details {
-		entries[idx] = DrawdownEntry{
-			Start:    detail.Start,
-			End:      detail.Trough,
-			Recovery: detail.Recovery,
-			Depth:    detail.Depth,
-			Days:     detail.Days,
-		}
-	}
-
-	return Drawdowns{Entries: entries}
-}
-
-func buildMonthlyReturns(acct ReportablePortfolio, warnings *[]string) MonthlyReturns {
-	years, grid, err := acct.MonthlyReturns(data.PortfolioEquity)
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("monthly returns: %v", err))
-		return MonthlyReturns{}
-	}
-
-	return MonthlyReturns{
-		Years:  years,
-		Values: grid,
-	}
-}
-
-func buildTrades(acct portfolio.Portfolio, warnings *[]string) Trades {
-	transactions := acct.Transactions()
-
-	var entries []TradeEntry
-
-	totalTransactions := 0
-	roundTrips := 0
-
-	for _, txn := range transactions {
-		switch txn.Type {
-		case asset.BuyTransaction, asset.SellTransaction:
-			totalTransactions++
-
-			if txn.Type == asset.SellTransaction {
-				roundTrips++
-			}
-
-			entries = append(entries, TradeEntry{
-				Date:   txn.Date,
-				Action: txn.Type.String(),
-				Ticker: txn.Asset.Ticker,
-				Shares: txn.Qty,
-				Price:  txn.Price,
-				Amount: txn.Amount,
-			})
-		}
-	}
-
-	result := Trades{
-		TotalTransactions: totalTransactions,
-		RoundTrips:        roundTrips,
-		Trades:            entries,
-	}
-
-	// Pull aggregate trade metrics from portfolio.
-	tradeMetrics, err := acct.TradeMetrics()
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("trade metrics: %v", err))
-	} else {
-		result.WinRate = tradeMetrics.WinRate
-		result.AvgHolding = tradeMetrics.AverageHoldingPeriod
-		result.AvgWin = tradeMetrics.AverageWin
-		result.AvgLoss = tradeMetrics.AverageLoss
-		result.ProfitFactor = tradeMetrics.ProfitFactor
-		result.GainLossRatio = tradeMetrics.GainLossRatio
-		result.Turnover = tradeMetrics.Turnover
-		result.PositivePeriods = tradeMetrics.NPositivePeriods
-	}
-
-	return result
-}
-
-// ---------------------------------------------------------------------------
-// Metric helpers -- return NaN on error and append to warnings.
-// ---------------------------------------------------------------------------
-
-func metricVal(acct portfolio.Portfolio, metric portfolio.PerformanceMetric, warnings *[]string) float64 {
-	val, err := acct.PerformanceMetric(metric).Value()
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s: %v", metric.Name(), err))
-		return math.NaN()
-	}
-
-	return val
-}
-
-func metricValBenchmark(acct portfolio.Portfolio, metric portfolio.PerformanceMetric, warnings *[]string) float64 {
-	val, err := acct.PerformanceMetric(metric).Benchmark().Value()
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s (benchmark): %v", metric.Name(), err))
-		return math.NaN()
-	}
-
-	return val
-}
-
-func metricValWindow(acct portfolio.Portfolio, metric portfolio.PerformanceMetric, window portfolio.Period, warnings *[]string) float64 {
-	val, err := acct.PerformanceMetric(metric).Window(window).Value()
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s (window %v): %v", metric.Name(), window, err))
-		return math.NaN()
-	}
-
-	return val
-}
-
-func metricValBenchmarkWindow(acct portfolio.Portfolio, metric portfolio.PerformanceMetric, window portfolio.Period, warnings *[]string) float64 {
-	val, err := acct.PerformanceMetric(metric).Benchmark().Window(window).Value()
-	if err != nil {
-		*warnings = append(*warnings, fmt.Sprintf("%s (benchmark, window %v): %v", metric.Name(), window, err))
-		return math.NaN()
-	}
-
-	return val
-}
-
-// annualizeTWRR converts a cumulative TWRR to an annualized rate.
-func annualizeTWRR(twrr float64, years float64) float64 {
-	if math.IsNaN(twrr) || years <= 0 {
-		return math.NaN()
-	}
-
-	return math.Pow(1+twrr, 1.0/years) - 1
 }

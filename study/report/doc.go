@@ -13,16 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package report builds structured, composable reports from backtest results.
+// Package report defines the types and interfaces for structured backtest
+// reports. Domain types (Header, EquityCurve, Risk, etc.) implement the
+// Section interface, allowing renderers to type-assert for styled output.
 //
-// [Summary] takes a [ReportablePortfolio] (composing [portfolio.Portfolio]
-// and [portfolio.PortfolioStats]) and produces a [Report] containing
-// Section primitives (MetricPairs, Table, TimeSeries, Text) that together
-// form a complete backtest summary.
-//
-//	rpt, err := report.Summary(acct)
-//	rpt.Render(report.FormatText, os.Stdout)
-//
-// The Report struct delegates rendering to each Section, supporting
-// FormatText, FormatJSON, and FormatHTML output formats.
+// Report builders live in subpackages (e.g., summary.Build) and renderers
+// in renderer subpackages (e.g., renderer/terminal.Render).
 package report

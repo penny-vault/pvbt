@@ -15,7 +15,7 @@
 
 // Package terminal renders backtest reports to styled terminal output.
 //
-// [Render] takes a [report.TerminalReport] view model and writes a styled
+// [Render] takes a [report.Report] view model and writes a styled
 // summary to the provided [io.Writer] using lipgloss for formatting.
 // The output includes the strategy header, equity curve, return tables,
 // risk metrics, drawdown analysis, monthly return heatmap, and trade

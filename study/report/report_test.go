@@ -25,6 +25,7 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study/report"
+	"github.com/penny-vault/pvbt/study/report/summary"
 )
 
 var (
@@ -105,7 +106,7 @@ func TestSummaryHeader(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaRunElapsed, (5 * time.Second).String())
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -149,7 +150,7 @@ func TestSummaryNoBenchmark(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "NoBench")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -175,7 +176,7 @@ func TestSummaryWithBenchmark(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyBenchmark, "BENCH")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -215,7 +216,7 @@ func TestSummaryInsufficientData(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "Empty")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -242,7 +243,7 @@ func TestSummaryInsufficientData(t *testing.T) {
 	acctOne.SetMetadata(portfolio.MetaStrategyName, "Single")
 	acctOne.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rptOne, err := report.Summary(acctOne)
+	rptOne, err := summary.Build(acctOne)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -270,7 +271,7 @@ func TestSummaryEquityCurve(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "EC")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}
@@ -302,7 +303,7 @@ func TestSummarySectionCount(t *testing.T) {
 	acct.SetMetadata(portfolio.MetaStrategyName, "Sections")
 	acct.SetMetadata(portfolio.MetaRunInitialCash, "10000.00")
 
-	rpt, err := report.Summary(acct)
+	rpt, err := summary.Build(acct)
 	if err != nil {
 		t.Fatalf("Summary returned error: %v", err)
 	}

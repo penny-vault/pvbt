@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/study/report"
-	"github.com/penny-vault/pvbt/study/report/terminal"
+	"github.com/penny-vault/pvbt/study/report/renderer/terminal"
 )
 
 func TestRenderDoesNotPanic(t *testing.T) {
