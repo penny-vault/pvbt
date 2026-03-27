@@ -2,75 +2,67 @@
 
 ## Problem
 
-The per-column cache in `fetchRange` uses `map[colCacheKey]*colCacheEntry` keyed by `(figi, metric, chunkYear)`. For 50 assets and 7 metrics, every `fetchRange` call does ~350 map lookups just for miss detection, then another ~350 for assembly -- plus building a union time set, sorting it, allocating a NaN slab, scattering values, and constructing a new DataFrame. The profile shows 29% of `fetchRange` CPU on map operations and 12% total CPU on GC from short-lived maps, slabs, and DataFrames created on every call.
+The per-column cache in `fetchRange` uses `map[colCacheKey]*colCacheEntry` keyed by `(figi, metric, chunkYear)`. For 50 assets and 7 metrics, every `fetchRange` call does ~350 map lookups for miss detection, ~350 more for assembly, builds a union time set map, sorts it, builds a time index map, allocates a NaN slab, scatters values, and constructs a new DataFrame. The profile shows 29% of `fetchRange` CPU on map operations and 12% total CPU on GC from short-lived maps, slabs, and DataFrames created on every call.
 
 ## Design
 
-### Replace per-column cache with per-chunk cache
+### Chunk-level cache with calendar-day-indexed slabs
 
-Replace `map[colCacheKey]*colCacheEntry` with `map[int64]*chunkEntry` where the int64 key is the year chunk start (Unix seconds). Each `chunkEntry` holds:
+Replace `map[colCacheKey]*colCacheEntry` with `map[int64]*chunkEntry` where the int64 key is the year chunk start (Unix seconds of Jan 1 00:00 Eastern). Each chunk holds a flat `[]float64` slab indexed by pure arithmetic:
 
 ```go
 type chunkEntry struct {
-    df       *data.DataFrame  // full year of data for all fetched assets/metrics
-    columns  map[chunkCol]bool // tracks which (figi, metric) pairs are present
-    bytes    int64             // estimated memory footprint
-}
-
-type chunkCol struct {
-    figi   string
-    metric data.Metric
+    baseUnix  int64            // Jan 1 00:00 Eastern, Unix seconds
+    assets    []asset.Asset    // ordered asset list
+    metrics   []data.Metric    // ordered metric list
+    assetIdx  map[string]int   // figi -> index into assets (built once per expansion)
+    metricIdx map[data.Metric]int // metric -> index into metrics (built once per expansion)
+    values    []float64        // [dayOffset * numAssets * numMetrics + aIdx * numMetrics + mIdx]
+    bytes     int64            // estimated memory footprint
 }
 ```
 
+Slab dimensions: 366 days x len(assets) x len(metrics). Always 366 slots regardless of leap year -- wastes one slot in non-leap years but avoids branching. Non-trading days and missing data are NaN.
+
+Lookup: `values[dayOffset*len(assets)*len(metrics) + aIdx*len(metrics) + mIdx]` where `dayOffset = (timestamp - baseUnix) / 86400`. No maps on the hot read path.
+
 ### Miss detection
 
-One map lookup per year instead of N*M. For each year, check the chunk's `columns` set for each requested (asset, metric) pair. If all are present, no fetch needed. If any are missing, collect the missing assets and metrics for that year.
+One map lookup per year to get the chunk entry. Then check `assetIdx` and `metricIdx` for each requested (asset, metric) pair. These are small maps (50 assets, 7 metrics) checked only during miss detection, not on every value read.
 
 ### Fetching misses
 
-Same as today: one provider call per year chunk with the missing assets and metrics. The returned DataFrame gets merged into the existing chunk entry using `DataFrame.Merge`. The chunk's `columns` set expands to include the newly fetched pairs.
-
-When the chunk is new (no entry exists), the provider result becomes the chunk entry directly.
+Same as today: one provider call per year chunk with the missing assets and metrics. When the chunk doesn't exist, create it with the fetched dimensions. When the chunk exists but needs new assets or metrics, allocate a new slab with expanded dimensions, scatter old values into the new layout, then scatter the fetched values. This reallocation only happens a few times during the first backtest step as different callers request different metric sets, then never again.
 
 ### Assembly
 
-Instead of scattering cached columns into a NaN slab:
+For each year in the requested range:
+1. Compute day offsets for `rangeStart` and `rangeEnd`
+2. Walk the day range, skip days where all requested columns are NaN (weekends/holidays)
+3. For each trading day, read values directly from the slab via arithmetic indexing
+4. Build the result DataFrame from the collected trading days and values
 
-1. For each year, get the chunk's DataFrame
-2. Select only the requested assets and metrics from it (if the chunk has more than requested)
-3. Call `Between(rangeStart, rangeEnd)` to slice to the requested date range
-4. For single-year requests (the common case), return directly -- no merge needed
-5. For multi-year requests, merge the year DataFrames
-
-### DataFrame.Merge
-
-If a `Merge` method doesn't exist on DataFrame, add one. It combines two DataFrames that may have different assets, metrics, and overlapping or adjacent time ranges into one. For this use case, the DataFrames have non-overlapping time ranges (different years) so the merge is a concatenation along the time axis.
-
-### DataFrame.Select
-
-If a `Select` method doesn't exist on DataFrame, add one. It returns a view or copy containing only the specified assets and metrics. This avoids returning the entire chunk when the caller only needs a subset.
+For single-year requests (the common case), this is a single linear scan with no maps, no sorting, no intermediate allocations. For multi-year requests, concatenate the results.
 
 ### Eviction
 
-Same policy as today: evict chunks older than `currentYear - 1`. But now it's one `delete` per evicted year instead of iterating all column entries.
+Same policy as today: evict chunks older than `currentYear - 1`. One `delete` call per evicted year instead of iterating all column entries.
 
 ### Size tracking
 
-Same approach: estimate bytes from the chunk DataFrame's dimensions. `len(times) * len(assets) * len(metrics) * 8` for values plus `len(times) * 24` for timestamps.
+`366 * len(assets) * len(metrics) * 8` for the values slab. Updated on expansion.
 
 ## Files Changed
 
 | File | Change |
 |------|--------|
-| `engine/data_cache.go` | Replace `colCacheKey`/`colCacheEntry` with `chunkEntry`/`chunkCol`, rewrite `get`/`put`/`evictBefore` |
-| `engine/engine.go` | Rewrite `fetchRange` miss detection, fetch, and assembly sections |
-| `data/data_frame.go` | Add `Merge` and `Select` methods if they don't exist |
+| `engine/data_cache.go` | Replace `colCacheKey`/`colCacheEntry` with `chunkEntry`, rewrite `get`/`put`/`evictBefore`, add slab indexing methods |
+| `engine/engine.go` | Rewrite `fetchRange` miss detection and assembly to use chunk slabs |
 | `engine/data_cache_test.go` | Update cache tests for new structure |
 
 ## What Does Not Change
 
 - `fetchFromProviders` -- still called with missing assets/metrics per year
-- Callers of `fetchRange` (`Fetch`, `FetchAt`, `Prices`) -- same interface
+- Callers of `fetchRange` (`Fetch`, `FetchAt`, `Prices`) -- same interface and return type
 - The public API -- entirely internal change
 - Provider interface -- unchanged
