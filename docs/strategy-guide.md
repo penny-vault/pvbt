@@ -658,12 +658,12 @@ Example -- a strategy that covers all shorts immediately on a margin call:
 func (s *PairsStrategy) OnMarginCall(ctx context.Context, _ *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     zerolog.Ctx(ctx).Warn().Msg("margin call: covering all short positions")
 
-    port.Holdings(func(held asset.Asset, qty float64) {
+    for held, qty := range port.Holdings() {
         if qty < 0 {
             // Buy back the full short quantity.
             batch.Order(ctx, held, portfolio.Buy, -qty)
         }
-    })
+    }
 
     return nil
 }
@@ -679,9 +679,9 @@ port.Value()                // total value (cash + holdings)
 port.Position(spy)          // shares held (negative for shorts)
 port.PositionValue(spy)     // market value of position (negative for shorts)
 
-port.Holdings(func(a asset.Asset, qty float64) {
+for ast, qty := range port.Holdings() {
     // iterate all positions; qty is negative for short positions
-})
+}
 
 port.Transactions()         // full trade log
 ```

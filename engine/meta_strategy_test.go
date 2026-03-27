@@ -63,12 +63,12 @@ func (s *spyOnlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 	// Buy SPY with all cash if not already held.
 	currentShares := fund.Position(target)
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		holdingPrice := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(holdingPrice) {
 			totalValue += qty * holdingPrice
 		}
-	})
+	}
 
 	targetShares := math.Floor(totalValue / price)
 	diff := targetShares - currentShares
@@ -111,12 +111,12 @@ func (s *tltOnlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 
 	currentShares := fund.Position(target)
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		holdingPrice := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(holdingPrice) {
 			totalValue += qty * holdingPrice
 		}
-	})
+	}
 
 	targetShares := math.Floor(totalValue / price)
 	diff := targetShares - currentShares

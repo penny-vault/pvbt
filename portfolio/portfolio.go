@@ -51,9 +51,9 @@ type Portfolio interface {
 	// in a specific asset (quantity * current price).
 	PositionValue(a asset.Asset) float64
 
-	// Holdings iterates over all current positions, calling fn with
-	// each asset and its held quantity.
-	Holdings(fn func(asset.Asset, float64))
+	// Holdings returns a map of all current positions keyed by asset
+	// with the held quantity as the value.
+	Holdings() map[asset.Asset]float64
 
 	// Transactions returns the full transaction log in chronological
 	// order. The log contains every event that changed the portfolio:

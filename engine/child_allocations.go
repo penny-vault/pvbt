@@ -72,12 +72,12 @@ func (eng *Engine) ChildAllocations(overrides ...map[string]float64) (portfolio.
 			members[asset.CashAsset] += childWeight * cashFraction
 		}
 
-		child.account.Holdings(func(held asset.Asset, _ float64) {
+		for held := range child.account.Holdings() {
 			posValue := child.account.PositionValue(held)
 			posWeight := posValue / childValue
 
 			members[held] += childWeight * posWeight
-		})
+		}
 	}
 
 	return portfolio.Allocation{

@@ -74,11 +74,12 @@ func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct portfolio.
 // This makes margin ratio calculations available before the full
 // updateAccountPrices call that records performance data.
 func (eng *Engine) setMarginPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
-	var heldAssets []asset.Asset
+	holdings := acct.Holdings()
 
-	acct.Holdings(func(held asset.Asset, _ float64) {
+	heldAssets := make([]asset.Asset, 0, len(holdings))
+	for held := range holdings {
 		heldAssets = append(heldAssets, held)
-	})
+	}
 
 	if len(heldAssets) == 0 {
 		return nil
@@ -115,9 +116,9 @@ func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct portfolio.Portf
 	batch := acct.NewBatch(date)
 	batch.SkipMiddleware = true
 
-	acct.Holdings(func(ast asset.Asset, qty float64) {
+	for ast, qty := range acct.Holdings() {
 		if qty >= 0 {
-			return
+			continue
 		}
 
 		coverQty := math.Ceil(math.Abs(qty) * coverFraction)
@@ -133,7 +134,7 @@ func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct portfolio.Portf
 			TimeInForce:   broker.Day,
 			Justification: "margin call auto-liquidation",
 		})
-	})
+	}
 
 	if len(batch.Orders) == 0 {
 		return nil

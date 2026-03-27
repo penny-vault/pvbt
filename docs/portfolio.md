@@ -333,12 +333,12 @@ p.PositionValue(asset)  // market value of the position in an asset
 To iterate over all current holdings:
 
 ```go
-p.Holdings(func(a Asset, qty float64) {
+for ast, qty := range p.Holdings() {
     log.Info().
-        Str("symbol", a.Symbol()).
+        Str("symbol", ast.Symbol()).
         Float64("qty", qty).
         Msg("holding")
-})
+}
 ```
 
 ## Short position lifecycle

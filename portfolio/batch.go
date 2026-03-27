@@ -268,7 +268,7 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 
 		// Liquidate all positions not in the target allocation.
 		// Long positions are sold; short positions are covered (bought back).
-		b.portfolio.Holdings(func(ast asset.Asset, qty float64) {
+		for ast, qty := range b.portfolio.Holdings() {
 			if _, ok := alloc.Members[ast]; !ok && qty != 0 {
 				if qty > 0 {
 					sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})
@@ -276,7 +276,7 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 					coverBuys = append(coverBuys, pendingOrder{asset: ast, side: Buy, qty: math.Abs(qty)})
 				}
 			}
-		})
+		}
 
 		// Sell overweight positions.
 		for ast, weight := range alloc.Members {
@@ -360,9 +360,9 @@ func (b *Batch) ProjectedHoldings() map[asset.Asset]float64 {
 	holdings := make(map[asset.Asset]float64)
 
 	// Seed with current holdings (already mapped to logical by Account.Holdings).
-	b.portfolio.Holdings(func(ast asset.Asset, qty float64) {
+	for ast, qty := range b.portfolio.Holdings() {
 		holdings[ast] = qty
-	})
+	}
 
 	// Obtain active substitutions if the portfolio supports them.
 	var subs map[asset.Asset]Substitution

@@ -67,11 +67,11 @@ func (h *TaxLossHarvester) Process(ctx context.Context, batch *portfolio.Batch) 
 	// Collect held assets.
 	var heldAssets []asset.Asset
 
-	batch.Portfolio().Holdings(func(ast asset.Asset, qty float64) {
+	for ast, qty := range batch.Portfolio().Holdings() {
 		if qty > 0 {
 			heldAssets = append(heldAssets, ast)
 		}
-	})
+	}
 
 	for _, held := range heldAssets {
 		lots := taxAware.UnrealizedLots(held)

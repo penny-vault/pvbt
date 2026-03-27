@@ -131,14 +131,8 @@ var _ = Describe("SQLite", func() {
 			}
 
 			// Verify holdings.
-			origHoldings := make(map[asset.Asset]float64)
-			acct.Holdings(func(a asset.Asset, q float64) {
-				origHoldings[a] = q
-			})
-			resHoldings := make(map[asset.Asset]float64)
-			restored.Holdings(func(a asset.Asset, q float64) {
-				resHoldings[a] = q
-			})
+			origHoldings := acct.Holdings()
+			resHoldings := restored.Holdings()
 			Expect(resHoldings).To(Equal(origHoldings))
 
 			// Verify tax lots.

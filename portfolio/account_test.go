@@ -620,9 +620,7 @@ var _ = Describe("Account", func() {
 	Describe("Holdings", func() {
 		It("starts with no holdings", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
-			count := 0
-			a.Holdings(func(_ asset.Asset, _ float64) { count++ })
-			Expect(count).To(Equal(0))
+			Expect(a.Holdings()).To(HaveLen(0))
 		})
 
 		It("returns zero for unknown positions", func() {
@@ -650,10 +648,7 @@ var _ = Describe("Account", func() {
 				Amount: -1_000.0,
 			})
 
-			seen := make(map[asset.Asset]float64)
-			a.Holdings(func(ast asset.Asset, qty float64) {
-				seen[ast] = qty
-			})
+			seen := a.Holdings()
 			Expect(seen).To(HaveLen(2))
 			Expect(seen[spy]).To(Equal(10.0))
 			Expect(seen[bil]).To(Equal(20.0))
@@ -728,11 +723,8 @@ var _ = Describe("Account", func() {
 
 			Expect(a.Position(spy)).To(Equal(0.0))
 
-			// Holdings callback should not see SPY at all.
-			seen := make(map[asset.Asset]float64)
-			a.Holdings(func(ast asset.Asset, qty float64) {
-				seen[ast] = qty
-			})
+			// Holdings should not include SPY at all.
+			seen := a.Holdings()
 			Expect(seen).NotTo(HaveKey(spy))
 		})
 	})
