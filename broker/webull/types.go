@@ -241,18 +241,12 @@ func mapWebullStatus(status string) broker.OrderStatus {
 	}
 }
 
-// Compile-time references so the unused linter does not flag types and
+// Compile-time references so the unused linter does not flag mapping
 // functions that are only consumed from the test-export bridge today but
-// will be wired into the HTTP client and broker facade in later tasks.
+// will be wired into the broker facade in later tasks.
 var (
 	_ = toWebullOrder
 	_ = toBrokerOrder
 	_ = toBrokerPosition
 	_ = toBrokerBalance
-	_ = (*orderRequest)(nil)
-	_ = (*replaceRequest)(nil)
-	_ = (*orderResponse)(nil)
-	_ = (*positionResponse)(nil)
-	_ = (*accountResponse)(nil)
-	_ = (*accountListResponse)(nil)
 )

@@ -1,6 +1,7 @@
 package webull
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -131,4 +132,51 @@ func (tm *TokenManagerExport) SetTokensForTest(access, refresh string) {
 		RefreshToken:    refresh,
 		AccessExpiresAt: time.Now().Add(30 * time.Minute),
 	}
+}
+
+// --- API client test exports ---
+
+// APIClientForTestType is an exported alias for apiClient.
+type APIClientForTestType = apiClient
+
+// NewAPIClientForTest creates an apiClient pointing at a custom base URL
+// with an hmacSigner for testing.
+func NewAPIClientForTest(baseURL, appKey, appSecret string) *apiClient {
+	sign := &hmacSigner{appKey: appKey, appSecret: appSecret}
+	return newAPIClient(baseURL, sign)
+}
+
+// GetAccounts exposes getAccounts for testing.
+func (client *apiClient) GetAccounts(ctx context.Context) ([]accountEntry, error) {
+	return client.getAccounts(ctx)
+}
+
+// SubmitOrder exposes submitOrder for testing.
+func (client *apiClient) SubmitOrder(ctx context.Context, accountID string, order orderRequest) (string, error) {
+	return client.submitOrder(ctx, accountID, order)
+}
+
+// CancelOrder exposes cancelOrder for testing.
+func (client *apiClient) CancelOrder(ctx context.Context, accountID string, orderID string) error {
+	return client.cancelOrder(ctx, accountID, orderID)
+}
+
+// ReplaceOrder exposes replaceOrder for testing.
+func (client *apiClient) ReplaceOrder(ctx context.Context, accountID string, orderID string, replacement replaceRequest) error {
+	return client.replaceOrder(ctx, accountID, orderID, replacement)
+}
+
+// GetOrders exposes getOrders for testing.
+func (client *apiClient) GetOrders(ctx context.Context, accountID string) ([]orderResponse, error) {
+	return client.getOrders(ctx, accountID)
+}
+
+// GetPositions exposes getPositions for testing.
+func (client *apiClient) GetPositions(ctx context.Context, accountID string) ([]positionResponse, error) {
+	return client.getPositions(ctx, accountID)
+}
+
+// GetBalance exposes getBalance for testing.
+func (client *apiClient) GetBalance(ctx context.Context, accountID string) (accountResponse, error) {
+	return client.getBalance(ctx, accountID)
 }
