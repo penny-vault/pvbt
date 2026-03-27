@@ -487,6 +487,7 @@ func (eng *Engine) updateAccountPrices(ctx context.Context, acct portfolio.Portf
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
 	holdings := acct.Holdings()
+
 	priceAssets := make([]asset.Asset, 0, len(holdings))
 	for ast := range holdings {
 		priceAssets = append(priceAssets, ast)

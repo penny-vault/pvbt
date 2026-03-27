@@ -425,6 +425,7 @@ func (a *Account) Holdings() map[asset.Asset]float64 {
 		for ast, qty := range a.holdings {
 			result[ast] = qty
 		}
+
 		return result
 	}
 
@@ -438,6 +439,7 @@ func (a *Account) Holdings() map[asset.Asset]float64 {
 		key := mapToLogical(realAsset, a.substitutions, asOf)
 		logical[key] += qty
 	}
+
 	return logical
 }
 

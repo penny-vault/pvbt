@@ -75,6 +75,7 @@ func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct portfolio.
 // updateAccountPrices call that records performance data.
 func (eng *Engine) setMarginPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	holdings := acct.Holdings()
+
 	heldAssets := make([]asset.Asset, 0, len(holdings))
 	for held := range holdings {
 		heldAssets = append(heldAssets, held)

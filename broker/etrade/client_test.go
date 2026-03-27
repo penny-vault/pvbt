@@ -168,20 +168,20 @@ var _ = Describe("apiClient", func() {
 								"orderStatus": "OPEN",
 								"OrderDetail": []map[string]any{
 									{
-										"priceType":   "LIMIT",
-										"orderTerm":   "GOOD_FOR_DAY",
-										"limitPrice":  155.0,
-										"stopPrice":   0.0,
+										"priceType":  "LIMIT",
+										"orderTerm":  "GOOD_FOR_DAY",
+										"limitPrice": 155.0,
+										"stopPrice":  0.0,
 										"Instrument": []map[string]any{
 											{
 												"Product": map[string]any{
 													"symbol":       "AAPL",
 													"securityType": "EQ",
 												},
-												"orderAction":              "BUY",
-												"orderedQuantity":          5.0,
-												"filledQuantity":           0.0,
-												"averageExecutionPrice":    0.0,
+												"orderAction":           "BUY",
+												"orderedQuantity":       5.0,
+												"filledQuantity":        0.0,
+												"averageExecutionPrice": 0.0,
 											},
 										},
 									},
@@ -484,4 +484,3 @@ var _ = Describe("apiClient", func() {
 		})
 	})
 })
-

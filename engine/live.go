@@ -295,6 +295,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 			// Retry up to 18 times with 1-hour waits for delayed prices
 			// (mutual fund NAVs may not be available until 1-3 AM next day).
 			holdings := acct.Holdings()
+
 			priceAssets := make([]asset.Asset, 0, len(holdings))
 			for ast := range holdings {
 				priceAssets = append(priceAssets, ast)
