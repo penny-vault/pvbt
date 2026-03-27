@@ -339,7 +339,7 @@ var _ = Describe("WebullBroker", func() {
 			Expect(positions[0].Asset.Ticker).To(Equal("NVDA"))
 			Expect(positions[0].Qty).To(Equal(100.0))
 			Expect(positions[0].AvgOpenPrice).To(Equal(400.0))
-			Expect(positions[0].MarkPrice).To(Equal(50000.0))
+			Expect(positions[0].MarkPrice).To(Equal(500.0))
 		})
 	})
 

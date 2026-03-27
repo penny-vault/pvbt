@@ -19,15 +19,23 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/penny-vault/pvbt/broker"
 )
 
+// refresher is implemented by signers that can transparently refresh expired
+// credentials (e.g. oauthSigner). hmacSigner does not implement this.
+type refresher interface {
+	Refresh() error
+}
+
 type apiClient struct {
-	resty  *resty.Client
-	signer signer
+	resty     *resty.Client
+	signer    signer
+	refresher refresher // non-nil when signer supports token refresh
 }
 
 // newAPIClient creates a new apiClient configured with retry, request signing, and base URL.
@@ -36,7 +44,7 @@ func newAPIClient(baseURL string, sign signer) *apiClient {
 		SetBaseURL(baseURL).
 		SetRetryCount(3).
 		SetRetryWaitTime(1*time.Second).
-		SetRetryMaxWaitTime(4*time.Second).
+		SetRetryMaxWaitTime(30*time.Second).
 		SetHeader("Content-Type", "application/json")
 
 	httpClient.AddRetryCondition(func(resp *resty.Response, err error) bool {
@@ -44,17 +52,72 @@ func newAPIClient(baseURL string, sign signer) *apiClient {
 			return broker.IsRetryableError(err)
 		}
 
-		return resp.StatusCode() == 429 || resp.StatusCode() >= 500
+		return resp.StatusCode() == http.StatusTooManyRequests || resp.StatusCode() >= 500
+	})
+
+	// Respect Retry-After header on 429 responses.
+	httpClient.SetRetryAfter(func(_ *resty.Client, resp *resty.Response) (time.Duration, error) {
+		if resp == nil || resp.StatusCode() != http.StatusTooManyRequests {
+			return 0, nil
+		}
+
+		retryAfter := resp.Header().Get("Retry-After")
+		if retryAfter == "" {
+			return 0, nil
+		}
+
+		// Try parsing as seconds first.
+		if seconds, parseErr := strconv.Atoi(retryAfter); parseErr == nil {
+			return time.Duration(seconds) * time.Second, nil
+		}
+
+		// Try parsing as HTTP-date.
+		if retryTime, parseErr := http.ParseTime(retryAfter); parseErr == nil {
+			delay := time.Until(retryTime)
+			if delay > 0 {
+				return delay, nil
+			}
+		}
+
+		return 0, nil
 	})
 
 	httpClient.SetPreRequestHook(func(_ *resty.Client, rawReq *http.Request) error {
 		return sign.Sign(rawReq)
 	})
 
-	return &apiClient{
+	ac := &apiClient{
 		resty:  httpClient,
 		signer: sign,
 	}
+
+	// If the signer supports token refresh, store it for auth failure retry.
+	if rf, ok := sign.(refresher); ok {
+		ac.refresher = rf
+	}
+
+	return ac
+}
+
+// isAuthFailure returns true if the HTTP status code indicates an authentication
+// or authorization failure that may be recoverable via token refresh.
+func isAuthFailure(statusCode int) bool {
+	return statusCode == http.StatusUnauthorized || statusCode == http.StatusForbidden
+}
+
+// refreshAndRetry attempts to refresh credentials and returns true if the
+// caller should retry the request. Returns false if no refresher is configured
+// or the refresh itself fails.
+func (client *apiClient) refreshAndRetry(statusCode int) bool {
+	if client.refresher == nil {
+		return false
+	}
+
+	if !isAuthFailure(statusCode) {
+		return false
+	}
+
+	return client.refresher.Refresh() == nil
 }
 
 // submitOrderResponse wraps the Webull order placement response.
@@ -85,6 +148,24 @@ func (client *apiClient) getAccounts(ctx context.Context) ([]accountEntry, error
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			result = accountListResponse{}
+
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetResult(&result).
+				Get("/api/trade/account/list")
+			if err != nil {
+				return nil, fmt.Errorf("get accounts: %w", err)
+			}
+
+			if resp.IsError() {
+				return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return result.Accounts, nil
+		}
+
 		return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -106,6 +187,26 @@ func (client *apiClient) submitOrder(ctx context.Context, accountID string, orde
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			result = submitOrderResponse{}
+
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetBody(order).
+				SetResult(&result).
+				SetPathParam("account_id", accountID).
+				Post("/api/trade/order/place")
+			if err != nil {
+				return "", fmt.Errorf("submit order: %w", err)
+			}
+
+			if resp.IsError() {
+				return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return result.OrderID, nil
+		}
+
 		return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -114,18 +215,36 @@ func (client *apiClient) submitOrder(ctx context.Context, accountID string, orde
 
 // cancelOrder cancels an existing order.
 func (client *apiClient) cancelOrder(ctx context.Context, accountID string, orderID string) error {
+	body := map[string]string{
+		"account_id": accountID,
+		"order_id":   orderID,
+	}
+
 	resp, err := client.resty.R().
 		SetContext(ctx).
-		SetBody(map[string]string{
-			"account_id": accountID,
-			"order_id":   orderID,
-		}).
+		SetBody(body).
 		Post("/api/trade/order/cancel")
 	if err != nil {
 		return fmt.Errorf("cancel order: %w", err)
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetBody(body).
+				Post("/api/trade/order/cancel")
+			if err != nil {
+				return fmt.Errorf("cancel order: %w", err)
+			}
+
+			if resp.IsError() {
+				return broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return nil
+		}
+
 		return broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -145,6 +264,24 @@ func (client *apiClient) replaceOrder(ctx context.Context, accountID string, ord
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetBody(replacement).
+				SetQueryParam("account_id", accountID).
+				SetQueryParam("order_id", orderID).
+				Post("/api/trade/order/replace")
+			if err != nil {
+				return fmt.Errorf("replace order: %w", err)
+			}
+
+			if resp.IsError() {
+				return broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return nil
+		}
+
 		return broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -165,6 +302,25 @@ func (client *apiClient) getOrders(ctx context.Context, accountID string) ([]ord
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			result = orderListResponse{}
+
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetResult(&result).
+				SetQueryParam("account_id", accountID).
+				Get("/api/trade/order/list")
+			if err != nil {
+				return nil, fmt.Errorf("get orders: %w", err)
+			}
+
+			if resp.IsError() {
+				return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return result.Orders, nil
+		}
+
 		return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -185,6 +341,25 @@ func (client *apiClient) getPositions(ctx context.Context, accountID string) ([]
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			result = positionListResponse{}
+
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetResult(&result).
+				SetQueryParam("account_id", accountID).
+				Get("/api/trade/account/positions")
+			if err != nil {
+				return nil, fmt.Errorf("get positions: %w", err)
+			}
+
+			if resp.IsError() {
+				return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return result.Positions, nil
+		}
+
 		return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
@@ -205,6 +380,25 @@ func (client *apiClient) getBalance(ctx context.Context, accountID string) (acco
 	}
 
 	if resp.IsError() {
+		if client.refreshAndRetry(resp.StatusCode()) {
+			result = accountResponse{}
+
+			resp, err = client.resty.R().
+				SetContext(ctx).
+				SetResult(&result).
+				SetQueryParam("account_id", accountID).
+				Get("/api/trade/account/detail")
+			if err != nil {
+				return accountResponse{}, fmt.Errorf("get balance: %w", err)
+			}
+
+			if resp.IsError() {
+				return accountResponse{}, broker.NewHTTPError(resp.StatusCode(), resp.String())
+			}
+
+			return result, nil
+		}
+
 		return accountResponse{}, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 

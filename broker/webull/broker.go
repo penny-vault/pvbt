@@ -298,9 +298,6 @@ func (wb *WebullBroker) Replace(ctx context.Context, orderID string, order broke
 
 // Orders returns all orders for the current trading day.
 func (wb *WebullBroker) Orders(ctx context.Context) ([]broker.Order, error) {
-	wb.mu.Lock()
-	defer wb.mu.Unlock()
-
 	rawOrders, getErr := wb.client.getOrders(ctx, wb.accountID)
 	if getErr != nil {
 		return nil, fmt.Errorf("webull: get orders: %w", getErr)
@@ -316,9 +313,6 @@ func (wb *WebullBroker) Orders(ctx context.Context) ([]broker.Order, error) {
 
 // Positions returns all current positions in the account.
 func (wb *WebullBroker) Positions(ctx context.Context) ([]broker.Position, error) {
-	wb.mu.Lock()
-	defer wb.mu.Unlock()
-
 	rawPositions, getErr := wb.client.getPositions(ctx, wb.accountID)
 	if getErr != nil {
 		return nil, fmt.Errorf("webull: get positions: %w", getErr)
@@ -334,9 +328,6 @@ func (wb *WebullBroker) Positions(ctx context.Context) ([]broker.Position, error
 
 // Balance returns the current account balance.
 func (wb *WebullBroker) Balance(ctx context.Context) (broker.Balance, error) {
-	wb.mu.Lock()
-	defer wb.mu.Unlock()
-
 	rawBalance, getErr := wb.client.getBalance(ctx, wb.accountID)
 	if getErr != nil {
 		return broker.Balance{}, fmt.Errorf("webull: get balance: %w", getErr)
@@ -349,7 +340,7 @@ func (wb *WebullBroker) Balance(ctx context.Context) (broker.Balance, error) {
 // API does not currently expose a transactions endpoint, so this returns an
 // empty slice.
 func (wb *WebullBroker) Transactions(_ context.Context, _ time.Time) ([]broker.Transaction, error) {
-	log.Info().Msg("webull: transactions endpoint not available in Webull Open API")
+	log.Info().Msg("Webull OpenAPI does not provide a transaction history endpoint; dividends, splits, and fees will not be synced.")
 	return nil, nil
 }
 

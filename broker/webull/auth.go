@@ -73,48 +73,6 @@ func (hs *hmacSigner) Sign(req *http.Request) error {
 	return nil
 }
 
-// NewSigner creates the appropriate signer based on the detected auth mode.
-// It is called by the broker facade during Connect.
-func NewSigner() (signer, error) {
-	mode, modeErr := detectAuthMode()
-	if modeErr != nil {
-		return nil, modeErr
-	}
-
-	switch mode {
-	case authModeDirect:
-		return &hmacSigner{
-			appKey:    os.Getenv("WEBULL_APP_KEY"),
-			appSecret: os.Getenv("WEBULL_APP_SECRET"),
-		}, nil
-	case authModeOAuth:
-		mgr := newTokenManager(
-			authModeOAuth,
-			os.Getenv("WEBULL_CLIENT_ID"),
-			os.Getenv("WEBULL_CLIENT_SECRET"),
-			os.Getenv("WEBULL_CALLBACK_URL"),
-			os.Getenv("WEBULL_TOKEN_FILE"),
-			defaultAuthBaseURL,
-		)
-
-		if loadErr := mgr.loadTokens(); loadErr != nil {
-			return nil, fmt.Errorf("webull: load tokens: %w", loadErr)
-		}
-
-		if mgr.tokens.AccessToken == "" {
-			if authErr := mgr.authorize(); authErr != nil {
-				return nil, fmt.Errorf("webull: authorize: %w", authErr)
-			}
-		}
-
-		mgr.startRefreshLoop()
-
-		return &oauthSigner{tokenMgr: mgr}, nil
-	default:
-		return nil, fmt.Errorf("webull: unknown auth mode %d", mode)
-	}
-}
-
 // detectAuthMode inspects environment variables to determine how the broker
 // should authenticate. WEBULL_APP_KEY takes priority over OAuth env vars.
 func detectAuthMode() (authMode, error) {
@@ -136,7 +94,6 @@ func detectAuthMode() (authMode, error) {
 const (
 	defaultCallbackURL   = "https://127.0.0.1:5174"
 	defaultTokenFile     = "~/.pvbt/webull_token.json"
-	defaultAuthBaseURL   = "https://api.webull.com"
 	accessTokenBuffer    = 5 * time.Minute
 	refreshCheckInterval = 25 * time.Minute
 )
@@ -169,6 +126,12 @@ type tokenManager struct {
 // oauthSigner implements signer using OAuth 2.0 bearer tokens.
 type oauthSigner struct {
 	tokenMgr *tokenManager
+}
+
+// Refresh attempts to obtain a new access token using the stored refresh token.
+// This implements the refresher interface used by apiClient for 401/403 retry.
+func (oa *oauthSigner) Refresh() error {
+	return oa.tokenMgr.ensureValidToken()
 }
 
 // Close stops the background token refresh loop.
@@ -227,7 +190,7 @@ func newTokenManager(md authMode, clientID, clientSecret, callbackURL, tokenFile
 	}
 
 	if authBaseURL == "" {
-		authBaseURL = defaultAuthBaseURL
+		authBaseURL = productionAuthURL
 	}
 
 	return &tokenManager{

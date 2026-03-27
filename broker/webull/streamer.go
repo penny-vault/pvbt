@@ -68,6 +68,8 @@ func (fs *fillStreamer) run(ctx context.Context) {
 
 		// TODO(task-8): open gRPC stream and dispatch events via
 		// fs.handleTradeEvent(orderID, status, filledQty, filledPrice)
+		// On successful stream connection, reset backoff:
+		//   backoff = initialBackoff
 
 		log.Info().
 			Str("target", fs.grpcTarget).
@@ -82,9 +84,8 @@ func (fs *fillStreamer) run(ctx context.Context) {
 		case <-time.After(backoff):
 		}
 
-		backoff *= 2
-		if backoff > maxReconnectBackoff {
-			backoff = maxReconnectBackoff
+		if backoff < maxReconnectBackoff {
+			backoff *= 2
 		}
 	}
 }
@@ -93,7 +94,15 @@ func (fs *fillStreamer) run(ctx context.Context) {
 // cumulative filled quantity increases.
 func (fs *fillStreamer) handleTradeEvent(orderID, status string, filledQty, filledPrice float64) {
 	if status != "FILLED" && status != "FINAL_FILLED" {
-		log.Info().Str("order_id", orderID).Str("status", status).Msg("webull: trade event")
+		switch status {
+		case "PLACE_FAILED", "CANCEL_FAILED", "MODIFY_FAILED":
+			log.Error().Str("order_id", orderID).Str("status", status).Msg("webull: trade event")
+		case "CANCEL_SUCCESS", "MODIFY_SUCCESS":
+			log.Info().Str("order_id", orderID).Str("status", status).Msg("webull: trade event")
+		default:
+			log.Info().Str("order_id", orderID).Str("status", status).Msg("webull: trade event")
+		}
+
 		return
 	}
 

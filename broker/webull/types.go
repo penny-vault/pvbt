@@ -142,11 +142,19 @@ func toBrokerOrder(resp orderResponse) broker.Order {
 }
 
 func toBrokerPosition(resp positionResponse) broker.Position {
+	qty := parseFloat(resp.Qty)
+	marketValue := parseFloat(resp.MarketValue)
+
+	var markPrice float64
+	if qty != 0 {
+		markPrice = marketValue / qty
+	}
+
 	return broker.Position{
 		Asset:        asset.Asset{Ticker: resp.Symbol},
-		Qty:          parseFloat(resp.Qty),
+		Qty:          qty,
 		AvgOpenPrice: parseFloat(resp.AvgCost),
-		MarkPrice:    parseFloat(resp.MarketValue),
+		MarkPrice:    markPrice,
 	}
 }
 
