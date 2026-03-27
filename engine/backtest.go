@@ -335,6 +335,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			sb.EvaluatePending()
 		}
 
+		// Prefetch housekeeping prices for all held assets so that
+		// Transactions, setMarginPrices, and updateAccountPrices hit cache.
+		if err := e.prefetchHousekeepingPrices(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, fmt.Errorf("engine: prefetch housekeeping prices on %v: %w", date, err)
+		}
+
 		// 13-14b. Housekeep parent account (dividends + fill draining).
 		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
 			return nil, err
@@ -415,6 +421,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// Housekeep and update prices for all child portfolios at every step.
 		for _, child := range e.children {
+			if err := e.prefetchHousekeepingPrices(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q prefetch housekeeping on %v: %w", child.name, date, err)
+			}
+
 			if err := e.housekeepAccount(stepCtx, child.account, date, asset.Asset{}); err != nil {
 				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
 			}

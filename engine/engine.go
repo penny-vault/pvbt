@@ -664,6 +664,36 @@ func (e *Engine) prefetchBrokerPrices(ctx context.Context, orders []broker.Order
 	return nil
 }
 
+// prefetchHousekeepingPrices batch-fetches all metrics needed by the
+// housekeeping callers (Transactions, setMarginPrices, updateAccountPrices)
+// for all held assets, warming the year-chunk cache so each caller's
+// individual FetchAt calls are cache hits.
+func (e *Engine) prefetchHousekeepingPrices(ctx context.Context, acct portfolio.Portfolio, date time.Time, benchmark asset.Asset) error {
+	holdings := acct.Holdings()
+	if len(holdings) == 0 && benchmark == (asset.Asset{}) {
+		return nil
+	}
+
+	assets := make([]asset.Asset, 0, len(holdings)+1)
+	for ast := range holdings {
+		assets = append(assets, ast)
+	}
+
+	if benchmark != (asset.Asset{}) {
+		assets = append(assets, benchmark)
+	}
+
+	_, err := e.FetchAt(ctx, assets, date, []data.Metric{
+		data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow,
+		data.Volume, data.Dividend, data.SplitFactor,
+	})
+	if err != nil {
+		return fmt.Errorf("prefetch housekeeping prices: %w", err)
+	}
+
+	return nil
+}
+
 // PredictedPortfolio runs the strategy's Compute against a shadow copy of the
 // current portfolio using the next scheduled trade date. Data is forward-filled
 // from the last available date to the predicted date. The strategy is unaware
