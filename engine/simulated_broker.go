@@ -127,7 +127,12 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 	// Phase 1: Base model determines the price.
 	baseResult, baseErr := b.fillPipeline.FillBase(ctx, order, df)
 	if baseErr != nil {
-		return fmt.Errorf("simulated broker: fill model: %w", baseErr)
+		zerolog.Ctx(ctx).Warn().
+			Err(baseErr).
+			Str("asset", order.Asset.Ticker).
+			Msg("order skipped: fill model error")
+
+		return nil
 	}
 
 	// Convert dollar-amount orders between base and adjusters.
@@ -145,7 +150,12 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 	// Phase 2: Run adjusters on the result with computed quantity.
 	result, adjErr := b.fillPipeline.Adjust(ctx, order, df, baseResult)
 	if adjErr != nil {
-		return fmt.Errorf("simulated broker: fill adjuster: %w", adjErr)
+		zerolog.Ctx(ctx).Warn().
+			Err(adjErr).
+			Str("asset", order.Asset.Ticker).
+			Msg("order skipped: fill adjuster error")
+
+		return nil
 	}
 
 	// Check initial margin for short-opening sells.

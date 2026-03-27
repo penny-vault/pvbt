@@ -8,7 +8,9 @@ import (
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	backtestReport "github.com/penny-vault/pvbt/study/report"
+	"github.com/penny-vault/pvbt/study/report"
+	"github.com/penny-vault/pvbt/study/report/renderer/terminal"
+	"github.com/penny-vault/pvbt/study/report/summary"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
@@ -92,18 +94,18 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 	for p := range ch {
 		p.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 
-		reportable, ok := p.(backtestReport.ReportablePortfolio)
+		reportable, ok := p.(report.ReportablePortfolio)
 		if !ok {
 			log.Warn().Msg("portfolio does not support full reporting")
 			continue
 		}
 
-		rpt, buildErr := backtestReport.Summary(reportable)
+		rpt, buildErr := summary.Build(reportable)
 		if buildErr != nil {
 			log.Warn().Err(buildErr).Msg("some report metrics failed")
 		}
 
-		if renderErr := rpt.Render(backtestReport.FormatText, os.Stdout); renderErr != nil {
+		if renderErr := terminal.Render(rpt, os.Stdout); renderErr != nil {
 			return fmt.Errorf("rendering report: %w", renderErr)
 		}
 	}

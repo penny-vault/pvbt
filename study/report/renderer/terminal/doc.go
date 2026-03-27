@@ -13,16 +13,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package terminal renders backtest reports to styled terminal output.
+//
+// [Render] takes a [report.Report] view model and writes a styled
+// summary to the provided [io.Writer] using lipgloss for formatting.
+// The output includes the strategy header, equity curve, return tables,
+// risk metrics, drawdown analysis, monthly return heatmap, and trade
+// statistics:
+//
+//	err := terminal.Render(rpt, os.Stdout)
 package terminal
-
-import (
-	"io"
-
-	"github.com/penny-vault/pvbt/study/report"
-)
-
-// Render writes a plain-text backtest report to the given writer.
-// It delegates to the composable report's own Render method.
-func Render(rpt report.Report, writer io.Writer) error {
-	return rpt.Render(report.FormatText, writer)
-}

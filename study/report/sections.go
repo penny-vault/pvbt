@@ -18,145 +18,15 @@ package report
 import (
 	"fmt"
 	"math"
-	"strconv"
-	"strings"
-	"time"
-
-	"github.com/penny-vault/pvbt/asset"
-	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// Summary constructs a Report from the given portfolio. It reuses
-// the existing build* helpers to compute data and maps their results into
-// Section primitives (MetricPairs, Table, TimeSeries, Text).
-func Summary(acct ReportablePortfolio) (Report, error) {
-	var warnings []string
-
-	perfData := acct.PerfData()
-
-	// Build the header from portfolio metadata.
-	header := buildHeaderData(acct)
-
-	// Determine whether a benchmark is configured.
-	hasBenchmark := acct.Benchmark() != (asset.Asset{})
-
-	if perfData != nil && perfData.Len() > 0 {
-		header.StartDate = perfData.Start()
-		header.EndDate = perfData.End()
-		header.Steps = perfData.Len()
-	}
-
-	// Convert header to a MetricPairs section.
-	headerSection := headerToMetricPairs(header)
-
-	// Early exit when there is insufficient data for a full report.
-	if perfData == nil || perfData.Len() < 2 {
-		warnings = append(warnings, "insufficient data for full report")
-
-		sections := []Section{headerSection}
-		sections = append(sections, warningsToSection(warnings))
-
-		return Report{
-			Title:    header.StrategyName,
-			Sections: sections,
-		}, nil
-	}
-
-	var sections []Section
-
-	sections = append(sections, headerSection)
-
-	// Equity curve.
-	equityCurve := buildEquityCurve(perfData, header.InitialCash)
-	sections = append(sections, equityCurveToTimeSeries(equityCurve))
-
-	// Recent returns.
-	recentReturns := buildRecentReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, returnTableToSection("Recent Returns", recentReturns, hasBenchmark))
-
-	// Returns.
-	returns := buildReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, returnTableToSection("Returns", returns, hasBenchmark))
-
-	// Annual returns.
-	annualReturns := buildAnnualReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, annualReturnsToSection(annualReturns, hasBenchmark))
-
-	// Risk metrics.
-	risk := buildRisk(acct, hasBenchmark, &warnings)
-	sections = append(sections, riskToMetricPairs(risk, hasBenchmark))
-
-	// Risk vs benchmark.
-	if hasBenchmark {
-		riskVsBenchmark := buildRiskVsBenchmark(acct, &warnings)
-		sections = append(sections, riskVsBenchmarkToMetricPairs(riskVsBenchmark))
-	}
-
-	// Drawdowns.
-	drawdowns := buildDrawdowns(acct, &warnings)
-	sections = append(sections, drawdownsToSection(drawdowns))
-
-	// Monthly returns.
-	monthlyReturns := buildMonthlyReturns(acct, &warnings)
-	sections = append(sections, monthlyReturnsToSection(monthlyReturns))
-
-	// Trades.
-	trades := buildTrades(acct, &warnings)
-	sections = append(sections, tradesToSections(trades)...)
-
-	// Warnings.
-	if len(warnings) > 0 {
-		sections = append(sections, warningsToSection(warnings))
-	}
-
-	return Report{
-		Title:    header.StrategyName,
-		Sections: sections,
-	}, nil
-}
-
 // ---------------------------------------------------------------------------
-// Header helpers
+// Conversion functions -- used by Section.Render implementations in
+// section_impls.go to delegate text/JSON rendering to the generic
+// section types (MetricPairs, Table, TimeSeries).
 // ---------------------------------------------------------------------------
 
-// headerData is an internal struct to hold parsed header fields before
-// conversion to a MetricPairs section.
-type headerData struct {
-	StrategyName    string
-	StrategyVersion string
-	Benchmark       string
-	StartDate       time.Time
-	EndDate         time.Time
-	InitialCash     float64
-	FinalValue      float64
-	Elapsed         time.Duration
-	Steps           int
-}
-
-func buildHeaderData(acct ReportablePortfolio) headerData {
-	header := headerData{
-		StrategyName:    acct.GetMetadata(portfolio.MetaStrategyName),
-		StrategyVersion: acct.GetMetadata(portfolio.MetaStrategyVersion),
-		Benchmark:       acct.GetMetadata(portfolio.MetaStrategyBenchmark),
-		FinalValue:      acct.Value(),
-	}
-
-	if cashStr := acct.GetMetadata(portfolio.MetaRunInitialCash); cashStr != "" {
-		if parsed, parseErr := strconv.ParseFloat(cashStr, 64); parseErr == nil {
-			header.InitialCash = parsed
-		}
-	}
-
-	if elapsedStr := acct.GetMetadata(portfolio.MetaRunElapsed); elapsedStr != "" {
-		if parsed, parseErr := time.ParseDuration(elapsedStr); parseErr == nil {
-			header.Elapsed = parsed
-		}
-	}
-
-	return header
-}
-
-func headerToMetricPairs(header headerData) *MetricPairs {
+func headerToMetricPairs(header Header) *MetricPairs {
 	metrics := []MetricPair{
 		{Label: "Strategy", Value: 0, Format: "label:" + header.StrategyName},
 	}
@@ -203,36 +73,17 @@ func headerToMetricPairs(header headerData) *MetricPairs {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// Equity curve conversion
-// ---------------------------------------------------------------------------
-
 func equityCurveToTimeSeries(curve EquityCurve) *TimeSeries {
 	series := []NamedSeries{
-		{
-			Name:   "Strategy",
-			Times:  curve.Times,
-			Values: curve.StrategyValues,
-		},
+		{Name: "Strategy", Times: curve.Times, Values: curve.StrategyValues},
 	}
 
 	if len(curve.BenchmarkValues) > 0 {
-		series = append(series, NamedSeries{
-			Name:   "Benchmark",
-			Times:  curve.Times,
-			Values: curve.BenchmarkValues,
-		})
+		series = append(series, NamedSeries{Name: "Benchmark", Times: curve.Times, Values: curve.BenchmarkValues})
 	}
 
-	return &TimeSeries{
-		SectionName: "Equity Curve",
-		Series:      series,
-	}
+	return &TimeSeries{SectionName: "Equity Curve", Series: series}
 }
-
-// ---------------------------------------------------------------------------
-// Return table conversion
-// ---------------------------------------------------------------------------
 
 func returnTableToSection(name string, table ReturnTable, hasBenchmark bool) *Table {
 	sectionName := name
@@ -271,16 +122,8 @@ func returnTableToSection(name string, table ReturnTable, hasBenchmark bool) *Ta
 		rows[idx] = row
 	}
 
-	return &Table{
-		SectionName: sectionName,
-		Columns:     columns,
-		Rows:        rows,
-	}
+	return &Table{SectionName: sectionName, Columns: columns, Rows: rows}
 }
-
-// ---------------------------------------------------------------------------
-// Annual returns conversion
-// ---------------------------------------------------------------------------
 
 func annualReturnsToSection(annual AnnualReturns, hasBenchmark bool) *Table {
 	showBenchmark := hasBenchmark && len(annual.Benchmark) > 0
@@ -324,16 +167,8 @@ func annualReturnsToSection(annual AnnualReturns, hasBenchmark bool) *Table {
 		rows[idx] = row
 	}
 
-	return &Table{
-		SectionName: "Annual Returns",
-		Columns:     columns,
-		Rows:        rows,
-	}
+	return &Table{SectionName: "Annual Returns", Columns: columns, Rows: rows}
 }
-
-// ---------------------------------------------------------------------------
-// Risk metrics conversion
-// ---------------------------------------------------------------------------
 
 func riskToMetricPairs(risk Risk, hasBenchmark bool) *MetricPairs {
 	type riskDef struct {
@@ -357,11 +192,7 @@ func riskToMetricPairs(risk Risk, hasBenchmark bool) *MetricPairs {
 
 	metrics := make([]MetricPair, len(defs))
 	for idx, def := range defs {
-		pair := MetricPair{
-			Label:  def.label,
-			Value:  def.values[0],
-			Format: def.metricFmt,
-		}
+		pair := MetricPair{Label: def.label, Value: def.values[0], Format: def.metricFmt}
 
 		if hasBenchmark && !math.IsNaN(def.values[1]) {
 			benchVal := def.values[1]
@@ -371,10 +202,7 @@ func riskToMetricPairs(risk Risk, hasBenchmark bool) *MetricPairs {
 		metrics[idx] = pair
 	}
 
-	return &MetricPairs{
-		SectionName: "Risk Metrics",
-		Metrics:     metrics,
-	}
+	return &MetricPairs{SectionName: "Risk Metrics", Metrics: metrics}
 }
 
 func riskVsBenchmarkToMetricPairs(rvb RiskVsBenchmark) *MetricPairs {
@@ -392,10 +220,6 @@ func riskVsBenchmarkToMetricPairs(rvb RiskVsBenchmark) *MetricPairs {
 		},
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Drawdowns conversion
-// ---------------------------------------------------------------------------
 
 func drawdownsToSection(drawdowns Drawdowns) *Table {
 	columns := []Column{
@@ -421,33 +245,19 @@ func drawdownsToSection(drawdowns Drawdowns) *Table {
 
 		rows[idx] = []any{
 			fmt.Sprintf("%d", idx+1),
-			entry.Start,
-			endStr,
-			recoveryStr,
-			entry.Depth,
-			fmt.Sprintf("%d days", entry.Days),
+			entry.Start, endStr, recoveryStr,
+			entry.Depth, fmt.Sprintf("%d days", entry.Days),
 		}
 	}
 
-	return &Table{
-		SectionName: "Top Drawdowns",
-		Columns:     columns,
-		Rows:        rows,
-	}
+	return &Table{SectionName: "Top Drawdowns", Columns: columns, Rows: rows}
 }
-
-// ---------------------------------------------------------------------------
-// Monthly returns conversion
-// ---------------------------------------------------------------------------
 
 func monthlyReturnsToSection(monthly MonthlyReturns) *Table {
 	monthHeaders := []string{"Jan", "Feb", "Mar", "Apr", "May", "Jun",
 		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"}
 
-	columns := []Column{
-		{Header: "Year", Format: "string", Align: "left"},
-	}
-
+	columns := []Column{{Header: "Year", Format: "string", Align: "left"}}
 	for _, month := range monthHeaders {
 		columns = append(columns, Column{Header: month, Format: "percent", Align: "right"})
 	}
@@ -475,25 +285,14 @@ func monthlyReturnsToSection(monthly MonthlyReturns) *Table {
 			row = append(row, val)
 		}
 
-		yearTotal := yearCompound - 1
-		row = append(row, yearTotal)
-
+		row = append(row, yearCompound-1)
 		rows[yearIdx] = row
 	}
 
-	return &Table{
-		SectionName: "Monthly Returns",
-		Columns:     columns,
-		Rows:        rows,
-	}
+	return &Table{SectionName: "Monthly Returns", Columns: columns, Rows: rows}
 }
 
-// ---------------------------------------------------------------------------
-// Trades conversion
-// ---------------------------------------------------------------------------
-
 func tradesToSections(trades Trades) []Section {
-	// Trade summary as MetricPairs.
 	summaryMetrics := []MetricPair{
 		{Label: "Total Transactions", Value: float64(trades.TotalTransactions), Format: "number"},
 		{Label: "Round Trips", Value: float64(trades.RoundTrips), Format: "number"},
@@ -507,14 +306,8 @@ func tradesToSections(trades Trades) []Section {
 		{Label: "Positive Periods", Value: trades.PositivePeriods, Format: "percent"},
 	}
 
-	sections := []Section{
-		&MetricPairs{
-			SectionName: "Trade Summary",
-			Metrics:     summaryMetrics,
-		},
-	}
+	sections := []Section{&MetricPairs{SectionName: "Trade Summary", Metrics: summaryMetrics}}
 
-	// Recent trades as a Table.
 	if len(trades.Trades) > 0 {
 		maxTradesShown := 10
 
@@ -535,41 +328,11 @@ func tradesToSections(trades Trades) []Section {
 		rows := make([][]any, 0, len(trades.Trades)-startIdx)
 		for idx := startIdx; idx < len(trades.Trades); idx++ {
 			trade := trades.Trades[idx]
-			rows = append(rows, []any{
-				trade.Date,
-				trade.Action,
-				trade.Ticker,
-				trade.Shares,
-				trade.Price,
-				trade.Amount,
-			})
+			rows = append(rows, []any{trade.Date, trade.Action, trade.Ticker, trade.Shares, trade.Price, trade.Amount})
 		}
 
-		sections = append(sections, &Table{
-			SectionName: "Recent Trades",
-			Columns:     columns,
-			Rows:        rows,
-		})
+		sections = append(sections, &Table{SectionName: "Recent Trades", Columns: columns, Rows: rows})
 	}
 
 	return sections
-}
-
-// ---------------------------------------------------------------------------
-// Warnings conversion
-// ---------------------------------------------------------------------------
-
-func warningsToSection(warnings []string) *Text {
-	var builder strings.Builder
-
-	for _, warning := range warnings {
-		builder.WriteString("WARNING: ")
-		builder.WriteString(warning)
-		builder.WriteString("\n")
-	}
-
-	return &Text{
-		SectionName: "Warnings",
-		Body:        builder.String(),
-	}
 }

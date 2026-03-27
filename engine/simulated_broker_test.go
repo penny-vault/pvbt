@@ -314,7 +314,7 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(fill.Qty).To(Equal(15.0))
 		})
 
-		It("returns an error for an asset with no price", func() {
+		It("skips fill and produces no error when asset has no price", func() {
 			unknown := asset.Asset{CompositeFigi: "FIGI-UNKNOWN", Ticker: "UNKNOWN"}
 			simBroker := engine.NewSimulatedBroker()
 			simBroker.SetPriceProvider(&mockPriceProvider{
@@ -329,7 +329,8 @@ var _ = Describe("SimulatedBroker", func() {
 				OrderType: broker.Market,
 			})
 
-			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(HaveOccurred())
+			Consistently(simBroker.Fills()).ShouldNot(Receive())
 		})
 	})
 

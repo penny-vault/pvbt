@@ -24,8 +24,10 @@ import (
 
 // Report is a titled collection of renderable sections.
 type Report struct {
-	Title    string
-	Sections []Section
+	Title        string
+	Sections     []Section
+	HasBenchmark bool
+	Warnings     []string
 }
 
 // Render writes the report in the requested format to writer.
@@ -95,6 +97,13 @@ func (rpt Report) renderText(writer io.Writer) error {
 
 		if err := section.Render(FormatText, writer); err != nil {
 			return fmt.Errorf("rendering section %q: %w", section.Name(), err)
+		}
+	}
+
+	// Append warnings.
+	for _, warning := range rpt.Warnings {
+		if _, err := fmt.Fprintf(writer, "WARNING: %s\n", warning); err != nil {
+			return err
 		}
 	}
 
