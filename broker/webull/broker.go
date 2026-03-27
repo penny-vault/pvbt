@@ -45,6 +45,7 @@ type WebullBroker struct {
 	uat             bool
 	tokenFile       string
 	callbackURL     string
+	streamer        *fillStreamer
 	submittedOrders map[string]broker.Order
 	mu              sync.Mutex
 }
@@ -166,6 +167,27 @@ func (wb *WebullBroker) Connect(ctx context.Context) error {
 		wb.accountID = accounts[0].AccountID
 	}
 
+	grpcTarget := productionGRPC
+	if wb.uat {
+		grpcTarget = uatGRPC
+	}
+
+	wb.streamer = &fillStreamer{
+		fills:       wb.fills,
+		done:        make(chan struct{}),
+		cumulFilled: make(map[string]float64),
+		pollOrders: func(pollCtx context.Context) ([]orderResponse, error) {
+			return wb.client.getOrders(pollCtx, wb.accountID)
+		},
+		grpcTarget: grpcTarget,
+		sign:       sign,
+		accountID:  wb.accountID,
+	}
+
+	wb.streamer.wg.Add(1)
+
+	go wb.streamer.run(ctx)
+
 	log.Info().Str("account_id", wb.accountID).Msg("webull: connected")
 
 	return nil
@@ -173,6 +195,12 @@ func (wb *WebullBroker) Connect(ctx context.Context) error {
 
 // Close tears down the broker session and releases resources.
 func (wb *WebullBroker) Close() error {
+	if wb.streamer != nil {
+		if closeErr := wb.streamer.close(); closeErr != nil {
+			log.Error().Err(closeErr).Msg("webull: streamer close failed")
+		}
+	}
+
 	if wb.client != nil {
 		if oaSigner, ok := wb.client.signer.(*oauthSigner); ok {
 			oaSigner.Close()

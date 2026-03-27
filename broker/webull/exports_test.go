@@ -188,3 +188,36 @@ func SetClientForTest(wb *WebullBroker, baseURL, appKey, appSecret string) {
 	wb.client = newAPIClient(baseURL, sign)
 	wb.accountID = "test-account"
 }
+
+// --- Fill streamer test exports ---
+
+// FillStreamerForTestType is an exported alias for fillStreamer.
+type FillStreamerForTestType = fillStreamer
+
+// NewFillStreamerForTest creates a fillStreamer for testing with an injected
+// poll function instead of a real gRPC connection.
+func NewFillStreamerForTest(fills chan broker.Fill, pollFn func(ctx context.Context) ([]orderResponse, error)) *fillStreamer {
+	return &fillStreamer{
+		fills:       fills,
+		done:        make(chan struct{}),
+		cumulFilled: make(map[string]float64),
+		pollOrders:  pollFn,
+	}
+}
+
+// HandleTradeEvent exposes handleTradeEvent for testing.
+func (fs *fillStreamer) HandleTradeEvent(orderID, status string, filledQty, filledPrice float64) {
+	fs.handleTradeEvent(orderID, status, filledQty, filledPrice)
+}
+
+// PollMissedFills exposes pollMissedFills for testing.
+func (fs *fillStreamer) PollMissedFills(ctx context.Context) {
+	fs.pollMissedFills(ctx)
+}
+
+// CumulFilledForTest returns the cumulative filled qty for an order ID.
+func (fs *fillStreamer) CumulFilledForTest(orderID string) float64 {
+	fs.mu.Lock()
+	defer fs.mu.Unlock()
+	return fs.cumulFilled[orderID]
+}
