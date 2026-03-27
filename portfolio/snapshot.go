@@ -36,7 +36,7 @@ type TaxLot struct {
 // uses it with WithPortfolioSnapshot to resume from saved state.
 type PortfolioSnapshot interface {
 	Cash() float64
-	Holdings(func(asset.Asset, float64))
+	Holdings() map[asset.Asset]float64
 	Transactions() []Transaction
 	PerfData() *data.DataFrame
 	TaxLots() map[asset.Asset][]TaxLot
@@ -53,9 +53,9 @@ type PortfolioSnapshot interface {
 func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
 	return func(acct *Account) {
 		acct.cash = snap.Cash()
-		snap.Holdings(func(ast asset.Asset, qty float64) {
+		for ast, qty := range snap.Holdings() {
 			acct.holdings[ast] = qty
-		})
+		}
 
 		acct.transactions = append(acct.transactions, snap.Transactions()...)
 		if snap.PerfData() != nil {

@@ -75,15 +75,15 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 
 	weight := 1.0 / float64(len(s.assets))
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		price := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(price) {
 			totalValue += qty * price
 		}
-	})
+	}
 
 	// Sell assets not in target.
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		inTarget := false
 		for _, target := range s.assets {
 			if target == held {
@@ -94,7 +94,7 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 		if !inTarget && qty > 0 {
 			batch.Order(ctx, held, portfolio.Sell, qty)
 		}
-	})
+	}
 
 	// Buy/adjust target assets.
 	for _, target := range s.assets {
@@ -396,7 +396,7 @@ var _ = Describe("Backtest", func() {
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
 		testAssets = []asset.Asset{aapl, msft}
 		assetProvider = &mockAssetProvider{assets: testAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 	})
 
 	Context("end to end", func() {
@@ -616,7 +616,7 @@ var _ = Describe("Backtest", func() {
 			// MFE = (115 - 102) / 102 > 0
 			// MAE = (88 - 102) / 102 < 0
 
-			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			excursionMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			times := make([]time.Time, nDays)
@@ -625,11 +625,11 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 6 metrics x 30 days = 180 values
-			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)][SplitFactor(30)]
+			// 1 asset x 7 metrics x 30 days = 210 values
+			// Column layout: [Close(30)][AdjClose(30)][Dividend(30)][High(30)][Low(30)][SplitFactor(30)][Volume(30)]
 			vals := make([]float64, nDays*len(excursionAssets)*len(excursionMetrics))
 
-			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95, SplitFactor=1
+			// Fill with default values: Close=100, AdjClose=100, Dividend=0, High=105, Low=95, SplitFactor=1, Volume=1e6
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
 				vals[0*nDays+dayIdx] = 100.0 + float64(dayIdx) // Close: 100, 101, 102, ...
 				vals[1*nDays+dayIdx] = 100.0 + float64(dayIdx) // AdjClose: same as Close
@@ -637,6 +637,7 @@ var _ = Describe("Backtest", func() {
 				vals[3*nDays+dayIdx] = 105.0 + float64(dayIdx) // High: 105, 106, 107, ...
 				vals[4*nDays+dayIdx] = 95.0                    // Low: 95 baseline
 				vals[5*nDays+dayIdx] = 1.0                     // SplitFactor: 1 (no split)
+				vals[6*nDays+dayIdx] = 1_000_000.0             // Volume
 			}
 
 			// Override specific days for controlled excursion values.
@@ -675,7 +676,7 @@ var _ = Describe("Backtest", func() {
 		It("caps position size when MaxPositionSize is configured", func() {
 			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
 			allAssets := append(testAssets, spy)
-			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			allMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeDailyTestData(dataStart, 400, allAssets, allMetrics)
@@ -743,7 +744,7 @@ var _ = Describe("Backtest", func() {
 		// Each row is {close, high, low}; AdjClose=close, Dividend=0.
 		makeBracketTestData := func(startDate time.Time, testAsset asset.Asset, rows []struct{ close, high, low float64 }) *data.DataFrame {
 			numDays := len(rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			assets := []asset.Asset{testAsset}
 
 			times := make([]time.Time, numDays)
@@ -756,12 +757,13 @@ var _ = Describe("Backtest", func() {
 			// With 1 asset: metricIdx * numDays + dayIdx
 			vals := make([]float64, numDays*len(assets)*len(bracketMetrics))
 			for dayIdx, row := range rows {
-				vals[0*numDays+dayIdx] = row.close // MetricClose
-				vals[1*numDays+dayIdx] = row.close // AdjClose
-				vals[2*numDays+dayIdx] = 0.0       // Dividend
-				vals[3*numDays+dayIdx] = row.high  // MetricHigh
-				vals[4*numDays+dayIdx] = row.low   // MetricLow
-				vals[5*numDays+dayIdx] = 1.0       // SplitFactor: no split
+				vals[0*numDays+dayIdx] = row.close   // MetricClose
+				vals[1*numDays+dayIdx] = row.close   // AdjClose
+				vals[2*numDays+dayIdx] = 0.0         // Dividend
+				vals[3*numDays+dayIdx] = row.high    // MetricHigh
+				vals[4*numDays+dayIdx] = row.low     // MetricLow
+				vals[5*numDays+dayIdx] = 1.0         // SplitFactor: no split
+				vals[6*numDays+dayIdx] = 1_000_000.0 // Volume
 			}
 
 			df, dfErr := data.NewDataFrame(times, assets, bracketMetrics, data.Daily, data.SlabToColumns(vals, len(assets)*len(bracketMetrics), numDays))
@@ -791,7 +793,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
@@ -844,7 +846,7 @@ var _ = Describe("Backtest", func() {
 
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			df := makeBracketTestData(dataStart, testStock, rows)
-			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			bracketMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			provider := data.NewTestProvider(bracketMetrics, df)
 
 			strategy := &bracketStrategy{
@@ -890,7 +892,7 @@ var _ = Describe("Backtest", func() {
 			shortAssets := []asset.Asset{testStock}
 			shortProvider := &mockAssetProvider{assets: shortAssets}
 
-			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			times := make([]time.Time, nDays)
@@ -899,15 +901,16 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 6 metrics x 30 days
+			// 1 asset x 7 metrics x 30 days
 			vals := make([]float64, nDays*len(shortAssets)*len(shortMetrics))
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
-				vals[0*nDays+dayIdx] = 100.0 // Close: constant $100
-				vals[1*nDays+dayIdx] = 100.0 // AdjClose
-				vals[2*nDays+dayIdx] = 0.0   // Dividend: none
-				vals[3*nDays+dayIdx] = 102.0 // High
-				vals[4*nDays+dayIdx] = 98.0  // Low
-				vals[5*nDays+dayIdx] = 1.0   // SplitFactor: no split
+				vals[0*nDays+dayIdx] = 100.0       // Close: constant $100
+				vals[1*nDays+dayIdx] = 100.0       // AdjClose
+				vals[2*nDays+dayIdx] = 0.0         // Dividend: none
+				vals[3*nDays+dayIdx] = 102.0       // High
+				vals[4*nDays+dayIdx] = 98.0        // Low
+				vals[5*nDays+dayIdx] = 1.0         // SplitFactor: no split
+				vals[6*nDays+dayIdx] = 1_000_000.0 // Volume
 			}
 
 			shortDF, dfErr := data.NewDataFrame(times, shortAssets, shortMetrics, data.Daily, data.SlabToColumns(vals, len(shortAssets)*len(shortMetrics), nDays))
@@ -967,7 +970,7 @@ var _ = Describe("Backtest", func() {
 			shortAssets := []asset.Asset{testStock}
 			shortProvider := &mockAssetProvider{assets: shortAssets}
 
-			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+			shortMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 			times := make([]time.Time, nDays)
@@ -976,15 +979,16 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 6 metrics x 30 days
+			// 1 asset x 7 metrics x 30 days
 			vals := make([]float64, nDays*len(shortAssets)*len(shortMetrics))
 			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
-				vals[0*nDays+dayIdx] = 100.0 // Close
-				vals[1*nDays+dayIdx] = 100.0 // AdjClose
-				vals[2*nDays+dayIdx] = 0.0   // Dividend: none by default
-				vals[3*nDays+dayIdx] = 102.0 // High
-				vals[4*nDays+dayIdx] = 98.0  // Low
-				vals[5*nDays+dayIdx] = 1.0   // SplitFactor
+				vals[0*nDays+dayIdx] = 100.0       // Close
+				vals[1*nDays+dayIdx] = 100.0       // AdjClose
+				vals[2*nDays+dayIdx] = 0.0         // Dividend: none by default
+				vals[3*nDays+dayIdx] = 102.0       // High
+				vals[4*nDays+dayIdx] = 98.0        // Low
+				vals[5*nDays+dayIdx] = 1.0         // SplitFactor
+				vals[6*nDays+dayIdx] = 1_000_000.0 // Volume
 			}
 
 			// Place a $2.00 dividend on day 7 (Jan 8). The short is opened
@@ -1045,7 +1049,7 @@ var _ = Describe("Backtest", func() {
 
 			integrationMetrics := []data.Metric{
 				data.MetricClose, data.AdjClose, data.Dividend,
-				data.MetricHigh, data.MetricLow, data.SplitFactor,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
 			}
 			nDays := 30
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -1055,8 +1059,8 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 2 assets x 6 metrics x 30 days = 360 values.
-			// Column layout per asset: [Close][AdjClose][Dividend][High][Low][SplitFactor]
+			// 2 assets x 7 metrics x 30 days = 420 values.
+			// Column layout per asset: [Close][AdjClose][Dividend][High][Low][SplitFactor][Volume]
 			// Assets are interleaved: asset0-metric0, asset1-metric0, asset0-metric1, ...
 			// Actually, the DataFrame layout is: for each (asset, metric) pair in order.
 			nAssets := len(integrationAssets)
@@ -1073,24 +1077,26 @@ var _ = Describe("Backtest", func() {
 				shortHigh := shortPrice + 2.0
 				shortLow := shortPrice - 2.0
 
-				// Asset 0 (long) columns: Close, AdjClose, Dividend, High, Low, SplitFactor
-				// Asset 1 (short) columns: Close, AdjClose, Dividend, High, Low, SplitFactor
+				// Asset 0 (long) columns: Close, AdjClose, Dividend, High, Low, SplitFactor, Volume
+				// Asset 1 (short) columns: Close, AdjClose, Dividend, High, Low, SplitFactor, Volume
 				// Column index = (assetIdx*nMetrics + metricIdx)*nDays + dayIdx
 				// Long asset (index 0)
-				vals[(0*nMetrics+0)*nDays+dayIdx] = longPrice // Close
-				vals[(0*nMetrics+1)*nDays+dayIdx] = longPrice // AdjClose
-				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0       // Dividend
-				vals[(0*nMetrics+3)*nDays+dayIdx] = longHigh  // High
-				vals[(0*nMetrics+4)*nDays+dayIdx] = longLow   // Low
-				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0       // SplitFactor
+				vals[(0*nMetrics+0)*nDays+dayIdx] = longPrice   // Close
+				vals[(0*nMetrics+1)*nDays+dayIdx] = longPrice   // AdjClose
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0         // Dividend
+				vals[(0*nMetrics+3)*nDays+dayIdx] = longHigh    // High
+				vals[(0*nMetrics+4)*nDays+dayIdx] = longLow     // Low
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0         // SplitFactor
+				vals[(0*nMetrics+6)*nDays+dayIdx] = 1_000_000.0 // Volume
 
 				// Short asset (index 1)
-				vals[(1*nMetrics+0)*nDays+dayIdx] = shortPrice // Close
-				vals[(1*nMetrics+1)*nDays+dayIdx] = shortPrice // AdjClose
-				vals[(1*nMetrics+2)*nDays+dayIdx] = 0.0        // Dividend
-				vals[(1*nMetrics+3)*nDays+dayIdx] = shortHigh  // High
-				vals[(1*nMetrics+4)*nDays+dayIdx] = shortLow   // Low
-				vals[(1*nMetrics+5)*nDays+dayIdx] = 1.0        // SplitFactor
+				vals[(1*nMetrics+0)*nDays+dayIdx] = shortPrice  // Close
+				vals[(1*nMetrics+1)*nDays+dayIdx] = shortPrice  // AdjClose
+				vals[(1*nMetrics+2)*nDays+dayIdx] = 0.0         // Dividend
+				vals[(1*nMetrics+3)*nDays+dayIdx] = shortHigh   // High
+				vals[(1*nMetrics+4)*nDays+dayIdx] = shortLow    // Low
+				vals[(1*nMetrics+5)*nDays+dayIdx] = 1.0         // SplitFactor
+				vals[(1*nMetrics+6)*nDays+dayIdx] = 1_000_000.0 // Volume
 			}
 
 			// Place a $1.50 dividend on the short asset on day 2 (Jan 3, Wednesday).
@@ -1261,7 +1267,7 @@ var _ = Describe("Backtest", func() {
 
 			syncMetrics := []data.Metric{
 				data.MetricClose, data.AdjClose, data.Dividend,
-				data.MetricHigh, data.MetricLow, data.SplitFactor,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
 			}
 			nDays := 15
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -1271,7 +1277,7 @@ var _ = Describe("Backtest", func() {
 				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
 			}
 
-			// 1 asset x 6 metrics x 15 days
+			// 1 asset x 7 metrics x 15 days
 			// The split fires on calendar day 9 (Jan 10); post-split price
 			// appears from day 10 onward.
 			nMetrics := len(syncMetrics)
@@ -1287,6 +1293,7 @@ var _ = Describe("Backtest", func() {
 				vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0 // High
 				vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0 // Low
 				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0              // SplitFactor: no split by default
+				vals[(0*nMetrics+6)*nDays+dayIdx] = 1_000_000.0      // Volume
 			}
 			// $2.00 dividend on day 4 (Jan 5, Friday -- a trading day).
 			// By this point the strategy has already bought 100 shares on Jan 1.
@@ -1339,7 +1346,7 @@ var _ = Describe("Backtest", func() {
 
 			delistMetrics := []data.Metric{
 				data.MetricClose, data.AdjClose, data.Dividend,
-				data.MetricHigh, data.MetricLow, data.SplitFactor,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
 			}
 			nDays := 15
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -1366,7 +1373,8 @@ var _ = Describe("Backtest", func() {
 					vals[(0*nMetrics+3)*nDays+dayIdx] = math.NaN() // High
 					vals[(0*nMetrics+4)*nDays+dayIdx] = math.NaN() // Low
 				}
-				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0 // SplitFactor
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0         // SplitFactor
+				vals[(0*nMetrics+6)*nDays+dayIdx] = 1_000_000.0 // Volume
 			}
 
 			delistDF, dfErr := data.NewDataFrame(times, delistAssets, delistMetrics, data.Daily,

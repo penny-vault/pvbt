@@ -335,6 +335,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			sb.EvaluatePending()
 		}
 
+		// Prefetch housekeeping prices for all held assets so that
+		// Transactions, setMarginPrices, and updateAccountPrices hit cache.
+		if err := e.prefetchHousekeepingPrices(stepCtx, acct, date, e.benchmark); err != nil {
+			return nil, fmt.Errorf("engine: prefetch housekeeping prices on %v: %w", date, err)
+		}
+
 		// 13-14b. Housekeep parent account (dividends + fill draining).
 		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
 			return nil, err
@@ -368,6 +374,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, date, err)
 			}
 
+			if err := e.prefetchBrokerPrices(stepCtx, childBatch.Orders); err != nil {
+				return nil, fmt.Errorf("engine: child %q prefetch broker prices on %v: %w", childName, date, err)
+			}
+
 			if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
 				return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, date, err)
 			}
@@ -392,6 +402,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 					e.strategy.Name(), date, err)
 			}
 
+			// Prefetch broker prices for all order assets so that
+			// per-order Submit calls hit the year-chunk cache.
+			if err := e.prefetchBrokerPrices(stepCtx, batch.Orders); err != nil {
+				return nil, fmt.Errorf("engine: prefetch broker prices on %v: %w", date, err)
+			}
+
 			// Execute batch through middleware chain.
 			if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
 				return nil, fmt.Errorf("engine: execute batch on %v: %w", date, err)
@@ -405,6 +421,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// Housekeep and update prices for all child portfolios at every step.
 		for _, child := range e.children {
+			if err := e.prefetchHousekeepingPrices(stepCtx, child.account, date, asset.Asset{}); err != nil {
+				return nil, fmt.Errorf("engine: child %q prefetch housekeeping on %v: %w", child.name, date, err)
+			}
+
 			if err := e.housekeepAccount(stepCtx, child.account, date, asset.Asset{}); err != nil {
 				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
 			}
@@ -466,11 +486,12 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 func (eng *Engine) updateAccountPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
-	var priceAssets []asset.Asset
+	holdings := acct.Holdings()
 
-	acct.Holdings(func(a asset.Asset, _ float64) {
-		priceAssets = append(priceAssets, a)
-	})
+	priceAssets := make([]asset.Asset, 0, len(holdings))
+	for ast := range holdings {
+		priceAssets = append(priceAssets, ast)
+	}
 
 	if benchmark != (asset.Asset{}) {
 		priceAssets = append(priceAssets, benchmark)

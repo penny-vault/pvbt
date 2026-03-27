@@ -428,19 +428,35 @@ func (b *SimulatedBroker) evaluatePartialRemainders() {
 
 	ctx := context.Background()
 
+	// Prune expired remainders and collect unique assets.
+	assetSet := make(map[string]asset.Asset)
+
 	for orderID, pr := range b.partialRemainders {
-		// Cancel remainder after it has been pending for 2 bars.
 		if pr.bars >= 2 {
 			delete(b.partialRemainders, orderID)
-
 			continue
 		}
 
-		df, err := b.prices.Prices(ctx, pr.order.Asset)
-		if err != nil {
-			continue
-		}
+		assetSet[pr.order.Asset.CompositeFigi] = pr.order.Asset
+	}
 
+	if len(b.partialRemainders) == 0 {
+		return
+	}
+
+	// Batch-fetch prices for all remaining assets.
+	assets := make([]asset.Asset, 0, len(assetSet))
+	for _, held := range assetSet {
+		assets = append(assets, held)
+	}
+
+	df, err := b.prices.Prices(ctx, assets...)
+	if err != nil {
+		return
+	}
+
+	// Evaluate each remainder against the batched DataFrame.
+	for orderID, pr := range b.partialRemainders {
 		result, fillErr := b.fillPipeline.Fill(ctx, pr.order, df)
 		if fillErr != nil {
 			continue
@@ -500,11 +516,12 @@ func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]brok
 		return nil, nil
 	}
 
-	var heldAssets []asset.Asset
+	holdings := b.portfolio.Holdings()
 
-	b.portfolio.Holdings(func(ast asset.Asset, _ float64) {
+	heldAssets := make([]asset.Asset, 0, len(holdings))
+	for ast := range holdings {
 		heldAssets = append(heldAssets, ast)
-	})
+	}
 
 	if len(heldAssets) == 0 {
 		return nil, nil

@@ -45,6 +45,11 @@
 //   - [AccumulationDistribution](ctx, u, period): Accumulation/Distribution line (cumulative).
 //   - [CMF](ctx, u, period): Chaikin Money Flow (-1 to 1).
 //   - [MFI](ctx, u, period): Money Flow Index (0 to 100).
+//   - [ZScore](ctx, u, period, metrics...): Z-score of current value relative to rolling mean (unbounded).
+//   - [HurstRS](ctx, u, period): Hurst exponent via Rescaled Range analysis (0 to 1).
+//   - [HurstDFA](ctx, u, period): Hurst exponent via Detrended Fluctuation Analysis (0 to 1).
+//   - [PairsResidual](ctx, u, period, refUniverse): Z-score of OLS regression residuals vs reference assets.
+//   - [PairsRatio](ctx, u, period, refUniverse): Z-score of price ratio vs reference assets.
 //
 // # Custom Signals
 //

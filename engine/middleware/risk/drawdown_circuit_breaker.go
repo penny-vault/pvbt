@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -52,7 +51,7 @@ func (m *drawdownCircuitBreaker) Process(_ context.Context, batch *portfolio.Bat
 	// Collect sell orders for all existing long positions.
 	var sells []broker.Order
 
-	batch.Portfolio().Holdings(func(ast asset.Asset, qty float64) {
+	for ast, qty := range batch.Portfolio().Holdings() {
 		if qty > 0 {
 			sells = append(sells, broker.Order{
 				Asset:       ast,
@@ -62,7 +61,7 @@ func (m *drawdownCircuitBreaker) Process(_ context.Context, batch *portfolio.Bat
 				TimeInForce: broker.Day,
 			})
 		}
-	})
+	}
 
 	// Keep only sell orders from the batch (remove any buy orders).
 	filtered := batch.Orders[:0]

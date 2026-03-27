@@ -63,12 +63,12 @@ func (s *spyOnlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 	// Buy SPY with all cash if not already held.
 	currentShares := fund.Position(target)
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		holdingPrice := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(holdingPrice) {
 			totalValue += qty * holdingPrice
 		}
-	})
+	}
 
 	targetShares := math.Floor(totalValue / price)
 	diff := targetShares - currentShares
@@ -111,12 +111,12 @@ func (s *tltOnlyStrategy) Compute(ctx context.Context, eng *engine.Engine, fund 
 
 	currentShares := fund.Position(target)
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		holdingPrice := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(holdingPrice) {
 			totalValue += qty * holdingPrice
 		}
-	})
+	}
 
 	targetShares := math.Floor(totalValue / price)
 	diff := targetShares - currentShares
@@ -271,7 +271,7 @@ var _ = Describe("MetaStrategy", func() {
 		tlt = asset.Asset{CompositeFigi: "FIGI-TLT", Ticker: "TLT"}
 		allAssets = []asset.Asset{spy, tlt}
 		assetProvider = &mockAssetProvider{assets: allAssets}
-		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor}
+		metrics = []data.Metric{data.MetricClose, data.AdjClose, data.Dividend, data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume}
 
 		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 		dataFrame := makeLowPriceTestData(dataStart, 400, allAssets, metrics)

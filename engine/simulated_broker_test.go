@@ -43,10 +43,12 @@ func (m *mockPortfolio) ShortMarketValue() float64           { return m.shortMar
 func (m *mockPortfolio) Cash() float64                       { return 0 }
 func (m *mockPortfolio) Value() float64                      { return 0 }
 func (m *mockPortfolio) PositionValue(_ asset.Asset) float64 { return 0 }
-func (m *mockPortfolio) Holdings(fn func(asset.Asset, float64)) {
+func (m *mockPortfolio) Holdings() map[asset.Asset]float64 {
+	result := make(map[asset.Asset]float64, len(m.positions))
 	for ast, qty := range m.positions {
-		fn(ast, qty)
+		result[ast] = qty
 	}
+	return result
 }
 func (m *mockPortfolio) Transactions() []portfolio.Transaction { return nil }
 func (m *mockPortfolio) Prices() *data.DataFrame               { return nil }
@@ -137,6 +139,31 @@ type mockDFPriceProvider struct {
 
 func (m *mockDFPriceProvider) Prices(_ context.Context, _ ...asset.Asset) (*data.DataFrame, error) {
 	return m.df, nil
+}
+
+// countingPriceProvider wraps another PriceProvider and counts Prices calls.
+type countingPriceProvider struct {
+	inner     broker.PriceProvider
+	callCount int
+}
+
+func (cp *countingPriceProvider) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
+	cp.callCount++
+	return cp.inner.Prices(ctx, assets...)
+}
+
+func drainFills(sb *engine.SimulatedBroker, count int) []broker.Fill {
+	fills := make([]broker.Fill, 0, count)
+	ch := sb.Fills()
+	for range count {
+		select {
+		case fl := <-ch:
+			fills = append(fills, fl)
+		default:
+			return fills
+		}
+	}
+	return fills
 }
 
 // Compile-time interface checks.
@@ -976,6 +1003,63 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(delistTxn.Price).To(Equal(150.0))
 			Expect(delistTxn.Amount).To(BeNumerically("~", 15000.0, 0.01))
 			Expect(delistTxn.Justification).To(ContainSubstring("delisted"))
+		})
+	})
+
+	Context("evaluatePartialRemainders batching", func() {
+		It("fetches prices for all partial remainders in a single call", func() {
+			date1 := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+			date2 := time.Date(2024, 6, 16, 0, 0, 0, 0, time.UTC)
+			msft := asset.Asset{CompositeFigi: "BBG000BPH459", Ticker: "MSFT"}
+
+			partialPipeline := broker.NewPipeline(
+				broker.FillAtClose(),
+				[]broker.Adjuster{broker.MarketImpact(broker.LargeCap)},
+			)
+
+			provider1 := &countingPriceProvider{
+				inner: &mockVolumePriceProvider{
+					close:  map[asset.Asset]float64{aapl: 150.0, msft: 400.0},
+					volume: map[asset.Asset]float64{aapl: 50, msft: 50},
+					date:   date1,
+				},
+			}
+
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetFillPipeline(partialPipeline)
+			simBroker.SetPriceProvider(provider1, date1)
+
+			// Submit orders that will be partially filled
+			// (qty 100 but volume limit caps at 10% of 50 = 5 shares).
+			err := simBroker.Submit(context.Background(), broker.Order{
+				ID: "o1", Asset: aapl, Side: broker.Buy, Qty: 100,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			err = simBroker.Submit(context.Background(), broker.Order{
+				ID: "o2", Asset: msft, Side: broker.Buy, Qty: 100,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			// Drain the partial fills from bar 1.
+			drainFills(simBroker, 2)
+
+			// Advance to next bar with a fresh counting provider.
+			provider2 := &countingPriceProvider{
+				inner: &mockVolumePriceProvider{
+					close:  map[asset.Asset]float64{aapl: 155.0, msft: 410.0},
+					volume: map[asset.Asset]float64{aapl: 1000, msft: 1000},
+					date:   date2,
+				},
+			}
+			simBroker.SetPriceProvider(provider2, date2)
+
+			// EvaluatePending triggers evaluatePartialRemainders.
+			simBroker.EvaluatePending()
+
+			// The partial remainder evaluation should make exactly
+			// 1 batched call for both assets, not 2 individual calls.
+			Expect(provider2.callCount).To(Equal(1))
 		})
 	})
 })

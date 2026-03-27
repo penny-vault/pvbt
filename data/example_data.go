@@ -30,17 +30,17 @@ import (
 // testable examples and documentation.
 //
 // The returned providers supply [MetricClose], [AdjClose], [Dividend],
-// [MetricHigh], [MetricLow], and [SplitFactor] metrics. Dividend values
-// are zero (no dividends in the synthetic data). High and Low are derived
-// from Close by adding/subtracting 1% of the base price. SplitFactor is
-// always 1.0 (no splits).
+// [MetricHigh], [MetricLow], [SplitFactor], and [Volume] metrics. Dividend
+// values are zero (no dividends in the synthetic data). High and Low are
+// derived from Close by adding/subtracting 1% of the base price.
+// SplitFactor is always 1.0 (no splits). Volume is fixed at 1,000,000.
 func ExampleData() (*TestProvider, AssetProvider) {
 	spy := asset.Asset{CompositeFigi: "BBG000BDTBL9", Ticker: "SPY"}
 	tlt := asset.Asset{CompositeFigi: "BBG000BKJMY2", Ticker: "TLT"}
 	gld := asset.Asset{CompositeFigi: "BBG000CRF6Q8", Ticker: "GLD"}
 
 	assets := []asset.Asset{spy, tlt, gld}
-	metrics := []Metric{MetricClose, AdjClose, Dividend, MetricHigh, MetricLow, SplitFactor}
+	metrics := []Metric{MetricClose, AdjClose, Dividend, MetricHigh, MetricLow, SplitFactor, Volume}
 
 	// Generate trading days (skip weekends). Timestamps use US Eastern
 	// at 16:00 (market close) to match tradecron schedule dates.
@@ -89,6 +89,7 @@ func ExampleData() (*TestProvider, AssetProvider) {
 			cols[aIdx*numMetrics+3][timeIdx] = math.Round((price+basePrice[aIdx]*0.01)*100) / 100 // MetricHigh
 			cols[aIdx*numMetrics+4][timeIdx] = math.Round((price-basePrice[aIdx]*0.01)*100) / 100 // MetricLow
 			cols[aIdx*numMetrics+5][timeIdx] = 1.0                                                // SplitFactor
+			cols[aIdx*numMetrics+6][timeIdx] = 1_000_000.0                                        // Volume
 		}
 	}
 

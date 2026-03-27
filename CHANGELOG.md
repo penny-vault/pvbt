@@ -11,6 +11,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Users can now trade live through Webull accounts.
 - Users can now trade live through E*TRADE (Morgan Stanley) accounts.
+- Users can now trade through TradeStation using OAuth 2.0 authentication, with support for all order types, all time-in-force durations, and native OCO/bracket order groups.
+- Mean reversion signals: Z-Score, Hurst exponent (R/S and DFA variants), and pairs trading signals (PairsResidual, PairsRatio) for identifying stretched conditions and pair relationships (#27)
+
+### Changed
+
+- **Breaking:** `Portfolio.Holdings` now returns `map[asset.Asset]float64` instead of taking a callback. Update strategy code from `port.Holdings(func(a asset.Asset, qty float64) { ... })` to `for a, qty := range port.Holdings() { ... }`.
+
+### Fixed
+
+- Backtests with many holdings run significantly faster because broker price data is now fetched once per batch instead of once per order, and the MarketImpact fill adjuster correctly receives volume data.
+- Housekeeping data fetches (dividends, splits, margin prices, equity recording) are now batched into a single query per step instead of three separate queries.
 
 ## [0.5.0] - 2026-03-25
 

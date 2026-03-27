@@ -539,6 +539,42 @@ Webull OpenAPI does not provide a transaction history endpoint. Dividends, split
 
 Fills are delivered via a gRPC server-streaming connection to Webull's trade events endpoint. On disconnect, the broker reconnects with exponential backoff and polls the orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
 
+### TradeStation
+
+The `broker/tradestation` package enables live and paper trading through TradeStation. It supports equities with market, limit, stop, and stop-limit orders, dollar-amount orders, and OCO/bracket order groups.
+
+```go
+import "github.com/penny-vault/pvbt/broker/tradestation"
+
+tsBroker := tradestation.New()
+// or for paper trading:
+tsBroker := tradestation.New(tradestation.WithSandbox())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(tsBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Authentication uses OAuth 2.0 via Auth0:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `TRADESTATION_CLIENT_ID` | yes | OAuth app key |
+| `TRADESTATION_CLIENT_SECRET` | yes | OAuth app secret |
+| `TRADESTATION_ACCOUNT_ID` | no | Account ID; if unset, uses the first linked account |
+| `TRADESTATION_CALLBACK_URL` | no | OAuth callback URL (default: `https://127.0.0.1:5174`) |
+| `TRADESTATION_TOKEN_FILE` | no | Path to persist OAuth tokens (default: `~/.config/pvbt/tradestation-tokens.json`) |
+
+On first run, `Connect()` prints an authorization URL to the console. Open it in a browser, log in, and authorize the app -- a local HTTPS callback server captures the tokens automatically. Access tokens expire every 20 minutes and refresh automatically in the background. Refresh tokens do not expire when the `offline_access` scope is granted.
+
+All seven time-in-force durations are supported: Day, GTC, GTD, IOC, FOK, OnOpen, and OnClose.
+
+TradeStation's v3 API does not provide a transaction history endpoint. Dividends, splits, and fees are not synced automatically; `Transactions()` returns an empty slice.
+
+Fills are delivered via an HTTP chunked stream to the order status endpoint. On disconnect, the broker reconnects with exponential backoff and polls the REST orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.
