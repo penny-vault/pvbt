@@ -285,16 +285,16 @@ var _ = Describe("WebullBroker", func() {
 					json.NewEncoder(writer).Encode(map[string]any{
 						"orders": []map[string]any{
 							{
-								"order_id":        "ORD-300",
-								"symbol":          "GOOG",
-								"side":            "BUY",
-								"order_status":    "FILLED",
-								"order_type":      "LIMIT",
-								"qty":             "5",
-								"filled_qty":      "5",
+								"order_id":         "ORD-300",
+								"symbol":           "GOOG",
+								"side":             "BUY",
+								"order_status":     "FILLED",
+								"order_type":       "LIMIT",
+								"qty":              "5",
+								"filled_qty":       "5",
 								"filled_avg_price": "140.50",
-								"limit_price":     "141",
-								"stop_price":      "",
+								"limit_price":      "141",
+								"stop_price":       "",
 							},
 						},
 					})

@@ -35,11 +35,11 @@ func openOrder(orderID int64, symbol string) map[string]any {
 				"priceType": "MARKET",
 				"Instrument": []map[string]any{
 					{
-						"Product":                  map[string]any{"symbol": symbol},
-						"orderAction":              "BUY",
-						"orderedQuantity":          10.0,
-						"filledQuantity":           0.0,
-						"averageExecutionPrice":    0.0,
+						"Product":               map[string]any{"symbol": symbol},
+						"orderAction":           "BUY",
+						"orderedQuantity":       10.0,
+						"filledQuantity":        0.0,
+						"averageExecutionPrice": 0.0,
 					},
 				},
 			},
