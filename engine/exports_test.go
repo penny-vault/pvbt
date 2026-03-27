@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"math"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -10,12 +11,11 @@ import (
 
 // Test-only exports for black-box testing of dataCache.
 
-// DataCacheForTest is a type alias for dataCache, allowing the black-box
-// test file to hold references without knowing the concrete type name.
+// DataCacheForTest is a type alias for dataCache.
 type DataCacheForTest = dataCache
 
-// ColCacheEntryForTest is a type alias for colCacheEntry.
-type ColCacheEntryForTest = colCacheEntry
+// ChunkEntryForTest is a type alias for chunkEntry.
+type ChunkEntryForTest = chunkEntry
 
 // NewDataCacheForTest exposes newDataCache.
 var NewDataCacheForTest = newDataCache
@@ -36,39 +36,64 @@ func ChunkStartForTest(t time.Time) int64 {
 	return jan1.Unix()
 }
 
-// NewColCacheKeyForTest constructs a colCacheKey from exported parameters.
-func NewColCacheKeyForTest(figi string, metric data.Metric, chunkStart int64) colCacheKey {
-	return colCacheKey{figi: figi, metric: metric, chunkStart: chunkStart}
+// NewChunkEntryForTest exposes newChunkEntry.
+var NewChunkEntryForTest = newChunkEntry
+
+// ChunkEntryGetForTest reads a value from the chunk slab by figi, metric, and timestamp.
+func ChunkEntryGetForTest(ce *chunkEntry, figi string, metric data.Metric, unixSec int64) float64 {
+	aIdx, aOK := ce.assetIdx[figi]
+	mIdx, mOK := ce.metricIdx[metric]
+
+	if !aOK || !mOK {
+		return math.NaN()
+	}
+
+	day := ce.dayOffset(unixSec)
+	if day < 0 {
+		return math.NaN()
+	}
+
+	return ce.values[ce.valueIndex(day, aIdx, mIdx)]
 }
 
-// NewColCacheEntryForTest constructs a colCacheEntry from exported parameters.
-func NewColCacheEntryForTest(times []time.Time, values []float64) *colCacheEntry {
-	return &colCacheEntry{times: times, values: values}
+// ChunkEntrySetForTest exposes chunkEntry.set with named parameters.
+func ChunkEntrySetForTest(ce *chunkEntry, day, aIdx, mIdx int, val float64) {
+	ce.set(day, aIdx, mIdx, val)
 }
 
-// EntryValuesForTest returns the values slice from a colCacheEntry.
-func EntryValuesForTest(entry *colCacheEntry) []float64 {
-	return entry.values
+// ChunkEntryHasColumnForTest exposes chunkEntry.hasColumn.
+func ChunkEntryHasColumnForTest(ce *chunkEntry, figi string, metric data.Metric) bool {
+	return ce.hasColumn(figi, metric)
 }
 
-// CurBytesForTest returns the current byte count tracked by the cache.
-func CurBytesForTest(cache *dataCache) int64 {
-	return cache.curBytes
+// ChunkEntryExpandForTest exposes chunkEntry.expand.
+func ChunkEntryExpandForTest(ce *chunkEntry, newAssets []asset.Asset, newMetrics []data.Metric) {
+	ce.expand(newAssets, newMetrics)
 }
 
-// GetForTest exposes dataCache.get.
-func GetForTest(cache *dataCache, key colCacheKey) (*colCacheEntry, bool) {
-	return cache.get(key)
+// GetChunkForTest exposes dataCache.getChunk.
+func GetChunkForTest(dc *dataCache, yearStart int64) *chunkEntry {
+	return dc.getChunk(yearStart)
 }
 
-// PutForTest exposes dataCache.put.
-func PutForTest(cache *dataCache, key colCacheKey, entry *colCacheEntry) {
-	cache.put(key, entry)
+// PutChunkForTest exposes dataCache.putChunk.
+func PutChunkForTest(dc *dataCache, yearStart int64, ce *chunkEntry) {
+	dc.putChunk(yearStart, ce)
 }
 
 // EvictBeforeForTest exposes dataCache.evictBefore.
-func EvictBeforeForTest(cache *dataCache, t time.Time) {
-	cache.evictBefore(t)
+func EvictBeforeForTest(dc *dataCache, t time.Time) {
+	dc.evictBefore(t)
+}
+
+// CurBytesForTest returns the current byte count tracked by the cache.
+func CurBytesForTest(dc *dataCache) int64 {
+	return dc.curBytes
+}
+
+// DayOffsetForTest exposes chunkEntry.dayOffset.
+func DayOffsetForTest(ce *chunkEntry, unixSec int64) int {
+	return ce.dayOffset(unixSec)
 }
 
 // WalkBackTradingDaysForTest exposes walkBackTradingDays.
