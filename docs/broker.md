@@ -491,6 +491,54 @@ Day, GTC, GTD, IOC, and FOK durations are supported. OnOpen and OnClose are not 
 
 Fills are detected by polling the orders endpoint every 2 seconds. Duplicate fills are suppressed automatically.
 
+### Webull
+
+The `broker/webull` package enables live trading through Webull using the official Webull OpenAPI platform. It supports equities with market, limit, stop, and stop-limit orders and dollar-amount orders (fractional shares). Webull's API does not support contingent orders (OCO, bracket) reliably; the account layer manages group cancellation for this broker.
+
+```go
+import "github.com/penny-vault/pvbt/broker/webull"
+
+webullBroker := webull.New()
+// or for UAT/test environment:
+webullBroker := webull.New(webull.WithUAT())
+// or with fractional shares:
+webullBroker := webull.New(webull.WithFractionalShares())
+
+eng := engine.New(&MyStrategy{},
+    engine.WithBroker(webullBroker),
+    engine.WithDataProvider(provider),
+    engine.WithAssetProvider(provider),
+)
+```
+
+Webull supports two authentication modes. The broker auto-detects which to use based on environment variables.
+
+**Direct API** (HMAC-SHA1): Set `WEBULL_APP_KEY` and `WEBULL_APP_SECRET`. Every request is signed with HMAC-SHA1. No token refresh or browser auth needed.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WEBULL_APP_KEY` | yes | Application key from the Webull developer portal |
+| `WEBULL_APP_SECRET` | yes | Application secret |
+| `WEBULL_ACCOUNT_ID` | no | Account ID; if unset, uses the first account |
+
+**Connect API** (OAuth 2.0): Set `WEBULL_CLIENT_ID` and `WEBULL_CLIENT_SECRET`. On first run, `Connect()` prints an authorization URL to the console. Open it in a browser, log in, and authorize the app -- a local HTTPS callback server captures the tokens automatically. Access tokens expire in 30 minutes and are refreshed automatically. Refresh tokens expire after 15 days; after expiry, the browser authorization flow must be repeated.
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `WEBULL_CLIENT_ID` | yes | OAuth client ID |
+| `WEBULL_CLIENT_SECRET` | yes | OAuth client secret |
+| `WEBULL_ACCOUNT_ID` | no | Account ID; if unset, uses the first account |
+| `WEBULL_CALLBACK_URL` | no | OAuth callback URL (default: `https://127.0.0.1:5174`) |
+| `WEBULL_TOKEN_FILE` | no | Path to persist OAuth tokens (default: `~/.pvbt/webull_token.json`) |
+
+If both Direct API and OAuth environment variables are set, Direct API takes priority.
+
+Day and GTC durations are supported. All other time-in-force values are not supported by Webull and return an error. Replace operations may only change quantity and price; changes to side, time-in-force, or order type return an error.
+
+Webull OpenAPI does not provide a transaction history endpoint. Dividends, splits, and fees are not synced from the broker.
+
+Fills are delivered via a gRPC server-streaming connection to Webull's trade events endpoint. On disconnect, the broker reconnects with exponential backoff and polls the orders endpoint for any fills missed during the outage. Duplicate fills are suppressed automatically.
+
 ### Other brokers
 
 Additional brokers can be added by implementing the `Broker` interface. Broker implementations live in sub-packages under `broker/`.

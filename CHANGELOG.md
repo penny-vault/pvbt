@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Users can now trade through Webull using the official OpenAPI platform, with support for market, limit, stop, and stop-limit orders, fractional shares, and two authentication modes (HMAC-SHA1 and OAuth 2.0).
 - Users can now trade through E*TRADE (Morgan Stanley) using OAuth 1.0a authentication, with support for market, limit, stop, and stop-limit orders.
 
 ## [0.5.0] - 2026-03-25
