@@ -19,25 +19,22 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
-// Summary constructs a Report from the given portfolio. It reuses
-// the existing build* helpers to compute data and maps their results into
-// Section primitives (MetricPairs, Table, TimeSeries, Text).
+// Summary constructs a Report from the given portfolio. The report's
+// Sections are the domain types (Header, EquityCurve, ReturnTable, etc.)
+// which implement Section for text/JSON rendering and can be type-asserted
+// by the terminal renderer for styled output.
 func Summary(acct ReportablePortfolio) (Report, error) {
 	var warnings []string
 
 	perfData := acct.PerfData()
 
-	// Build the header from portfolio metadata.
 	header := buildHeaderData(acct)
-
-	// Determine whether a benchmark is configured.
 	hasBenchmark := acct.Benchmark() != (asset.Asset{})
 
 	if perfData != nil && perfData.Len() > 0 {
@@ -46,72 +43,57 @@ func Summary(acct ReportablePortfolio) (Report, error) {
 		header.Steps = perfData.Len()
 	}
 
-	// Convert header to a MetricPairs section.
-	headerSection := headerToMetricPairs(header)
-
-	// Early exit when there is insufficient data for a full report.
+	// Early exit for insufficient data.
 	if perfData == nil || perfData.Len() < 2 {
 		warnings = append(warnings, "insufficient data for full report")
 
-		sections := []Section{headerSection}
-		sections = append(sections, warningsToSection(warnings))
-
 		return Report{
-			Title:    header.StrategyName,
-			Sections: sections,
+			Title:        header.StrategyName,
+			Sections:     []Section{&header},
+			HasBenchmark: hasBenchmark,
+			Warnings:     warnings,
 		}, nil
 	}
 
-	var sections []Section
-
-	sections = append(sections, headerSection)
-
-	// Equity curve.
 	equityCurve := buildEquityCurve(perfData, header.InitialCash)
-	sections = append(sections, equityCurveToTimeSeries(equityCurve))
 
-	// Recent returns.
 	recentReturns := buildRecentReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, returnTableToSection("Recent Returns", recentReturns, hasBenchmark))
+	recentReturns.SectionName = "Recent Returns"
 
-	// Returns.
 	returns := buildReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, returnTableToSection("Returns", returns, hasBenchmark))
+	returns.SectionName = "Returns"
 
-	// Annual returns.
 	annualReturns := buildAnnualReturns(acct, hasBenchmark, &warnings)
-	sections = append(sections, annualReturnsToSection(annualReturns, hasBenchmark))
 
-	// Risk metrics.
 	risk := buildRisk(acct, hasBenchmark, &warnings)
-	sections = append(sections, riskToMetricPairs(risk, hasBenchmark))
+	risk.hasBenchmark = hasBenchmark
 
-	// Risk vs benchmark.
-	if hasBenchmark {
-		riskVsBenchmark := buildRiskVsBenchmark(acct, &warnings)
-		sections = append(sections, riskVsBenchmarkToMetricPairs(riskVsBenchmark))
-	}
-
-	// Drawdowns.
 	drawdowns := buildDrawdowns(acct, &warnings)
-	sections = append(sections, drawdownsToSection(drawdowns))
-
-	// Monthly returns.
 	monthlyReturns := buildMonthlyReturns(acct, &warnings)
-	sections = append(sections, monthlyReturnsToSection(monthlyReturns))
-
-	// Trades.
 	trades := buildTrades(acct, &warnings)
-	sections = append(sections, tradesToSections(trades)...)
 
-	// Warnings.
-	if len(warnings) > 0 {
-		sections = append(sections, warningsToSection(warnings))
+	sections := []Section{
+		&header,
+		&equityCurve,
+		&recentReturns,
+		&returns,
+		&annualReturns,
+		&risk,
 	}
+
+	var riskVsBenchmark RiskVsBenchmark
+	if hasBenchmark {
+		riskVsBenchmark = buildRiskVsBenchmark(acct, &warnings)
+		sections = append(sections, &riskVsBenchmark)
+	}
+
+	sections = append(sections, &drawdowns, &monthlyReturns, &trades)
 
 	return Report{
-		Title:    header.StrategyName,
-		Sections: sections,
+		Title:        header.StrategyName,
+		Sections:     sections,
+		HasBenchmark: hasBenchmark,
+		Warnings:     warnings,
 	}, nil
 }
 
@@ -119,9 +101,9 @@ func Summary(acct ReportablePortfolio) (Report, error) {
 // Header helpers
 // ---------------------------------------------------------------------------
 
-// headerData is an internal struct to hold parsed header fields before
+// Header is an internal struct to hold parsed header fields before
 // conversion to a MetricPairs section.
-type headerData struct {
+type Header struct {
 	StrategyName    string
 	StrategyVersion string
 	Benchmark       string
@@ -133,8 +115,8 @@ type headerData struct {
 	Steps           int
 }
 
-func buildHeaderData(acct ReportablePortfolio) headerData {
-	header := headerData{
+func buildHeaderData(acct ReportablePortfolio) Header {
+	header := Header{
 		StrategyName:    acct.GetMetadata(portfolio.MetaStrategyName),
 		StrategyVersion: acct.GetMetadata(portfolio.MetaStrategyVersion),
 		Benchmark:       acct.GetMetadata(portfolio.MetaStrategyBenchmark),
@@ -156,7 +138,7 @@ func buildHeaderData(acct ReportablePortfolio) headerData {
 	return header
 }
 
-func headerToMetricPairs(header headerData) *MetricPairs {
+func headerToMetricPairs(header Header) *MetricPairs {
 	metrics := []MetricPair{
 		{Label: "Strategy", Value: 0, Format: "label:" + header.StrategyName},
 	}
@@ -553,23 +535,4 @@ func tradesToSections(trades Trades) []Section {
 	}
 
 	return sections
-}
-
-// ---------------------------------------------------------------------------
-// Warnings conversion
-// ---------------------------------------------------------------------------
-
-func warningsToSection(warnings []string) *Text {
-	var builder strings.Builder
-
-	for _, warning := range warnings {
-		builder.WriteString("WARNING: ")
-		builder.WriteString(warning)
-		builder.WriteString("\n")
-	}
-
-	return &Text{
-		SectionName: "Warnings",
-		Body:        builder.String(),
-	}
 }

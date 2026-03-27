@@ -275,10 +275,10 @@ func TestSummaryEquityCurve(t *testing.T) {
 		t.Fatalf("Summary returned error: %v", err)
 	}
 
-	// Find the Equity Curve section (TimeSeries type).
+	// Find the equity curve section.
 	found := false
 	for _, section := range rpt.Sections {
-		if section.Name() == "Equity Curve" && section.Type() == "time_series" {
+		if section.Type() == "equity_curve" {
 			found = true
 
 			break
@@ -286,7 +286,7 @@ func TestSummaryEquityCurve(t *testing.T) {
 	}
 
 	if !found {
-		t.Error("expected an 'Equity Curve' time_series section in the report")
+		t.Error("expected an equity_curve section in the report")
 	}
 }
 

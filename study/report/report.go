@@ -53,10 +53,11 @@ type EquityCurve struct {
 
 // ReturnTable holds return figures for named periods.
 type ReturnTable struct {
-	AsOf      time.Time
-	Periods   []string
-	Strategy  []float64
-	Benchmark []float64
+	SectionName string
+	AsOf        time.Time
+	Periods     []string
+	Strategy    []float64
+	Benchmark   []float64
 }
 
 // AnnualReturns holds year-by-year return figures.
@@ -69,6 +70,7 @@ type AnnualReturns struct {
 // Risk holds paired (strategy, benchmark) risk metrics.
 // Each [2]float64 is {Strategy, Benchmark}.
 type Risk struct {
+	hasBenchmark      bool
 	MaxDrawdown       [2]float64
 	Volatility        [2]float64
 	DownsideDeviation [2]float64
