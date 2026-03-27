@@ -210,17 +210,3 @@ func (client *apiClient) getBalance(ctx context.Context, accountID string) (acco
 
 	return result, nil
 }
-
-// Compile-time references so the unused linter does not flag the client
-// infrastructure that is only consumed from the test-export bridge today
-// but will be wired into the broker facade in a later task.
-var (
-	_ = newAPIClient
-	_ = (*apiClient).getAccounts
-	_ = (*apiClient).submitOrder
-	_ = (*apiClient).cancelOrder
-	_ = (*apiClient).replaceOrder
-	_ = (*apiClient).getOrders
-	_ = (*apiClient).getPositions
-	_ = (*apiClient).getBalance
-)

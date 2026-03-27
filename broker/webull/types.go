@@ -240,13 +240,3 @@ func mapWebullStatus(status string) broker.OrderStatus {
 		return broker.OrderOpen
 	}
 }
-
-// Compile-time references so the unused linter does not flag mapping
-// functions that are only consumed from the test-export bridge today but
-// will be wired into the broker facade in later tasks.
-var (
-	_ = toWebullOrder
-	_ = toBrokerOrder
-	_ = toBrokerPosition
-	_ = toBrokerBalance
-)

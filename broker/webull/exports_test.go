@@ -180,3 +180,11 @@ func (client *apiClient) GetPositions(ctx context.Context, accountID string) ([]
 func (client *apiClient) GetBalance(ctx context.Context, accountID string) (accountResponse, error) {
 	return client.getBalance(ctx, accountID)
 }
+
+// SetClientForTest replaces the broker's internal client with one
+// pointing at the given URL.
+func SetClientForTest(wb *WebullBroker, baseURL, appKey, appSecret string) {
+	sign := &hmacSigner{appKey: appKey, appSecret: appSecret}
+	wb.client = newAPIClient(baseURL, sign)
+	wb.accountID = "test-account"
+}
