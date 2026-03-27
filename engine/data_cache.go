@@ -16,18 +16,12 @@
 package engine
 
 import (
-	"math"
 	"time"
 
-	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
-const (
-	defaultMaxBytes int64 = 512 * 1024 * 1024 // 512 MB
-	daysPerChunk          = 366               // always 366 to avoid leap-year branching
-	secondsPerDay         = 86400
-)
+const defaultMaxBytes int64 = 512 * 1024 * 1024 // 512 MB
 
 var nyc *time.Location
 
@@ -40,168 +34,22 @@ func init() {
 	}
 }
 
-// chunkCol identifies an (asset, metric) pair that has been fetched.
-type chunkCol struct {
-	figi   string
-	metric data.Metric
+// colCacheKey identifies a single cached column: one asset, one metric,
+// one calendar-year chunk.
+type colCacheKey struct {
+	figi       string
+	metric     data.Metric
+	chunkStart int64 // Unix seconds, Jan 1 00:00 Eastern
 }
 
-// chunkEntry holds a full year of data in a flat slab indexed by calendar day.
-// Layout: values[dayOffset * numAssets * numMetrics + assetIdx * numMetrics + metricIdx]
-// dayOffset = (timestamp - baseUnix) / 86400, range [0, 365].
-// Non-trading days and missing data are NaN.
-type chunkEntry struct {
-	baseUnix  int64               // Jan 1 00:00 Eastern, Unix seconds
-	assets    []asset.Asset       // ordered asset list
-	metrics   []data.Metric       // ordered metric list
-	assetIdx  map[string]int      // figi -> index into assets
-	metricIdx map[data.Metric]int // metric -> index into metrics
-	fetched   map[chunkCol]bool   // tracks which (figi, metric) pairs have been fetched
-	values    []float64           // flat slab
-	times     []time.Time         // original provider timestamp per day slot (zero = no data)
-	bytes     int64               // estimated memory footprint
+// colCacheEntry holds a single time-series column.
+type colCacheEntry struct {
+	times  []time.Time
+	values []float64
 }
 
-// newChunkEntry creates a chunk for the given year with the specified assets
-// and metrics. The slab is initialized to NaN.
-func newChunkEntry(yearStart int64, assets []asset.Asset, metrics []data.Metric) *chunkEntry {
-	ce := &chunkEntry{
-		baseUnix:  yearStart,
-		assets:    make([]asset.Asset, len(assets)),
-		metrics:   make([]data.Metric, len(metrics)),
-		assetIdx:  make(map[string]int, len(assets)),
-		metricIdx: make(map[data.Metric]int, len(metrics)),
-		fetched:   make(map[chunkCol]bool, len(assets)*len(metrics)),
-	}
-
-	copy(ce.assets, assets)
-	copy(ce.metrics, metrics)
-
-	for idx, ast := range assets {
-		ce.assetIdx[ast.CompositeFigi] = idx
-	}
-
-	for idx, met := range metrics {
-		ce.metricIdx[met] = idx
-	}
-
-	ce.values = make([]float64, daysPerChunk*len(assets)*len(metrics))
-	for idx := range ce.values {
-		ce.values[idx] = math.NaN()
-	}
-
-	ce.times = make([]time.Time, daysPerChunk)
-	ce.bytes = int64(len(ce.values)*8 + daysPerChunk*24)
-
-	return ce
-}
-
-// dayOffset returns the calendar day offset for a Unix timestamp relative to
-// the chunk's base. Returns -1 if out of range.
-func (ce *chunkEntry) dayOffset(unixSec int64) int {
-	off := int((unixSec - ce.baseUnix) / secondsPerDay)
-	if off < 0 || off >= daysPerChunk {
-		return -1
-	}
-
-	return off
-}
-
-// stride returns the number of float64 values per day.
-func (ce *chunkEntry) stride() int {
-	return len(ce.assets) * len(ce.metrics)
-}
-
-// valueIndex returns the flat slab index for (dayOffset, assetIdx, metricIdx).
-func (ce *chunkEntry) valueIndex(day, aIdx, mIdx int) int {
-	return day*ce.stride() + aIdx*len(ce.metrics) + mIdx
-}
-
-// set writes a value into the slab for the given asset, metric, and day offset.
-func (ce *chunkEntry) set(day, aIdx, mIdx int, val float64) {
-	ce.values[ce.valueIndex(day, aIdx, mIdx)] = val
-}
-
-// hasColumn returns true if the chunk has fetched data for the given (figi, metric) pair.
-func (ce *chunkEntry) hasColumn(figi string, metric data.Metric) bool {
-	return ce.fetched[chunkCol{figi: figi, metric: metric}]
-}
-
-// expand grows the chunk to include additional assets and/or metrics.
-// Existing values are scattered into the new layout. New slots are NaN.
-func (ce *chunkEntry) expand(newAssets []asset.Asset, newMetrics []data.Metric) {
-	// Build merged asset list: existing + new.
-	mergedAssets := make([]asset.Asset, len(ce.assets))
-	copy(mergedAssets, ce.assets)
-
-	for _, ast := range newAssets {
-		if _, ok := ce.assetIdx[ast.CompositeFigi]; !ok {
-			mergedAssets = append(mergedAssets, ast)
-		}
-	}
-
-	// Build merged metric list: existing + new.
-	mergedMetrics := make([]data.Metric, len(ce.metrics))
-	copy(mergedMetrics, ce.metrics)
-
-	for _, met := range newMetrics {
-		if _, ok := ce.metricIdx[met]; !ok {
-			mergedMetrics = append(mergedMetrics, met)
-		}
-	}
-
-	// If nothing changed, return early.
-	if len(mergedAssets) == len(ce.assets) && len(mergedMetrics) == len(ce.metrics) {
-		return
-	}
-
-	// Build new index maps.
-	newAssetIdx := make(map[string]int, len(mergedAssets))
-	for idx, ast := range mergedAssets {
-		newAssetIdx[ast.CompositeFigi] = idx
-	}
-
-	newMetricIdx := make(map[data.Metric]int, len(mergedMetrics))
-	for idx, met := range mergedMetrics {
-		newMetricIdx[met] = idx
-	}
-
-	// Allocate new slab and fill with NaN.
-	newStride := len(mergedAssets) * len(mergedMetrics)
-	newValues := make([]float64, daysPerChunk*newStride)
-
-	for idx := range newValues {
-		newValues[idx] = math.NaN()
-	}
-
-	// Scatter old values into new layout.
-	oldStride := ce.stride()
-
-	for day := range daysPerChunk {
-		for oldAIdx, ast := range ce.assets {
-			newAIdx := newAssetIdx[ast.CompositeFigi]
-
-			for oldMIdx, met := range ce.metrics {
-				newMIdx := newMetricIdx[met]
-				oldIdx := day*oldStride + oldAIdx*len(ce.metrics) + oldMIdx
-				newIdx := day*newStride + newAIdx*len(mergedMetrics) + newMIdx
-				newValues[newIdx] = ce.values[oldIdx]
-			}
-		}
-	}
-
-	ce.assets = mergedAssets
-	ce.metrics = mergedMetrics
-	ce.assetIdx = newAssetIdx
-	ce.metricIdx = newMetricIdx
-	ce.values = newValues
-	// ce.times is unchanged -- day slots are the same, only values layout changes.
-	ce.bytes = int64(len(newValues)*8 + daysPerChunk*24)
-}
-
-// dataCache holds chunk entries keyed by year start (Unix seconds).
 type dataCache struct {
-	chunks   map[int64]*chunkEntry
+	entries  map[colCacheKey]*colCacheEntry
 	curBytes int64
 	maxBytes int64
 }
@@ -212,35 +60,36 @@ func newDataCache(maxBytes int64) *dataCache {
 	}
 
 	return &dataCache{
-		chunks:   make(map[int64]*chunkEntry),
+		entries:  make(map[colCacheKey]*colCacheEntry),
 		maxBytes: maxBytes,
 	}
 }
 
-// getChunk returns the chunk entry for the given year, or nil if not cached.
-func (dc *dataCache) getChunk(yearStart int64) *chunkEntry {
-	return dc.chunks[yearStart]
+func (c *dataCache) get(key colCacheKey) (*colCacheEntry, bool) {
+	e, ok := c.entries[key]
+	return e, ok
 }
 
-// putChunk stores a chunk entry, updating byte tracking.
-func (dc *dataCache) putChunk(yearStart int64, ce *chunkEntry) {
-	if old, ok := dc.chunks[yearStart]; ok {
-		dc.curBytes -= old.bytes
+func (c *dataCache) put(key colCacheKey, entry *colCacheEntry) {
+	entrySize := estimateEntryBytes(entry)
+	if old, ok := c.entries[key]; ok {
+		c.curBytes -= estimateEntryBytes(old)
 	}
 
-	dc.chunks[yearStart] = ce
-	dc.curBytes += ce.bytes
+	c.entries[key] = entry
+	c.curBytes += entrySize
 }
 
-// evictBefore removes all chunks whose year is more than one year before t.
-func (dc *dataCache) evictBefore(t time.Time) {
+// evictBefore removes all entries whose chunk year is more than one year
+// before t. We keep the previous year because lookback windows commonly
+// span across year boundaries.
+func (c *dataCache) evictBefore(t time.Time) {
 	year := t.In(nyc).Year()
-
-	for yearStart, ce := range dc.chunks {
-		chunkYear := time.Unix(yearStart, 0).In(nyc).Year()
+	for key, entry := range c.entries {
+		chunkYear := time.Unix(key.chunkStart, 0).In(nyc).Year()
 		if chunkYear < year-1 {
-			dc.curBytes -= ce.bytes
-			delete(dc.chunks, yearStart)
+			c.curBytes -= estimateEntryBytes(entry)
+			delete(c.entries, key)
 		}
 	}
 }
@@ -252,11 +101,18 @@ func chunkYears(start, end time.Time) []int64 {
 	endYear := end.In(nyc).Year()
 
 	years := make([]int64, 0, endYear-startYear+1)
-
-	for yr := startYear; yr <= endYear; yr++ {
-		jan1 := time.Date(yr, 1, 1, 0, 0, 0, 0, nyc)
+	for y := startYear; y <= endYear; y++ {
+		jan1 := time.Date(y, 1, 1, 0, 0, 0, 0, nyc)
 		years = append(years, jan1.Unix())
 	}
 
 	return years
+}
+
+func estimateEntryBytes(e *colCacheEntry) int64 {
+	if e == nil {
+		return 0
+	}
+
+	return int64(len(e.values)*8 + len(e.times)*24)
 }
