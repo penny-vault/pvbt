@@ -661,13 +661,9 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	defer conn.Release()
 
 	rows, err := conn.Query(ctx,
-		`SELECT composite_figi, ticker FROM (
-		     SELECT DISTINCT ON (composite_figi) composite_figi, ticker, rating
-		     FROM ratings
-		     WHERE analyst = $1 AND event_date <= $2
-		     ORDER BY composite_figi, event_date DESC
-		 ) sub
-		 WHERE rating = ANY($3)`,
+		`SELECT composite_figi, ticker
+		 FROM ratings
+		 WHERE analyst = $1 AND event_date = $2 AND rating = ANY($3)`,
 		analyst, asOfDate, filter.Values,
 	)
 	if err != nil {
@@ -689,6 +685,8 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	return assets, rows.Err()
 }
 
+// RatingHistory returns the initial rating state just before start and all
+// rating changes in [start, end] for the given analyst.
 // -- metric mappings ---------------------------------------------------------
 
 // metricView maps each Metric to the database view it comes from.
