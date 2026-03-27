@@ -20,7 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Backtests with many holdings run significantly faster because broker price data is now fetched once per batch instead of once per order, and the MarketImpact fill adjuster correctly receives volume data.
+- Backtests with rated universes run up to 17x faster because universe membership queries no longer scan the full ratings history on every step.
+- Broker price data is now fetched once per batch instead of once per order, and the MarketImpact fill adjuster correctly receives volume data.
 - Housekeeping data fetches (dividends, splits, margin prices, equity recording) are now batched into a single query per step instead of three separate queries.
 
 ## [0.5.0] - 2026-03-25
