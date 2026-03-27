@@ -495,8 +495,17 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 			e.cache.curBytes = e.cache.curBytes - oldBytes + chunk.bytes
 		}
 
+		// Mark all requested (asset, metric) pairs as fetched,
+		// even if the provider returned no data for some of them.
+		for _, ma := range missAssets {
+			for _, mm := range missMetrics {
+				chunk.fetched[chunkCol{figi: ma.CompositeFigi, metric: mm}] = true
+			}
+		}
+
 		// Scatter provider results into the chunk slab.
 		dfTimes := df.Times()
+
 		for _, provAsset := range df.AssetList() {
 			aIdx, aOK := chunk.assetIdx[provAsset.CompositeFigi]
 			if !aOK {

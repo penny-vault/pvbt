@@ -66,6 +66,11 @@ func ChunkEntryHasColumnForTest(ce *chunkEntry, figi string, metric data.Metric)
 	return ce.hasColumn(figi, metric)
 }
 
+// MarkFetchedForTest marks a (figi, metric) pair as fetched in the chunk.
+func MarkFetchedForTest(ce *chunkEntry, figi string, metric data.Metric) {
+	ce.fetched[chunkCol{figi: figi, metric: metric}] = true
+}
+
 // ChunkEntryExpandForTest exposes chunkEntry.expand.
 func ChunkEntryExpandForTest(ce *chunkEntry, newAssets []asset.Asset, newMetrics []data.Metric) {
 	ce.expand(newAssets, newMetrics)

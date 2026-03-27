@@ -40,6 +40,12 @@ func init() {
 	}
 }
 
+// chunkCol identifies an (asset, metric) pair that has been fetched.
+type chunkCol struct {
+	figi   string
+	metric data.Metric
+}
+
 // chunkEntry holds a full year of data in a flat slab indexed by calendar day.
 // Layout: values[dayOffset * numAssets * numMetrics + assetIdx * numMetrics + metricIdx]
 // dayOffset = (timestamp - baseUnix) / 86400, range [0, 365].
@@ -50,6 +56,7 @@ type chunkEntry struct {
 	metrics   []data.Metric       // ordered metric list
 	assetIdx  map[string]int      // figi -> index into assets
 	metricIdx map[data.Metric]int // metric -> index into metrics
+	fetched   map[chunkCol]bool   // tracks which (figi, metric) pairs have been fetched
 	values    []float64           // flat slab
 	times     []time.Time         // original provider timestamp per day slot (zero = no data)
 	bytes     int64               // estimated memory footprint
@@ -64,6 +71,7 @@ func newChunkEntry(yearStart int64, assets []asset.Asset, metrics []data.Metric)
 		metrics:   make([]data.Metric, len(metrics)),
 		assetIdx:  make(map[string]int, len(assets)),
 		metricIdx: make(map[data.Metric]int, len(metrics)),
+		fetched:   make(map[chunkCol]bool, len(assets)*len(metrics)),
 	}
 
 	copy(ce.assets, assets)
@@ -114,12 +122,9 @@ func (ce *chunkEntry) set(day, aIdx, mIdx int, val float64) {
 	ce.values[ce.valueIndex(day, aIdx, mIdx)] = val
 }
 
-// hasColumn returns true if the chunk contains data for the given (figi, metric).
+// hasColumn returns true if the chunk has fetched data for the given (figi, metric) pair.
 func (ce *chunkEntry) hasColumn(figi string, metric data.Metric) bool {
-	_, aOK := ce.assetIdx[figi]
-	_, mOK := ce.metricIdx[metric]
-
-	return aOK && mOK
+	return ce.fetched[chunkCol{figi: figi, metric: metric}]
 }
 
 // expand grows the chunk to include additional assets and/or metrics.

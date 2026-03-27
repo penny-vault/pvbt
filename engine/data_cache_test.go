@@ -98,7 +98,15 @@ var _ = Describe("dataCache", func() {
 
 		It("detects present and missing columns", func() {
 			ce := engine.NewChunkEntryForTest(yr2025, []asset.Asset{aapl}, []data.Metric{data.MetricClose})
+
+			// Not fetched yet -- hasColumn is false.
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.MetricClose)).To(BeFalse())
+
+			// Mark as fetched.
+			engine.MarkFetchedForTest(ce, "FIGI-AAPL", data.MetricClose)
 			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.MetricClose)).To(BeTrue())
+
+			// Still missing.
 			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.Volume)).To(BeFalse())
 			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-MSFT", data.MetricClose)).To(BeFalse())
 		})
@@ -115,7 +123,8 @@ var _ = Describe("dataCache", func() {
 					time.Date(2025, 3, 15, 16, 0, 0, 0, nyc).Unix())
 				Expect(val).To(Equal(150.0))
 
-				Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-MSFT", data.MetricClose)).To(BeTrue())
+				// New asset is in the slab but not yet fetched.
+				Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-MSFT", data.MetricClose)).To(BeFalse())
 				val2 := engine.ChunkEntryGetForTest(ce, "FIGI-MSFT", data.MetricClose,
 					time.Date(2025, 3, 15, 16, 0, 0, 0, nyc).Unix())
 				Expect(math.IsNaN(val2)).To(BeTrue())
@@ -132,7 +141,8 @@ var _ = Describe("dataCache", func() {
 					time.Date(2025, 3, 15, 16, 0, 0, 0, nyc).Unix())
 				Expect(val).To(Equal(150.0))
 
-				Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.Volume)).To(BeTrue())
+				// New metric is in the slab but not yet fetched.
+				Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.Volume)).To(BeFalse())
 			})
 
 			It("is a no-op when all assets and metrics already present", func() {
@@ -146,6 +156,58 @@ var _ = Describe("dataCache", func() {
 					time.Date(2025, 3, 15, 16, 0, 0, 0, nyc).Unix())
 				Expect(val).To(Equal(150.0))
 			})
+		})
+	})
+
+	Describe("incremental expansion with partial fetches", func() {
+		It("does not report unfetched columns as present after expand", func() {
+			nyc := engine.NYCForTest()
+			yr := engine.ChunkStartForTest(time.Date(2024, 1, 1, 0, 0, 0, 0, nyc))
+
+			aapl := asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
+			msft := asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
+			goog := asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
+
+			// Step 1: Create chunk with AAPL + MarketCap, mark fetched, scatter data.
+			ce := engine.NewChunkEntryForTest(yr, []asset.Asset{aapl}, []data.Metric{data.MarketCap})
+			engine.MarkFetchedForTest(ce, "FIGI-AAPL", data.MarketCap)
+
+			day5 := engine.DayOffsetForTest(ce, time.Date(2024, 1, 5, 16, 0, 0, 0, nyc).Unix())
+			engine.ChunkEntrySetForTest(ce, day5, 0, 0, 1e12) // AAPL market cap
+
+			// Step 2: Expand to add Close metric for AAPL (housekeeping).
+			engine.ChunkEntryExpandForTest(ce, nil, []data.Metric{data.MetricClose})
+			engine.MarkFetchedForTest(ce, "FIGI-AAPL", data.MetricClose)
+
+			// Simulate scatter of AAPL Close.
+			aIdx := 0 // AAPL is index 0
+			mIdx := 1 // Close is index 1 after expand
+			engine.ChunkEntrySetForTest(ce, day5, aIdx, mIdx, 150.0)
+
+			// Step 3: Expand to add 2 more assets (strategy universe).
+			engine.ChunkEntryExpandForTest(ce, []asset.Asset{msft, goog}, nil)
+
+			// Mark only MarketCap as fetched for the new assets.
+			engine.MarkFetchedForTest(ce, "FIGI-MSFT", data.MarketCap)
+			engine.MarkFetchedForTest(ce, "FIGI-GOOG", data.MarketCap)
+
+			// CRITICAL: MSFT and GOOG have MarketCap fetched but NOT Close.
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-MSFT", data.MarketCap)).To(BeTrue())
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-GOOG", data.MarketCap)).To(BeTrue())
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-MSFT", data.MetricClose)).To(BeFalse(),
+				"MSFT Close should not be reported as fetched -- this was the bug")
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-GOOG", data.MetricClose)).To(BeFalse(),
+				"GOOG Close should not be reported as fetched -- this was the bug")
+
+			// AAPL still has both.
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.MarketCap)).To(BeTrue())
+			Expect(engine.ChunkEntryHasColumnForTest(ce, "FIGI-AAPL", data.MetricClose)).To(BeTrue())
+
+			// Values: AAPL Close has data, MSFT Close is NaN.
+			Expect(engine.ChunkEntryGetForTest(ce, "FIGI-AAPL", data.MetricClose,
+				time.Date(2024, 1, 5, 16, 0, 0, 0, nyc).Unix())).To(Equal(150.0))
+			Expect(math.IsNaN(engine.ChunkEntryGetForTest(ce, "FIGI-MSFT", data.MetricClose,
+				time.Date(2024, 1, 5, 16, 0, 0, 0, nyc).Unix()))).To(BeTrue())
 		})
 	})
 
