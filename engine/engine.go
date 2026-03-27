@@ -626,15 +626,42 @@ func (e *Engine) Close() error {
 	return firstErr
 }
 
-// Prices implements broker.PriceProvider. It returns close, high, and low
-// prices for the requested assets at the engine's current simulation date.
-// High and low are needed by EvaluatePending for intrabar bracket order
-// evaluation.
+// Prices implements broker.PriceProvider. It returns close, high, low,
+// and volume prices plus dividend/split data for the requested assets at
+// the engine's current simulation date. High and low are needed by
+// EvaluatePending for intrabar bracket order evaluation. Volume is needed
+// by the MarketImpact fill adjuster.
 func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
 	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{
 		data.MetricClose, data.MetricHigh, data.MetricLow,
-		data.Dividend, data.SplitFactor,
+		data.Volume, data.Dividend, data.SplitFactor,
 	})
+}
+
+// prefetchBrokerPrices batch-fetches price data for all unique assets
+// in the given orders, warming the year-chunk cache so that subsequent
+// per-order Prices calls in Submit are cache hits.
+func (e *Engine) prefetchBrokerPrices(ctx context.Context, orders []broker.Order) error {
+	if len(orders) == 0 {
+		return nil
+	}
+
+	assetSet := make(map[string]asset.Asset, len(orders))
+	for idx := range orders {
+		assetSet[orders[idx].Asset.CompositeFigi] = orders[idx].Asset
+	}
+
+	assets := make([]asset.Asset, 0, len(assetSet))
+	for _, held := range assetSet {
+		assets = append(assets, held)
+	}
+
+	_, err := e.Prices(ctx, assets...)
+	if err != nil {
+		return fmt.Errorf("prefetch broker prices: %w", err)
+	}
+
+	return nil
 }
 
 // PredictedPortfolio runs the strategy's Compute against a shadow copy of the

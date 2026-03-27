@@ -368,6 +368,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, date, err)
 			}
 
+			if err := e.prefetchBrokerPrices(stepCtx, childBatch.Orders); err != nil {
+				return nil, fmt.Errorf("engine: child %q prefetch broker prices on %v: %w", childName, date, err)
+			}
+
 			if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
 				return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, date, err)
 			}
@@ -390,6 +394,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			if err := e.strategy.Compute(stepCtx, e, acct, batch); err != nil {
 				return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
 					e.strategy.Name(), date, err)
+			}
+
+			// Prefetch broker prices for all order assets so that
+			// per-order Submit calls hit the year-chunk cache.
+			if err := e.prefetchBrokerPrices(stepCtx, batch.Orders); err != nil {
+				return nil, fmt.Errorf("engine: prefetch broker prices on %v: %w", date, err)
 			}
 
 			// Execute batch through middleware chain.
