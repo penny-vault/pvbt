@@ -45,7 +45,7 @@ func (fp *fakePortfolio) Cash() float64                         { return 0 }
 func (fp *fakePortfolio) Value() float64                        { return fp.portfolioVal }
 func (fp *fakePortfolio) Position(_ asset.Asset) float64        { return 0 }
 func (fp *fakePortfolio) PositionValue(_ asset.Asset) float64   { return 0 }
-func (fp *fakePortfolio) Holdings(_ func(asset.Asset, float64)) {}
+func (fp *fakePortfolio) Holdings() map[asset.Asset]float64 { return nil }
 func (fp *fakePortfolio) Transactions() []portfolio.Transaction { return nil }
 func (fp *fakePortfolio) Prices() *data.DataFrame               { return nil }
 func (fp *fakePortfolio) PerfData() *data.DataFrame             { return fp.perfData }

@@ -294,11 +294,11 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 			// i. Mark-to-market: fetch prices and record equity.
 			// Retry up to 18 times with 1-hour waits for delayed prices
 			// (mutual fund NAVs may not be available until 1-3 AM next day).
-			var priceAssets []asset.Asset
-
-			acct.Holdings(func(a asset.Asset, _ float64) {
-				priceAssets = append(priceAssets, a)
-			})
+			holdings := acct.Holdings()
+			priceAssets := make([]asset.Asset, 0, len(holdings))
+			for ast := range holdings {
+				priceAssets = append(priceAssets, ast)
+			}
 
 			if e.benchmark != (asset.Asset{}) {
 				priceAssets = append(priceAssets, e.benchmark)

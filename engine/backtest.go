@@ -476,11 +476,11 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 func (eng *Engine) updateAccountPrices(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
 	priceMetrics := []data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow}
 
-	var priceAssets []asset.Asset
-
-	acct.Holdings(func(a asset.Asset, _ float64) {
-		priceAssets = append(priceAssets, a)
-	})
+	holdings := acct.Holdings()
+	priceAssets := make([]asset.Asset, 0, len(holdings))
+	for ast := range holdings {
+		priceAssets = append(priceAssets, ast)
+	}
 
 	if benchmark != (asset.Asset{}) {
 		priceAssets = append(priceAssets, benchmark)

@@ -415,37 +415,30 @@ func (a *Account) PositionValue(ast asset.Asset) float64 {
 	return qty * v
 }
 
-// Holdings iterates over all current positions, calling fn with each
-// asset and its held quantity. When active substitutions exist, real
-// assets are mapped back to their logical originals so that strategy
-// code sees the canonical asset names.
-func (a *Account) Holdings(fn func(asset.Asset, float64)) {
+// Holdings returns a map of all current positions keyed by asset with the
+// held quantity as the value. When active substitutions exist, real assets
+// are mapped back to their logical originals so that strategy code sees
+// the canonical asset names.
+func (a *Account) Holdings() map[asset.Asset]float64 {
+	if len(a.substitutions) == 0 {
+		result := make(map[asset.Asset]float64, len(a.holdings))
+		for ast, qty := range a.holdings {
+			result[ast] = qty
+		}
+		return result
+	}
+
 	var asOf time.Time
 	if a.prices != nil {
 		asOf = a.prices.End()
 	}
 
-	// When substitutions are active, multiple real assets may map to the
-	// same logical asset. Aggregate quantities under the logical key.
-	// A zero asOf is safe here: time.Time{}.Before(expiry) is true for any
-	// real expiry date, so substitutions remain active when prices are absent.
-	if len(a.substitutions) > 0 {
-		logical := make(map[asset.Asset]float64, len(a.holdings))
-		for realAsset, qty := range a.holdings {
-			key := mapToLogical(realAsset, a.substitutions, asOf)
-			logical[key] += qty
-		}
-
-		for ast, qty := range logical {
-			fn(ast, qty)
-		}
-
-		return
+	logical := make(map[asset.Asset]float64, len(a.holdings))
+	for realAsset, qty := range a.holdings {
+		key := mapToLogical(realAsset, a.substitutions, asOf)
+		logical[key] += qty
 	}
-
-	for ast, qty := range a.holdings {
-		fn(ast, qty)
-	}
+	return logical
 }
 
 // Transactions returns the full transaction log in chronological order.

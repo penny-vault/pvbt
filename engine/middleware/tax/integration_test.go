@@ -194,10 +194,7 @@ var _ = Describe("Integration: full tax optimization flow", func() {
 		Expect(acct.Position(ivv)).To(BeNumerically(">", 0.0), "IVV should be held as substitute")
 
 		// Logical view via Holdings() should report SPY, not IVV.
-		logicalHoldings := make(map[asset.Asset]float64)
-		acct.Holdings(func(ast asset.Asset, qty float64) {
-			logicalHoldings[ast] = qty
-		})
+		logicalHoldings := acct.Holdings()
 		Expect(logicalHoldings).To(HaveKey(spy), "logical view should show SPY")
 		Expect(logicalHoldings).NotTo(HaveKey(ivv), "logical view should not show IVV")
 

@@ -106,11 +106,11 @@ var _ = Describe("Substitution mapping", func() {
 			expiry := ts.AddDate(0, 1, 0)
 			acct.RegisterSubstitution(spy, ivv, expiry)
 
-			// Holdings callback should receive SPY, not IVV.
+			// Holdings should return SPY, not IVV.
 			found := make(map[string]float64)
-			acct.Holdings(func(ast asset.Asset, qty float64) {
+			for ast, qty := range acct.Holdings() {
 				found[ast.Ticker] = qty
-			})
+			}
 
 			Expect(found).To(HaveKey("SPY"))
 			Expect(found).NotTo(HaveKey("IVV"))
@@ -127,9 +127,9 @@ var _ = Describe("Substitution mapping", func() {
 			acct.RegisterSubstitution(spy, ivv, expired)
 
 			found := make(map[string]float64)
-			acct.Holdings(func(ast asset.Asset, qty float64) {
+			for ast, qty := range acct.Holdings() {
 				found[ast.Ticker] = qty
-			})
+			}
 
 			Expect(found).To(HaveKey("IVV"))
 			Expect(found).NotTo(HaveKey("SPY"))
@@ -271,9 +271,9 @@ var _ = Describe("Substitution mapping", func() {
 			acct.RegisterSubstitution(qqq, qqqe, expiry)
 
 			found := make(map[string]float64)
-			acct.Holdings(func(ast asset.Asset, qty float64) {
+			for ast, qty := range acct.Holdings() {
 				found[ast.Ticker] = qty
-			})
+			}
 
 			Expect(found).To(HaveKey("SPY"))
 			Expect(found).To(HaveKey("QQQ"))

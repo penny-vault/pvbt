@@ -516,11 +516,11 @@ func (b *SimulatedBroker) Transactions(ctx context.Context, _ time.Time) ([]brok
 		return nil, nil
 	}
 
-	var heldAssets []asset.Asset
-
-	b.portfolio.Holdings(func(ast asset.Asset, _ float64) {
+	holdings := b.portfolio.Holdings()
+	heldAssets := make([]asset.Asset, 0, len(holdings))
+	for ast := range holdings {
 		heldAssets = append(heldAssets, ast)
-	})
+	}
 
 	if len(heldAssets) == 0 {
 		return nil, nil

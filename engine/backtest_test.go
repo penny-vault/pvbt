@@ -75,15 +75,15 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 
 	weight := 1.0 / float64(len(s.assets))
 	totalValue := fund.Cash()
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		price := priceDF.ValueAt(held, data.MetricClose, eng.CurrentDate())
 		if !math.IsNaN(price) {
 			totalValue += qty * price
 		}
-	})
+	}
 
 	// Sell assets not in target.
-	fund.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range fund.Holdings() {
 		inTarget := false
 		for _, target := range s.assets {
 			if target == held {
@@ -94,7 +94,7 @@ func (s *backtestStrategy) Compute(ctx context.Context, eng *engine.Engine, fund
 		if !inTarget && qty > 0 {
 			batch.Order(ctx, held, portfolio.Sell, qty)
 		}
-	})
+	}
 
 	// Buy/adjust target assets.
 	for _, target := range s.assets {

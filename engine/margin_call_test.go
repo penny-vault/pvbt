@@ -80,11 +80,11 @@ func (s *marginCallHandlerStrategy) OnMarginCall(ctx context.Context, _ *engine.
 	s.marginCallCount++
 
 	// Cover all shorts.
-	port.Holdings(func(held asset.Asset, qty float64) {
+	for held, qty := range port.Holdings() {
 		if qty < 0 {
 			batch.Order(ctx, held, portfolio.Buy, -qty)
 		}
-	})
+	}
 
 	return nil
 }
