@@ -74,6 +74,44 @@ func (tm *TokenManagerExport) SaveTokensExport() error {
 	return tm.saveTokens()
 }
 
+// OrderRequestExport is an exported alias for orderRequest.
+type OrderRequestExport = orderRequest
+
+// OrderResponseExport is an exported alias for orderResponse.
+type OrderResponseExport = orderResponse
+
+// ReplaceRequestExport is an exported alias for replaceRequest.
+type ReplaceRequestExport = replaceRequest
+
+// AccountResponseExport is an exported alias for accountResponse.
+type AccountResponseExport = accountResponse
+
+// AccountListResponseExport is an exported alias for accountListResponse.
+type AccountListResponseExport = accountListResponse
+
+// PositionResponseExport is an exported alias for positionResponse.
+type PositionResponseExport = positionResponse
+
+// ToWebullOrder exposes toWebullOrder for testing.
+func ToWebullOrder(order broker.Order, fractional bool) orderRequest {
+	return toWebullOrder(order, fractional)
+}
+
+// ToBrokerOrder exposes toBrokerOrder for testing.
+func ToBrokerOrder(resp orderResponse) broker.Order {
+	return toBrokerOrder(resp)
+}
+
+// ToBrokerPosition exposes toBrokerPosition for testing.
+func ToBrokerPosition(resp positionResponse) broker.Position {
+	return toBrokerPosition(resp)
+}
+
+// ToBrokerBalance exposes toBrokerBalance for testing.
+func ToBrokerBalance(resp accountResponse) broker.Balance {
+	return toBrokerBalance(resp)
+}
+
 // AccessTokenExport returns the current access token for assertions.
 func (tm *TokenManagerExport) AccessTokenExport() string {
 	tm.mu.Lock()
