@@ -35,8 +35,8 @@ type Report interface {
 	// Name returns the Vue component name to mount (e.g. "MonteCarlo").
 	Name() string
 
-	// Data writes the report's JSON data to w.
-	Data(w io.Writer) error
+	// Data writes the report's JSON data to writer.
+	Data(writer io.Writer) error
 }
 
 // templateData holds the values injected into the base HTML template.
@@ -48,7 +48,7 @@ type templateData struct {
 }
 
 // Render writes a self-contained HTML file for the given report to w.
-func Render(rpt Report, w io.Writer) error {
+func Render(rpt Report, writer io.Writer) error {
 	var dataBuf bytes.Buffer
 	if err := rpt.Data(&dataBuf); err != nil {
 		return fmt.Errorf("generating report data: %w", err)
@@ -66,7 +66,7 @@ func Render(rpt Report, w io.Writer) error {
 		Component: rpt.Name(),
 	}
 
-	if err := tmpl.Execute(w, td); err != nil {
+	if err := tmpl.Execute(writer, td); err != nil {
 		return fmt.Errorf("executing report template: %w", err)
 	}
 
