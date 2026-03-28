@@ -13,7 +13,8 @@ export default defineConfig({
     },
     outDir: 'dist',
     cssCodeSplit: false,
-    minify: 'terser',
+    cssInlineThreshold: Infinity,
+    minify: 'esbuild',
     rollupOptions: {
       output: {
         inlineDynamicImports: true,

@@ -19,17 +19,17 @@ done < <(find "$STUDY_DIR" -name '*.vue' \
 # Generate src/main.js
 MAIN="$SCRIPT_DIR/src/main.js"
 cat > "$MAIN" <<'HEADER'
-import { createApp } from 'vue'
+import { createApp, h } from 'vue'
 import './style.css'
 HEADER
 
 # Import each component
 idx=0
 declare -a NAMES=()
-for comp in "${COMPONENTS[@]}"; do
+for comp in "${COMPONENTS[@]+"${COMPONENTS[@]}"}"; do
   name=$(basename "$comp" .vue)
   NAMES+=("$name")
-  rel=$(python3 -c "import os.path; print(os.path.relpath('$comp', '$SCRIPT_DIR/src'))")
+  rel=$(python3 -c "import os.path; p=os.path.relpath('$comp', '$SCRIPT_DIR/src'); print(p if p.startswith('.') else './'+p)")
   echo "import ${name} from '${rel}'" >> "$MAIN"
   idx=$((idx + 1))
 done
@@ -45,7 +45,7 @@ fi
 for comp in "${SHARED[@]}"; do
   name=$(basename "$comp" .vue)
   NAMES+=("$name")
-  rel=$(python3 -c "import os.path; print(os.path.relpath('$comp', '$SCRIPT_DIR/src'))")
+  rel=$(python3 -c "import os.path; p=os.path.relpath('$comp', '$SCRIPT_DIR/src'); print(p if p.startswith('.') else './'+p)")
   echo "import ${name} from '${rel}'" >> "$MAIN"
 done
 
@@ -75,8 +75,6 @@ const app = createApp({
   },
 })
 
-import { h } from 'vue'
-
 Object.entries(components).forEach(([name, comp]) => {
   app.component(name, comp)
 })
@@ -91,4 +89,13 @@ npm run build
 
 # Copy output to report directory
 cp "$SCRIPT_DIR/dist/bundle.js" "$REPORT_DIR/bundle.js"
-echo "Copied bundle.js to $REPORT_DIR/bundle.js"
+
+# Inline CSS into bundle as a self-injecting style tag
+if [ -f "$SCRIPT_DIR/dist/style.css" ]; then
+  CSS_CONTENT=$(cat "$SCRIPT_DIR/dist/style.css")
+  printf '\n(function(){var s=document.createElement("style");s.textContent=%s;document.head.appendChild(s)})();\n' \
+    "$(python3 -c "import json,sys; print(json.dumps(sys.stdin.read()))" < "$SCRIPT_DIR/dist/style.css")" \
+    >> "$REPORT_DIR/bundle.js"
+fi
+
+echo "Bundle built and copied to $REPORT_DIR/bundle.js"
