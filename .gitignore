@@ -34,3 +34,6 @@ Thumbs.db
 
 # Worktrees
 .worktrees/
+
+# Node
+study/ui/node_modules/

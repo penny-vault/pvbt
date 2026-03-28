@@ -1,0 +1,26 @@
+{
+  "name": "pvbt-report-ui",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite"
+  },
+  "dependencies": {
+    "vue": "^3.5",
+    "echarts": "^5.5",
+    "@tanstack/vue-table": "^8.20",
+    "@tanstack/vue-virtual": "^3.10",
+    "radix-vue": "^1.9",
+    "class-variance-authority": "^0.7",
+    "clsx": "^2.1",
+    "tailwind-merge": "^2.5"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.1",
+    "vite": "^5.4",
+    "tailwindcss": "^3.4",
+    "postcss": "^8.4",
+    "autoprefixer": "^10.4"
+  }
+}
