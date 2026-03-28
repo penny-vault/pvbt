@@ -85,9 +85,9 @@ func buildFakePortfolio(dates []time.Time, equityValues []float64) *fakePortfoli
 // test deserialization. Only fields that the tests inspect are included.
 type stressReportData struct {
 	Rankings []struct {
-		RunName      string `json:"runName"`
-		ScenarioName string `json:"scenarioName"`
-		ErrorMsg     string `json:"errorMsg,omitempty"`
+		RunName      string  `json:"runName"`
+		ScenarioName string  `json:"scenarioName"`
+		ErrorMsg     string  `json:"errorMsg,omitempty"`
 		MaxDrawdown  float64 `json:"maxDrawdown"`
 		TotalReturn  float64 `json:"totalReturn"`
 		WorstDay     float64 `json:"worstDay"`
@@ -97,9 +97,9 @@ type stressReportData struct {
 		Name       string `json:"name"`
 		DateRange  string `json:"dateRange"`
 		RunMetrics []struct {
-			RunName     string `json:"runName"`
-			ErrorMsg    string `json:"errorMsg,omitempty"`
-			HasData     bool   `json:"hasData"`
+			RunName     string  `json:"runName"`
+			ErrorMsg    string  `json:"errorMsg,omitempty"`
+			HasData     bool    `json:"hasData"`
 			MaxDrawdown float64 `json:"maxDrawdown"`
 			TotalReturn float64 `json:"totalReturn"`
 			WorstDay    float64 `json:"worstDay"`

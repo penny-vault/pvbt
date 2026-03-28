@@ -118,4 +118,3 @@ var _ = Describe("Optimizer", func() {
 		})
 	})
 })
-
