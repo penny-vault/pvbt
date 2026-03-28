@@ -10,11 +10,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
+	"github.com/penny-vault/pvbt/cli/summary"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
-	"github.com/penny-vault/pvbt/study/report/renderer/terminal"
-	"github.com/penny-vault/pvbt/study/report/summary"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
@@ -194,12 +193,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	rpt, err := summary.Build(acct)
-	if err != nil {
-		log.Warn().Err(err).Msg("some report metrics failed")
-	}
-
-	if err := terminal.Render(rpt, os.Stdout); err != nil {
+	if err := summary.Render(acct, os.Stdout); err != nil {
 		return fmt.Errorf("rendering report: %w", err)
 	}
 
