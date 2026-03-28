@@ -342,7 +342,7 @@ var _ = Describe("Analyze", func() {
 })
 
 // findTable searches the report for a Table section whose name contains substr.
-func findTable(rpt report.Report, substr string) *report.Table {
+func findTable(rpt report.ComposableReport, substr string) *report.Table {
 	for _, section := range rpt.Sections {
 		if section.Type() == "table" {
 			tbl, ok := section.(*report.Table)

@@ -323,7 +323,7 @@ var _ = Describe("Section primitives", func() {
 
 var _ = Describe("Report", func() {
 	It("renders all sections in order for text format", func() {
-		rpt := report.Report{
+		rpt := report.ComposableReport{
 			Title: "Test Report",
 			Sections: []report.Section{
 				&report.Text{SectionName: "Intro", Body: "Hello"},
@@ -345,7 +345,7 @@ var _ = Describe("Report", func() {
 	})
 
 	It("renders JSON with title and sections array", func() {
-		rpt := report.Report{
+		rpt := report.ComposableReport{
 			Title: "JSON Test",
 			Sections: []report.Section{
 				&report.Text{SectionName: "Note", Body: "test"},
@@ -359,14 +359,14 @@ var _ = Describe("Report", func() {
 	})
 
 	It("handles empty sections slice", func() {
-		rpt := report.Report{Title: "Empty"}
+		rpt := report.ComposableReport{Title: "Empty"}
 		var buf bytes.Buffer
 		Expect(rpt.Render(report.FormatText, &buf)).To(Succeed())
 		Expect(buf.String()).To(ContainSubstring("Empty"))
 	})
 
 	It("returns error for unsupported format", func() {
-		rpt := report.Report{Title: "X"}
+		rpt := report.ComposableReport{Title: "X"}
 		var buf bytes.Buffer
 		Expect(rpt.Render("invalid", &buf)).To(HaveOccurred())
 	})

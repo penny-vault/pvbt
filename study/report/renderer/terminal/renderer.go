@@ -24,7 +24,7 @@ import (
 
 // Render writes a lipgloss-styled backtest report to the given writer.
 // It type-asserts each section to the domain type for styled rendering.
-func Render(rpt report.Report, writer io.Writer) error {
+func Render(rpt report.ComposableReport, writer io.Writer) error {
 	var builder strings.Builder
 
 	hasBenchmark := rpt.HasBenchmark

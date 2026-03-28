@@ -42,7 +42,7 @@ var portfolioAsset = asset.Asset{
 // results. It filters failed runs, extracts equity curves and summary metrics,
 // then builds a report with fan chart, terminal wealth, confidence intervals,
 // probability of ruin, optional historical rank, and a summary narrative.
-func analyzeResults(results []study.RunResult, historicalResult report.ReportablePortfolio, ruinThreshold float64) (report.Report, error) {
+func analyzeResults(results []study.RunResult, historicalResult report.ReportablePortfolio, ruinThreshold float64) (report.ComposableReport, error) {
 	// Step 1: Filter successful results.
 	var successful []study.RunResult
 
@@ -53,7 +53,7 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 	}
 
 	if len(successful) == 0 {
-		return report.Report{
+		return report.ComposableReport{
 			Title: "Monte Carlo Simulation",
 			Sections: []report.Section{
 				&report.Text{
@@ -80,7 +80,7 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 			if errors.Is(err, portfolio.ErrNoRiskFreeRate) || errors.Is(err, portfolio.ErrNoBenchmark) {
 				log.Warn().Err(err).Int("path", idx).Msg("monte carlo: partial summary (risk-free rate or benchmark not configured)")
 			} else {
-				return report.Report{}, fmt.Errorf("computing summary for path %d: %w", idx, err)
+				return report.ComposableReport{}, fmt.Errorf("computing summary for path %d: %w", idx, err)
 			}
 		}
 
@@ -113,7 +113,7 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 	if historicalResult != nil {
 		historicalRank, err := buildHistoricalRank(equityCurves, summaries, historicalResult)
 		if err != nil {
-			return report.Report{}, fmt.Errorf("computing historical rank: %w", err)
+			return report.ComposableReport{}, fmt.Errorf("computing historical rank: %w", err)
 		}
 
 		sections = append(sections, historicalRank)
@@ -123,7 +123,7 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 	summaryText := buildMCSummaryText(len(results), len(successful), summaries, ruinThreshold)
 	sections = append(sections, summaryText)
 
-	return report.Report{
+	return report.ComposableReport{
 		Title:    "Monte Carlo Simulation",
 		Sections: sections,
 	}, nil

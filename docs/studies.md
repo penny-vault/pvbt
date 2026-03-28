@@ -84,13 +84,13 @@ type Study interface {
     Name() string
     Description() string
     Configurations(ctx context.Context) ([]RunConfig, error)
-    Analyze(results []RunResult) (report.Report, error)
+    Analyze(results []RunResult) (report.ComposableReport, error)
 }
 ```
 
 `Configurations()` returns the base set of run configs. These are cross-producted with any parameter sweeps on the Runner before execution. Each `RunConfig` specifies the backtest date range, initial deposit, preset, parameter overrides, and metadata.
 
-`Analyze()` receives all run results (including failed runs where `Err` is non-nil) and composes a `report.Report` from report primitives (Table, TimeSeries, MetricPairs, Text sections). Each study type decides how to handle failed runs.
+`Analyze()` receives all run results (including failed runs where `Err` is non-nil) and composes a `report.ComposableReport` from report primitives (Table, TimeSeries, MetricPairs, Text sections). Each study type decides how to handle failed runs.
 
 ## Stress test study
 

@@ -22,8 +22,8 @@ import (
 	"strings"
 )
 
-// Report is a titled collection of renderable sections.
-type Report struct {
+// ComposableReport is a titled collection of renderable sections.
+type ComposableReport struct {
 	Title        string
 	Sections     []Section
 	HasBenchmark bool
@@ -31,7 +31,7 @@ type Report struct {
 }
 
 // Render writes the report in the requested format to writer.
-func (rpt Report) Render(format Format, writer io.Writer) error {
+func (rpt ComposableReport) Render(format Format, writer io.Writer) error {
 	switch format {
 	case FormatJSON:
 		return rpt.renderJSON(writer)
@@ -42,7 +42,7 @@ func (rpt Report) Render(format Format, writer io.Writer) error {
 	}
 }
 
-func (rpt Report) renderJSON(writer io.Writer) error {
+func (rpt ComposableReport) renderJSON(writer io.Writer) error {
 	_, err := fmt.Fprintf(writer, `{"title":%s,"sections":[`, jsonString(rpt.Title))
 	if err != nil {
 		return err
@@ -77,7 +77,7 @@ func jsonString(str string) string {
 	return string(encoded)
 }
 
-func (rpt Report) renderText(writer io.Writer) error {
+func (rpt ComposableReport) renderText(writer io.Writer) error {
 	if _, err := fmt.Fprintf(writer, "\n  %s\n", rpt.Title); err != nil {
 		return err
 	}

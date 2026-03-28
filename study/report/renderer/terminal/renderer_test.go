@@ -38,7 +38,7 @@ func TestRenderDoesNotPanic(t *testing.T) {
 		Steps:           28,
 	}
 
-	rpt := report.Report{
+	rpt := report.ComposableReport{
 		Title:    "TestStrategy",
 		Sections: []report.Section{&header},
 		Warnings: []string{"insufficient data for full report"},
@@ -169,7 +169,7 @@ func TestRenderFullReport(t *testing.T) {
 		},
 	}
 
-	rpt := report.Report{
+	rpt := report.ComposableReport{
 		Title: "MyStrat",
 		Sections: []report.Section{
 			&header,

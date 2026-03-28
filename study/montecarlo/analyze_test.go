@@ -154,7 +154,7 @@ var _ = Describe("analyzeResults", func() {
 
 	// Create a MonteCarloStudy and use its Analyze method to access the
 	// internal analyzeResults function.
-	analyzeViaStudy := func(results []study.RunResult, historical report.ReportablePortfolio, ruinThreshold float64) (report.Report, error) {
+	analyzeViaStudy := func(results []study.RunResult, historical report.ReportablePortfolio, ruinThreshold float64) (report.ComposableReport, error) {
 		mcs := montecarlo.New(nil, nil)
 		mcs.RuinThreshold = ruinThreshold
 		mcs.HistoricalResult = historical
@@ -163,7 +163,7 @@ var _ = Describe("analyzeResults", func() {
 	}
 
 	Context("report structure", func() {
-		var rpt report.Report
+		var rpt report.ComposableReport
 
 		BeforeEach(func() {
 			// Three paths with different equity curves.

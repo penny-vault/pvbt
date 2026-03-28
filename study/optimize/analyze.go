@@ -49,7 +49,7 @@ func analyzeResults(
 	objective study.Metric,
 	topN int,
 	results []study.RunResult,
-) (report.Report, error) {
+) (report.ComposableReport, error) {
 	combos := groupByCombination(splits, objective, results)
 	rankCombos(combos, objective)
 
@@ -63,7 +63,7 @@ func analyzeResults(
 	sections = append(sections, buildOverfittingTable(combos, objective))
 	sections = append(sections, buildEquityCurves(combos, topN))
 
-	return report.Report{
+	return report.ComposableReport{
 		Title:    "Parameter Optimization",
 		Sections: sections,
 	}, nil

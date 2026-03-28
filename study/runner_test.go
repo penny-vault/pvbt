@@ -33,7 +33,7 @@ import (
 type mockStudy struct {
 	configs   []study.RunConfig
 	configErr error
-	analyzeFn func([]study.RunResult) (report.Report, error)
+	analyzeFn func([]study.RunResult) (report.ComposableReport, error)
 }
 
 func (ms *mockStudy) Name() string        { return "mock" }
@@ -43,12 +43,12 @@ func (ms *mockStudy) Configurations(_ context.Context) ([]study.RunConfig, error
 	return ms.configs, ms.configErr
 }
 
-func (ms *mockStudy) Analyze(results []study.RunResult) (report.Report, error) {
+func (ms *mockStudy) Analyze(results []study.RunResult) (report.ComposableReport, error) {
 	if ms.analyzeFn != nil {
 		return ms.analyzeFn(results)
 	}
 
-	return report.Report{Title: "Mock Results"}, nil
+	return report.ComposableReport{Title: "Mock Results"}, nil
 }
 
 // mockStrategy satisfies engine.Strategy for constructing an engine
@@ -85,11 +85,11 @@ var _ = Describe("Runner", func() {
 			runner := &study.Runner{
 				Study: &mockStudy{
 					configs: []study.RunConfig{},
-					analyzeFn: func(results []study.RunResult) (report.Report, error) {
+					analyzeFn: func(results []study.RunResult) (report.ComposableReport, error) {
 						analyzedResults = results
 						analyzeCallCount++
 
-						return report.Report{Title: "Empty Study"}, nil
+						return report.ComposableReport{Title: "Empty Study"}, nil
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },
@@ -114,10 +114,10 @@ var _ = Describe("Runner", func() {
 						{Name: "base-a", Start: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2020, 12, 31, 0, 0, 0, 0, time.UTC)},
 						{Name: "base-b", Start: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2021, 12, 31, 0, 0, 0, 0, time.UTC)},
 					},
-					analyzeFn: func(results []study.RunResult) (report.Report, error) {
+					analyzeFn: func(results []study.RunResult) (report.ComposableReport, error) {
 						analyzedResultCount = len(results)
 
-						return report.Report{Title: "Sweep Results"}, nil
+						return report.ComposableReport{Title: "Sweep Results"}, nil
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },
@@ -190,8 +190,8 @@ var _ = Describe("Runner", func() {
 			runner := &study.Runner{
 				Study: &mockStudy{
 					configs: []study.RunConfig{},
-					analyzeFn: func(_ []study.RunResult) (report.Report, error) {
-						return report.Report{}, fmt.Errorf("analysis failed")
+					analyzeFn: func(_ []study.RunResult) (report.ComposableReport, error) {
+						return report.ComposableReport{}, fmt.Errorf("analysis failed")
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },
