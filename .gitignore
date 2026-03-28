@@ -35,5 +35,7 @@ Thumbs.db
 # Worktrees
 .worktrees/
 
-# Node
+# Node / Vite
 study/ui/node_modules/
+study/ui/dist/
+study/ui/src/main.js
