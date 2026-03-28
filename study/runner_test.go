@@ -18,6 +18,7 @@ package study_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -29,11 +30,23 @@ import (
 	"github.com/penny-vault/pvbt/study/report"
 )
 
+// mockReport implements report.Report for testing.
+type mockReport struct {
+	title string
+}
+
+func (mr *mockReport) Name() string { return mr.title }
+
+func (mr *mockReport) Data(writer io.Writer) error {
+	_, err := writer.Write([]byte("{}"))
+	return err
+}
+
 // mockStudy implements study.Study for testing the Runner without a real engine.
 type mockStudy struct {
 	configs   []study.RunConfig
 	configErr error
-	analyzeFn func([]study.RunResult) (report.ComposableReport, error)
+	analyzeFn func([]study.RunResult) (report.Report, error)
 }
 
 func (ms *mockStudy) Name() string        { return "mock" }
@@ -43,12 +56,12 @@ func (ms *mockStudy) Configurations(_ context.Context) ([]study.RunConfig, error
 	return ms.configs, ms.configErr
 }
 
-func (ms *mockStudy) Analyze(results []study.RunResult) (report.ComposableReport, error) {
+func (ms *mockStudy) Analyze(results []study.RunResult) (report.Report, error) {
 	if ms.analyzeFn != nil {
 		return ms.analyzeFn(results)
 	}
 
-	return report.ComposableReport{Title: "Mock Results"}, nil
+	return &mockReport{title: "Mock Results"}, nil
 }
 
 // mockStrategy satisfies engine.Strategy for constructing an engine
@@ -85,11 +98,11 @@ var _ = Describe("Runner", func() {
 			runner := &study.Runner{
 				Study: &mockStudy{
 					configs: []study.RunConfig{},
-					analyzeFn: func(results []study.RunResult) (report.ComposableReport, error) {
+					analyzeFn: func(results []study.RunResult) (report.Report, error) {
 						analyzedResults = results
 						analyzeCallCount++
 
-						return report.ComposableReport{Title: "Empty Study"}, nil
+						return &mockReport{title: "Empty Study"}, nil
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },
@@ -100,7 +113,7 @@ var _ = Describe("Runner", func() {
 
 			result := <-resultCh
 			Expect(result.Err).NotTo(HaveOccurred())
-			Expect(result.Report.Title).To(Equal("Empty Study"))
+			Expect(result.Report.Name()).To(Equal("Empty Study"))
 			Expect(analyzeCallCount).To(Equal(1))
 			Expect(analyzedResults).To(HaveLen(0))
 		})
@@ -114,10 +127,10 @@ var _ = Describe("Runner", func() {
 						{Name: "base-a", Start: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2020, 12, 31, 0, 0, 0, 0, time.UTC)},
 						{Name: "base-b", Start: time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2021, 12, 31, 0, 0, 0, 0, time.UTC)},
 					},
-					analyzeFn: func(results []study.RunResult) (report.ComposableReport, error) {
+					analyzeFn: func(results []study.RunResult) (report.Report, error) {
 						analyzedResultCount = len(results)
 
-						return report.ComposableReport{Title: "Sweep Results"}, nil
+						return &mockReport{title: "Sweep Results"}, nil
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },
@@ -134,7 +147,7 @@ var _ = Describe("Runner", func() {
 			result := <-resultCh
 			// Analyze should have been called with 6 results (2 base x 3 sweep values).
 			Expect(analyzedResultCount).To(Equal(6))
-			Expect(result.Report.Title).To(Equal("Sweep Results"))
+			Expect(result.Report.Name()).To(Equal("Sweep Results"))
 		})
 
 		It("sends progress updates for each run", func() {
@@ -190,8 +203,8 @@ var _ = Describe("Runner", func() {
 			runner := &study.Runner{
 				Study: &mockStudy{
 					configs: []study.RunConfig{},
-					analyzeFn: func(_ []study.RunResult) (report.ComposableReport, error) {
-						return report.ComposableReport{}, fmt.Errorf("analysis failed")
+					analyzeFn: func(_ []study.RunResult) (report.Report, error) {
+						return nil, fmt.Errorf("analysis failed")
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },

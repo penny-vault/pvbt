@@ -63,7 +63,7 @@ type Progress struct {
 // Result is sent on a channel when the study completes.
 type Result struct {
 	Runs   []RunResult
-	Report report.ComposableReport
+	Report report.Report
 	Err    error
 }
 
@@ -72,5 +72,5 @@ type Study interface {
 	Name() string
 	Description() string
 	Configurations(ctx context.Context) ([]RunConfig, error)
-	Analyze(results []RunResult) (report.ComposableReport, error)
+	Analyze(results []RunResult) (report.Report, error)
 }

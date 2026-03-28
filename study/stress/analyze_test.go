@@ -16,6 +16,8 @@
 package stress_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -79,6 +81,45 @@ func buildFakePortfolio(dates []time.Time, equityValues []float64) *fakePortfoli
 	}
 }
 
+// stressReportData mirrors the JSON structure of the stressReport for
+// test deserialization. Only fields that the tests inspect are included.
+type stressReportData struct {
+	Rankings []struct {
+		RunName      string  `json:"runName"`
+		ScenarioName string  `json:"scenarioName"`
+		ErrorMsg     string  `json:"errorMsg,omitempty"`
+		MaxDrawdown  float64 `json:"maxDrawdown"`
+		TotalReturn  float64 `json:"totalReturn"`
+		WorstDay     float64 `json:"worstDay"`
+	} `json:"rankings"`
+
+	Scenarios []struct {
+		Name       string `json:"name"`
+		DateRange  string `json:"dateRange"`
+		RunMetrics []struct {
+			RunName     string  `json:"runName"`
+			ErrorMsg    string  `json:"errorMsg,omitempty"`
+			HasData     bool    `json:"hasData"`
+			MaxDrawdown float64 `json:"maxDrawdown"`
+			TotalReturn float64 `json:"totalReturn"`
+			WorstDay    float64 `json:"worstDay"`
+		} `json:"runMetrics"`
+	} `json:"scenarios"`
+
+	Summary string `json:"summary"`
+}
+
+// decodeStressReport calls Data on the report and unmarshals the JSON.
+func decodeStressReport(rpt report.Report) stressReportData {
+	var buf bytes.Buffer
+	Expect(rpt.Data(&buf)).To(Succeed())
+
+	var result stressReportData
+	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+
+	return result
+}
+
 var _ = Describe("Analyze", func() {
 	var (
 		scenarios  []study.Scenario
@@ -104,23 +145,19 @@ var _ = Describe("Analyze", func() {
 	})
 
 	Describe("with empty results", func() {
-		It("returns a valid report with the expected section types", func() {
+		It("returns a valid report with the expected fields", func() {
 			rpt, err := stressTest.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rpt.Title).NotTo(BeEmpty())
+			Expect(rpt.Name()).NotTo(BeEmpty())
 
-			sectionTypes := make([]string, len(rpt.Sections))
-			for idx, section := range rpt.Sections {
-				sectionTypes[idx] = section.Type()
-			}
-
-			Expect(sectionTypes).To(ContainElement("table"))
-			Expect(sectionTypes).To(ContainElement("text"))
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Rankings).To(HaveLen(0))
+			Expect(rptData.Summary).NotTo(BeEmpty())
 		})
 	})
 
 	Describe("with failed results", func() {
-		It("includes failed runs in the table with error information", func() {
+		It("includes failed runs in the rankings with error information", func() {
 			results := []study.RunResult{
 				{
 					Config: study.RunConfig{Name: "FailedRun"},
@@ -131,32 +168,19 @@ var _ = Describe("Analyze", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			var rankingTable *report.Table
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Rankings).NotTo(BeEmpty())
 
-			for _, section := range rpt.Sections {
-				if section.Type() == "table" {
-					rankingTable = section.(*report.Table)
+			found := false
+			for _, ranking := range rptData.Rankings {
+				if ranking.ErrorMsg == "backtest engine error" {
+					found = true
 
 					break
 				}
 			}
 
-			Expect(rankingTable).NotTo(BeNil())
-			Expect(rankingTable.Rows).NotTo(BeEmpty())
-
-			found := false
-
-			for _, row := range rankingTable.Rows {
-				for _, cell := range row {
-					if cellStr, ok := cell.(string); ok && cellStr == "backtest engine error" {
-						found = true
-
-						break
-					}
-				}
-			}
-
-			Expect(found).To(BeTrue(), "expected error message in ranking table rows")
+			Expect(found).To(BeTrue(), "expected error message in rankings")
 		})
 	})
 
@@ -188,84 +212,52 @@ var _ = Describe("Analyze", func() {
 		It("returns a report without error", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rpt.Title).NotTo(BeEmpty())
+			Expect(rpt.Name()).NotTo(BeEmpty())
 		})
 
-		It("produces a ranking table section", func() {
+		It("produces a rankings section", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			sectionTypes := make([]string, len(rpt.Sections))
-			for idx, section := range rpt.Sections {
-				sectionTypes[idx] = section.Type()
-			}
-
-			Expect(sectionTypes).To(ContainElement("table"))
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Rankings).NotTo(BeEmpty())
 		})
 
-		It("produces one metric_pairs section per scenario", func() {
+		It("produces one scenario detail per scenario", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			metricPairCount := 0
-
-			for _, section := range rpt.Sections {
-				if section.Type() == "metric_pairs" {
-					metricPairCount++
-				}
-			}
-
-			Expect(metricPairCount).To(Equal(len(scenarios)))
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Scenarios).To(HaveLen(len(scenarios)))
 		})
 
-		It("produces a text summary section", func() {
+		It("produces a summary", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			found := false
-
-			for _, section := range rpt.Sections {
-				if section.Type() == "text" {
-					found = true
-
-					break
-				}
-			}
-
-			Expect(found).To(BeTrue())
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Summary).NotTo(BeEmpty())
 		})
 
-		It("names MetricPairs sections after their scenario", func() {
+		It("names scenario details after their scenario", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			sectionNames := make([]string, 0)
+			rptData := decodeStressReport(rpt)
 
-			for _, section := range rpt.Sections {
-				if section.Type() == "metric_pairs" {
-					sectionNames = append(sectionNames, section.Name())
-				}
+			scenarioNames := make([]string, len(rptData.Scenarios))
+			for idx, scenario := range rptData.Scenarios {
+				scenarioNames[idx] = scenario.Name
 			}
 
 			for _, scenario := range scenarios {
-				foundScenario := false
-
-				for _, sectionName := range sectionNames {
-					if len(sectionName) >= len(scenario.Name) && sectionName[:len(scenario.Name)] == scenario.Name {
-						foundScenario = true
-
-						break
-					}
-				}
-
-				Expect(foundScenario).To(BeTrue(),
-					"expected a metric_pairs section starting with scenario name %q", scenario.Name)
+				Expect(scenarioNames).To(ContainElement(scenario.Name))
 			}
 		})
 	})
 
 	Describe("with mixed results (some failed, some successful)", func() {
-		It("processes successful runs while including failed ones in the table", func() {
+		It("processes successful runs while including failed ones in rankings", func() {
 			dates := []time.Time{
 				time.Date(2020, 1, 2, 0, 0, 0, 0, time.UTC),
 				time.Date(2020, 3, 2, 0, 0, 0, 0, time.UTC),
@@ -288,14 +280,10 @@ var _ = Describe("Analyze", func() {
 			rpt, err := stressTest.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			sectionTypes := make([]string, len(rpt.Sections))
-			for idx, section := range rpt.Sections {
-				sectionTypes[idx] = section.Type()
-			}
-
-			Expect(sectionTypes).To(ContainElement("table"))
-			Expect(sectionTypes).To(ContainElement("metric_pairs"))
-			Expect(sectionTypes).To(ContainElement("text"))
+			rptData := decodeStressReport(rpt)
+			Expect(rptData.Rankings).NotTo(BeEmpty())
+			Expect(rptData.Scenarios).NotTo(BeEmpty())
+			Expect(rptData.Summary).NotTo(BeEmpty())
 		})
 	})
 })

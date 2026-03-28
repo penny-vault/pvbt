@@ -31,6 +31,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// Ensure monteCarloReport satisfies the report.Report interface.
+var _ report.Report = (*monteCarloReport)(nil)
+
 // portfolioAsset is the sentinel asset used to look up equity columns in the
 // performance DataFrame. It mirrors the unexported constant in portfolio/account.go.
 var portfolioAsset = asset.Asset{
@@ -40,9 +43,9 @@ var portfolioAsset = asset.Asset{
 
 // analyzeResults computes the Monte Carlo report from the collected simulation
 // results. It filters failed runs, extracts equity curves and summary metrics,
-// then builds a report with fan chart, terminal wealth, confidence intervals,
-// probability of ruin, optional historical rank, and a summary narrative.
-func analyzeResults(results []study.RunResult, historicalResult report.ReportablePortfolio, ruinThreshold float64) (report.ComposableReport, error) {
+// then builds a monteCarloReport with fan chart, terminal wealth, confidence
+// intervals, probability of ruin, optional historical rank, and a summary narrative.
+func analyzeResults(results []study.RunResult, historicalResult report.ReportablePortfolio, ruinThreshold float64) (report.Report, error) {
 	// Step 1: Filter successful results.
 	var successful []study.RunResult
 
@@ -53,14 +56,8 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 	}
 
 	if len(successful) == 0 {
-		return report.ComposableReport{
-			Title: "Monte Carlo Simulation",
-			Sections: []report.Section{
-				&report.Text{
-					SectionName: "Summary",
-					Body:        "No successful simulation paths to analyze.",
-				},
-			},
+		return &monteCarloReport{
+			Summary: "No successful simulation paths to analyze.",
 		}, nil
 	}
 
@@ -80,7 +77,7 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 			if errors.Is(err, portfolio.ErrNoRiskFreeRate) || errors.Is(err, portfolio.ErrNoBenchmark) {
 				log.Warn().Err(err).Int("path", idx).Msg("monte carlo: partial summary (risk-free rate or benchmark not configured)")
 			} else {
-				return report.ComposableReport{}, fmt.Errorf("computing summary for path %d: %w", idx, err)
+				return nil, fmt.Errorf("computing summary for path %d: %w", idx, err)
 			}
 		}
 
@@ -90,48 +87,40 @@ func analyzeResults(results []study.RunResult, historicalResult report.Reportabl
 	// Use the first successful result's perf data for the time axis.
 	times := successful[0].Portfolio.PerfData().Times()
 
-	// Step 3: Build report sections.
-	sections := make([]report.Section, 0, 6)
+	// Step 3: Build report.
+	rpt := &monteCarloReport{}
 
-	// Section 1: Fan Chart.
-	fanChart := buildFanChart(times, equityCurves, historicalResult)
-	sections = append(sections, fanChart)
+	// Fan chart data.
+	rpt.FanChart = computeFanChart(times, equityCurves, historicalResult)
 
-	// Section 2: Terminal Wealth Distribution.
-	terminalWealth := buildTerminalWealthTable(equityCurves, historicalResult)
-	sections = append(sections, terminalWealth)
+	// Terminal wealth distribution.
+	rpt.TerminalWealth = computeTerminalWealth(equityCurves, historicalResult)
 
-	// Section 3: Confidence Intervals on Key Metrics.
-	confidenceIntervals := buildConfidenceTable(summaries)
-	sections = append(sections, confidenceIntervals)
+	// Confidence intervals on key metrics.
+	rpt.ConfidenceIntervals = computeConfidenceIntervals(summaries)
 
-	// Section 4: Probability of Ruin.
-	ruinSection := buildRuinSection(summaries, ruinThreshold)
-	sections = append(sections, ruinSection)
+	// Probability of ruin.
+	rpt.Ruin = computeRuin(summaries, ruinThreshold)
 
-	// Section 5: Historical Rank (only if historical result is present).
+	// Historical rank (only if historical result is present).
 	if historicalResult != nil {
-		historicalRank, err := buildHistoricalRank(equityCurves, summaries, historicalResult)
+		histRank, err := computeHistoricalRank(equityCurves, summaries, historicalResult)
 		if err != nil {
-			return report.ComposableReport{}, fmt.Errorf("computing historical rank: %w", err)
+			return nil, fmt.Errorf("computing historical rank: %w", err)
 		}
 
-		sections = append(sections, historicalRank)
+		rpt.HistoricalRank = histRank
 	}
 
-	// Section 6: Summary Narrative.
-	summaryText := buildMCSummaryText(len(results), len(successful), summaries, ruinThreshold)
-	sections = append(sections, summaryText)
+	// Summary narrative.
+	rpt.Summary = computeMCSummary(len(results), len(successful), summaries, ruinThreshold)
 
-	return report.ComposableReport{
-		Title:    "Monte Carlo Simulation",
-		Sections: sections,
-	}, nil
+	return rpt, nil
 }
 
-// buildFanChart constructs a TimeSeries section with P5/P25/P50/P75/P95
-// percentile bands across all simulation paths' equity curves.
-func buildFanChart(times []time.Time, equityCurves [][]float64, historicalResult report.ReportablePortfolio) *report.TimeSeries {
+// computeFanChart builds a fanChartData with P5/P25/P50/P75/P95 percentile
+// bands across all simulation paths' equity curves.
+func computeFanChart(times []time.Time, equityCurves [][]float64, historicalResult report.ReportablePortfolio) fanChartData {
 	numSteps := len(times)
 	p5Values := make([]float64, numSteps)
 	p25Values := make([]float64, numSteps)
@@ -157,12 +146,13 @@ func buildFanChart(times []time.Time, equityCurves [][]float64, historicalResult
 		p95Values[step] = percentile(valuesAtStep, 0.95)
 	}
 
-	series := []report.NamedSeries{
-		{Name: "P5", Times: times, Values: p5Values},
-		{Name: "P25", Times: times, Values: p25Values},
-		{Name: "P50", Times: times, Values: p50Values},
-		{Name: "P75", Times: times, Values: p75Values},
-		{Name: "P95", Times: times, Values: p95Values},
+	fc := fanChartData{
+		Times: times,
+		P5:    p5Values,
+		P25:   p25Values,
+		P50:   p50Values,
+		P75:   p75Values,
+		P95:   p95Values,
 	}
 
 	if historicalResult != nil {
@@ -172,24 +162,20 @@ func buildFanChart(times []time.Time, equityCurves [][]float64, historicalResult
 			histValues := histPerfData.Column(portfolioAsset, data.PortfolioEquity)
 
 			if len(histValues) > 0 {
-				series = append(series, report.NamedSeries{
-					Name:   "Historical",
+				fc.Actual = &actualSeries{
 					Times:  histTimes,
 					Values: histValues,
-				})
+				}
 			}
 		}
 	}
 
-	return &report.TimeSeries{
-		SectionName: "Equity Curve Distribution",
-		Series:      series,
-	}
+	return fc
 }
 
-// buildTerminalWealthTable collects the final equity value from each path and
-// presents percentiles plus mean and standard deviation.
-func buildTerminalWealthTable(equityCurves [][]float64, historicalResult report.ReportablePortfolio) *report.Table {
+// computeTerminalWealth collects the final equity value from each path and
+// produces percentiles plus mean and standard deviation as terminalStat entries.
+func computeTerminalWealth(equityCurves [][]float64, historicalResult report.ReportablePortfolio) []terminalStat {
 	terminalValues := make([]float64, 0, len(equityCurves))
 
 	for _, curve := range equityCurves {
@@ -205,52 +191,35 @@ func buildTerminalWealthTable(equityCurves [][]float64, historicalResult report.
 	mean := computeMean(terminalValues)
 	stddev := computeStdDev(terminalValues, mean)
 
-	type statRow struct {
-		label string
-		value float64
-	}
-
-	stats := []statRow{
-		{"P1", percentile(sorted, 0.01)},
-		{"P5", percentile(sorted, 0.05)},
-		{"P10", percentile(sorted, 0.10)},
-		{"P25", percentile(sorted, 0.25)},
-		{"P50", percentile(sorted, 0.50)},
-		{"P75", percentile(sorted, 0.75)},
-		{"P90", percentile(sorted, 0.90)},
-		{"P95", percentile(sorted, 0.95)},
-		{"P99", percentile(sorted, 0.99)},
-		{"Mean", mean},
-		{"Std Dev", stddev},
+	stats := []terminalStat{
+		{Label: "P1", Value: percentile(sorted, 0.01)},
+		{Label: "P5", Value: percentile(sorted, 0.05)},
+		{Label: "P10", Value: percentile(sorted, 0.10)},
+		{Label: "P25", Value: percentile(sorted, 0.25)},
+		{Label: "P50", Value: percentile(sorted, 0.50)},
+		{Label: "P75", Value: percentile(sorted, 0.75)},
+		{Label: "P90", Value: percentile(sorted, 0.90)},
+		{Label: "P95", Value: percentile(sorted, 0.95)},
+		{Label: "P99", Value: percentile(sorted, 0.99)},
+		{Label: "Mean", Value: mean},
+		{Label: "Std Dev", Value: stddev},
 	}
 
 	if historicalResult != nil {
 		histValue := historicalResult.Value()
 		rank := percentileRank(sorted, histValue)
 
-		stats = append(stats, statRow{
-			label: fmt.Sprintf("Historical (P%.0f)", rank*100),
-			value: histValue,
+		stats = append(stats, terminalStat{
+			Label: fmt.Sprintf("Historical (P%.0f)", rank*100),
+			Value: histValue,
 		})
 	}
 
-	rows := make([][]any, len(stats))
-	for idx, stat := range stats {
-		rows[idx] = []any{stat.label, stat.value}
-	}
-
-	return &report.Table{
-		SectionName: "Terminal Wealth Distribution",
-		Columns: []report.Column{
-			{Header: "Statistic", Format: "string", Align: "left"},
-			{Header: "Value", Format: "currency", Align: "right"},
-		},
-		Rows: rows,
-	}
+	return stats
 }
 
-// buildConfidenceTable shows P5/P25/P50/P75/P95 for TWRR, MaxDrawdown, and Sharpe.
-func buildConfidenceTable(summaries []portfolio.Summary) *report.Table {
+// computeConfidenceIntervals computes P5/P25/P50/P75/P95 for TWRR, MaxDrawdown, and Sharpe.
+func computeConfidenceIntervals(summaries []portfolio.Summary) []confidenceRow {
 	twrrValues := make([]float64, len(summaries))
 	ddValues := make([]float64, len(summaries))
 	sharpeValues := make([]float64, len(summaries))
@@ -265,48 +234,37 @@ func buildConfidenceTable(summaries []portfolio.Summary) *report.Table {
 	sort.Float64s(ddValues)
 	sort.Float64s(sharpeValues)
 
-	type metricRow struct {
+	type metricInput struct {
 		name   string
 		sorted []float64
 	}
 
-	metrics := []metricRow{
+	metrics := []metricInput{
 		{"TWRR", twrrValues},
 		{"Max Drawdown", ddValues},
 		{"Sharpe", sharpeValues},
 	}
 
-	rows := make([][]any, len(metrics))
+	rows := make([]confidenceRow, len(metrics))
 	for idx, metric := range metrics {
-		rows[idx] = []any{
-			metric.name,
-			percentile(metric.sorted, 0.05),
-			percentile(metric.sorted, 0.25),
-			percentile(metric.sorted, 0.50),
-			percentile(metric.sorted, 0.75),
-			percentile(metric.sorted, 0.95),
+		rows[idx] = confidenceRow{
+			Metric: metric.name,
+			P5:     percentile(metric.sorted, 0.05),
+			P25:    percentile(metric.sorted, 0.25),
+			P50:    percentile(metric.sorted, 0.50),
+			P75:    percentile(metric.sorted, 0.75),
+			P95:    percentile(metric.sorted, 0.95),
 		}
 	}
 
-	return &report.Table{
-		SectionName: "Confidence Intervals",
-		Columns: []report.Column{
-			{Header: "Metric", Format: "string", Align: "left"},
-			{Header: "P5", Format: "number", Align: "right"},
-			{Header: "P25", Format: "number", Align: "right"},
-			{Header: "P50", Format: "number", Align: "right"},
-			{Header: "P75", Format: "number", Align: "right"},
-			{Header: "P95", Format: "number", Align: "right"},
-		},
-		Rows: rows,
-	}
+	return rows
 }
 
-// buildRuinSection computes the probability of ruin -- the fraction of paths
+// computeRuin computes the probability of ruin -- the fraction of paths
 // whose max drawdown exceeded the ruin threshold.
-func buildRuinSection(summaries []portfolio.Summary, ruinThreshold float64) *report.MetricPairs {
+func computeRuin(summaries []portfolio.Summary, ruinThreshold float64) ruinData {
 	if len(summaries) == 0 {
-		return &report.MetricPairs{SectionName: "Probability of Ruin", Metrics: nil}
+		return ruinData{Threshold: ruinThreshold}
 	}
 
 	ruinCount := 0
@@ -325,19 +283,16 @@ func buildRuinSection(summaries []portfolio.Summary, ruinThreshold float64) *rep
 	sort.Float64s(ddValues)
 	medianDD := percentile(ddValues, 0.50)
 
-	return &report.MetricPairs{
-		SectionName: "Probability of Ruin",
-		Metrics: []report.MetricPair{
-			{Label: "Probability of Ruin", Value: ruinPct, Format: "percent"},
-			{Label: "Ruin Threshold", Value: ruinThreshold, Format: "percent"},
-			{Label: "Median Max Drawdown", Value: medianDD, Format: "percent"},
-		},
+	return ruinData{
+		Probability:    ruinPct,
+		Threshold:      ruinThreshold,
+		MedianDrawdown: medianDD,
 	}
 }
 
-// buildHistoricalRank computes where the historical result's metrics rank
+// computeHistoricalRank computes where the historical result's metrics rank
 // among the simulated paths.
-func buildHistoricalRank(equityCurves [][]float64, summaries []portfolio.Summary, historicalResult report.ReportablePortfolio) (*report.MetricPairs, error) {
+func computeHistoricalRank(equityCurves [][]float64, summaries []portfolio.Summary, historicalResult report.ReportablePortfolio) (*historicalRankData, error) {
 	histSummary, err := historicalResult.Summary()
 	if err != nil {
 		return nil, fmt.Errorf("computing historical summary: %w", err)
@@ -381,21 +336,18 @@ func buildHistoricalRank(equityCurves [][]float64, summaries []portfolio.Summary
 	sort.Float64s(sharpeValues)
 	sharpeRank := percentileRank(sharpeValues, histSummary.Sharpe)
 
-	return &report.MetricPairs{
-		SectionName: "Historical Rank",
-		Metrics: []report.MetricPair{
-			{Label: "Terminal Value Percentile", Value: tvRank, Format: "percent"},
-			{Label: "TWRR Percentile", Value: twrrRank, Format: "percent"},
-			{Label: "Max Drawdown Percentile", Value: ddRank, Format: "percent"},
-			{Label: "Sharpe Percentile", Value: sharpeRank, Format: "percent"},
-		},
+	return &historicalRankData{
+		TerminalValuePercentile: tvRank,
+		TWRRPercentile:          twrrRank,
+		MaxDrawdownPercentile:   ddRank,
+		SharpePercentile:        sharpeRank,
 	}, nil
 }
 
-// buildMCSummaryText produces a brief narrative summarizing the simulation.
-func buildMCSummaryText(totalRuns int, successfulRuns int, summaries []portfolio.Summary, ruinThreshold float64) *report.Text {
+// computeMCSummary produces a brief narrative string summarizing the simulation.
+func computeMCSummary(totalRuns int, successfulRuns int, summaries []portfolio.Summary, ruinThreshold float64) string {
 	if len(summaries) == 0 {
-		return &report.Text{SectionName: "Summary", Body: "No successful simulation paths to analyze."}
+		return "No successful simulation paths to analyze."
 	}
 
 	var sb strings.Builder
@@ -430,10 +382,7 @@ func buildMCSummaryText(totalRuns int, successfulRuns int, summaries []portfolio
 	ruinPct := float64(ruinCount) / float64(len(summaries)) * 100
 	fmt.Fprintf(&sb, "Probability of ruin (drawdown beyond %.0f%%): %.1f%%.\n", ruinThreshold*100, ruinPct)
 
-	return &report.Text{
-		SectionName: "Summary",
-		Body:        sb.String(),
-	}
+	return sb.String()
 }
 
 // percentile returns the value at the given percentile (0-1) from a sorted slice.

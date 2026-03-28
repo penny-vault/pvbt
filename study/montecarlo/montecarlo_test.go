@@ -247,10 +247,10 @@ var _ = Describe("MonteCarloStudy", func() {
 	})
 
 	Describe("Analyze", func() {
-		It("returns an empty report when no results are provided", func() {
+		It("returns a report when no results are provided", func() {
 			rpt, err := mcs.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rpt.Title).To(Equal("Monte Carlo Simulation"))
+			Expect(rpt.Name()).To(Equal("MonteCarlo"))
 		})
 	})
 })

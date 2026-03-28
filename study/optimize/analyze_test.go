@@ -16,6 +16,8 @@
 package optimize_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -127,6 +129,51 @@ func itoa(val int) string {
 	return string(digits)
 }
 
+// optReportData mirrors the JSON structure of the optimizerReport for
+// test deserialization. Only fields that the tests inspect are included.
+type optReportData struct {
+	ObjectiveName string `json:"objectiveName"`
+
+	Rankings []struct {
+		Rank       int     `json:"rank"`
+		Parameters string  `json:"parameters"`
+		MeanOOS    float64 `json:"meanOOS"`
+		MeanIS     float64 `json:"meanIS"`
+		OOSStdDev  float64 `json:"oosStdDev"`
+	} `json:"rankings"`
+
+	BestDetail *struct {
+		Parameters string `json:"parameters"`
+		Folds      []struct {
+			FoldName string  `json:"foldName"`
+			ISScore  float64 `json:"isScore"`
+			OOSScore float64 `json:"oosScore"`
+		} `json:"folds"`
+	} `json:"bestDetail,omitempty"`
+
+	Overfitting []struct {
+		Parameters  string  `json:"parameters"`
+		MeanIS      float64 `json:"meanIS"`
+		MeanOOS     float64 `json:"meanOOS"`
+		Degradation float64 `json:"degradation"`
+	} `json:"overfitting"`
+
+	EquityCurves []struct {
+		Name string `json:"name"`
+	} `json:"equityCurves"`
+}
+
+// decodeOptReport calls Data on the report and unmarshals the JSON.
+func decodeOptReport(rpt report.Report) optReportData {
+	var buf bytes.Buffer
+	Expect(rpt.Data(&buf)).To(Succeed())
+
+	var result optReportData
+	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+
+	return result
+}
+
 var _ = Describe("Analyze", func() {
 	var splits []study.Split
 
@@ -166,19 +213,15 @@ var _ = Describe("Analyze", func() {
 	})
 
 	Describe("with empty results", func() {
-		It("returns a valid report with expected section types", func() {
+		It("returns a valid report with expected fields", func() {
 			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rpt.Title).NotTo(BeEmpty())
+			Expect(rpt.Name()).NotTo(BeEmpty())
 
-			sectionTypes := make([]string, len(rpt.Sections))
-			for idx, section := range rpt.Sections {
-				sectionTypes[idx] = section.Type()
-			}
-
-			Expect(sectionTypes).To(ContainElement("table"))
-			Expect(sectionTypes).To(ContainElement("time_series"))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Rankings).NotTo(BeNil())
+			Expect(rptData.EquityCurves).NotTo(BeNil())
 		})
 	})
 
@@ -215,9 +258,8 @@ var _ = Describe("Analyze", func() {
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			rankingsTable := findTable(rpt, "Rankings")
-			Expect(rankingsTable).NotTo(BeNil())
-			Expect(rankingsTable.Rows).To(HaveLen(2))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Rankings).To(HaveLen(2))
 		})
 
 		It("ranks combos with better OOS scores first", func() {
@@ -225,56 +267,44 @@ var _ = Describe("Analyze", func() {
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			rankingsTable := findTable(rpt, "Rankings")
-			Expect(rankingsTable).NotTo(BeNil())
-			Expect(rankingsTable.Rows).To(HaveLen(2))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Rankings).To(HaveLen(2))
 
 			// First row should be rank 1.
-			firstRow := rankingsTable.Rows[0]
-			rank, ok := firstRow[0].(int)
-			Expect(ok).To(BeTrue())
-			Expect(rank).To(Equal(1))
+			firstRow := rptData.Rankings[0]
+			Expect(firstRow.Rank).To(Equal(1))
 
 			// Combo A (lookback=20, strong growth) should rank above
 			// combo B (lookback=50, flat).
-			paramsStr, ok := firstRow[1].(string)
-			Expect(ok).To(BeTrue())
-			Expect(paramsStr).To(ContainSubstring("lookback=20"))
+			Expect(firstRow.Parameters).To(ContainSubstring("lookback=20"))
 		})
 
-		It("produces a best combo detail table", func() {
+		It("produces a best combo detail", func() {
 			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			detailTable := findTable(rpt, "Best Combination")
-			Expect(detailTable).NotTo(BeNil())
-			Expect(detailTable.Rows).To(HaveLen(len(splits)))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.BestDetail).NotTo(BeNil())
+			Expect(rptData.BestDetail.Folds).To(HaveLen(len(splits)))
 		})
 
-		It("produces an overfitting check table", func() {
+		It("produces an overfitting check", func() {
 			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			overfitTable := findTable(rpt, "Overfitting")
-			Expect(overfitTable).NotTo(BeNil())
-			Expect(overfitTable.Rows).To(HaveLen(2))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Overfitting).To(HaveLen(2))
 		})
 
-		It("produces a time_series section for equity curves", func() {
+		It("produces equity curves for the top combos", func() {
 			opt := optimize.New(splits, optimize.WithTopN(1))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			var tsSections int
-			for _, section := range rpt.Sections {
-				if section.Type() == "time_series" {
-					tsSections++
-				}
-			}
-
-			Expect(tsSections).To(Equal(1))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.EquityCurves).To(HaveLen(1))
 		})
 	})
 
@@ -293,9 +323,8 @@ var _ = Describe("Analyze", func() {
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			rankingsTable := findTable(rpt, "Rankings")
-			Expect(rankingsTable).NotTo(BeNil())
-			Expect(rankingsTable.Rows).To(BeEmpty())
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Rankings).To(BeEmpty())
 		})
 	})
 
@@ -328,32 +357,15 @@ var _ = Describe("Analyze", func() {
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
-			rankingsTable := findTable(rpt, "Rankings")
-			Expect(rankingsTable).NotTo(BeNil())
-			Expect(rankingsTable.Rows).To(HaveLen(2))
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Rankings).To(HaveLen(2))
 
 			// Combo B (no drawdown, score=0) should rank above combo A
 			// (large negative drawdown) since higher is better.
-			firstParams, ok := rankingsTable.Rows[0][1].(string)
-			Expect(ok).To(BeTrue())
-			Expect(firstParams).To(ContainSubstring("lookback=50"))
+			Expect(rptData.Rankings[0].Parameters).To(ContainSubstring("lookback=50"))
 		})
 	})
 })
-
-// findTable searches the report for a Table section whose name contains substr.
-func findTable(rpt report.ComposableReport, substr string) *report.Table {
-	for _, section := range rpt.Sections {
-		if section.Type() == "table" {
-			tbl, ok := section.(*report.Table)
-			if ok && contains(tbl.Name(), substr) {
-				return tbl
-			}
-		}
-	}
-
-	return nil
-}
 
 // makeDailyDates creates a slice of daily dates from start (inclusive)
 // to end (exclusive).

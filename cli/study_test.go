@@ -54,12 +54,12 @@ var _ = Describe("stress-test command", func() {
 		Expect(workersFlag.DefValue).To(Equal(fmt.Sprintf("%d", runtime.GOMAXPROCS(0))))
 	})
 
-	It("defaults format flag to text", func() {
+	It("defaults format flag to html", func() {
 		strategy := &testStrategy{}
 		cmd := newStressTestCmd(strategy)
 		formatFlag := cmd.Flags().Lookup("format")
 		Expect(formatFlag).NotTo(BeNil())
-		Expect(formatFlag.DefValue).To(Equal("text"))
+		Expect(formatFlag.DefValue).To(Equal("html"))
 	})
 
 	It("accepts arbitrary args", func() {

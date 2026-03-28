@@ -57,7 +57,7 @@ func newStressTestCmd(strategy engine.Strategy) *cobra.Command {
 	}
 
 	cmd.Flags().Int("workers", runtime.GOMAXPROCS(0), "Number of concurrent workers")
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("format", "html", "Output format (html, json)")
 
 	return cmd
 }
@@ -121,7 +121,26 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 		return err
 	}
 
-	return result.Report.Render(report.Format(formatStr), os.Stdout)
+	switch formatStr {
+	case "json":
+		return result.Report.Data(os.Stdout)
+	default:
+		outputFile := "stress-test-report.html"
+
+		file, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("create report file: %w", err)
+		}
+		defer file.Close()
+
+		if err := report.Render(result.Report, file); err != nil {
+			return fmt.Errorf("render report: %w", err)
+		}
+
+		log.Info().Str("path", outputFile).Msg("report written")
+
+		return nil
+	}
 }
 
 // strategyFactory returns a function that creates fresh copies of the strategy
@@ -230,7 +249,7 @@ func newOptimizeCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Int("samples", 100, "Number of random samples (random search only)")
 	cmd.Flags().Int("workers", runtime.GOMAXPROCS(0), "Number of concurrent workers")
 	cmd.Flags().Int("top", 10, "Number of top parameter combinations to include in the report")
-	cmd.Flags().String("format", "text", "Output format (text, json)")
+	cmd.Flags().String("format", "html", "Output format (html, json)")
 	cmd.Flags().String("scenarios", "", "Comma-separated scenario names for scenario validation")
 	cmd.Flags().Int("holdout", 1, "Number of scenarios to hold out per split (scenario validation)")
 
@@ -352,7 +371,26 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("get --format: %w", err)
 	}
 
-	return result.Report.Render(report.Format(formatStr), os.Stdout)
+	switch formatStr {
+	case "json":
+		return result.Report.Data(os.Stdout)
+	default:
+		outputFile := "optimize-report.html"
+
+		file, err := os.Create(outputFile)
+		if err != nil {
+			return fmt.Errorf("create report file: %w", err)
+		}
+		defer file.Close()
+
+		if err := report.Render(result.Report, file); err != nil {
+			return fmt.Errorf("render report: %w", err)
+		}
+
+		log.Info().Str("path", outputFile).Msg("report written")
+
+		return nil
+	}
 }
 
 // buildSplits constructs the cross-validation splits based on the --validation flag.

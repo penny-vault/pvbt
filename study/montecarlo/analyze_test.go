@@ -16,7 +16,9 @@
 package montecarlo_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -149,12 +151,61 @@ func newFakePortfolio(baseDate time.Time, equityValues []float64, summary portfo
 	}
 }
 
+// mcReportData mirrors the JSON structure of the monteCarloReport for
+// test deserialization. Only fields that the tests inspect are included.
+type mcReportData struct {
+	FanChart struct {
+		P5     []float64 `json:"p5"`
+		P25    []float64 `json:"p25"`
+		P50    []float64 `json:"p50"`
+		P75    []float64 `json:"p75"`
+		P95    []float64 `json:"p95"`
+		Actual *struct {
+			Values []float64 `json:"values"`
+		} `json:"actual,omitempty"`
+	} `json:"fanChart"`
+
+	TerminalWealth []struct {
+		Label string  `json:"label"`
+		Value float64 `json:"value"`
+	} `json:"terminalWealth"`
+
+	ConfidenceIntervals []struct {
+		Metric string `json:"metric"`
+	} `json:"confidenceIntervals"`
+
+	Ruin struct {
+		Probability float64 `json:"probability"`
+		Threshold   float64 `json:"threshold"`
+	} `json:"ruin"`
+
+	HistoricalRank *struct {
+		TerminalValuePercentile float64 `json:"terminalValuePercentile"`
+		TWRRPercentile          float64 `json:"twrrPercentile"`
+		MaxDrawdownPercentile   float64 `json:"maxDrawdownPercentile"`
+		SharpePercentile        float64 `json:"sharpePercentile"`
+	} `json:"historicalRank,omitempty"`
+
+	Summary string `json:"summary"`
+}
+
+// decodeReport calls Data on the report.Report and unmarshals the JSON.
+func decodeReport(rpt report.Report) mcReportData {
+	var buf bytes.Buffer
+	Expect(rpt.Data(&buf)).To(Succeed())
+
+	var result mcReportData
+	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+
+	return result
+}
+
 var _ = Describe("analyzeResults", func() {
 	baseDate := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	// Create a MonteCarloStudy and use its Analyze method to access the
 	// internal analyzeResults function.
-	analyzeViaStudy := func(results []study.RunResult, historical report.ReportablePortfolio, ruinThreshold float64) (report.ComposableReport, error) {
+	analyzeViaStudy := func(results []study.RunResult, historical report.ReportablePortfolio, ruinThreshold float64) (report.Report, error) {
 		mcs := montecarlo.New(nil, nil)
 		mcs.RuinThreshold = ruinThreshold
 		mcs.HistoricalResult = historical
@@ -163,7 +214,8 @@ var _ = Describe("analyzeResults", func() {
 	}
 
 	Context("report structure", func() {
-		var rpt report.ComposableReport
+		var rpt report.Report
+		var rptData mcReportData
 
 		BeforeEach(func() {
 			// Three paths with different equity curves.
@@ -186,32 +238,39 @@ var _ = Describe("analyzeResults", func() {
 			var err error
 			rpt, err = analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
+			rptData = decodeReport(rpt)
 		})
 
-		It("has the correct title", func() {
-			Expect(rpt.Title).To(Equal("Monte Carlo Simulation"))
+		It("has the correct component name", func() {
+			Expect(rpt.Name()).To(Equal("MonteCarlo"))
 		})
 
-		It("has the expected number of sections without historical result", func() {
-			// Fan chart, terminal wealth, confidence intervals, ruin, summary = 5
-			Expect(rpt.Sections).To(HaveLen(5))
+		It("has fan chart data without historical result", func() {
+			Expect(rptData.FanChart.P50).NotTo(BeEmpty())
+			Expect(rptData.FanChart.Actual).To(BeNil())
 		})
 
-		It("has sections in the correct order", func() {
-			Expect(rpt.Sections[0].Type()).To(Equal("time_series"))
-			Expect(rpt.Sections[0].Name()).To(Equal("Equity Curve Distribution"))
+		It("has terminal wealth distribution", func() {
+			Expect(rptData.TerminalWealth).NotTo(BeEmpty())
+		})
 
-			Expect(rpt.Sections[1].Type()).To(Equal("table"))
-			Expect(rpt.Sections[1].Name()).To(Equal("Terminal Wealth Distribution"))
+		It("has confidence intervals for TWRR, Max Drawdown, and Sharpe", func() {
+			Expect(rptData.ConfidenceIntervals).To(HaveLen(3))
+			Expect(rptData.ConfidenceIntervals[0].Metric).To(Equal("TWRR"))
+			Expect(rptData.ConfidenceIntervals[1].Metric).To(Equal("Max Drawdown"))
+			Expect(rptData.ConfidenceIntervals[2].Metric).To(Equal("Sharpe"))
+		})
 
-			Expect(rpt.Sections[2].Type()).To(Equal("table"))
-			Expect(rpt.Sections[2].Name()).To(Equal("Confidence Intervals"))
+		It("has ruin probability data", func() {
+			Expect(rptData.Ruin.Threshold).To(Equal(-0.30))
+		})
 
-			Expect(rpt.Sections[3].Type()).To(Equal("metric_pairs"))
-			Expect(rpt.Sections[3].Name()).To(Equal("Probability of Ruin"))
+		It("has no historical rank without historical result", func() {
+			Expect(rptData.HistoricalRank).To(BeNil())
+		})
 
-			Expect(rpt.Sections[4].Type()).To(Equal("text"))
-			Expect(rpt.Sections[4].Name()).To(Equal("Summary"))
+		It("has a summary narrative", func() {
+			Expect(rptData.Summary).NotTo(BeEmpty())
 		})
 	})
 
@@ -231,16 +290,13 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(paths, nil, -0.50)
 			Expect(err).NotTo(HaveOccurred())
+			rptData := decodeReport(rpt)
 
-			// Check terminal wealth table (section index 1).
-			termTable, ok := rpt.Sections[1].(*report.Table)
-			Expect(ok).To(BeTrue())
-
-			// Find the P50 row.
+			// Find the P50 entry.
 			var medianValue float64
-			for _, row := range termTable.Rows {
-				if row[0] == "P50" {
-					medianValue = row[1].(float64)
+			for _, stat := range rptData.TerminalWealth {
+				if stat.Label == "P50" {
+					medianValue = stat.Value
 				}
 			}
 
@@ -267,19 +323,15 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Ruin section is index 3.
-			ruinSection, ok := rpt.Sections[3].(*report.MetricPairs)
-			Expect(ok).To(BeTrue())
+			rptData := decodeReport(rpt)
 
 			// 1 of 3 paths has drawdown < -0.30 threshold.
-			ruinPct := ruinSection.Metrics[0].Value
-			Expect(ruinPct).To(BeNumerically("~", 1.0/3.0, 0.001))
+			Expect(rptData.Ruin.Probability).To(BeNumerically("~", 1.0/3.0, 0.001))
 		})
 	})
 
 	Context("historical rank", func() {
-		It("includes historical rank section when historical result is provided", func() {
+		It("includes historical rank when historical result is provided", func() {
 			path1 := newFakePortfolio(baseDate, []float64{100, 110, 120}, portfolio.Summary{
 				TWRR: 0.20, MaxDrawdown: -0.05, Sharpe: 1.5,
 			})
@@ -298,18 +350,12 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, historical, -0.30)
 			Expect(err).NotTo(HaveOccurred())
+			rptData := decodeReport(rpt)
 
-			// With historical, we should have 6 sections.
-			Expect(rpt.Sections).To(HaveLen(6))
-
-			// Historical rank is section index 4.
-			rankSection, ok := rpt.Sections[4].(*report.MetricPairs)
-			Expect(ok).To(BeTrue())
-			Expect(rankSection.Name()).To(Equal("Historical Rank"))
-			Expect(rankSection.Metrics).To(HaveLen(4))
+			Expect(rptData.HistoricalRank).NotTo(BeNil())
 		})
 
-		It("omits historical rank section when historical result is nil", func() {
+		It("omits historical rank when historical result is nil", func() {
 			path := newFakePortfolio(baseDate, []float64{100, 110}, portfolio.Summary{
 				TWRR: 0.10, MaxDrawdown: -0.05, Sharpe: 1.0,
 			})
@@ -320,14 +366,9 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
+			rptData := decodeReport(rpt)
 
-			// Without historical, we should have 5 sections.
-			Expect(rpt.Sections).To(HaveLen(5))
-
-			// No section should be named "Historical Rank".
-			for _, section := range rpt.Sections {
-				Expect(section.Name()).NotTo(Equal("Historical Rank"))
-			}
+			Expect(rptData.HistoricalRank).To(BeNil())
 		})
 	})
 
@@ -344,15 +385,10 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
-
-			// Report should still be valid with 5 sections.
-			Expect(rpt.Sections).To(HaveLen(5))
-			Expect(rpt.Title).To(Equal("Monte Carlo Simulation"))
+			rptData := decodeReport(rpt)
 
 			// Summary text should mention the failed path.
-			summarySection, ok := rpt.Sections[4].(*report.Text)
-			Expect(ok).To(BeTrue())
-			Expect(summarySection.Body).To(ContainSubstring("1 of 2 paths succeeded"))
+			Expect(rptData.Summary).To(ContainSubstring("1 of 2 paths succeeded"))
 		})
 
 		It("filters out runs with nil portfolios", func() {
@@ -368,7 +404,9 @@ var _ = Describe("analyzeResults", func() {
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(rpt.Sections).To(HaveLen(5))
+			// Report should still produce valid JSON.
+			rptData := decodeReport(rpt)
+			Expect(rptData.Summary).NotTo(BeEmpty())
 		})
 
 		It("returns a placeholder report when all runs fail", func() {
@@ -379,12 +417,10 @@ var _ = Describe("analyzeResults", func() {
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
 
-			Expect(rpt.Title).To(Equal("Monte Carlo Simulation"))
-			Expect(rpt.Sections).To(HaveLen(1))
+			Expect(rpt.Name()).To(Equal("MonteCarlo"))
 
-			textSection, ok := rpt.Sections[0].(*report.Text)
-			Expect(ok).To(BeTrue())
-			Expect(textSection.Body).To(ContainSubstring("No successful"))
+			rptData := decodeReport(rpt)
+			Expect(rptData.Summary).To(ContainSubstring("No successful"))
 		})
 	})
 
@@ -403,13 +439,10 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, historical, -0.30)
 			Expect(err).NotTo(HaveOccurred())
+			rptData := decodeReport(rpt)
 
-			fanChart, ok := rpt.Sections[0].(*report.TimeSeries)
-			Expect(ok).To(BeTrue())
-
-			// Should have 6 series: P5, P25, P50, P75, P95, Historical.
-			Expect(fanChart.Series).To(HaveLen(6))
-			Expect(fanChart.Series[5].Name).To(Equal("Historical"))
+			Expect(rptData.FanChart.Actual).NotTo(BeNil())
+			Expect(rptData.FanChart.Actual.Values).NotTo(BeEmpty())
 		})
 	})
 
@@ -425,13 +458,12 @@ var _ = Describe("analyzeResults", func() {
 
 			rpt, err := analyzeViaStudy(results, nil, -0.30)
 			Expect(err).NotTo(HaveOccurred())
+			rptData := decodeReport(rpt)
 
-			ciTable, ok := rpt.Sections[2].(*report.Table)
-			Expect(ok).To(BeTrue())
-			Expect(ciTable.Rows).To(HaveLen(3))
-			Expect(ciTable.Rows[0][0]).To(Equal("TWRR"))
-			Expect(ciTable.Rows[1][0]).To(Equal("Max Drawdown"))
-			Expect(ciTable.Rows[2][0]).To(Equal("Sharpe"))
+			Expect(rptData.ConfidenceIntervals).To(HaveLen(3))
+			Expect(rptData.ConfidenceIntervals[0].Metric).To(Equal("TWRR"))
+			Expect(rptData.ConfidenceIntervals[1].Metric).To(Equal("Max Drawdown"))
+			Expect(rptData.ConfidenceIntervals[2].Metric).To(Equal("Sharpe"))
 		})
 	})
 })

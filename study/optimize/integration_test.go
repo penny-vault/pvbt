@@ -66,44 +66,26 @@ var _ = Describe("Integration", func() {
 		rpt, analyzeErr := opt.Analyze(results)
 
 		Expect(analyzeErr).NotTo(HaveOccurred())
-		Expect(rpt.Title).NotTo(BeEmpty())
+		Expect(rpt.Name()).NotTo(BeEmpty())
 
-		// The report must contain at least four sections.
-		Expect(rpt.Sections).To(HaveLen(4))
+		rptData := decodeOptReport(rpt)
 
-		// Verify Rankings table: 3 combos, best first.
-		rankingsTable := findTable(rpt, "Rankings")
-		Expect(rankingsTable).NotTo(BeNil(), "expected a Rankings table section")
-		Expect(rankingsTable.Rows).To(HaveLen(3))
+		// Verify Rankings: 3 combos, best first.
+		Expect(rptData.Rankings).To(HaveLen(3))
 
 		// First row should be rank 1 and identify combo A (lookback=10).
-		firstRank, ok := rankingsTable.Rows[0][0].(int)
-		Expect(ok).To(BeTrue())
-		Expect(firstRank).To(Equal(1))
+		Expect(rptData.Rankings[0].Rank).To(Equal(1))
+		Expect(rptData.Rankings[0].Parameters).To(ContainSubstring("lookback=10"))
 
-		firstParams, paramOK := rankingsTable.Rows[0][1].(string)
-		Expect(paramOK).To(BeTrue())
-		Expect(firstParams).To(ContainSubstring("lookback=10"))
+		// Verify Best Combination Detail exists.
+		Expect(rptData.BestDetail).NotTo(BeNil())
+		Expect(rptData.BestDetail.Folds).To(HaveLen(len(splits)))
 
-		// Verify Best Combination Detail table exists.
-		detailTable := findTable(rpt, "Best Combination")
-		Expect(detailTable).NotTo(BeNil(), "expected a Best Combination Detail table section")
-		Expect(detailTable.Rows).To(HaveLen(len(splits)))
+		// Verify Overfitting rows exist, one per combo.
+		Expect(rptData.Overfitting).To(HaveLen(3))
 
-		// Verify Overfitting table exists with one row per combo.
-		overfitTable := findTable(rpt, "Overfitting")
-		Expect(overfitTable).NotTo(BeNil(), "expected an Overfitting Check table section")
-		Expect(overfitTable.Rows).To(HaveLen(3))
-
-		// Verify equity curves time_series section is present.
-		var tsCount int
-		for _, section := range rpt.Sections {
-			if section.Type() == "time_series" {
-				tsCount++
-			}
-		}
-
-		Expect(tsCount).To(Equal(1), "expected exactly one time_series section")
+		// Verify equity curves are present.
+		Expect(rptData.EquityCurves).NotTo(BeEmpty())
 	})
 
 	It("ranks parameter combinations correctly across two TrainTest splits", func() {
@@ -152,13 +134,10 @@ var _ = Describe("Integration", func() {
 
 		Expect(analyzeErr).NotTo(HaveOccurred())
 
-		rankingsTable := findTable(rpt, "Rankings")
-		Expect(rankingsTable).NotTo(BeNil())
-		Expect(rankingsTable.Rows).To(HaveLen(2))
+		rptData := decodeOptReport(rpt)
+		Expect(rptData.Rankings).To(HaveLen(2))
 
 		// Combo A (window=5) must rank first.
-		topParams, paramOK := rankingsTable.Rows[0][1].(string)
-		Expect(paramOK).To(BeTrue())
-		Expect(topParams).To(ContainSubstring("window=5"))
+		Expect(rptData.Rankings[0].Parameters).To(ContainSubstring("window=5"))
 	})
 })
