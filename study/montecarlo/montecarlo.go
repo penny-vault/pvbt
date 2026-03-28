@@ -125,6 +125,6 @@ func (mcs *MonteCarloStudy) EngineOptions(cfg study.RunConfig) []engine.Option {
 
 // Analyze delegates to analyzeResults to compute percentile distributions
 // and build the Monte Carlo report.
-func (mcs *MonteCarloStudy) Analyze(results []study.RunResult) (report.Report, error) {
+func (mcs *MonteCarloStudy) Analyze(results []study.RunResult) (report.ComposableReport, error) {
 	return analyzeResults(results, mcs.HistoricalResult, mcs.RuinThreshold)
 }

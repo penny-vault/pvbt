@@ -102,6 +102,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	if outputPath == "" {
 		info := engine.DescribeStrategy(strategy)
+
 		filePrefix := info.ShortCode
 		if filePrefix == "" {
 			filePrefix = strategy.Name()

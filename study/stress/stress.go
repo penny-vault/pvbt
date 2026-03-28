@@ -80,6 +80,6 @@ func (stressTest *StressTest) Configurations(_ context.Context) ([]study.RunConf
 
 // Analyze slices each run's equity curve into per-scenario windows and builds
 // a report with a ranking table, per-scenario metric pairs, and a summary.
-func (stressTest *StressTest) Analyze(results []study.RunResult) (report.Report, error) {
+func (stressTest *StressTest) Analyze(results []study.RunResult) (report.ComposableReport, error) {
 	return analyzeResults(stressTest.scenarios, results)
 }

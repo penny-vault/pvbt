@@ -39,8 +39,8 @@ func (fs *fakeOptStudy) Configurations(_ context.Context) ([]study.RunConfig, er
 	return fs.configs, nil
 }
 
-func (fs *fakeOptStudy) Analyze(_ []study.RunResult) (report.Report, error) {
-	return report.Report{Title: "fake"}, nil
+func (fs *fakeOptStudy) Analyze(_ []study.RunResult) (report.ComposableReport, error) {
+	return report.ComposableReport{Title: "fake"}, nil
 }
 
 // recordingSearch records each call to Next and returns canned batches.
@@ -303,9 +303,9 @@ var _ = Describe("Runner Search Path", func() {
 							End:   time.Date(2020, 12, 31, 0, 0, 0, 0, time.UTC),
 						},
 					},
-					analyzeFn: func(results []study.RunResult) (report.Report, error) {
+					analyzeFn: func(results []study.RunResult) (report.ComposableReport, error) {
 						analyzedCount = len(results)
-						return report.Report{Title: "Sweep"}, nil
+						return report.ComposableReport{Title: "Sweep"}, nil
 					},
 				},
 				NewStrategy: func() engine.Strategy { return &mockStrategy{} },

@@ -39,7 +39,7 @@ var portfolioAsset = asset.Asset{
 // Sections are the domain types (Header, EquityCurve, ReturnTable, etc.)
 // which implement Section for text/JSON rendering and can be type-asserted
 // by the terminal renderer for styled output.
-func Build(acct report.ReportablePortfolio) (report.Report, error) {
+func Build(acct report.ReportablePortfolio) (report.ComposableReport, error) {
 	var warnings []string
 
 	perfData := acct.PerfData()
@@ -57,7 +57,7 @@ func Build(acct report.ReportablePortfolio) (report.Report, error) {
 	if perfData == nil || perfData.Len() < 2 {
 		warnings = append(warnings, "insufficient data for full report")
 
-		return report.Report{
+		return report.ComposableReport{
 			Title:        header.StrategyName,
 			Sections:     []report.Section{&header},
 			HasBenchmark: hasBenchmark,
@@ -99,7 +99,7 @@ func Build(acct report.ReportablePortfolio) (report.Report, error) {
 
 	sections = append(sections, &drawdowns, &monthlyReturns, &trades)
 
-	return report.Report{
+	return report.ComposableReport{
 		Title:        header.StrategyName,
 		Sections:     sections,
 		HasBenchmark: hasBenchmark,

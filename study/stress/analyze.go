@@ -50,9 +50,9 @@ type runAnalysis struct {
 	scenarios []scenarioMetrics
 }
 
-// analyzeResults builds a report.Report from the results slice. It is the
+// analyzeResults builds a report.ComposableReport from the results slice. It is the
 // shared implementation used by StressTest.Analyze.
-func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (report.Report, error) {
+func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (report.ComposableReport, error) {
 	analyses := make([]runAnalysis, len(results))
 
 	for idx, result := range results {
@@ -75,7 +75,7 @@ func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (repo
 	summaryText := buildSummaryText(scenarios, analyses)
 	sections = append(sections, summaryText)
 
-	return report.Report{
+	return report.ComposableReport{
 		Title:    "Stress Test Analysis",
 		Sections: sections,
 	}, nil
