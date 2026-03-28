@@ -100,10 +100,10 @@ var _ = Describe("Optimizer", func() {
 		It("uses MetricSharpe as the default objective", func() {
 			opt := optimize.New(splits)
 			// The default is verified indirectly: Analyze should not panic
-			// and should produce a report with Sharpe in the section name.
+			// and should produce a report.
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
-			Expect(rpt.Title).NotTo(BeEmpty())
+			Expect(rpt.Name()).NotTo(BeEmpty())
 		})
 	})
 
@@ -112,31 +112,10 @@ var _ = Describe("Optimizer", func() {
 			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
-			// The rankings section should mention CAGR.
-			found := false
-			for _, section := range rpt.Sections {
-				if section.Type() == "table" && len(section.Name()) > 0 {
-					if contains(section.Name(), "CAGR") {
-						found = true
-						break
-					}
-				}
-			}
-			Expect(found).To(BeTrue(), "expected a table section mentioning CAGR")
+			// The report JSON should mention CAGR as the objective name.
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.ObjectiveName).To(Equal("CAGR"))
 		})
 	})
 })
 
-// contains reports whether substr appears in str.
-func contains(str, substr string) bool {
-	return len(str) >= len(substr) && searchString(str, substr)
-}
-
-func searchString(str, substr string) bool {
-	for idx := 0; idx <= len(str)-len(substr); idx++ {
-		if str[idx:idx+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

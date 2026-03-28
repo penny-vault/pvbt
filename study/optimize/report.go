@@ -18,6 +18,7 @@ package optimize
 import (
 	"encoding/json"
 	"io"
+	"math"
 	"time"
 )
 
@@ -65,5 +66,54 @@ type equityCurveSeries struct {
 func (or *optimizerReport) Name() string { return "Optimize" }
 
 func (or *optimizerReport) Data(writer io.Writer) error {
-	return json.NewEncoder(writer).Encode(or)
+	// Create a sanitized copy that replaces NaN with null-friendly zero values
+	// since JSON does not support NaN.
+	sanitized := *or
+
+	sanitized.Rankings = make([]rankingRow, len(or.Rankings))
+	for idx, row := range or.Rankings {
+		sanitized.Rankings[idx] = rankingRow{
+			Rank:       row.Rank,
+			Parameters: row.Parameters,
+			MeanOOS:    sanitizeFloat(row.MeanOOS),
+			MeanIS:     sanitizeFloat(row.MeanIS),
+			OOSStdDev:  sanitizeFloat(row.OOSStdDev),
+		}
+	}
+
+	if or.BestDetail != nil {
+		detail := *or.BestDetail
+		detail.Folds = make([]foldDetail, len(or.BestDetail.Folds))
+
+		for idx, fold := range or.BestDetail.Folds {
+			detail.Folds[idx] = foldDetail{
+				FoldName: fold.FoldName,
+				ISScore:  sanitizeFloat(fold.ISScore),
+				OOSScore: sanitizeFloat(fold.OOSScore),
+			}
+		}
+
+		sanitized.BestDetail = &detail
+	}
+
+	sanitized.Overfitting = make([]overfittingRow, len(or.Overfitting))
+	for idx, row := range or.Overfitting {
+		sanitized.Overfitting[idx] = overfittingRow{
+			Parameters:  row.Parameters,
+			MeanIS:      sanitizeFloat(row.MeanIS),
+			MeanOOS:     sanitizeFloat(row.MeanOOS),
+			Degradation: sanitizeFloat(row.Degradation),
+		}
+	}
+
+	return json.NewEncoder(writer).Encode(&sanitized)
+}
+
+// sanitizeFloat replaces NaN and Inf with zero for JSON compatibility.
+func sanitizeFloat(val float64) float64 {
+	if math.IsNaN(val) || math.IsInf(val, 0) {
+		return 0
+	}
+
+	return val
 }

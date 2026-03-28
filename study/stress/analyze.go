@@ -113,12 +113,12 @@ func computeScenarioMetrics(scenario study.Scenario, perfData *data.DataFrame) s
 	}
 
 	sliced := perfData.Between(scenario.Start, scenario.End)
-	if sliced == nil || sliced.Len() == 0 {
+	if sliced == nil || sliced.Len() < 2 {
 		return metrics
 	}
 
 	equityValues := sliced.Column(portfolioAsset, data.PortfolioEquity)
-	if len(equityValues) == 0 {
+	if len(equityValues) < 2 {
 		return metrics
 	}
 

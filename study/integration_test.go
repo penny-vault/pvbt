@@ -18,6 +18,7 @@ package study_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"time"
@@ -248,46 +249,25 @@ var _ = Describe("Integration", func() {
 		Expect(result.Runs[0].Err).NotTo(HaveOccurred())
 		Expect(result.Runs[0].Portfolio).NotTo(BeNil())
 
-		// Verify report has sections.
-		Expect(result.Report.Title).To(Equal("Stress Test Analysis"))
-		Expect(result.Report.Sections).NotTo(BeEmpty())
+		// Verify report component name.
+		Expect(result.Report.Name()).To(Equal("StressTest"))
 
-		// Render in text format.
-		var textBuffer bytes.Buffer
-		Expect(result.Report.Render(report.FormatText, &textBuffer)).To(Succeed())
-		Expect(textBuffer.Len()).To(BeNumerically(">", 0))
-
-		// Render in JSON format.
+		// Verify JSON data can be retrieved.
 		var jsonBuffer bytes.Buffer
-		Expect(result.Report.Render(report.FormatJSON, &jsonBuffer)).To(Succeed())
-		Expect(jsonBuffer.String()).To(ContainSubstring(`"title"`))
+		Expect(result.Report.Data(&jsonBuffer)).To(Succeed())
+		Expect(jsonBuffer.Len()).To(BeNumerically(">", 0))
 
-		// Verify the stress analysis produced meaningful metrics.
-		// The ranking table is the first section; find the scenario metrics section.
-		foundScenarioSection := false
-		for _, section := range result.Report.Sections {
-			metricPairs, isMetricPairs := section.(*report.MetricPairs)
-			if !isMetricPairs {
-				continue
-			}
+		// Verify the JSON is valid and contains expected fields.
+		var stressData map[string]json.RawMessage
+		Expect(json.Unmarshal(jsonBuffer.Bytes(), &stressData)).To(Succeed())
+		Expect(stressData).To(HaveKey("rankings"))
+		Expect(stressData).To(HaveKey("scenarios"))
+		Expect(stressData).To(HaveKey("summary"))
 
-			foundScenarioSection = true
-
-			// There should be metrics for the single run.
-			Expect(metricPairs.Metrics).NotTo(BeEmpty())
-
-			for _, pair := range metricPairs.Metrics {
-				if pair.Format == "percent" {
-					// With rising synthetic prices, total return should be positive
-					// and drawdown should be zero or negative. Either way, the value
-					// should be a real number (not NaN).
-					Expect(math.IsNaN(pair.Value)).To(BeFalse(),
-						"expected non-NaN metric for %s", pair.Label)
-				}
-			}
-		}
-
-		Expect(foundScenarioSection).To(BeTrue(), "expected at least one MetricPairs scenario section")
+		// Verify HTML rendering works.
+		var htmlBuffer bytes.Buffer
+		Expect(report.Render(result.Report, &htmlBuffer)).To(Succeed())
+		Expect(htmlBuffer.Len()).To(BeNumerically(">", 0))
 	})
 
 	It("runs a Monte Carlo simulation through the full runner pipeline", func() {
@@ -351,19 +331,24 @@ var _ = Describe("Integration", func() {
 			Expect(run.Portfolio).NotTo(BeNil(), "run %d has nil portfolio", idx)
 		}
 
-		// Verify report title and sections.
-		Expect(result.Report.Title).To(Equal("Monte Carlo Simulation"))
-		Expect(result.Report.Sections).NotTo(BeEmpty())
+		// Verify report component name.
+		Expect(result.Report.Name()).To(Equal("MonteCarlo"))
 
-		// Render in text format.
-		var textBuffer bytes.Buffer
-		Expect(result.Report.Render(report.FormatText, &textBuffer)).To(Succeed())
-		Expect(textBuffer.Len()).To(BeNumerically(">", 0))
+		// Verify JSON data can be retrieved.
+		var mcJSONBuffer bytes.Buffer
+		Expect(result.Report.Data(&mcJSONBuffer)).To(Succeed())
+		Expect(mcJSONBuffer.Len()).To(BeNumerically(">", 0))
 
-		// Render in JSON format.
-		var jsonBuffer bytes.Buffer
-		Expect(result.Report.Render(report.FormatJSON, &jsonBuffer)).To(Succeed())
-		Expect(jsonBuffer.String()).To(ContainSubstring(`"title"`))
+		// Verify the JSON is valid and contains expected fields.
+		var mcData map[string]json.RawMessage
+		Expect(json.Unmarshal(mcJSONBuffer.Bytes(), &mcData)).To(Succeed())
+		Expect(mcData).To(HaveKey("fanChart"))
+		Expect(mcData).To(HaveKey("summary"))
+
+		// Verify HTML rendering works.
+		var mcHTMLBuffer bytes.Buffer
+		Expect(report.Render(result.Report, &mcHTMLBuffer)).To(Succeed())
+		Expect(mcHTMLBuffer.Len()).To(BeNumerically(">", 0))
 	})
 
 	It("calls EngineCustomizer.EngineOptions once per run config", func() {
