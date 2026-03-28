@@ -83,13 +83,8 @@ var _ = Describe("Render", func() {
 		Expect(output).To(ContainSubstring(`__REPORT_COMPONENT__`))
 		Expect(output).To(ContainSubstring(`"TestComponent"`))
 
-		// Verify CDN scripts are present.
-		Expect(output).To(ContainSubstring("vue@3"))
-		Expect(output).To(ContainSubstring("tailwindcss"))
-		Expect(output).To(ContainSubstring("echarts"))
-
-		// Verify the stub bundle is inlined.
-		Expect(output).To(ContainSubstring("Vue.createApp"))
+		// Verify the bundle is inlined (contains Vue runtime).
+		Expect(output).To(ContainSubstring("createApp"))
 	})
 
 	It("returns an error when Data fails", func() {
