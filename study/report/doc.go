@@ -13,10 +13,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package report defines the types and interfaces for structured backtest
-// reports. Domain types (Header, EquityCurve, Risk, etc.) implement the
-// Section interface, allowing renderers to type-assert for styled output.
-//
-// Report builders live in subpackages (e.g., summary.Build) and renderers
-// in renderer subpackages (e.g., renderer/terminal.Render).
+// Package report defines the Report interface for Vue-based HTML reports and
+// provides a Render function that produces self-contained HTML files.
 package report
