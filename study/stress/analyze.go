@@ -27,6 +27,9 @@ import (
 	"github.com/penny-vault/pvbt/study/report"
 )
 
+// Ensure stressReport satisfies the report.Report interface.
+var _ report.Report = (*stressReport)(nil)
+
 // portfolioAsset is the sentinel asset used to look up equity columns in the
 // performance DataFrame. It mirrors the unexported constant in portfolio/account.go.
 var portfolioAsset = asset.Asset{
@@ -50,34 +53,28 @@ type runAnalysis struct {
 	scenarios []scenarioMetrics
 }
 
-// analyzeResults builds a report.ComposableReport from the results slice. It is the
+// analyzeResults builds a stressReport from the results slice. It is the
 // shared implementation used by StressTest.Analyze.
-func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (report.ComposableReport, error) {
+func analyzeResults(scenarios []study.Scenario, results []study.RunResult) (report.Report, error) {
 	analyses := make([]runAnalysis, len(results))
 
 	for idx, result := range results {
 		analyses[idx] = analyzeRun(scenarios, result)
 	}
 
-	sections := make([]report.Section, 0, 2+len(scenarios)+1)
+	// Build rankings: one entry per (run, scenario) sorted by max drawdown severity.
+	rankings := buildRankings(analyses)
 
-	// Ranking table: one row per (run, scenario) sorted by max drawdown severity.
-	rankingTable := buildRankingTable(analyses)
-	sections = append(sections, rankingTable)
+	// Build per-scenario detail sections.
+	scenarioDetails := buildScenarioDetails(scenarios, analyses)
 
-	// Per-scenario MetricPairs sections.
-	for scenarioIdx, scenario := range scenarios {
-		metricsSection := buildScenarioMetricPairs(scenario, scenarioIdx, analyses)
-		sections = append(sections, metricsSection)
-	}
+	// Build summary text.
+	summaryText := buildSummary(scenarios, analyses)
 
-	// Summary text.
-	summaryText := buildSummaryText(scenarios, analyses)
-	sections = append(sections, summaryText)
-
-	return report.ComposableReport{
-		Title:    "Stress Test Analysis",
-		Sections: sections,
+	return &stressReport{
+		Rankings:  rankings,
+		Scenarios: scenarioDetails,
+		Summary:   summaryText,
 	}, nil
 }
 
@@ -204,37 +201,28 @@ func computeWorstDayReturn(equityValues []float64) float64 {
 	return worst
 }
 
-// buildRankingTable constructs a Table section ranking all (run, scenario)
-// pairs by max drawdown severity (largest drawdown first).
-func buildRankingTable(analyses []runAnalysis) *report.Table {
-	type rankRow struct {
-		runName      string
-		scenarioName string
-		maxDrawdown  float64
-		totalReturn  float64
-		worstDay     float64
-		errorMsg     string
-	}
-
-	var rows []rankRow
+// buildRankings constructs a sorted slice of scenarioRanking entries, one per
+// (run, scenario) pair, sorted by max drawdown severity (largest drawdown first).
+func buildRankings(analyses []runAnalysis) []scenarioRanking {
+	var rankings []scenarioRanking
 
 	for _, analysis := range analyses {
 		for _, scenarioResult := range analysis.scenarios {
-			rows = append(rows, rankRow{
-				runName:      analysis.runName,
-				scenarioName: scenarioResult.scenarioName,
-				maxDrawdown:  scenarioResult.maxDrawdown,
-				totalReturn:  scenarioResult.totalReturn,
-				worstDay:     scenarioResult.worstDayReturn,
-				errorMsg:     analysis.errMsg,
+			rankings = append(rankings, scenarioRanking{
+				RunName:      analysis.runName,
+				ScenarioName: scenarioResult.scenarioName,
+				ErrorMsg:     analysis.errMsg,
+				MaxDrawdown:  scenarioResult.maxDrawdown,
+				TotalReturn:  scenarioResult.totalReturn,
+				WorstDay:     scenarioResult.worstDayReturn,
 			})
 		}
 	}
 
 	// Sort by max drawdown ascending (most negative first = worst).
-	sort.Slice(rows, func(left, right int) bool {
-		leftDD := rows[left].maxDrawdown
-		rightDD := rows[right].maxDrawdown
+	sort.Slice(rankings, func(left, right int) bool {
+		leftDD := rankings[left].MaxDrawdown
+		rightDD := rankings[right].MaxDrawdown
 
 		if math.IsNaN(leftDD) {
 			return false
@@ -247,113 +235,51 @@ func buildRankingTable(analyses []runAnalysis) *report.Table {
 		return leftDD < rightDD
 	})
 
-	tableRows := make([][]any, len(rows))
+	return rankings
+}
 
-	for rowIdx, row := range rows {
-		if row.errorMsg != "" {
-			tableRows[rowIdx] = []any{
-				row.runName,
-				row.scenarioName,
-				row.errorMsg,
-				"",
-				"",
-				"",
+// buildScenarioDetails constructs a scenarioDetail for each scenario,
+// aggregating metrics across all runs.
+func buildScenarioDetails(scenarios []study.Scenario, analyses []runAnalysis) []scenarioDetail {
+	details := make([]scenarioDetail, len(scenarios))
+
+	for scenarioIdx, scenario := range scenarios {
+		dateRange := fmt.Sprintf("%s to %s",
+			scenario.Start.Format("2006-01-02"),
+			scenario.End.Format("2006-01-02"),
+		)
+
+		runMetrics := make([]runMetricSet, 0, len(analyses))
+
+		for _, analysis := range analyses {
+			if scenarioIdx >= len(analysis.scenarios) {
+				continue
 			}
 
-			continue
+			scenarioResult := analysis.scenarios[scenarioIdx]
+
+			runMetrics = append(runMetrics, runMetricSet{
+				RunName:     analysis.runName,
+				ErrorMsg:    analysis.errMsg,
+				HasData:     scenarioResult.hasData,
+				MaxDrawdown: scenarioResult.maxDrawdown,
+				TotalReturn: scenarioResult.totalReturn,
+				WorstDay:    scenarioResult.worstDayReturn,
+			})
 		}
 
-		tableRows[rowIdx] = []any{
-			row.runName,
-			row.scenarioName,
-			"",
-			row.maxDrawdown,
-			row.totalReturn,
-			row.worstDay,
+		details[scenarioIdx] = scenarioDetail{
+			Name:       scenario.Name,
+			DateRange:  dateRange,
+			RunMetrics: runMetrics,
 		}
 	}
 
-	return &report.Table{
-		SectionName: "Scenario Rankings by Max Drawdown",
-		Columns: []report.Column{
-			{Header: "Run", Format: "string", Align: "left"},
-			{Header: "Scenario", Format: "string", Align: "left"},
-			{Header: "Error", Format: "string", Align: "left"},
-			{Header: "Max Drawdown", Format: "percent", Align: "right"},
-			{Header: "Total Return", Format: "percent", Align: "right"},
-			{Header: "Worst Day", Format: "percent", Align: "right"},
-		},
-		Rows: tableRows,
-	}
+	return details
 }
 
-// buildScenarioMetricPairs constructs a MetricPairs section for a single
-// scenario, aggregating metrics across all runs.
-func buildScenarioMetricPairs(scenario study.Scenario, scenarioIdx int, analyses []runAnalysis) *report.MetricPairs {
-	pairs := make([]report.MetricPair, 0, len(analyses)*3)
-
-	for _, analysis := range analyses {
-		if scenarioIdx >= len(analysis.scenarios) {
-			continue
-		}
-
-		scenarioResult := analysis.scenarios[scenarioIdx]
-		prefix := analysis.runName
-
-		if analysis.errMsg != "" {
-			pairs = append(pairs, report.MetricPair{
-				Label:  fmt.Sprintf("%s: Error", prefix),
-				Value:  0,
-				Format: fmt.Sprintf("label:%s", analysis.errMsg),
-			})
-
-			continue
-		}
-
-		if !scenarioResult.hasData {
-			pairs = append(pairs, report.MetricPair{
-				Label:  fmt.Sprintf("%s: Max Drawdown", prefix),
-				Value:  0,
-				Format: "label:N/A",
-			})
-
-			continue
-		}
-
-		pairs = append(pairs,
-			report.MetricPair{
-				Label:  fmt.Sprintf("%s: Max Drawdown", prefix),
-				Value:  scenarioResult.maxDrawdown,
-				Format: "percent",
-			},
-			report.MetricPair{
-				Label:  fmt.Sprintf("%s: Total Return", prefix),
-				Value:  scenarioResult.totalReturn,
-				Format: "percent",
-			},
-			report.MetricPair{
-				Label:  fmt.Sprintf("%s: Worst Day", prefix),
-				Value:  scenarioResult.worstDayReturn,
-				Format: "percent",
-			},
-		)
-	}
-
-	sectionName := fmt.Sprintf("%s (%s to %s)",
-		scenario.Name,
-		scenario.Start.Format("2006-01-02"),
-		scenario.End.Format("2006-01-02"),
-	)
-
-	return &report.MetricPairs{
-		SectionName: sectionName,
-		Metrics:     pairs,
-	}
-}
-
-// buildSummaryText produces a brief narrative text section summarizing the
-// stress test results.
-func buildSummaryText(scenarios []study.Scenario, analyses []runAnalysis) *report.Text {
+// buildSummary produces a brief narrative string summarizing the stress test results.
+func buildSummary(scenarios []study.Scenario, analyses []runAnalysis) string {
 	failedRuns := 0
 
 	for _, analysis := range analyses {
@@ -383,8 +309,5 @@ func buildSummaryText(scenarios []study.Scenario, analyses []runAnalysis) *repor
 
 	fmt.Fprintf(&sb, "Scenarios covered: %s.\n", strings.Join(scenarioNames, ", "))
 
-	return &report.Text{
-		SectionName: "Summary",
-		Body:        sb.String(),
-	}
+	return sb.String()
 }

@@ -25,6 +25,9 @@ import (
 	"github.com/penny-vault/pvbt/study/report"
 )
 
+// Ensure optimizerReport satisfies the report.Report interface.
+var _ report.Report = (*optimizerReport)(nil)
+
 // comboResult holds per-split scores for a single parameter combination.
 type comboResult struct {
 	comboID   string
@@ -49,24 +52,22 @@ func analyzeResults(
 	objective study.Metric,
 	topN int,
 	results []study.RunResult,
-) (report.ComposableReport, error) {
+) (report.Report, error) {
 	combos := groupByCombination(splits, objective, results)
 	rankCombos(combos, objective)
 
-	sections := make([]report.Section, 0, 4)
-	sections = append(sections, buildRankingsTable(combos, objective))
-
-	if len(combos) > 0 {
-		sections = append(sections, buildBestComboDetail(combos[0], splits, objective))
+	rpt := &optimizerReport{
+		ObjectiveName: metricName(objective),
+		Rankings:      computeRankings(combos),
+		Overfitting:   computeOverfitting(combos),
+		EquityCurves:  computeEquityCurves(combos, topN),
 	}
 
-	sections = append(sections, buildOverfittingTable(combos, objective))
-	sections = append(sections, buildEquityCurves(combos, topN))
+	if len(combos) > 0 {
+		rpt.BestDetail = computeBestComboDetail(combos[0], splits)
+	}
 
-	return report.ComposableReport{
-		Title:    "Parameter Optimization",
-		Sections: sections,
-	}, nil
+	return rpt, nil
 }
 
 // groupByCombination groups RunResults by _combination_id metadata and
@@ -230,42 +231,26 @@ func paramsLabel(cr *comboResult) string {
 	return strings.Join(parts, ", ")
 }
 
-// buildRankingsTable constructs the main rankings table: rank, params,
-// mean OOS, mean IS, OOS stddev.
-func buildRankingsTable(combos []*comboResult, objective study.Metric) *report.Table {
-	rows := make([][]any, len(combos))
+// computeRankings builds the rankings slice: rank, params, mean OOS, mean IS, OOS stddev.
+func computeRankings(combos []*comboResult) []rankingRow {
+	rows := make([]rankingRow, len(combos))
 
 	for idx, cr := range combos {
-		meanOOS := meanIgnoringNaN(cr.oosScores)
-		meanIS := meanIgnoringNaN(cr.isScores)
-		stdOOS := stddevIgnoringNaN(cr.oosScores)
-
-		rows[idx] = []any{
-			idx + 1,
-			paramsLabel(cr),
-			meanOOS,
-			meanIS,
-			stdOOS,
+		rows[idx] = rankingRow{
+			Rank:       idx + 1,
+			Parameters: paramsLabel(cr),
+			MeanOOS:    meanIgnoringNaN(cr.oosScores),
+			MeanIS:     meanIgnoringNaN(cr.isScores),
+			OOSStdDev:  stddevIgnoringNaN(cr.oosScores),
 		}
 	}
 
-	return &report.Table{
-		SectionName: fmt.Sprintf("Rankings by Mean OOS %s", metricName(objective)),
-		Columns: []report.Column{
-			{Header: "Rank", Format: "number", Align: "right"},
-			{Header: "Parameters", Format: "string", Align: "left"},
-			{Header: "Mean OOS", Format: "number", Align: "right"},
-			{Header: "Mean IS", Format: "number", Align: "right"},
-			{Header: "OOS StdDev", Format: "number", Align: "right"},
-		},
-		Rows: rows,
-	}
+	return rows
 }
 
-// buildBestComboDetail constructs a per-fold detail table for the top-ranked
-// combination showing IS/OOS scores plus CAGR, MaxDrawdown, and Sharpe.
-func buildBestComboDetail(best *comboResult, splits []study.Split, objective study.Metric) *report.Table {
-	rows := make([][]any, len(splits))
+// computeBestComboDetail builds a per-fold detail for the top-ranked combination.
+func computeBestComboDetail(best *comboResult, splits []study.Split) *bestComboDetail {
+	folds := make([]foldDetail, len(splits))
 
 	for idx, sp := range splits {
 		isScore := math.NaN()
@@ -279,28 +264,23 @@ func buildBestComboDetail(best *comboResult, splits []study.Split, objective stu
 			oosScore = best.oosScores[idx]
 		}
 
-		rows[idx] = []any{
-			sp.Name,
-			isScore,
-			oosScore,
+		folds[idx] = foldDetail{
+			FoldName: sp.Name,
+			ISScore:  isScore,
+			OOSScore: oosScore,
 		}
 	}
 
-	return &report.Table{
-		SectionName: fmt.Sprintf("Best Combination Detail: %s", paramsLabel(best)),
-		Columns: []report.Column{
-			{Header: "Fold", Format: "string", Align: "left"},
-			{Header: fmt.Sprintf("IS %s", metricName(objective)), Format: "number", Align: "right"},
-			{Header: fmt.Sprintf("OOS %s", metricName(objective)), Format: "number", Align: "right"},
-		},
-		Rows: rows,
+	return &bestComboDetail{
+		Parameters: paramsLabel(best),
+		Folds:      folds,
 	}
 }
 
-// buildOverfittingTable constructs an overfitting diagnostic table comparing
+// computeOverfitting builds an overfitting diagnostic slice comparing
 // mean IS and mean OOS scores for every combination.
-func buildOverfittingTable(combos []*comboResult, objective study.Metric) *report.Table {
-	rows := make([][]any, len(combos))
+func computeOverfitting(combos []*comboResult) []overfittingRow {
+	rows := make([]overfittingRow, len(combos))
 
 	for idx, cr := range combos {
 		meanOOS := meanIgnoringNaN(cr.oosScores)
@@ -313,49 +293,37 @@ func buildOverfittingTable(combos []*comboResult, objective study.Metric) *repor
 			degradation = math.NaN()
 		}
 
-		rows[idx] = []any{
-			paramsLabel(cr),
-			meanIS,
-			meanOOS,
-			degradation,
+		rows[idx] = overfittingRow{
+			Parameters:  paramsLabel(cr),
+			MeanIS:      meanIS,
+			MeanOOS:     meanOOS,
+			Degradation: degradation,
 		}
 	}
 
-	return &report.Table{
-		SectionName: fmt.Sprintf("Overfitting Check: IS vs OOS %s", metricName(objective)),
-		Columns: []report.Column{
-			{Header: "Parameters", Format: "string", Align: "left"},
-			{Header: "Mean IS", Format: "number", Align: "right"},
-			{Header: "Mean OOS", Format: "number", Align: "right"},
-			{Header: "Degradation", Format: "percent", Align: "right"},
-		},
-		Rows: rows,
-	}
+	return rows
 }
 
-// buildEquityCurves constructs a TimeSeries section with placeholder series
-// for the top N combinations. Actual equity curve extraction from portfolios
-// requires access to the portfolio's PerfData, which is not retained per-split
-// in the current RunResult design. The section is included as a structural
-// placeholder to be wired up when end-to-end integration is available.
-func buildEquityCurves(combos []*comboResult, topN int) *report.TimeSeries {
+// computeEquityCurves builds placeholder equity curve series for the top N
+// combinations. Actual equity curve extraction from portfolios requires
+// access to the portfolio's PerfData, which is not retained per-split in
+// the current RunResult design. The series are included as structural
+// placeholders to be wired up when end-to-end integration is available.
+func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 	limit := topN
 	if limit > len(combos) {
 		limit = len(combos)
 	}
 
-	series := make([]report.NamedSeries, limit)
+	curves := make([]equityCurveSeries, limit)
 
 	for idx := range limit {
-		series[idx] = report.NamedSeries{
+		curves[idx] = equityCurveSeries{
 			Name: paramsLabel(combos[idx]),
 		}
 	}
 
-	return &report.TimeSeries{
-		SectionName: "Top Combinations OOS Equity Curves",
-		Series:      series,
-	}
+	return curves
 }
 
 // metricName returns a human-readable name for the given metric.

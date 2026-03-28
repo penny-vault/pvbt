@@ -105,6 +105,6 @@ func (opt *Optimizer) Configurations(_ context.Context) ([]study.RunConfig, erro
 
 // Analyze processes all RunResults, groups them by combination and split,
 // ranks by out-of-sample objective score, and builds the optimization report.
-func (opt *Optimizer) Analyze(results []study.RunResult) (report.ComposableReport, error) {
+func (opt *Optimizer) Analyze(results []study.RunResult) (report.Report, error) {
 	return analyzeResults(opt.splits, opt.objective, opt.topN, results)
 }
