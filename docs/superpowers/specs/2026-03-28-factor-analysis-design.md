@@ -35,8 +35,8 @@ This follows the same pattern as economic indicators (`asset.EconomicIndicator` 
 Two methods on the `Portfolio` interface, implemented on `Account`:
 
 ```go
-FactorAnalysis(factors *data.DataFrame) (FactorRegression, error)
-StepwiseFactorAnalysis(factors *data.DataFrame) (StepwiseResult, error)
+FactorAnalysis(factors *data.DataFrame) (*FactorRegression, error)
+StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResult, error)
 ```
 
 `FactorAnalysis` regresses portfolio excess returns against every factor in the DataFrame. Use this when you want a specific model (e.g., Fama-French 3) applied consistently across strategies for comparability.

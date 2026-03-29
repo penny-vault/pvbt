@@ -192,6 +192,21 @@ func (a *Account) alignWithFactors(factors *data.DataFrame) (*alignedFactors, er
 			continue
 		}
 
+		// Skip rows where any factor value is NaN.
+		hasNaN := false
+
+		for _, metric := range allMetrics {
+			if math.IsNaN(rawFactorCols[metric][fi]) {
+				hasNaN = true
+
+				break
+			}
+		}
+
+		if hasNaN {
+			continue
+		}
+
 		response = append(response, excessCol[ii])
 		for _, metric := range allMetrics {
 			factorCols[metric] = append(factorCols[metric], rawFactorCols[metric][fi])
@@ -260,9 +275,11 @@ func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResu
 	}
 
 	// Track which factors are selected and which remain.
+	// Sort once for deterministic tie-breaking (slices.Delete preserves order).
 	selected := make([]data.Metric, 0, len(allMetrics))
 	remaining := make([]data.Metric, len(allMetrics))
 	copy(remaining, allMetrics)
+	slices.Sort(remaining)
 
 	var steps []FactorRegression
 
@@ -276,19 +293,6 @@ func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResu
 		)
 
 		candidateAIC := math.Inf(1)
-
-		// Sort remaining candidates for deterministic tie-breaking.
-		slices.SortFunc(remaining, func(aa, bb data.Metric) int {
-			if aa < bb {
-				return -1
-			}
-
-			if aa > bb {
-				return 1
-			}
-
-			return 0
-		})
 
 		// Try adding each remaining factor.
 		for idx, metric := range remaining {
