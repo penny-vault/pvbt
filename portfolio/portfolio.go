@@ -147,6 +147,16 @@ type Portfolio interface {
 	// Benchmark returns the asset used as the performance benchmark
 	// for this portfolio.
 	Benchmark() asset.Asset
+
+	// FactorAnalysis regresses portfolio excess returns against the factor
+	// return series in the provided DataFrame. The DataFrame should use
+	// asset.Factor as its asset, with one metric per factor. Returns
+	// alpha, per-factor betas, R-squared, and AIC.
+	FactorAnalysis(factors *data.DataFrame) (*FactorRegression, error)
+
+	// StepwiseFactorAnalysis uses forward stepwise AIC selection to find
+	// the best factor subset from the candidates in the DataFrame.
+	StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResult, error)
 }
 
 // PortfolioManager is the interface the engine uses to manage the

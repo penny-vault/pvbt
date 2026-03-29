@@ -27,3 +27,8 @@ var EconomicIndicator = Asset{Ticker: "$ECONOMIC_INDICATOR"}
 // CashAsset is a sentinel asset representing uninvested cash in a portfolio.
 // Used by ChildAllocations to represent a child strategy's cash position.
 var CashAsset = Asset{Ticker: "$CASH", CompositeFigi: "$CASH"}
+
+// Factor is a sentinel asset for factor return series (e.g. Fama-French
+// SMB, HML, MktRF). Factor names are represented as metrics in a DataFrame
+// with this asset, following the same pattern as EconomicIndicator.
+var Factor = Asset{Ticker: "$FACTOR", CompositeFigi: "$FACTOR"}

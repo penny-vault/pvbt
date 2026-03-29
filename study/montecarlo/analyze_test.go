@@ -78,6 +78,12 @@ func (fp *fakePortfolio) MarginRatio() float64                  { return 0 }
 func (fp *fakePortfolio) MarginDeficiency() float64             { return 0 }
 func (fp *fakePortfolio) BuyingPower() float64                  { return 0 }
 func (fp *fakePortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
+func (fp *fakePortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {
+	return nil, nil
+}
+func (fp *fakePortfolio) StepwiseFactorAnalysis(_ *data.DataFrame) (*portfolio.StepwiseResult, error) {
+	return nil, nil
+}
 
 // PortfolioStats interface methods.
 func (fp *fakePortfolio) Returns(_ context.Context, _ *portfolio.Period) *data.DataFrame { return nil }
