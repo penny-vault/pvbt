@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -47,11 +48,11 @@ type StepwiseResult struct {
 	Steps []FactorRegression // one per round (each adds one factor)
 }
 
-// OLSRegress runs ordinary least squares regression of the response vector
+// olsRegress runs ordinary least squares regression of the response vector
 // (portfolio excess returns) against the factor columns in the DataFrame.
 // The DataFrame must have asset.Factor as its sole asset; each metric is a
 // factor. Returns alpha (intercept), per-factor betas, R-squared, and AIC.
-func OLSRegress(response []float64, factors *data.DataFrame) (*FactorRegression, error) {
+func olsRegress(response []float64, factors *data.DataFrame) (*FactorRegression, error) {
 	metrics := factors.MetricList()
 	if len(metrics) == 0 {
 		return nil, ErrNoFactors
@@ -139,12 +140,18 @@ func OLSRegress(response []float64, factors *data.DataFrame) (*FactorRegression,
 	}, nil
 }
 
-// FactorAnalysis regresses the portfolio's excess returns against the factor
-// return series in the provided DataFrame. The DataFrame must use asset.Factor
-// as its asset, with one metric per factor return series. The method aligns
-// dates between the portfolio and factor time axes, using only overlapping
-// dates for the regression.
-func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, error) {
+// alignedFactors holds the result of aligning portfolio excess returns with
+// factor return series on overlapping dates.
+type alignedFactors struct {
+	response   []float64                 // aligned portfolio excess returns
+	factorCols map[data.Metric][]float64 // metric -> aligned factor returns
+	times      []time.Time               // dummy time axis for DataFrame construction
+}
+
+// alignWithFactors extracts portfolio excess returns from the Account, aligns
+// them with the factor DataFrame on overlapping dates, and filters out NaN
+// values (e.g. the first row produced by Pct()).
+func (a *Account) alignWithFactors(factors *data.DataFrame) (*alignedFactors, error) {
 	ctx := context.Background()
 
 	excessDF := a.ExcessReturns(ctx, nil)
@@ -156,21 +163,24 @@ func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, er
 	excessCol := excessDF.Column(portfolioAsset, excessMetrics[0])
 	excessTimes := excessDF.Times()
 
-	// Build a date -> index map for the factor DataFrame.
 	factorTimes := factors.Times()
 
 	factorDateIdx := make(map[time.Time]int, len(factorTimes))
-
 	for ii, tt := range factorTimes {
 		factorDateIdx[tt] = ii
 	}
 
-	// Align: walk the excess returns time axis and collect matching factor rows.
-	metrics := factors.MetricList()
+	allMetrics := factors.MetricList()
 
-	var alignedResponse []float64
+	// Pre-fetch factor columns to avoid repeated lookups.
+	rawFactorCols := make(map[data.Metric][]float64, len(allMetrics))
+	for _, metric := range allMetrics {
+		rawFactorCols[metric] = factors.Column(asset.Factor, metric)
+	}
 
-	alignedFactorCols := make([][]float64, len(metrics))
+	var response []float64
+
+	factorCols := make(map[data.Metric][]float64, len(allMetrics))
 
 	for ii, tt := range excessTimes {
 		fi, ok := factorDateIdx[tt]
@@ -178,35 +188,60 @@ func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, er
 			continue
 		}
 
-		alignedResponse = append(alignedResponse, excessCol[ii])
+		if math.IsNaN(excessCol[ii]) {
+			continue
+		}
 
-		for jj, metric := range metrics {
-			col := factors.Column(asset.Factor, metric)
-			alignedFactorCols[jj] = append(alignedFactorCols[jj], col[fi])
+		response = append(response, excessCol[ii])
+		for _, metric := range allMetrics {
+			factorCols[metric] = append(factorCols[metric], rawFactorCols[metric][fi])
 		}
 	}
 
-	// Build an aligned factor DataFrame for OLSRegress.
-	nn := len(alignedResponse)
+	nn := len(response)
 
-	alignedTimes := make([]time.Time, nn)
-
+	dummyTimes := make([]time.Time, nn)
 	for ii := range nn {
-		alignedTimes[ii] = time.Date(2000+ii, 1, 1, 0, 0, 0, 0, time.UTC) // dummy dates
+		dummyTimes[ii] = time.Date(2000+ii, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+
+	return &alignedFactors{
+		response:   response,
+		factorCols: factorCols,
+		times:      dummyTimes,
+	}, nil
+}
+
+// FactorAnalysis regresses the portfolio's excess returns against the factor
+// return series in the provided DataFrame. The DataFrame must use asset.Factor
+// as its asset, with one metric per factor return series. The method aligns
+// dates between the portfolio and factor time axes, using only overlapping
+// dates for the regression.
+func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, error) {
+	aligned, err := a.alignWithFactors(factors)
+	if err != nil {
+		return nil, err
+	}
+
+	metrics := factors.MetricList()
+
+	cols := make([][]float64, len(metrics))
+	for jj, metric := range metrics {
+		cols[jj] = aligned.factorCols[metric]
 	}
 
 	alignedDF, err := data.NewDataFrame(
-		alignedTimes,
+		aligned.times,
 		[]asset.Asset{asset.Factor},
 		metrics,
 		data.Daily,
-		alignedFactorCols,
+		cols,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("building aligned factor DataFrame: %w", err)
 	}
 
-	return OLSRegress(alignedResponse, alignedDF)
+	return olsRegress(aligned.response, alignedDF)
 }
 
 // StepwiseFactorAnalysis uses forward stepwise AIC selection to find the best
@@ -214,98 +249,71 @@ func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, er
 // remaining factor and keeps the one that produces the lowest AIC, stopping
 // when no addition improves the model.
 func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResult, error) {
-	ctx := context.Background()
-
-	excessDF := a.ExcessReturns(ctx, nil)
-	if excessDF == nil {
-		return nil, fmt.Errorf("no excess returns available: portfolio may lack price history or risk-free data")
-	}
-
 	allMetrics := factors.MetricList()
 	if len(allMetrics) == 0 {
 		return nil, ErrNoFactors
 	}
 
-	// Align portfolio excess returns with factor dates.
-	excessMetrics := excessDF.MetricList()
-	excessCol := excessDF.Column(portfolioAsset, excessMetrics[0])
-	excessTimes := excessDF.Times()
-
-	factorTimes := factors.Times()
-
-	factorDateIdx := make(map[time.Time]int, len(factorTimes))
-	for ii, tt := range factorTimes {
-		factorDateIdx[tt] = ii
-	}
-
-	var alignedResponse []float64
-
-	alignedFactorCols := make(map[data.Metric][]float64)
-
-	for ii, tt := range excessTimes {
-		fi, ok := factorDateIdx[tt]
-		if !ok {
-			continue
-		}
-
-		alignedResponse = append(alignedResponse, excessCol[ii])
-
-		for _, metric := range allMetrics {
-			col := factors.Column(asset.Factor, metric)
-			alignedFactorCols[metric] = append(alignedFactorCols[metric], col[fi])
-		}
-	}
-
-	nn := len(alignedResponse)
-
-	alignedTimes := make([]time.Time, nn)
-	for ii := range nn {
-		alignedTimes[ii] = time.Date(2000+ii, 1, 1, 0, 0, 0, 0, time.UTC)
+	aligned, err := a.alignWithFactors(factors)
+	if err != nil {
+		return nil, err
 	}
 
 	// Track which factors are selected and which remain.
 	selected := make([]data.Metric, 0, len(allMetrics))
-
-	remaining := make(map[data.Metric]bool, len(allMetrics))
-	for _, metric := range allMetrics {
-		remaining[metric] = true
-	}
+	remaining := make([]data.Metric, len(allMetrics))
+	copy(remaining, allMetrics)
 
 	var steps []FactorRegression
 
 	bestAIC := math.Inf(1)
 
 	for len(remaining) > 0 {
-		var bestCandidate data.Metric
-
-		var bestResult *FactorRegression
+		var (
+			bestCandidate data.Metric
+			bestResult    *FactorRegression
+			bestIdx       int
+		)
 
 		candidateAIC := math.Inf(1)
 
+		// Sort remaining candidates for deterministic tie-breaking.
+		slices.SortFunc(remaining, func(aa, bb data.Metric) int {
+			if aa < bb {
+				return -1
+			}
+
+			if aa > bb {
+				return 1
+			}
+
+			return 0
+		})
+
 		// Try adding each remaining factor.
-		for metric := range remaining {
+		for idx, metric := range remaining {
 			trial := make([]data.Metric, len(selected)+1)
 			copy(trial, selected)
 			trial[len(selected)] = metric
 
 			trialCols := make([][]float64, len(trial))
 			for jj, mm := range trial {
-				trialCols[jj] = alignedFactorCols[mm]
+				trialCols[jj] = aligned.factorCols[mm]
 			}
 
-			trialDF, err := data.NewDataFrame(
-				alignedTimes,
+			trialDF, dfErr := data.NewDataFrame(
+				aligned.times,
 				[]asset.Asset{asset.Factor},
 				trial,
 				data.Daily,
 				trialCols,
 			)
-			if err != nil {
-				return nil, fmt.Errorf("building trial DataFrame: %w", err)
+			if dfErr != nil {
+				return nil, fmt.Errorf("building trial DataFrame: %w", dfErr)
 			}
 
-			result, err := OLSRegress(alignedResponse, trialDF)
-			if err != nil {
+			result, regErr := olsRegress(aligned.response, trialDF)
+			if regErr != nil {
 				continue
 			}
 
@@ -313,6 +321,7 @@ func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResu
 				candidateAIC = result.AIC
 				bestCandidate = metric
 				bestResult = result
+				bestIdx = idx
 			}
 		}
 
@@ -324,7 +333,7 @@ func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResu
 		bestAIC = candidateAIC
 
 		selected = append(selected, bestCandidate)
-		delete(remaining, bestCandidate)
+		remaining = slices.Delete(remaining, bestIdx, bestIdx+1)
 
 		steps = append(steps, *bestResult)
 	}
