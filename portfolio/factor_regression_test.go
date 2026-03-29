@@ -100,4 +100,81 @@ var _ = Describe("FactorRegression", func() {
 			Expect(err).To(MatchError(portfolio.ErrNoFactors))
 		})
 	})
+
+	Describe("FactorAnalysis", func() {
+		It("regresses portfolio excess returns against factors", func() {
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+			days := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 21)
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, time.Time{}),
+				portfolio.WithBenchmark(spy),
+			)
+
+			rfDaily := 0.0001
+			equity := make([]float64, 21)
+			equity[0] = 10_000.0
+
+			rfEquity := make([]float64, 21)
+			rfEquity[0] = 100.0
+
+			benchEquity := make([]float64, 21)
+			benchEquity[0] = 100.0
+
+			for ii := 1; ii <= 20; ii++ {
+				excessRet := 0.001 + 0.8*mktRF[ii-1] + 0.4*smb[ii-1]
+				portRet := excessRet + rfDaily
+				equity[ii] = equity[ii-1] * (1 + portRet)
+				rfEquity[ii] = rfEquity[ii-1] * (1 + rfDaily)
+				benchEquity[ii] = benchEquity[ii-1] * (1 + 0.005)
+			}
+
+			acct.Record(portfolio.Transaction{
+				Date:   days[0],
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			for ii, dd := range days {
+				spyPrice := equity[ii] / 100.0
+				cols := [][]float64{
+					{spyPrice}, {spyPrice},
+					{benchEquity[ii]}, {benchEquity[ii]},
+				}
+
+				df, err := data.NewDataFrame(
+					[]time.Time{dd},
+					[]asset.Asset{spy, bil},
+					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
+					cols,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				acct.SetRiskFreeValue(rfEquity[ii])
+				acct.UpdatePrices(df)
+			}
+
+			factorDF, err := data.NewDataFrame(
+				days[1:],
+				[]asset.Asset{asset.Factor},
+				[]data.Metric{data.Metric("MktRF"), data.Metric("SMB")},
+				data.Daily,
+				[][]float64{mktRF, smb},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := acct.FactorAnalysis(factorDF)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(result.Alpha).To(BeNumerically("~", 0.001, 0.01))
+			Expect(result.Betas["MktRF"]).To(BeNumerically("~", 0.8, 0.05))
+			Expect(result.Betas["SMB"]).To(BeNumerically("~", 0.4, 0.05))
+			Expect(result.RSquared).To(BeNumerically(">", 0.95))
+		})
+	})
 })
