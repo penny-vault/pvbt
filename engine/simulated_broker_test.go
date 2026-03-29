@@ -78,6 +78,12 @@ func (m *mockPortfolio) MarginRatio() float64                  { return 0 }
 func (m *mockPortfolio) MarginDeficiency() float64             { return 0 }
 func (m *mockPortfolio) BuyingPower() float64                  { return 0 }
 func (m *mockPortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
+func (m *mockPortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {
+	return nil, nil
+}
+func (m *mockPortfolio) StepwiseFactorAnalysis(_ *data.DataFrame) (*portfolio.StepwiseResult, error) {
+	return nil, nil
+}
 
 // mockPriceProvider implements broker.PriceProvider for tests.
 type mockPriceProvider struct {
