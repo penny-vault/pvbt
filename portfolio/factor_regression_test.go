@@ -282,4 +282,61 @@ var _ = Describe("FactorRegression", func() {
 			Expect(result.Steps[1].Betas).To(HaveLen(2))
 		})
 	})
+
+	Describe("edge cases", func() {
+		It("FactorAnalysis returns error when portfolio has no price history", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			factorDF, err := data.NewDataFrame(
+				daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 20),
+				[]asset.Asset{asset.Factor},
+				[]data.Metric{data.Metric("MktRF")},
+				data.Daily,
+				[][]float64{mktRF},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = acct.FactorAnalysis(factorDF)
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("FactorAnalysis returns error when date overlap is too short", func() {
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			days := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 5)
+
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			acct.Record(portfolio.Transaction{
+				Date:  days[0], Asset: spy, Type: asset.BuyTransaction,
+				Qty: 100, Price: 100.0, Amount: -10_000.0,
+			})
+
+			for ii, dd := range days {
+				price := 100.0 + float64(ii)
+				df, err := data.NewDataFrame(
+					[]time.Time{dd},
+					[]asset.Asset{spy},
+					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
+					[][]float64{{price}, {price}},
+				)
+				Expect(err).NotTo(HaveOccurred())
+				acct.SetRiskFreeValue(50.0)
+				acct.UpdatePrices(df)
+			}
+
+			// Factor data on completely different dates.
+			farDays := daySeq(time.Date(2025, 6, 2, 0, 0, 0, 0, time.UTC), 20)
+			factorDF, err := data.NewDataFrame(
+				farDays,
+				[]asset.Asset{asset.Factor},
+				[]data.Metric{data.Metric("MktRF")},
+				data.Daily,
+				[][]float64{mktRF},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = acct.FactorAnalysis(factorDF)
+			Expect(err).To(MatchError(portfolio.ErrTooFewObservations))
+		})
+	})
 })
