@@ -17,6 +17,12 @@ package portfolio
 
 import (
 	"errors"
+	"fmt"
+	"math"
+
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"gonum.org/v1/gonum/mat"
 )
 
 var (
@@ -37,4 +43,96 @@ type FactorRegression struct {
 type StepwiseResult struct {
 	Best  FactorRegression   // the final selected model
 	Steps []FactorRegression // one per round (each adds one factor)
+}
+
+// OLSRegress runs ordinary least squares regression of the response vector
+// (portfolio excess returns) against the factor columns in the DataFrame.
+// The DataFrame must have asset.Factor as its sole asset; each metric is a
+// factor. Returns alpha (intercept), per-factor betas, R-squared, and AIC.
+func OLSRegress(response []float64, factors *data.DataFrame) (*FactorRegression, error) {
+	metrics := factors.MetricList()
+	if len(metrics) == 0 {
+		return nil, ErrNoFactors
+	}
+
+	nn := min(len(response), factors.Len())
+	if nn < 12 {
+		return nil, ErrTooFewObservations
+	}
+
+	kk := len(metrics) // number of factors
+	response = response[:nn]
+
+	// Build the design matrix X with an intercept column (first column = 1).
+	// Layout: X is nn x (kk+1), stored row-major for gonum.
+	ncols := kk + 1
+
+	xData := make([]float64, nn*ncols)
+	for ii := range nn {
+		xData[ii*ncols] = 1.0 // intercept column
+	}
+
+	for jj, metric := range metrics {
+		col := factors.Column(asset.Factor, metric)
+		for ii := range nn {
+			xData[ii*ncols+(jj+1)] = col[ii]
+		}
+	}
+
+	xMat := mat.NewDense(nn, kk+1, xData)
+	yVec := mat.NewVecDense(nn, response)
+
+	// Solve X'X * beta = X'y via QR decomposition.
+	var qr mat.QR
+	qr.Factorize(xMat)
+
+	var betaVec mat.VecDense
+	if err := qr.SolveVecTo(&betaVec, false, yVec); err != nil {
+		return nil, fmt.Errorf("OLS solve failed: %w", err)
+	}
+
+	// Extract coefficients.
+	alphaVal := betaVec.AtVec(0)
+
+	betas := make(map[string]float64, kk)
+	for jj, metric := range metrics {
+		betas[string(metric)] = betaVec.AtVec(jj + 1)
+	}
+
+	// Compute R-squared = 1 - SS_res / SS_tot.
+	yMean := 0.0
+	for ii := range nn {
+		yMean += response[ii]
+	}
+
+	yMean /= float64(nn)
+
+	ssTot := 0.0
+	ssRes := 0.0
+
+	var predicted mat.VecDense
+	predicted.MulVec(xMat, &betaVec)
+
+	for ii := range nn {
+		residual := response[ii] - predicted.AtVec(ii)
+		ssRes += residual * residual
+		deviation := response[ii] - yMean
+		ssTot += deviation * deviation
+	}
+
+	rSquared := 0.0
+	if ssTot > 0 {
+		rSquared = 1.0 - ssRes/ssTot
+	}
+
+	// AIC = n*ln(SS_res/n) + 2*(k+1)
+	// where k+1 counts all parameters including the intercept.
+	aic := float64(nn)*math.Log(ssRes/float64(nn)) + 2.0*float64(kk+1)
+
+	return &FactorRegression{
+		Alpha:    alphaVal,
+		RSquared: rSquared,
+		AIC:      aic,
+		Betas:    betas,
+	}, nil
 }
