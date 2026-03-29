@@ -127,9 +127,16 @@ func OLSRegress(response []float64, factors *data.DataFrame) (*FactorRegression,
 		rSquared = 1.0 - ssRes/ssTot
 	}
 
-	// AIC = n*ln(SS_res/n) + 2*(k+1)
-	// where k+1 counts all parameters including the intercept.
-	aic := float64(nn)*math.Log(ssRes/float64(nn)) + 2.0*float64(kk+1)
+	// AICc (corrected AIC for finite samples):
+	//   AIC  = n*ln(SS_res/n) + 2*p
+	//   AICc = AIC + 2*p*(p+1)/(n-p-1)
+	// where p = k+1 counts all parameters including the intercept.
+	pp := float64(kk + 1)
+
+	aic := float64(nn)*math.Log(ssRes/float64(nn)) + 2.0*pp
+	if float64(nn)-pp-1 > 0 {
+		aic += 2.0 * pp * (pp + 1) / (float64(nn) - pp - 1)
+	}
 
 	return &FactorRegression{
 		Alpha:    alphaVal,
@@ -210,7 +217,132 @@ func (a *Account) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, er
 }
 
 // StepwiseFactorAnalysis uses forward stepwise AIC selection to find the best
-// factor subset. Implemented in a later task.
+// factor subset from the candidates. At each step it tries adding each
+// remaining factor and keeps the one that produces the lowest AIC, stopping
+// when no addition improves the model.
 func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResult, error) {
-	return nil, errors.New("not yet implemented")
+	ctx := context.Background()
+
+	excessDF := a.ExcessReturns(ctx, nil)
+	if excessDF == nil {
+		return nil, fmt.Errorf("no excess returns available: portfolio may lack price history or risk-free data")
+	}
+
+	allMetrics := factors.MetricList()
+	if len(allMetrics) == 0 {
+		return nil, ErrNoFactors
+	}
+
+	// Align portfolio excess returns with factor dates.
+	excessMetrics := excessDF.MetricList()
+	excessCol := excessDF.Column(portfolioAsset, excessMetrics[0])
+	excessTimes := excessDF.Times()
+
+	factorTimes := factors.Times()
+
+	factorDateIdx := make(map[time.Time]int, len(factorTimes))
+	for ii, tt := range factorTimes {
+		factorDateIdx[tt] = ii
+	}
+
+	var alignedResponse []float64
+
+	alignedFactorCols := make(map[data.Metric][]float64)
+
+	for ii, tt := range excessTimes {
+		fi, ok := factorDateIdx[tt]
+		if !ok {
+			continue
+		}
+
+		alignedResponse = append(alignedResponse, excessCol[ii])
+
+		for _, metric := range allMetrics {
+			col := factors.Column(asset.Factor, metric)
+			alignedFactorCols[metric] = append(alignedFactorCols[metric], col[fi])
+		}
+	}
+
+	nn := len(alignedResponse)
+
+	alignedTimes := make([]time.Time, nn)
+	for ii := range nn {
+		alignedTimes[ii] = time.Date(2000+ii, 1, 1, 0, 0, 0, 0, time.UTC)
+	}
+
+	// Track which factors are selected and which remain.
+	selected := make([]data.Metric, 0, len(allMetrics))
+
+	remaining := make(map[data.Metric]bool, len(allMetrics))
+	for _, metric := range allMetrics {
+		remaining[metric] = true
+	}
+
+	var steps []FactorRegression
+
+	bestAIC := math.Inf(1)
+
+	for len(remaining) > 0 {
+		var bestCandidate data.Metric
+
+		var bestResult *FactorRegression
+
+		candidateAIC := math.Inf(1)
+
+		// Try adding each remaining factor.
+		for metric := range remaining {
+			trial := make([]data.Metric, len(selected)+1)
+			copy(trial, selected)
+			trial[len(selected)] = metric
+
+			trialCols := make([][]float64, len(trial))
+			for jj, mm := range trial {
+				trialCols[jj] = alignedFactorCols[mm]
+			}
+
+			trialDF, err := data.NewDataFrame(
+				alignedTimes,
+				[]asset.Asset{asset.Factor},
+				trial,
+				data.Daily,
+				trialCols,
+			)
+			if err != nil {
+				return nil, fmt.Errorf("building trial DataFrame: %w", err)
+			}
+
+			result, err := OLSRegress(alignedResponse, trialDF)
+			if err != nil {
+				continue
+			}
+
+			if result.AIC < candidateAIC {
+				candidateAIC = result.AIC
+				bestCandidate = metric
+				bestResult = result
+			}
+		}
+
+		// Stop if no candidate improves AICc by at least 2 (Burnham & Anderson
+		// threshold: models within 2 AICc units are essentially equivalent).
+		if candidateAIC >= bestAIC-2.0 {
+			break
+		}
+
+		bestAIC = candidateAIC
+
+		selected = append(selected, bestCandidate)
+		delete(remaining, bestCandidate)
+
+		steps = append(steps, *bestResult)
+	}
+
+	if len(steps) == 0 {
+		return nil, fmt.Errorf("no factor improved the model")
+	}
+
+	return &StepwiseResult{
+		Best:  steps[len(steps)-1],
+		Steps: steps,
+	}, nil
 }

@@ -177,4 +177,109 @@ var _ = Describe("FactorRegression", func() {
 			Expect(result.RSquared).To(BeNumerically(">", 0.95))
 		})
 	})
+
+	Describe("StepwiseFactorAnalysis", func() {
+		It("selects factors that improve AIC and rejects noise", func() {
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			bil := asset.Asset{CompositeFigi: "BIL", Ticker: "BIL"}
+			days := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 21)
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, time.Time{}),
+				portfolio.WithBenchmark(spy),
+			)
+
+			rfDaily := 0.0001
+			equity := make([]float64, 21)
+			equity[0] = 10_000.0
+
+			rfEquity := make([]float64, 21)
+			rfEquity[0] = 100.0
+
+			benchEquity := make([]float64, 21)
+			benchEquity[0] = 100.0
+
+			// Add small idiosyncratic noise uncorrelated with the factors so
+			// the model is not a perfect fit (prevents floating-point artifacts
+			// in AIC from dominating selection).
+			idioNoise := []float64{
+				0.0002, -0.0003, 0.0001, -0.0002, 0.0003,
+				-0.0001, 0.0002, -0.0003, 0.0001, -0.0002,
+				0.0003, -0.0001, 0.0002, -0.0003, 0.0001,
+				-0.0002, 0.0003, -0.0001, 0.0002, -0.0003,
+			}
+
+			for ii := 1; ii <= 20; ii++ {
+				excessRet := 0.001 + 0.8*mktRF[ii-1] + 0.4*smb[ii-1] + idioNoise[ii-1]
+				portRet := excessRet + rfDaily
+				equity[ii] = equity[ii-1] * (1 + portRet)
+				rfEquity[ii] = rfEquity[ii-1] * (1 + rfDaily)
+				benchEquity[ii] = benchEquity[ii-1] * (1 + 0.005)
+			}
+
+			acct.Record(portfolio.Transaction{
+				Date:   days[0],
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			for ii, dd := range days {
+				spyPrice := equity[ii] / 100.0
+				cols := [][]float64{
+					{spyPrice}, {spyPrice},
+					{benchEquity[ii]}, {benchEquity[ii]},
+				}
+
+				df, err := data.NewDataFrame(
+					[]time.Time{dd},
+					[]asset.Asset{spy, bil},
+					[]data.Metric{data.MetricClose, data.AdjClose},
+					data.Daily,
+					cols,
+				)
+				Expect(err).NotTo(HaveOccurred())
+
+				acct.SetRiskFreeValue(rfEquity[ii])
+				acct.UpdatePrices(df)
+			}
+
+			// Noise factor constructed to be orthogonal to MktRF and SMB
+			// (via Gram-Schmidt projection), ensuring zero explanatory power.
+			noise := []float64{
+				0.004779, 0.002363, -0.003715, 0.001151, -0.002484,
+				-0.001272, 0.003574, 0.002335, -0.004899, 0.001148,
+				-0.001273, 0.003572, -0.002485, -0.003689, 0.004779,
+				0.001147, -0.002480, 0.002336, -0.001247, -0.003694,
+			}
+
+			factorDF, err := data.NewDataFrame(
+				days[1:],
+				[]asset.Asset{asset.Factor},
+				[]data.Metric{data.Metric("MktRF"), data.Metric("SMB"), data.Metric("Noise")},
+				data.Daily,
+				[][]float64{mktRF, smb, noise},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			result, err := acct.StepwiseFactorAnalysis(factorDF)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Best model should include MktRF and SMB but not Noise.
+			Expect(result.Best.Betas).To(HaveKey("MktRF"))
+			Expect(result.Best.Betas).To(HaveKey("SMB"))
+			Expect(result.Best.Betas).NotTo(HaveKey("Noise"))
+
+			// Should have 2 steps (one per selected factor).
+			Expect(result.Steps).To(HaveLen(2))
+
+			// First step picks one factor (single-factor model).
+			Expect(result.Steps[0].Betas).To(HaveLen(1))
+
+			// Second step adds the other real factor.
+			Expect(result.Steps[1].Betas).To(HaveLen(2))
+		})
+	})
 })
