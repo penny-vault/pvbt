@@ -127,16 +127,9 @@ func OLSRegress(response []float64, factors *data.DataFrame) (*FactorRegression,
 		rSquared = 1.0 - ssRes/ssTot
 	}
 
-	// AICc (corrected AIC for finite samples):
-	//   AIC  = n*ln(SS_res/n) + 2*p
-	//   AICc = AIC + 2*p*(p+1)/(n-p-1)
-	// where p = k+1 counts all parameters including the intercept.
-	pp := float64(kk + 1)
-
-	aic := float64(nn)*math.Log(ssRes/float64(nn)) + 2.0*pp
-	if float64(nn)-pp-1 > 0 {
-		aic += 2.0 * pp * (pp + 1) / (float64(nn) - pp - 1)
-	}
+	// AIC = n*ln(SS_res/n) + 2*(k+1)
+	// where k+1 counts all parameters including the intercept.
+	aic := float64(nn)*math.Log(ssRes/float64(nn)) + 2.0*float64(kk+1)
 
 	return &FactorRegression{
 		Alpha:    alphaVal,
@@ -323,9 +316,8 @@ func (a *Account) StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResu
 			}
 		}
 
-		// Stop if no candidate improves AICc by at least 2 (Burnham & Anderson
-		// threshold: models within 2 AICc units are essentially equivalent).
-		if candidateAIC >= bestAIC-2.0 {
+		// Stop if no candidate improves AIC.
+		if candidateAIC >= bestAIC {
 			break
 		}
 
