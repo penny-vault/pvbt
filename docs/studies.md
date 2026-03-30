@@ -206,7 +206,7 @@ if err != nil {
 }
 
 optimizer := optimize.New(splits,
-    optimize.WithObjective(study.MetricSharpe),
+    optimize.WithObjective(portfolio.Sharpe.(portfolio.Rankable)),
     optimize.WithTopN(10),
 )
 
@@ -220,7 +220,7 @@ runner := &study.Runner{
     Workers:        8,
     SearchStrategy: study.NewBayesian(sweeps, seed),
     Splits:         splits,
-    Objective:      study.MetricSharpe,
+    Objective:      portfolio.Sharpe.(portfolio.Rankable),
 }
 
 progressCh, resultCh, err := runner.Run(ctx)
