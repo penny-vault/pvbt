@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/report"
 )
@@ -37,19 +38,10 @@ type comboResult struct {
 	isScores  []float64 // one per split
 }
 
-// higherIsBetter returns true when larger values of the given metric
-// indicate better performance. All supported metrics (Sharpe, CAGR,
-// Sortino, Calmar) have higher-is-better semantics. MaxDrawdown returns
-// negative values (e.g. -0.05 for a 5% drawdown), so closer to zero
-// (numerically higher) is also better.
-func higherIsBetter(_ study.Metric) bool {
-	return true
-}
-
 // analyzeResults is the shared implementation used by Optimizer.Analyze.
 func analyzeResults(
 	splits []study.Split,
-	objective study.Metric,
+	objective portfolio.Rankable,
 	topN int,
 	results []study.RunResult,
 ) (report.Report, error) {
@@ -57,7 +49,7 @@ func analyzeResults(
 	rankCombos(combos, objective)
 
 	rpt := &optimizerReport{
-		ObjectiveName: metricName(objective),
+		ObjectiveName: objective.Name(),
 		Rankings:      computeRankings(combos),
 		Overfitting:   computeOverfitting(combos),
 		EquityCurves:  computeEquityCurves(combos, topN),
@@ -74,7 +66,7 @@ func analyzeResults(
 // computes IS/OOS scores for each combo+split pair.
 func groupByCombination(
 	splits []study.Split,
-	objective study.Metric,
+	objective portfolio.PerformanceMetric,
 	results []study.RunResult,
 ) []*comboResult {
 	comboMap := make(map[string]*comboResult)
@@ -180,8 +172,8 @@ func stddevIgnoringNaN(values []float64) float64 {
 
 // rankCombos sorts combos by mean OOS score: descending for metrics where
 // higher is better, ascending for metrics like MaxDrawdown.
-func rankCombos(combos []*comboResult, objective study.Metric) {
-	ascending := !higherIsBetter(objective)
+func rankCombos(combos []*comboResult, objective portfolio.Rankable) {
+	ascending := !objective.HigherIsBetter()
 
 	sort.Slice(combos, func(left, right int) bool {
 		leftMean := meanIgnoringNaN(combos[left].oosScores)
@@ -324,22 +316,4 @@ func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 	}
 
 	return curves
-}
-
-// metricName returns a human-readable name for the given metric.
-func metricName(metric study.Metric) string {
-	switch metric {
-	case study.MetricSharpe:
-		return "Sharpe"
-	case study.MetricCAGR:
-		return "CAGR"
-	case study.MetricMaxDrawdown:
-		return "MaxDrawdown"
-	case study.MetricSortino:
-		return "Sortino"
-	case study.MetricCalmar:
-		return "Calmar"
-	default:
-		return fmt.Sprintf("Metric(%d)", int(metric))
-	}
 }

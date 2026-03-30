@@ -26,6 +26,7 @@ import (
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/optimize"
 	"github.com/penny-vault/pvbt/study/report"
@@ -210,21 +211,21 @@ func parseSimpleDuration(input string) (time.Duration, error) {
 	return time.Duration(count) * multiplier, nil
 }
 
-// parseMetric maps a flag string to the corresponding study.Metric constant.
-func parseMetric(metricStr string) (study.Metric, error) {
+// parseMetric maps a flag string to the corresponding portfolio.Rankable.
+func parseMetric(metricStr string) (portfolio.Rankable, error) {
 	switch strings.ToLower(strings.TrimSpace(metricStr)) {
 	case "sharpe":
-		return study.MetricSharpe, nil
+		return portfolio.Sharpe.(portfolio.Rankable), nil
 	case "cagr":
-		return study.MetricCAGR, nil
+		return portfolio.CAGR.(portfolio.Rankable), nil
 	case "max-drawdown", "maxdrawdown":
-		return study.MetricMaxDrawdown, nil
+		return portfolio.MaxDrawdown.(portfolio.Rankable), nil
 	case "sortino":
-		return study.MetricSortino, nil
+		return portfolio.Sortino.(portfolio.Rankable), nil
 	case "calmar":
-		return study.MetricCalmar, nil
+		return portfolio.Calmar.(portfolio.Rankable), nil
 	default:
-		return 0, fmt.Errorf("unknown metric %q: choose from sharpe, cagr, max-drawdown, sortino, calmar", metricStr)
+		return nil, fmt.Errorf("unknown metric %q: choose from sharpe, cagr, max-drawdown, sortino, calmar", metricStr)
 	}
 }
 

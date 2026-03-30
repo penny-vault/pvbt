@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study/report"
 )
 
@@ -35,7 +36,7 @@ type Runner struct {
 	Sweeps         []ParamSweep
 	SearchStrategy SearchStrategy
 	Splits         []Split
-	Objective      Metric
+	Objective      portfolio.Rankable
 }
 
 // Run executes the study and returns channels for progress and the final result.

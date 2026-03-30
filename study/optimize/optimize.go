@@ -18,6 +18,7 @@ package optimize
 import (
 	"context"
 
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/report"
 )
@@ -29,7 +30,7 @@ var _ study.Study = (*Optimizer)(nil)
 // across cross-validation splits and ranks them by out-of-sample performance.
 type Optimizer struct {
 	splits    []study.Split
-	objective study.Metric
+	objective portfolio.Rankable
 	topN      int
 }
 
@@ -37,7 +38,7 @@ type Optimizer struct {
 type Option func(*Optimizer)
 
 // WithObjective sets the metric used to rank parameter combinations.
-func WithObjective(metric study.Metric) Option {
+func WithObjective(metric portfolio.Rankable) Option {
 	return func(opt *Optimizer) {
 		opt.objective = metric
 	}
@@ -52,11 +53,11 @@ func WithTopN(topN int) Option {
 }
 
 // New creates an Optimizer for the given cross-validation splits.
-// Default objective is MetricSharpe; default topN is 10.
+// Default objective is Sharpe; default topN is 10.
 func New(splits []study.Split, opts ...Option) *Optimizer {
 	opt := &Optimizer{
 		splits:    splits,
-		objective: study.MetricSharpe,
+		objective: portfolio.Sharpe.(portfolio.Rankable),
 		topN:      10,
 	}
 

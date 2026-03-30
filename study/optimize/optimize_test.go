@@ -22,6 +22,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/optimize"
 )
@@ -109,7 +110,7 @@ var _ = Describe("Optimizer", func() {
 
 	Describe("WithObjective", func() {
 		It("accepts a custom objective metric", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
 			// The report JSON should mention CAGR as the objective name.
