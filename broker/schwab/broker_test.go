@@ -2,7 +2,7 @@ package schwab_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -94,7 +94,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /trader/v1/accounts/HASH-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Location", "/v1/accounts/HASH-TEST/orders/ORD-QTY-1")
 					writer.WriteHeader(http.StatusCreated)
 				})
@@ -128,7 +128,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /marketdata/v1/TSLA/quotes", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"TSLA": map[string]any{
 							"quote": map[string]any{
 								"lastPrice": 100.0,
@@ -139,7 +139,7 @@ var _ = Describe("SchwabBroker", func() {
 
 				mux.HandleFunc("POST /trader/v1/accounts/HASH-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 
 					legs := body["orderLegCollection"].([]any)
 					firstLeg := legs[0].(map[string]any)
@@ -169,7 +169,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /marketdata/v1/BRK.A/quotes", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"BRK.A": map[string]any{
 							"quote": map[string]any{
 								"lastPrice": 100.0,
@@ -246,7 +246,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /trader/v1/accounts/HASH-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"orderId":           123,
 							"status":            "WORKING",
@@ -280,7 +280,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /trader/v1/accounts/HASH-TEST", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"securitiesAccount": map[string]any{
 							"positions": []map[string]any{
 								{
@@ -311,7 +311,7 @@ var _ = Describe("SchwabBroker", func() {
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /trader/v1/accounts/HASH-TEST", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"securitiesAccount": map[string]any{
 							"accountNumber": "12345678",
 							"type":          "MARGIN",
@@ -341,7 +341,7 @@ var _ = Describe("SchwabBroker", func() {
 
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /trader/v1/accounts/HASH-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Location", "/v1/accounts/HASH-TEST/orders/BRACKET-1")
 					writer.WriteHeader(http.StatusCreated)
 				})
@@ -363,7 +363,7 @@ var _ = Describe("SchwabBroker", func() {
 
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /trader/v1/accounts/HASH-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Location", "/v1/accounts/HASH-TEST/orders/OCO-1")
 					writer.WriteHeader(http.StatusCreated)
 				})

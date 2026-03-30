@@ -18,8 +18,8 @@ package montecarlo_test
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/bytedance/sonic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -203,7 +203,7 @@ func decodeReport(rpt report.Report) mcReportData {
 	Expect(rpt.Data(&buf)).To(Succeed())
 
 	var result mcReportData
-	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+	Expect(sonic.Unmarshal(buf.Bytes(), &result)).To(Succeed())
 
 	return result
 }

@@ -3,7 +3,7 @@ package cli
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -78,7 +78,7 @@ var _ = Describe("newDescribeCmd", func() {
 			Expect(cmd.Execute()).To(Succeed())
 
 			var parsed engine.StrategyInfo
-			Expect(json.Unmarshal(outputBuf.Bytes(), &parsed)).To(Succeed())
+			Expect(sonic.Unmarshal(outputBuf.Bytes(), &parsed)).To(Succeed())
 			Expect(parsed.ShortCode).To(Equal("dct"))
 		})
 	})

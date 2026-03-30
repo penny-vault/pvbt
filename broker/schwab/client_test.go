@@ -2,7 +2,7 @@ package schwab_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 
@@ -26,7 +26,7 @@ var _ = Describe("apiClient", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				Expect(req.URL.Path).To(Equal("/trader/v1/accounts/accountNumbers"))
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"accountNumber": "11111111", "hashValue": "HASH-AAA"},
 					{"accountNumber": "22222222", "hashValue": "HASH-BBB"},
 				})
@@ -43,7 +43,7 @@ var _ = Describe("apiClient", func() {
 		It("matches the specified account number", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"accountNumber": "11111111", "hashValue": "HASH-AAA"},
 					{"accountNumber": "22222222", "hashValue": "HASH-BBB"},
 				})
@@ -60,7 +60,7 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when no accounts exist", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{})
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{})
 			}))
 			DeferCleanup(server.Close)
 
@@ -73,7 +73,7 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when specified account is not found", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"accountNumber": "11111111", "hashValue": "HASH-AAA"},
 				})
 			}))
@@ -171,7 +171,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Query().Get("toEnteredTime")).ToNot(BeEmpty())
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{
 						"orderId":           123,
 						"status":            "WORKING",
@@ -212,7 +212,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Query().Get("fields")).To(Equal("positions"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"securitiesAccount": map[string]any{
 						"positions": []map[string]any{
 							{
@@ -246,7 +246,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/trader/v1/accounts/HASH-TEST"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"securitiesAccount": map[string]any{
 						"accountNumber": "12345678",
 						"type":          "MARGIN",
@@ -278,7 +278,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Query().Get("fields")).To(Equal("quote"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"TSLA": map[string]any{
 						"quote": map[string]any{
 							"lastPrice": 245.50,
@@ -302,7 +302,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/trader/v1/userPreference"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"streamerInfo": []map[string]any{
 						{
 							"streamerSocketUrl":      "wss://streamer.schwab.com",

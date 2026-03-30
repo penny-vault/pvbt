@@ -2,7 +2,7 @@ package alpaca_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -39,7 +39,7 @@ func newAuthedServer(authReceived chan map[string]any, listenReceived chan map[s
 		Expect(readErr).ToNot(HaveOccurred())
 
 		var authMsg map[string]any
-		Expect(json.Unmarshal(authData, &authMsg)).To(Succeed())
+		Expect(sonic.Unmarshal(authData, &authMsg)).To(Succeed())
 
 		if authReceived != nil {
 			authReceived <- authMsg
@@ -54,7 +54,7 @@ func newAuthedServer(authReceived chan map[string]any, listenReceived chan map[s
 			},
 		}
 
-		payload, marshalErr := json.Marshal(authResp)
+		payload, marshalErr := sonic.Marshal(authResp)
 		Expect(marshalErr).ToNot(HaveOccurred())
 		Expect(conn.WriteMessage(websocket.TextMessage, payload)).To(Succeed())
 
@@ -63,7 +63,7 @@ func newAuthedServer(authReceived chan map[string]any, listenReceived chan map[s
 		Expect(listenErr).ToNot(HaveOccurred())
 
 		var listenMsg map[string]any
-		Expect(json.Unmarshal(listenData, &listenMsg)).To(Succeed())
+		Expect(sonic.Unmarshal(listenData, &listenMsg)).To(Succeed())
 
 		if listenReceived != nil {
 			listenReceived <- listenMsg
@@ -77,7 +77,7 @@ func newAuthedServer(authReceived chan map[string]any, listenReceived chan map[s
 			},
 		}
 
-		ackPayload, ackErr := json.Marshal(listenAck)
+		ackPayload, ackErr := sonic.Marshal(listenAck)
 		Expect(ackErr).ToNot(HaveOccurred())
 		Expect(conn.WriteMessage(websocket.TextMessage, ackPayload)).To(Succeed())
 
@@ -104,7 +104,7 @@ func sendTradeUpdate(conn *websocket.Conn, event, executionID, orderID, price, q
 		},
 	}
 
-	payload, marshalErr := json.Marshal(tradeUpdate)
+	payload, marshalErr := sonic.Marshal(tradeUpdate)
 	Expect(marshalErr).ToNot(HaveOccurred())
 	Expect(conn.WriteMessage(websocket.TextMessage, payload)).To(Succeed())
 }
@@ -191,7 +191,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 					},
 				}
 
-				payload, marshalErr := json.Marshal(unauthorizedResp)
+				payload, marshalErr := sonic.Marshal(unauthorizedResp)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				conn.WriteMessage(websocket.TextMessage, payload)
 			}))

@@ -3,8 +3,8 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math"
 	"strings"
 	"time"
@@ -561,7 +561,7 @@ func (r *SnapshotRecorder) RatedAssets(ctx context.Context, analyst string, filt
 }
 
 func (r *SnapshotRecorder) recordRatedAssets(analyst string, filter RatingFilter, forDate time.Time, assets []asset.Asset) error {
-	filterJSON, err := json.Marshal(filter.Values)
+	filterJSON, err := sonic.Marshal(filter.Values)
 	if err != nil {
 		return fmt.Errorf("marshal filter values: %w", err)
 	}

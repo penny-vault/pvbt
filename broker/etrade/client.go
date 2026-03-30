@@ -2,8 +2,8 @@ package etrade
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"strconv"
 	"time"
 
@@ -87,7 +87,7 @@ func (cl *apiClient) getBalance(ctx context.Context) (etradeBalanceResponse, err
 	}
 
 	var result etradeBalanceResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return etradeBalanceResponse{}, fmt.Errorf("etrade: get balance: decode response: %w", unmarshalErr)
 	}
 
@@ -112,7 +112,7 @@ func (cl *apiClient) getPositions(ctx context.Context) ([]etradePosition, error)
 	}
 
 	var result etradePortfolioResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return nil, fmt.Errorf("etrade: get positions: decode response: %w", unmarshalErr)
 	}
 
@@ -142,7 +142,7 @@ func (cl *apiClient) getOrders(ctx context.Context) ([]etradeOrderDetail, error)
 	}
 
 	var result etradeOrdersResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return nil, fmt.Errorf("etrade: get orders: decode response: %w", unmarshalErr)
 	}
 
@@ -172,7 +172,7 @@ func (cl *apiClient) getQuote(ctx context.Context, symbol string) (float64, erro
 	}
 
 	var result etradeQuoteResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return 0, fmt.Errorf("etrade: get quote %s: decode response: %w", symbol, unmarshalErr)
 	}
 
@@ -198,7 +198,7 @@ func (cl *apiClient) getTransactions(ctx context.Context, since time.Time) ([]et
 	}
 
 	var result etradeTransactionsResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return nil, fmt.Errorf("etrade: get transactions: decode response: %w", unmarshalErr)
 	}
 
@@ -234,7 +234,7 @@ func (cl *apiClient) previewOrder(ctx context.Context, req etradePreviewRequest)
 	}
 
 	var result etradePreviewResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return 0, fmt.Errorf("etrade: preview order: decode response: %w", unmarshalErr)
 	}
 
@@ -274,7 +274,7 @@ func (cl *apiClient) placeOrder(ctx context.Context, req etradePreviewRequest, p
 	}
 
 	var result etradePlaceResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return 0, fmt.Errorf("etrade: place order: decode response: %w", unmarshalErr)
 	}
 
@@ -338,7 +338,7 @@ func (cl *apiClient) previewModifyOrder(ctx context.Context, orderID string, req
 	}
 
 	var result etradePreviewResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return 0, fmt.Errorf("etrade: preview modify order %s: decode response: %w", orderID, unmarshalErr)
 	}
 
@@ -376,7 +376,7 @@ func (cl *apiClient) placeModifyOrder(ctx context.Context, orderID string, req e
 	}
 
 	var result etradePlaceResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &result); unmarshalErr != nil {
 		return 0, fmt.Errorf("etrade: place modify order %s: decode response: %w", orderID, unmarshalErr)
 	}
 

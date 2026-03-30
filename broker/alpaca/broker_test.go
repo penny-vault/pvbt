@@ -2,7 +2,7 @@ package alpaca_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -37,7 +37,7 @@ var _ = Describe("AlpacaBroker", func() {
 
 		mux.HandleFunc("GET /v2/account", func(writer http.ResponseWriter, req *http.Request) {
 			writer.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(writer).Encode(map[string]any{
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 				"id":                 "acct-001",
 				"status":             "ACTIVE",
 				"cash":               "25000",
@@ -103,7 +103,7 @@ var _ = Describe("AlpacaBroker", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /v2/account", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"id":     "acct-001",
 					"status": "SUSPENDED",
 					"cash":   "0",
@@ -147,9 +147,9 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-QTY-1",
 						"status": "new",
 					})
@@ -178,7 +178,7 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/stocks/TSLA/trades/latest", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"trade": map[string]any{
 							"p": "100",
 						},
@@ -187,10 +187,10 @@ var _ = Describe("AlpacaBroker", func() {
 
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 					submittedQty = body["qty"].(string)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-AMT-1",
 						"status": "new",
 					})
@@ -216,15 +216,15 @@ var _ = Describe("AlpacaBroker", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /v2/account", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"id": "acct-001", "status": "ACTIVE",
 					"cash": "25000", "equity": "50000",
 				})
 			})
 			mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewDecoder(req.Body).Decode(&receivedBody)
+				sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"id":     "ORD-FRAC-1",
 					"status": "new",
 				})
@@ -256,7 +256,7 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/stocks/BRK.A/trades/latest", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"trade": map[string]any{
 							"p": "100",
 						},
@@ -311,16 +311,16 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-ORIG-1",
 						"status": "new",
 					})
 				})
 				mux.HandleFunc("PATCH /v2/orders/ORD-ORIG-1", func(writer http.ResponseWriter, req *http.Request) {
 					patchCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&patchBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&patchBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-REPLACED-1",
 						"status": "new",
 					})
@@ -367,7 +367,7 @@ var _ = Describe("AlpacaBroker", func() {
 					if postCalled.Load() > 1 {
 						orderID = "ORD-NEW-2"
 					}
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     orderID,
 						"status": "new",
 					})
@@ -407,7 +407,7 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-422-1",
 						"status": "new",
 					})
@@ -446,7 +446,7 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"id":            "ORD-LIST-1",
 							"status":        "new",
@@ -478,7 +478,7 @@ var _ = Describe("AlpacaBroker", func() {
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"symbol":                 "NVDA",
 							"qty":                    "200",
@@ -519,9 +519,9 @@ var _ = Describe("AlpacaBroker", func() {
 
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-BRACKET-1",
 						"status": "new",
 					})
@@ -553,9 +553,9 @@ var _ = Describe("AlpacaBroker", func() {
 
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-OCO-1",
 						"status": "new",
 					})

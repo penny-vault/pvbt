@@ -2,7 +2,7 @@ package tradestation_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -105,9 +105,9 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v3/orderexecution/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{{"OrderID": "ORD-QTY-1"}},
 					})
 				})
@@ -134,7 +134,7 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/marketdata/quotes/TSLA", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Quotes": []map[string]any{
 							{"Symbol": "TSLA", "Last": 100.0},
 						},
@@ -143,11 +143,11 @@ var _ = Describe("TradeStationBroker", func() {
 
 				mux.HandleFunc("POST /v3/orderexecution/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 					submittedQty = body["Quantity"].(string)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{{"OrderID": "ORD-AMT-1"}},
 					})
 				})
@@ -172,7 +172,7 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/marketdata/quotes/BRK.A", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Quotes": []map[string]any{
 							{"Symbol": "BRK.A", "Last": 100.0},
 						},
@@ -224,7 +224,7 @@ var _ = Describe("TradeStationBroker", func() {
 				mux.HandleFunc("PUT /v3/orderexecution/orders/", func(writer http.ResponseWriter, req *http.Request) {
 					replacePath = req.URL.Path
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{{"OrderID": "ORDREPLACENEW"}},
 					})
 				})
@@ -249,7 +249,7 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/brokerage/accounts/ACCT-TEST/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{
 							{
 								"OrderID":   "123",
@@ -284,7 +284,7 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/brokerage/accounts/ACCT-TEST/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"Symbol":           "NVDA",
 							"Quantity":         "200",
@@ -311,7 +311,7 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/brokerage/accounts/ACCT-TEST/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"CashBalance": "30000.00",
 							"Equity":      "75000.00",
@@ -345,9 +345,9 @@ var _ = Describe("TradeStationBroker", func() {
 
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v3/orderexecution/ordergroups", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{{"OrderID": "OCO-1"}, {"OrderID": "OCO-2"}},
 					})
 				})
@@ -367,9 +367,9 @@ var _ = Describe("TradeStationBroker", func() {
 
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v3/orderexecution/ordergroups", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"Orders": []map[string]any{{"OrderID": "BRK-1"}},
 					})
 				})

@@ -1,7 +1,7 @@
 package tradestation
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -89,7 +89,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(req.FormValue("refresh_token")).To(Equal("refresh-old"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"access_token":  "access-new",
 					"refresh_token": "refresh-new",
 					"expires_in":    1200,
@@ -124,7 +124,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(req.FormValue("redirect_uri")).ToNot(BeEmpty())
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"access_token":  "access-from-code",
 					"refresh_token": "refresh-from-code",
 					"expires_in":    1200,
@@ -159,7 +159,7 @@ var _ = Describe("tokenManager", func() {
 		It("refreshes when access token is expired", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"access_token":  "refreshed",
 					"refresh_token": "refresh-new",
 					"expires_in":    1200,

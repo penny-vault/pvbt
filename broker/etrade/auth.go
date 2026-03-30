@@ -12,9 +12,9 @@ import (
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"io"
 	"math/big"
 	"net"
@@ -479,7 +479,7 @@ func saveTokens(path string, creds *oauthCredentials) error {
 		return fmt.Errorf("etrade: save tokens: create directory: %w", mkdirErr)
 	}
 
-	data, marshalErr := json.MarshalIndent(creds, "", "  ")
+	data, marshalErr := sonic.MarshalIndent(creds, "", "  ")
 	if marshalErr != nil {
 		return fmt.Errorf("etrade: save tokens: marshal: %w", marshalErr)
 	}
@@ -501,7 +501,7 @@ func loadTokens(path string) (*oauthCredentials, error) {
 	}
 
 	var creds oauthCredentials
-	if unmarshalErr := json.Unmarshal(data, &creds); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &creds); unmarshalErr != nil {
 		return nil, fmt.Errorf("etrade: load tokens: parse: %w", unmarshalErr)
 	}
 

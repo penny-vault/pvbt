@@ -2,8 +2,8 @@ package library
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"io"
 	"net/http"
 	"os"
@@ -115,7 +115,7 @@ func loadCache(cachePath string) (*CachedResults, error) {
 	}
 
 	var cached CachedResults
-	if err := json.Unmarshal(data, &cached); err != nil {
+	if err := sonic.Unmarshal(data, &cached); err != nil {
 		return nil, fmt.Errorf("parsing cache file: %w", err)
 	}
 
@@ -129,7 +129,7 @@ func writeCache(cachePath string, listings []Listing) error {
 		Listings:  listings,
 	}
 
-	data, err := json.Marshal(cached)
+	data, err := sonic.Marshal(cached)
 	if err != nil {
 		return fmt.Errorf("marshaling cache: %w", err)
 	}
@@ -217,7 +217,7 @@ func fetchFromGitHub(ctx context.Context, baseURL string) ([]Listing, error) {
 		}
 
 		var searchResult githubSearchResponse
-		if unmarshalErr := json.Unmarshal(body, &searchResult); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(body, &searchResult); unmarshalErr != nil {
 			return nil, fmt.Errorf("parsing GitHub response for page %d: %w", page, unmarshalErr)
 		}
 

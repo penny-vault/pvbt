@@ -3,8 +3,8 @@ package data
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math"
 	"slices"
 	"sort"
@@ -612,7 +612,7 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDa
 // -- RatingProvider --
 
 func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filter RatingFilter, forDate time.Time) ([]asset.Asset, error) {
-	filterJSON, err := json.Marshal(filter.Values)
+	filterJSON, err := sonic.Marshal(filter.Values)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot provider: marshal filter: %w", err)
 	}

@@ -3,6 +3,7 @@ package schwab_test
 import (
 	"context"
 	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,7 +62,7 @@ var _ = Describe("activityStreamer", Label("streaming"), func() {
 				_, msgData, readErr := conn.ReadMessage()
 				Expect(readErr).ToNot(HaveOccurred())
 				var loginMsg map[string]any
-				json.Unmarshal(msgData, &loginMsg)
+				sonic.Unmarshal(msgData, &loginMsg)
 				loginReceived <- loginMsg
 
 				// Send LOGIN success response.
@@ -83,7 +84,7 @@ var _ = Describe("activityStreamer", Label("streaming"), func() {
 				_, msgData, readErr = conn.ReadMessage()
 				Expect(readErr).ToNot(HaveOccurred())
 				var subsMsg map[string]any
-				json.Unmarshal(msgData, &subsMsg)
+				sonic.Unmarshal(msgData, &subsMsg)
 				subsReceived <- subsMsg
 
 				<-handlerDone

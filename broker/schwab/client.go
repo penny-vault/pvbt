@@ -2,8 +2,8 @@ package schwab
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/url"
 	"strings"
 	"time"
@@ -230,7 +230,7 @@ func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, 
 
 	// Schwab returns quotes keyed by symbol: {"AAPL": {"quote": {"lastPrice": 150.0}}}
 	var quoteMap map[string]schwabQuoteResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &quoteMap); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &quoteMap); unmarshalErr != nil {
 		return 0, fmt.Errorf("parse quote: %w", unmarshalErr)
 	}
 

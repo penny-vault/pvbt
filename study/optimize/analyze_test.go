@@ -17,7 +17,7 @@ package optimize_test
 
 import (
 	"bytes"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -171,7 +171,7 @@ func decodeOptReport(rpt report.Report) optReportData {
 	Expect(rpt.Data(&buf)).To(Succeed())
 
 	var result optReportData
-	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+	Expect(sonic.Unmarshal(buf.Bytes(), &result)).To(Succeed())
 
 	return result
 }

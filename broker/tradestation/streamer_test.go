@@ -2,8 +2,8 @@ package tradestation_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -60,7 +60,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 					},
 				}
 
-				data, _ := json.Marshal(event)
+				data, _ := sonic.Marshal(event)
 				fmt.Fprintf(writer, "%s\n", data)
 				flusher.Flush()
 
@@ -111,7 +111,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 					},
 				}
 
-				data, _ := json.Marshal(event)
+				data, _ := sonic.Marshal(event)
 				// Send same event twice.
 				fmt.Fprintf(writer, "%s\n", data)
 				flusher.Flush()
@@ -151,7 +151,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 				if streamConnectCount == 1 {
 					// First connection: send GoAway.
 					goAway := map[string]any{"GoAway": true}
-					data, _ := json.Marshal(goAway)
+					data, _ := sonic.Marshal(goAway)
 					fmt.Fprintf(writer, "%s\n", data)
 					flusher.Flush()
 					return
@@ -179,7 +179,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 					},
 				}
 
-				data, _ := json.Marshal(event)
+				data, _ := sonic.Marshal(event)
 				fmt.Fprintf(writer, "%s\n", data)
 				flusher.Flush()
 
@@ -188,7 +188,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 			// Return empty orders for pollMissedFills.
 			mux.HandleFunc("/v3/brokerage/accounts/", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{"Orders": []any{}})
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{"Orders": []any{}})
 			})
 
 			server := httptest.NewServer(mux)

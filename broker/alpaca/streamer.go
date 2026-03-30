@@ -17,8 +17,8 @@ package alpaca
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sync"
 	"time"
 
@@ -93,7 +93,7 @@ func (streamer *fillStreamer) connect(ctx context.Context) error {
 	}
 
 	var authResp wsAuthResponse
-	if unmarshalErr := json.Unmarshal(authData, &authResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(authData, &authResp); unmarshalErr != nil {
 		conn.Close()
 		return fmt.Errorf("fill streamer parse auth response: %w", unmarshalErr)
 	}
@@ -236,7 +236,7 @@ func (streamer *fillStreamer) run() {
 // handleMessage parses a WebSocket message and delivers fills.
 func (streamer *fillStreamer) handleMessage(data []byte) {
 	var msg wsStreamMessage
-	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
 
@@ -245,7 +245,7 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 	}
 
 	var tradeUpdate wsTradeUpdate
-	if unmarshalErr := json.Unmarshal(msg.Data, &tradeUpdate); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(msg.Data, &tradeUpdate); unmarshalErr != nil {
 		return
 	}
 
@@ -354,7 +354,7 @@ func (streamer *fillStreamer) reconnect(ctx context.Context) error {
 		}
 
 		var authResp wsAuthResponse
-		if unmarshalErr := json.Unmarshal(authData, &authResp); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(authData, &authResp); unmarshalErr != nil {
 			conn.Close()
 			continue
 		}

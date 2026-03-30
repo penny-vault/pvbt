@@ -1,7 +1,7 @@
 package library_test
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,7 +13,7 @@ import (
 )
 
 func writeIndex(dir string, strategy library.InstalledStrategy) {
-	data, err := json.Marshal(strategy)
+	data, err := sonic.Marshal(strategy)
 	Expect(err).NotTo(HaveOccurred())
 	err = os.MkdirAll(dir, 0o755)
 	Expect(err).NotTo(HaveOccurred())

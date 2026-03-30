@@ -2,7 +2,7 @@ package tastytrade_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -31,7 +31,7 @@ var _ = Describe("apiClient", func() {
 
 		mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
 			writer.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(writer).Encode(map[string]any{
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 				"data": map[string]any{
 					"session-token": "test-token-abc",
 					"user": map[string]any{
@@ -43,7 +43,7 @@ var _ = Describe("apiClient", func() {
 
 		mux.HandleFunc("GET /customers/me/accounts", func(writer http.ResponseWriter, req *http.Request) {
 			writer.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(writer).Encode(map[string]any{
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 				"data": map[string]any{
 					"items": []map[string]any{
 						{
@@ -75,7 +75,7 @@ var _ = Describe("apiClient", func() {
 
 			mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"session-token": "tok-999",
 						"user": map[string]any{
@@ -90,7 +90,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.Header.Get("Authorization")).To(Equal("Bearer tok-999"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"items": []map[string]any{
 							{
@@ -116,7 +116,7 @@ var _ = Describe("apiClient", func() {
 
 			mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"session-token": "tok-empty",
 						"user":          map[string]any{},
@@ -126,7 +126,7 @@ var _ = Describe("apiClient", func() {
 
 			mux.HandleFunc("GET /customers/me/accounts", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"items": []map[string]any{},
 					},
@@ -166,11 +166,11 @@ var _ = Describe("apiClient", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 					Expect(body["order-type"]).To(Equal("Limit"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"order": map[string]any{
 								"id":     "ORD-123",
@@ -222,7 +222,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("PUT /accounts/ACCT-001/orders/ORD-789", func(writer http.ResponseWriter, req *http.Request) {
 					replacePath = req.URL.Path
-					json.NewDecoder(req.Body).Decode(&replaceBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&replaceBody)
 					writer.WriteHeader(http.StatusOK)
 				})
 			})
@@ -251,7 +251,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -288,7 +288,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -318,7 +318,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newAuthenticatedClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"cash-balance":            25000.50,
 							"net-liquidating-value":   50000.00,
@@ -345,7 +345,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("equity")).To(Equal("TSLA"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -378,7 +378,7 @@ var _ = Describe("apiClient", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{

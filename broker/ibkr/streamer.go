@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sync"
 	"time"
 
@@ -131,7 +132,7 @@ func (os *orderStreamer) readLoop(ctx context.Context) {
 		}
 
 		var msg ibWSMessage
-		if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(data, &msg); unmarshalErr != nil {
 			continue
 		}
 
@@ -140,7 +141,7 @@ func (os *orderStreamer) readLoop(ctx context.Context) {
 		}
 
 		var args ibWSFillArgs
-		if unmarshalErr := json.Unmarshal(msg.Args, &args); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(msg.Args, &args); unmarshalErr != nil {
 			continue
 		}
 

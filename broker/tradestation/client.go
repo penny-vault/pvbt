@@ -2,8 +2,8 @@ package tradestation
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -205,7 +205,7 @@ func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, 
 	}
 
 	var quoteResp tsQuoteResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &quoteResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &quoteResp); unmarshalErr != nil {
 		return 0, fmt.Errorf("parse quote: %w", unmarshalErr)
 	}
 
@@ -240,7 +240,7 @@ func extractOrderID(body []byte) string {
 		} `json:"Orders"`
 	}
 
-	if unmarshalErr := json.Unmarshal(body, &result); unmarshalErr != nil || len(result.Orders) == 0 {
+	if unmarshalErr := sonic.Unmarshal(body, &result); unmarshalErr != nil || len(result.Orders) == 0 {
 		return ""
 	}
 

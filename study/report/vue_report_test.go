@@ -17,8 +17,8 @@ package report_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"io"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -35,7 +35,7 @@ type testReport struct {
 func (tr *testReport) Name() string { return tr.name }
 
 func (tr *testReport) Data(w io.Writer) error {
-	return json.NewEncoder(w).Encode(tr.data)
+	return sonic.ConfigDefault.NewEncoder(w).Encode(tr.data)
 }
 
 var _ report.Report = (*testReport)(nil)

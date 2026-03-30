@@ -24,9 +24,9 @@ import (
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/url"
 	"os"
@@ -112,7 +112,7 @@ func (ga *gatewayAuthenticator) Init(ctx context.Context) error {
 	}
 
 	var status authStatusResponse
-	if decodeErr := json.Unmarshal(resp.Body(), &status); decodeErr != nil {
+	if decodeErr := sonic.Unmarshal(resp.Body(), &status); decodeErr != nil {
 		return fmt.Errorf("gateway auth status decode: %w", decodeErr)
 	}
 
@@ -244,7 +244,7 @@ func (oa *oauthAuthenticator) Init(ctx context.Context) error {
 		}
 
 		var reqTokenData oauthTokenResponse
-		if decodeErr := json.Unmarshal(reqTokenResp.Body(), &reqTokenData); decodeErr != nil {
+		if decodeErr := sonic.Unmarshal(reqTokenResp.Body(), &reqTokenData); decodeErr != nil {
 			return fmt.Errorf("oauth request token decode: %w", decodeErr)
 		}
 
@@ -264,7 +264,7 @@ func (oa *oauthAuthenticator) Init(ctx context.Context) error {
 		}
 
 		var accessData oauthTokenResponse
-		if decodeErr := json.Unmarshal(accessResp.Body(), &accessData); decodeErr != nil {
+		if decodeErr := sonic.Unmarshal(accessResp.Body(), &accessData); decodeErr != nil {
 			return fmt.Errorf("oauth access token decode: %w", decodeErr)
 		}
 
@@ -308,7 +308,7 @@ func (oa *oauthAuthenticator) obtainLiveSessionToken(ctx context.Context, client
 	}
 
 	var lstData oauthTokenResponse
-	if decodeErr := json.Unmarshal(lstResp.Body(), &lstData); decodeErr != nil {
+	if decodeErr := sonic.Unmarshal(lstResp.Body(), &lstData); decodeErr != nil {
 		return fmt.Errorf("oauth live session token decode: %w", decodeErr)
 	}
 

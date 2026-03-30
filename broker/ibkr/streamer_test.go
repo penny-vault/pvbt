@@ -2,7 +2,7 @@ package ibkr_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -92,7 +92,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 						"avgPrice":       150.25,
 					},
 				}
-				msgBytes, marshalErr := json.Marshal(fillMsg)
+				msgBytes, marshalErr := sonic.Marshal(fillMsg)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				Expect(conn.WriteMessage(websocket.TextMessage, msgBytes)).To(Succeed())
 
@@ -132,7 +132,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 						"avgPrice":       99.50,
 					},
 				}
-				msgBytes, marshalErr := json.Marshal(fillMsg)
+				msgBytes, marshalErr := sonic.Marshal(fillMsg)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				Expect(conn.WriteMessage(websocket.TextMessage, msgBytes)).To(Succeed())
 
@@ -174,7 +174,7 @@ var _ = Describe("orderStreamer", Label("streaming"), func() {
 						"avgPrice":       200.00,
 					},
 				}
-				msgBytes, marshalErr := json.Marshal(fillMsg)
+				msgBytes, marshalErr := sonic.Marshal(fillMsg)
 				Expect(marshalErr).ToNot(HaveOccurred())
 
 				// Send the same fill twice.

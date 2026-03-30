@@ -2,8 +2,8 @@ package tradier
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sync"
 	"time"
 
@@ -128,7 +128,7 @@ func (streamer *accountStreamer) readLoop() {
 		}
 
 		var ev tradierAccountEvent
-		if unmarshalErr := json.Unmarshal(data, &ev); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(data, &ev); unmarshalErr != nil {
 			log.Warn().Err(unmarshalErr).Msg("tradier: failed to unmarshal account event")
 			continue
 		}

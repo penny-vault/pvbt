@@ -11,9 +11,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math/big"
 	"net"
 	"net/http"
@@ -230,7 +230,7 @@ func (tm *tokenManager) loadTokens() error {
 	}
 
 	var store tokenStore
-	if unmarshalErr := json.Unmarshal(data, &store); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &store); unmarshalErr != nil {
 		return fmt.Errorf("webull: parse tokens: %w", unmarshalErr)
 	}
 
@@ -247,7 +247,7 @@ func (tm *tokenManager) saveTokens() error {
 		return fmt.Errorf("webull: create token directory: %w", mkdirErr)
 	}
 
-	data, marshalErr := json.MarshalIndent(tm.tokens, "", "  ")
+	data, marshalErr := sonic.MarshalIndent(tm.tokens, "", "  ")
 	if marshalErr != nil {
 		return fmt.Errorf("webull: marshal tokens: %w", marshalErr)
 	}
@@ -293,7 +293,7 @@ func (tm *tokenManager) refreshAccessToken() error {
 	}
 
 	var tokenResp webullTokenResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
 		return fmt.Errorf("webull: parse token response: %w", unmarshalErr)
 	}
 
@@ -376,7 +376,7 @@ func (tm *tokenManager) exchangeCode(ctx context.Context, code string) error {
 	}
 
 	var tokenResp webullTokenResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
 		return fmt.Errorf("webull: parse token response: %w", unmarshalErr)
 	}
 

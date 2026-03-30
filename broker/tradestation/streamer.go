@@ -2,8 +2,8 @@ package tradestation
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"sync"
 	"time"
@@ -101,7 +101,7 @@ func (streamer *orderStreamer) run(ctx context.Context, resp *http.Response) {
 	defer streamer.wg.Done()
 	defer resp.Body.Close()
 
-	decoder := json.NewDecoder(resp.Body)
+	decoder := sonic.ConfigDefault.NewDecoder(resp.Body)
 
 	for {
 		select {
@@ -134,7 +134,7 @@ func (streamer *orderStreamer) run(ctx context.Context, resp *http.Response) {
 
 			resp.Body.Close()
 			resp = newResp
-			decoder = json.NewDecoder(resp.Body)
+			decoder = sonic.ConfigDefault.NewDecoder(resp.Body)
 
 			continue
 		}
@@ -148,7 +148,7 @@ func (streamer *orderStreamer) run(ctx context.Context, resp *http.Response) {
 			}
 
 			resp = newResp
-			decoder = json.NewDecoder(resp.Body)
+			decoder = sonic.ConfigDefault.NewDecoder(resp.Body)
 
 			continue
 		}

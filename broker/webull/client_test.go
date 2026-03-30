@@ -17,7 +17,7 @@ package webull_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 
@@ -55,7 +55,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /api/trade/account/list", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"accounts": []map[string]string{
 							{"account_id": "acct-1", "status": "ACTIVE"},
 							{"account_id": "acct-2", "status": "INACTIVE"},
@@ -78,12 +78,12 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /api/trade/order/place", func(writer http.ResponseWriter, req *http.Request) {
 					var body webull.OrderRequestExport
-					Expect(json.NewDecoder(req.Body).Decode(&body)).To(Succeed())
+					Expect(sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)).To(Succeed())
 					Expect(body.Side).To(Equal("BUY"))
 					Expect(body.OrderType).To(Equal("MARKET"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]string{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]string{
 						"order_id": "ord-abc-123",
 					})
 				})
@@ -129,7 +129,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /api/trade/order/cancel", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]string
-					Expect(json.NewDecoder(req.Body).Decode(&body)).To(Succeed())
+					Expect(sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)).To(Succeed())
 					Expect(body["account_id"]).To(Equal("acct-1"))
 					Expect(body["order_id"]).To(Equal("ord-123"))
 
@@ -150,7 +150,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("order_id")).To(Equal("ord-123"))
 
 					var body webull.ReplaceRequestExport
-					Expect(json.NewDecoder(req.Body).Decode(&body)).To(Succeed())
+					Expect(sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)).To(Succeed())
 					Expect(body.Qty).To(Equal("20"))
 					Expect(body.LimitPrice).To(Equal("150.50"))
 
@@ -173,7 +173,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("account_id")).To(Equal("acct-1"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": []map[string]string{
 							{
 								"order_id":         "ord-1",
@@ -217,7 +217,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("account_id")).To(Equal("acct-1"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"positions": []map[string]string{
 							{
 								"symbol":        "AAPL",
@@ -255,7 +255,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("account_id")).To(Equal("acct-1"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]string{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]string{
 						"account_id":      "acct-1",
 						"net_liquidation": "50000.00",
 						"cash_balance":    "25000.00",

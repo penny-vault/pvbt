@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math"
 	"time"
 
@@ -259,7 +260,7 @@ var _ = Describe("Integration", func() {
 
 		// Verify the JSON is valid and contains expected fields.
 		var stressData map[string]json.RawMessage
-		Expect(json.Unmarshal(jsonBuffer.Bytes(), &stressData)).To(Succeed())
+		Expect(sonic.Unmarshal(jsonBuffer.Bytes(), &stressData)).To(Succeed())
 		Expect(stressData).To(HaveKey("rankings"))
 		Expect(stressData).To(HaveKey("scenarios"))
 		Expect(stressData).To(HaveKey("summary"))
@@ -341,7 +342,7 @@ var _ = Describe("Integration", func() {
 
 		// Verify the JSON is valid and contains expected fields.
 		var mcData map[string]json.RawMessage
-		Expect(json.Unmarshal(mcJSONBuffer.Bytes(), &mcData)).To(Succeed())
+		Expect(sonic.Unmarshal(mcJSONBuffer.Bytes(), &mcData)).To(Succeed())
 		Expect(mcData).To(HaveKey("fanChart"))
 		Expect(mcData).To(HaveKey("summary"))
 
