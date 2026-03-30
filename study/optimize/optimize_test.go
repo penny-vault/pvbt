@@ -95,6 +95,12 @@ var _ = Describe("Optimizer", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(configs[0].Metadata["study"]).To(Equal("parameter-optimization"))
 		})
+
+		It("returns an error when splits is empty", func() {
+			opt := optimize.New(nil)
+			_, err := opt.Configurations(context.Background())
+			Expect(err).To(MatchError(ContainSubstring("no splits")))
+		})
 	})
 
 	Describe("defaults", func() {
