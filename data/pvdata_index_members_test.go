@@ -27,18 +27,24 @@ import (
 
 var _ = Describe("IndexState", func() {
 	var (
-		aapl asset.Asset
-		goog asset.Asset
-		msft asset.Asset
-		day1 time.Time
-		day2 time.Time
-		day3 time.Time
+		aapl   asset.Asset
+		goog   asset.Asset
+		msft   asset.Asset
+		aaplIC data.IndexConstituent
+		googIC data.IndexConstituent
+		msftIC data.IndexConstituent
+		day1   time.Time
+		day2   time.Time
+		day3   time.Time
 	)
 
 	BeforeEach(func() {
 		aapl = asset.Asset{CompositeFigi: "FIGI-AAPL", Ticker: "AAPL"}
 		goog = asset.Asset{CompositeFigi: "FIGI-GOOG", Ticker: "GOOG"}
 		msft = asset.Asset{CompositeFigi: "FIGI-MSFT", Ticker: "MSFT"}
+		aaplIC = data.IndexConstituent{Asset: aapl, Weight: 0.5}
+		googIC = data.IndexConstituent{Asset: goog, Weight: 0.3}
+		msftIC = data.IndexConstituent{Asset: msft, Weight: 0.2}
 		day1 = time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
 		day2 = time.Date(2025, 1, 3, 0, 0, 0, 0, time.UTC)
 		day3 = time.Date(2025, 1, 6, 0, 0, 0, 0, time.UTC)
@@ -46,111 +52,151 @@ var _ = Describe("IndexState", func() {
 
 	It("returns snapshot members at the snapshot date", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl, goog}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}}},
 			nil,
 		)
-		members := state.Advance(day1)
-		Expect(members).To(ConsistOf(aapl, goog))
+		assets, constituents := state.Advance(day1)
+		Expect(assets).To(ConsistOf(aapl, goog))
+		Expect(constituents).To(ConsistOf(aaplIC, googIC))
 	})
 
 	It("carries forward snapshot members to later dates", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
 			nil,
 		)
 		state.Advance(day1)
-		members := state.Advance(day2)
-		Expect(members).To(ConsistOf(aapl))
+		assets, _ := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl))
 	})
 
 	It("applies changelog add between snapshots", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl}}},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add"}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
+			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3}},
 		)
 		state.Advance(day1)
-		members := state.Advance(day2)
-		Expect(members).To(ConsistOf(aapl, goog))
+		assets, constituents := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl, goog))
+		Expect(constituents).To(HaveLen(2))
 	})
 
 	It("applies changelog remove between snapshots", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl, goog}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}}},
 			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"}},
 		)
 		state.Advance(day1)
-		members := state.Advance(day2)
-		Expect(members).To(ConsistOf(aapl))
+		assets, constituents := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl))
+		Expect(constituents).To(HaveLen(1))
+		Expect(constituents[0].Asset).To(Equal(aapl))
 	})
 
 	It("resets members when a new snapshot arrives", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{
-				{Date: day1, Members: []asset.Asset{aapl, goog}},
-				{Date: day3, Members: []asset.Asset{aapl, msft}},
+				{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}},
+				{Date: day3, Members: []data.IndexConstituent{aaplIC, msftIC}},
 			},
 			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"}},
 		)
 		state.Advance(day1)
-		members := state.Advance(day3)
-		Expect(members).To(ConsistOf(aapl, msft))
+		assets, _ := state.Advance(day3)
+		Expect(assets).To(ConsistOf(aapl, msft))
 	})
 
 	It("discards changelog entries superseded by a snapshot", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{
-				{Date: day1, Members: []asset.Asset{aapl}},
-				{Date: day2, Members: []asset.Asset{aapl, goog}},
+				{Date: day1, Members: []data.IndexConstituent{aaplIC}},
+				{Date: day2, Members: []data.IndexConstituent{aaplIC, googIC}},
 			},
 			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-MSFT", Ticker: "MSFT", Action: "add"}},
 		)
-		members := state.Advance(day2)
-		Expect(members).To(ConsistOf(aapl, goog))
+		assets, _ := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl, goog))
 	})
 
 	It("returns nil when no data exists before the requested date", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day3, Members: []asset.Asset{aapl}}},
+			[]data.IndexSnapshotEntry{{Date: day3, Members: []data.IndexConstituent{aaplIC}}},
 			nil,
 		)
-		members := state.Advance(day1)
-		Expect(members).To(BeNil())
+		assets, constituents := state.Advance(day1)
+		Expect(assets).To(BeNil())
+		Expect(constituents).To(BeNil())
 	})
 
 	It("returns the borrowed slice without copying", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl, goog}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}}},
 			nil,
 		)
-		first := state.Advance(day1)
-		second := state.Advance(day2)
-		Expect(&first[0]).To(BeIdenticalTo(&second[0]))
+		firstAssets, _ := state.Advance(day1)
+		secondAssets, _ := state.Advance(day2)
+		Expect(&firstAssets[0]).To(BeIdenticalTo(&secondAssets[0]))
 	})
 
 	It("handles multiple changelog entries on the same date", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
 			[]data.IndexChangeEntry{
-				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add"},
-				{Date: day2, CompositeFigi: "FIGI-MSFT", Ticker: "MSFT", Action: "add"},
+				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3},
+				{Date: day2, CompositeFigi: "FIGI-MSFT", Ticker: "MSFT", Action: "add", Weight: 0.2},
 			},
 		)
 		state.Advance(day1)
-		members := state.Advance(day2)
-		Expect(members).To(ConsistOf(aapl, goog, msft))
+		assets, _ := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl, goog, msft))
 	})
 
 	It("handles changelog add then remove across dates", func() {
 		state := data.NewIndexState(
-			[]data.IndexSnapshotEntry{{Date: day1, Members: []asset.Asset{aapl}}},
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
 			[]data.IndexChangeEntry{
-				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add"},
+				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3},
 				{Date: day3, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"},
 			},
 		)
 		state.Advance(day1)
 		state.Advance(day2)
-		members := state.Advance(day3)
-		Expect(members).To(ConsistOf(aapl))
+		assets, _ := state.Advance(day3)
+		Expect(assets).To(ConsistOf(aapl))
+	})
+
+	It("preserves weight data through snapshots", func() {
+		state := data.NewIndexState(
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{
+				{Asset: aapl, Weight: 0.6},
+				{Asset: goog, Weight: 0.4},
+			}}},
+			nil,
+		)
+		_, constituents := state.Advance(day1)
+		Expect(constituents).To(HaveLen(2))
+
+		weightMap := make(map[string]float64)
+		for _, ic := range constituents {
+			weightMap[ic.Asset.Ticker] = ic.Weight
+		}
+		Expect(weightMap["AAPL"]).To(BeNumerically("~", 0.6, 0.001))
+		Expect(weightMap["GOOG"]).To(BeNumerically("~", 0.4, 0.001))
+	})
+
+	It("preserves weight data through changelog adds", func() {
+		state := data.NewIndexState(
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
+			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.35}},
+		)
+		state.Advance(day1)
+		_, constituents := state.Advance(day2)
+		Expect(constituents).To(HaveLen(2))
+
+		for _, ic := range constituents {
+			if ic.Asset.Ticker == "GOOG" {
+				Expect(ic.Weight).To(BeNumerically("~", 0.35, 0.001))
+			}
+		}
 	})
 })

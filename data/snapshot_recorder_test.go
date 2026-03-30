@@ -153,14 +153,16 @@ var _ = Describe("SnapshotRecorder", func() {
 
 	Describe("index member recording", func() {
 		It("records index members from IndexMembers() call", func() {
-			members := []asset.Asset{
-				{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"},
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			members := []asset.Asset{spy}
+			constituents := []data.IndexConstituent{
+				{Asset: spy, Weight: 0.5},
 			}
 
 			nyc, _ := time.LoadLocation("America/New_York")
 			date := time.Date(2024, 1, 2, 16, 0, 0, 0, nyc)
 
-			stub := &stubIndexProvider{members: members}
+			stub := &stubIndexProvider{members: members, constituents: constituents}
 
 			var err error
 			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
@@ -169,9 +171,10 @@ var _ = Describe("SnapshotRecorder", func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			result, err := recorder.IndexMembers(ctx, "SP500", date)
+			resultAssets, resultConstituents, err := recorder.IndexMembers(ctx, "SP500", date)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(members))
+			Expect(resultAssets).To(Equal(members))
+			Expect(resultConstituents).To(Equal(constituents))
 
 			Expect(recorder.Close()).To(Succeed())
 			recorder = nil
@@ -183,6 +186,10 @@ var _ = Describe("SnapshotRecorder", func() {
 			var count int
 			Expect(db.QueryRow("SELECT count(*) FROM index_members").Scan(&count)).To(Succeed())
 			Expect(count).To(Equal(1))
+
+			var weight float64
+			Expect(db.QueryRow("SELECT weight FROM index_members LIMIT 1").Scan(&weight)).To(Succeed())
+			Expect(weight).To(BeNumerically("~", 0.5, 0.001))
 		})
 	})
 
@@ -230,9 +237,10 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			nyc, _ := time.LoadLocation("America/New_York")
-			result, err := recorder.IndexMembers(ctx, "SP500", time.Date(2024, 1, 2, 16, 0, 0, 0, nyc))
+			resultAssets, resultConstituents, err := recorder.IndexMembers(ctx, "SP500", time.Date(2024, 1, 2, 16, 0, 0, 0, nyc))
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNil())
+			Expect(resultAssets).To(BeNil())
+			Expect(resultConstituents).To(BeNil())
 		})
 
 		It("returns empty slice for RatedAssets when no RatingProvider", func() {
@@ -266,11 +274,12 @@ func (s *stubAssetProvider) LookupAsset(ctx context.Context, ticker string) (ass
 }
 
 type stubIndexProvider struct {
-	members []asset.Asset
+	members      []asset.Asset
+	constituents []data.IndexConstituent
 }
 
-func (s *stubIndexProvider) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error) {
-	return s.members, nil
+func (s *stubIndexProvider) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, []data.IndexConstituent, error) {
+	return s.members, s.constituents, nil
 }
 
 type stubRatingProvider struct {

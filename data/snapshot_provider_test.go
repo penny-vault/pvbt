@@ -174,19 +174,21 @@ var _ = Describe("SnapshotProvider", func() {
 	})
 
 	Describe("IndexMembers", func() {
-		It("replays recorded index members", func() {
+		It("replays recorded index members with weights", func() {
 			// Seed via recorder.
-			members := []asset.Asset{{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}}
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			members := []asset.Asset{spy}
+			constituents := []data.IndexConstituent{{Asset: spy, Weight: 0.75}}
 			nyc, _ := time.LoadLocation("America/New_York")
 			date := time.Date(2024, 1, 2, 16, 0, 0, 0, nyc)
 
 			recorder, err := data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
-				IndexProvider: &stubIndexProvider{members: members},
+				IndexProvider: &stubIndexProvider{members: members, constituents: constituents},
 				AssetProvider: &stubAssetProvider{assets: members},
 			})
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = recorder.IndexMembers(ctx, "SP500", date)
+			_, _, err = recorder.IndexMembers(ctx, "SP500", date)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(recorder.Close()).To(Succeed())
 
@@ -194,10 +196,12 @@ var _ = Describe("SnapshotProvider", func() {
 			Expect(err).NotTo(HaveOccurred())
 			defer snap.Close()
 
-			result, err := snap.IndexMembers(ctx, "SP500", date)
+			resultAssets, resultConstituents, err := snap.IndexMembers(ctx, "SP500", date)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(HaveLen(1))
-			Expect(result[0].Ticker).To(Equal("SPY"))
+			Expect(resultAssets).To(HaveLen(1))
+			Expect(resultAssets[0].Ticker).To(Equal("SPY"))
+			Expect(resultConstituents).To(HaveLen(1))
+			Expect(resultConstituents[0].Weight).To(BeNumerically("~", 0.75, 0.001))
 		})
 	})
 

@@ -70,6 +70,7 @@ func CreateSnapshotSchema(db *sql.DB) error {
 			event_date TEXT NOT NULL,
 			composite_figi TEXT NOT NULL REFERENCES assets(composite_figi),
 			ticker TEXT NOT NULL,
+			weight REAL NOT NULL DEFAULT 0,
 			PRIMARY KEY (index_name, event_date, composite_figi)
 		)`,
 

@@ -57,12 +57,26 @@ func (u *indexUniverse) SetDataSource(ds DataSource) {
 // Callers that need data across steps must copy. Dates must be monotonically
 // increasing across calls.
 func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
-	members, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
-	if err != nil || len(members) == 0 {
+	assets, _, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
+	if err != nil || len(assets) == 0 {
 		return nil
 	}
 
-	return members
+	return assets
+}
+
+// Constituents returns the index members with their weights at the given date.
+// The returned slice is borrowed from the provider and is only valid for the
+// current engine step. Since the provider is stateful and monotonically
+// advancing, calling Constituents with the same date as a preceding Assets
+// call is a no-op that returns the cached parallel slice.
+func (u *indexUniverse) Constituents(asOfDate time.Time) []data.IndexConstituent {
+	_, constituents, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
+	if err != nil || len(constituents) == 0 {
+		return nil
+	}
+
+	return constituents
 }
 
 // Window returns a DataFrame covering [currentDate - lookback, currentDate]

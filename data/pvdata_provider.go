@@ -694,7 +694,7 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 // Dates must be monotonically increasing across calls for a given index.
 // The provider loads all snapshot and changelog data on the first call and
 // advances an internal cursor as time progresses.
-func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
+func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, []IndexConstituent, error) {
 	if p.indexes == nil {
 		p.indexes = make(map[string]*indexState)
 	}
@@ -705,15 +705,15 @@ func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate
 
 		state, err = p.loadIndexState(ctx, index)
 		if err != nil {
-			return nil, fmt.Errorf("pvdata: load index state for %q: %w", index, err)
+			return nil, nil, fmt.Errorf("pvdata: load index state for %q: %w", index, err)
 		}
 
 		p.indexes[index] = state
 	}
 
-	members := state.Advance(forDate)
+	assets, constituents := state.Advance(forDate)
 
-	return members, nil
+	return assets, constituents, nil
 }
 
 func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*indexState, error) {
@@ -725,7 +725,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 
 	// Load snapshots grouped by date.
 	snapRows, err := conn.Query(ctx,
-		`SELECT snapshot_date, composite_figi, ticker
+		`SELECT snapshot_date, composite_figi, ticker, weight
 		 FROM indices_snapshot
 		 WHERE index_name = $1
 		 ORDER BY snapshot_date, composite_figi`,
@@ -741,11 +741,13 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	var current *IndexSnapshotEntry
 
 	for snapRows.Next() {
-		var dt time.Time
+		var (
+			dt           time.Time
+			figi, ticker string
+			weight       float64
+		)
 
-		var figi, ticker string
-
-		if err := snapRows.Scan(&dt, &figi, &ticker); err != nil {
+		if err := snapRows.Scan(&dt, &figi, &ticker, &weight); err != nil {
 			return nil, fmt.Errorf("scan snapshot row: %w", err)
 		}
 
@@ -757,9 +759,12 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 			current = &IndexSnapshotEntry{Date: dt}
 		}
 
-		current.Members = append(current.Members, asset.Asset{
-			CompositeFigi: figi,
-			Ticker:        ticker,
+		current.Members = append(current.Members, IndexConstituent{
+			Asset: asset.Asset{
+				CompositeFigi: figi,
+				Ticker:        ticker,
+			},
+			Weight: weight,
 		})
 	}
 
@@ -773,7 +778,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 
 	// Load changelog.
 	logRows, err := conn.Query(ctx,
-		`SELECT event_date, composite_figi, ticker, action
+		`SELECT event_date, composite_figi, ticker, action, weight
 		 FROM indices_changelog
 		 WHERE index_name = $1
 		 ORDER BY event_date, composite_figi`,
@@ -789,7 +794,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	for logRows.Next() {
 		var entry IndexChangeEntry
 
-		if err := logRows.Scan(&entry.Date, &entry.CompositeFigi, &entry.Ticker, &entry.Action); err != nil {
+		if err := logRows.Scan(&entry.Date, &entry.CompositeFigi, &entry.Ticker, &entry.Action, &entry.Weight); err != nil {
 			return nil, fmt.Errorf("scan changelog row: %w", err)
 		}
 

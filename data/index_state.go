@@ -24,7 +24,7 @@ import (
 // indexSnapshot is a point-in-time capture of all constituents for one index.
 type indexSnapshot struct {
 	date    time.Time
-	members []asset.Asset
+	members []IndexConstituent
 }
 
 // indexChange is a single add or remove event from the changelog.
@@ -33,29 +33,36 @@ type indexChange struct {
 	compositeFigi string
 	ticker        string
 	action        string // "add" or "remove"
+	weight        float64
 }
 
 // indexState holds the stacks and current membership for one index.
 // Dates passed to advance must be monotonically increasing.
 type indexState struct {
-	snapshots []indexSnapshot // sorted by date, earliest first (index 0 = earliest)
-	changelog []indexChange   // sorted by date, earliest first
-	snapIdx   int             // next unprocessed snapshot
-	logIdx    int             // next unprocessed changelog entry
-	members   []asset.Asset   // current constituents; mutated in place
+	snapshots    []indexSnapshot    // sorted by date, earliest first (index 0 = earliest)
+	changelog    []indexChange      // sorted by date, earliest first
+	snapIdx      int                // next unprocessed snapshot
+	logIdx       int                // next unprocessed changelog entry
+	constituents []IndexConstituent // current constituents; mutated in place
+	assets       []asset.Asset      // parallel view for asset-only access
 }
 
 // advance pops snapshots and changelog entries up through forDate,
-// updating members in place. Returns the current members slice.
-func (st *indexState) advance(forDate time.Time) []asset.Asset {
+// updating constituents and assets in place.
+func (st *indexState) advance(forDate time.Time) {
 	// Pop snapshots: each one resets members entirely.
 	for st.snapIdx < len(st.snapshots) && !st.snapshots[st.snapIdx].date.After(forDate) {
 		snap := st.snapshots[st.snapIdx]
 		st.snapIdx++
 
-		// Replace members with this snapshot's constituents.
-		st.members = st.members[:0]
-		st.members = append(st.members, snap.members...)
+		// Replace constituents with this snapshot's members.
+		st.constituents = st.constituents[:0]
+		st.assets = st.assets[:0]
+		st.constituents = append(st.constituents, snap.members...)
+
+		for _, ic := range snap.members {
+			st.assets = append(st.assets, ic.Asset)
+		}
 
 		// Discard changelog entries at or before this snapshot date.
 		for st.logIdx < len(st.changelog) && !st.changelog[st.logIdx].date.After(snap.date) {
@@ -70,30 +77,35 @@ func (st *indexState) advance(forDate time.Time) []asset.Asset {
 
 		switch ch.action {
 		case "add":
-			st.members = append(st.members, asset.Asset{
+			newAsset := asset.Asset{
 				CompositeFigi: ch.compositeFigi,
 				Ticker:        ch.ticker,
+			}
+			st.constituents = append(st.constituents, IndexConstituent{
+				Asset:  newAsset,
+				Weight: ch.weight,
 			})
+			st.assets = append(st.assets, newAsset)
 		case "remove":
-			for ii := range st.members {
-				if st.members[ii].CompositeFigi == ch.compositeFigi {
-					last := len(st.members) - 1
-					st.members[ii] = st.members[last]
-					st.members = st.members[:last]
+			for ii := range st.constituents {
+				if st.constituents[ii].Asset.CompositeFigi == ch.compositeFigi {
+					last := len(st.constituents) - 1
+					st.constituents[ii] = st.constituents[last]
+					st.constituents = st.constituents[:last]
+					st.assets[ii] = st.assets[last]
+					st.assets = st.assets[:last]
 
 					break
 				}
 			}
 		}
 	}
-
-	return st.members
 }
 
 // IndexSnapshotEntry is a snapshot used to construct an indexState.
 type IndexSnapshotEntry struct {
 	Date    time.Time
-	Members []asset.Asset
+	Members []IndexConstituent
 }
 
 // IndexChangeEntry is a changelog event used to construct an indexState.
@@ -102,6 +114,7 @@ type IndexChangeEntry struct {
 	CompositeFigi string
 	Ticker        string
 	Action        string
+	Weight        float64
 }
 
 // NewIndexState creates an indexState from pre-sorted snapshots and changelog
@@ -119,13 +132,16 @@ func NewIndexState(snapshots []IndexSnapshotEntry, changelog []IndexChangeEntry)
 			compositeFigi: entry.CompositeFigi,
 			ticker:        entry.Ticker,
 			action:        entry.Action,
+			weight:        entry.Weight,
 		}
 	}
 
 	return &indexState{snapshots: ss, changelog: cc}
 }
 
-// Advance is the exported wrapper for advance.
-func (st *indexState) Advance(forDate time.Time) []asset.Asset {
-	return st.advance(forDate)
+// Advance is the exported wrapper for advance. It returns both the asset-only
+// slice and the full constituent slice with weights.
+func (st *indexState) Advance(forDate time.Time) ([]asset.Asset, []IndexConstituent) {
+	st.advance(forDate)
+	return st.assets, st.constituents
 }

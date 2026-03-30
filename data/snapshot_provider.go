@@ -583,30 +583,39 @@ func (p *SnapshotProvider) fetchFundamentals(
 
 // -- IndexProvider --
 
-func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
+func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, []IndexConstituent, error) {
 	dateStr := forDate.Format("2006-01-02")
 
 	rows, err := p.db.QueryContext(ctx,
-		"SELECT composite_figi, ticker FROM index_members WHERE index_name = ? AND event_date = ?",
+		"SELECT composite_figi, ticker, COALESCE(weight, 0) FROM index_members WHERE index_name = ? AND event_date = ?",
 		index, dateStr,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("snapshot provider: query index members: %w", err)
+		return nil, nil, fmt.Errorf("snapshot provider: query index members: %w", err)
 	}
 	defer rows.Close()
 
-	var members []asset.Asset
+	var (
+		assets       []asset.Asset
+		constituents []IndexConstituent
+	)
 
 	for rows.Next() {
-		var a asset.Asset
-		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
-			return nil, fmt.Errorf("snapshot provider: scan index member: %w", err)
+		var (
+			figi, ticker string
+			weight       float64
+		)
+
+		if err := rows.Scan(&figi, &ticker, &weight); err != nil {
+			return nil, nil, fmt.Errorf("snapshot provider: scan index member: %w", err)
 		}
 
-		members = append(members, a)
+		assetVal := asset.Asset{CompositeFigi: figi, Ticker: ticker}
+		assets = append(assets, assetVal)
+		constituents = append(constituents, IndexConstituent{Asset: assetVal, Weight: weight})
 	}
 
-	return members, rows.Err()
+	return assets, constituents, rows.Err()
 }
 
 // -- RatingProvider --

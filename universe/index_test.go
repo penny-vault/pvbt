@@ -29,23 +29,24 @@ import (
 	"github.com/penny-vault/pvbt/universe"
 )
 
-// mockIndexProvider returns assets keyed by t.Unix().
+// mockIndexProvider returns assets and constituents keyed by t.Unix().
 type mockIndexProvider struct {
-	results map[int64][]asset.Asset
+	assetResults       map[int64][]asset.Asset
+	constituentResults map[int64][]data.IndexConstituent
 }
 
-func (m *mockIndexProvider) IndexMembers(_ context.Context, _ string, t time.Time) ([]asset.Asset, error) {
-	if assets, ok := m.results[t.Unix()]; ok {
-		return assets, nil
-	}
-	return nil, nil
+func (m *mockIndexProvider) IndexMembers(_ context.Context, _ string, t time.Time) ([]asset.Asset, []data.IndexConstituent, error) {
+	assets := m.assetResults[t.Unix()]
+	constituents := m.constituentResults[t.Unix()]
+
+	return assets, constituents, nil
 }
 
 // errorIndexProvider always returns an error.
 type errorIndexProvider struct{}
 
-func (e *errorIndexProvider) IndexMembers(_ context.Context, _ string, _ time.Time) ([]asset.Asset, error) {
-	return nil, fmt.Errorf("provider error")
+func (e *errorIndexProvider) IndexMembers(_ context.Context, _ string, _ time.Time) ([]asset.Asset, []data.IndexConstituent, error) {
+	return nil, nil, fmt.Errorf("provider error")
 }
 
 var _ = Describe("Index Universe", func() {
@@ -68,8 +69,15 @@ var _ = Describe("Index Universe", func() {
 	Describe("Assets", func() {
 		It("returns assets from the index provider", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
+				assetResults: map[int64][]asset.Asset{
 					now.Unix(): {goog, aapl, msft},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {
+						{Asset: goog, Weight: 0.4},
+						{Asset: aapl, Weight: 0.35},
+						{Asset: msft, Weight: 0.25},
+					},
 				},
 			}
 			u := universe.NewIndex(provider, "SP500")
@@ -79,7 +87,8 @@ var _ = Describe("Index Universe", func() {
 
 		It("returns nil when provider returns no assets", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{},
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
 			}
 			u := universe.NewIndex(provider, "SP500")
 			assets := u.Assets(now)
@@ -93,11 +102,53 @@ var _ = Describe("Index Universe", func() {
 		})
 	})
 
+	Describe("Constituents", func() {
+		It("returns constituents with weights from the provider", func() {
+			provider := &mockIndexProvider{
+				assetResults: map[int64][]asset.Asset{
+					now.Unix(): {aapl, goog},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {
+						{Asset: aapl, Weight: 0.6},
+						{Asset: goog, Weight: 0.4},
+					},
+				},
+			}
+			u := universe.NewIndex(provider, "SP500")
+			constituents := u.Constituents(now)
+			Expect(constituents).To(HaveLen(2))
+			Expect(constituents[0].Weight).To(BeNumerically("~", 0.6, 0.001))
+		})
+
+		It("returns nil when provider returns no constituents", func() {
+			provider := &mockIndexProvider{
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
+			}
+			u := universe.NewIndex(provider, "SP500")
+			constituents := u.Constituents(now)
+			Expect(constituents).To(BeNil())
+		})
+
+		It("returns nil when the provider returns an error", func() {
+			u := universe.NewIndex(&errorIndexProvider{}, "SP500")
+			constituents := u.Constituents(now)
+			Expect(constituents).To(BeNil())
+		})
+	})
+
 	Describe("Window", func() {
 		It("delegates to the data source with resolved assets", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
+				assetResults: map[int64][]asset.Asset{
 					now.Unix(): {aapl, goog},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {
+						{Asset: aapl, Weight: 0.6},
+						{Asset: goog, Weight: 0.4},
+					},
 				},
 			}
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
@@ -113,7 +164,10 @@ var _ = Describe("Index Universe", func() {
 		})
 
 		It("returns an error when no data source is set", func() {
-			provider := &mockIndexProvider{results: map[int64][]asset.Asset{}}
+			provider := &mockIndexProvider{
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
+			}
 			u := universe.NewIndex(provider, "SP500")
 			_, err := u.Window(context.Background(), portfolio.Months(3), data.MetricClose)
 			Expect(err).To(HaveOccurred())
@@ -123,8 +177,11 @@ var _ = Describe("Index Universe", func() {
 	Describe("At", func() {
 		It("delegates to the data source with resolved assets", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
+				assetResults: map[int64][]asset.Asset{
 					now.Unix(): {aapl},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {{Asset: aapl, Weight: 1.0}},
 				},
 			}
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
@@ -139,7 +196,10 @@ var _ = Describe("Index Universe", func() {
 		})
 
 		It("returns an error when no data source is set", func() {
-			provider := &mockIndexProvider{results: map[int64][]asset.Asset{}}
+			provider := &mockIndexProvider{
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
+			}
 			u := universe.NewIndex(provider, "SP500")
 			_, err := u.At(context.Background(), data.MetricClose)
 			Expect(err).To(HaveOccurred())
@@ -148,7 +208,10 @@ var _ = Describe("Index Universe", func() {
 
 	Describe("CurrentDate", func() {
 		It("delegates to the data source", func() {
-			provider := &mockIndexProvider{results: map[int64][]asset.Asset{}}
+			provider := &mockIndexProvider{
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
+			}
 			ds := &mockDataSource{currentDate: now}
 			u := universe.NewIndex(provider, "SP500")
 			u.SetDataSource(ds)
@@ -157,7 +220,10 @@ var _ = Describe("Index Universe", func() {
 		})
 
 		It("returns zero time when no data source is set", func() {
-			provider := &mockIndexProvider{results: map[int64][]asset.Asset{}}
+			provider := &mockIndexProvider{
+				assetResults:       map[int64][]asset.Asset{},
+				constituentResults: map[int64][]data.IndexConstituent{},
+			}
 			u := universe.NewIndex(provider, "SP500")
 			Expect(u.CurrentDate()).To(Equal(time.Time{}))
 		})
@@ -166,8 +232,11 @@ var _ = Describe("Index Universe", func() {
 	Describe("SP500 and Nasdaq100 convenience constructors", func() {
 		It("SP500 returns a universe that queries 'sp500'", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
+				assetResults: map[int64][]asset.Asset{
 					now.Unix(): {aapl},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {{Asset: aapl, Weight: 1.0}},
 				},
 			}
 			u := universe.SP500(provider)
@@ -177,8 +246,11 @@ var _ = Describe("Index Universe", func() {
 
 		It("Nasdaq100 returns a universe that queries 'ndx100'", func() {
 			provider := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
+				assetResults: map[int64][]asset.Asset{
 					now.Unix(): {goog},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {{Asset: goog, Weight: 1.0}},
 				},
 			}
 			u := universe.Nasdaq100(provider)
