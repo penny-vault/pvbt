@@ -29,8 +29,6 @@ import (
 const (
 	productionBaseURL = "https://api.webull.com"
 	uatBaseURL        = "https://us-openapi-alb.uat.webullbroker.com"
-	productionGRPC    = "events-api.webull.com:443"
-	uatGRPC           = "events-api.uat.webullbroker.com:443"
 	productionAuthURL = "https://us-oauth-open-api.webull.com"
 	uatAuthURL        = "https://us-oauth-open-api.uat.webullbroker.com"
 	fillChannelSize   = 1024
@@ -167,11 +165,6 @@ func (wb *WebullBroker) Connect(ctx context.Context) error {
 		wb.accountID = accounts[0].AccountID
 	}
 
-	grpcTarget := productionGRPC
-	if wb.uat {
-		grpcTarget = uatGRPC
-	}
-
 	wb.streamer = &fillStreamer{
 		fills:       wb.fills,
 		done:        make(chan struct{}),
@@ -179,9 +172,6 @@ func (wb *WebullBroker) Connect(ctx context.Context) error {
 		pollOrders: func(pollCtx context.Context) ([]orderResponse, error) {
 			return wb.client.getOrders(pollCtx, wb.accountID)
 		},
-		grpcTarget: grpcTarget,
-		sign:       sign,
-		accountID:  wb.accountID,
 	}
 
 	wb.streamer.wg.Add(1)
