@@ -156,23 +156,23 @@ func (vp *viewedPortfolio) StepwiseFactorAnalysis(factors *data.DataFrame) (*Ste
 
 // --- Portfolio interface: point-in-time pass-through methods ---
 
-func (vp *viewedPortfolio) Cash() float64                  { return vp.acct.Cash() }
-func (vp *viewedPortfolio) Value() float64                 { return vp.acct.Value() }
-func (vp *viewedPortfolio) Position(ast asset.Asset) float64    { return vp.acct.Position(ast) }
+func (vp *viewedPortfolio) Cash() float64                         { return vp.acct.Cash() }
+func (vp *viewedPortfolio) Value() float64                        { return vp.acct.Value() }
+func (vp *viewedPortfolio) Position(ast asset.Asset) float64      { return vp.acct.Position(ast) }
 func (vp *viewedPortfolio) PositionValue(ast asset.Asset) float64 { return vp.acct.PositionValue(ast) }
-func (vp *viewedPortfolio) Holdings() map[asset.Asset]float64    { return vp.acct.Holdings() }
-func (vp *viewedPortfolio) Transactions() []Transaction          { return vp.acct.Transactions() }
-func (vp *viewedPortfolio) Annotations() []Annotation            { return vp.acct.Annotations() }
-func (vp *viewedPortfolio) TradeDetails() []TradeDetail          { return vp.acct.TradeDetails() }
-func (vp *viewedPortfolio) Equity() float64                      { return vp.acct.Equity() }
-func (vp *viewedPortfolio) LongMarketValue() float64             { return vp.acct.LongMarketValue() }
-func (vp *viewedPortfolio) ShortMarketValue() float64            { return vp.acct.ShortMarketValue() }
-func (vp *viewedPortfolio) MarginRatio() float64                 { return vp.acct.MarginRatio() }
-func (vp *viewedPortfolio) MarginDeficiency() float64            { return vp.acct.MarginDeficiency() }
-func (vp *viewedPortfolio) BuyingPower() float64                 { return vp.acct.BuyingPower() }
-func (vp *viewedPortfolio) Benchmark() asset.Asset               { return vp.acct.Benchmark() }
-func (vp *viewedPortfolio) SetMetadata(key, value string)        { vp.acct.SetMetadata(key, value) }
-func (vp *viewedPortfolio) GetMetadata(key string) string        { return vp.acct.GetMetadata(key) }
+func (vp *viewedPortfolio) Holdings() map[asset.Asset]float64     { return vp.acct.Holdings() }
+func (vp *viewedPortfolio) Transactions() []Transaction           { return vp.acct.Transactions() }
+func (vp *viewedPortfolio) Annotations() []Annotation             { return vp.acct.Annotations() }
+func (vp *viewedPortfolio) TradeDetails() []TradeDetail           { return vp.acct.TradeDetails() }
+func (vp *viewedPortfolio) Equity() float64                       { return vp.acct.Equity() }
+func (vp *viewedPortfolio) LongMarketValue() float64              { return vp.acct.LongMarketValue() }
+func (vp *viewedPortfolio) ShortMarketValue() float64             { return vp.acct.ShortMarketValue() }
+func (vp *viewedPortfolio) MarginRatio() float64                  { return vp.acct.MarginRatio() }
+func (vp *viewedPortfolio) MarginDeficiency() float64             { return vp.acct.MarginDeficiency() }
+func (vp *viewedPortfolio) BuyingPower() float64                  { return vp.acct.BuyingPower() }
+func (vp *viewedPortfolio) Benchmark() asset.Asset                { return vp.acct.Benchmark() }
+func (vp *viewedPortfolio) SetMetadata(key, value string)         { vp.acct.SetMetadata(key, value) }
+func (vp *viewedPortfolio) GetMetadata(key string) string         { return vp.acct.GetMetadata(key) }
 
 // Prices returns the windowed price DataFrame.
 func (vp *viewedPortfolio) Prices() *data.DataFrame {

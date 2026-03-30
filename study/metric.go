@@ -91,6 +91,7 @@ func WindowedScoreExcluding(rp report.ReportablePortfolio, window DateRange, exc
 	}
 
 	var totalWeight float64
+
 	var weightedSum float64
 
 	for _, seg := range segments {
