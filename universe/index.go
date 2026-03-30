@@ -18,8 +18,6 @@ package universe
 import (
 	"context"
 	"fmt"
-	"sort"
-	"sync"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -30,16 +28,13 @@ import (
 // compile-time check
 var _ Universe = (*indexUniverse)(nil)
 
-// indexUniverse resolves index membership from an IndexProvider and caches
-// results in memory. It fetches on demand when Assets is called for a time
-// outside the cached range.
+// indexUniverse resolves index membership from an IndexProvider. The provider
+// owns the membership state; this type is a thin wrapper that delegates
+// Assets calls and provides Window/At data access.
 type indexUniverse struct {
 	provider  data.IndexProvider
 	indexName string
 	ds        DataSource
-
-	mu    sync.Mutex
-	cache map[int64][]asset.Asset // keyed by Unix seconds
 }
 
 // NewIndex creates an index universe backed by the given provider. The universe
@@ -49,7 +44,6 @@ func NewIndex(provider data.IndexProvider, indexName string) *indexUniverse {
 	return &indexUniverse{
 		provider:  provider,
 		indexName: indexName,
-		cache:     make(map[int64][]asset.Asset),
 	}
 }
 
@@ -58,25 +52,15 @@ func (u *indexUniverse) SetDataSource(ds DataSource) {
 	u.ds = ds
 }
 
+// Assets returns the index members at the given date. The returned slice is
+// borrowed from the provider and is only valid for the current engine step.
+// Callers that need data across steps must copy. Dates must be monotonically
+// increasing across calls.
 func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
-	key := asOfDate.Unix()
-	if members, ok := u.cache[key]; ok {
-		return members
-	}
-
 	members, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
 	if err != nil || len(members) == 0 {
 		return nil
 	}
-
-	sort.Slice(members, func(i, j int) bool {
-		return members[i].Ticker < members[j].Ticker
-	})
-
-	u.cache[key] = members
 
 	return members
 }

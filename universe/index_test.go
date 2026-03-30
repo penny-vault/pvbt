@@ -41,17 +41,6 @@ func (m *mockIndexProvider) IndexMembers(_ context.Context, _ string, t time.Tim
 	return nil, nil
 }
 
-// countingIndexProvider wraps mockIndexProvider and counts calls.
-type countingIndexProvider struct {
-	inner     *mockIndexProvider
-	callCount *int
-}
-
-func (c *countingIndexProvider) IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error) {
-	*c.callCount++
-	return c.inner.IndexMembers(ctx, index, t)
-}
-
 // errorIndexProvider always returns an error.
 type errorIndexProvider struct{}
 
@@ -77,7 +66,7 @@ var _ = Describe("Index Universe", func() {
 	})
 
 	Describe("Assets", func() {
-		It("returns assets from the index provider sorted by ticker", func() {
+		It("returns assets from the index provider", func() {
 			provider := &mockIndexProvider{
 				results: map[int64][]asset.Asset{
 					now.Unix(): {goog, aapl, msft},
@@ -85,26 +74,7 @@ var _ = Describe("Index Universe", func() {
 			}
 			u := universe.NewIndex(provider, "SP500")
 			assets := u.Assets(now)
-			Expect(assets).To(HaveLen(3))
-			Expect(assets[0].Ticker).To(Equal("AAPL"))
-			Expect(assets[1].Ticker).To(Equal("GOOG"))
-			Expect(assets[2].Ticker).To(Equal("MSFT"))
-		})
-
-		It("caches results for the same date", func() {
-			callCount := 0
-			provider := &countingIndexProvider{
-				inner: &mockIndexProvider{
-					results: map[int64][]asset.Asset{
-						now.Unix(): {aapl, goog},
-					},
-				},
-				callCount: &callCount,
-			}
-			u := universe.NewIndex(provider, "SP500")
-			u.Assets(now)
-			u.Assets(now)
-			Expect(callCount).To(Equal(1))
+			Expect(assets).To(ConsistOf(goog, aapl, msft))
 		})
 
 		It("returns nil when provider returns no assets", func() {
