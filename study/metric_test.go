@@ -111,12 +111,12 @@ var _ = Describe("Metric", func() {
 
 	Describe("WindowedScore", func() {
 		It("returns a finite value for a known portfolio and window", func() {
-			score := study.WindowedScore(fakePF, fullWindow, study.MetricCAGR)
+			score := study.WindowedScore(fakePF, fullWindow, portfolio.CAGR.(portfolio.Rankable))
 			Expect(math.IsNaN(score)).To(BeFalse(), "expected finite CAGR score, got NaN")
 		})
 
 		It("returns a finite Sharpe value for sufficient data", func() {
-			score := study.WindowedScore(fakePF, fullWindow, study.MetricSharpe)
+			score := study.WindowedScore(fakePF, fullWindow, portfolio.Sharpe.(portfolio.Rankable))
 			Expect(math.IsNaN(score)).To(BeFalse(), "expected finite Sharpe score, got NaN")
 		})
 
@@ -128,7 +128,7 @@ var _ = Describe("Metric", func() {
 				Start: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
 			}
-			score := study.WindowedScore(fakePF, emptyWindow, study.MetricCAGR)
+			score := study.WindowedScore(fakePF, emptyWindow, portfolio.CAGR.(portfolio.Rankable))
 			Expect(math.IsNaN(score)).To(BeFalse(), "expected non-NaN for empty window")
 			Expect(score).To(Equal(0.0))
 		})
@@ -136,14 +136,14 @@ var _ = Describe("Metric", func() {
 
 	Describe("WindowedScoreExcluding", func() {
 		It("delegates to WindowedScore when exclude is nil", func() {
-			direct := study.WindowedScore(fakePF, fullWindow, study.MetricCAGR)
-			excluding := study.WindowedScoreExcluding(fakePF, fullWindow, nil, study.MetricCAGR)
+			direct := study.WindowedScore(fakePF, fullWindow, portfolio.CAGR.(portfolio.Rankable))
+			excluding := study.WindowedScoreExcluding(fakePF, fullWindow, nil, portfolio.CAGR.(portfolio.Rankable))
 			Expect(excluding).To(Equal(direct))
 		})
 
 		It("delegates to WindowedScore when exclude is empty", func() {
-			direct := study.WindowedScore(fakePF, fullWindow, study.MetricCAGR)
-			excluding := study.WindowedScoreExcluding(fakePF, fullWindow, []study.DateRange{}, study.MetricCAGR)
+			direct := study.WindowedScore(fakePF, fullWindow, portfolio.CAGR.(portfolio.Rankable))
+			excluding := study.WindowedScoreExcluding(fakePF, fullWindow, []study.DateRange{}, portfolio.CAGR.(portfolio.Rankable))
 			Expect(excluding).To(Equal(direct))
 		})
 
@@ -152,19 +152,10 @@ var _ = Describe("Metric", func() {
 				Start: time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC),
 			}
-			score := study.WindowedScoreExcluding(fakePF, fullWindow, []study.DateRange{excludeRange}, study.MetricCAGR)
+			score := study.WindowedScoreExcluding(fakePF, fullWindow, []study.DateRange{excludeRange}, portfolio.CAGR.(portfolio.Rankable))
 			// The current implementation delegates to WindowedScore, so the result
 			// should be finite (not NaN).
 			Expect(math.IsNaN(score)).To(BeFalse(), "expected a value even with exclusions, got NaN")
-		})
-	})
-
-	Describe("Metric.performanceMetric panic", func() {
-		It("panics on an unknown metric value", func() {
-			unknownMetric := study.Metric(9999)
-			Expect(func() {
-				study.WindowedScore(fakePF, fullWindow, unknownMetric)
-			}).To(Panic())
 		})
 	})
 })

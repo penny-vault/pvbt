@@ -60,4 +60,6 @@ func (cagrMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) 
 // returns across different time horizons.
 func (cagrMetric) BenchmarkTargetable() {}
 
+func (cagrMetric) HigherIsBetter() bool { return true }
+
 var CAGR PerformanceMetric = cagrMetric{}

@@ -46,6 +46,13 @@ var _ = Describe("ParamSweep", func() {
 			sweep := study.SweepRange("x", 10.0, 5.0, 1.0)
 			Expect(sweep.Values()).To(BeEmpty())
 		})
+
+		It("avoids floating-point accumulation error for small steps", func() {
+			sweep := study.SweepRange("threshold", 0.0, 1.0, 0.1)
+			values := sweep.Values()
+			Expect(values).To(HaveLen(11)) // 0.0, 0.1, 0.2, ..., 1.0
+			Expect(values[len(values)-1]).To(Equal("1"))
+		})
 	})
 
 	Describe("SweepDuration", func() {

@@ -69,6 +69,15 @@ type BenchmarkTargetable interface {
 	BenchmarkTargetable()
 }
 
+// Rankable extends PerformanceMetric with sort-direction metadata for
+// optimization ranking. Only metrics that implement Rankable can be used
+// as optimization objectives. This forces any new rankable metric to
+// explicitly declare its sort direction, preventing silent sorting bugs.
+type Rankable interface {
+	PerformanceMetric
+	HigherIsBetter() bool
+}
+
 // PerformanceMetric is implemented by each metric type (Sharpe, Beta,
 // etc.). Each implementation lives in its own file with an unexported
 // struct and an exported package-level var. The PortfolioStats interface

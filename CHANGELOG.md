@@ -17,9 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** `Portfolio.Holdings` now returns `map[asset.Asset]float64` instead of taking a callback. Update strategy code from `port.Holdings(func(a asset.Asset, qty float64) { ... })` to `for a, qty := range port.Holdings() { ... }`.
+- **Breaking:** Optimization objectives are now specified with `portfolio.Rankable` values (e.g. `portfolio.Sharpe`) instead of the deleted `study.Metric` enum.
+- Optimization reports show real equity curves for the top 10 parameter combinations.
 
 ### Fixed
 
+- Parameter sweeps with fractional step sizes no longer skip the final value due to floating-point drift.
 - Backtests with rated universes run up to 17x faster because universe membership queries no longer scan the full ratings history on every step.
 - Broker price data is now fetched once per batch instead of once per order, and the MarketImpact fill adjuster correctly receives volume data.
 - Housekeeping data fetches (dividends, splits, margin prices, equity recording) are now batched into a single query per step instead of three separate queries.
