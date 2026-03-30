@@ -16,11 +16,15 @@
 package optimize
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/report"
@@ -31,11 +35,13 @@ var _ report.Report = (*optimizerReport)(nil)
 
 // comboResult holds per-split scores for a single parameter combination.
 type comboResult struct {
-	comboID   string
-	preset    string
-	params    map[string]string
-	oosScores []float64 // one per split
-	isScores  []float64 // one per split
+	comboID      string
+	preset       string
+	params       map[string]string
+	oosScores    []float64 // one per split
+	isScores     []float64 // one per split
+	equityTimes  []time.Time
+	equityValues []float64
 }
 
 // analyzeResults is the shared implementation used by Optimizer.Analyze.
@@ -47,6 +53,12 @@ func analyzeResults(
 ) (report.Report, error) {
 	combos := groupByCombination(splits, objective, results)
 	rankCombos(combos, objective)
+
+	// Discard equity data for combos outside the top N to bound memory.
+	for idx := topN; idx < len(combos); idx++ {
+		combos[idx].equityTimes = nil
+		combos[idx].equityValues = nil
+	}
 
 	rpt := &optimizerReport{
 		ObjectiveName: objective.Name(),
@@ -114,6 +126,22 @@ func groupByCombination(
 		sp := splits[splitIdx]
 		cr.oosScores[splitIdx] = study.WindowedScore(rr.Portfolio, sp.Test, objective)
 		cr.isScores[splitIdx] = study.WindowedScoreExcluding(rr.Portfolio, sp.Train, sp.Exclude, objective)
+
+		// Extract equity curve for this split's test window.
+		perfData := rr.Portfolio.PerfDataView(context.Background())
+		if perfData != nil {
+			eqWindow := perfData.Between(sp.Test.Start, sp.Test.End)
+			if eqWindow != nil {
+				portfolioAsset := asset.Asset{
+					CompositeFigi: "_PORTFOLIO_",
+					Ticker:        "_PORTFOLIO_",
+				}
+				eqCol := eqWindow.Column(portfolioAsset, data.PortfolioEquity)
+				eqTimes := eqWindow.Times()
+				cr.equityTimes = append(cr.equityTimes, eqTimes...)
+				cr.equityValues = append(cr.equityValues, eqCol...)
+			}
+		}
 	}
 
 	comboSlice := make([]*comboResult, 0, len(comboMap))
@@ -296,11 +324,8 @@ func computeOverfitting(combos []*comboResult) []overfittingRow {
 	return rows
 }
 
-// computeEquityCurves builds placeholder equity curve series for the top N
-// combinations. Actual equity curve extraction from portfolios requires
-// access to the portfolio's PerfData, which is not retained per-split in
-// the current RunResult design. The series are included as structural
-// placeholders to be wired up when end-to-end integration is available.
+// computeEquityCurves builds equity curve series for the top N
+// combinations from their stored equity data.
 func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 	limit := topN
 	if limit > len(combos) {
@@ -311,7 +336,9 @@ func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 
 	for idx := range limit {
 		curves[idx] = equityCurveSeries{
-			Name: paramsLabel(combos[idx]),
+			Name:   paramsLabel(combos[idx]),
+			Times:  combos[idx].equityTimes,
+			Values: combos[idx].equityValues,
 		}
 	}
 

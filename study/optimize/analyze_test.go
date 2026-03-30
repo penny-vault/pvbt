@@ -159,7 +159,9 @@ type optReportData struct {
 	} `json:"overfitting"`
 
 	EquityCurves []struct {
-		Name string `json:"name"`
+		Name   string      `json:"name"`
+		Times  []time.Time `json:"times"`
+		Values []float64   `json:"values"`
 	} `json:"equityCurves"`
 }
 
@@ -298,13 +300,15 @@ var _ = Describe("Analyze", func() {
 			Expect(rptData.Overfitting).To(HaveLen(2))
 		})
 
-		It("produces equity curves for the top combos", func() {
+		It("produces equity curves with real data for the top combos", func() {
 			opt := optimize.New(splits, optimize.WithTopN(1))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
 			rptData := decodeOptReport(rpt)
 			Expect(rptData.EquityCurves).To(HaveLen(1))
+			Expect(rptData.EquityCurves[0].Times).NotTo(BeEmpty(), "equity curve should have timestamps")
+			Expect(rptData.EquityCurves[0].Values).NotTo(BeEmpty(), "equity curve should have values")
 		})
 	})
 
