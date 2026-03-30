@@ -24,7 +24,7 @@ func (s *MomentumRotation) Name() string { return "momentum-rotation" }
 
 func (s *MomentumRotation) Setup(_ *engine.Engine) {}
 
-func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+func (s *MomentumRotation) Compute(ctx context.Context, _ *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
 	log := zerolog.Ctx(ctx)
 
 	// Fetch close prices for the lookback period.
@@ -42,7 +42,7 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
 	momentum := df.Pct(df.Len() - 1).Last()
 
 	// Build a fallback DataFrame for risk-off assets at the current date.
-	riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+	riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
 	if err != nil {
 		log.Error().Err(err).Msg("risk-off data fetch failed")
 		return nil

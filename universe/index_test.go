@@ -161,7 +161,7 @@ var _ = Describe("Index Universe", func() {
 			u := universe.NewIndex(provider, "SP500")
 			u.SetDataSource(ds)
 
-			result, err := u.At(context.Background(), now, data.MetricClose)
+			result, err := u.At(context.Background(), data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.fetchCalled).To(BeTrue())
 			Expect(ds.fetchAssets).To(ConsistOf(aapl))
@@ -171,7 +171,7 @@ var _ = Describe("Index Universe", func() {
 		It("returns an error when no data source is set", func() {
 			provider := &mockIndexProvider{results: map[int64][]asset.Asset{}}
 			u := universe.NewIndex(provider, "SP500")
-			_, err := u.At(context.Background(), now, data.MetricClose)
+			_, err := u.At(context.Background(), data.MetricClose)
 			Expect(err).To(HaveOccurred())
 		})
 	})

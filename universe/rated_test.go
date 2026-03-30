@@ -163,7 +163,7 @@ var _ = Describe("Rated Universe", func() {
 			u := universe.NewRated(provider, "analyst1", filter)
 			u.SetDataSource(ds)
 
-			result, err := u.At(context.Background(), now, data.MetricClose)
+			result, err := u.At(context.Background(), data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(ds.fetchCalled).To(BeTrue())
 			Expect(ds.fetchAssets).To(ConsistOf(aapl))
@@ -173,7 +173,7 @@ var _ = Describe("Rated Universe", func() {
 		It("returns an error when no data source is set", func() {
 			provider := &mockRatingProvider{results: map[int64][]asset.Asset{}}
 			u := universe.NewRated(provider, "analyst1", filter)
-			_, err := u.At(context.Background(), now, data.MetricClose)
+			_, err := u.At(context.Background(), data.MetricClose)
 			Expect(err).To(HaveOccurred())
 		})
 	})

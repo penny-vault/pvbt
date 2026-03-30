@@ -96,16 +96,17 @@ func (u *ratedUniverse) Window(ctx context.Context, lookback portfolio.Period, m
 	return u.ds.Fetch(ctx, members, lookback, metrics)
 }
 
-// At returns a single-row DataFrame at time t for the resolved assets and
-// requested metrics.
-func (u *ratedUniverse) At(ctx context.Context, asOfDate time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
+// At returns a single-row DataFrame at CurrentDate() for the resolved assets
+// and requested metrics.
+func (u *ratedUniverse) At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.RatedUniverse()?")
 	}
 
-	members := u.Assets(asOfDate)
+	now := u.ds.CurrentDate()
+	members := u.Assets(now)
 
-	return u.ds.FetchAt(ctx, members, asOfDate, metrics)
+	return u.ds.FetchAt(ctx, members, now, metrics)
 }
 
 // CurrentDate returns the current simulation date from the data source, or

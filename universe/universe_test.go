@@ -110,7 +110,7 @@ var _ = Describe("Static Universe", func() {
 			ds := &mockDataSource{currentDate: now, fetchResult: emptyDF}
 			staticUniverse := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
 
-			result, err := staticUniverse.At(context.Background(), now, data.MetricClose)
+			result, err := staticUniverse.At(context.Background(), data.MetricClose)
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(ds.fetchCalled).To(BeTrue())

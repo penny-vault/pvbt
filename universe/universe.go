@@ -34,8 +34,9 @@ type Universe interface {
 	// for the requested metrics, using the universe's current membership.
 	Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
 
-	// At returns a single-row DataFrame at time t for the requested metrics.
-	At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+	// At returns a single-row DataFrame at CurrentDate() for the requested
+	// metrics. It always uses the current simulation date, the same as Window.
+	At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error)
 
 	// CurrentDate returns the current simulation date from the data source.
 	CurrentDate() time.Time
