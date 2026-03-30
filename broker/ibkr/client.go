@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"strconv"
 	"time"
@@ -99,7 +100,7 @@ func checkResponse(resp *resty.Response) error {
 
 // decodeBody unmarshals a JSON response body into the given target.
 func decodeBody(resp *resty.Response, target any) error {
-	if unmarshalErr := json.Unmarshal(resp.Body(), target); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), target); unmarshalErr != nil {
 		return fmt.Errorf("decode response: %w", unmarshalErr)
 	}
 
@@ -347,7 +348,7 @@ func (ac *apiClient) getSnapshot(ctx context.Context, conid int64) (float64, err
 	}
 
 	var snapshots []map[string]json.RawMessage
-	if unmarshalErr := json.Unmarshal(resp.Body(), &snapshots); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &snapshots); unmarshalErr != nil {
 		return 0, fmt.Errorf("get snapshot parse: %w", unmarshalErr)
 	}
 
@@ -362,7 +363,7 @@ func (ac *apiClient) getSnapshot(ctx context.Context, conid int64) (float64, err
 
 	// IB returns the value as a JSON string (e.g. "155.25").
 	var priceStr string
-	if unmarshalErr := json.Unmarshal(rawPrice, &priceStr); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(rawPrice, &priceStr); unmarshalErr != nil {
 		return 0, fmt.Errorf("get snapshot parse price: %w", unmarshalErr)
 	}
 

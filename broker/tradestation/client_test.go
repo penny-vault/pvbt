@@ -2,7 +2,7 @@ package tradestation_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 
@@ -26,7 +26,7 @@ var _ = Describe("apiClient", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts"))
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
 					{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
 				})
@@ -43,7 +43,7 @@ var _ = Describe("apiClient", func() {
 		It("matches the specified account ID", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
 					{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
 				})
@@ -60,7 +60,7 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when no accounts exist", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{})
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{})
 			}))
 			DeferCleanup(server.Close)
 
@@ -73,7 +73,7 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when specified account is not found", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
 					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
 				})
 			}))
@@ -94,7 +94,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.Header.Get("Authorization")).To(Equal("Bearer test-token"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"Orders": []map[string]any{
 						{"OrderID": "987654321"},
 					},
@@ -144,7 +144,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.Method).To(Equal("PUT"))
 				Expect(req.URL.Path).To(Equal("/v3/orderexecution/orders/ORDOLD"))
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"Orders": []map[string]any{
 						{"OrderID": "ORDNEW"},
 					},
@@ -174,7 +174,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts/ACCT-TEST/orders"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"Orders": []map[string]any{
 						{
 							"OrderID":    "123",
@@ -212,7 +212,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts/ACCT-TEST/positions"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{
 						"Symbol":           "AAPL",
 						"Quantity":         "100",
@@ -242,7 +242,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts/ACCT-TEST/balances"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{
 						"CashBalance": "25000.00",
 						"Equity":      "50000.00",
@@ -269,7 +269,7 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/marketdata/quotes/TSLA"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"Quotes": []map[string]any{
 						{"Symbol": "TSLA", "Last": 245.50},
 					},
@@ -292,9 +292,9 @@ var _ = Describe("apiClient", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				Expect(req.Method).To(Equal("POST"))
 				Expect(req.URL.Path).To(Equal("/v3/orderexecution/ordergroups"))
-				json.NewDecoder(req.Body).Decode(&receivedBody)
+				sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"Orders": []map[string]any{
 						{"OrderID": "GRP-1"},
 						{"OrderID": "GRP-2"},

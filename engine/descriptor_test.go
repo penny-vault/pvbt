@@ -17,7 +17,7 @@ package engine_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -124,11 +124,11 @@ var _ = Describe("DescribeStrategy", func() {
 			strategy := &descriptorStrategy{}
 			info := engine.DescribeStrategy(strategy)
 
-			encoded, err := json.Marshal(info)
+			encoded, err := sonic.Marshal(info)
 			Expect(err).NotTo(HaveOccurred())
 
 			var decoded engine.StrategyInfo
-			Expect(json.Unmarshal(encoded, &decoded)).To(Succeed())
+			Expect(sonic.Unmarshal(encoded, &decoded)).To(Succeed())
 			Expect(decoded.Name).To(Equal(info.Name))
 			Expect(decoded.ShortCode).To(Equal(info.ShortCode))
 		})
@@ -136,7 +136,7 @@ var _ = Describe("DescribeStrategy", func() {
 		It("includes warmup in JSON output", func() {
 			strategy := &descriptorStrategy{}
 			info := engine.DescribeStrategy(strategy)
-			encoded, err := json.Marshal(info)
+			encoded, err := sonic.Marshal(info)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(encoded)).To(ContainSubstring(`"warmup":14`))
 		})
@@ -150,11 +150,11 @@ var _ = Describe("DescribeStrategy", func() {
 			Benchmark:   "SPY",
 		}
 
-		data, err := json.Marshal(desc)
+		data, err := sonic.Marshal(desc)
 		Expect(err).NotTo(HaveOccurred())
 
 		var parsed map[string]interface{}
-		Expect(json.Unmarshal(data, &parsed)).To(Succeed())
+		Expect(sonic.Unmarshal(data, &parsed)).To(Succeed())
 		Expect(parsed["schedule"]).To(Equal("@monthend"))
 		Expect(parsed["benchmark"]).To(Equal("SPY"))
 	})
@@ -180,7 +180,7 @@ var _ = Describe("DescribeStrategy", func() {
 			strategy := &plainStrategy{}
 			info := engine.DescribeStrategy(strategy)
 
-			encoded, err := json.Marshal(info)
+			encoded, err := sonic.Marshal(info)
 			Expect(err).NotTo(HaveOccurred())
 
 			jsonStr := string(encoded)

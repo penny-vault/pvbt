@@ -2,8 +2,8 @@ package library_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -24,7 +24,7 @@ func cannedSearchResponse(repos []map[string]interface{}) string {
 		"incomplete_results": false,
 		"items":              repos,
 	}
-	data, err := json.Marshal(response)
+	data, err := sonic.Marshal(response)
 	Expect(err).NotTo(HaveOccurred())
 	return string(data)
 }
@@ -160,7 +160,7 @@ var _ = Describe("Search", func() {
 					{Name: "old-strat", Owner: "old-owner"},
 				},
 			}
-			cacheData, err := json.Marshal(staleCache)
+			cacheData, err := sonic.Marshal(staleCache)
 			Expect(err).NotTo(HaveOccurred())
 			err = os.WriteFile(filepath.Join(cacheDir, "discover.json"), cacheData, 0o644)
 			Expect(err).NotTo(HaveOccurred())
@@ -206,7 +206,7 @@ var _ = Describe("Search", func() {
 					{Name: "cached-strat", Owner: "cached-owner", Description: "from cache"},
 				},
 			}
-			cacheData, err := json.Marshal(staleCache)
+			cacheData, err := sonic.Marshal(staleCache)
 			Expect(err).NotTo(HaveOccurred())
 			err = os.WriteFile(filepath.Join(cacheDir, "discover.json"), cacheData, 0o644)
 			Expect(err).NotTo(HaveOccurred())

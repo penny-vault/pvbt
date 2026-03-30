@@ -17,9 +17,9 @@ package library
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/url"
 	"os"
 	"os/exec"
@@ -87,7 +87,7 @@ func Install(ctx context.Context, libDir string, cloneURL string) (*InstalledStr
 	}
 
 	var description engine.StrategyInfo
-	if err := json.Unmarshal(describeOutput, &description); err != nil {
+	if err := sonic.Unmarshal(describeOutput, &description); err != nil {
 		cleanup(destDir)
 		return nil, fmt.Errorf("parsing describe output: %w", err)
 	}
@@ -114,7 +114,7 @@ func Install(ctx context.Context, libDir string, cloneURL string) (*InstalledStr
 	}
 
 	// Write index.json.
-	indexData, err := json.MarshalIndent(strategy, "", "  ")
+	indexData, err := sonic.MarshalIndent(strategy, "", "  ")
 	if err != nil {
 		cleanup(destDir)
 		return nil, fmt.Errorf("marshaling index.json: %w", err)
@@ -166,7 +166,7 @@ func List(libDir string) ([]InstalledStrategy, error) {
 		}
 
 		var strategy InstalledStrategy
-		if unmarshalErr := json.Unmarshal(data, &strategy); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(data, &strategy); unmarshalErr != nil {
 			return nil, fmt.Errorf("parsing %s: %w", indexPath, unmarshalErr)
 		}
 

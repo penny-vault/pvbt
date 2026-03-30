@@ -17,7 +17,7 @@ package alpaca_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -56,7 +56,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/account", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":                 "abc-123",
 						"status":             "ACTIVE",
 						"cash":               "25000",
@@ -87,7 +87,7 @@ var _ = Describe("apiClient", func() {
 					capturedSecretHeader = req.Header.Get("APCA-API-SECRET-KEY")
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "abc-123",
 						"status": "ACTIVE",
 					})
@@ -122,10 +122,10 @@ var _ = Describe("apiClient", func() {
 
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /v2/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&capturedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&capturedBody)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "order-123",
 						"status": "new",
 						"symbol": "AAPL",
@@ -172,10 +172,10 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("PATCH /v2/orders/ORD-789", func(writer http.ResponseWriter, req *http.Request) {
 					replacePath = req.URL.Path
-					json.NewDecoder(req.Body).Decode(&replaceBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&replaceBody)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"id":     "ORD-NEW",
 						"status": "accepted",
 					})
@@ -202,7 +202,7 @@ var _ = Describe("apiClient", func() {
 					Expect(req.URL.Query().Get("limit")).To(Equal("500"))
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"id":            "ORD-A",
 							"status":        "new",
@@ -241,7 +241,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"symbol":                 "AAPL",
 							"qty":                    "100",
@@ -269,7 +269,7 @@ var _ = Describe("apiClient", func() {
 			client, _ := newClient(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v2/stocks/TSLA/trades/latest", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"trade": map[string]any{
 							"p": "245.50",
 						},
@@ -298,7 +298,7 @@ var _ = Describe("apiClient", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{
 							"symbol": "GOOG",
 							"qty":    "50",

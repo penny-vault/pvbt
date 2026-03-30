@@ -2,8 +2,8 @@ package tradier_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -130,7 +130,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{
 							"id":     12345,
 							"status": "ok",
@@ -164,7 +164,7 @@ var _ = Describe("TradierBroker", func() {
 				mux.HandleFunc("GET /markets/quotes", func(writer http.ResponseWriter, req *http.Request) {
 					quoteCalled.Add(1)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"quotes": map[string]any{
 							"quote": map[string]any{
 								"last": 200.0,
@@ -181,7 +181,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})
@@ -205,7 +205,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /markets/quotes", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"quotes": map[string]any{
 							"quote": map[string]any{
 								"last": 50000.0,
@@ -257,7 +257,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})
@@ -281,7 +281,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"positions": map[string]any{
 							"position": map[string]any{
 								"id":            1,
@@ -300,7 +300,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})
@@ -330,7 +330,7 @@ var _ = Describe("TradierBroker", func() {
 					deletedPath = req.URL.Path
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 99, "status": "ok"},
 					})
 				})
@@ -363,7 +363,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": map[string]any{
 							"order": existingOrder,
 						},
@@ -377,7 +377,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 100, "status": "ok"},
 					})
 				})
@@ -415,7 +415,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": map[string]any{
 							"order": existingOrder,
 						},
@@ -426,7 +426,7 @@ var _ = Describe("TradierBroker", func() {
 					deleteCalled.Add(1)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 200, "status": "ok"},
 					})
 				})
@@ -437,7 +437,7 @@ var _ = Describe("TradierBroker", func() {
 					postCalled.Add(1)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 201, "status": "ok"},
 					})
 				})
@@ -463,7 +463,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": map[string]any{
 							"order": map[string]any{
 								"id":       int64(300),
@@ -496,7 +496,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"positions": map[string]any{
 							"position": map[string]any{
 								"id":            1,
@@ -511,7 +511,7 @@ var _ = Describe("TradierBroker", func() {
 
 				mux.HandleFunc("GET /markets/quotes", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"quotes": map[string]any{
 							"quote": map[string]any{
 								"last": 500.0,
@@ -536,7 +536,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"balances": map[string]any{
 							"account_number": "TEST-ACCT",
 							"account_type":   "margin",
@@ -564,7 +564,7 @@ var _ = Describe("TradierBroker", func() {
 			tb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/TEST-ACCT/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"balances": map[string]any{
 							"account_number": "TEST-ACCT",
 							"account_type":   "cash",
@@ -599,7 +599,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})
@@ -647,7 +647,7 @@ var _ = Describe("TradierBroker", func() {
 					}
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})
@@ -760,7 +760,7 @@ var _ = Describe("TradierBroker", func() {
 					receivedBody = string(bodyBytes[:nn])
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order": map[string]any{"id": 1, "status": "ok"},
 					})
 				})

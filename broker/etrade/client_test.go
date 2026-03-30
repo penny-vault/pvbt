@@ -2,7 +2,7 @@ package etrade_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -66,7 +66,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			result, err := cl.GetBalance(context.Background())
@@ -115,7 +115,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			positions, err := cl.GetPositions(context.Background())
@@ -133,7 +133,7 @@ var _ = Describe("apiClient", func() {
 						"AccountPortfolio": []any{},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			positions, err := cl.GetPositions(context.Background())
@@ -190,7 +190,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			orders, err := cl.GetOrders(context.Background())
@@ -206,7 +206,7 @@ var _ = Describe("apiClient", func() {
 				resp := map[string]any{
 					"OrdersResponse": map[string]any{},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			orders, err := cl.GetOrders(context.Background())
@@ -243,7 +243,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			price, err := cl.GetQuote(context.Background(), "MSFT")
@@ -292,7 +292,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			txns, err := cl.GetTransactions(context.Background(), since)
@@ -308,7 +308,7 @@ var _ = Describe("apiClient", func() {
 				resp := map[string]any{
 					"TransactionListResponse": map[string]any{},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			txns, err := cl.GetTransactions(context.Background(), time.Now())
@@ -325,7 +325,7 @@ var _ = Describe("apiClient", func() {
 				Expect(rr.Header.Get("Content-Type")).To(ContainSubstring("application/json"))
 
 				var body map[string]any
-				Expect(json.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
+				Expect(sonic.ConfigDefault.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
 				Expect(body).To(HaveKey("PreviewOrderRequest"))
 
 				ww.Header().Set("Content-Type", "application/json")
@@ -336,7 +336,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			req := etrade.EtradePreviewRequest{
@@ -367,7 +367,7 @@ var _ = Describe("apiClient", func() {
 				Expect(rr.Header.Get("Authorization")).To(HavePrefix("OAuth "))
 
 				var body map[string]any
-				Expect(json.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
+				Expect(sonic.ConfigDefault.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
 
 				placeReq, ok := body["PlaceOrderRequest"].(map[string]any)
 				Expect(ok).To(BeTrue())
@@ -379,7 +379,7 @@ var _ = Describe("apiClient", func() {
 						"orderId": int64(555),
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			req := etrade.EtradePreviewRequest{
@@ -399,7 +399,7 @@ var _ = Describe("apiClient", func() {
 				Expect(rr.Header.Get("Authorization")).To(HavePrefix("OAuth "))
 
 				var body map[string]any
-				Expect(json.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
+				Expect(sonic.ConfigDefault.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
 				cancelReq, ok := body["CancelOrderRequest"].(map[string]any)
 				Expect(ok).To(BeTrue())
 				Expect(cancelReq["orderId"]).To(BeNumerically("==", 42))
@@ -443,7 +443,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			_, err := cl.GetBalance(context.Background())
@@ -473,7 +473,7 @@ var _ = Describe("apiClient", func() {
 						},
 					},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			})
 
 			cl.SetCreds(newCreds)

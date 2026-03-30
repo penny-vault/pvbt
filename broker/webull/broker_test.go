@@ -2,7 +2,7 @@ package webull_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -133,7 +133,7 @@ var _ = Describe("WebullBroker", func() {
 					submitCalled.Add(1)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order_id": "ORD-001",
 					})
 				})
@@ -156,10 +156,10 @@ var _ = Describe("WebullBroker", func() {
 
 			wb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /api/trade/order/place", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order_id": "ORD-002",
 					})
 				})
@@ -204,7 +204,7 @@ var _ = Describe("WebullBroker", func() {
 				// First submit an order so it is tracked.
 				mux.HandleFunc("POST /api/trade/order/place", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order_id": "ORD-100",
 					})
 				})
@@ -238,7 +238,7 @@ var _ = Describe("WebullBroker", func() {
 			wb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /api/trade/order/place", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"order_id": "ORD-200",
 					})
 				})
@@ -282,7 +282,7 @@ var _ = Describe("WebullBroker", func() {
 			wb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /api/trade/order/list", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": []map[string]any{
 							{
 								"order_id":         "ORD-300",
@@ -319,7 +319,7 @@ var _ = Describe("WebullBroker", func() {
 			wb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /api/trade/account/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"positions": []map[string]any{
 							{
 								"symbol":        "NVDA",
@@ -348,7 +348,7 @@ var _ = Describe("WebullBroker", func() {
 			wb := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /api/trade/account/detail", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"account_id":      "test-account",
 						"net_liquidation": "100000",
 						"cash_balance":    "25000",

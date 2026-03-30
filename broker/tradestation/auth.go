@@ -7,9 +7,9 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math/big"
 	"net"
 	"net/http"
@@ -89,7 +89,7 @@ func loadTokens(path string) (*tokenStore, error) {
 	}
 
 	var store tokenStore
-	if unmarshalErr := json.Unmarshal(data, &store); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &store); unmarshalErr != nil {
 		return nil, fmt.Errorf("parse tokens: %w", unmarshalErr)
 	}
 
@@ -102,7 +102,7 @@ func saveTokens(path string, store *tokenStore) error {
 		return fmt.Errorf("create token directory: %w", mkdirErr)
 	}
 
-	data, marshalErr := json.MarshalIndent(store, "", "  ")
+	data, marshalErr := sonic.MarshalIndent(store, "", "  ")
 	if marshalErr != nil {
 		return fmt.Errorf("marshal tokens: %w", marshalErr)
 	}
@@ -138,7 +138,7 @@ func (manager *tokenManager) refreshAccessToken() error {
 	}
 
 	var tokenResp tsTokenResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
 		return fmt.Errorf("parse token response: %w", unmarshalErr)
 	}
 
@@ -170,7 +170,7 @@ func (manager *tokenManager) exchangeAuthCode(code string) error {
 	}
 
 	var tokenResp tsTokenResponse
-	if unmarshalErr := json.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &tokenResp); unmarshalErr != nil {
 		return fmt.Errorf("parse token response: %w", unmarshalErr)
 	}
 

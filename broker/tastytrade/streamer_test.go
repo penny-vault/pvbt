@@ -2,7 +2,7 @@ package tastytrade_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -59,7 +59,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 					},
 					"timestamp": 1742480400000,
 				}
-				payload, marshalErr := json.Marshal(envelope)
+				payload, marshalErr := sonic.Marshal(envelope)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				conn.WriteMessage(websocket.TextMessage, payload)
 				<-handlerDone
@@ -103,7 +103,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 					"timestamp": 1742480400000,
 				}
 
-				payload, marshalErr := json.Marshal(envelope)
+				payload, marshalErr := sonic.Marshal(envelope)
 				Expect(marshalErr).ToNot(HaveOccurred())
 
 				// Send the same fill twice.
@@ -159,7 +159,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 					"timestamp": 1742480400000,
 				}
 
-				payload, marshalErr := json.Marshal(envelope)
+				payload, marshalErr := sonic.Marshal(envelope)
 				Expect(marshalErr).ToNot(HaveOccurred())
 				conn.WriteMessage(websocket.TextMessage, payload)
 
@@ -195,7 +195,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"session-token": "ws-test-token",
 						"user":          map[string]any{"external-id": "u1"},
@@ -204,7 +204,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 			})
 			mux.HandleFunc("GET /customers/me/accounts", func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"data": map[string]any{
 						"items": []map[string]any{
 							{"account": map[string]any{"account-number": "WS-ACCT"}},
@@ -225,7 +225,7 @@ var _ = Describe("fillStreamer", Label("streaming"), func() {
 				Expect(readErr).ToNot(HaveOccurred())
 
 				var msg map[string]any
-				json.Unmarshal(msgData, &msg)
+				sonic.Unmarshal(msgData, &msg)
 				connectReceived <- msg
 
 				<-handlerDone

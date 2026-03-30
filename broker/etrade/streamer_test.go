@@ -2,7 +2,7 @@ package etrade_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -133,7 +133,7 @@ var _ = Describe("orderPoller", func() {
 					})
 				}
 
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			}))
 
 			cl = etrade.NewAPIClientForTest(server.URL, testCreds(), testAccountIDKey)
@@ -161,7 +161,7 @@ var _ = Describe("orderPoller", func() {
 				resp := ordersResponse([]map[string]any{
 					executedOrder(99001, "MSFT", 5.0, 320.00),
 				})
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			}))
 
 			cl = etrade.NewAPIClientForTest(server.URL, testCreds(), testAccountIDKey)
@@ -185,7 +185,7 @@ var _ = Describe("orderPoller", func() {
 				resp := ordersResponse([]map[string]any{
 					partialOrder(77777, "GOOG", 30.0, 175.50),
 				})
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			}))
 
 			cl = etrade.NewAPIClientForTest(server.URL, testCreds(), testAccountIDKey)
@@ -207,7 +207,7 @@ var _ = Describe("orderPoller", func() {
 				resp := map[string]any{
 					"OrdersResponse": map[string]any{},
 				}
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			}))
 
 			cl = etrade.NewAPIClientForTest(server.URL, testCreds(), testAccountIDKey)
@@ -247,7 +247,7 @@ var _ = Describe("orderPoller", func() {
 				resp := ordersResponse([]map[string]any{
 					executedOrder(55555, "SPY", 100.0, 450.00),
 				})
-				_ = json.NewEncoder(ww).Encode(resp)
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(resp)
 			}))
 
 			cl = etrade.NewAPIClientForTest(server.URL, testCreds(), testAccountIDKey)

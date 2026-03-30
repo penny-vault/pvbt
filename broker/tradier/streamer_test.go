@@ -2,7 +2,7 @@ package tradier_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -52,7 +52,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				Expect(readErr).ToNot(HaveOccurred())
 
 				var sub map[string]any
-				Expect(json.Unmarshal(msgData, &sub)).To(Succeed())
+				Expect(sonic.Unmarshal(msgData, &sub)).To(Succeed())
 				subReceived <- sub
 
 				<-handlerDone
@@ -103,7 +103,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				LastFillQuantity: 10.0,
 				TransactionDate:  "2026-03-22T15:30:00Z",
 			}
-			eventJSON, _ := json.Marshal(event)
+			eventJSON, _ := sonic.Marshal(event)
 			server, handlerDone := buildServer(eventJSON)
 			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
@@ -132,7 +132,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				LastFillQuantity: 5.0,
 				TransactionDate:  "2026-03-22T16:00:00Z",
 			}
-			eventJSON, _ := json.Marshal(event)
+			eventJSON, _ := sonic.Marshal(event)
 			server, handlerDone := buildServer(eventJSON)
 			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
@@ -155,7 +155,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				Event:  "order",
 				Status: "open",
 			}
-			eventJSON, _ := json.Marshal(event)
+			eventJSON, _ := sonic.Marshal(event)
 			server, handlerDone := buildServer(eventJSON)
 			DeferCleanup(func() { close(handlerDone) })
 			DeferCleanup(server.Close)
@@ -183,7 +183,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 				LastFillQuantity: 20.0,
 				TransactionDate:  "2026-03-22T17:00:00Z",
 			}
-			eventJSON, _ := json.Marshal(event)
+			eventJSON, _ := sonic.Marshal(event)
 
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				conn, upgradeErr := wsUpgrader.Upgrade(writer, req, nil)
@@ -283,7 +283,7 @@ var _ = Describe("accountStreamer", Label("streaming"), func() {
 						"order": orders,
 					},
 				}
-				json.NewEncoder(writer).Encode(resp)
+				sonic.ConfigDefault.NewEncoder(writer).Encode(resp)
 			}))
 			DeferCleanup(server.Close)
 

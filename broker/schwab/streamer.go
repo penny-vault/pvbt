@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sync"
 	"time"
 
@@ -142,7 +143,7 @@ func (streamer *activityStreamer) sendLogin(conn *websocket.Conn) error {
 	}
 
 	var loginResp streamerLoginResponse
-	if unmarshalErr := json.Unmarshal(respData, &loginResp); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(respData, &loginResp); unmarshalErr != nil {
 		return fmt.Errorf("parse LOGIN response: %w", unmarshalErr)
 	}
 
@@ -277,7 +278,7 @@ func (streamer *activityStreamer) run() {
 
 func (streamer *activityStreamer) handleMessage(data []byte) {
 	var msg streamerDataMessage
-	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
 
@@ -292,7 +293,7 @@ func (streamer *activityStreamer) handleMessage(data []byte) {
 			}
 
 			var orderData schwabOrderResponse
-			if unmarshalErr := json.Unmarshal(content.MessageData, &orderData); unmarshalErr != nil {
+			if unmarshalErr := sonic.Unmarshal(content.MessageData, &orderData); unmarshalErr != nil {
 				continue
 			}
 

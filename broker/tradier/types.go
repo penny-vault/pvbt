@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"math"
 	"net/url"
 	"strconv"
@@ -134,7 +135,7 @@ func unmarshalFlexible[T any](raw json.RawMessage) ([]T, error) {
 
 	if trimmed[0] == '[' {
 		var items []T
-		if unmarshalErr := json.Unmarshal(trimmed, &items); unmarshalErr != nil {
+		if unmarshalErr := sonic.Unmarshal(trimmed, &items); unmarshalErr != nil {
 			return nil, fmt.Errorf("tradier: unmarshal array: %w", unmarshalErr)
 		}
 
@@ -142,7 +143,7 @@ func unmarshalFlexible[T any](raw json.RawMessage) ([]T, error) {
 	}
 
 	var single T
-	if unmarshalErr := json.Unmarshal(trimmed, &single); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(trimmed, &single); unmarshalErr != nil {
 		return nil, fmt.Errorf("tradier: unmarshal object: %w", unmarshalErr)
 	}
 

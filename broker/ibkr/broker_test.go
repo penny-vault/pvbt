@@ -2,7 +2,7 @@ package ibkr_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -53,16 +53,16 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 						{Conid: 265598, CompanyName: "Apple Inc", Ticker: "AAPL"},
 					})
 				})
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "ORD-1", OrderStatus: "PreSubmitted"},
 					})
 				})
@@ -91,14 +91,14 @@ var _ = Describe("IBBroker", func() {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					secdefCalls.Add(1)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 						{Conid: 265598, CompanyName: "Apple Inc", Ticker: "AAPL"},
 					})
 				})
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "ORD-1", OrderStatus: "PreSubmitted"},
 					})
 				})
@@ -121,7 +121,7 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{})
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{})
 				})
 			})
 
@@ -140,7 +140,7 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 						{Conid: 265598, CompanyName: "Apple Inc", Ticker: "AAPL"},
 					})
 				})
@@ -164,24 +164,24 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 						{Conid: 76792991, CompanyName: "Tesla Inc", Ticker: "TSLA"},
 					})
 				})
 
 				mux.HandleFunc("GET /iserver/marketdata/snapshot", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 						{"conid": 76792991, "31": "200.00"},
 					})
 				})
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body []map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 					submittedQty = body[0]["quantity"].(float64)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "ORD-AMT-1", OrderStatus: "PreSubmitted"},
 					})
 				})
@@ -206,14 +206,14 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 						{Conid: 265598, CompanyName: "Apple Inc", Ticker: "AAPL"},
 					})
 				})
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{ReplyID: "reply-abc-123", Message: []string{"Are you sure?"}},
 					})
 				})
@@ -221,10 +221,10 @@ var _ = Describe("IBBroker", func() {
 				mux.HandleFunc("POST /iserver/reply/reply-abc-123", func(writer http.ResponseWriter, req *http.Request) {
 					confirmCalled.Add(1)
 					var body map[string]bool
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 					Expect(body["confirmed"]).To(BeTrue())
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "ORD-CONFIRMED", OrderStatus: "PreSubmitted"},
 					})
 				})
@@ -265,7 +265,7 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /iserver/account/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"orders": []map[string]any{
 							{
 								"orderId":           "ORD-100",
@@ -299,7 +299,7 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /portfolio/U1234567/positions/0", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBPositionEntry{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBPositionEntry{
 						{
 							ContractId: 265598,
 							Position:   200,
@@ -327,7 +327,7 @@ var _ = Describe("IBBroker", func() {
 			ib := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /portfolio/U1234567/summary", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(ibkr.IBAccountSummary{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(ibkr.IBAccountSummary{
 						CashBalance:    ibkr.SummaryValue{Amount: 50000.0},
 						NetLiquidation: ibkr.SummaryValue{Amount: 125000.0},
 						BuyingPower:    ibkr.SummaryValue{Amount: 100000.0},
@@ -349,9 +349,9 @@ var _ = Describe("IBBroker", func() {
 		secdefHandler := func(mux *http.ServeMux) {
 			mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 				var body map[string]string
-				json.NewDecoder(req.Body).Decode(&body)
+				sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBSecdefResult{
 					{Conid: 756733, CompanyName: "SPDR S&P 500", Ticker: body["symbol"]},
 				})
 			})
@@ -364,9 +364,9 @@ var _ = Describe("IBBroker", func() {
 				secdefHandler(mux)
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "BRACKET-1", OrderStatus: "PreSubmitted"},
 					})
 				})
@@ -398,9 +398,9 @@ var _ = Describe("IBBroker", func() {
 				secdefHandler(mux)
 
 				mux.HandleFunc("POST /iserver/account/U1234567/orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
+					sonic.ConfigDefault.NewEncoder(writer).Encode([]ibkr.IBOrderReply{
 						{OrderID: "OCA-1", OrderStatus: "PreSubmitted"},
 					})
 				})

@@ -1,7 +1,7 @@
 package tradier_test
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -157,7 +157,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(password).To(Equal("test-client-secret"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]interface{}{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]interface{}{
 					"access_token":  "new-access",
 					"refresh_token": "new-refresh",
 					"expires_in":    86400,
@@ -197,7 +197,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(password).To(Equal("test-client-secret"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(map[string]interface{}{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]interface{}{
 					"access_token":  "refreshed-access",
 					"refresh_token": "refreshed-refresh",
 					"expires_in":    86400,

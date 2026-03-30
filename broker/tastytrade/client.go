@@ -2,8 +2,8 @@ package tastytrade
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/url"
 	"sync"
 	"time"
@@ -255,7 +255,7 @@ func (client *apiClient) getBalance(ctx context.Context) (balanceResponse, error
 		Data balanceResponse `json:"data"`
 	}
 
-	if unmarshalErr := json.Unmarshal(resp.Body(), &envelope); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &envelope); unmarshalErr != nil {
 		return balanceResponse{}, fmt.Errorf("parse balance: %w", unmarshalErr)
 	}
 

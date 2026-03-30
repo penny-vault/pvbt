@@ -1,7 +1,7 @@
 package schwab
 
 import (
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,7 +113,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(password).To(Equal("test-client-secret"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(schwabTokenResponse{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(schwabTokenResponse{
 					AccessToken:  "new-access",
 					RefreshToken: "new-refresh",
 					ExpiresIn:    1800,
@@ -176,7 +176,7 @@ var _ = Describe("tokenManager", func() {
 				Expect(req.Form.Get("redirect_uri")).To(Equal("https://127.0.0.1:5174"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(schwabTokenResponse{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(schwabTokenResponse{
 					AccessToken:  "fresh-access",
 					RefreshToken: "fresh-refresh",
 					ExpiresIn:    1800,
@@ -222,7 +222,7 @@ var _ = Describe("tokenManager", func() {
 		It("refreshes the access token when expired but refresh token is valid", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				json.NewEncoder(writer).Encode(schwabTokenResponse{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(schwabTokenResponse{
 					AccessToken:  "refreshed-access",
 					RefreshToken: "still-valid-refresh",
 					ExpiresIn:    1800,

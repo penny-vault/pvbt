@@ -2,7 +2,7 @@ package tastytrade_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -38,7 +38,7 @@ var _ = Describe("TastytradeBroker", func() {
 
 		mux.HandleFunc("POST /sessions", func(writer http.ResponseWriter, req *http.Request) {
 			writer.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(writer).Encode(map[string]any{
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 				"data": map[string]any{
 					"session-token": "test-token-broker",
 					"user": map[string]any{
@@ -50,7 +50,7 @@ var _ = Describe("TastytradeBroker", func() {
 
 		mux.HandleFunc("GET /customers/me/accounts", func(writer http.ResponseWriter, req *http.Request) {
 			writer.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(writer).Encode(map[string]any{
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 				"data": map[string]any{
 					"items": []map[string]any{
 						{
@@ -119,9 +119,9 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"order": map[string]any{
 								"id":     "ORD-QTY-1",
@@ -158,7 +158,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -172,14 +172,14 @@ var _ = Describe("TastytradeBroker", func() {
 
 				mux.HandleFunc("POST /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					var body map[string]any
-					json.NewDecoder(req.Body).Decode(&body)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 
 					legs := body["legs"].([]any)
 					firstLeg := legs[0].(map[string]any)
 					submittedQty = firstLeg["quantity"].(float64)
 
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"order": map[string]any{
 								"id":     "ORD-AMT-1",
@@ -209,7 +209,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -263,7 +263,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"complex-order": map[string]any{
 								"id": "CX-99",
@@ -323,7 +323,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -361,7 +361,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -405,9 +405,9 @@ var _ = Describe("TastytradeBroker", func() {
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"complex-order": map[string]any{
 								"id": "COMPLEX-1",
@@ -447,9 +447,9 @@ var _ = Describe("TastytradeBroker", func() {
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
-					json.NewDecoder(req.Body).Decode(&receivedBody)
+					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"complex-order": map[string]any{
 								"id":     "BRACKET-1",
@@ -500,7 +500,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"items": []map[string]any{
 								{
@@ -531,7 +531,7 @@ var _ = Describe("TastytradeBroker", func() {
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /accounts/ACCT-001/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					json.NewEncoder(writer).Encode(map[string]any{
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 						"data": map[string]any{
 							"cash-balance":            30000.0,
 							"net-liquidating-value":   75000.0,

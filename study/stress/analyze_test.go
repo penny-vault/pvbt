@@ -17,8 +17,8 @@ package stress_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
+	"github.com/bytedance/sonic"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -115,7 +115,7 @@ func decodeStressReport(rpt report.Report) stressReportData {
 	Expect(rpt.Data(&buf)).To(Succeed())
 
 	var result stressReportData
-	Expect(json.Unmarshal(buf.Bytes(), &result)).To(Succeed())
+	Expect(sonic.Unmarshal(buf.Bytes(), &result)).To(Succeed())
 
 	return result
 }

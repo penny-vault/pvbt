@@ -16,10 +16,20 @@
 package montecarlo
 
 import (
-	"encoding/json"
 	"io"
 	"time"
+
+	"github.com/bytedance/sonic"
 )
+
+var nanSafeAPI = sonic.Config{
+	EscapeHTML:            true,
+	SortMapKeys:           true,
+	CompactMarshaler:      true,
+	CopyString:            true,
+	ValidateString:        true,
+	EncodeNullForInfOrNan: true,
+}.Froze()
 
 // monteCarloReport implements report.Report for the Monte Carlo study.
 type monteCarloReport struct {
@@ -87,5 +97,5 @@ type historicalRankData struct {
 func (mr *monteCarloReport) Name() string { return "MonteCarlo" }
 
 func (mr *monteCarloReport) Data(writer io.Writer) error {
-	return json.NewEncoder(writer).Encode(mr)
+	return nanSafeAPI.NewEncoder(writer).Encode(mr)
 }

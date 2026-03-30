@@ -2,7 +2,7 @@ package ibkr_test
 
 import (
 	"context"
-	"encoding/json"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -35,7 +35,7 @@ var _ = Describe("Auth", func() {
 		It("verifies an active session on Init", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /iserver/auth/status", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"authenticated": true,
 					"connected":     true,
 				})
@@ -51,14 +51,14 @@ var _ = Describe("Auth", func() {
 			var reauthCalled atomic.Int32
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /iserver/auth/status", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"authenticated": false,
 					"connected":     false,
 				})
 			})
 			mux.HandleFunc("POST /iserver/reauthenticate", func(writer http.ResponseWriter, req *http.Request) {
 				reauthCalled.Add(1)
-				json.NewEncoder(writer).Encode(map[string]any{"message": "triggered"})
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{"message": "triggered"})
 			})
 			server := httptest.NewServer(mux)
 			DeferCleanup(server.Close)
@@ -80,7 +80,7 @@ var _ = Describe("Auth", func() {
 			var tickleCalls atomic.Int32
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /iserver/auth/status", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]any{"authenticated": true, "connected": true})
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{"authenticated": true, "connected": true})
 			})
 			mux.HandleFunc("POST /tickle", func(writer http.ResponseWriter, req *http.Request) {
 				tickleCalls.Add(1)
@@ -116,18 +116,18 @@ var _ = Describe("Auth", func() {
 
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /oauth/request_token", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]string{
 					"oauth_token": "req-token-123",
 				})
 			})
 			mux.HandleFunc("POST /oauth/access_token", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]string{
 					"oauth_token":        "access-token-456",
 					"oauth_token_secret": "secret-789",
 				})
 			})
 			mux.HandleFunc("POST /oauth/live_session_token", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]string{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]string{
 					"diffie_hellman_response":      "ZGgtcmVzcG9uc2U=",
 					"live_session_token_signature": "lst-sig",
 				})

@@ -2,8 +2,8 @@ package ibkr_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -33,7 +33,7 @@ var _ = Describe("Client", func() {
 		It("returns the first account ID", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /iserver/accounts", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"accounts": []string{"U1234567"},
 				})
 			})
@@ -52,8 +52,8 @@ var _ = Describe("Client", func() {
 			var capturedBody []map[string]any
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /iserver/account/U123/orders", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewDecoder(req.Body).Decode(&capturedBody)
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewDecoder(req.Body).Decode(&capturedBody)
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{"order_id": "resp-1", "order_status": "PreSubmitted"},
 				})
 			})
@@ -76,7 +76,7 @@ var _ = Describe("Client", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("DELETE /iserver/account/U123/order/", func(writer http.ResponseWriter, req *http.Request) {
 				deletedPath = req.URL.Path
-				json.NewEncoder(writer).Encode(map[string]any{"msg": "cancelled"})
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{"msg": "cancelled"})
 			})
 			server := httptest.NewServer(mux)
 			DeferCleanup(server.Close)
@@ -91,7 +91,7 @@ var _ = Describe("Client", func() {
 		It("fetches positions from portfolio endpoint", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /portfolio/U123/positions/0", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{"contractId": 265598, "position": 100.0, "avgCost": 150.50, "mktPrice": 155.0, "ticker": "AAPL", "currency": "USD"},
 				})
 			})
@@ -110,7 +110,7 @@ var _ = Describe("Client", func() {
 		It("fetches summary from portfolio endpoint", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("GET /portfolio/U123/summary", func(writer http.ResponseWriter, req *http.Request) {
-				json.NewEncoder(writer).Encode(map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
 					"cashbalance":    map[string]any{"amount": 50000.0},
 					"netliquidation": map[string]any{"amount": 150000.0},
 					"buyingpower":    map[string]any{"amount": 200000.0},
@@ -132,9 +132,9 @@ var _ = Describe("Client", func() {
 			mux := http.NewServeMux()
 			mux.HandleFunc("POST /iserver/secdef/search", func(writer http.ResponseWriter, req *http.Request) {
 				var body map[string]string
-				json.NewDecoder(req.Body).Decode(&body)
+				sonic.ConfigDefault.NewDecoder(req.Body).Decode(&body)
 				Expect(body["symbol"]).To(Equal("AAPL"))
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{"conid": 265598, "companyName": "APPLE INC", "ticker": "AAPL"},
 				})
 			})
@@ -155,7 +155,7 @@ var _ = Describe("Client", func() {
 			mux.HandleFunc("GET /iserver/marketdata/snapshot", func(writer http.ResponseWriter, req *http.Request) {
 				Expect(req.URL.Query().Get("conids")).To(Equal("265598"))
 				Expect(req.URL.Query().Get("fields")).To(Equal("31"))
-				json.NewEncoder(writer).Encode([]map[string]any{
+				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
 					{"conid": 265598, "31": "155.25"},
 				})
 			})

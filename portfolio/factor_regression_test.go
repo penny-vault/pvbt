@@ -267,7 +267,7 @@ var _ = Describe("FactorRegression", func() {
 
 			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			acct.Record(portfolio.Transaction{
-				Date:  days[0], Asset: spy, Type: asset.BuyTransaction,
+				Date: days[0], Asset: spy, Type: asset.BuyTransaction,
 				Qty: 100, Price: 100.0, Amount: -10_000.0,
 			})
 

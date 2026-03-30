@@ -2,8 +2,8 @@ package tradier
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"net/url"
 	"time"
 
@@ -116,7 +116,7 @@ func (client *apiClient) getOrders(ctx context.Context) ([]tradierOrderResponse,
 	}
 
 	var wrapper tradierOrdersWrapper
-	if unmarshalErr := json.Unmarshal(resp.Body(), &wrapper); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &wrapper); unmarshalErr != nil {
 		return nil, fmt.Errorf("tradier: decode orders response: %w", unmarshalErr)
 	}
 
@@ -136,7 +136,7 @@ func (client *apiClient) getPositions(ctx context.Context) ([]tradierPositionRes
 	}
 
 	var wrapper tradierPositionsWrapper
-	if unmarshalErr := json.Unmarshal(resp.Body(), &wrapper); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(resp.Body(), &wrapper); unmarshalErr != nil {
 		return nil, fmt.Errorf("tradier: decode positions response: %w", unmarshalErr)
 	}
 

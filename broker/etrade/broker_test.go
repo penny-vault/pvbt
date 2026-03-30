@@ -2,8 +2,8 @@ package etrade_test
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
+	"github.com/bytedance/sonic"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -118,7 +118,7 @@ var _ = Describe("EtradeBroker", func() {
 			// Positions endpoint: empty portfolio so detectAction returns BUY.
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/portfolio.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PortfolioResponse": map[string]any{
 						"AccountPortfolio": []any{},
 					},
@@ -129,7 +129,7 @@ var _ = Describe("EtradeBroker", func() {
 				Expect(rr.Method).To(Equal(http.MethodPost))
 				previewCalled = true
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PreviewOrderResponse": map[string]any{
 						"PreviewIds": []map[string]any{
 							{"previewId": int64(100)},
@@ -142,7 +142,7 @@ var _ = Describe("EtradeBroker", func() {
 				Expect(rr.Method).To(Equal(http.MethodPost))
 				placeCalled = true
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PlaceOrderResponse": map[string]any{
 						"orderId": int64(200),
 					},
@@ -167,7 +167,7 @@ var _ = Describe("EtradeBroker", func() {
 
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/portfolio.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PortfolioResponse": map[string]any{
 						"AccountPortfolio": []any{},
 					},
@@ -178,7 +178,7 @@ var _ = Describe("EtradeBroker", func() {
 				quoteCalled = true
 				ww.Header().Set("Content-Type", "application/json")
 				// $200 price -> $1000 / $200 = 5 shares
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"QuoteResponse": map[string]any{
 						"QuoteData": []map[string]any{
 							{"All": map[string]any{"lastTrade": 200.0}},
@@ -189,7 +189,7 @@ var _ = Describe("EtradeBroker", func() {
 
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/orders/preview.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PreviewOrderResponse": map[string]any{
 						"PreviewIds": []map[string]any{
 							{"previewId": int64(101)},
@@ -200,7 +200,7 @@ var _ = Describe("EtradeBroker", func() {
 
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/orders/place.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PlaceOrderResponse": map[string]any{
 						"orderId": int64(201),
 					},
@@ -223,7 +223,7 @@ var _ = Describe("EtradeBroker", func() {
 		It("returns an error when a dollar-amount order results in zero shares", func() {
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/portfolio.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PortfolioResponse": map[string]any{
 						"AccountPortfolio": []any{},
 					},
@@ -233,7 +233,7 @@ var _ = Describe("EtradeBroker", func() {
 			mux.HandleFunc("/v1/market/quote/GOOG.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
 				// $5000 price -> $10 / $5000 = 0 shares
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"QuoteResponse": map[string]any{
 						"QuoteData": []map[string]any{
 							{"All": map[string]any{"lastTrade": 5000.0}},
@@ -282,7 +282,7 @@ var _ = Describe("EtradeBroker", func() {
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/orders/cancel.json", func(ww http.ResponseWriter, rr *http.Request) {
 				Expect(rr.Method).To(Equal(http.MethodPut))
 				var body map[string]any
-				Expect(json.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
+				Expect(sonic.ConfigDefault.NewDecoder(rr.Body).Decode(&body)).To(Succeed())
 				cancelReq, ok := body["CancelOrderRequest"].(map[string]any)
 				Expect(ok).To(BeTrue())
 				Expect(cancelReq["orderId"]).To(BeNumerically("==", 42))
@@ -324,7 +324,7 @@ var _ = Describe("EtradeBroker", func() {
 				Expect(rr.Method).To(Equal(http.MethodPut))
 				previewCalled = true
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PreviewOrderResponse": map[string]any{
 						"PreviewIds": []map[string]any{
 							{"previewId": int64(102)},
@@ -337,7 +337,7 @@ var _ = Describe("EtradeBroker", func() {
 				Expect(rr.Method).To(Equal(http.MethodPut))
 				placeCalled = true
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PlaceOrderResponse": map[string]any{
 						"orderId": int64(202),
 					},
@@ -382,7 +382,7 @@ var _ = Describe("EtradeBroker", func() {
 		It("returns translated broker orders", func() {
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/orders.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"OrdersResponse": map[string]any{
 						"Order": []map[string]any{
 							{
@@ -439,7 +439,7 @@ var _ = Describe("EtradeBroker", func() {
 		It("returns translated broker positions with mark price from quote", func() {
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/portfolio.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"PortfolioResponse": map[string]any{
 						"AccountPortfolio": []map[string]any{
 							{
@@ -460,7 +460,7 @@ var _ = Describe("EtradeBroker", func() {
 
 			mux.HandleFunc("/v1/market/quote/NVDA.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"QuoteResponse": map[string]any{
 						"QuoteData": []map[string]any{
 							{"All": map[string]any{"lastTrade": 105.0}},
@@ -501,7 +501,7 @@ var _ = Describe("EtradeBroker", func() {
 		It("returns translated broker balance", func() {
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/balance.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"BalanceResponse": map[string]any{
 						"accountType": "MARGIN",
 						"Computed": map[string]any{
@@ -551,7 +551,7 @@ var _ = Describe("EtradeBroker", func() {
 
 			mux.HandleFunc("/v1/accounts/"+testAccountIDKey+"/transactions.json", func(ww http.ResponseWriter, _ *http.Request) {
 				ww.Header().Set("Content-Type", "application/json")
-				_ = json.NewEncoder(ww).Encode(map[string]any{
+				_ = sonic.ConfigDefault.NewEncoder(ww).Encode(map[string]any{
 					"TransactionListResponse": map[string]any{
 						"Transaction": []map[string]any{
 							{

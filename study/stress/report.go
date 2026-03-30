@@ -16,9 +16,19 @@
 package stress
 
 import (
-	"encoding/json"
 	"io"
+
+	"github.com/bytedance/sonic"
 )
+
+var nanSafeAPI = sonic.Config{
+	EscapeHTML:            true,
+	SortMapKeys:           true,
+	CompactMarshaler:      true,
+	CopyString:            true,
+	ValidateString:        true,
+	EncodeNullForInfOrNan: true,
+}.Froze()
 
 // stressReport implements report.Report for the stress test study.
 type stressReport struct {
@@ -57,5 +67,5 @@ type runMetricSet struct {
 func (sr *stressReport) Name() string { return "StressTest" }
 
 func (sr *stressReport) Data(writer io.Writer) error {
-	return json.NewEncoder(writer).Encode(sr)
+	return nanSafeAPI.NewEncoder(writer).Encode(sr)
 }

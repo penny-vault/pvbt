@@ -2,8 +2,8 @@ package tastytrade
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sync"
 	"time"
 
@@ -192,7 +192,7 @@ func (streamer *fillStreamer) run() {
 // handleMessage parses a WebSocket message as a streamer envelope and delivers fills.
 func (streamer *fillStreamer) handleMessage(data []byte) {
 	var msg streamerMessage
-	if unmarshalErr := json.Unmarshal(data, &msg); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(data, &msg); unmarshalErr != nil {
 		return
 	}
 
@@ -201,7 +201,7 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 	}
 
 	var order orderResponse
-	if unmarshalErr := json.Unmarshal(msg.Data, &order); unmarshalErr != nil {
+	if unmarshalErr := sonic.Unmarshal(msg.Data, &order); unmarshalErr != nil {
 		return
 	}
 

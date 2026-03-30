@@ -1,8 +1,8 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
+	"github.com/bytedance/sonic"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -24,7 +24,7 @@ func newDescribeCmd(strategy engine.Strategy) *cobra.Command {
 			}
 
 			if useJSON {
-				data, marshalErr := json.MarshalIndent(info, "", "  ")
+				data, marshalErr := sonic.MarshalIndent(info, "", "  ")
 				if marshalErr != nil {
 					return fmt.Errorf("marshal descriptor: %w", marshalErr)
 				}
