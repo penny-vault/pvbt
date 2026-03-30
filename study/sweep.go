@@ -54,11 +54,13 @@ func (ps ParamSweep) Max() string { return ps.max }
 // SweepRange generates values from min to max (inclusive) with the given step.
 func SweepRange[T Numeric](field string, min, max, step T) ParamSweep {
 	var values []string
+
 	for ii := 0; ; ii++ {
 		val := min + T(ii)*step
 		if val > max {
 			break
 		}
+
 		values = append(values, fmt.Sprintf("%v", val))
 	}
 
