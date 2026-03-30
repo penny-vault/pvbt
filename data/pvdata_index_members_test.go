@@ -184,6 +184,19 @@ var _ = Describe("IndexState", func() {
 		Expect(weightMap["GOOG"]).To(BeNumerically("~", 0.4, 0.001))
 	})
 
+	It("handles changelog-only data without snapshots", func() {
+		state := data.NewIndexState(
+			nil,
+			[]data.IndexChangeEntry{
+				{Date: day1, CompositeFigi: "FIGI-AAPL", Ticker: "AAPL", Action: "add", Weight: 0.5},
+			},
+		)
+		assets, constituents := state.Advance(day1)
+		Expect(assets).To(ConsistOf(aapl))
+		Expect(constituents).To(HaveLen(1))
+		Expect(constituents[0].Weight).To(BeNumerically("~", 0.5, 0.001))
+	})
+
 	It("preserves weight data through changelog adds", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},

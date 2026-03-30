@@ -54,8 +54,9 @@
 //	u := universe.NewStatic("GLD", "TLT", "FRED:DGS3MO")
 //
 // From predefined indexes: use SP500 or Nasdaq100 with an IndexProvider.
-// These universes resolve time-varying membership on every call to Assets and
-// cache the results so repeated lookups for the same date are fast.
+// The provider loads all snapshot and changelog data on first access and
+// advances as time progresses. The returned membership slice is borrowed
+// and only valid for the current engine step.
 //
 //	u := universe.SP500(indexProvider)
 //	u := universe.Nasdaq100(indexProvider)
