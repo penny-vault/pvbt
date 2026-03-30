@@ -109,10 +109,9 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 	}
 
 	recorder, err := data.NewSnapshotRecorder(outputPath, data.SnapshotRecorderConfig{
-		BatchProvider: provider,
-		AssetProvider: provider,
-		// IndexProvider and RatingProvider are nil unless PVDataProvider
-		// implements them in the future or the strategy registers its own.
+		BatchProvider:  provider,
+		AssetProvider:  provider,
+		RatingProvider: provider,
 	})
 	if err != nil {
 		provider.Close()
