@@ -164,7 +164,7 @@ var _ = Describe("Index Universe", func() {
 	})
 
 	Describe("SP500 and Nasdaq100 convenience constructors", func() {
-		It("SP500 returns a universe that queries 'SP500'", func() {
+		It("SP500 returns a universe that queries 'sp500'", func() {
 			provider := &mockIndexProvider{
 				results: map[int64][]asset.Asset{
 					now.Unix(): {aapl},
@@ -175,7 +175,7 @@ var _ = Describe("Index Universe", func() {
 			Expect(assets).To(ConsistOf(aapl))
 		})
 
-		It("Nasdaq100 returns a universe that queries 'NASDAQ100'", func() {
+		It("Nasdaq100 returns a universe that queries 'ndx100'", func() {
 			provider := &mockIndexProvider{
 				results: map[int64][]asset.Asset{
 					now.Unix(): {goog},
