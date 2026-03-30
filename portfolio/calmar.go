@@ -78,4 +78,6 @@ func (calmar) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*da
 // Calmar is the Calmar ratio: annualized return divided by maximum drawdown.
 func (calmar) BenchmarkTargetable() {}
 
+func (calmar) HigherIsBetter() bool { return true }
+
 var Calmar PerformanceMetric = calmar{}

@@ -70,4 +70,6 @@ func (sharpe) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*da
 // risk-free rate, using standard deviation of returns as the risk measure.
 func (sharpe) BenchmarkTargetable() {}
 
+func (sharpe) HigherIsBetter() bool { return true }
+
 var Sharpe PerformanceMetric = sharpe{}

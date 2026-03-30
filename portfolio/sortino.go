@@ -81,4 +81,6 @@ func (sortino) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*d
 // instead of total standard deviation, penalizing only negative volatility.
 func (sortino) BenchmarkTargetable() {}
 
+func (sortino) HigherIsBetter() bool { return true }
+
 var Sortino PerformanceMetric = sortino{}
