@@ -63,7 +63,7 @@ func (runner *Runner) Run(ctx context.Context) (<-chan Progress, <-chan Result, 
 	// Existing sweep path.
 	configs = CrossProduct(configs, runner.Sweeps)
 
-	progressCh := make(chan Progress, len(configs)*2)
+	progressCh := make(chan Progress, 64)
 	resultCh := make(chan Result, 1)
 
 	go runner.execute(ctx, configs, workers, progressCh, resultCh)
