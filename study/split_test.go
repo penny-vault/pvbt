@@ -292,4 +292,75 @@ var _ = Describe("DateRange and Split", func() {
 			Expect(err).To(HaveOccurred())
 		})
 	})
+
+	Describe("SubtractRanges", func() {
+		var (
+			jan = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			mar = time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC)
+			may = time.Date(2020, 5, 1, 0, 0, 0, 0, time.UTC)
+			jul = time.Date(2020, 7, 1, 0, 0, 0, 0, time.UTC)
+			sep = time.Date(2020, 9, 1, 0, 0, 0, 0, time.UTC)
+			dec = time.Date(2020, 12, 31, 0, 0, 0, 0, time.UTC)
+		)
+
+		It("returns the full window when exclude is empty", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				nil,
+			)
+			Expect(result).To(HaveLen(1))
+			Expect(result[0].Start).To(Equal(jan))
+			Expect(result[0].End).To(Equal(dec))
+		})
+
+		It("removes an exclusion from the middle", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				[]study.DateRange{{Start: may, End: jul}},
+			)
+			Expect(result).To(HaveLen(2))
+			Expect(result[0]).To(Equal(study.DateRange{Start: jan, End: may}))
+			Expect(result[1]).To(Equal(study.DateRange{Start: jul, End: dec}))
+		})
+
+		It("removes an exclusion at the start", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				[]study.DateRange{{Start: jan, End: may}},
+			)
+			Expect(result).To(HaveLen(1))
+			Expect(result[0]).To(Equal(study.DateRange{Start: may, End: dec}))
+		})
+
+		It("removes an exclusion at the end", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				[]study.DateRange{{Start: sep, End: dec}},
+			)
+			Expect(result).To(HaveLen(1))
+			Expect(result[0]).To(Equal(study.DateRange{Start: jan, End: sep}))
+		})
+
+		It("handles multiple exclusions", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				[]study.DateRange{
+					{Start: mar, End: may},
+					{Start: jul, End: sep},
+				},
+			)
+			Expect(result).To(HaveLen(3))
+			Expect(result[0]).To(Equal(study.DateRange{Start: jan, End: mar}))
+			Expect(result[1]).To(Equal(study.DateRange{Start: may, End: jul}))
+			Expect(result[2]).To(Equal(study.DateRange{Start: sep, End: dec}))
+		})
+
+		It("returns empty when exclusion covers the full window", func() {
+			result := study.SubtractRanges(
+				study.DateRange{Start: jan, End: dec},
+				[]study.DateRange{{Start: jan, End: dec}},
+			)
+			Expect(result).To(BeEmpty())
+		})
+	})
 })
