@@ -26,7 +26,7 @@ import (
 // closed date interval [window.Start, window.End]. It returns NaN if
 // the metric cannot be computed (e.g. the window contains no data).
 func WindowedScore(rp report.ReportablePortfolio, window DateRange, metric portfolio.PerformanceMetric) float64 {
-	val, err := rp.PerformanceMetric(metric).AbsoluteWindow(window.Start, window.End).Value()
+	val, err := rp.View(window.Start, window.End).PerformanceMetric(metric).Value()
 	if err != nil {
 		return math.NaN()
 	}
@@ -35,17 +35,44 @@ func WindowedScore(rp report.ReportablePortfolio, window DateRange, metric portf
 }
 
 // WindowedScoreExcluding computes the given metric for rp over window,
-// ignoring sub-ranges listed in exclude. When exclude is empty it
-// delegates directly to WindowedScore.
-//
-// Full exclusion filtering (splicing out date ranges from the equity curve
-// before computing the metric) will be implemented when KFold end-to-end
-// testing is in place. For now, only the delegation path is active.
+// ignoring sub-ranges listed in exclude. It computes the metric on each
+// non-excluded segment and returns the duration-weighted average. When
+// exclude is empty it delegates directly to WindowedScore.
 func WindowedScoreExcluding(rp report.ReportablePortfolio, window DateRange, exclude []DateRange, metric portfolio.PerformanceMetric) float64 {
 	if len(exclude) == 0 {
 		return WindowedScore(rp, window, metric)
 	}
 
-	// TODO: implement actual exclusion filtering by splicing the equity curve.
-	return WindowedScore(rp, window, metric)
+	segments := SubtractRanges(window, exclude)
+	if len(segments) == 0 {
+		return math.NaN()
+	}
+
+	if len(segments) == 1 {
+		return WindowedScore(rp, segments[0], metric)
+	}
+
+	var totalWeight float64
+
+	var weightedSum float64
+
+	for _, seg := range segments {
+		score := WindowedScore(rp, seg, metric)
+
+		// Skip data-poor segments (e.g. too few data points for the metric).
+		// The average is computed over segments that produce valid scores.
+		if math.IsNaN(score) {
+			continue
+		}
+
+		weight := seg.End.Sub(seg.Start).Seconds()
+		weightedSum += score * weight
+		totalWeight += weight
+	}
+
+	if totalWeight == 0 {
+		return math.NaN()
+	}
+
+	return weightedSum / totalWeight
 }

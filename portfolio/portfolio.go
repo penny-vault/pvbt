@@ -157,6 +157,11 @@ type Portfolio interface {
 	// StepwiseFactorAnalysis uses forward stepwise AIC selection to find
 	// the best factor subset from the candidates in the DataFrame.
 	StepwiseFactorAnalysis(factors *data.DataFrame) (*StepwiseResult, error)
+
+	// View returns a read-only Portfolio restricted to the date range
+	// [start, end]. Metrics computed on the view use only data within
+	// this range.
+	View(start, end time.Time) Portfolio
 }
 
 // PortfolioManager is the interface the engine uses to manage the

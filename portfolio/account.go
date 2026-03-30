@@ -452,6 +452,18 @@ func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery 
 	return PerformanceMetricQuery{account: a, metric: m}
 }
 
+// View returns a read-only Portfolio restricted to the date range
+// [start, end]. Metrics computed on the view use only data within
+// this range.
+func (a *Account) View(start, end time.Time) Portfolio {
+	return &viewedPortfolio{
+		acct:  a,
+		stats: newWindowedStats(a, start, end),
+		start: start,
+		end:   end,
+	}
+}
+
 func (a *Account) Summary() (Summary, error) {
 	var errs []error
 
@@ -1703,6 +1715,12 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 // PerfData returns the accumulated performance DataFrame, or nil if no
 // prices have been recorded yet.
 func (a *Account) PerfData() *data.DataFrame { return a.perfData }
+
+// SetPerfData replaces the performance DataFrame. This is intended for
+// testing scenarios where a synthetic equity curve is needed.
+func (a *Account) SetPerfData(df *data.DataFrame) {
+	a.perfData = df
+}
 
 // TaxLots returns the current tax lot positions keyed by asset.
 func (a *Account) TaxLots() map[asset.Asset][]TaxLot { return a.taxLots }

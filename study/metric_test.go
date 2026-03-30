@@ -68,10 +68,12 @@ func buildMetricPerfDF(dates []time.Time, equityValues []float64) *data.DataFram
 // buildMetricFakePortfolio creates a metricFakePortfolio backed by the given equity curve.
 func buildMetricFakePortfolio(dates []time.Time, equityValues []float64) *metricFakePortfolio {
 	acct := portfolio.New(portfolio.WithCash(equityValues[0], dates[0]))
+	perfDF := buildMetricPerfDF(dates, equityValues)
+	acct.SetPerfData(perfDF)
 
 	return &metricFakePortfolio{
 		Account: acct,
-		perfDF:  buildMetricPerfDF(dates, equityValues),
+		perfDF:  perfDF,
 	}
 }
 
@@ -115,9 +117,11 @@ var _ = Describe("Metric", func() {
 			Expect(math.IsNaN(score)).To(BeFalse(), "expected finite CAGR score, got NaN")
 		})
 
-		It("returns a finite Sharpe value for sufficient data", func() {
+		It("returns NaN for Sharpe when risk-free rate data is absent", func() {
+			// The fake portfolio has equity data but no risk-free rate column,
+			// so Sharpe correctly returns NaN via ErrNoRiskFreeRate.
 			score := study.WindowedScore(fakePF, fullWindow, portfolio.Sharpe.(portfolio.Rankable))
-			Expect(math.IsNaN(score)).To(BeFalse(), "expected finite Sharpe score, got NaN")
+			Expect(math.IsNaN(score)).To(BeTrue(), "expected NaN Sharpe when risk-free data is missing")
 		})
 
 		It("returns a zero value (not NaN) for a window that contains no data", func() {
@@ -147,15 +151,28 @@ var _ = Describe("Metric", func() {
 			Expect(excluding).To(Equal(direct))
 		})
 
-		It("returns a value when exclude ranges are provided", func() {
+		It("produces a different score when a middle segment is excluded", func() {
+			fullScore := study.WindowedScore(fakePF, fullWindow, portfolio.CAGR.(portfolio.Rankable))
+
 			excludeRange := study.DateRange{
-				Start: time.Date(2020, 3, 1, 0, 0, 0, 0, time.UTC),
-				End:   time.Date(2020, 6, 1, 0, 0, 0, 0, time.UTC),
+				Start: time.Date(2020, 4, 1, 0, 0, 0, 0, time.UTC),
+				End:   time.Date(2020, 8, 1, 0, 0, 0, 0, time.UTC),
 			}
-			score := study.WindowedScoreExcluding(fakePF, fullWindow, []study.DateRange{excludeRange}, portfolio.CAGR.(portfolio.Rankable))
-			// The current implementation delegates to WindowedScore, so the result
-			// should be finite (not NaN).
-			Expect(math.IsNaN(score)).To(BeFalse(), "expected a value even with exclusions, got NaN")
+			excludedScore := study.WindowedScoreExcluding(
+				fakePF, fullWindow, []study.DateRange{excludeRange}, portfolio.CAGR.(portfolio.Rankable),
+			)
+
+			Expect(math.IsNaN(excludedScore)).To(BeFalse(), "excluded score should not be NaN")
+			Expect(excludedScore).NotTo(Equal(fullScore),
+				"excluding a middle segment should change the score")
+		})
+
+		It("returns NaN when the exclusion covers the entire window", func() {
+			score := study.WindowedScoreExcluding(
+				fakePF, fullWindow, []study.DateRange{fullWindow}, portfolio.CAGR.(portfolio.Rankable),
+			)
+			Expect(math.IsNaN(score)).To(BeTrue(),
+				"full exclusion should return NaN")
 		})
 	})
 })

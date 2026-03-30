@@ -17,6 +17,7 @@ package study
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -40,6 +41,57 @@ type Split struct {
 // overlaps reports whether two DateRanges share any time.
 func overlaps(aa, bb DateRange) bool {
 	return aa.Start.Before(bb.End) && bb.Start.Before(aa.End)
+}
+
+// SubtractRanges returns the portions of window not covered by any range in
+// exclude. Exclude ranges are assumed non-overlapping. The returned slices
+// share boundary timestamps with the exclusion ranges; this is acceptable
+// because metric computations are insensitive to a single shared data point.
+func SubtractRanges(window DateRange, exclude []DateRange) []DateRange {
+	if len(exclude) == 0 {
+		return []DateRange{window}
+	}
+
+	// Sort exclusions by start time.
+	sorted := make([]DateRange, len(exclude))
+	copy(sorted, exclude)
+	sort.Slice(sorted, func(ii, jj int) bool {
+		return sorted[ii].Start.Before(sorted[jj].Start)
+	})
+
+	var result []DateRange
+
+	cursor := window.Start
+
+	for _, ex := range sorted {
+		// Clamp exclusion to the window.
+		exStart := ex.Start
+		if exStart.Before(window.Start) {
+			exStart = window.Start
+		}
+
+		exEnd := ex.End
+		if exEnd.After(window.End) {
+			exEnd = window.End
+		}
+
+		// Emit the segment before this exclusion.
+		if cursor.Before(exStart) {
+			result = append(result, DateRange{Start: cursor, End: exStart})
+		}
+
+		// Advance cursor past the exclusion.
+		if exEnd.After(cursor) {
+			cursor = exEnd
+		}
+	}
+
+	// Emit the segment after the last exclusion.
+	if cursor.Before(window.End) {
+		result = append(result, DateRange{Start: cursor, End: window.End})
+	}
+
+	return result
 }
 
 // TrainTest produces a single split where training covers [start, cutoff] and
