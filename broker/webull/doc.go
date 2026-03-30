@@ -47,7 +47,8 @@
 //
 // # Fill Delivery
 //
-// Fills are delivered via a gRPC server-streaming connection to Webull's trade
-// events endpoint. On disconnect, the broker reconnects with exponential
-// backoff and polls for any fills missed during the outage.
+// Fills are delivered by periodically polling the Webull REST API for order
+// status updates. The poller runs with exponential backoff and deduplicates
+// fills already delivered, so each fill is reported exactly once. Webull's
+// gRPC streaming API is not used.
 package webull

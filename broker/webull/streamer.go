@@ -36,19 +36,13 @@ type fillStreamer struct {
 	mu          sync.Mutex
 	cumulFilled map[string]float64 // order ID -> cumulative filled qty
 
-	// pollOrders retrieves current orders for reconciliation on reconnect.
+	// pollOrders retrieves current orders for reconciliation.
 	pollOrders func(ctx context.Context) ([]orderResponse, error)
-
-	// gRPC connection fields
-	grpcTarget string
-	sign       signer
-	accountID  string
 }
 
-// run starts the gRPC trade event stream with reconnect logic. The actual
-// gRPC connection is not yet implemented; this method is a placeholder that
-// will be wired up in Task 8. It references handleTradeEvent and
-// pollMissedFills so the fill-processing logic is reachable from non-test code.
+// run polls for fills on a recurring interval with exponential backoff.
+// Webull's gRPC streaming API is not used; fill delivery relies on periodic
+// REST polling via pollMissedFills.
 func (fs *fillStreamer) run(ctx context.Context) {
 	defer fs.wg.Done()
 
@@ -63,18 +57,7 @@ func (fs *fillStreamer) run(ctx context.Context) {
 		default:
 		}
 
-		// On (re)connect, poll for any fills missed while disconnected.
 		fs.pollMissedFills(ctx)
-
-		// TODO(task-8): open gRPC stream and dispatch events via
-		// fs.handleTradeEvent(orderID, status, filledQty, filledPrice)
-		// On successful stream connection, reset backoff:
-		//   backoff = initialBackoff
-
-		log.Info().
-			Str("target", fs.grpcTarget).
-			Str("account_id", fs.accountID).
-			Msg("webull: gRPC stream not yet connected, waiting before retry")
 
 		select {
 		case <-fs.done:
