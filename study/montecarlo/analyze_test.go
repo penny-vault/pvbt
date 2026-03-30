@@ -85,6 +85,8 @@ func (fp *fakePortfolio) StepwiseFactorAnalysis(_ *data.DataFrame) (*portfolio.S
 	return nil, nil
 }
 
+func (fp *fakePortfolio) View(_, _ time.Time) portfolio.Portfolio { return fp }
+
 // PortfolioStats interface methods.
 func (fp *fakePortfolio) Returns(_ context.Context, _ *portfolio.Period) *data.DataFrame { return nil }
 func (fp *fakePortfolio) ExcessReturns(_ context.Context, _ *portfolio.Period) *data.DataFrame {

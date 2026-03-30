@@ -85,6 +85,8 @@ func (m *mockPortfolio) StepwiseFactorAnalysis(_ *data.DataFrame) (*portfolio.St
 	return nil, nil
 }
 
+func (m *mockPortfolio) View(_, _ time.Time) portfolio.Portfolio { return m }
+
 // mockPriceProvider implements broker.PriceProvider for tests.
 type mockPriceProvider struct {
 	prices map[asset.Asset]float64

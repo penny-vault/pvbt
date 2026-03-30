@@ -17,9 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - **Breaking:** `Portfolio.Holdings` now returns `map[asset.Asset]float64` instead of taking a callback. Update strategy code from `port.Holdings(func(a asset.Asset, qty float64) { ... })` to `for a, qty := range port.Holdings() { ... }`.
+- **Breaking:** `Portfolio` interface now includes a `View(start, end time.Time) Portfolio` method that returns a date-restricted view. Custom `Portfolio` implementations must add this method.
 
 ### Fixed
 
+- KFold cross-validation in-sample scores now correctly exclude the test fold, producing accurate overfitting diagnostics.
 - Backtests with rated universes run up to 17x faster because universe membership queries no longer scan the full ratings history on every step.
 - Broker price data is now fetched once per batch instead of once per order, and the MarketImpact fill adjuster correctly receives volume data.
 - Housekeeping data fetches (dividends, splits, margin prices, equity recording) are now batched into a single query per step instead of three separate queries.
