@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/penny-vault/pvbt/engine"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study/report"
 )
 
@@ -35,7 +36,7 @@ type Runner struct {
 	Sweeps         []ParamSweep
 	SearchStrategy SearchStrategy
 	Splits         []Split
-	Objective      Metric
+	Objective      portfolio.Rankable
 }
 
 // Run executes the study and returns channels for progress and the final result.
@@ -62,7 +63,7 @@ func (runner *Runner) Run(ctx context.Context) (<-chan Progress, <-chan Result, 
 	// Existing sweep path.
 	configs = CrossProduct(configs, runner.Sweeps)
 
-	progressCh := make(chan Progress, len(configs)*2)
+	progressCh := make(chan Progress, 64)
 	resultCh := make(chan Result, 1)
 
 	go runner.execute(ctx, configs, workers, progressCh, resultCh)

@@ -159,7 +159,9 @@ type optReportData struct {
 	} `json:"overfitting"`
 
 	EquityCurves []struct {
-		Name string `json:"name"`
+		Name   string      `json:"name"`
+		Times  []time.Time `json:"times"`
+		Values []float64   `json:"values"`
 	} `json:"equityCurves"`
 }
 
@@ -214,7 +216,7 @@ var _ = Describe("Analyze", func() {
 
 	Describe("with empty results", func() {
 		It("returns a valid report with expected fields", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze([]study.RunResult{})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(rpt.Name()).NotTo(BeEmpty())
@@ -254,7 +256,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("groups by combination ID", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -263,7 +265,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("ranks combos with better OOS scores first", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -280,7 +282,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("produces a best combo detail", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -290,7 +292,7 @@ var _ = Describe("Analyze", func() {
 		})
 
 		It("produces an overfitting check", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
@@ -298,19 +300,21 @@ var _ = Describe("Analyze", func() {
 			Expect(rptData.Overfitting).To(HaveLen(2))
 		})
 
-		It("produces equity curves for the top combos", func() {
+		It("produces equity curves with real data for the top combos", func() {
 			opt := optimize.New(splits, optimize.WithTopN(1))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 
 			rptData := decodeOptReport(rpt)
 			Expect(rptData.EquityCurves).To(HaveLen(1))
+			Expect(rptData.EquityCurves[0].Times).NotTo(BeEmpty(), "equity curve should have timestamps")
+			Expect(rptData.EquityCurves[0].Values).NotTo(BeEmpty(), "equity curve should have values")
 		})
 	})
 
 	Describe("with results missing metadata", func() {
 		It("ignores results without _combination_id", func() {
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 			results := []study.RunResult{
 				{
 					Config: study.RunConfig{
@@ -353,7 +357,7 @@ var _ = Describe("Analyze", func() {
 				makeResult("combo-b", 1, paramsB, acctB),
 			}
 
-			opt := optimize.New(splits, optimize.WithObjective(study.MetricMaxDrawdown))
+			opt := optimize.New(splits, optimize.WithObjective(portfolio.MaxDrawdown.(portfolio.Rankable)))
 			rpt, err := opt.Analyze(results)
 			Expect(err).NotTo(HaveOccurred())
 

@@ -74,4 +74,6 @@ func (maxDrawdown) ComputeSeries(ctx context.Context, stats PortfolioStats, wind
 // MaxDrawdown is the largest peak-to-trough decline in portfolio value.
 func (maxDrawdown) BenchmarkTargetable() {}
 
+func (maxDrawdown) HigherIsBetter() bool { return true }
+
 var MaxDrawdown PerformanceMetric = maxDrawdown{}

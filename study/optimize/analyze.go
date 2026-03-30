@@ -16,11 +16,16 @@
 package optimize
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
+	"time"
 
+	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/data"
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/report"
 )
@@ -30,34 +35,33 @@ var _ report.Report = (*optimizerReport)(nil)
 
 // comboResult holds per-split scores for a single parameter combination.
 type comboResult struct {
-	comboID   string
-	preset    string
-	params    map[string]string
-	oosScores []float64 // one per split
-	isScores  []float64 // one per split
-}
-
-// higherIsBetter returns true when larger values of the given metric
-// indicate better performance. All supported metrics (Sharpe, CAGR,
-// Sortino, Calmar) have higher-is-better semantics. MaxDrawdown returns
-// negative values (e.g. -0.05 for a 5% drawdown), so closer to zero
-// (numerically higher) is also better.
-func higherIsBetter(_ study.Metric) bool {
-	return true
+	comboID      string
+	preset       string
+	params       map[string]string
+	oosScores    []float64 // one per split
+	isScores     []float64 // one per split
+	equityTimes  []time.Time
+	equityValues []float64
 }
 
 // analyzeResults is the shared implementation used by Optimizer.Analyze.
 func analyzeResults(
 	splits []study.Split,
-	objective study.Metric,
+	objective portfolio.Rankable,
 	topN int,
 	results []study.RunResult,
 ) (report.Report, error) {
 	combos := groupByCombination(splits, objective, results)
 	rankCombos(combos, objective)
 
+	// Discard equity data for combos outside the top N to bound memory.
+	for idx := topN; idx < len(combos); idx++ {
+		combos[idx].equityTimes = nil
+		combos[idx].equityValues = nil
+	}
+
 	rpt := &optimizerReport{
-		ObjectiveName: metricName(objective),
+		ObjectiveName: objective.Name(),
 		Rankings:      computeRankings(combos),
 		Overfitting:   computeOverfitting(combos),
 		EquityCurves:  computeEquityCurves(combos, topN),
@@ -74,7 +78,7 @@ func analyzeResults(
 // computes IS/OOS scores for each combo+split pair.
 func groupByCombination(
 	splits []study.Split,
-	objective study.Metric,
+	objective portfolio.PerformanceMetric,
 	results []study.RunResult,
 ) []*comboResult {
 	comboMap := make(map[string]*comboResult)
@@ -122,6 +126,22 @@ func groupByCombination(
 		sp := splits[splitIdx]
 		cr.oosScores[splitIdx] = study.WindowedScore(rr.Portfolio, sp.Test, objective)
 		cr.isScores[splitIdx] = study.WindowedScoreExcluding(rr.Portfolio, sp.Train, sp.Exclude, objective)
+
+		// Extract equity curve for this split's test window.
+		perfData := rr.Portfolio.PerfDataView(context.Background())
+		if perfData != nil {
+			eqWindow := perfData.Between(sp.Test.Start, sp.Test.End)
+			if eqWindow != nil {
+				portfolioAsset := asset.Asset{
+					CompositeFigi: "_PORTFOLIO_",
+					Ticker:        "_PORTFOLIO_",
+				}
+				eqCol := eqWindow.Column(portfolioAsset, data.PortfolioEquity)
+				eqTimes := eqWindow.Times()
+				cr.equityTimes = append(cr.equityTimes, eqTimes...)
+				cr.equityValues = append(cr.equityValues, eqCol...)
+			}
+		}
 	}
 
 	comboSlice := make([]*comboResult, 0, len(comboMap))
@@ -180,8 +200,8 @@ func stddevIgnoringNaN(values []float64) float64 {
 
 // rankCombos sorts combos by mean OOS score: descending for metrics where
 // higher is better, ascending for metrics like MaxDrawdown.
-func rankCombos(combos []*comboResult, objective study.Metric) {
-	ascending := !higherIsBetter(objective)
+func rankCombos(combos []*comboResult, objective portfolio.Rankable) {
+	ascending := !objective.HigherIsBetter()
 
 	sort.Slice(combos, func(left, right int) bool {
 		leftMean := meanIgnoringNaN(combos[left].oosScores)
@@ -304,11 +324,8 @@ func computeOverfitting(combos []*comboResult) []overfittingRow {
 	return rows
 }
 
-// computeEquityCurves builds placeholder equity curve series for the top N
-// combinations. Actual equity curve extraction from portfolios requires
-// access to the portfolio's PerfData, which is not retained per-split in
-// the current RunResult design. The series are included as structural
-// placeholders to be wired up when end-to-end integration is available.
+// computeEquityCurves builds equity curve series for the top N
+// combinations from their stored equity data.
 func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 	limit := topN
 	if limit > len(combos) {
@@ -319,27 +336,11 @@ func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
 
 	for idx := range limit {
 		curves[idx] = equityCurveSeries{
-			Name: paramsLabel(combos[idx]),
+			Name:   paramsLabel(combos[idx]),
+			Times:  combos[idx].equityTimes,
+			Values: combos[idx].equityValues,
 		}
 	}
 
 	return curves
-}
-
-// metricName returns a human-readable name for the given metric.
-func metricName(metric study.Metric) string {
-	switch metric {
-	case study.MetricSharpe:
-		return "Sharpe"
-	case study.MetricCAGR:
-		return "CAGR"
-	case study.MetricMaxDrawdown:
-		return "MaxDrawdown"
-	case study.MetricSortino:
-		return "Sortino"
-	case study.MetricCalmar:
-		return "Calmar"
-	default:
-		return fmt.Sprintf("Metric(%d)", int(metric))
-	}
 }

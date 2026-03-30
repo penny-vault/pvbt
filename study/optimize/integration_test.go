@@ -21,6 +21,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/optimize"
 )
@@ -62,7 +63,7 @@ var _ = Describe("Integration", func() {
 			makeResult("combo-c", 0, paramsC, acctC),
 		}
 
-		opt := optimize.New(splits, optimize.WithObjective(study.MetricCAGR))
+		opt := optimize.New(splits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 		rpt, analyzeErr := opt.Analyze(results)
 
 		Expect(analyzeErr).NotTo(HaveOccurred())
@@ -129,7 +130,7 @@ var _ = Describe("Integration", func() {
 			makeResult("combo-b", 1, paramsB, acctB2),
 		}
 
-		opt := optimize.New(allSplits, optimize.WithObjective(study.MetricCAGR))
+		opt := optimize.New(allSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
 		rpt, analyzeErr := opt.Analyze(results)
 
 		Expect(analyzeErr).NotTo(HaveOccurred())

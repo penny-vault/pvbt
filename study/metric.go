@@ -16,55 +16,17 @@
 package study
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study/report"
 )
 
-// Metric identifies a performance metric used to score a portfolio over a
-// date range. It is an enumeration of the metrics supported by the
-// parameter optimisation and validation framework.
-type Metric int
-
-const (
-	// MetricSharpe scores a portfolio by its annualised Sharpe ratio.
-	MetricSharpe Metric = iota
-	// MetricCAGR scores a portfolio by its compound annual growth rate.
-	MetricCAGR Metric = iota
-	// MetricMaxDrawdown scores a portfolio by its maximum drawdown (lower is better; negate if maximising).
-	MetricMaxDrawdown Metric = iota
-	// MetricSortino scores a portfolio by its Sortino ratio.
-	MetricSortino Metric = iota
-	// MetricCalmar scores a portfolio by its Calmar ratio.
-	MetricCalmar Metric = iota
-)
-
-// performanceMetric maps a Metric constant to the corresponding
-// portfolio.PerformanceMetric implementation.
-func (mt Metric) performanceMetric() portfolio.PerformanceMetric {
-	switch mt {
-	case MetricSharpe:
-		return portfolio.Sharpe
-	case MetricCAGR:
-		return portfolio.CAGR
-	case MetricMaxDrawdown:
-		return portfolio.MaxDrawdown
-	case MetricSortino:
-		return portfolio.Sortino
-	case MetricCalmar:
-		return portfolio.Calmar
-	default:
-		panic(fmt.Sprintf("unknown metric: %d", int(mt)))
-	}
-}
-
 // WindowedScore computes the given metric for rp restricted to the
 // closed date interval [window.Start, window.End]. It returns NaN if
 // the metric cannot be computed (e.g. the window contains no data).
-func WindowedScore(rp report.ReportablePortfolio, window DateRange, metric Metric) float64 {
-	val, err := rp.View(window.Start, window.End).PerformanceMetric(metric.performanceMetric()).Value()
+func WindowedScore(rp report.ReportablePortfolio, window DateRange, metric portfolio.PerformanceMetric) float64 {
+	val, err := rp.View(window.Start, window.End).PerformanceMetric(metric).Value()
 	if err != nil {
 		return math.NaN()
 	}
@@ -76,7 +38,7 @@ func WindowedScore(rp report.ReportablePortfolio, window DateRange, metric Metri
 // ignoring sub-ranges listed in exclude. It computes the metric on each
 // non-excluded segment and returns the duration-weighted average. When
 // exclude is empty it delegates directly to WindowedScore.
-func WindowedScoreExcluding(rp report.ReportablePortfolio, window DateRange, exclude []DateRange, metric Metric) float64 {
+func WindowedScoreExcluding(rp report.ReportablePortfolio, window DateRange, exclude []DateRange, metric portfolio.PerformanceMetric) float64 {
 	if len(exclude) == 0 {
 		return WindowedScore(rp, window, metric)
 	}
