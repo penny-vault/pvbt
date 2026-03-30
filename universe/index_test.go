@@ -193,39 +193,6 @@ var _ = Describe("Index Universe", func() {
 		})
 	})
 
-	Describe("Prefetch", func() {
-		It("pre-populates the cache so Assets skips the provider", func() {
-			day1 := time.Date(2025, 6, 15, 0, 0, 0, 0, time.UTC)
-			day2 := time.Date(2025, 6, 16, 0, 0, 0, 0, time.UTC)
-
-			callCount := 0
-			inner := &mockIndexProvider{
-				results: map[int64][]asset.Asset{
-					day1.Unix(): {goog, aapl},
-					day2.Unix(): {msft},
-				},
-			}
-			provider := &countingIndexProvider{
-				inner:     inner,
-				callCount: &callCount,
-			}
-			u := universe.NewIndex(provider, "SP500")
-
-			err := u.Prefetch(context.Background(), day1, day2)
-			Expect(err).NotTo(HaveOccurred())
-
-			assets := u.Assets(day1)
-			Expect(assets).To(HaveLen(2))
-			Expect(assets[0].Ticker).To(Equal("AAPL"))
-			Expect(assets[1].Ticker).To(Equal("GOOG"))
-
-			beforeCount := callCount
-			u.Assets(day1)
-			u.Assets(day2)
-			Expect(callCount).To(Equal(beforeCount))
-		})
-	})
-
 	Describe("SP500 and Nasdaq100 convenience constructors", func() {
 		It("SP500 returns a universe that queries 'SP500'", func() {
 			provider := &mockIndexProvider{

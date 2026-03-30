@@ -36,8 +36,6 @@ type StaticUniverse struct {
 
 func (u *StaticUniverse) Assets(_ time.Time) []asset.Asset { return u.members }
 
-func (u *StaticUniverse) Prefetch(_ context.Context, _, _ time.Time) error { return nil }
-
 func (u *StaticUniverse) Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")

@@ -32,7 +32,7 @@ var _ Universe = (*indexUniverse)(nil)
 
 // indexUniverse resolves index membership from an IndexProvider and caches
 // results in memory. It fetches on demand when Assets is called for a time
-// outside the cached range, or all at once if Prefetch is called.
+// outside the cached range.
 type indexUniverse struct {
 	provider  data.IndexProvider
 	indexName string
@@ -79,32 +79,6 @@ func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	u.cache[key] = members
 
 	return members
-}
-
-func (u *indexUniverse) Prefetch(ctx context.Context, start, end time.Time) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
-	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
-		key := date.Unix()
-		if _, ok := u.cache[key]; ok {
-			continue
-		}
-
-		members, err := u.provider.IndexMembers(ctx, u.indexName, date)
-		if err != nil {
-			return err
-		}
-
-		if len(members) > 0 {
-			sort.Slice(members, func(i, j int) bool {
-				return members[i].Ticker < members[j].Ticker
-			})
-			u.cache[key] = members
-		}
-	}
-
-	return nil
 }
 
 // Window returns a DataFrame covering [currentDate - lookback, currentDate]

@@ -84,33 +84,6 @@ func (u *ratedUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	return members
 }
 
-// Prefetch pre-populates the cache for every day in [start, end].
-func (u *ratedUniverse) Prefetch(ctx context.Context, start, end time.Time) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
-	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
-		key := date.Unix()
-		if _, ok := u.cache[key]; ok {
-			continue
-		}
-
-		members, err := u.provider.RatedAssets(ctx, u.analyst, u.filter, date)
-		if err != nil {
-			return err
-		}
-
-		if len(members) > 0 {
-			sort.Slice(members, func(i, j int) bool {
-				return members[i].Ticker < members[j].Ticker
-			})
-			u.cache[key] = members
-		}
-	}
-
-	return nil
-}
-
 // Window returns a DataFrame covering [currentDate - lookback, currentDate]
 // for the resolved assets and requested metrics.
 func (u *ratedUniverse) Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error) {

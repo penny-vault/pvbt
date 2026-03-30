@@ -26,11 +26,9 @@
 //
 // # Universe Interface
 //
-// Every universe implements five methods:
+// Every universe implements four methods:
 //
 //   - Assets(t time.Time) []asset.Asset -- returns the members at time t.
-//   - Prefetch(ctx, start, end) error -- pre-loads data for a date range so
-//     the engine can operate efficiently.
 //   - Window(ctx, lookback, metrics...) (*data.DataFrame, error) -- returns a
 //     DataFrame covering the lookback period ending at the current simulation
 //     date.
