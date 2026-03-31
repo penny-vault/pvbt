@@ -9,20 +9,17 @@ Universes change over time. The S&P 500 adds and removes companies. ETFs get cre
 ```go
 type Universe interface {
     Assets(t time.Time) []asset.Asset
-    Prefetch(ctx context.Context, start, end time.Time) error
     Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
-    At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+    At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error)
     CurrentDate() time.Time
 }
 ```
 
 `Assets` returns the list of instruments in the universe at time `t`. The engine calls this at each computation step to resolve membership for the current simulation date.
 
-`Prefetch` allows the engine to tell the universe what time range it will operate over. The engine calls this before the run loop starts. Universes that need to load data (like index membership from a database) can fetch everything in one shot. Static universes ignore it.
-
 `Window` fetches a DataFrame for the universe's current assets over a lookback period from the current date. This is the primary way signals get data for the universe.
 
-`At` fetches a single-row DataFrame for the universe's assets at a specific time.
+`At` fetches a single-row DataFrame for the universe's assets at the current simulation date.
 
 `CurrentDate` returns the simulation date the universe is currently positioned at.
 
@@ -70,7 +67,7 @@ s.tech = universe.Nasdaq100(indexProvider)
 
 These constructors take a `data.IndexProvider` -- a provider that knows how to supply historical index membership. The database provider implements this interface alongside `BatchProvider`. The returned universe's membership varies by date. If you backtest a strategy that uses `universe.SP500(p)` starting in 2010, the universe in January 2010 will contain whatever companies were in the S&P 500 at that time -- not today's list.
 
-Index universes cache membership in memory. The first call to `Assets(t)` for a given date fetches from the provider and caches the result. Subsequent calls for the same date are pure in-memory lookups. If the engine calls `Prefetch` before the run, the universe loads the entire range upfront.
+Index universes delegate to the data provider, which loads all snapshot and changelog data on the first call and advances as time progresses. The returned membership slice is borrowed and only valid for the current engine step.
 
 ## Getting data for a universe
 

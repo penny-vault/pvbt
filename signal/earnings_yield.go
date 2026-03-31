@@ -19,7 +19,6 @@ import (
 	"context"
 	"fmt"
 	"math"
-	"time"
 
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/universe"
@@ -31,13 +30,8 @@ const EarningsYieldSignal data.Metric = "EarningsYield"
 // EarningsYield computes earnings per share divided by price for each
 // asset in the universe. Returns a single-row DataFrame with one column
 // per asset containing the earnings yield.
-func EarningsYield(ctx context.Context, assetUniverse universe.Universe, t ...time.Time) *data.DataFrame {
-	fetchTime := assetUniverse.CurrentDate()
-	if len(t) > 0 {
-		fetchTime = t[0]
-	}
-
-	df, err := assetUniverse.At(ctx, fetchTime, data.EarningsPerShare, data.Price)
+func EarningsYield(ctx context.Context, assetUniverse universe.Universe) *data.DataFrame {
+	df, err := assetUniverse.At(ctx, data.EarningsPerShare, data.Price)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("EarningsYield: %w", err))
 	}

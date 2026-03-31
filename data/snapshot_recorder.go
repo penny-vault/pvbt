@@ -487,28 +487,28 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 // -- IndexProvider --
 
 // IndexMembers delegates to the inner IndexProvider and records the results.
-func (r *SnapshotRecorder) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, error) {
+func (r *SnapshotRecorder) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, []IndexConstituent, error) {
 	if r.indexProvider == nil {
-		return nil, nil
+		return nil, nil, nil
 	}
 
-	members, err := r.indexProvider.IndexMembers(ctx, index, forDate)
+	assets, constituents, err := r.indexProvider.IndexMembers(ctx, index, forDate)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	if err := r.recordAssets(members); err != nil {
-		return nil, fmt.Errorf("snapshot recorder: record index member assets: %w", err)
+	if err := r.recordAssets(assets); err != nil {
+		return nil, nil, fmt.Errorf("snapshot recorder: record index member assets: %w", err)
 	}
 
-	if err := r.recordIndexMembers(index, forDate, members); err != nil {
-		return nil, fmt.Errorf("snapshot recorder: record index members: %w", err)
+	if err := r.recordIndexMembers(index, forDate, constituents); err != nil {
+		return nil, nil, fmt.Errorf("snapshot recorder: record index members: %w", err)
 	}
 
-	return members, nil
+	return assets, constituents, nil
 }
 
-func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, members []asset.Asset) error {
+func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, constituents []IndexConstituent) error {
 	tx, err := r.db.Begin()
 	if err != nil {
 		return err
@@ -520,15 +520,15 @@ func (r *SnapshotRecorder) recordIndexMembers(index string, forDate time.Time, m
 		}
 	}()
 
-	stmt, err := tx.Prepare("INSERT OR IGNORE INTO index_members (index_name, event_date, composite_figi, ticker) VALUES (?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT OR IGNORE INTO index_members (index_name, event_date, composite_figi, ticker, weight) VALUES (?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
 	dateStr := forDate.Format("2006-01-02")
-	for _, a := range members {
-		if _, err := stmt.Exec(index, dateStr, a.CompositeFigi, a.Ticker); err != nil {
+	for _, ic := range constituents {
+		if _, err := stmt.Exec(index, dateStr, ic.Asset.CompositeFigi, ic.Asset.Ticker, ic.Weight); err != nil {
 			return err
 		}
 	}

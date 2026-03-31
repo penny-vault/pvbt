@@ -55,22 +55,6 @@ var _ = Describe("EarningsYield", func() {
 		Expect(result.Value(goog, signal.EarningsYieldSignal)).To(BeNumerically("~", 0.05, 1e-10))
 	})
 
-	It("uses explicit time when provided", func() {
-		explicitTime := time.Date(2025, 3, 1, 16, 0, 0, 0, time.UTC)
-		times := []time.Time{explicitTime}
-		vals := [][]float64{{8}, {160}} // EPS=8, Price=160 => 0.05
-		df, err := data.NewDataFrame(times, []asset.Asset{aapl},
-			[]data.Metric{data.EarningsPerShare, data.Price}, data.Daily, vals)
-		Expect(err).NotTo(HaveOccurred())
-
-		ds := &mockDataSource{currentDate: now, fetchResult: df}
-		u := universe.NewStaticWithSource([]asset.Asset{aapl}, ds)
-
-		result := signal.EarningsYield(ctx, u, explicitTime)
-		Expect(result.Err()).NotTo(HaveOccurred())
-		Expect(result.Value(aapl, signal.EarningsYieldSignal)).To(BeNumerically("~", 0.05, 1e-10))
-	})
-
 	It("returns error when EarningsPerShare metric is missing", func() {
 		times := []time.Time{now}
 		vals := [][]float64{{100}} // only Price, no EPS

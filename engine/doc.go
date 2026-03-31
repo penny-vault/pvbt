@@ -89,7 +89,7 @@
 //
 //		// Pick the risk-on asset with the highest positive momentum.
 //		// If none are positive, fall back to the risk-off asset (TLT).
-//		riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+//		riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
 //		if err != nil {
 //			log.Error().Err(err).Msg("risk-off data fetch failed")
 //			return err

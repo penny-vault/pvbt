@@ -76,11 +76,12 @@
 // that universe implementations can obtain data without depending on the
 // engine type directly.
 //
-// [IndexProvider] supplies historical index membership. A provider that has
-// access to historical index composition (e.g. S&P 500 additions and
+// [IndexProvider] supplies historical index membership and weights. A provider
+// that has access to historical index composition (e.g. S&P 500 additions and
 // removals) implements this interface alongside [BatchProvider] or
-// [StreamProvider]. The IndexMembers method returns the list of assets that
-// belonged to the index at a given point in time.
+// [StreamProvider]. The IndexMembers method returns both a plain asset slice
+// and an [IndexConstituent] slice (which includes weight data) for the members
+// that belonged to the index at a given point in time.
 //
 // [DataRequest] describes a batch of data to fetch. It specifies the assets,
 // metrics, time range, and [Frequency].

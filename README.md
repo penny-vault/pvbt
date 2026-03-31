@@ -44,7 +44,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, p portfolio.Portf
 		return nil
 	}
 
-	riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+	riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
 	if err != nil {
 		return nil
 	}

@@ -26,16 +26,14 @@
 //
 // # Universe Interface
 //
-// Every universe implements five methods:
+// Every universe implements four methods:
 //
 //   - Assets(t time.Time) []asset.Asset -- returns the members at time t.
-//   - Prefetch(ctx, start, end) error -- pre-loads data for a date range so
-//     the engine can operate efficiently.
 //   - Window(ctx, lookback, metrics...) (*data.DataFrame, error) -- returns a
 //     DataFrame covering the lookback period ending at the current simulation
 //     date.
-//   - At(ctx, t, metrics...) (*data.DataFrame, error) -- returns a single-row
-//     DataFrame at time t.
+//   - At(ctx, metrics...) (*data.DataFrame, error) -- returns a single-row
+//     DataFrame at the current simulation date.
 //   - CurrentDate() time.Time -- returns the current simulation date.
 //
 // # Creating Universes
@@ -56,8 +54,9 @@
 //	u := universe.NewStatic("GLD", "TLT", "FRED:DGS3MO")
 //
 // From predefined indexes: use SP500 or Nasdaq100 with an IndexProvider.
-// These universes resolve time-varying membership on every call to Assets and
-// cache the results so repeated lookups for the same date are fast.
+// The provider loads all snapshot and changelog data on first access and
+// advances as time progresses. The returned membership slice is borrowed
+// and only valid for the current engine step.
 //
 //	u := universe.SP500(indexProvider)
 //	u := universe.Nasdaq100(indexProvider)
@@ -71,7 +70,7 @@
 // point-in-time lookup, useful for getting the latest price or indicator value.
 //
 //	df, err := u.Window(ctx, portfolio.Months(6), data.Close, data.Volume)
-//	row, err := u.At(ctx, today, data.Close)
+//	row, err := u.At(ctx, data.Close)
 //
 // # Membership and Time
 //

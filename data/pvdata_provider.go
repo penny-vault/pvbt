@@ -36,6 +36,7 @@ import (
 var _ BatchProvider = (*PVDataProvider)(nil)
 var _ AssetProvider = (*PVDataProvider)(nil)
 var _ RatingProvider = (*PVDataProvider)(nil)
+var _ IndexProvider = (*PVDataProvider)(nil)
 
 // pvdataConfig is the subset of ~/.pvdata.toml we care about.
 type pvdataConfig struct {
@@ -50,6 +51,7 @@ type PVDataProvider struct {
 	pool      *pgxpool.Pool
 	ownsPool  bool
 	dimension string
+	indexes   map[string]*indexState
 }
 
 // PVDataOption configures a PVDataProvider.
@@ -683,6 +685,127 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	}
 
 	return assets, rows.Err()
+}
+
+// IndexMembers returns the constituents of the named index at forDate. The
+// returned slice is borrowed -- it is only valid for the current engine step.
+// Callers that need data across steps must copy.
+//
+// Dates must be monotonically increasing across calls for a given index.
+// The provider loads all snapshot and changelog data on the first call and
+// advances an internal cursor as time progresses.
+func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, []IndexConstituent, error) {
+	if p.indexes == nil {
+		p.indexes = make(map[string]*indexState)
+	}
+
+	state, ok := p.indexes[index]
+	if !ok {
+		var err error
+
+		state, err = p.loadIndexState(ctx, index)
+		if err != nil {
+			return nil, nil, fmt.Errorf("pvdata: load index state for %q: %w", index, err)
+		}
+
+		p.indexes[index] = state
+	}
+
+	assets, constituents := state.Advance(forDate)
+
+	return assets, constituents, nil
+}
+
+func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*indexState, error) {
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("acquire connection: %w", err)
+	}
+	defer conn.Release()
+
+	// Load snapshots grouped by date.
+	snapRows, err := conn.Query(ctx,
+		`SELECT snapshot_date, composite_figi, ticker, weight
+		 FROM indices_snapshot
+		 WHERE index_name = $1
+		 ORDER BY snapshot_date, composite_figi`,
+		index,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query snapshots: %w", err)
+	}
+	defer snapRows.Close()
+
+	var snapshots []IndexSnapshotEntry
+
+	var current *IndexSnapshotEntry
+
+	for snapRows.Next() {
+		var (
+			dt           time.Time
+			figi, ticker string
+			weight       float64
+		)
+
+		if err := snapRows.Scan(&dt, &figi, &ticker, &weight); err != nil {
+			return nil, fmt.Errorf("scan snapshot row: %w", err)
+		}
+
+		if current == nil || !current.Date.Equal(dt) {
+			if current != nil {
+				snapshots = append(snapshots, *current)
+			}
+
+			current = &IndexSnapshotEntry{Date: dt}
+		}
+
+		current.Members = append(current.Members, IndexConstituent{
+			Asset: asset.Asset{
+				CompositeFigi: figi,
+				Ticker:        ticker,
+			},
+			Weight: weight,
+		})
+	}
+
+	if current != nil {
+		snapshots = append(snapshots, *current)
+	}
+
+	if err := snapRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate snapshots: %w", err)
+	}
+
+	// Load changelog.
+	logRows, err := conn.Query(ctx,
+		`SELECT event_date, composite_figi, ticker, action, weight
+		 FROM indices_changelog
+		 WHERE index_name = $1
+		 ORDER BY event_date, composite_figi`,
+		index,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query changelog: %w", err)
+	}
+	defer logRows.Close()
+
+	var changelog []IndexChangeEntry
+
+	for logRows.Next() {
+		var entry IndexChangeEntry
+
+		if err := logRows.Scan(&entry.Date, &entry.CompositeFigi, &entry.Ticker, &entry.Action, &entry.Weight); err != nil {
+			return nil, fmt.Errorf("scan changelog row: %w", err)
+		}
+
+		changelog = append(changelog, entry)
+	}
+
+	if err := logRows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate changelog: %w", err)
+	}
+
+	return NewIndexState(snapshots, changelog), nil
 }
 
 // RatingHistory returns the initial rating state just before start and all

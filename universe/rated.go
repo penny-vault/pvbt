@@ -84,33 +84,6 @@ func (u *ratedUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	return members
 }
 
-// Prefetch pre-populates the cache for every day in [start, end].
-func (u *ratedUniverse) Prefetch(ctx context.Context, start, end time.Time) error {
-	u.mu.Lock()
-	defer u.mu.Unlock()
-
-	for date := start; !date.After(end); date = date.AddDate(0, 0, 1) {
-		key := date.Unix()
-		if _, ok := u.cache[key]; ok {
-			continue
-		}
-
-		members, err := u.provider.RatedAssets(ctx, u.analyst, u.filter, date)
-		if err != nil {
-			return err
-		}
-
-		if len(members) > 0 {
-			sort.Slice(members, func(i, j int) bool {
-				return members[i].Ticker < members[j].Ticker
-			})
-			u.cache[key] = members
-		}
-	}
-
-	return nil
-}
-
 // Window returns a DataFrame covering [currentDate - lookback, currentDate]
 // for the resolved assets and requested metrics.
 func (u *ratedUniverse) Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error) {
@@ -123,16 +96,17 @@ func (u *ratedUniverse) Window(ctx context.Context, lookback portfolio.Period, m
 	return u.ds.Fetch(ctx, members, lookback, metrics)
 }
 
-// At returns a single-row DataFrame at time t for the resolved assets and
-// requested metrics.
-func (u *ratedUniverse) At(ctx context.Context, asOfDate time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
+// At returns a single-row DataFrame at CurrentDate() for the resolved assets
+// and requested metrics.
+func (u *ratedUniverse) At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.RatedUniverse()?")
 	}
 
-	members := u.Assets(asOfDate)
+	now := u.ds.CurrentDate()
+	members := u.Assets(now)
 
-	return u.ds.FetchAt(ctx, members, asOfDate, metrics)
+	return u.ds.FetchAt(ctx, members, now, metrics)
 }
 
 // CurrentDate returns the current simulation date from the data source, or

@@ -29,8 +29,9 @@ import (
 
 // testIndexProvider implements both DataProvider (via BatchProvider) and IndexProvider.
 type testIndexProvider struct {
-	metrics []data.Metric
-	members map[int64][]asset.Asset // keyed by Unix seconds
+	metrics      []data.Metric
+	members      map[int64][]asset.Asset // keyed by Unix seconds
+	constituents map[int64][]data.IndexConstituent
 }
 
 func (p *testIndexProvider) Provides() []data.Metric { return p.metrics }
@@ -39,8 +40,8 @@ func (p *testIndexProvider) Fetch(_ context.Context, _ data.DataRequest) (*data.
 	df, err := data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 	return df, err
 }
-func (p *testIndexProvider) IndexMembers(_ context.Context, _ string, t time.Time) ([]asset.Asset, error) {
-	return p.members[t.Unix()], nil
+func (p *testIndexProvider) IndexMembers(_ context.Context, _ string, t time.Time) ([]asset.Asset, []data.IndexConstituent, error) {
+	return p.members[t.Unix()], p.constituents[t.Unix()], nil
 }
 
 var _ = Describe("Engine.IndexUniverse", func() {
@@ -52,6 +53,9 @@ var _ = Describe("Engine.IndexUniverse", func() {
 			metrics: []data.Metric{data.MetricClose},
 			members: map[int64][]asset.Asset{
 				t.Unix(): {aapl},
+			},
+			constituents: map[int64][]data.IndexConstituent{
+				t.Unix(): {{Asset: aapl, Weight: 1.0}},
 			},
 		}
 

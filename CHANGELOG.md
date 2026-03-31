@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Strategies can use `universe.SP500` and `universe.Nasdaq100` to trade against historical index membership sourced from pv-data. Index weight data is available via `Constituents()` on the index universe.
 - Users can now trade live through Webull accounts.
 - Users can now trade live through E*TRADE (Morgan Stanley) accounts.
 - Users can now trade through TradeStation using OAuth 2.0 authentication, with support for all order types, all time-in-force durations, and native OCO/bracket order groups.
@@ -16,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** `IndexProvider.IndexMembers` now returns `([]asset.Asset, []IndexConstituent, error)` instead of `([]asset.Asset, error)`. Implementors must return both the asset list and the constituent list with weights.
+- **Breaking:** `Universe.Prefetch` has been removed. Data providers now pre-fetch internally.
+- **Breaking:** `Universe.At` no longer accepts a date parameter; it always uses the current simulation date. Update strategy code from `u.At(ctx, date, metrics...)` to `u.At(ctx, metrics...)`.
+- **Breaking:** `universe.SP500` and `universe.Nasdaq100` now use pv-data canonical names (`"sp500"`, `"ndx100"`) instead of `"SP500"` and `"NASDAQ100"`.
 - **Breaking:** `Portfolio.Holdings` now returns `map[asset.Asset]float64` instead of taking a callback. Update strategy code from `port.Holdings(func(a asset.Asset, qty float64) { ... })` to `for a, qty := range port.Holdings() { ... }`.
 - **Breaking:** `Portfolio` interface now includes a `View(start, end time.Time) Portfolio` method that returns a date-restricted view. Custom `Portfolio` implementations must add this method.
 - **Breaking:** Optimization objectives are now specified with `portfolio.Rankable` values (e.g. `portfolio.Sharpe`) instead of the deleted `study.Metric` enum.

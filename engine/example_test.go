@@ -80,13 +80,13 @@ func (s *MomentumStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{Schedule: "@monthend", Benchmark: "SPY"}
 }
 
-func (s *MomentumStrategy) Compute(ctx context.Context, e *engine.Engine, p portfolio.Portfolio, batch *portfolio.Batch) error {
+func (s *MomentumStrategy) Compute(ctx context.Context, _ *engine.Engine, p portfolio.Portfolio, batch *portfolio.Batch) error {
 	mom := signal.Momentum(ctx, s.RiskOn, portfolio.Months(3), data.MetricClose)
 	if err := mom.Err(); err != nil {
 		return nil
 	}
 
-	riskOffDF, err := s.RiskOff.At(ctx, e.CurrentDate(), data.MetricClose)
+	riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
 	if err != nil {
 		return nil
 	}

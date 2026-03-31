@@ -112,6 +112,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		BatchProvider:  provider,
 		AssetProvider:  provider,
 		RatingProvider: provider,
+		IndexProvider:  provider,
 	})
 	if err != nil {
 		provider.Close()

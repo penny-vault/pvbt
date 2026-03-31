@@ -60,12 +60,18 @@ type StreamProvider interface {
 	Subscribe(ctx context.Context, req DataRequest) (<-chan DataPoint, error)
 }
 
+// IndexConstituent is an asset with its weight in an index at a point in time.
+type IndexConstituent struct {
+	Asset  asset.Asset
+	Weight float64
+}
+
 // IndexProvider supplies index membership data. A provider that has
 // access to historical index composition (e.g. S&P 500 additions and
 // removals) implements this interface alongside BatchProvider or
 // StreamProvider.
 type IndexProvider interface {
-	IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, error)
+	IndexMembers(ctx context.Context, index string, t time.Time) ([]asset.Asset, []IndexConstituent, error)
 }
 
 // HolidayProvider supplies market holiday data. Providers that have

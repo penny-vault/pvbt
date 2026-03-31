@@ -30,16 +30,13 @@ type Universe interface {
 	// Assets returns the members of the universe at time t.
 	Assets(t time.Time) []asset.Asset
 
-	// Prefetch tells the universe what time range the engine will
-	// operate over so it can load membership data in bulk.
-	Prefetch(ctx context.Context, start, end time.Time) error
-
 	// Window returns a DataFrame covering [currentDate - lookback, currentDate]
 	// for the requested metrics, using the universe's current membership.
 	Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error)
 
-	// At returns a single-row DataFrame at time t for the requested metrics.
-	At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error)
+	// At returns a single-row DataFrame at CurrentDate() for the requested
+	// metrics. It always uses the current simulation date, the same as Window.
+	At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error)
 
 	// CurrentDate returns the current simulation date from the data source.
 	CurrentDate() time.Time

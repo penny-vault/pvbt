@@ -36,8 +36,6 @@ type StaticUniverse struct {
 
 func (u *StaticUniverse) Assets(_ time.Time) []asset.Asset { return u.members }
 
-func (u *StaticUniverse) Prefetch(_ context.Context, _, _ time.Time) error { return nil }
-
 func (u *StaticUniverse) Window(ctx context.Context, lookback portfolio.Period, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
@@ -46,12 +44,14 @@ func (u *StaticUniverse) Window(ctx context.Context, lookback portfolio.Period, 
 	return u.ds.Fetch(ctx, u.members, lookback, metrics)
 }
 
-func (u *StaticUniverse) At(ctx context.Context, t time.Time, metrics ...data.Metric) (*data.DataFrame, error) {
+func (u *StaticUniverse) At(ctx context.Context, metrics ...data.Metric) (*data.DataFrame, error) {
 	if u.ds == nil {
 		return nil, fmt.Errorf("universe has no data source; was it created via engine.Universe()?")
 	}
 
-	return u.ds.FetchAt(ctx, u.members, t, metrics)
+	now := u.ds.CurrentDate()
+
+	return u.ds.FetchAt(ctx, u.members, now, metrics)
 }
 
 func (u *StaticUniverse) CurrentDate() time.Time {
