@@ -16,13 +16,12 @@
 // Package stress implements the stress test study type. It runs a strategy
 // against named historical market scenarios (e.g. the 2008 Financial Crisis,
 // COVID Crash, Dot-com Bust) and computes per-scenario metrics such as
-// maximum drawdown, drawdown velocity, total return, and worst single-day
-// return. The results are composed into a report with a comparison table
+// maximum drawdown, total return, and worst single-day return. The results are composed into a report with a comparison table
 // ranking scenarios by severity.
 //
 // Usage:
 //
-//	scenarios := stress.DefaultScenarios()
+//	scenarios := study.AllScenarios()
 //	stressStudy := stress.New(scenarios)
 //
 //	runner := &study.Runner{
