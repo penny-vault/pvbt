@@ -17,6 +17,7 @@ package optimize
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
@@ -79,6 +80,10 @@ func (opt *Optimizer) Description() string {
 // Configurations returns a single RunConfig whose date range spans the
 // earliest start and latest end across all configured splits.
 func (opt *Optimizer) Configurations(_ context.Context) ([]study.RunConfig, error) {
+	if len(opt.splits) == 0 {
+		return nil, fmt.Errorf("optimizer: no splits configured")
+	}
+
 	earliest := opt.splits[0].FullRange.Start
 	latest := opt.splits[0].FullRange.End
 

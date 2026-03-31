@@ -15,54 +15,43 @@ data" with "zero."
 ## Solution
 
 Replace `encoding/json` with [bytedance/sonic](https://github.com/bytedance/sonic)
-across the entire codebase. Sonic is a drop-in replacement for `encoding/json`
-with an `EncodeNullForInfOrNan` option that encodes NaN and Inf as JSON `null`.
+across the entire codebase. Sonic is a drop-in replacement for `encoding/json`.
 
 ### Scope
 
 1. **Add `github.com/bytedance/sonic` as a dependency.**
 
-2. **Create `internal/jsonutil` package** that wraps sonic with the right config:
+2. **Replace `encoding/json` with `sonic` in all 66 files.** Sonic's top-level
+   API (`sonic.Marshal`, `sonic.Unmarshal`, `sonic.NewEncoder`, `sonic.NewDecoder`)
+   mirrors `encoding/json`. Call sites change `json.X(...)` to `sonic.X(...)`.
+   Files that use `json.RawMessage` retain a secondary `encoding/json` import
+   for the type.
+
+3. **Use a NaN-safe frozen config in the three report `Data()` methods.** Each
+   report file declares a package-level variable:
 
    ```go
-   package jsonutil
-
-   import (
-       "io"
-       "github.com/bytedance/sonic"
-   )
-
-   var api = sonic.Config{
+   var nanSafeAPI = sonic.Config{
+       EscapeHTML:            true,
+       SortMapKeys:           true,
+       CompactMarshaler:      true,
+       CopyString:            true,
+       ValidateString:        true,
        EncodeNullForInfOrNan: true,
    }.Froze()
-
-   func Marshal(val any) ([]byte, error)            { return api.Marshal(val) }
-   func Unmarshal(buf []byte, val any) error         { return api.Unmarshal(buf, val) }
-   func NewEncoder(writer io.Writer) sonic.Encoder   { return api.NewEncoder(writer) }
-   func NewDecoder(reader io.Reader) sonic.Decoder   { return api.NewDecoder(reader) }
    ```
 
-   This provides the same API as `encoding/json` with `EncodeNullForInfOrNan`
-   enabled. All files import `internal/jsonutil` instead of `encoding/json`.
-
-3. **Replace `encoding/json` imports in all 66 files.** Call sites change from
-   `json.Marshal(...)` to `jsonutil.Marshal(...)` etc. No other code changes
-   needed at call sites.
+   The `Data()` methods use `nanSafeAPI.NewEncoder(writer).Encode(...)`.
 
 4. **Remove manual sanitization from `optimize/report.go`:** delete the private
    `sanitizeFloat` function and the copy-and-sanitize logic in `Data()`. The
-   method simplifies to `jsonutil.NewEncoder(writer).Encode(or)`, same as stress
-   and montecarlo already do.
-
-5. **No changes needed to stress or montecarlo `Data()` methods** beyond the
-   import swap -- sonic handles the NaN fields automatically.
+   method simplifies to a single encode call, same as stress and montecarlo.
 
 ### Testing
 
-- Add a test that verifies NaN and Inf float64 values encode as `null` in JSON
-  output. Place this alongside the report package or in a shared test helper.
-- The existing test suite across all 66 files provides regression coverage for
-  the import swap. Run `make test` to confirm no behavioral differences.
+- The existing test suite provides regression coverage for the import swap.
+- Add a test that verifies NaN and Inf float64 values encode as `null` via the
+  NaN-safe config used by report `Data()` methods.
 
 ### Risks
 
