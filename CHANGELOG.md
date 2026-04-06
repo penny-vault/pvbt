@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Schedules support `@daily`, `@quarterbegin`, and `@quarterend` directives for daily and quarterly trading schedules.
 - Strategies can use `universe.SP500` and `universe.Nasdaq100` to trade against historical index membership sourced from pv-data. Index weight data is available via `Constituents()` on the index universe.
 - Users can now trade live through Webull accounts.
 - Users can now trade live through E*TRADE (Morgan Stanley) accounts.

@@ -84,6 +84,141 @@ var _ = Describe("TradeCron", func() {
 		})
 	})
 
+	Describe("@quarterbegin", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("fires on the first trading day of Q1", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Dec 15, 2024 is mid-Q4.
+			forDate := time.Date(2024, time.December, 15, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Jan 2, 2025 is the first trading day of Q1 (Jan 1 is a holiday/weekend).
+			// Jan 1, 2025 is a Wednesday -- but it's New Year's Day.
+			// Without holidays loaded, Jan 1 is a normal Wednesday.
+			want := time.Date(2025, time.January, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("fires on the first trading day of Q2", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Mar 15, 2025 is mid-Q1.
+			forDate := time.Date(2025, time.March, 15, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Apr 1, 2025 is a Tuesday.
+			want := time.Date(2025, time.April, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("advances to next quarter if current quarter's first day has passed", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Feb 15, 2025 -- Q1 already started Jan 1.
+			forDate := time.Date(2025, time.February, 15, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Next quarter begins Apr 1, 2025 (Tuesday).
+			want := time.Date(2025, time.April, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("fires on the first trading day when the quarter starts on a weekend", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Jun 15, 2025 -- looking for Q3 start.
+			forDate := time.Date(2025, time.June, 15, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Jul 1, 2025 is a Tuesday.
+			want := time.Date(2025, time.July, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+	})
+
+	Describe("@quarterend", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("fires on the last trading day of Q1", func() {
+			tc, err := tradecron.New("@quarterend", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Feb 1, 2025 -- mid-Q1.
+			forDate := time.Date(2025, time.February, 1, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Mar 31, 2025 is a Monday.
+			want := time.Date(2025, time.March, 31, 16, 0, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("fires on the last trading day of Q2", func() {
+			tc, err := tradecron.New("@quarterend", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// May 1, 2025 -- mid-Q2.
+			forDate := time.Date(2025, time.May, 1, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Jun 30, 2025 is a Monday.
+			want := time.Date(2025, time.June, 30, 16, 0, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("advances to the next quarter after firing", func() {
+			tc, err := tradecron.New("@quarterend", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// After Q1 end close on Mar 31, 2025.
+			forDate := time.Date(2025, time.March, 31, 16, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Next quarter end is Jun 30, 2025 (Monday).
+			want := time.Date(2025, time.June, 30, 16, 0, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("fires on the last trading day when quarter ends on a weekend", func() {
+			tc, err := tradecron.New("@quarterend", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Aug 1, 2025 -- mid-Q3. Sep 30, 2025 is a Tuesday.
+			forDate := time.Date(2025, time.August, 1, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			want := time.Date(2025, time.September, 30, 16, 0, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("iterates through consecutive quarters", func() {
+			tc, err := tradecron.New("@quarterend", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			forDate := time.Date(2025, time.January, 1, 0, 0, 0, 0, nyc)
+
+			var months []time.Month
+			for range 4 {
+				next := tc.Next(forDate)
+				months = append(months, next.Month())
+				forDate = next.Add(time.Nanosecond)
+			}
+
+			Expect(months).To(Equal([]time.Month{
+				time.March, time.June, time.September, time.December,
+			}))
+		})
+	})
+
 	Describe("Next", func() {
 		Context("when the last trading day of the month is an early-close day", func() {
 			BeforeEach(func() {

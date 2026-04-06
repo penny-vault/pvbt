@@ -18,6 +18,8 @@
 //   - @weekend -- last trading day of the week
 //   - @monthbegin -- first trading day of the month
 //   - @monthend -- last trading day of the month
+//   - @quarterbegin -- first trading day of the quarter
+//   - @quarterend -- last trading day of the quarter
 //
 // Directives may be combined with standard cron fields (minute, hour,
 // day-of-month, month, day-of-week).
@@ -41,6 +43,8 @@
 //	@monthbegin           first trading day of month
 //	@weekbegin            first trading day of week
 //	@weekend              last trading day of week
+//	@quarterbegin         first trading day of quarter
+//	@quarterend           last trading day of quarter
 //	*/5 * * * *           every 5 minutes during trading hours
 //
 // # RegularHours

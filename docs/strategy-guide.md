@@ -218,15 +218,18 @@ Common schedule expressions:
 
 | Expression | When Compute runs |
 |------------|-------------------|
+| `@daily` | Every trading day at market open |
 | `@monthend` | Last trading day of each month at market close |
 | `@monthbegin` | First trading day of each month |
 | `@weekbegin` | First trading day of each week |
 | `@weekend` | Last trading day of each week |
+| `@quarterbegin` | First trading day of each quarter |
+| `@quarterend` | Last trading day of each quarter |
 | `@open * * *` | Every trading day at market open |
 | `@close * * *` | Every trading day at market close |
 | `0 10 * * *` | Every trading day at 10:00 AM ET |
 
-The format is standard 5-field cron (`minute hour day-of-month month day-of-week`) with market-aware extensions. `@open` and `@close` replace the minute/hour fields. `@monthend`, `@monthbegin`, `@weekbegin`, and `@weekend` replace the day-of-month field. All times are Eastern.
+The format is standard 5-field cron (`minute hour day-of-month month day-of-week`) with market-aware extensions. `@open` and `@close` replace the minute/hour fields. `@daily`, `@monthend`, `@monthbegin`, `@weekbegin`, `@weekend`, `@quarterbegin`, and `@quarterend` replace the day-of-month field. All times are Eastern.
 
 ### Warmup
 
