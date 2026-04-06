@@ -59,6 +59,7 @@ func quarterEndMonth(mo time.Month) time.Month {
 func nextQuarterFirstMonth(tt time.Time) time.Time {
 	start := quarterStartMonth(tt.Month()) + 3
 	year := tt.Year()
+
 	if start > 12 {
 		start -= 12
 		year++
