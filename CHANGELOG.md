@@ -29,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Database NULL values for metrics like EV/EBIT now appear as NaN instead of 0 in DataFrames.
 - KFold cross-validation in-sample scores now correctly exclude the test fold, producing accurate overfitting diagnostics.
 - Parameter sweeps with fractional step sizes no longer skip the final value due to floating-point drift.
 - Backtests with rated universes run up to 17x faster because universe membership queries no longer scan the full ratings history on every step.
