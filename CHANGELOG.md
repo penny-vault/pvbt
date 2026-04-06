@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Schedules support `@daily`, `@quarterbegin`, and `@quarterend` directives for daily and quarterly trading schedules.
 - Strategies can use `universe.SP500` and `universe.Nasdaq100` to trade against historical index membership sourced from pv-data. Index weight data is available via `Constituents()` on the index universe.
 - Users can now trade live through Webull accounts.
 - Users can now trade live through E*TRADE (Morgan Stanley) accounts.
@@ -28,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Database NULL values for metrics like EV/EBIT now appear as NaN instead of 0 in DataFrames.
 - KFold cross-validation in-sample scores now correctly exclude the test fold, producing accurate overfitting diagnostics.
 - Parameter sweeps with fractional step sizes no longer skip the final value due to floating-point drift.
 - Backtests with rated universes run up to 17x faster because universe membership queries no longer scan the full ratings history on every step.

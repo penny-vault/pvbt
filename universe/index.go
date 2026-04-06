@@ -116,10 +116,10 @@ func (u *indexUniverse) CurrentDate() time.Time {
 
 // SP500 creates a universe tracking S&P 500 membership historically.
 func SP500(p data.IndexProvider) *indexUniverse {
-	return NewIndex(p, "sp500")
+	return NewIndex(p, "SPX")
 }
 
 // Nasdaq100 creates a universe tracking Nasdaq 100 membership historically.
 func Nasdaq100(p data.IndexProvider) *indexUniverse {
-	return NewIndex(p, "ndx100")
+	return NewIndex(p, "NDX")
 }

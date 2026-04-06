@@ -24,12 +24,15 @@ import (
 )
 
 const (
-	AtOpen       = "@open"
-	AtClose      = "@close"
-	AtWeekBegin  = "@weekbegin"
-	AtWeekEnd    = "@weekend"
-	AtMonthBegin = "@monthbegin"
-	AtMonthEnd   = "@monthend"
+	AtOpen         = "@open"
+	AtClose        = "@close"
+	AtDaily        = "@daily"
+	AtWeekBegin    = "@weekbegin"
+	AtWeekEnd      = "@weekend"
+	AtMonthBegin   = "@monthbegin"
+	AtMonthEnd     = "@monthend"
+	AtQuarterBegin = "@quarterbegin"
+	AtQuarterEnd   = "@quarterend"
 )
 
 // MarketHours defines the opening and closing times for a trading session.
@@ -67,13 +70,16 @@ var (
 //
 // Additional market-aware modifiers are supported:
 //
-//	@open       - Run at market open; replaces Minute and Hour field
-//	              e.g., @open * * *
-//	@close      - Run at market close; replaces Minute and Hour field
-//	@weekbegin  - Run on first trading day of week; replaces DayOfMonth field
-//	@weekend    - Run on last trading day of week; replaces DayOfMonth field
-//	@monthbegin - Run at market open or timespec on first trading day of month
-//	@monthend   - Run at market close or timespec on last trading day of month
+//	@daily        - Run at market open on every trading day (shorthand for @open * * *)
+//	@open         - Run at market open; replaces Minute and Hour field
+//	                e.g., @open * * *
+//	@close        - Run at market close; replaces Minute and Hour field
+//	@weekbegin    - Run on first trading day of week; replaces DayOfMonth field
+//	@weekend      - Run on last trading day of week; replaces DayOfMonth field
+//	@monthbegin   - Run at market open or timespec on first trading day of month
+//	@monthend     - Run at market close or timespec on last trading day of month
+//	@quarterbegin - Run at market open or timespec on first trading day of quarter
+//	@quarterend   - Run at market close or timespec on last trading day of quarter
 //
 // Examples:
 //   - every 5 minutes: */5 * * * *
@@ -85,6 +91,12 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
 	scheduleStr := strings.TrimSpace(cronSpec)
+
+	// @daily is shorthand for "@open * * *" (every trading day at market open).
+	if scheduleStr == AtDaily {
+		scheduleStr = "@open * * *"
+	}
+
 	scheduleStr = expandBriefFormat(scheduleStr)
 
 	// separate special tokens from timespec
@@ -154,6 +166,18 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 			}
 
 			dateFlag = AtMonthEnd
+		case AtQuarterBegin:
+			if dateFlag != "" {
+				return nil, ErrConflictingModifiers
+			}
+
+			dateFlag = AtQuarterBegin
+		case AtQuarterEnd:
+			if dateFlag != "" {
+				return nil, ErrConflictingModifiers
+			}
+
+			dateFlag = AtQuarterEnd
 		default:
 			return nil, ErrUnknownModifier
 		}
@@ -162,14 +186,14 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 	// Default time for date-only modifiers: @monthend → @close, @monthbegin → @open.
 	if timeFlag == "" && dateFlag != "" {
 		switch dateFlag {
-		case AtMonthEnd, AtWeekEnd:
+		case AtMonthEnd, AtWeekEnd, AtQuarterEnd:
 			timeFlag = AtClose
 
 			var parseErr error
 			if timeSpec, parseErr = parseTimeRelativeTo(timeSpecTokens, hours.Close/100, hours.Close%100); parseErr != nil {
 				return nil, parseErr
 			}
-		case AtMonthBegin, AtWeekBegin:
+		case AtMonthBegin, AtWeekBegin, AtQuarterBegin:
 			timeFlag = AtOpen
 
 			var parseErr error
@@ -287,6 +311,49 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 		if !forDate.Before(scheduledTime) {
 			nextMonth := time.Date(checkDate.Year(), checkDate.Month()+1, 1, 0, 0, 0, 0, tc.marketStatus.tz)
 			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(nextMonth)
+		}
+	case AtQuarterBegin:
+		lastQuarter := time.Date(forDate.Year(), quarterStartMonth(forDate.Month()), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1)
+		firstTradingDayOfThisQuarter := tc.marketStatus.NextFirstTradingDayOfMonth(lastQuarter)
+
+		dateOnly := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
+		if firstTradingDayOfThisQuarter.After(dateOnly) || firstTradingDayOfThisQuarter.Equal(dateOnly) {
+			checkDate = firstTradingDayOfThisQuarter
+		} else {
+			nextQuarterStart := nextQuarterFirstMonth(forDate)
+			checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(
+				time.Date(nextQuarterStart.Year(), nextQuarterStart.Month(), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1),
+			)
+
+			firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+			if nextDate.After(firstTradingDay) {
+				nextQ := nextQuarterFirstMonth(nextDate)
+				checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(
+					time.Date(nextQ.Year(), nextQ.Month(), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1),
+				)
+			}
+		}
+	case AtQuarterEnd:
+		quarterEnd := quarterEndMonth(forDate.Month())
+		checkDate = tc.marketStatus.NextLastTradingDayOfMonth(
+			time.Date(forDate.Year(), quarterEnd, 1, 0, 0, 0, 0, tc.marketStatus.tz),
+		)
+
+		scheduledTime := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+
+		if tc.TimeFlag == AtClose {
+			if earlyClose := tc.marketStatus.EarlyClose(checkDate); earlyClose != 0 {
+				scheduledTime = time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(),
+					earlyClose/100, earlyClose%100, 0, 0, tc.marketStatus.tz)
+			}
+		}
+
+		if !forDate.Before(scheduledTime) {
+			nextQ := nextQuarterFirstMonth(forDate)
+			nextQuarterEnd := quarterEndMonth(nextQ.Month())
+			checkDate = tc.marketStatus.NextLastTradingDayOfMonth(
+				time.Date(nextQ.Year(), nextQuarterEnd, 1, 0, 0, 0, 0, tc.marketStatus.tz),
+			)
 		}
 	default:
 		checkDate = forDate

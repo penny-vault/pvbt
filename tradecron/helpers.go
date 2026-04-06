@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -42,6 +43,29 @@ func expandBriefFormat(spec string) string {
 	}
 
 	return strings.Join(tokens, " ")
+}
+
+// quarterStartMonth returns the first month of the quarter containing m.
+func quarterStartMonth(mo time.Month) time.Month {
+	return ((mo - 1) / 3 * 3) + 1
+}
+
+// quarterEndMonth returns the last month of the quarter containing m.
+func quarterEndMonth(mo time.Month) time.Month {
+	return quarterStartMonth(mo) + 2
+}
+
+// nextQuarterFirstMonth returns the first day of the next quarter after t.
+func nextQuarterFirstMonth(tt time.Time) time.Time {
+	start := quarterStartMonth(tt.Month()) + 3
+	year := tt.Year()
+
+	if start > 12 {
+		start -= 12
+		year++
+	}
+
+	return time.Date(year, start, 1, 0, 0, 0, 0, tt.Location())
 }
 
 // parseTimeRelativeTo parses a set of tokens relative to the specified time.

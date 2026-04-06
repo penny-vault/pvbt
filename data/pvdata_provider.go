@@ -17,6 +17,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"os"
@@ -423,18 +424,22 @@ func (p *PVDataProvider) fetchEod(
 
 	want := metricSet(metrics)
 
+	type eodMapping struct {
+		metric Metric
+		dest   *float64
+	}
+
 	rowCount := 0
 	for rows.Next() {
 		rowCount++
 
 		var (
-			figi                             string
-			eventDate                        time.Time
-			open, high, low, close, adjClose float64
-			volume                           float64
-			dividend, splitFactor            float64
+			figi      string
+			eventDate time.Time
+			open, high, low, closeVal, adjClose,
+			volume, dividend, splitFactor *float64
 		)
-		if err := rows.Scan(&figi, &eventDate, &open, &high, &low, &close, &adjClose, &volume, &dividend, &splitFactor); err != nil {
+		if err := rows.Scan(&figi, &eventDate, &open, &high, &low, &closeVal, &adjClose, &volume, &dividend, &splitFactor); err != nil {
 			return fmt.Errorf("pvdata: scan eod row: %w", err)
 		}
 
@@ -442,36 +447,21 @@ func (p *PVDataProvider) fetchEod(
 		sec := eventDate.Unix()
 		timeSet[sec] = eventDate
 
-		if want[MetricOpen] {
-			ensureCol(figi, MetricOpen)[sec] = open
+		mappings := []eodMapping{
+			{MetricOpen, open},
+			{MetricHigh, high},
+			{MetricLow, low},
+			{MetricClose, closeVal},
+			{AdjClose, adjClose},
+			{Volume, volume},
+			{Dividend, dividend},
+			{SplitFactor, splitFactor},
 		}
 
-		if want[MetricHigh] {
-			ensureCol(figi, MetricHigh)[sec] = high
-		}
-
-		if want[MetricLow] {
-			ensureCol(figi, MetricLow)[sec] = low
-		}
-
-		if want[MetricClose] {
-			ensureCol(figi, MetricClose)[sec] = close
-		}
-
-		if want[AdjClose] {
-			ensureCol(figi, AdjClose)[sec] = adjClose
-		}
-
-		if want[Volume] {
-			ensureCol(figi, Volume)[sec] = volume
-		}
-
-		if want[Dividend] {
-			ensureCol(figi, Dividend)[sec] = dividend
-		}
-
-		if want[SplitFactor] {
-			ensureCol(figi, SplitFactor)[sec] = splitFactor
+		for _, mp := range mappings {
+			if want[mp.metric] && mp.dest != nil {
+				ensureCol(figi, mp.metric)[sec] = *mp.dest
+			}
 		}
 	}
 
@@ -528,9 +518,10 @@ func (p *PVDataProvider) fetchMetrics(
 
 	want := metricSet(metrics)
 
-	// Pre-allocate scan destinations reused across rows.
-	intVals := make([]int64, len(columns))
-	floatVals := make([]float64, len(columns))
+	// Pre-allocate scan destinations reused across rows. We use pointers so
+	// that SQL NULLs are represented as nil rather than the Go zero value.
+	intVals := make([]*int64, len(columns))
+	floatVals := make([]*float64, len(columns))
 
 	for rows.Next() {
 		var (
@@ -544,8 +535,10 @@ func (p *PVDataProvider) fetchMetrics(
 
 		for idx, col := range columns {
 			if col.intCol {
+				intVals[idx] = nil
 				scanArgs = append(scanArgs, &intVals[idx])
 			} else {
+				floatVals[idx] = nil
 				scanArgs = append(scanArgs, &floatVals[idx])
 			}
 		}
@@ -564,9 +557,13 @@ func (p *PVDataProvider) fetchMetrics(
 			}
 
 			if col.intCol {
-				ensureCol(figi, col.metric)[sec] = float64(intVals[idx])
+				if intVals[idx] != nil {
+					ensureCol(figi, col.metric)[sec] = float64(*intVals[idx])
+				}
 			} else {
-				ensureCol(figi, col.metric)[sec] = floatVals[idx]
+				if floatVals[idx] != nil {
+					ensureCol(figi, col.metric)[sec] = *floatVals[idx]
+				}
 			}
 		}
 	}
@@ -627,9 +624,9 @@ func (p *PVDataProvider) fetchFundamentals(
 		vals[0] = &figi
 		vals[1] = &eventDate
 
-		floatVals := make([]float64, len(sqlCols))
-		for i := range sqlCols {
-			vals[i+2] = &floatVals[i]
+		floatVals := make([]*float64, len(sqlCols))
+		for idx := range sqlCols {
+			vals[idx+2] = &floatVals[idx]
 		}
 
 		if err := rows.Scan(vals...); err != nil {
@@ -640,8 +637,10 @@ func (p *PVDataProvider) fetchFundamentals(
 		sec := eventDate.Unix()
 		timeSet[sec] = eventDate
 
-		for i, m := range metricOrder {
-			ensureCol(figi, m)[sec] = floatVals[i]
+		for idx, m := range metricOrder {
+			if floatVals[idx] != nil {
+				ensureCol(figi, m)[sec] = *floatVals[idx]
+			}
 		}
 	}
 
@@ -723,12 +722,12 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	}
 	defer conn.Release()
 
-	// Load snapshots grouped by date.
+	// Load snapshots. Each row contains a snapshot_date and a JSONB array of constituents.
 	snapRows, err := conn.Query(ctx,
-		`SELECT snapshot_date, composite_figi, ticker, weight
+		`SELECT snapshot_date, constituents
 		 FROM indices_snapshot
-		 WHERE index_name = $1
-		 ORDER BY snapshot_date, composite_figi`,
+		 WHERE index_ticker = $1
+		 ORDER BY snapshot_date`,
 		index,
 	)
 	if err != nil {
@@ -736,40 +735,42 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	}
 	defer snapRows.Close()
 
-	var snapshots []IndexSnapshotEntry
+	type constituentJSON struct {
+		CompositeFigi string  `json:"composite_figi"`
+		Ticker        string  `json:"ticker"`
+		Weight        float64 `json:"weight"`
+	}
 
-	var current *IndexSnapshotEntry
+	var snapshots []IndexSnapshotEntry
 
 	for snapRows.Next() {
 		var (
-			dt           time.Time
-			figi, ticker string
-			weight       float64
+			dt          time.Time
+			rawConstits []byte
 		)
 
-		if err := snapRows.Scan(&dt, &figi, &ticker, &weight); err != nil {
+		if err := snapRows.Scan(&dt, &rawConstits); err != nil {
 			return nil, fmt.Errorf("scan snapshot row: %w", err)
 		}
 
-		if current == nil || !current.Date.Equal(dt) {
-			if current != nil {
-				snapshots = append(snapshots, *current)
-			}
-
-			current = &IndexSnapshotEntry{Date: dt}
+		var constits []constituentJSON
+		if err := json.Unmarshal(rawConstits, &constits); err != nil {
+			return nil, fmt.Errorf("unmarshal constituents for %s: %w", dt.Format("2006-01-02"), err)
 		}
 
-		current.Members = append(current.Members, IndexConstituent{
-			Asset: asset.Asset{
-				CompositeFigi: figi,
-				Ticker:        ticker,
-			},
-			Weight: weight,
-		})
-	}
+		entry := IndexSnapshotEntry{Date: dt}
 
-	if current != nil {
-		snapshots = append(snapshots, *current)
+		for _, cc := range constits {
+			entry.Members = append(entry.Members, IndexConstituent{
+				Asset: asset.Asset{
+					CompositeFigi: cc.CompositeFigi,
+					Ticker:        cc.Ticker,
+				},
+				Weight: cc.Weight,
+			})
+		}
+
+		snapshots = append(snapshots, entry)
 	}
 
 	if err := snapRows.Err(); err != nil {
@@ -780,7 +781,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	logRows, err := conn.Query(ctx,
 		`SELECT event_date, composite_figi, ticker, action, weight
 		 FROM indices_changelog
-		 WHERE index_name = $1
+		 WHERE index_ticker = $1
 		 ORDER BY event_date, composite_figi`,
 		index,
 	)

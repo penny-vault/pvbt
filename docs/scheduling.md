@@ -22,17 +22,20 @@ Expressions use standard cron syntax extended with market-aware directives.
 
 | Expression | When Compute runs |
 |------------|-------------------|
+| `@daily` | Every trading day at market open |
 | `@monthend` | Last trading day of each month |
 | `@close @monthend` | Last trading day of each month at market close |
 | `@monthbegin` | First trading day of each month |
 | `@weekbegin` | First trading day of each week |
 | `@weekend` | Last trading day of each week |
+| `@quarterbegin` | First trading day of each quarter |
+| `@quarterend` | Last trading day of each quarter |
 | `@close * * *` | Every trading day at market close |
 | `@open * * *` | Every trading day at market open |
 | `0 10 * * *` | Every trading day at 10:00 AM ET |
 | `*/5 * * * *` | Every 5 minutes during trading hours |
 
-Supported directives: `@open`, `@close`, `@weekbegin`, `@weekend`, `@monthbegin`, `@monthend`. These can be combined with standard cron fields for minute, hour, day-of-month, month, and day-of-week.
+Supported directives: `@daily`, `@open`, `@close`, `@weekbegin`, `@weekend`, `@monthbegin`, `@monthend`, `@quarterbegin`, `@quarterend`. These can be combined with standard cron fields for minute, hour, day-of-month, month, and day-of-week.
 
 The `tradecron.RegularHours` constraint ensures the schedule never fires on weekends, holidays, or outside market hours. If a scheduled time falls on a holiday, it advances to the next valid trading day.
 
