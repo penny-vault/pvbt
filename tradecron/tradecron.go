@@ -26,6 +26,7 @@ import (
 const (
 	AtOpen       = "@open"
 	AtClose      = "@close"
+	AtDaily      = "@daily"
 	AtWeekBegin  = "@weekbegin"
 	AtWeekEnd    = "@weekend"
 	AtMonthBegin = "@monthbegin"
@@ -67,6 +68,7 @@ var (
 //
 // Additional market-aware modifiers are supported:
 //
+//	@daily      - Run at market open on every trading day (shorthand for @open * * *)
 //	@open       - Run at market open; replaces Minute and Hour field
 //	              e.g., @open * * *
 //	@close      - Run at market close; replaces Minute and Hour field
@@ -85,6 +87,12 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
 	scheduleStr := strings.TrimSpace(cronSpec)
+
+	// @daily is shorthand for "@open * * *" (every trading day at market open).
+	if scheduleStr == AtDaily {
+		scheduleStr = "@open * * *"
+	}
+
 	scheduleStr = expandBriefFormat(scheduleStr)
 
 	// separate special tokens from timespec

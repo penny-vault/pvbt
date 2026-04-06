@@ -18,6 +18,72 @@ var _ = Describe("TradeCron", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	Describe("@daily", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("fires at market open on a regular trading day", func() {
+			tc, err := tradecron.New("@daily", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Monday Jan 6, 2025 at midnight.
+			forDate := time.Date(2025, time.January, 6, 0, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Should fire at 9:30 AM on Jan 6.
+			want := time.Date(2025, time.January, 6, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("advances to the next trading day after market open", func() {
+			tc, err := tradecron.New("@daily", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// After market open on Monday Jan 6.
+			forDate := time.Date(2025, time.January, 6, 9, 30, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Should fire at 9:30 AM on Tuesday Jan 7.
+			want := time.Date(2025, time.January, 7, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("skips weekends", func() {
+			tc, err := tradecron.New("@daily", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Friday Jan 10, 2025 after market open.
+			forDate := time.Date(2025, time.January, 10, 9, 30, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Should skip Saturday and Sunday, fire Monday Jan 13.
+			want := time.Date(2025, time.January, 13, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("skips holidays", func() {
+			tradecron.SetMarketHolidays([]tradecron.MarketHoliday{
+				{
+					Date:       time.Date(2025, time.January, 7, 0, 0, 0, 0, nyc),
+					EarlyClose: false,
+					CloseTime:  0,
+				},
+			})
+
+			tc, err := tradecron.New("@daily", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// After market open on Monday Jan 6.
+			forDate := time.Date(2025, time.January, 6, 9, 30, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			// Jan 7 is a holiday, should skip to Jan 8.
+			want := time.Date(2025, time.January, 8, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+	})
+
 	Describe("Next", func() {
 		Context("when the last trading day of the month is an early-close day", func() {
 			BeforeEach(func() {

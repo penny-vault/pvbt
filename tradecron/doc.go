@@ -11,6 +11,7 @@
 //
 // Directives can appear before the standard cron fields:
 //
+//   - @daily -- every trading day at market open
 //   - @open -- market open
 //   - @close -- market close
 //   - @weekbegin -- first trading day of the week
@@ -32,6 +33,7 @@
 //
 // # Common Schedules
 //
+//	@daily                every trading day at market open
 //	@monthend             last trading day of each month
 //	@close @monthend      last trading day at close
 //	@close * * *          every trading day at close
