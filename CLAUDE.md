@@ -27,7 +27,7 @@ Changes to the public API are breaking and must appear in the changelog. Everyth
 - `DataFrame` (construction via `NewDataFrame`, querying, `Correlation`, `Covariance`, `Std`, etc.)
 - Broker options (`WithFractionalShares`, etc.)
 - Middleware configuration (`risk.Conservative`, `risk.Moderate`, `tax.TaxEfficient`, etc.) and TOML config file (`pvbt.toml`)
-- Weighting functions, universe declarations, parameter/preset definitions
+- Weighting functions, universe declarations (`USTradable`, `SP500`, `Nasdaq100`, `NewStatic`), parameter/preset definitions
 
 ## Code Conventions
 

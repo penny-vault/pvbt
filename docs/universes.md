@@ -23,6 +23,12 @@ type Universe interface {
 
 `CurrentDate` returns the simulation date the universe is currently positioned at.
 
+## Choosing a universe
+
+Most strategies that trade a broad US equity opportunity set should start with `universe.USTradable(p)`. It is a daily-refreshed set of liquid US stocks that meet standard tradability criteria: market cap above the 25th percentile of US-listed common stocks, $2.5M median dollar volume over the trailing 200 days, prior close of at least $5, and 200 days of contiguous price history. Recent IPOs, ADRs, limited partnerships, ETFs, and OTC stocks are excluded, and for companies with multiple share classes only the most liquid common share is kept.
+
+Use `SP500` or `Nasdaq100` only when you specifically want to track those indexes. Use `NewStatic` for fixed asset lists like ETF rotations.
+
 ## Creating universes
 
 There are three ways to create a universe, depending on where the assets come from.
@@ -57,6 +63,12 @@ s.rates = universe.NewStatic("FRED:DGS3MO", "FRED:DGS10")
 ```
 
 ### From a predefined index
+
+For broad equity strategies, the recommended starting point:
+
+```go
+s.stocks = universe.USTradable(indexProvider)
+```
 
 For well-known indexes whose membership changes over time:
 

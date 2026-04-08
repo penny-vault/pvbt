@@ -229,7 +229,7 @@ var _ = Describe("Index Universe", func() {
 		})
 	})
 
-	Describe("SP500 and Nasdaq100 convenience constructors", func() {
+	Describe("SP500, Nasdaq100, and USTradable convenience constructors", func() {
 		It("SP500 returns a universe that queries 'SPX'", func() {
 			provider := &mockIndexProvider{
 				assetResults: map[int64][]asset.Asset{
@@ -256,6 +256,24 @@ var _ = Describe("Index Universe", func() {
 			u := universe.Nasdaq100(provider)
 			assets := u.Assets(now)
 			Expect(assets).To(ConsistOf(goog))
+		})
+
+		It("USTradable returns a universe that queries 'us-tradable'", func() {
+			provider := &mockIndexProvider{
+				assetResults: map[int64][]asset.Asset{
+					now.Unix(): {aapl, goog, msft},
+				},
+				constituentResults: map[int64][]data.IndexConstituent{
+					now.Unix(): {
+						{Asset: aapl, Weight: 0.4},
+						{Asset: goog, Weight: 0.35},
+						{Asset: msft, Weight: 0.25},
+					},
+				},
+			}
+			u := universe.USTradable(provider)
+			assets := u.Assets(now)
+			Expect(assets).To(ConsistOf(aapl, goog, msft))
 		})
 	})
 })
