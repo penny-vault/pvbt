@@ -53,13 +53,21 @@
 //
 //	u := universe.NewStatic("GLD", "TLT", "FRED:DGS3MO")
 //
-// From predefined indexes: use SP500 or Nasdaq100 with an IndexProvider.
-// The provider loads all snapshot and changelog data on first access and
-// advances as time progresses. The returned membership slice is borrowed
-// and only valid for the current engine step.
+// From predefined indexes: use USTradable, SP500, or Nasdaq100 with an
+// IndexProvider, or call eng.IndexUniverse(name) from within Setup. The
+// provider loads all snapshot and changelog data on first access and advances
+// as time progresses. The returned membership slice is borrowed and only
+// valid for the current engine step.
 //
+//	u := universe.USTradable(indexProvider)
 //	u := universe.SP500(indexProvider)
 //	u := universe.Nasdaq100(indexProvider)
+//
+// USTradable is the recommended default for broad US equity strategies. It
+// is a daily-refreshed set of liquid US common stocks meeting standard
+// tradability criteria (market cap, dollar volume, price floor, and data
+// completeness). Use SP500 or Nasdaq100 only when you specifically want to
+// track those indexes.
 //
 // # Getting Data
 //

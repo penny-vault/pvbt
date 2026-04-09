@@ -23,12 +23,6 @@ type Universe interface {
 
 `CurrentDate` returns the simulation date the universe is currently positioned at.
 
-## Choosing a universe
-
-Most strategies that trade a broad US equity opportunity set should start with `universe.USTradable(p)`. It is a daily-refreshed set of liquid US stocks that meet standard tradability criteria: market cap above the 25th percentile of US-listed common stocks, $2.5M median dollar volume over the trailing 200 days, prior close of at least $5, and 200 days of contiguous price history. Recent IPOs, ADRs, limited partnerships, ETFs, and OTC stocks are excluded, and for companies with multiple share classes only the most liquid common share is kept.
-
-Use `SP500` or `Nasdaq100` only when you specifically want to track those indexes. Use `NewStatic` for fixed asset lists like ETF rotations.
-
 ## Creating universes
 
 There are three ways to create a universe, depending on where the assets come from.
@@ -64,22 +58,41 @@ s.rates = universe.NewStatic("FRED:DGS3MO", "FRED:DGS10")
 
 ### From a predefined index
 
-For broad equity strategies, the recommended starting point:
+For broad equity strategies, the recommended starting point is `us-tradable`:
 
 ```go
-s.stocks = universe.USTradable(indexProvider)
+func (s *MomentumStrategy) Setup(eng *engine.Engine) error {
+    s.stocks = eng.IndexUniverse("us-tradable")
+    return nil
+}
 ```
 
-For well-known indexes whose membership changes over time:
+For well-known market indexes whose membership changes over time:
 
 ```go
-s.stocks = universe.SP500(indexProvider)
-s.tech = universe.Nasdaq100(indexProvider)
+func (s *MyStrategy) Setup(eng *engine.Engine) error {
+    s.sp500 = eng.IndexUniverse("SPX")
+    s.ndx   = eng.IndexUniverse("NDX")
+    return nil
+}
 ```
 
-These constructors take a `data.IndexProvider` -- a provider that knows how to supply historical index membership. The database provider implements this interface alongside `BatchProvider`. The returned universe's membership varies by date. If you backtest a strategy that uses `universe.SP500(p)` starting in 2010, the universe in January 2010 will contain whatever companies were in the S&P 500 at that time -- not today's list.
+`eng.IndexUniverse` finds the registered `IndexProvider` and wires the resulting universe to the engine's data source. The returned universe's membership varies by date: if you backtest a strategy that uses `eng.IndexUniverse("SPX")` starting in 2010, the universe in January 2010 will contain whatever companies were in the S&P 500 at that time -- not today's list.
 
-Index universes delegate to the data provider, which loads all snapshot and changelog data on the first call and advances as time progresses. The returned membership slice is borrowed and only valid for the current engine step.
+The provider loads all snapshot and changelog data on the first call and advances as time progresses. The returned membership slice is borrowed and only valid for the current engine step.
+
+#### What `us-tradable` filters
+
+The `us-tradable` universe is recomputed daily by pv-data and includes only US common stocks meeting all of the following:
+
+- Market cap above the 25th percentile of US-listed common stocks
+- Median daily dollar volume of at least $2.5M over the trailing 200 days
+- Prior close of at least $5
+- 200 trading days of contiguous price and volume history
+
+ADRs, limited partnerships, ETFs, closed-end funds, OTC stocks, and recent IPOs are excluded. For companies with multiple share classes, only the most liquid common share is kept. Membership typically lands in the 1,500-2,500 range. This is the same set of constraints Quantopian's QTradableStocksUS used to define its tradable universe, with a percentile-based market cap floor that adapts across time rather than a fixed dollar threshold.
+
+Use `us-tradable` as the default for any broad US equity strategy. Use `SPX` or `NDX` only when you specifically want to track those indexes. Use `NewStatic` for fixed asset lists like ETF rotations.
 
 ## Getting data for a universe
 
