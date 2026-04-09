@@ -30,15 +30,16 @@ import (
 )
 
 type paramTestStrategy struct {
-	Lookback float64           `pvbt:"lookback" desc:"Lookback in months" default:"6.0"`
-	Ticker   asset.Asset       `pvbt:"ticker" desc:"Primary ticker" default:"SPY"`
-	RiskOn   universe.Universe `pvbt:"riskOn" desc:"Risk-on universe" default:"VFINX,PRIDX" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
-	Name_    string            // exported, no pvbt tag -- name derived from field name
-	hidden   int               // unexported, should be skipped
-	Duration time.Duration     `pvbt:"dur" desc:"Interval" default:"5m"`
-	Enabled  bool              `pvbt:"enabled" desc:"Enable feature" default:"true"`
-	Count    int               `pvbt:"count" desc:"Number of items" default:"10"`
-	Label    string            `pvbt:"label" desc:"Display label" default:"hello"`
+	Lookback    float64           `pvbt:"lookback" desc:"Lookback in months" default:"6.0"`
+	Ticker      asset.Asset       `pvbt:"ticker" desc:"Primary ticker" default:"SPY"`
+	RiskOn      universe.Universe `pvbt:"riskOn" desc:"Risk-on universe" default:"VFINX,PRIDX" suggest:"Classic=VFINX,PRIDX|Modern=SPY,QQQ"`
+	Name_       string            // exported, no pvbt tag -- name derived from field name
+	RebalanceAt string            // exported, no pvbt tag, multi-word -- exercises kebab-case derivation
+	hidden      int               // unexported, should be skipped
+	Duration    time.Duration     `pvbt:"dur" desc:"Interval" default:"5m"`
+	Enabled     bool              `pvbt:"enabled" desc:"Enable feature" default:"true"`
+	Count       int               `pvbt:"count" desc:"Number of items" default:"10"`
+	Label       string            `pvbt:"label" desc:"Display label" default:"hello"`
 }
 
 func (s *paramTestStrategy) Name() string           { return "test" }
@@ -61,8 +62,8 @@ var _ = Describe("StrategyParameters", func() {
 		strategy := &paramTestStrategy{}
 		params := engine.StrategyParameters(strategy)
 
-		// Should include exported fields only: Lookback, Ticker, RiskOn, Name_, Duration, Enabled, Count, Label = 8
-		Expect(params).To(HaveLen(8))
+		// Should include exported fields only: Lookback, Ticker, RiskOn, Name_, RebalanceAt, Duration, Enabled, Count, Label = 9
+		Expect(params).To(HaveLen(9))
 
 		lookback := findParam(params, "lookback")
 		Expect(lookback).NotTo(BeNil())
@@ -71,13 +72,44 @@ var _ = Describe("StrategyParameters", func() {
 		Expect(lookback.GoType).To(Equal(reflect.TypeOf(float64(0))))
 	})
 
-	It("derives name from field name when pvbt tag is missing", func() {
+	It("derives a single-word name from the field name when the pvbt tag is missing", func() {
 		strategy := &paramTestStrategy{}
 		params := engine.StrategyParameters(strategy)
 
 		nameParam := findParam(params, "name_")
 		Expect(nameParam).NotTo(BeNil())
 		Expect(nameParam.FieldName).To(Equal("Name_"))
+	})
+
+	It("derives a kebab-case name for multi-word fields when the pvbt tag is missing", func() {
+		strategy := &paramTestStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		rebalanceAt := findParam(params, "rebalance-at")
+		Expect(rebalanceAt).NotTo(BeNil())
+		Expect(rebalanceAt.FieldName).To(Equal("RebalanceAt"))
+	})
+})
+
+var _ = Describe("ParameterName", func() {
+	fieldByName := func(name string) reflect.StructField {
+		t := reflect.TypeOf(paramTestStrategy{})
+		field, ok := t.FieldByName(name)
+		Expect(ok).To(BeTrue())
+		return field
+	}
+
+	It("returns the pvbt tag verbatim when present", func() {
+		Expect(engine.ParameterName(fieldByName("Lookback"))).To(Equal("lookback"))
+		Expect(engine.ParameterName(fieldByName("RiskOn"))).To(Equal("riskOn"))
+	})
+
+	It("derives kebab-case from a PascalCase field name when the tag is missing", func() {
+		Expect(engine.ParameterName(fieldByName("RebalanceAt"))).To(Equal("rebalance-at"))
+	})
+
+	It("leaves a single-word exported field lowercased", func() {
+		Expect(engine.ParameterName(fieldByName("Name_"))).To(Equal("name_"))
 	})
 
 	It("parses suggest tags into a suggestions map", func() {

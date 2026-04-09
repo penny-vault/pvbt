@@ -114,32 +114,6 @@ var _ = Describe("defaultOutputPath", func() {
 	})
 })
 
-var _ = Describe("toKebabCase", func() {
-	It("converts PascalCase to kebab-case", func() {
-		Expect(toKebabCase("LookbackPeriod")).To(Equal("lookback-period"))
-	})
-
-	It("converts consecutive uppercase letters", func() {
-		Expect(toKebabCase("URL")).To(Equal("u-r-l"))
-	})
-
-	It("leaves lowercase unchanged", func() {
-		Expect(toKebabCase("fast")).To(Equal("fast"))
-	})
-
-	It("handles single character", func() {
-		Expect(toKebabCase("A")).To(Equal("a"))
-	})
-
-	It("handles empty string", func() {
-		Expect(toKebabCase("")).To(Equal(""))
-	})
-
-	It("converts camelCase", func() {
-		Expect(toKebabCase("myField")).To(Equal("my-field"))
-	})
-})
-
 var _ = Describe("registerStrategyFlags", func() {
 	It("registers flags from struct tags with correct defaults", func() {
 		cmd := &cobra.Command{Use: "test"}

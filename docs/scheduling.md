@@ -50,7 +50,7 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Po
     mom6 := signal.Momentum(ctx, s.RiskOn, portfolio.Months(6))
 
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
-    riskOffDF, _ := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+    riskOffDF, _ := s.RiskOff.At(ctx, data.MetricClose)
     portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
     plan, _ := portfolio.EqualWeight(momentum)
     batch.RebalanceTo(ctx, plan...)
