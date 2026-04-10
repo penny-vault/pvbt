@@ -314,6 +314,48 @@ var _ = Describe("SQLite", func() {
 		})
 	})
 
+	Describe("transaction type round-trip", func() {
+		It("persists split, interest, and journal transaction types", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			txnDate := time.Date(2024, 3, 22, 0, 0, 0, 0, time.UTC)
+
+			acct.Record(portfolio.Transaction{
+				Date:  txnDate,
+				Asset: spy,
+				Type:  asset.SplitTransaction,
+				Qty:   20,
+				Price: 250,
+			})
+			acct.Record(portfolio.Transaction{
+				Date:   txnDate,
+				Asset:  spy,
+				Type:   asset.InterestTransaction,
+				Amount: 12.50,
+			})
+			acct.Record(portfolio.Transaction{
+				Date:   txnDate,
+				Asset:  spy,
+				Type:   asset.JournalTransaction,
+				Amount: 500,
+			})
+
+			path := filepath.Join(tmpDir, "txntypes.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			txns := restored.Transactions()
+			// First txn is the deposit from WithCash, then our three.
+			Expect(txns).To(HaveLen(4))
+			Expect(txns[1].Type).To(Equal(asset.SplitTransaction))
+			Expect(txns[2].Type).To(Equal(asset.InterestTransaction))
+			Expect(txns[3].Type).To(Equal(asset.JournalTransaction))
+		})
+	})
+
 	Describe("error cases", func() {
 		It("returns an error for nonexistent file", func() {
 			_, err := portfolio.FromSQLite(filepath.Join(tmpDir, "noexist.db"))
