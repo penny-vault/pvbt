@@ -40,10 +40,7 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			continue
 		}
 
-		name := field.Tag.Get("pvbt")
-		if name == "" {
-			name = toKebabCase(field.Name)
-		}
+		name := engine.ParameterName(field)
 
 		desc := field.Tag.Get("desc")
 		defaultStr := field.Tag.Get("default")
@@ -133,10 +130,7 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			continue
 		}
 
-		name := field.Tag.Get("pvbt")
-		if name == "" {
-			name = toKebabCase(field.Name)
-		}
+		name := engine.ParameterName(field)
 
 		fieldValue := val.Field(ii)
 		if !fieldValue.CanSet() {
@@ -237,10 +231,7 @@ func collectParamSweeps(cmd *cobra.Command, strategy engine.Strategy) []study.Pa
 			continue
 		}
 
-		name := field.Tag.Get("pvbt")
-		if name == "" {
-			name = toKebabCase(field.Name)
-		}
+		name := engine.ParameterName(field)
 
 		fl := cmd.Flags().Lookup(name)
 		if fl == nil {
@@ -253,19 +244,4 @@ func collectParamSweeps(cmd *cobra.Command, strategy engine.Strategy) []study.Pa
 	}
 
 	return sweeps
-}
-
-// toKebabCase converts a PascalCase or camelCase name to kebab-case.
-func toKebabCase(s string) string {
-	var result strings.Builder
-
-	for i, r := range s {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			result.WriteByte('-')
-		}
-
-		result.WriteRune(r)
-	}
-
-	return strings.ToLower(result.String())
 }

@@ -25,12 +25,12 @@ package main
 
 import (
     "context"
+    "fmt"
 
     "github.com/penny-vault/pvbt/cli"
     "github.com/penny-vault/pvbt/data"
     "github.com/penny-vault/pvbt/engine"
     "github.com/penny-vault/pvbt/portfolio"
-    "github.com/penny-vault/pvbt/tradecron"
     "github.com/penny-vault/pvbt/universe"
     "github.com/rs/zerolog"
 )
@@ -59,11 +59,11 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
     // Fetch close prices for the lookback period.
     df, err := s.RiskOn.Window(ctx, portfolio.Months(s.Lookback), data.MetricClose)
     if err != nil {
-        log.Error().Err(err).Msg("Window fetch failed")
-        return nil
+        return fmt.Errorf("risk-on window fetch: %w", err)
     }
 
     if df.Len() < 2 {
+        log.Debug().Int("len", df.Len()).Msg("insufficient risk-on history; skipping tick")
         return nil
     }
 
@@ -71,10 +71,9 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
     momentum := df.Pct(df.Len() - 1).Last()
 
     // Fallback DataFrame for when no risk-on asset has positive momentum.
-    riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+    riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
     if err != nil {
-        log.Error().Err(err).Msg("risk-off data fetch failed")
-        return nil
+        return fmt.Errorf("risk-off snapshot fetch: %w", err)
     }
 
     // Select the asset with the highest positive return; fall back to risk-off.
@@ -83,13 +82,12 @@ func (s *MomentumRotation) Compute(ctx context.Context, eng *engine.Engine, port
     // Convert selection to equal-weight allocation.
     plan, err := portfolio.EqualWeight(momentum)
     if err != nil {
-        log.Error().Err(err).Msg("EqualWeight failed")
-        return nil
+        return fmt.Errorf("equal-weight plan: %w", err)
     }
 
     // Execute the rebalance.
     if err := batch.RebalanceTo(ctx, plan...); err != nil {
-        log.Error().Err(err).Msg("rebalance failed")
+        return fmt.Errorf("rebalance: %w", err)
     }
 
     return nil
@@ -295,15 +293,26 @@ func (s *MyStrategy) Setup(eng *engine.Engine) {
 
 ### Index universe
 
-Tracks historical index membership. Members change over time (additions and removals), which avoids survivorship bias:
+Tracks historical index membership. Members change over time (additions and removals), which avoids survivorship bias.
+
+For broad US equity strategies, the recommended starting point is `us-tradable`, a daily-refreshed investable universe of liquid US common stocks (market cap above the 25th percentile, $2.5M median dollar volume, $5+ price, 200 days of clean data):
 
 ```go
 func (s *MyStrategy) Setup(eng *engine.Engine) {
-    s.sp500 = eng.IndexUniverse("SP500")
+    s.stocks = eng.IndexUniverse("us-tradable")
 }
 ```
 
-At each date, `s.sp500.Assets(t)` returns the index members as of that date.
+For specific market indexes:
+
+```go
+func (s *MyStrategy) Setup(eng *engine.Engine) {
+    s.sp500 = eng.IndexUniverse("SPX")
+    s.ndx   = eng.IndexUniverse("NDX")
+}
+```
+
+At each date, `s.stocks.Assets(t)` returns the universe members as of that date.
 
 ### Rated universe
 
@@ -323,8 +332,8 @@ Both methods are available in `Compute`:
 // Window: lookback period ending at the current simulation date.
 df, err := s.Assets.Window(ctx, data.Months(6), data.MetricClose, data.AdjClose)
 
-// At: single point in time.
-df, err := s.Assets.At(ctx, eng.CurrentDate(), data.MetricClose)
+// At: single row at the current simulation date.
+df, err := s.Assets.At(ctx, data.MetricClose)
 ```
 
 The returned DataFrame contains one column per (asset, metric) pair and one row per trading day.
@@ -414,15 +423,25 @@ df.Covariance()         // cross-asset covariance matrix
 
 ### Aggregations
 
-Aggregate across assets at each timestamp:
+Two families of aggregation.
+
+**Per-column aggregations** collapse the *time* dimension and return a single-row DataFrame with one value per (asset, metric). These preserve the asset axis, so they are the right tool for computing per-asset summary statistics over a window:
 
 ```go
-df.Mean()               // average across assets -> synthetic "MEAN" asset
-df.Sum()                // sum across assets -> "SUM"
-df.MaxAcrossAssets()    // max across assets -> "MAX"
-df.MinAcrossAssets()    // min across assets -> "MIN"
-df.Variance()           // variance across timestamps per column
-df.Std()                // standard deviation
+df.Mean()               // time-mean per (asset, metric); single-row DataFrame
+df.Sum()                // time-sum per column
+df.Variance()           // time-variance per column
+df.Std()                // time-standard-deviation per column
+df.Covariance()         // cross-asset covariance matrix
+```
+
+**Cross-asset reductions** collapse the *asset* dimension and return a DataFrame with a single synthetic asset column per metric. Use these when the signal should summarize the universe at each timestamp:
+
+```go
+df.MaxAcrossAssets()    // per-row max -> synthetic "MAX" asset
+df.MinAcrossAssets()    // per-row min -> synthetic "MIN" asset
+df.IdxMaxAcrossAssets() // per-row argmax (ticker string per row)
+df.CountWhere(m, pred)  // per-row count -> synthetic "COUNT" asset
 ```
 
 ### Rolling windows

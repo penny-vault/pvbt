@@ -30,6 +30,38 @@ type Parameter struct {
 	Suggestions map[string]string `json:"suggestions,omitempty"` // preset name -> value
 }
 
+// ParameterName returns the parameter name used for a strategy struct field.
+// It prefers an explicit `pvbt` struct tag and otherwise derives a slug from
+// the Go field name by converting PascalCase or camelCase to kebab-case (for
+// example `RiskOn` becomes `risk-on`). This function is the single source of
+// truth for field-to-parameter-name derivation; both the engine and the CLI
+// call it so the names used in `describe`, cobra flags, and `--preset`
+// lookups always agree.
+func ParameterName(field reflect.StructField) string {
+	if tag := field.Tag.Get("pvbt"); tag != "" {
+		return tag
+	}
+
+	return toKebabCase(field.Name)
+}
+
+// toKebabCase converts a PascalCase or camelCase identifier to kebab-case.
+// It inserts a hyphen before every upper-case rune that is not the first
+// rune, then lower-cases the whole string.
+func toKebabCase(s string) string {
+	var result strings.Builder
+
+	for idx, runeValue := range s {
+		if idx > 0 && runeValue >= 'A' && runeValue <= 'Z' {
+			result.WriteByte('-')
+		}
+
+		result.WriteRune(runeValue)
+	}
+
+	return strings.ToLower(result.String())
+}
+
 // StrategyParameters reflects over the strategy struct and returns metadata
 // for each exported field. Used by the CLI to generate flags and by UIs to
 // build configuration forms.
@@ -58,10 +90,7 @@ func StrategyParameters(s Strategy) []Parameter {
 			continue
 		}
 
-		name := field.Tag.Get("pvbt")
-		if name == "" {
-			name = strings.ToLower(field.Name)
-		}
+		name := ParameterName(field)
 
 		var suggestions map[string]string
 		if suggestTag := field.Tag.Get("suggest"); suggestTag != "" {

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strategies can use `universe.USTradable` as a daily-refreshed investable universe of liquid US stocks. Membership is sourced from pv-data and filters by market cap, dollar volume, price floor, and data completeness, mirroring the criteria of Quantopian's QTradableStocksUS. This is the recommended default universe for broad US equity strategies.
+
+### Fixed
+
+- `--preset` silently skipped strategy fields like `RiskOn` when they had no `pvbt` tag. It now applies them.
+- The strategy guide and overview examples did not compile — they called `Universe.At(ctx, date, metrics...)`, which was removed in 0.6.0.
+- The strategy guide wrongly documented `Mean`, `Sum`, `Variance`, and `Std` as reducing across assets. They reduce across time and preserve the asset axis.
+
 ## [0.6.0] - 2026-04-06
 
 ### Added

@@ -123,3 +123,18 @@ func SP500(p data.IndexProvider) *indexUniverse {
 func Nasdaq100(p data.IndexProvider) *indexUniverse {
 	return NewIndex(p, "NDX")
 }
+
+// USTradable creates a universe of US stocks meeting standard tradability
+// criteria: market cap above the 25th percentile of US-listed common stocks,
+// median daily dollar volume of at least $2.5M over the trailing 200 days,
+// prior close of at least $5, and 200 days of contiguous price history.
+// Recent IPOs, ADRs, limited partnerships, ETFs, and OTC stocks are excluded.
+// For companies with multiple share classes, the most liquid common share is
+// kept. Membership is recomputed daily.
+//
+// This is the recommended default universe for strategies that trade a broad
+// US equity opportunity set. Use SP500 or Nasdaq100 only when you specifically
+// want to track those indexes.
+func USTradable(p data.IndexProvider) *indexUniverse {
+	return NewIndex(p, "us-tradable")
+}

@@ -26,6 +26,7 @@ package main
 
 import (
     "context"
+    "fmt"
     "time"
 
     "github.com/penny-vault/pvbt/data"
@@ -33,7 +34,6 @@ import (
     "github.com/penny-vault/pvbt/portfolio"
     "github.com/penny-vault/pvbt/signal"
     "github.com/penny-vault/pvbt/universe"
-    "github.com/rs/zerolog/log"
 )
 
 type ADM struct {
@@ -60,26 +60,25 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Po
     // Average the three momentum scores across all risk-on assets.
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
-        log.Error().Err(err).Msg("signal computation failed")
-        return err
+        return fmt.Errorf("signal computation: %w", err)
     }
 
     // Pick the risk-on asset with the highest positive momentum.
     // If none are positive, fall back to the risk-off asset (TLT).
-    riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+    riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
     if err != nil {
-        log.Error().Err(err).Msg("risk-off data fetch failed")
-        return err
+        return fmt.Errorf("risk-off snapshot fetch: %w", err)
     }
     portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 
     // Build an equal-weight plan and rebalance into it.
     plan, err := portfolio.EqualWeight(momentum)
     if err != nil {
-        log.Error().Err(err).Msg("EqualWeight failed")
-        return err
+        return fmt.Errorf("equal-weight plan: %w", err)
     }
-    batch.RebalanceTo(ctx, plan...)
+    if err := batch.RebalanceTo(ctx, plan...); err != nil {
+        return fmt.Errorf("rebalance: %w", err)
+    }
     return nil
 }
 
@@ -141,7 +140,7 @@ The `Schedule` field sets the trading schedule. The tradecron expression `@month
 
 The `Benchmark` field tells the engine which asset to compare against in performance reports. The risk-free rate used by metrics like Sharpe and Sortino is DGS3MO (3-month treasury yield), resolved automatically by the engine when available.
 
-Setup is also where a strategy would register universes it creates itself (e.g., `universe.SP500(provider)`) or do any other one-time initialization.
+Setup is also where a strategy would register universes it creates itself (e.g., `eng.IndexUniverse("us-tradable")` for the recommended broad US equity universe, or `eng.IndexUniverse("SPX")` for the S&P 500) or do any other one-time initialization.
 
 ### Compute
 
@@ -154,26 +153,25 @@ func (s *ADM) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Po
     // Average the three momentum scores across all risk-on assets.
     momentum := mom1.Add(mom3).Add(mom6).DivScalar(3)
     if err := momentum.Err(); err != nil {
-        log.Error().Err(err).Msg("signal computation failed")
-        return err
+        return fmt.Errorf("signal computation: %w", err)
     }
 
     // Pick the risk-on asset with the highest positive momentum.
     // If none are positive, fall back to the risk-off asset (TLT).
-    riskOffDF, err := s.RiskOff.At(ctx, eng.CurrentDate(), data.MetricClose)
+    riskOffDF, err := s.RiskOff.At(ctx, data.MetricClose)
     if err != nil {
-        log.Error().Err(err).Msg("risk-off data fetch failed")
-        return err
+        return fmt.Errorf("risk-off snapshot fetch: %w", err)
     }
     portfolio.MaxAboveZero(data.MetricClose, riskOffDF).Select(momentum)
 
     // Build an equal-weight plan and rebalance into it.
     plan, err := portfolio.EqualWeight(momentum)
     if err != nil {
-        log.Error().Err(err).Msg("EqualWeight failed")
-        return err
+        return fmt.Errorf("equal-weight plan: %w", err)
     }
-    batch.RebalanceTo(ctx, plan...)
+    if err := batch.RebalanceTo(ctx, plan...); err != nil {
+        return fmt.Errorf("rebalance: %w", err)
+    }
     return nil
 }
 ```
