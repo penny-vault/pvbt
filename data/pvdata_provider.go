@@ -932,6 +932,13 @@ var metricView = map[Metric]string{
 	MarketCapFundamental:                "fundamentals",
 }
 
+// IsFundamental reports whether the given metric is sourced from the
+// fundamentals table. Fundamental metrics are sparse (quarterly) and
+// require forward-fill when merged with daily price data.
+func IsFundamental(metric Metric) bool {
+	return metricView[metric] == "fundamentals"
+}
+
 // metricColumn maps fundamental Metrics to their SQL column names.
 var metricColumn = map[Metric]string{
 	Revenue:                             "revenues",
