@@ -109,6 +109,12 @@ func transactionTypeToString(txnType asset.TransactionType) string {
 		return "deposit"
 	case asset.WithdrawalTransaction:
 		return "withdrawal"
+	case asset.SplitTransaction:
+		return "split"
+	case asset.InterestTransaction:
+		return "interest"
+	case asset.JournalTransaction:
+		return "journal"
 	default:
 		return fmt.Sprintf("unknown(%d)", int(txnType))
 	}
@@ -129,6 +135,12 @@ func stringToTransactionType(str string) (asset.TransactionType, error) {
 		return asset.DepositTransaction, nil
 	case "withdrawal":
 		return asset.WithdrawalTransaction, nil
+	case "split":
+		return asset.SplitTransaction, nil
+	case "interest":
+		return asset.InterestTransaction, nil
+	case "journal":
+		return asset.JournalTransaction, nil
 	default:
 		return 0, fmt.Errorf("unknown transaction type: %q", str)
 	}
