@@ -31,6 +31,46 @@ type SnapshotProvider struct {
 	db *sql.DB
 }
 
+// scanAssetRow scans 11 asset columns from any row/queryrow scanner.
+func scanAssetRow(scanner interface{ Scan(dest ...any) error }) (asset.Asset, error) {
+	var (
+		aa                                               asset.Asset
+		name, assetType, exchange, sector, industry, cik string
+		sicCode                                          int
+		listedStr, delistedStr                           string
+	)
+
+	if err := scanner.Scan(
+		&aa.CompositeFigi, &aa.Ticker,
+		&name, &assetType, &exchange, &sector, &industry,
+		&sicCode, &cik, &listedStr, &delistedStr,
+	); err != nil {
+		return asset.Asset{}, err
+	}
+
+	aa.Name = name
+	aa.AssetType = asset.AssetType(assetType)
+	aa.PrimaryExchange = asset.Exchange(exchange)
+	aa.Sector = asset.Sector(sector)
+	aa.Industry = asset.Industry(industry)
+	aa.SICCode = sicCode
+	aa.CIK = cik
+
+	if listedStr != "" {
+		if tt, err := time.Parse("2006-01-02", listedStr); err == nil {
+			aa.Listed = tt
+		}
+	}
+
+	if delistedStr != "" {
+		if tt, err := time.Parse("2006-01-02", delistedStr); err == nil {
+			aa.Delisted = tt
+		}
+	}
+
+	return aa, nil
+}
+
 // NewSnapshotProvider opens the snapshot database at path in read-only mode.
 func NewSnapshotProvider(path string) (*SnapshotProvider, error) {
 	db, err := sql.Open("sqlite", path)
@@ -125,7 +165,10 @@ func (p *SnapshotProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron
 // -- AssetProvider --
 
 func (p *SnapshotProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
-	rows, err := p.db.QueryContext(ctx, "SELECT composite_figi, ticker FROM assets ORDER BY ticker")
+	rows, err := p.db.QueryContext(ctx,
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets ORDER BY ticker`)
 	if err != nil {
 		return nil, fmt.Errorf("snapshot provider: query assets: %w", err)
 	}
@@ -134,28 +177,29 @@ func (p *SnapshotProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 	var assets []asset.Asset
 
 	for rows.Next() {
-		var a asset.Asset
-		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
-			return nil, fmt.Errorf("snapshot provider: scan asset: %w", err)
+		aa, scanErr := scanAssetRow(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("snapshot provider: scan asset: %w", scanErr)
 		}
 
-		assets = append(assets, a)
+		assets = append(assets, aa)
 	}
 
 	return assets, rows.Err()
 }
 
 func (p *SnapshotProvider) LookupAsset(ctx context.Context, ticker string) (asset.Asset, error) {
-	var foundAsset asset.Asset
+	row := p.db.QueryRowContext(ctx,
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets WHERE ticker = ? LIMIT 1`, ticker)
 
-	err := p.db.QueryRowContext(ctx,
-		"SELECT composite_figi, ticker FROM assets WHERE ticker = ? LIMIT 1", ticker,
-	).Scan(&foundAsset.CompositeFigi, &foundAsset.Ticker)
+	aa, err := scanAssetRow(row)
 	if err != nil {
 		return asset.Asset{}, fmt.Errorf("snapshot provider: lookup asset %q: %w", ticker, err)
 	}
 
-	return foundAsset, nil
+	return aa, nil
 }
 
 // -- BatchProvider --
@@ -587,7 +631,12 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDa
 	dateStr := forDate.Format("2006-01-02")
 
 	rows, err := p.db.QueryContext(ctx,
-		"SELECT composite_figi, ticker, COALESCE(weight, 0) FROM index_members WHERE index_name = ? AND event_date = ?",
+		`SELECT a.composite_figi, a.ticker, a.name, a.asset_type, a.primary_exchange,
+		        a.sector, a.industry, a.sic_code, a.cik, a.listed, a.delisted,
+		        COALESCE(im.weight, 0)
+		 FROM index_members im
+		 JOIN assets a ON a.composite_figi = im.composite_figi
+		 WHERE im.index_name = ? AND im.event_date = ?`,
 		index, dateStr,
 	)
 	if err != nil {
@@ -602,15 +651,45 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDa
 
 	for rows.Next() {
 		var (
-			figi, ticker string
-			weight       float64
+			name, assetType, exchange, sector, industry, cik string
+			sicCode                                          int
+			listedStr, delistedStr                           string
+			figi, ticker                                     string
+			weight                                           float64
 		)
 
-		if err := rows.Scan(&figi, &ticker, &weight); err != nil {
+		if err := rows.Scan(
+			&figi, &ticker, &name, &assetType, &exchange,
+			&sector, &industry, &sicCode, &cik, &listedStr, &delistedStr,
+			&weight,
+		); err != nil {
 			return nil, nil, fmt.Errorf("snapshot provider: scan index member: %w", err)
 		}
 
-		assetVal := asset.Asset{CompositeFigi: figi, Ticker: ticker}
+		assetVal := asset.Asset{
+			CompositeFigi:   figi,
+			Ticker:          ticker,
+			Name:            name,
+			AssetType:       asset.AssetType(assetType),
+			PrimaryExchange: asset.Exchange(exchange),
+			Sector:          asset.Sector(sector),
+			Industry:        asset.Industry(industry),
+			SICCode:         sicCode,
+			CIK:             cik,
+		}
+
+		if listedStr != "" {
+			if tt, parseErr := time.Parse("2006-01-02", listedStr); parseErr == nil {
+				assetVal.Listed = tt
+			}
+		}
+
+		if delistedStr != "" {
+			if tt, parseErr := time.Parse("2006-01-02", delistedStr); parseErr == nil {
+				assetVal.Delisted = tt
+			}
+		}
+
 		assets = append(assets, assetVal)
 		constituents = append(constituents, IndexConstituent{Asset: assetVal, Weight: weight})
 	}
@@ -629,7 +708,11 @@ func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filt
 	dateStr := forDate.Format("2006-01-02")
 
 	rows, err := p.db.QueryContext(ctx,
-		"SELECT composite_figi, ticker FROM ratings WHERE analyst = ? AND filter_values = ? AND event_date = ?",
+		`SELECT a.composite_figi, a.ticker, a.name, a.asset_type, a.primary_exchange,
+		        a.sector, a.industry, a.sic_code, a.cik, a.listed, a.delisted
+		 FROM ratings r
+		 JOIN assets a ON a.composite_figi = r.composite_figi
+		 WHERE r.analyst = ? AND r.filter_values = ? AND r.event_date = ?`,
 		analyst, string(filterJSON), dateStr,
 	)
 	if err != nil {
@@ -640,12 +723,12 @@ func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filt
 	var assets []asset.Asset
 
 	for rows.Next() {
-		var a asset.Asset
-		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
-			return nil, fmt.Errorf("snapshot provider: scan rated asset: %w", err)
+		aa, scanErr := scanAssetRow(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("snapshot provider: scan rated asset: %w", scanErr)
 		}
 
-		assets = append(assets, a)
+		assets = append(assets, aa)
 	}
 
 	return assets, rows.Err()
