@@ -181,14 +181,32 @@ func (r *SnapshotRecorder) recordAssets(assets []asset.Asset) error {
 		}
 	}()
 
-	stmt, err := tx.Prepare("INSERT OR IGNORE INTO assets (composite_figi, ticker) VALUES (?, ?)")
+	stmt, err := tx.Prepare(`INSERT OR IGNORE INTO assets
+		(composite_figi, ticker, name, asset_type, primary_exchange, sector, industry, sic_code, cik, listed, delisted)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 
-	for _, a := range assets {
-		if _, err := stmt.Exec(a.CompositeFigi, a.Ticker); err != nil {
+	for _, aa := range assets {
+		listedStr := ""
+		if !aa.Listed.IsZero() {
+			listedStr = aa.Listed.Format("2006-01-02")
+		}
+
+		delistedStr := ""
+		if !aa.Delisted.IsZero() {
+			delistedStr = aa.Delisted.Format("2006-01-02")
+		}
+
+		if _, err := stmt.Exec(
+			aa.CompositeFigi, aa.Ticker, aa.Name,
+			string(aa.AssetType), string(aa.PrimaryExchange),
+			string(aa.Sector), string(aa.Industry),
+			aa.SICCode, aa.CIK,
+			listedStr, delistedStr,
+		); err != nil {
 			return err
 		}
 	}
