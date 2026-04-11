@@ -32,7 +32,10 @@ type SnapshotProvider struct {
 }
 
 // scanAssetRow scans 11 asset columns from any row/queryrow scanner.
-func scanAssetRow(scanner interface{ Scan(dest ...any) error }) (asset.Asset, error) {
+// scanAssetRow scans the 11 standard asset columns from any row scanner.
+// Extra scan destinations (e.g. a weight column) can be appended after the
+// asset columns via the extra parameter.
+func scanAssetRow(scanner interface{ Scan(dest ...any) error }, extra ...any) (asset.Asset, error) {
 	var (
 		aa                                               asset.Asset
 		name, assetType, exchange, sector, industry, cik string
@@ -40,11 +43,14 @@ func scanAssetRow(scanner interface{ Scan(dest ...any) error }) (asset.Asset, er
 		listedStr, delistedStr                           string
 	)
 
-	if err := scanner.Scan(
+	dest := []any{
 		&aa.CompositeFigi, &aa.Ticker,
 		&name, &assetType, &exchange, &sector, &industry,
 		&sicCode, &cik, &listedStr, &delistedStr,
-	); err != nil {
+	}
+	dest = append(dest, extra...)
+
+	if err := scanner.Scan(dest...); err != nil {
 		return asset.Asset{}, err
 	}
 
@@ -57,15 +63,21 @@ func scanAssetRow(scanner interface{ Scan(dest ...any) error }) (asset.Asset, er
 	aa.CIK = cik
 
 	if listedStr != "" {
-		if tt, err := time.Parse("2006-01-02", listedStr); err == nil {
-			aa.Listed = tt
+		tt, parseErr := time.Parse("2006-01-02", listedStr)
+		if parseErr != nil {
+			return asset.Asset{}, fmt.Errorf("parse listed date %q: %w", listedStr, parseErr)
 		}
+
+		aa.Listed = tt
 	}
 
 	if delistedStr != "" {
-		if tt, err := time.Parse("2006-01-02", delistedStr); err == nil {
-			aa.Delisted = tt
+		tt, parseErr := time.Parse("2006-01-02", delistedStr)
+		if parseErr != nil {
+			return asset.Asset{}, fmt.Errorf("parse delisted date %q: %w", delistedStr, parseErr)
 		}
+
+		aa.Delisted = tt
 	}
 
 	return aa, nil
@@ -650,44 +662,11 @@ func (p *SnapshotProvider) IndexMembers(ctx context.Context, index string, forDa
 	)
 
 	for rows.Next() {
-		var (
-			name, assetType, exchange, sector, industry, cik string
-			sicCode                                          int
-			listedStr, delistedStr                           string
-			figi, ticker                                     string
-			weight                                           float64
-		)
+		var weight float64
 
-		if err := rows.Scan(
-			&figi, &ticker, &name, &assetType, &exchange,
-			&sector, &industry, &sicCode, &cik, &listedStr, &delistedStr,
-			&weight,
-		); err != nil {
-			return nil, nil, fmt.Errorf("snapshot provider: scan index member: %w", err)
-		}
-
-		assetVal := asset.Asset{
-			CompositeFigi:   figi,
-			Ticker:          ticker,
-			Name:            name,
-			AssetType:       asset.AssetType(assetType),
-			PrimaryExchange: asset.Exchange(exchange),
-			Sector:          asset.Sector(sector),
-			Industry:        asset.Industry(industry),
-			SICCode:         sicCode,
-			CIK:             cik,
-		}
-
-		if listedStr != "" {
-			if tt, parseErr := time.Parse("2006-01-02", listedStr); parseErr == nil {
-				assetVal.Listed = tt
-			}
-		}
-
-		if delistedStr != "" {
-			if tt, parseErr := time.Parse("2006-01-02", delistedStr); parseErr == nil {
-				assetVal.Delisted = tt
-			}
+		assetVal, scanErr := scanAssetRow(rows, &weight)
+		if scanErr != nil {
+			return nil, nil, fmt.Errorf("snapshot provider: scan index member: %w", scanErr)
 		}
 
 		assets = append(assets, assetVal)
