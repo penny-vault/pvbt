@@ -34,17 +34,42 @@ var _ = Describe("SnapshotRecorder", func() {
 
 	Describe("asset recording", func() {
 		It("records assets from Assets() call", func() {
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
 			stubAssets := []asset.Asset{
-				{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"},
-				{CompositeFigi: "BBG000BHTK15", Ticker: "TLT"},
+				{
+					CompositeFigi:   "BBG000BLNNH6",
+					Ticker:          "SPY",
+					Name:            "SPDR S&P 500 ETF Trust",
+					AssetType:       asset.AssetTypeETF,
+					PrimaryExchange: asset.ExchangeNYSE,
+					Sector:          "",
+					Industry:        "",
+					SICCode:         6726,
+					CIK:             "0000884394",
+					Listed:          time.Date(1993, 1, 22, 0, 0, 0, 0, nyc),
+				},
+				{
+					CompositeFigi:   "BBG000BHTK15",
+					Ticker:          "TLT",
+					Name:            "iShares 20+ Year Treasury Bond ETF",
+					AssetType:       asset.AssetTypeETF,
+					PrimaryExchange: asset.ExchangeNASDAQ,
+					Sector:          "",
+					Industry:        "",
+					SICCode:         0,
+					CIK:             "0000088525",
+					Listed:          time.Date(2002, 7, 22, 0, 0, 0, 0, nyc),
+				},
 			}
 			stub := &stubAssetProvider{assets: stubAssets}
 
-			var err error
-			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+			var recErr error
+			recorder, recErr = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
 				AssetProvider: stub,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(recErr).NotTo(HaveOccurred())
 
 			result, err := recorder.Assets(ctx)
 			Expect(err).NotTo(HaveOccurred())
@@ -61,17 +86,40 @@ var _ = Describe("SnapshotRecorder", func() {
 			var count int
 			Expect(db.QueryRow("SELECT count(*) FROM assets").Scan(&count)).To(Succeed())
 			Expect(count).To(Equal(2))
+
+			var name, assetType, exchange, cik string
+			var sicCode int
+			Expect(db.QueryRow(
+				"SELECT name, asset_type, primary_exchange, sic_code, cik FROM assets WHERE ticker = 'SPY'",
+			).Scan(&name, &assetType, &exchange, &sicCode, &cik)).To(Succeed())
+			Expect(name).To(Equal("SPDR S&P 500 ETF Trust"))
+			Expect(assetType).To(Equal("ETF"))
+			Expect(exchange).To(Equal("NYSE"))
+			Expect(sicCode).To(Equal(6726))
+			Expect(cik).To(Equal("0000884394"))
 		})
 
 		It("records asset from LookupAsset() call", func() {
-			expected := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			expected := asset.Asset{
+				CompositeFigi:   "BBG000BLNNH6",
+				Ticker:          "SPY",
+				Name:            "SPDR S&P 500 ETF Trust",
+				AssetType:       asset.AssetTypeETF,
+				PrimaryExchange: asset.ExchangeNYSE,
+				SICCode:         6726,
+				CIK:             "0000884394",
+				Listed:          time.Date(1993, 1, 22, 0, 0, 0, 0, nyc),
+			}
 			stub := &stubAssetProvider{lookupResult: expected}
 
-			var err error
-			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+			var recErr error
+			recorder, recErr = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
 				AssetProvider: stub,
 			})
-			Expect(err).NotTo(HaveOccurred())
+			Expect(recErr).NotTo(HaveOccurred())
 
 			result, err := recorder.LookupAsset(ctx, "SPY")
 			Expect(err).NotTo(HaveOccurred())
@@ -87,6 +135,17 @@ var _ = Describe("SnapshotRecorder", func() {
 			var count int
 			Expect(db.QueryRow("SELECT count(*) FROM assets").Scan(&count)).To(Succeed())
 			Expect(count).To(Equal(1))
+
+			var name, assetType, exchange, cik string
+			var sicCode int
+			Expect(db.QueryRow(
+				"SELECT name, asset_type, primary_exchange, sic_code, cik FROM assets WHERE ticker = 'SPY'",
+			).Scan(&name, &assetType, &exchange, &sicCode, &cik)).To(Succeed())
+			Expect(name).To(Equal("SPDR S&P 500 ETF Trust"))
+			Expect(assetType).To(Equal("ETF"))
+			Expect(exchange).To(Equal("NYSE"))
+			Expect(sicCode).To(Equal(6726))
+			Expect(cik).To(Equal("0000884394"))
 		})
 	})
 
