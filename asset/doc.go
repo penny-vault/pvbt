@@ -18,11 +18,16 @@
 //
 // # Asset Type
 //
-// The Asset struct has two fields: CompositeFigi (a globally unique identifier
-// from the Financial Instrument Global Identifier standard, used to
-// unambiguously identify securities across exchanges and data sources) and
-// Ticker (a human-readable symbol like "SPY" or "AAPL"). Assets are resolved from
-// tickers via an AssetProvider registered with the engine.
+// The Asset struct carries identity fields (CompositeFigi, Ticker) and
+// metadata loaded from the data provider: Name, [AssetType], [Exchange],
+// [Sector], [Industry], SICCode, CIK, and listing dates (Listed, Delisted).
+// Strategies use the metadata to filter assets -- for example, excluding
+// financial-sector stocks or limiting to common stock only.
+//
+// The AssetType, Exchange, Sector, and Industry fields are string-typed
+// enums with named constants (e.g. [AssetTypeETF], [ExchangeNYSE],
+// [SectorTechnology], [IndustryBiotechnology]). Raw exchange codes from
+// the database are normalized via [NormalizeExchange].
 //
 // # Economic Indicators
 //
