@@ -17,6 +17,8 @@ package engine_test
 
 import (
 	"context"
+	"time"
+
 	"github.com/bytedance/sonic"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -188,5 +190,30 @@ var _ = Describe("DescribeStrategy", func() {
 			Expect(jsonStr).NotTo(ContainSubstring(`"source"`))
 			Expect(jsonStr).NotTo(ContainSubstring(`"version"`))
 		})
+	})
+})
+
+// testOnlyDescriptorStrategy has a mix of regular and test-only fields and
+// implements Descriptor so it can be passed to DescribeStrategy.
+type testOnlyDescriptorStrategy struct {
+	Lookback int       `pvbt:"lookback" desc:"Lookback" default:"6"`
+	Now      time.Time `pvbt:"now" testonly:"true"`
+}
+
+func (s *testOnlyDescriptorStrategy) Name() string           { return "TestOnlyDescriptor" }
+func (s *testOnlyDescriptorStrategy) Setup(_ *engine.Engine) {}
+func (s *testOnlyDescriptorStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+func (s *testOnlyDescriptorStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{ShortCode: "tod"}
+}
+
+var _ = Describe("DescribeStrategy with testonly fields", func() {
+	It("omits test-only fields from StrategyInfo.Parameters", func() {
+		info := engine.DescribeStrategy(&testOnlyDescriptorStrategy{})
+
+		Expect(info.Parameters).To(HaveLen(1))
+		Expect(info.Parameters[0].Name).To(Equal("lookback"))
 	})
 })
