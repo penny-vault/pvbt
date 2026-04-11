@@ -60,6 +60,8 @@ func CreateSnapshotSchema(db *sql.DB) error {
 		fmt.Sprintf(`CREATE TABLE IF NOT EXISTS fundamentals (
 			composite_figi TEXT NOT NULL REFERENCES assets(composite_figi),
 			event_date TEXT NOT NULL,
+			date_key TEXT,
+			report_period TEXT,
 			dimension TEXT NOT NULL,
 			%s,
 			PRIMARY KEY (composite_figi, event_date, dimension)

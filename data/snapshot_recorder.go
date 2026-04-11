@@ -447,13 +447,15 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		return nil
 	}
 
-	placeholders := make([]string, 3+len(colNames))
-	placeholders[0] = "?"
-	placeholders[1] = "?"
+	placeholders := make([]string, 5+len(colNames))
+	placeholders[0] = "?" // composite_figi
+	placeholders[1] = "?" // event_date
+	placeholders[2] = "?" // date_key
+	placeholders[3] = "?" // report_period
+	placeholders[4] = "?" // dimension
 
-	placeholders[2] = "?"
 	for idx := range colNames {
-		placeholders[3+idx] = "?"
+		placeholders[5+idx] = "?"
 	}
 
 	// Build ON CONFLICT clause for upsert.
@@ -463,7 +465,7 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 	}
 
 	query := fmt.Sprintf(
-		"INSERT INTO fundamentals (composite_figi, event_date, dimension, %s) VALUES (%s) ON CONFLICT(composite_figi, event_date, dimension) DO UPDATE SET %s",
+		"INSERT INTO fundamentals (composite_figi, event_date, date_key, report_period, dimension, %s) VALUES (%s) ON CONFLICT(composite_figi, event_date, dimension) DO UPDATE SET %s",
 		strings.Join(colNames, ", "),
 		strings.Join(placeholders, ", "),
 		strings.Join(upsertCols, ", "),
@@ -473,23 +475,25 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format("2006-01-02")
 
-			args := make([]any, 3+len(colMetrics))
+			args := make([]any, 5+len(colMetrics))
 			args[0] = a.CompositeFigi
 			args[1] = dateStr
-			args[2] = "ARQ" // default dimension
+			args[2] = nil // date_key: populated when DataFrame metadata is available
+			args[3] = nil // report_period: populated when DataFrame metadata is available
+			args[4] = "ARQ"
 
 			for idx, metric := range colMetrics {
 				mi, ok := mIdx[metric]
 				if !ok {
-					args[3+idx] = nil
+					args[5+idx] = nil
 					continue
 				}
 
 				val := df.columns[assetIdx*numDFMetrics+mi][timeIdx]
 				if math.IsNaN(val) {
-					args[3+idx] = nil
+					args[5+idx] = nil
 				} else {
-					args[3+idx] = val
+					args[5+idx] = val
 				}
 			}
 

@@ -267,6 +267,27 @@ The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio.
 
 The risk-free rate is DGS3MO (3-month treasury yield), resolved automatically by the engine during initialization when available. When resolved, the engine pre-computes a cumulative risk-free series and attaches it to all DataFrames returned by `Fetch` and `FetchAt`, enabling `df.RiskAdjustedPct(n)` to subtract the risk-free return automatically. The risk-free rate feeds Sharpe, Sortino, Treynor, and related metrics.
 
+### Fundamental data
+
+Fundamental metrics (revenue, earnings, balance sheet items) come from SEC filings and behave differently from price data. Prices update every trading day; fundamentals update quarterly when companies file. The engine handles this automatically -- once a filing becomes public, its values are forward-filled across trading days until the next filing supersedes them. Your strategy sees dense data from both `Fetch` and `FetchAt` without NaN gaps.
+
+Fundamental data comes in two families. "As Reported" (AR) dimensions are indexed to the SEC filing date -- the date the data became publicly available. These are safe for backtesting because your strategy only sees data that existed at the time. "Most Recent Reported" (MR) dimensions include restatements and are indexed to the fiscal period end, which can introduce look-ahead bias since the restated numbers weren't available at that date.
+
+Within each family there are three time spans: Quarterly (Q), Annual (Y), and Trailing Twelve Months (T). The default is ARQ -- quarterly data indexed to filing dates, excluding restatements. To change it, call `SetFundamentalDimension` in `Setup`:
+
+```go
+eng.SetFundamentalDimension("MRQ") // most-recent reported, quarterly
+```
+
+| Dimension | Description |
+|-----------|-------------|
+| `ARQ` | As Reported, Quarterly. Point-in-time (indexed to SEC filing date). Excludes restatements. Recommended for backtesting. |
+| `ARY` | As Reported, Annual. Same as ARQ but annual observations. |
+| `ART` | As Reported, Trailing Twelve Months. Quarterly observations of one-year duration. |
+| `MRQ` | Most Recent Reported, Quarterly. Indexed to fiscal period end. Includes restatements. Suitable for business performance analysis. |
+| `MRY` | Most Recent Reported, Annual. |
+| `MRT` | Most Recent Reported, Trailing Twelve Months. |
+
 ### Asset lookup
 
 `eng.Asset(ticker)` resolves a ticker to an `asset.Asset` using the registered `AssetProvider`. It panics if the ticker is not found, which is appropriate in `Setup` since a missing benchmark or risk-free asset is a fatal configuration error.
