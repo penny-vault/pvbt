@@ -44,11 +44,11 @@ var _ IndexProvider = (*PVDataProvider)(nil)
 // to zero values.
 func scanPgxAsset(scanner interface{ Scan(dest ...any) error }) (asset.Asset, error) {
 	var (
-		aa                          asset.Asset
-		name, assetType, exchange   *string
-		sector, industry, cik       *string
-		sicCode                     *int
-		listed, delisted            *time.Time
+		aa                        asset.Asset
+		name, assetType, exchange *string
+		sector, industry, cik     *string
+		sicCode                   *int
+		listed, delisted          *time.Time
 	)
 
 	if err := scanner.Scan(
