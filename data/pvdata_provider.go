@@ -73,6 +73,12 @@ func WithConfigFile(path string) PVDataOption {
 	return func(o *pvdataOptions) { o.configFile = path }
 }
 
+// SetDimension updates the fundamental dimension filter at runtime.
+// Valid values: "ARQ", "ARY", "ART", "MRQ", "MRY", "MRT".
+func (p *PVDataProvider) SetDimension(dim string) {
+	p.dimension = dim
+}
+
 // NewPVDataProvider creates a provider that reads from a pv-data database.
 // If pool is nil the provider reads ~/.pvdata.toml (or the path set via
 // WithConfigFile) for the connection URL and creates its own pool.

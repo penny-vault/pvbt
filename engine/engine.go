@@ -50,16 +50,17 @@ type Engine struct {
 	riskFreeIndex      map[time.Time]int // date -> index into riskFreeValues, built once during init
 
 	// configuration (set via options, used during init)
-	cacheMaxBytes    int64
-	initialDeposit   float64
-	broker           broker.Broker
-	snapshot         portfolio.PortfolioSnapshot
-	dateRangeMode    DateRangeMode
-	warmup           int
-	benchmarkTicker  string
-	fillBaseModel    broker.BaseModel
-	fillAdjusters    []broker.Adjuster
-	middlewareConfig *MiddlewareConfig
+	cacheMaxBytes        int64
+	initialDeposit       float64
+	broker               broker.Broker
+	snapshot             portfolio.PortfolioSnapshot
+	dateRangeMode        DateRangeMode
+	warmup               int
+	benchmarkTicker      string
+	fillBaseModel        broker.BaseModel
+	fillAdjusters        []broker.Adjuster
+	middlewareConfig     *MiddlewareConfig
+	fundamentalDimension string
 
 	account portfolio.PortfolioManager
 
@@ -129,6 +130,19 @@ func (e *Engine) createAccount(start time.Time) portfolio.PortfolioManager {
 	opts = append(opts, portfolio.WithBroker(e.broker))
 
 	return portfolio.New(opts...)
+}
+
+// validDimensions lists the accepted fundamental dimension codes.
+var validDimensions = map[string]bool{
+	"ARQ": true, "ARY": true, "ART": true,
+	"MRQ": true, "MRY": true, "MRT": true,
+}
+
+// SetFundamentalDimension configures the fundamental data dimension used
+// by this engine. Valid values: "ARQ", "ARY", "ART", "MRQ", "MRY", "MRT".
+// Call this from Strategy.Setup. If not called, defaults to "ARQ".
+func (e *Engine) SetFundamentalDimension(dim string) {
+	e.fundamentalDimension = dim
 }
 
 // SetBenchmark sets the benchmark asset for performance comparison.
