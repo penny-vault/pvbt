@@ -239,55 +239,6 @@ func (e *Engine) buildProviderRouting() error {
 	return nil
 }
 
-// fetchFromProviders groups metrics by their provider, issues one Fetch call
-// per provider, and merges the results with MergeColumns.
-func (e *Engine) fetchFromProviders(ctx context.Context, assets []asset.Asset, metrics []data.Metric, start, end time.Time) (*data.DataFrame, error) {
-	if e.metricProvider == nil {
-		return nil, fmt.Errorf("engine: provider routing not initialized; call buildProviderRouting first")
-	}
-
-	// Group metrics by provider.
-	providerMetrics := make(map[data.BatchProvider][]data.Metric)
-
-	for _, metric := range metrics {
-		batchProvider, ok := e.metricProvider[metric]
-		if !ok {
-			return nil, fmt.Errorf("engine: no provider registered for metric %q", metric)
-		}
-
-		providerMetrics[batchProvider] = append(providerMetrics[batchProvider], metric)
-	}
-
-	var frames []*data.DataFrame
-
-	for batchProvider, provMetrics := range providerMetrics {
-		req := data.DataRequest{
-			Assets:    assets,
-			Metrics:   provMetrics,
-			Start:     start,
-			End:       end,
-			Frequency: data.Daily,
-		}
-
-		df, err := batchProvider.Fetch(ctx, req)
-		if err != nil {
-			return nil, fmt.Errorf("engine: provider fetch: %w", err)
-		}
-
-		frames = append(frames, df)
-	}
-
-	if len(frames) == 0 {
-		return data.NewDataFrame(nil, nil, nil, data.Daily, nil)
-	}
-
-	if len(frames) == 1 {
-		return frames[0], nil
-	}
-
-	return data.MergeColumns(frames...)
-}
-
 // Fetch implements data.DataSource.
 func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portfolio.Period, metrics []data.Metric) (*data.DataFrame, error) {
 	log := zerolog.Ctx(ctx)
@@ -454,7 +405,11 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		}
 	}
 
-	// Fetch misses: one bulk call per chunk year.
+	// Fetch misses: one bulk call per provider per chunk year. Each provider
+	// is fetched independently so that providers with different time axes
+	// (e.g. sparse fundamental filing dates vs. dense daily close prices)
+	// do not need to share a common timestamp grid at fetch time. The slab
+	// assembly below builds the union time axis from cached column entries.
 	for year, cacheMiss := range misses {
 		missAssets := make([]asset.Asset, 0, len(cacheMiss.assets))
 		for _, assetItem := range cacheMiss.assets {
@@ -476,39 +431,96 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 			Time("chunkEnd", chunkEnd).
 			Msg("engine.fetchRange cache miss")
 
-		df, err := e.fetchFromProviders(ctx, missAssets, missMetrics, chunkStart, chunkEnd)
-		if err != nil {
-			return nil, err
+		// Group miss metrics by provider so each provider is fetched once.
+		type providerFetch struct {
+			provider data.BatchProvider
+			metrics  []data.Metric
 		}
 
-		// Decompose the DataFrame into individual columns and cache them.
-		// For empty results, cache empty entries so we don't re-fetch.
-		dfTimes := df.Times()
-		if len(dfTimes) == 0 {
-			empty := &colCacheEntry{}
+		providerMap := make(map[data.BatchProvider]*providerFetch)
 
-			for _, assetItem := range missAssets {
-				for _, metric := range missMetrics {
-					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-					e.cache.put(key, empty)
+		for _, metric := range missMetrics {
+			bp, ok := e.metricProvider[metric]
+			if !ok {
+				return nil, fmt.Errorf("engine: no provider registered for metric %q", metric)
+			}
+
+			pf, exists := providerMap[bp]
+			if !exists {
+				pf = &providerFetch{provider: bp}
+				providerMap[bp] = pf
+			}
+
+			pf.metrics = append(pf.metrics, metric)
+		}
+
+		// Cache metrics that could not be fetched (not in any miss) as empty
+		// so we record them as checked and don't re-fetch on subsequent calls.
+		cachedMetrics := make(map[data.Metric]bool, len(missMetrics))
+
+		for _, pf := range providerMap {
+			req := data.DataRequest{
+				Assets:    missAssets,
+				Metrics:   pf.metrics,
+				Start:     chunkStart,
+				End:       chunkEnd,
+				Frequency: data.Daily,
+			}
+
+			df, fetchErr := pf.provider.Fetch(ctx, req)
+			if fetchErr != nil {
+				return nil, fmt.Errorf("engine: provider fetch: %w", fetchErr)
+			}
+
+			// Decompose the DataFrame into individual columns and cache them.
+			// Each provider may have its own time axis (e.g. sparse fundamentals).
+			dfTimes := df.Times()
+			if len(dfTimes) == 0 {
+				empty := &colCacheEntry{}
+
+				for _, assetItem := range missAssets {
+					for _, metric := range pf.metrics {
+						key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
+						e.cache.put(key, empty)
+
+						cachedMetrics[metric] = true
+					}
+				}
+			} else {
+				timesCopy := make([]time.Time, len(dfTimes))
+				copy(timesCopy, dfTimes)
+
+				for _, assetItem := range df.AssetList() {
+					for _, metric := range df.MetricList() {
+						col := df.Column(assetItem, metric)
+						if col == nil {
+							continue
+						}
+
+						colCopy := make([]float64, len(col))
+						copy(colCopy, col)
+
+						key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
+						e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
+
+						cachedMetrics[metric] = true
+					}
 				}
 			}
-		} else {
-			for _, assetItem := range df.AssetList() {
-				for _, metric := range df.MetricList() {
-					col := df.Column(assetItem, metric)
-					if col == nil {
-						continue
-					}
+		}
 
-					colCopy := make([]float64, len(col))
-					copy(colCopy, col)
+		// Any miss metric not placed into the cache (because its provider
+		// returned an empty result without listing it in MetricList) needs an
+		// empty sentinel so we don't re-fetch it on the next call.
+		for _, assetItem := range missAssets {
+			for _, metric := range missMetrics {
+				if cachedMetrics[metric] {
+					continue
+				}
 
-					timesCopy := make([]time.Time, len(dfTimes))
-					copy(timesCopy, dfTimes)
-
-					key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
-					e.cache.put(key, &colCacheEntry{times: timesCopy, values: colCopy})
+				key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
+				if _, already := e.cache.get(key); !already {
+					e.cache.put(key, &colCacheEntry{})
 				}
 			}
 		}
@@ -584,6 +596,25 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 					}
 
 					slab[colStart+ti] = entry.values[ii]
+				}
+			}
+		}
+	}
+
+	// Forward-fill fundamental metric columns. Fundamentals are sparse
+	// (quarterly filing dates) but represent step-function data: the
+	// value holds until the next filing supersedes it.
+	for mIdx, metric := range metrics {
+		if !data.IsFundamental(metric) {
+			continue
+		}
+
+		for aIdx := range assets {
+			colStart := (aIdx*numMetrics + mIdx) * numTimes
+
+			for ti := 1; ti < numTimes; ti++ {
+				if math.IsNaN(slab[colStart+ti]) && !math.IsNaN(slab[colStart+ti-1]) {
+					slab[colStart+ti] = slab[colStart+ti-1]
 				}
 			}
 		}
