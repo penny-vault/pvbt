@@ -14,7 +14,16 @@ func CreateSnapshotSchema(db *sql.DB) error {
 	statements := []string{
 		`CREATE TABLE IF NOT EXISTS assets (
 			composite_figi TEXT PRIMARY KEY,
-			ticker TEXT NOT NULL
+			ticker TEXT NOT NULL,
+			name TEXT NOT NULL DEFAULT '',
+			asset_type TEXT NOT NULL DEFAULT '',
+			primary_exchange TEXT NOT NULL DEFAULT '',
+			sector TEXT NOT NULL DEFAULT '',
+			industry TEXT NOT NULL DEFAULT '',
+			sic_code INTEGER NOT NULL DEFAULT 0,
+			cik TEXT NOT NULL DEFAULT '',
+			listed TEXT NOT NULL DEFAULT '',
+			delisted TEXT NOT NULL DEFAULT ''
 		)`,
 
 		`CREATE TABLE IF NOT EXISTS eod (
