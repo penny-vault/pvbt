@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The strategy guide and overview examples did not compile — they called `Universe.At(ctx, date, metrics...)`, which was removed in 0.6.0.
 - The strategy guide wrongly documented `Mean`, `Sum`, `Variance`, and `Std` as reducing across assets. They reduce across time and preserve the asset axis.
 - Fundamental metrics (revenue, working capital, etc.) are now forward-filled onto the daily time grid. Previously, `FetchAt` returned NaN when the simulation date did not exactly match a filing date, and `Fetch` returned sparse data with NaN gaps between quarterly filings.
+- `FetchAt` for fundamental metrics now returns forward-filled values when the requested date falls on a weekend or holiday. Previously the response was empty, causing strategies that rebalance on a calendar date (e.g. March 31 for Q1 data) to silently skip the step in years where that date was not a trading day.
 
 ## [0.6.0] - 2026-04-06
 

@@ -119,6 +119,33 @@ func (s *fetchThenFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engi
 	return nil
 }
 
+// pastFetchAtStrategy calls FetchAt with a fixed historical date during Compute.
+// Used to exercise point-in-time fundamental queries on non-trading days.
+type pastFetchAtStrategy struct {
+	queryDate time.Time
+	metrics   []data.Metric
+	assets    []asset.Asset
+	fetched   *data.DataFrame
+	fetchErr  error
+}
+
+func (s *pastFetchAtStrategy) Name() string { return "pastFetchAtStrategy" }
+
+func (s *pastFetchAtStrategy) Setup(_ *engine.Engine) {}
+
+func (s *pastFetchAtStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *pastFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	if s.fetched != nil {
+		return nil
+	}
+
+	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, s.queryDate, s.metrics)
+	return nil
+}
+
 // futureFetchAtStrategy calls FetchAt with a future date during Compute.
 type futureFetchAtStrategy struct {
 	metrics  []data.Metric
@@ -516,6 +543,65 @@ var _ = Describe("Fetch", func() {
 			for _, val := range revCol {
 				Expect(val).To(BeNumerically("==", 500_000_000))
 			}
+		})
+
+		It("returns forward-filled fundamentals for FetchAt on a non-trading day", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			fundamentalAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: fundamentalAssets}
+
+			// Daily close prices spanning the year so the engine has trading days
+			// to schedule on.
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 200, fundamentalAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// One fundamental filing well before the query date so forward-fill
+			// has a value to propagate.
+			filingDate := time.Date(2024, 2, 15, 16, 0, 0, 0, time.UTC)
+			fundDF, err := data.NewDataFrame(
+				[]time.Time{filingDate},
+				fundamentalAssets,
+				[]data.Metric{data.WorkingCapital},
+				data.Daily,
+				[][]float64{{42_000_000}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			fundProvider := data.NewTestProvider([]data.Metric{data.WorkingCapital}, fundDF)
+
+			// 2024-03-31 is a Sunday: no trading-day data and no filing on that
+			// exact date. Without the fix, FetchAt returns an empty frame because
+			// the requested timestamp never enters the union time grid.
+			queryDate := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+			Expect(queryDate.Weekday()).To(Equal(time.Sunday))
+
+			strategy := &pastFetchAtStrategy{
+				queryDate: queryDate,
+				metrics:   []data.Metric{data.WorkingCapital},
+				assets:    fundamentalAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, fundProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			// Run the simulation past the query date so the look-ahead guard
+			// allows it.
+			simStart := time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 4, 5, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(Equal(1),
+				"FetchAt should produce a row at the requested date even on a non-trading day")
+
+			wc := strategy.fetched.Column(spy, data.WorkingCapital)
+			Expect(wc).To(HaveLen(1))
+			Expect(wc[0]).To(BeNumerically("==", 42_000_000),
+				"forward-filled fundamental value should be the most recent prior filing")
 		})
 
 		It("does not forward-fill price metrics", func() {
