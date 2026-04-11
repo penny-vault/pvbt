@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Strategies can use `universe.USTradable` as a daily-refreshed investable universe of liquid US stocks. Membership is sourced from pv-data and filters by market cap, dollar volume, price floor, and data completeness, mirroring the criteria of Quantopian's QTradableStocksUS. This is the recommended default universe for broad US equity strategies.
 - The `asset.Asset` type carries metadata from the data provider: name, asset type, exchange, sector, industry, SIC code, CIK, and listing dates. Strategies can filter by these fields directly (e.g. exclude financial-sector stocks or limit to common stock).
 - Strategies can configure the fundamental data dimension (ARQ, MRQ, ARY, MRY, ART, MRT) via `SetFundamentalDimension` in `Setup`. AR dimensions use SEC filing dates for point-in-time correctness; MR dimensions include restatements and are indexed to the fiscal period. Defaults to ARQ.
+- Strategy authors can mark a parameter field as test-only with `testonly:"true"`. Test-only parameters are hidden from `pvbt describe`, the TUI, CLI flags, presets, and study sweeps, and `engine.ApplyParams` rejects any attempt to set them. Tests assign test-only fields directly on the strategy struct.
 
 ### Fixed
 
