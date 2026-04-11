@@ -242,6 +242,10 @@ func strategyParams(strategy engine.Strategy) map[string]any {
 			continue
 		}
 
+		if engine.IsTestOnlyField(field) {
+			continue
+		}
+
 		name := field.Tag.Get("pvbt")
 		if name == "" {
 			name = strings.ToLower(field.Name)

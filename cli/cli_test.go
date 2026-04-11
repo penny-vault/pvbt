@@ -386,3 +386,15 @@ var _ = Describe("collectParamSweeps with testonly fields", func() {
 		}
 	})
 })
+
+var _ = Describe("strategyParams with testonly fields", func() {
+	It("does not include a test-only field in the backtest metadata map", func() {
+		strategy := &testOnlyFlagStrategy{}
+
+		params := strategyParams(strategy)
+
+		Expect(params).NotTo(HaveKey("seed"))
+		Expect(params).To(HaveKey("lookback"))
+		Expect(params).To(HaveKey("window"))
+	})
+})
