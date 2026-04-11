@@ -187,3 +187,45 @@ var _ = Describe("StrategyParameters with testonly fields", func() {
 		Expect(findParam(params, "hidden-true")).To(BeNil())
 	})
 })
+
+// sanityTestOnlyStrategy records the value of a test-only field the first
+// time Compute is called. This proves direct struct assignment of a
+// testonly field is visible to Compute even though the field is hidden
+// from every user surface.
+type sanityTestOnlyStrategy struct {
+	Window   int `pvbt:"window" desc:"window" default:"5"`
+	Injected int `pvbt:"injected" testonly:"true"`
+
+	observed int
+	seen     bool
+}
+
+func (s *sanityTestOnlyStrategy) Name() string           { return "sanityTestOnly" }
+func (s *sanityTestOnlyStrategy) Setup(_ *engine.Engine) {}
+func (s *sanityTestOnlyStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	if !s.seen {
+		s.observed = s.Injected
+		s.seen = true
+	}
+	return nil
+}
+
+var _ = Describe("test-only field accessibility", func() {
+	It("is observable inside Compute when set via direct struct assignment", func() {
+		strategy := &sanityTestOnlyStrategy{Injected: 42}
+		Expect(strategy.Injected).To(Equal(42))
+
+		// Calling Compute directly is sufficient to prove the field is
+		// readable. The point of this test is the marker does not block
+		// normal Go field reads -- it only filters discovery surfaces.
+		err := strategy.Compute(context.Background(), nil, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.seen).To(BeTrue())
+		Expect(strategy.observed).To(Equal(42))
+
+		// And the parameter is correctly hidden from discovery.
+		params := engine.StrategyParameters(strategy)
+		Expect(findParam(params, "injected")).To(BeNil())
+		Expect(findParam(params, "window")).NotTo(BeNil())
+	})
+})
