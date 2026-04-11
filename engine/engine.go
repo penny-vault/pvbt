@@ -61,17 +61,19 @@ type Engine struct {
 	fillAdjusters        []broker.Adjuster
 	middlewareConfig     *MiddlewareConfig
 	fundamentalDimension string
+	progressCallback     ProgressCallback
 
 	account portfolio.PortfolioManager
 
 	// populated during initialization
-	assets         map[string]asset.Asset
-	cache          *dataCache
-	currentDate    time.Time
-	start          time.Time
-	end            time.Time
-	metricProvider map[data.Metric]data.BatchProvider
-	predicting     bool
+	assets                map[string]asset.Asset
+	cache                 *dataCache
+	currentDate           time.Time
+	start                 time.Time
+	end                   time.Time
+	metricProvider        map[data.Metric]data.BatchProvider
+	predicting            bool
+	measurementsEvaluated int
 
 	children       []*childEntry
 	childrenByName map[string]*childEntry

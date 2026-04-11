@@ -113,3 +113,12 @@ func WithMiddlewareConfig(cfg MiddlewareConfig) Option {
 		e.middlewareConfig = &cfg
 	}
 }
+
+// WithProgressCallback registers a callback that receives a ProgressEvent
+// after each backtest step. The callback runs synchronously inside the step
+// loop, so it must return quickly. Used by the CLI to drive a progress bar.
+func WithProgressCallback(fn ProgressCallback) Option {
+	return func(e *Engine) {
+		e.progressCallback = fn
+	}
+}

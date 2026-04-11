@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `pvbt backtest` now renders an interactive progress bar by default when run from a terminal, showing the current and final simulation dates, percent complete, ETA, and a running count of performance measurements evaluated. Pass `--no-progress` to disable it (e.g. for CI logs).
+- Strategy authors can register a progress observer on the engine via `WithProgressCallback`, which fires after each backtest step with a `ProgressEvent` containing the step index, total steps, current and bounding dates, and cumulative measurement count.
 - Strategies can use `universe.USTradable` as a daily-refreshed investable universe of liquid US stocks. Membership is sourced from pv-data and filters by market cap, dollar volume, price floor, and data completeness, mirroring the criteria of Quantopian's QTradableStocksUS. This is the recommended default universe for broad US equity strategies.
 - The `asset.Asset` type carries metadata from the data provider: name, asset type, exchange, sector, industry, SIC code, CIK, and listing dates. Strategies can filter by these fields directly (e.g. exclude financial-sector stocks or limit to common stock).
 - Strategies can configure the fundamental data dimension (ARQ, MRQ, ARY, MRY, ART, MRT) via `SetFundamentalDimension` in `Setup`. AR dimensions use SEC filing dates for point-in-time correctness; MR dimensions include restatements and are indexed to the fiscal period. Defaults to ARQ.
