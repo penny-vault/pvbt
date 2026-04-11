@@ -115,6 +115,12 @@ func StrategyParameters(s Strategy) []Parameter {
 			continue
 		}
 
+		// Skip fields marked test-only -- they must not appear on any
+		// user-facing surface.
+		if IsTestOnlyField(field) {
+			continue
+		}
+
 		name := ParameterName(field)
 
 		var suggestions map[string]string

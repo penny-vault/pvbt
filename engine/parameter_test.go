@@ -174,3 +174,16 @@ var _ = Describe("IsTestOnlyField", func() {
 		Expect(func() { engine.IsTestOnlyField(field) }).To(PanicWith(ContainSubstring("invalid testonly tag")))
 	})
 })
+
+var _ = Describe("StrategyParameters with testonly fields", func() {
+	It("omits fields tagged testonly:\"true\"", func() {
+		strategy := &testOnlyTagStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		// Visible and HiddenFalse remain; HiddenTrue is filtered.
+		Expect(params).To(HaveLen(2))
+		Expect(findParam(params, "visible")).NotTo(BeNil())
+		Expect(findParam(params, "hidden-false")).NotTo(BeNil())
+		Expect(findParam(params, "hidden-true")).To(BeNil())
+	})
+})
