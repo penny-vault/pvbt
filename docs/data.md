@@ -150,6 +150,8 @@ eng := engine.New(&ADM{},
 )
 ```
 
+`Assets` and `LookupAsset` return `asset.Asset` values with full metadata: name, asset type, primary exchange, sector, industry, SIC code, CIK, and listing dates. Strategies can use these fields directly for filtering -- for example, `a.Sector == asset.SectorFinancialServices` or `a.AssetType == asset.AssetTypeCommonStock`.
+
 ### DataSource interface
 
 The `data.DataSource` interface decouples data fetching from the engine, preventing circular dependencies between the engine and other packages:

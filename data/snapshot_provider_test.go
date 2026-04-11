@@ -31,13 +31,17 @@ var _ = Describe("SnapshotProvider", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(data.CreateSnapshotSchema(db)).To(Succeed())
 
-		_, err = db.Exec("INSERT INTO assets (composite_figi, ticker) VALUES ('BBG000BLNNH6', 'SPY'), ('BBG000BHTK15', 'TLT')")
+		_, err = db.Exec(`INSERT INTO assets
+			(composite_figi, ticker, name, asset_type, primary_exchange, sector, industry, sic_code, cik, listed, delisted)
+			VALUES
+			('BBG000BLNNH6', 'SPY', 'SPDR S&P 500 ETF Trust', 'ETF', 'NYSE', '', '', 6726, '0000884394', '1993-01-22', ''),
+			('BBG000BHTK15', 'TLT', 'iShares 20+ Year Treasury Bond ETF', 'ETF', 'NASDAQ', '', '', 0, '0000088525', '2002-07-22', '')`)
 		Expect(err).NotTo(HaveOccurred())
 		db.Close()
 	}
 
 	Describe("Assets", func() {
-		It("returns all assets from the snapshot", func() {
+		It("returns all assets with metadata from the snapshot", func() {
 			seedDB()
 
 			snap, err := data.NewSnapshotProvider(dbPath)
@@ -48,11 +52,17 @@ var _ = Describe("SnapshotProvider", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(assets).To(HaveLen(2))
 			Expect(assets[0].Ticker).To(Equal("SPY"))
+			Expect(assets[0].Name).To(Equal("SPDR S&P 500 ETF Trust"))
+			Expect(assets[0].AssetType).To(Equal(asset.AssetTypeETF))
+			Expect(assets[0].PrimaryExchange).To(Equal(asset.ExchangeNYSE))
+			Expect(assets[0].SICCode).To(Equal(6726))
+			Expect(assets[0].CIK).To(Equal("0000884394"))
+			Expect(assets[0].Listed.Year()).To(Equal(1993))
 		})
 	})
 
 	Describe("LookupAsset", func() {
-		It("finds an asset by ticker", func() {
+		It("finds an asset by ticker with full metadata", func() {
 			seedDB()
 
 			snap, err := data.NewSnapshotProvider(dbPath)
@@ -62,6 +72,9 @@ var _ = Describe("SnapshotProvider", func() {
 			result, err := snap.LookupAsset(ctx, "SPY")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.CompositeFigi).To(Equal("BBG000BLNNH6"))
+			Expect(result.Name).To(Equal("SPDR S&P 500 ETF Trust"))
+			Expect(result.AssetType).To(Equal(asset.AssetTypeETF))
+			Expect(result.PrimaryExchange).To(Equal(asset.ExchangeNYSE))
 		})
 
 		It("returns error for unknown ticker", func() {
