@@ -39,6 +39,66 @@ var _ AssetProvider = (*PVDataProvider)(nil)
 var _ RatingProvider = (*PVDataProvider)(nil)
 var _ IndexProvider = (*PVDataProvider)(nil)
 
+// scanPgxAsset scans a full asset row from a pgx result set. All metadata
+// columns are nullable in the view, so we scan into pointers and fall back
+// to zero values.
+func scanPgxAsset(scanner interface{ Scan(dest ...any) error }) (asset.Asset, error) {
+	var (
+		aa                          asset.Asset
+		name, assetType, exchange   *string
+		sector, industry, cik       *string
+		sicCode                     *int
+		listed, delisted            *time.Time
+	)
+
+	if err := scanner.Scan(
+		&aa.CompositeFigi, &aa.Ticker,
+		&name, &assetType, &exchange,
+		&sector, &industry, &sicCode, &cik,
+		&listed, &delisted,
+	); err != nil {
+		return asset.Asset{}, err
+	}
+
+	if name != nil {
+		aa.Name = *name
+	}
+
+	if assetType != nil {
+		aa.AssetType = asset.AssetType(*assetType)
+	}
+
+	if exchange != nil {
+		aa.PrimaryExchange = asset.NormalizeExchange(*exchange)
+	}
+
+	if sector != nil {
+		aa.Sector = asset.Sector(*sector)
+	}
+
+	if industry != nil {
+		aa.Industry = asset.Industry(*industry)
+	}
+
+	if sicCode != nil {
+		aa.SICCode = *sicCode
+	}
+
+	if cik != nil {
+		aa.CIK = *cik
+	}
+
+	if listed != nil {
+		aa.Listed = *listed
+	}
+
+	if delisted != nil {
+		aa.Delisted = *delisted
+	}
+
+	return aa, nil
+}
+
 // pvdataConfig is the subset of ~/.pvdata.toml we care about.
 type pvdataConfig struct {
 	DB struct {
@@ -144,14 +204,17 @@ func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.
 	}
 	defer conn.Release()
 
-	var foundAsset asset.Asset
-
-	err = conn.QueryRow(ctx,
-		"SELECT ticker, composite_figi FROM assets WHERE ticker = $1 AND active = true LIMIT 1",
+	row := conn.QueryRow(ctx,
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets
+		 WHERE ticker = $1 AND active = true LIMIT 1`,
 		ticker,
-	).Scan(&foundAsset.Ticker, &foundAsset.CompositeFigi)
-	if err != nil {
-		return asset.Asset{}, fmt.Errorf("pvdata: lookup asset %q: %w", ticker, err)
+	)
+
+	foundAsset, scanErr := scanPgxAsset(row)
+	if scanErr != nil {
+		return asset.Asset{}, fmt.Errorf("pvdata: lookup asset %q: %w", ticker, scanErr)
 	}
 
 	return foundAsset, nil
@@ -160,7 +223,9 @@ func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.
 // Assets returns all known assets from the database.
 func (p *PVDataProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 	rows, err := p.pool.Query(ctx,
-		`SELECT composite_figi, ticker FROM assets ORDER BY ticker`)
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets ORDER BY ticker`)
 	if err != nil {
 		return nil, fmt.Errorf("query assets: %w", err)
 	}
@@ -169,12 +234,12 @@ func (p *PVDataProvider) Assets(ctx context.Context) ([]asset.Asset, error) {
 	var assets []asset.Asset
 
 	for rows.Next() {
-		var a asset.Asset
-		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
-			return nil, fmt.Errorf("scan asset: %w", err)
+		aa, scanErr := scanPgxAsset(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan asset: %w", scanErr)
 		}
 
-		assets = append(assets, a)
+		assets = append(assets, aa)
 	}
 
 	return assets, rows.Err()
@@ -662,9 +727,11 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	defer conn.Release()
 
 	rows, err := conn.Query(ctx,
-		`SELECT composite_figi, ticker
-		 FROM ratings
-		 WHERE analyst = $1 AND event_date = $2 AND rating = ANY($3)`,
+		`SELECT a.composite_figi, a.ticker, a.name, a.asset_type, a.primary_exchange,
+		        a.sector, a.industry, a.sic_code, a.cik, a.listed, a.delisted
+		 FROM ratings r
+		 JOIN assets a ON a.composite_figi = r.composite_figi
+		 WHERE r.analyst = $1 AND r.event_date = $2 AND r.rating = ANY($3)`,
 		analyst, asOfDate, filter.Values,
 	)
 	if err != nil {
@@ -675,12 +742,12 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	var assets []asset.Asset
 
 	for rows.Next() {
-		var a asset.Asset
-		if err := rows.Scan(&a.CompositeFigi, &a.Ticker); err != nil {
-			return nil, fmt.Errorf("pvdata: scan rated asset: %w", err)
+		aa, scanErr := scanPgxAsset(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("pvdata: scan rated asset: %w", scanErr)
 		}
 
-		assets = append(assets, a)
+		assets = append(assets, aa)
 	}
 
 	return assets, rows.Err()
