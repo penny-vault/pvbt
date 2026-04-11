@@ -36,9 +36,12 @@ func standardWindows() []portfolio.Period {
 }
 
 // computeMetrics computes all provided metrics on the PortfolioStats for
-// the given date across all standard windows plus since-inception.
-func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []portfolio.PerformanceMetric, appendMetric func(portfolio.MetricRow)) {
+// the given date across all standard windows plus since-inception. It
+// returns the number of metric rows successfully evaluated and appended.
+func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []portfolio.PerformanceMetric, appendMetric func(portfolio.MetricRow)) int {
 	ctx := context.Background()
+
+	appended := 0
 
 	for _, metric := range metrics {
 		// Since inception (nil window).
@@ -50,6 +53,8 @@ func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []po
 				Window: "since_inception",
 				Value:  val,
 			})
+
+			appended++
 		}
 
 		// Standard windows.
@@ -64,9 +69,13 @@ func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []po
 					Window: windowLabel(window),
 					Value:  val,
 				})
+
+				appended++
 			}
 		}
 	}
+
+	return appended
 }
 
 // windowLabel returns a human-readable label for a Period.

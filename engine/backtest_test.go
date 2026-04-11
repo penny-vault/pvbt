@@ -500,6 +500,100 @@ var _ = Describe("Backtest", func() {
 		})
 	})
 
+	Context("progress callback", func() {
+		It("delivers an event per step with cumulative measurement counts", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &backtestStrategy{assets: testAssets}
+
+			var events []engine.ProgressEvent
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithProgressCallback(func(ev engine.ProgressEvent) {
+					events = append(events, ev)
+				}),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 29, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(events).NotTo(BeEmpty(), "callback should fire at least once")
+
+			first := events[0]
+			last := events[len(events)-1]
+
+			Expect(first.Step).To(Equal(1))
+			Expect(first.TotalSteps).To(Equal(last.TotalSteps))
+			Expect(last.Step).To(Equal(last.TotalSteps),
+				"final event step should equal total step count")
+
+			Expect(first.Start).To(Equal(last.Start))
+			Expect(first.End).To(Equal(last.End))
+			Expect(first.End).To(Equal(end))
+			Expect(last.Date).NotTo(BeZero())
+			Expect(last.Date.Before(end) || last.Date.Equal(end)).To(BeTrue())
+
+			Expect(last.MeasurementsEvaluated).To(BeNumerically(">", 0),
+				"the default account registers all metrics so the run should produce measurements")
+
+			// Measurement count is cumulative and never decreases. Step counter
+			// advances by exactly 1 per event.
+			for ii := 1; ii < len(events); ii++ {
+				Expect(events[ii].MeasurementsEvaluated).To(
+					BeNumerically(">=", events[ii-1].MeasurementsEvaluated),
+					"measurement count should be monotonically non-decreasing")
+				Expect(events[ii].Step).To(Equal(events[ii-1].Step+1),
+					"step counter should advance by exactly 1 per event")
+			}
+		})
+
+		It("clears the cumulative count when the engine is reused", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &backtestStrategy{assets: testAssets}
+
+			var firstRunFinal, secondRunFirst engine.ProgressEvent
+			runIdx := 0
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+				engine.WithProgressCallback(func(ev engine.ProgressEvent) {
+					if runIdx == 0 {
+						firstRunFinal = ev
+					} else if secondRunFirst.Step == 0 {
+						secondRunFirst = ev
+					}
+				}),
+			)
+
+			start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 2, 15, 0, 0, 0, 0, time.UTC)
+
+			_, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+
+			runIdx = 1
+
+			_, err = eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(firstRunFinal.MeasurementsEvaluated).To(BeNumerically(">", 0))
+			Expect(secondRunFirst.MeasurementsEvaluated).To(
+				BeNumerically("<=", firstRunFinal.MeasurementsEvaluated/firstRunFinal.Step+1),
+				"second run should start counting from a clean slate, not continue accumulating")
+		})
+	})
+
 	Context("daily equity recording", func() {
 		It("records equity every trading day even for a monthly strategy", func() {
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)

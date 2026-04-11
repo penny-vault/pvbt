@@ -241,6 +241,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// 8. Store start/end on engine.
 	e.start = start
 	e.end = end
+	e.measurementsEvaluated = 0
 
 	// Wire portfolio to simulated broker for margin checks.
 	if sb, ok := e.broker.(*SimulatedBroker); ok {
@@ -450,12 +451,24 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		// 18b. Compute registered metrics only on strategy dates.
 		if step.isParentStrategy {
 			if statsProvider, ok := acct.(portfolio.PortfolioStats); ok {
-				computeMetrics(statsProvider, date, acct.RegisteredMetrics(), acct.AppendMetric)
+				e.measurementsEvaluated += computeMetrics(statsProvider, date, acct.RegisteredMetrics(), acct.AppendMetric)
 			}
 		}
 
 		// 19. Evict old cache data.
 		e.cache.evictBefore(date)
+
+		// 20. Notify any registered progress observer that this step is done.
+		if e.progressCallback != nil {
+			e.progressCallback(ProgressEvent{
+				Step:                  stepIdx + 1,
+				TotalSteps:            len(steps),
+				Date:                  date,
+				Start:                 e.start,
+				End:                   e.end,
+				MeasurementsEvaluated: e.measurementsEvaluated,
+			})
+		}
 	}
 
 	// PHASE 4: RETURN

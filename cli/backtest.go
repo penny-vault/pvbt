@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"os"
@@ -35,7 +36,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("end", now.Format("2006-01-02"), "Backtest end date (YYYY-MM-DD)")
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 	cmd.Flags().String("output", "", "Output file path (default: auto-generated)")
-	cmd.Flags().Bool("tui", false, "Enable interactive TUI")
+	cmd.Flags().Bool("no-progress", false, "Disable the interactive progress bar (logs go straight to stderr)")
 
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
@@ -131,13 +132,9 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("load config: %w", err)
 	}
 
-	useTUI, err := cmd.Flags().GetBool("tui")
+	noProgress, err := cmd.Flags().GetBool("no-progress")
 	if err != nil {
 		return err
-	}
-
-	if useTUI {
-		return runBacktestWithTUI(strategy)
 	}
 
 	provider, err := data.NewPVDataProvider(nil)
@@ -169,12 +166,31 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
 	}
 
+	useProgress := !noProgress && stderrIsTerminal()
+
+	var program *tea.Program
+
+	if useProgress {
+		title := fmt.Sprintf("Backtest: %s", strategy.Name())
+		model := newProgressModel(title, start, end)
+		program = tea.NewProgram(model, tea.WithOutput(os.Stderr))
+
+		engineOpts = append(engineOpts, engine.WithProgressCallback(func(ev engine.ProgressEvent) {
+			program.Send(progressUpdateMsg{
+				step:         ev.Step,
+				totalSteps:   ev.TotalSteps,
+				date:         ev.Date,
+				measurements: ev.MeasurementsEvaluated,
+			})
+		}))
+	}
+
 	eng := engine.New(strategy, engineOpts...)
 	defer eng.Close()
 
 	startTime := time.Now()
 
-	result, err := eng.Backtest(ctx, start, end)
+	result, err := runEngineBacktest(ctx, eng, program, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
@@ -237,23 +253,44 @@ func strategyParams(strategy engine.Strategy) map[string]any {
 	return params
 }
 
-func runBacktestWithTUI(strategy engine.Strategy) error {
-	m := newTUIModel()
-	program := tea.NewProgram(m, tea.WithAltScreen())
-
-	// redirect logs to TUI
-	w := newTUILogWriter(program)
-	log.Logger = zerolog.New(w).With().Timestamp().Logger()
-
-	// run backtest in background
-	go func() {
-		// simulate some progress for now since Engine.Run is a stub
-		program.Send(doneMsg{})
-	}()
-
-	if _, err := program.Run(); err != nil {
-		return fmt.Errorf("TUI error: %w", err)
+// runEngineBacktest runs the engine, optionally rendering a bubble tea
+// progress bar. When program is nil the engine is run inline and zerolog
+// continues writing to its existing destination. When program is non-nil,
+// zerolog is buffered for the duration of the run so log output does not
+// scribble over the progress bar; the buffer is flushed once the bar exits.
+func runEngineBacktest(ctx context.Context, eng *engine.Engine, program *tea.Program, start, end time.Time) (portfolio.Portfolio, error) {
+	if program == nil {
+		return eng.Backtest(ctx, start, end)
 	}
 
-	return nil
+	var logBuffer bytes.Buffer
+
+	savedLogger := log.Logger
+	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: &logBuffer, NoColor: true}).
+		With().Timestamp().Logger()
+
+	defer func() {
+		log.Logger = savedLogger
+
+		if logBuffer.Len() > 0 {
+			_, _ = os.Stderr.Write(logBuffer.Bytes())
+		}
+	}()
+
+	go func() {
+		result, err := eng.Backtest(ctx, start, end)
+		program.Send(progressDoneMsg{result: result, err: err})
+	}()
+
+	finalModel, runErr := program.Run()
+	if runErr != nil {
+		return nil, fmt.Errorf("progress UI: %w", runErr)
+	}
+
+	final, ok := finalModel.(progressModel)
+	if !ok {
+		return nil, fmt.Errorf("progress UI: unexpected model type %T", finalModel)
+	}
+
+	return final.result, final.err
 }
