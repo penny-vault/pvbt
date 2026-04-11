@@ -460,9 +460,9 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 			args := make([]any, 5+len(colMetrics))
 			args[0] = a.CompositeFigi
 			args[1] = dateStr
-			args[2] = nil  // date_key: populated when DataFrame metadata is available
-			args[3] = nil  // report_period: populated when DataFrame metadata is available
-			args[4] = "ARQ" // default dimension
+			args[2] = nil // date_key: populated when DataFrame metadata is available
+			args[3] = nil // report_period: populated when DataFrame metadata is available
+			args[4] = "ARQ"
 
 			for idx, metric := range colMetrics {
 				mi, ok := mIdx[metric]
