@@ -52,6 +52,26 @@ const CPI data.Metric = "CPI"
 const FedFundsRate data.Metric = "FedFundsRate"
 ```
 
+### Fundamental data semantics
+
+Fundamental metrics (revenue, earnings, balance sheet items, etc.) are sourced
+from SEC filings and stored with three date fields:
+
+| Field | Meaning |
+|-------|---------|
+| `event_date` | Filing date -- when the data became publicly available (AR dimensions) or fiscal period end (MR dimensions). This is the temporal index used for queries. |
+| `date_key` | Normalized calendar quarter/year boundary. Used for cross-company comparison (e.g., aligning all companies' Q2 data). |
+| `report_period` | The actual end date of the company's fiscal period as stated in filings. |
+
+The engine automatically forward-fills fundamental values onto the daily time
+grid. Once a filing becomes public, its values are treated as current until the
+next filing supersedes them. This means `Fetch` and `FetchAt` return dense data
+for fundamental metrics -- no NaN gaps between quarterly filings.
+
+Fundamental queries filter by dimension (default `"ARQ"` -- As Reported
+Quarterly). See `SetFundamentalDimension` in the strategy guide for how to
+change this.
+
 ### Economic indicators
 
 Economic indicators like unemployment and CPI are not tied to a specific asset. They use the sentinel `asset.EconomicIndicator` in requests and DataFrames. From the DataFrame's perspective they look like any other asset -- the data layout stays uniform.

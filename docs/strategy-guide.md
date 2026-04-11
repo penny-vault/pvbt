@@ -267,6 +267,33 @@ The benchmark is used for Beta, Alpha, Tracking Error, and Information Ratio.
 
 The risk-free rate is DGS3MO (3-month treasury yield), resolved automatically by the engine during initialization when available. When resolved, the engine pre-computes a cumulative risk-free series and attaches it to all DataFrames returned by `Fetch` and `FetchAt`, enabling `df.RiskAdjustedPct(n)` to subtract the risk-free return automatically. The risk-free rate feeds Sharpe, Sortino, Treynor, and related metrics.
 
+### Fundamental dimension
+
+Strategies that use fundamental data can configure which reporting dimension
+to query. Call `SetFundamentalDimension` during `Setup`:
+
+```go
+func (s *MyStrategy) Setup(eng *engine.Engine) {
+    eng.SetFundamentalDimension("ARQ")
+}
+```
+
+If not called, defaults to `"ARQ"`.
+
+| Dimension | Description |
+|-----------|-------------|
+| `ARQ` | As Reported, Quarterly. Point-in-time (indexed to SEC filing date). Excludes restatements. Recommended for backtesting. |
+| `ARY` | As Reported, Annual. Same as ARQ but annual observations. |
+| `ART` | As Reported, Trailing Twelve Months. Quarterly observations of one-year duration. |
+| `MRQ` | Most Recent Reported, Quarterly. Indexed to fiscal period end. Includes restatements. Suitable for business performance analysis. |
+| `MRY` | Most Recent Reported, Annual. |
+| `MRT` | Most Recent Reported, Trailing Twelve Months. |
+
+AR dimensions are suitable for backtesting because they are indexed to the SEC
+filing date, preventing look-ahead bias. MR dimensions include restatements
+and are indexed to the fiscal period end, so they may introduce look-ahead bias
+in backtests.
+
 ### Asset lookup
 
 `eng.Asset(ticker)` resolves a ticker to an `asset.Asset` using the registered `AssetProvider`. It panics if the ticker is not found, which is appropriate in `Setup` since a missing benchmark or risk-free asset is a fatal configuration error.
