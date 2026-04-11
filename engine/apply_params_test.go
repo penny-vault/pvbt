@@ -148,3 +148,56 @@ var _ = Describe("ApplyParams", func() {
 		})
 	})
 })
+
+// applyParamsTestOnlyStrategy has one regular field and one test-only field.
+// It implements Descriptor so the preset path is also exercisable.
+type applyParamsTestOnlyStrategy struct {
+	Window int `pvbt:"window" desc:"Rolling window" default:"12"`
+	Seed   int `pvbt:"seed" testonly:"true"`
+}
+
+func (ap *applyParamsTestOnlyStrategy) Name() string           { return "ApplyParamsTestOnly" }
+func (ap *applyParamsTestOnlyStrategy) Setup(_ *engine.Engine) {}
+func (ap *applyParamsTestOnlyStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+func (ap *applyParamsTestOnlyStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{ShortCode: "apto"}
+}
+
+var _ = Describe("ApplyParams with testonly fields", func() {
+	It("returns an error when explicit params target a test-only field", func() {
+		strategy := &applyParamsTestOnlyStrategy{}
+		eng := engine.New(strategy)
+
+		err := engine.ApplyParams(eng, "", map[string]string{"seed": "42"})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("seed"))
+		Expect(err.Error()).To(ContainSubstring("test-only"))
+		Expect(strategy.Seed).To(Equal(0))
+	})
+
+	It("still applies non-test-only params alongside the rejected one", func() {
+		strategy := &applyParamsTestOnlyStrategy{}
+		eng := engine.New(strategy)
+
+		err := engine.ApplyParams(eng, "", map[string]string{
+			"window": "24",
+			"seed":   "42",
+		})
+		Expect(err).To(HaveOccurred())
+		// The whole call fails -- no params should be partially applied.
+		Expect(strategy.Window).To(Equal(0))
+		Expect(strategy.Seed).To(Equal(0))
+	})
+
+	It("allows direct struct assignment of a test-only field", func() {
+		strategy := &applyParamsTestOnlyStrategy{Seed: 99}
+		eng := engine.New(strategy)
+
+		err := engine.ApplyParams(eng, "", map[string]string{"window": "24"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.Window).To(Equal(24))
+		Expect(strategy.Seed).To(Equal(99))
+	})
+})

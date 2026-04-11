@@ -132,3 +132,100 @@ var _ = Describe("ParameterName", func() {
 		Expect(lookback.Suggestions).To(BeNil())
 	})
 })
+
+type testOnlyTagStrategy struct {
+	Visible     int `pvbt:"visible" desc:"v" default:"1"`
+	HiddenTrue  int `pvbt:"hidden-true" testonly:"true"`
+	HiddenFalse int `pvbt:"hidden-false" testonly:"false"`
+}
+
+func (s *testOnlyTagStrategy) Name() string           { return "testOnlyTag" }
+func (s *testOnlyTagStrategy) Setup(_ *engine.Engine) {}
+func (s *testOnlyTagStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+var _ = Describe("IsTestOnlyField", func() {
+	fieldByName := func(name string) reflect.StructField {
+		t := reflect.TypeOf(testOnlyTagStrategy{})
+		field, ok := t.FieldByName(name)
+		Expect(ok).To(BeTrue())
+		return field
+	}
+
+	It("returns false when the testonly tag is absent", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("Visible"))).To(BeFalse())
+	})
+
+	It("returns true when the testonly tag is \"true\"", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("HiddenTrue"))).To(BeTrue())
+	})
+
+	It("returns false when the testonly tag is \"false\"", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("HiddenFalse"))).To(BeFalse())
+	})
+
+	It("panics when the testonly tag has an unparseable value", func() {
+		type bad struct {
+			Field int `pvbt:"x" testonly:"banana"`
+		}
+		field, ok := reflect.TypeOf(bad{}).FieldByName("Field")
+		Expect(ok).To(BeTrue())
+		Expect(func() { engine.IsTestOnlyField(field) }).To(PanicWith(ContainSubstring("invalid testonly tag")))
+	})
+})
+
+var _ = Describe("StrategyParameters with testonly fields", func() {
+	It("omits fields tagged testonly:\"true\"", func() {
+		strategy := &testOnlyTagStrategy{}
+		params := engine.StrategyParameters(strategy)
+
+		// Visible and HiddenFalse remain; HiddenTrue is filtered.
+		Expect(params).To(HaveLen(2))
+		Expect(findParam(params, "visible")).NotTo(BeNil())
+		Expect(findParam(params, "hidden-false")).NotTo(BeNil())
+		Expect(findParam(params, "hidden-true")).To(BeNil())
+	})
+})
+
+// sanityTestOnlyStrategy records the value of a test-only field the first
+// time Compute is called. This proves direct struct assignment of a
+// testonly field is visible to Compute even though the field is hidden
+// from every user surface.
+type sanityTestOnlyStrategy struct {
+	Window   int `pvbt:"window" desc:"window" default:"5"`
+	Injected int `pvbt:"injected" testonly:"true"`
+
+	observed int
+	seen     bool
+}
+
+func (s *sanityTestOnlyStrategy) Name() string           { return "sanityTestOnly" }
+func (s *sanityTestOnlyStrategy) Setup(_ *engine.Engine) {}
+func (s *sanityTestOnlyStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	if !s.seen {
+		s.observed = s.Injected
+		s.seen = true
+	}
+	return nil
+}
+
+var _ = Describe("test-only field accessibility", func() {
+	It("is observable inside Compute when set via direct struct assignment", func() {
+		strategy := &sanityTestOnlyStrategy{Injected: 42}
+		Expect(strategy.Injected).To(Equal(42))
+
+		// Calling Compute directly is sufficient to prove the field is
+		// readable. The point of this test is the marker does not block
+		// normal Go field reads -- it only filters discovery surfaces.
+		err := strategy.Compute(context.Background(), nil, nil, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.seen).To(BeTrue())
+		Expect(strategy.observed).To(Equal(42))
+
+		// And the parameter is correctly hidden from discovery.
+		params := engine.StrategyParameters(strategy)
+		Expect(findParam(params, "injected")).To(BeNil())
+		Expect(findParam(params, "window")).NotTo(BeNil())
+	})
+})

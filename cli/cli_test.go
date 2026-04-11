@@ -326,3 +326,75 @@ var _ = Describe("applyPreset", func() {
 		Expect(err.Error()).To(ContainSubstring("unknown preset"))
 	})
 })
+
+type testOnlyFlagStrategy struct {
+	Lookback int `pvbt:"lookback" desc:"lookback" default:"30"`
+	Seed     int `pvbt:"seed" testonly:"true"`
+	Window   int `pvbt:"window" desc:"window" default:"5"`
+}
+
+func (s *testOnlyFlagStrategy) Name() string           { return "testOnlyFlag" }
+func (s *testOnlyFlagStrategy) Setup(e *engine.Engine) {}
+func (s *testOnlyFlagStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+var _ = Describe("registerStrategyFlags with testonly fields", func() {
+	It("does not register a cobra flag for a test-only field", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testOnlyFlagStrategy{}
+
+		registerStrategyFlags(cmd, strategy)
+
+		Expect(cmd.Flags().Lookup("lookback")).NotTo(BeNil())
+		Expect(cmd.Flags().Lookup("window")).NotTo(BeNil())
+		Expect(cmd.Flags().Lookup("seed")).To(BeNil())
+	})
+})
+
+var _ = Describe("applyStrategyFlags with testonly fields", func() {
+	It("leaves a test-only field untouched even if a flag is registered out of band", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testOnlyFlagStrategy{}
+
+		// Manually register a flag for "seed" to simulate a flag being
+		// registered out of band (e.g., by another command). The
+		// test-only check inside applyStrategyFlags must still skip the
+		// field, leaving it at its zero value.
+		cmd.Flags().Int("seed", 999, "")
+
+		applyStrategyFlags(cmd, strategy)
+		Expect(strategy.Seed).To(Equal(0))
+	})
+})
+
+var _ = Describe("collectParamSweeps with testonly fields", func() {
+	It("does not collect a sweep for a test-only field even if a flag is registered out of band", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testOnlyFlagStrategy{}
+
+		registerStrategyFlags(cmd, strategy)
+
+		// Manually register a "seed" flag with range syntax. Without the
+		// explicit IsTestOnlyField check inside collectParamSweeps, this
+		// would be picked up as a parameter sweep.
+		cmd.Flags().String("seed", "1:5:1", "")
+
+		sweeps := collectParamSweeps(cmd, strategy)
+		for _, sweep := range sweeps {
+			Expect(sweep.Field()).NotTo(Equal("seed"))
+		}
+	})
+})
+
+var _ = Describe("strategyParams with testonly fields", func() {
+	It("does not include a test-only field in the backtest metadata map", func() {
+		strategy := &testOnlyFlagStrategy{}
+
+		params := strategyParams(strategy)
+
+		Expect(params).NotTo(HaveKey("seed"))
+		Expect(params).To(HaveKey("lookback"))
+		Expect(params).To(HaveKey("window"))
+	})
+})

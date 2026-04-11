@@ -17,6 +17,7 @@ package engine
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 )
@@ -62,6 +63,17 @@ func ApplyParams(eng *Engine, preset string, params map[string]string) error {
 		merged[paramName] = paramValue
 	}
 
+	// Reject any merged param that targets a test-only field. Test-only
+	// parameters are deliberately invisible to user surfaces and must not
+	// be settable via ApplyParams; tests should construct strategies with
+	// direct field assignment instead.
+	testOnly := testOnlyParamNames(eng.strategy)
+	for paramName := range merged {
+		if _, isTestOnly := testOnly[paramName]; isTestOnly {
+			return fmt.Errorf("ApplyParams: parameter %q is test-only and cannot be set via ApplyParams; assign the field directly on the strategy struct", paramName)
+		}
+	}
+
 	// Apply all merged parameters via applyParamValue.
 	for paramName, paramValue := range merged {
 		if err := applyParamValue(eng.strategy, paramName, paramValue); err != nil {
@@ -75,4 +87,35 @@ func ApplyParams(eng *Engine, preset string, params map[string]string) error {
 	}
 
 	return nil
+}
+
+// testOnlyParamNames returns the set of parameter names (as kebab-case)
+// belonging to fields marked testonly:"true" on the given strategy.
+func testOnlyParamNames(strategy Strategy) map[string]struct{} {
+	names := make(map[string]struct{})
+
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	if val.Kind() != reflect.Struct {
+		return names
+	}
+
+	targetType := val.Type()
+	for ii := 0; ii < targetType.NumField(); ii++ {
+		field := targetType.Field(ii)
+		if !field.IsExported() {
+			continue
+		}
+
+		if !IsTestOnlyField(field) {
+			continue
+		}
+
+		names[ParameterName(field)] = struct{}{}
+	}
+
+	return names
 }
