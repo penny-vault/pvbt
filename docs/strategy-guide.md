@@ -279,7 +279,14 @@ Within each family there are three time spans: Quarterly (Q), Annual (Y), and Tr
 eng.SetFundamentalDimension("MRQ") // most-recent reported, quarterly
 ```
 
-The six dimensions are ARQ, ARY, ART (as reported) and MRQ, MRY, MRT (most recent reported). Use AR dimensions for backtesting and MR dimensions when you need restated numbers for business performance analysis.
+| Dimension | Description |
+|-----------|-------------|
+| `ARQ` | As Reported, Quarterly. Point-in-time (indexed to SEC filing date). Excludes restatements. Recommended for backtesting. |
+| `ARY` | As Reported, Annual. Same as ARQ but annual observations. |
+| `ART` | As Reported, Trailing Twelve Months. Quarterly observations of one-year duration. |
+| `MRQ` | Most Recent Reported, Quarterly. Indexed to fiscal period end. Includes restatements. Suitable for business performance analysis. |
+| `MRY` | Most Recent Reported, Annual. |
+| `MRT` | Most Recent Reported, Trailing Twelve Months. |
 
 ### Asset lookup
 
