@@ -561,6 +561,25 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		}
 	}
 
+	// Point-in-time queries (rangeStart == rangeEnd, used by FetchAt) on
+	// fundamental data must always represent the requested timestamp in the
+	// grid so the forward-fill pass below can populate values from the most
+	// recent prior filing. Otherwise, asking for fundamentals on a calendar
+	// date that happens to fall on a weekend or holiday returns an empty
+	// frame because no provider emitted data on that exact day.
+	hasFundamental := false
+
+	for _, metric := range metrics {
+		if data.IsFundamental(metric) {
+			hasFundamental = true
+			break
+		}
+	}
+
+	if hasFundamental && rangeStart.Equal(rangeEnd) {
+		timeSet[rangeEnd.Unix()] = rangeEnd
+	}
+
 	if len(timeSet) == 0 {
 		return data.NewDataFrame(nil, nil, nil, data.Daily, nil)
 	}
