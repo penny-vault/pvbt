@@ -132,3 +132,45 @@ var _ = Describe("ParameterName", func() {
 		Expect(lookback.Suggestions).To(BeNil())
 	})
 })
+
+type testOnlyTagStrategy struct {
+	Visible     int `pvbt:"visible" desc:"v" default:"1"`
+	HiddenTrue  int `pvbt:"hidden-true" testonly:"true"`
+	HiddenFalse int `pvbt:"hidden-false" testonly:"false"`
+}
+
+func (s *testOnlyTagStrategy) Name() string           { return "testOnlyTag" }
+func (s *testOnlyTagStrategy) Setup(_ *engine.Engine) {}
+func (s *testOnlyTagStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+var _ = Describe("IsTestOnlyField", func() {
+	fieldByName := func(name string) reflect.StructField {
+		t := reflect.TypeOf(testOnlyTagStrategy{})
+		field, ok := t.FieldByName(name)
+		Expect(ok).To(BeTrue())
+		return field
+	}
+
+	It("returns false when the testonly tag is absent", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("Visible"))).To(BeFalse())
+	})
+
+	It("returns true when the testonly tag is \"true\"", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("HiddenTrue"))).To(BeTrue())
+	})
+
+	It("returns false when the testonly tag is \"false\"", func() {
+		Expect(engine.IsTestOnlyField(fieldByName("HiddenFalse"))).To(BeFalse())
+	})
+
+	It("panics when the testonly tag has an unparseable value", func() {
+		type bad struct {
+			Field int `pvbt:"x" testonly:"banana"`
+		}
+		field, ok := reflect.TypeOf(bad{}).FieldByName("Field")
+		Expect(ok).To(BeTrue())
+		Expect(func() { engine.IsTestOnlyField(field) }).To(PanicWith(ContainSubstring("invalid testonly tag")))
+	})
+})

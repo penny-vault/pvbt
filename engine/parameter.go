@@ -16,7 +16,9 @@
 package engine
 
 import (
+	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 )
 
@@ -43,6 +45,29 @@ func ParameterName(field reflect.StructField) string {
 	}
 
 	return toKebabCase(field.Name)
+}
+
+// IsTestOnlyField reports whether the given strategy struct field is marked as
+// test-only via a `testonly:"true"` struct tag. Test-only fields are hidden
+// from every user-facing surface (CLI flags, describe output, TUI, presets,
+// study sweeps) and cannot be set through ApplyParams. They remain exported
+// so that test code can assign them directly.
+//
+// The tag value must parse as a Go boolean. An unparseable value is a
+// programming error in the strategy source code, so this function panics
+// rather than silently treating it as false.
+func IsTestOnlyField(field reflect.StructField) bool {
+	raw, ok := field.Tag.Lookup("testonly")
+	if !ok {
+		return false
+	}
+
+	val, err := strconv.ParseBool(raw)
+	if err != nil {
+		panic(fmt.Sprintf("strategy field %s: invalid testonly tag %q: %v", field.Name, raw, err))
+	}
+
+	return val
 }
 
 // toKebabCase converts a PascalCase or camelCase identifier to kebab-case.
