@@ -73,6 +73,12 @@ func WithConfigFile(path string) PVDataOption {
 	return func(o *pvdataOptions) { o.configFile = path }
 }
 
+// SetDimension updates the fundamental dimension filter at runtime.
+// Valid values: "ARQ", "ARY", "ART", "MRQ", "MRY", "MRT".
+func (p *PVDataProvider) SetDimension(dim string) {
+	p.dimension = dim
+}
+
 // NewPVDataProvider creates a provider that reads from a pv-data database.
 // If pool is nil the provider reads ~/.pvdata.toml (or the path set via
 // WithConfigFile) for the connection URL and creates its own pool.
@@ -601,7 +607,7 @@ func (p *PVDataProvider) fetchFundamentals(
 	}
 
 	query := fmt.Sprintf(
-		`SELECT composite_figi, event_date, %s
+		`SELECT composite_figi, event_date, date_key, %s
 		 FROM fundamentals
 		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date AND dimension = $4
 		 ORDER BY event_date`,
@@ -618,15 +624,17 @@ func (p *PVDataProvider) fetchFundamentals(
 		var (
 			figi      string
 			eventDate time.Time
+			dateKey   time.Time
 		)
 
-		vals := make([]any, len(sqlCols)+2)
+		vals := make([]any, len(sqlCols)+3)
 		vals[0] = &figi
 		vals[1] = &eventDate
+		vals[2] = &dateKey
 
 		floatVals := make([]*float64, len(sqlCols))
 		for idx := range sqlCols {
-			vals[idx+2] = &floatVals[idx]
+			vals[idx+3] = &floatVals[idx]
 		}
 
 		if err := rows.Scan(vals...); err != nil {
@@ -930,6 +938,13 @@ var metricView = map[Metric]string{
 	TangibleAssetValue:                  "fundamentals",
 	WorkingCapital:                      "fundamentals",
 	MarketCapFundamental:                "fundamentals",
+}
+
+// IsFundamental reports whether the given metric is sourced from the
+// fundamentals table. Fundamental metrics are sparse (quarterly) and
+// require forward-fill when merged with daily price data.
+func IsFundamental(metric Metric) bool {
+	return metricView[metric] == "fundamentals"
 }
 
 // metricColumn maps fundamental Metrics to their SQL column names.

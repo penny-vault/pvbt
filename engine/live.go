@@ -93,6 +93,19 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 		}
 	}
 
+	// 4d. Validate and wire fundamental dimension if set by Setup.
+	if e.fundamentalDimension != "" {
+		if !validDimensions[e.fundamentalDimension] {
+			return nil, fmt.Errorf("engine: invalid fundamental dimension %q; valid values: ARQ, ARY, ART, MRQ, MRY, MRT", e.fundamentalDimension)
+		}
+
+		for _, provider := range e.providers {
+			if pvProvider, ok := provider.(interface{ SetDimension(string) }); ok {
+				pvProvider.SetDimension(e.fundamentalDimension)
+			}
+		}
+	}
+
 	// 5. Validate.
 	if e.schedule == nil {
 		return nil, fmt.Errorf("engine: strategy %q did not set a schedule during Setup", e.strategy.Name())

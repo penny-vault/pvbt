@@ -423,4 +423,138 @@ var _ = Describe("Fetch", func() {
 			Expect(strategy.fetched.Len()).To(BeNumerically(">", 10))
 		})
 	})
+
+	Context("with sparse fundamental data", func() {
+		It("forward-fills fundamental metrics to the simulation date", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			fundamentalAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: fundamentalAssets}
+
+			// Daily close prices: Jan 1 - Mar 31 2024
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 90, fundamentalAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// Sparse fundamental data: only two filing dates
+			filingDate1 := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			filingDate2 := time.Date(2024, 2, 20, 16, 0, 0, 0, time.UTC)
+
+			fundTimes := []time.Time{filingDate1, filingDate2}
+			fundVals := [][]float64{{100_000_000, 120_000_000}}
+			fundDF, err := data.NewDataFrame(fundTimes, fundamentalAssets,
+				[]data.Metric{data.WorkingCapital}, data.Daily, fundVals)
+			Expect(err).NotTo(HaveOccurred())
+			fundProvider := data.NewTestProvider([]data.Metric{data.WorkingCapital}, fundDF)
+
+			strategy := &fetchAtStrategy{
+				metrics: []data.Metric{data.MetricClose, data.WorkingCapital},
+				assets:  fundamentalAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, fundProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			simStart := time.Date(2024, 2, 28, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 2, 28, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+
+			wc := strategy.fetched.Column(spy, data.WorkingCapital)
+			Expect(wc).To(HaveLen(1))
+			Expect(wc[0]).To(BeNumerically("==", 120_000_000))
+		})
+
+		It("forward-fills fundamentals in Fetch with a lookback range", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			fundamentalAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: fundamentalAssets}
+
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 90, fundamentalAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// Filing date is before the lookback window so all 30 days in range
+			// have the forward-filled value.
+			filingDate := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			fundDF, err := data.NewDataFrame(
+				[]time.Time{filingDate},
+				fundamentalAssets,
+				[]data.Metric{data.Revenue},
+				data.Daily,
+				[][]float64{{500_000_000}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			fundProvider := data.NewTestProvider([]data.Metric{data.Revenue}, fundDF)
+
+			strategy := &fetchStrategy{
+				lookback: portfolio.Days(30),
+				metrics:  []data.Metric{data.MetricClose, data.Revenue},
+				assets:   fundamentalAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, fundProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			// Sim date Mar 1; lookback starts Jan 31 -- well after the Jan 15 filing.
+			simStart := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 3, 1, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+
+			revCol := strategy.fetched.Column(spy, data.Revenue)
+			Expect(len(revCol)).To(BeNumerically(">", 1))
+
+			for _, val := range revCol {
+				Expect(val).To(BeNumerically("==", 500_000_000))
+			}
+		})
+
+		It("does not forward-fill price metrics", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			fundamentalAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: fundamentalAssets}
+
+			day1 := time.Date(2024, 2, 1, 16, 0, 0, 0, time.UTC)
+			day2 := time.Date(2024, 2, 5, 16, 0, 0, 0, time.UTC)
+			priceDF, err := data.NewDataFrame(
+				[]time.Time{day1, day2},
+				fundamentalAssets,
+				[]data.Metric{data.MetricClose},
+				data.Daily,
+				[][]float64{{100.0, 105.0}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			priceProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, priceDF)
+
+			strategy := &fetchStrategy{
+				lookback: portfolio.Days(5),
+				metrics:  []data.Metric{data.MetricClose},
+				assets:   fundamentalAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(priceProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			simStart := time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+
+			closeCol := strategy.fetched.Column(spy, data.MetricClose)
+			Expect(closeCol).To(HaveLen(2))
+		})
+	})
 })

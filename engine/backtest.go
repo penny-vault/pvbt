@@ -108,7 +108,20 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 	}
 
-	// 4d. Initialize child strategies.
+	// 4d. Validate and wire fundamental dimension if set by Setup.
+	if e.fundamentalDimension != "" {
+		if !validDimensions[e.fundamentalDimension] {
+			return nil, fmt.Errorf("engine: invalid fundamental dimension %q; valid values: ARQ, ARY, ART, MRQ, MRY, MRT", e.fundamentalDimension)
+		}
+
+		for _, provider := range e.providers {
+			if pvProvider, ok := provider.(interface{ SetDimension(string) }); ok {
+				pvProvider.SetDimension(e.fundamentalDimension)
+			}
+		}
+	}
+
+	// 4e. Initialize child strategies.
 	for _, child := range e.children {
 		if err := hydrateFields(e, child.strategy); err != nil {
 			return nil, fmt.Errorf("engine: hydrating child %q: %w", child.name, err)
