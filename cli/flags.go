@@ -40,6 +40,12 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			continue
 		}
 
+		// Skip fields marked test-only -- they must not be exposed as
+		// CLI flags.
+		if engine.IsTestOnlyField(field) {
+			continue
+		}
+
 		name := engine.ParameterName(field)
 
 		desc := field.Tag.Get("desc")
@@ -127,6 +133,10 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 	for ii := 0; ii < strategyType.NumField(); ii++ {
 		field := strategyType.Field(ii)
 		if !field.IsExported() {
+			continue
+		}
+
+		if engine.IsTestOnlyField(field) {
 			continue
 		}
 
@@ -228,6 +238,10 @@ func collectParamSweeps(cmd *cobra.Command, strategy engine.Strategy) []study.Pa
 	for ii := 0; ii < strategyType.NumField(); ii++ {
 		field := strategyType.Field(ii)
 		if !field.IsExported() {
+			continue
+		}
+
+		if engine.IsTestOnlyField(field) {
 			continue
 		}
 
