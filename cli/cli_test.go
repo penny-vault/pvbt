@@ -17,6 +17,9 @@ package cli
 
 import (
 	"context"
+	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -396,5 +399,163 @@ var _ = Describe("strategyParams with testonly fields", func() {
 		Expect(params).NotTo(HaveKey("seed"))
 		Expect(params).To(HaveKey("lookback"))
 		Expect(params).To(HaveKey("window"))
+	})
+})
+
+// addCPUBurnSubcommand registers a lightweight "burn" subcommand on the
+// given root. The subcommand spins in a small arithmetic loop for a few
+// hundred milliseconds so the Go CPU profiler has time to collect
+// samples. It is used only from the --cpu-profile tests below so we can
+// exercise the persistent pre/post-run hooks without bringing up the
+// full backtest runtime (data provider, config, output DB, ...).
+func addCPUBurnSubcommand(rootCmd *cobra.Command) {
+	burnCmd := &cobra.Command{
+		Use: "burn",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			deadline := time.Now().Add(400 * time.Millisecond)
+			accumulator := 0.0
+			for iteration := 0; time.Now().Before(deadline); iteration++ {
+				accumulator += float64(iteration) * 1.0000001
+				if accumulator > 1e18 {
+					accumulator = 0
+				}
+			}
+			return nil
+		},
+	}
+	rootCmd.AddCommand(burnCmd)
+}
+
+// addFailingBurnSubcommand mirrors addCPUBurnSubcommand but its RunE
+// returns a sentinel error after the CPU burn completes. It is used to
+// exercise the code path where a subcommand errors out so the tests can
+// verify that the CPU profile is still flushed to disk. Cobra does not
+// invoke PersistentPostRunE when a subcommand's RunE returns a non-nil
+// error, so the profile cleanup must happen via a deferred callback
+// wired around rootCmd.Execute.
+func addFailingBurnSubcommand(rootCmd *cobra.Command) {
+	burnCmd := &cobra.Command{
+		Use: "burn-fail",
+		RunE: func(_ *cobra.Command, _ []string) error {
+			deadline := time.Now().Add(200 * time.Millisecond)
+			accumulator := 0.0
+			for iteration := 0; time.Now().Before(deadline); iteration++ {
+				accumulator += float64(iteration) * 1.0000001
+				if accumulator > 1e18 {
+					accumulator = 0
+				}
+			}
+			return errors.New("test burn-fail")
+		},
+	}
+	rootCmd.AddCommand(burnCmd)
+}
+
+var _ = Describe("--cpu-profile persistent flag", func() {
+	It("writes a CPU profile when --cpu-profile is set", func() {
+		tmpDir := GinkgoT().TempDir()
+		profilePath := filepath.Join(tmpDir, "cpu.prof")
+
+		strategy := &testStrategy{}
+
+		// Mirror how cli.Run wraps rootCmd.Execute with a deferred
+		// cleanup in an inner function so the defer fires -- which
+		// stops the profile and closes the file -- before the
+		// assertions below inspect the file on disk.
+		execErr := func() error {
+			rootCmd, cleanup := newRootCmd(strategy)
+			defer cleanup()
+
+			addCPUBurnSubcommand(rootCmd)
+			rootCmd.SetArgs([]string{"burn", "--cpu-profile", profilePath})
+
+			return rootCmd.Execute()
+		}()
+		Expect(execErr).NotTo(HaveOccurred())
+
+		info, err := os.Stat(profilePath)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(info.Size()).To(BeNumerically(">", 0),
+			"CPU profile file must be non-empty after a command run")
+	})
+
+	It("does not create a profile file when --cpu-profile is not set", func() {
+		tmpDir := GinkgoT().TempDir()
+		profilePath := filepath.Join(tmpDir, "cpu.prof")
+
+		strategy := &testStrategy{}
+		rootCmd, cleanup := newRootCmd(strategy)
+		defer cleanup()
+		addCPUBurnSubcommand(rootCmd)
+
+		rootCmd.SetArgs([]string{"burn"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		_, err := os.Stat(profilePath)
+		Expect(os.IsNotExist(err)).To(BeTrue(),
+			"profile file should not exist when --cpu-profile is unset")
+	})
+
+	It("returns an error when --cpu-profile target cannot be created", func() {
+		tmpDir := GinkgoT().TempDir()
+		// A path inside a non-existent directory cannot be created.
+		profilePath := filepath.Join(tmpDir, "does-not-exist", "cpu.prof")
+
+		strategy := &testStrategy{}
+		rootCmd, cleanup := newRootCmd(strategy)
+		defer cleanup()
+		addCPUBurnSubcommand(rootCmd)
+
+		rootCmd.SetArgs([]string{"burn", "--cpu-profile", profilePath})
+		err := rootCmd.Execute()
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("cpu profile"))
+	})
+
+	It("exposes --cpu-profile as a persistent flag on every subcommand", func() {
+		strategy := &testStrategy{}
+		rootCmd, cleanup := newRootCmd(strategy)
+		defer cleanup()
+
+		for _, sub := range rootCmd.Commands() {
+			flag := sub.PersistentFlags().Lookup("cpu-profile")
+			if flag == nil {
+				flag = sub.InheritedFlags().Lookup("cpu-profile")
+			}
+			Expect(flag).NotTo(BeNil(),
+				"subcommand %q should inherit the --cpu-profile flag", sub.Use)
+		}
+	})
+
+	It("still flushes the CPU profile when the subcommand returns an error", func() {
+		tmpDir := GinkgoT().TempDir()
+		profilePath := filepath.Join(tmpDir, "cpu.prof")
+
+		strategy := &testStrategy{}
+
+		// Mirror how cli.Run wraps rootCmd.Execute with a deferred
+		// cleanup in an inner function so the defer fires *before* the
+		// assertions run. If the fix is in place, cleanup stops the
+		// profile and closes the file; if it regresses back to
+		// PersistentPostRunE, the file stays open and empty because
+		// cobra skips PersistentPostRunE when RunE returns an error.
+		execErr := func() error {
+			rootCmd, cleanup := newRootCmd(strategy)
+			defer cleanup()
+
+			addFailingBurnSubcommand(rootCmd)
+			rootCmd.SetArgs([]string{"burn-fail", "--cpu-profile", profilePath})
+
+			return rootCmd.Execute()
+		}()
+
+		Expect(execErr).To(HaveOccurred(),
+			"burn-fail must propagate its error so we're actually testing the error path")
+
+		info, statErr := os.Stat(profilePath)
+		Expect(statErr).NotTo(HaveOccurred(),
+			"profile file must exist even when the subcommand errored")
+		Expect(info.Size()).To(BeNumerically(">", 0),
+			"profile file must be non-empty -- pprof.StopCPUProfile must have run")
 	})
 })

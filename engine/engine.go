@@ -474,28 +474,66 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		// so we record them as checked and don't re-fetch on subsequent calls.
 		cachedMetrics := make(map[data.Metric]bool, len(missMetrics))
 
-		for _, pf := range providerMap {
-			req := data.DataRequest{
-				Assets:    missAssets,
-				Metrics:   pf.metrics,
-				Start:     chunkStart,
-				End:       chunkEnd,
-				Frequency: data.Daily,
+		// Fetch from all providers concurrently. Each provider uses its
+		// own DB connection so there is no contention. Results are
+		// collected and then decomposed into the cache sequentially.
+		type fetchResult struct {
+			provFetch *providerFetch
+			frame     *data.DataFrame
+			err       error
+		}
+
+		results := make([]fetchResult, 0, len(providerMap))
+
+		if len(providerMap) == 1 {
+			// Common case: skip goroutine overhead when only one provider.
+			for _, pf := range providerMap {
+				req := data.DataRequest{
+					Assets:    missAssets,
+					Metrics:   pf.metrics,
+					Start:     chunkStart,
+					End:       chunkEnd,
+					Frequency: data.Daily,
+				}
+
+				df, fetchErr := pf.provider.Fetch(ctx, req)
+				results = append(results, fetchResult{provFetch: pf, frame: df, err: fetchErr})
+			}
+		} else {
+			ch := make(chan fetchResult, len(providerMap))
+
+			for _, pf := range providerMap {
+				go func(pf *providerFetch) {
+					req := data.DataRequest{
+						Assets:    missAssets,
+						Metrics:   pf.metrics,
+						Start:     chunkStart,
+						End:       chunkEnd,
+						Frequency: data.Daily,
+					}
+
+					df, fetchErr := pf.provider.Fetch(ctx, req)
+					ch <- fetchResult{provFetch: pf, frame: df, err: fetchErr}
+				}(pf)
 			}
 
-			df, fetchErr := pf.provider.Fetch(ctx, req)
-			if fetchErr != nil {
-				return nil, fmt.Errorf("engine: provider fetch: %w", fetchErr)
+			for range len(providerMap) {
+				results = append(results, <-ch)
+			}
+		}
+
+		// Decompose fetched DataFrames into the column cache.
+		for _, fr := range results {
+			if fr.err != nil {
+				return nil, fmt.Errorf("engine: provider fetch: %w", fr.err)
 			}
 
-			// Decompose the DataFrame into individual columns and cache them.
-			// Each provider may have its own time axis (e.g. sparse fundamentals).
-			dfTimes := df.Times()
+			dfTimes := fr.frame.Times()
 			if len(dfTimes) == 0 {
 				empty := &colCacheEntry{}
 
 				for _, assetItem := range missAssets {
-					for _, metric := range pf.metrics {
+					for _, metric := range fr.provFetch.metrics {
 						key := colCacheKey{figi: assetItem.CompositeFigi, metric: metric, chunkStart: year}
 						e.cache.put(key, empty)
 
@@ -506,9 +544,9 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 				timesCopy := make([]time.Time, len(dfTimes))
 				copy(timesCopy, dfTimes)
 
-				for _, assetItem := range df.AssetList() {
-					for _, metric := range df.MetricList() {
-						col := df.Column(assetItem, metric)
+				for _, assetItem := range fr.frame.AssetList() {
+					for _, metric := range fr.frame.MetricList() {
+						col := fr.frame.Column(assetItem, metric)
 						if col == nil {
 							continue
 						}
@@ -540,6 +578,32 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 				}
 			}
 		}
+	}
+
+	// Fast path: point-in-time queries (rangeStart == rangeEnd) skip the
+	// union-time-axis rebuild and binary-search cached year chunks directly.
+	if rangeStart.Equal(rangeEnd) {
+		hasFundamental := false
+
+		for _, m := range metrics {
+			if data.IsFundamental(m) {
+				hasFundamental = true
+				break
+			}
+		}
+
+		result, pitErr := e.assemblePointInTime(assets, metrics, rangeEnd, hasFundamental)
+		if pitErr != nil {
+			return nil, fmt.Errorf("engine: assemble point-in-time: %w", pitErr)
+		}
+
+		log.Debug().
+			Int("len", result.Len()).
+			Int("assets", len(result.AssetList())).
+			Int("metrics", len(result.MetricList())).
+			Msg("engine.fetchRange fast path")
+
+		return result, nil
 	}
 
 	// Assemble the requested DataFrame from cached columns.
@@ -669,6 +733,84 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 		Msg("engine.Fetch final result")
 
 	return result, nil
+}
+
+// assemblePointInTime builds a one-row DataFrame for a point-in-time query
+// by binary-searching cached year chunks instead of rebuilding the full union
+// time axis. Semantics match the slab path exactly: non-fundamental metrics
+// require an exact date-key match; fundamental metrics forward-fill from the
+// most recent filing within the same year chunk.
+func (e *Engine) assemblePointInTime(assets []asset.Asset, metrics []data.Metric, target time.Time, hasFundamental bool) (*data.DataFrame, error) {
+	targetKey := data.DateKey(target)
+	years := chunkYears(target, target)
+	numMetrics := len(metrics)
+	numCols := len(assets) * numMetrics
+
+	slab := make([]float64, numCols)
+	for idx := range slab {
+		slab[idx] = math.NaN()
+	}
+
+	anyMatch := false
+
+	for aIdx, currentAsset := range assets {
+		for mIdx, metric := range metrics {
+			isFund := data.IsFundamental(metric)
+			slabIdx := aIdx*numMetrics + mIdx
+
+			for _, year := range years {
+				key := colCacheKey{figi: currentAsset.CompositeFigi, metric: metric, chunkStart: year}
+
+				entry, ok := e.cache.get(key)
+				if !ok || len(entry.times) == 0 {
+					continue
+				}
+
+				if isFund {
+					// Binary-search for the greatest index with dateKey <= targetKey,
+					// then walk backwards to find the most recent non-NaN value.
+					// The cache entry shares a union time axis with other metrics
+					// from the same provider fetch, so fundamental columns are
+					// sparse (NaN on non-filing dates). This walk mirrors the slab
+					// path's forward-fill which propagates the last non-NaN value.
+					bestIdx := sort.Search(len(entry.times), func(idx int) bool {
+						return data.DateKey(entry.times[idx]) > targetKey
+					}) - 1
+
+					for walkIdx := bestIdx; walkIdx >= 0; walkIdx-- {
+						if !math.IsNaN(entry.values[walkIdx]) {
+							slab[slabIdx] = entry.values[walkIdx]
+							anyMatch = true
+
+							break
+						}
+					}
+				} else {
+					// Exact date-key match via binary search.
+					lo := sort.Search(len(entry.times), func(idx int) bool {
+						return data.DateKey(entry.times[idx]) >= targetKey
+					})
+
+					if lo < len(entry.times) && data.DateKey(entry.times[lo]) == targetKey {
+						slab[slabIdx] = entry.values[lo]
+						anyMatch = true
+					}
+				}
+			}
+		}
+	}
+
+	if !anyMatch && !hasFundamental {
+		return data.NewDataFrame(nil, assets, metrics, data.Daily, nil)
+	}
+
+	// One-row DataFrame anchored at the target timestamp.
+	cols := make([][]float64, numCols)
+	for colIdx := range cols {
+		cols[colIdx] = slab[colIdx : colIdx+1 : colIdx+1]
+	}
+
+	return data.NewDataFrame([]time.Time{target}, assets, metrics, data.Daily, cols)
 }
 
 // Close releases all resources held by the engine, including closing

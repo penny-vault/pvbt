@@ -84,10 +84,13 @@ func (c *dataCache) put(key colCacheKey, entry *colCacheEntry) {
 // before t. We keep the previous year because lookback windows commonly
 // span across year boundaries.
 func (c *dataCache) evictBefore(t time.Time) {
-	year := t.In(nyc).Year()
+	// chunkStart values are always Jan 1 00:00 Eastern for some year, so we
+	// can compute a single threshold and do an integer comparison per entry
+	// instead of calling time.Unix().In(nyc).Year() on every iteration.
+	threshold := time.Date(t.In(nyc).Year()-1, 1, 1, 0, 0, 0, 0, nyc).Unix()
+
 	for key, entry := range c.entries {
-		chunkYear := time.Unix(key.chunkStart, 0).In(nyc).Year()
-		if chunkYear < year-1 {
+		if key.chunkStart < threshold {
 			c.curBytes -= estimateEntryBytes(entry)
 			delete(c.entries, key)
 		}

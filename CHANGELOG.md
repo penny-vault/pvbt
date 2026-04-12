@@ -7,8 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Long-horizon backtests run significantly faster. Point-in-time data lookups now binary-search the cache directly instead of rebuilding a union time axis, and the data provider fetches only the database columns each strategy requests.
+
 ### Added
 
+- All strategy binaries accept `--cpu-profile <path>` to write a Go CPU profile for the duration of the command.
 - `pvbt backtest` now renders an interactive progress bar by default when run from a terminal, showing the current and final simulation dates, percent complete, ETA, and a running count of performance measurements evaluated. Pass `--no-progress` to disable it (e.g. for CI logs).
 - Strategy authors can register a progress observer on the engine via `WithProgressCallback`, which fires after each backtest step with a `ProgressEvent` containing the step index, total steps, current and bounding dates, and cumulative measurement count.
 - Strategies can use `universe.USTradable` as a daily-refreshed investable universe of liquid US stocks. Membership is sourced from pv-data and filters by market cap, dollar volume, price floor, and data completeness, mirroring the criteria of Quantopian's QTradableStocksUS. This is the recommended default universe for broad US equity strategies.
