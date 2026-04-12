@@ -550,38 +550,39 @@ func (p *PVDataProvider) fetchMetrics(
 	ensureCol func(string, Metric) map[int64]float64,
 	timeSet map[int64]time.Time,
 ) error {
-	// metricsColumns defines the SQL column order and corresponding Metric for
-	// each value returned by the metrics query. The scan destination for each
-	// entry is a *float64 into the vals slice at the same index.
-	type metricsColumn struct {
+	if len(metrics) == 0 {
+		return nil
+	}
+
+	// boundCol ties a requested Metric to its scan type so we can convert
+	// bigint columns to float64 after scanning.
+	type boundCol struct {
 		metric Metric
-		// intCol means the SQL column is bigint; the scanned int64 is converted to float64.
 		intCol bool
 	}
 
-	columns := []metricsColumn{
-		{metric: MarketCap, intCol: true},
-		{metric: EnterpriseValue, intCol: true},
-		{metric: PE},
-		{metric: PB},
-		{metric: PS},
-		{metric: EVtoEBIT},
-		{metric: EVtoEBITDA},
-		{metric: ForwardPE},
-		{metric: PEG},
-		{metric: PriceToCashFlow},
-		{metric: Beta},
+	sqlCols := make([]string, 0, len(metrics))
+	bound := make([]boundCol, 0, len(metrics))
+
+	for _, mm := range metrics {
+		spec, ok := metricsColumn[mm]
+		if !ok {
+			return fmt.Errorf("pvdata: no SQL column for metrics-view metric %q", mm)
+		}
+
+		sqlCols = append(sqlCols, spec.sql)
+		bound = append(bound, boundCol{metric: mm, intCol: spec.intCol})
 	}
 
-	rows, err := conn.Query(ctx,
-		`SELECT composite_figi, event_date,
-		        market_cap, ev, pe, pb, ps, ev_ebit, ev_ebitda,
-		        pe_forward, peg, price_to_cash_flow, beta
+	query := fmt.Sprintf(
+		`SELECT composite_figi, event_date, %s
 		 FROM metrics
 		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date
 		 ORDER BY event_date`,
-		figis, start, end,
+		strings.Join(sqlCols, ", "),
 	)
+
+	rows, err := conn.Query(ctx, query, figis, start, end)
 	if err != nil {
 		return fmt.Errorf("pvdata: query metrics: %w", err)
 	}
@@ -591,8 +592,9 @@ func (p *PVDataProvider) fetchMetrics(
 
 	// Pre-allocate scan destinations reused across rows. We use pointers so
 	// that SQL NULLs are represented as nil rather than the Go zero value.
-	intVals := make([]*int64, len(columns))
-	floatVals := make([]*float64, len(columns))
+	intVals := make([]*int64, len(bound))
+	floatVals := make([]*float64, len(bound))
+	scanArgs := make([]any, 0, 2+len(bound))
 
 	for rows.Next() {
 		var (
@@ -600,11 +602,11 @@ func (p *PVDataProvider) fetchMetrics(
 			eventDate time.Time
 		)
 
-		// Build scan args: figi, eventDate, then one dest per column.
-		scanArgs := make([]any, 0, 2+len(columns))
+		// Reset and rebuild scan args: figi, eventDate, then one dest per column.
+		scanArgs = scanArgs[:0]
 		scanArgs = append(scanArgs, &figi, &eventDate)
 
-		for idx, col := range columns {
+		for idx, col := range bound {
 			if col.intCol {
 				intVals[idx] = nil
 				scanArgs = append(scanArgs, &intVals[idx])
@@ -622,7 +624,7 @@ func (p *PVDataProvider) fetchMetrics(
 		sec := eventDate.Unix()
 		timeSet[sec] = eventDate
 
-		for idx, col := range columns {
+		for idx, col := range bound {
 			if !want[col.metric] {
 				continue
 			}
@@ -1107,6 +1109,26 @@ var metricColumn = map[Metric]string{
 	TangibleAssetValue:                  "tangible_asset_value",
 	WorkingCapital:                      "working_capital",
 	MarketCapFundamental:                "market_capitalization",
+}
+
+// metricsColumn maps metrics-view Metrics to their SQL column names and
+// whether the column is an integer (bigint) type. Integer columns are scanned
+// as *int64 and converted to float64.
+var metricsColumn = map[Metric]struct {
+	sql    string
+	intCol bool
+}{
+	MarketCap:       {sql: "market_cap", intCol: true},
+	EnterpriseValue: {sql: "ev", intCol: true},
+	PE:              {sql: "pe", intCol: false},
+	PB:              {sql: "pb", intCol: false},
+	PS:              {sql: "ps", intCol: false},
+	EVtoEBIT:        {sql: "ev_ebit", intCol: false},
+	EVtoEBITDA:      {sql: "ev_ebitda", intCol: false},
+	ForwardPE:       {sql: "pe_forward", intCol: false},
+	PEG:             {sql: "peg", intCol: false},
+	PriceToCashFlow: {sql: "price_to_cash_flow", intCol: false},
+	Beta:            {sql: "beta", intCol: false},
 }
 
 func metricSet(ms []Metric) map[Metric]bool {
