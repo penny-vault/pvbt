@@ -17,6 +17,7 @@ package engine_test
 
 import (
 	"context"
+	"math"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -641,6 +642,137 @@ var _ = Describe("Fetch", func() {
 
 			closeCol := strategy.fetched.Column(spy, data.MetricClose)
 			Expect(closeCol).To(HaveLen(2))
+		})
+	})
+
+	Context("FetchAt point-in-time fast path", func() {
+		It("returns an empty frame for a date with no data for a daily metric", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			pitAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: pitAssets}
+
+			// Data covers Jan 1 - Mar 31 (90 days). The query date (May 15)
+			// falls outside this range and has no cached entry.
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 90, pitAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// May 15 is outside the data range -- no close price exists.
+			queryDate := time.Date(2024, 5, 15, 0, 0, 0, 0, time.UTC)
+
+			strategy := &pastFetchAtStrategy{
+				queryDate: queryDate,
+				metrics:   []data.Metric{data.MetricClose},
+				assets:    pitAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			// Sim runs after the query date so the look-ahead guard allows it.
+			simStart := time.Date(2024, 6, 1, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 6, 3, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(Equal(0),
+				"FetchAt on a date with no data for a daily-only metric should return an empty frame")
+		})
+
+		It("returns a one-row frame on a trading day", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			pitAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: pitAssets}
+
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 90, pitAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// 2024-02-01 is a Thursday -- trading day with data in the fixture.
+			queryDate := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+			Expect(queryDate.Weekday()).To(Equal(time.Thursday))
+
+			strategy := &pastFetchAtStrategy{
+				queryDate: queryDate,
+				metrics:   []data.Metric{data.MetricClose},
+				assets:    pitAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			simStart := time.Date(2024, 2, 5, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 2, 7, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(Equal(1),
+				"FetchAt on a trading day should return exactly one row")
+
+			closeCol := strategy.fetched.Column(spy, data.MetricClose)
+			Expect(closeCol).To(HaveLen(1))
+			Expect(math.IsNaN(closeCol[0])).To(BeFalse(),
+				"the close price should be a real value, not NaN")
+		})
+
+		It("forward-fills fundamental metrics from the most recent filing within the year", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			pitAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: pitAssets}
+
+			// Daily close prices so the engine has trading days.
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 200, pitAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			// One fundamental filing on Jan 15.
+			filingDate := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			fundDF, err := data.NewDataFrame(
+				[]time.Time{filingDate},
+				pitAssets,
+				[]data.Metric{data.WorkingCapital},
+				data.Daily,
+				[][]float64{{77_000_000}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			fundProvider := data.NewTestProvider([]data.Metric{data.WorkingCapital}, fundDF)
+
+			// Query on Mar 10 -- well after the Jan 15 filing, same year chunk.
+			queryDate := time.Date(2024, 3, 10, 0, 0, 0, 0, time.UTC)
+
+			strategy := &pastFetchAtStrategy{
+				queryDate: queryDate,
+				metrics:   []data.Metric{data.MetricClose, data.WorkingCapital},
+				assets:    pitAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, fundProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			simStart := time.Date(2024, 4, 1, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 4, 3, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+			Expect(strategy.fetched).NotTo(BeNil())
+			Expect(strategy.fetched.Len()).To(Equal(1),
+				"FetchAt with a fundamental should return one row even when no exact match exists")
+
+			wc := strategy.fetched.Column(spy, data.WorkingCapital)
+			Expect(wc).To(HaveLen(1))
+			Expect(wc[0]).To(BeNumerically("==", 77_000_000),
+				"forward-filled fundamental value should be the most recent prior filing")
 		})
 	})
 })

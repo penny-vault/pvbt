@@ -128,6 +128,10 @@ func dateKey(t time.Time) int32 {
 	return int32(year)*10000 + int32(month)*100 + int32(day)
 }
 
+// DateKey is the exported form of dateKey. It converts a time.Time to an
+// integer YYYYMMDD key suitable for date-only comparisons.
+func DateKey(t time.Time) int32 { return dateKey(t) }
+
 // ensureDateKeys lazily builds the dateKey cache on first access.
 // Only DataFrames that perform date-based lookups (timeIndexByDate,
 // Between) pay the cost; intermediate DataFrames in metric chains skip it.
