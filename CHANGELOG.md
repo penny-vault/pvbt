@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-04-14
+
 ### Changed
 
 - Long-horizon backtests run significantly faster. Point-in-time data lookups now binary-search the cache directly instead of rebuilding a union time axis, and the data provider fetches only the database columns each strategy requests.
@@ -196,7 +198,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.6.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/penny-vault/pvbt/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/penny-vault/pvbt/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/penny-vault/pvbt/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/penny-vault/pvbt/compare/v0.3.0...v0.4.0
