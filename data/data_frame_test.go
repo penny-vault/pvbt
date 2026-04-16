@@ -128,6 +128,12 @@ var _ = Describe("DataFrame", func() {
 			Expect(math.IsNaN(df.Value(aapl, data.Metric("Nonexistent")))).To(BeTrue())
 		})
 
+		It("Value returns NaN when asset/metric are registered but no timestamps exist", func() {
+			empty, err := data.NewDataFrame(nil, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Daily, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(math.IsNaN(empty.Value(aapl, data.Price))).To(BeTrue())
+		})
+
 		It("ValueAt returns value at specific timestamp", func() {
 			Expect(df.ValueAt(aapl, data.Price, times[2])).To(Equal(102.0))
 			Expect(df.ValueAt(goog, data.Volume, times[0])).To(Equal(2000.0))
