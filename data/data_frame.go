@@ -349,6 +349,9 @@ func (df *DataFrame) Value(a asset.Asset, metric Metric) float64 {
 	}
 
 	col := df.colSlice(aIdx, mIdx)
+	if len(col) == 0 {
+		return math.NaN()
+	}
 
 	return col[len(col)-1]
 }
