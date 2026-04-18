@@ -350,6 +350,46 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 	return result, nil
 }
 
+// FetchFundamentalsByDateKey returns fundamental data for a specific
+// reporting period. dateKey identifies the normalized quarter boundary
+// (e.g. 2024-03-31 for Q1 2024). All metrics must be fundamentals;
+// non-fundamental metrics produce an error. Subject to point-in-time
+// correctness: only filings with event_date <= eng.CurrentDate() are
+// included. Assets that have not filed for dateKey as of CurrentDate
+// get NaN values.
+func (e *Engine) FetchFundamentalsByDateKey(
+	ctx context.Context,
+	assets []asset.Asset,
+	metrics []data.Metric,
+	dateKey time.Time,
+) (*data.DataFrame, error) {
+	for _, mm := range metrics {
+		if !data.IsFundamental(mm) {
+			return nil, fmt.Errorf("FetchFundamentalsByDateKey: metric %q is not a fundamental metric", mm)
+		}
+	}
+
+	dimension := e.fundamentalDimension
+	if dimension == "" {
+		dimension = "ARQ"
+	}
+
+	for _, provider := range e.providers {
+		if dp, ok := provider.(data.FundamentalsByDateKeyProvider); ok {
+			df, err := dp.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, dimension, e.currentDate)
+			if err != nil {
+				return nil, fmt.Errorf("FetchFundamentalsByDateKey: %w", err)
+			}
+
+			df.SetSource(e)
+
+			return df, nil
+		}
+	}
+
+	return nil, fmt.Errorf("FetchFundamentalsByDateKey: no provider supports FundamentalsByDateKeyProvider")
+}
+
 // sliceRiskFree returns the cumulative risk-free values for the given
 // timestamps. Returns nil if no risk-free series is available or if
 // timestamps fall outside the precomputed range. Uses the pre-built
