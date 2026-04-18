@@ -635,9 +635,14 @@ func (r *SnapshotRecorder) recordFundamentalsByDateKey(df *DataFrame, metrics []
 		placeholders[idx] = "?"
 	}
 
-	upsertCols := make([]string, len(colNames))
-	for idx, col := range colNames {
-		upsertCols[idx] = fmt.Sprintf("%s = COALESCE(excluded.%s, %s)", col, col, col)
+	upsertCols := make([]string, 0, 2+len(colNames))
+	upsertCols = append(upsertCols,
+		"date_key = COALESCE(excluded.date_key, date_key)",
+		"report_period = COALESCE(excluded.report_period, report_period)",
+	)
+
+	for _, col := range colNames {
+		upsertCols = append(upsertCols, fmt.Sprintf("%s = COALESCE(excluded.%s, %s)", col, col, col))
 	}
 
 	query := fmt.Sprintf(

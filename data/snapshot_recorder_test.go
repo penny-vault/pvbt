@@ -499,6 +499,63 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(wc).To(BeNumerically("==", 120_000_000.0))
 		})
 
+		It("populates date_key when a row already exists from the daily Fetch path", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+			dateKey := time.Date(2024, 12, 31, 0, 0, 0, 0, time.UTC)
+
+			dailyDF, err := data.NewDataFrame(
+				[]time.Time{dateKey},
+				assets,
+				[]data.Metric{data.WorkingCapital},
+				data.Daily,
+				[][]float64{{50_000_000}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			stub := &stubFundamentalsByDateKeyProvider{
+				TestProvider: data.NewTestProvider([]data.Metric{data.WorkingCapital}, dailyDF),
+				values:       map[string]float64{spy.CompositeFigi: 120_000_000.0},
+				dimension:    "ARQ",
+			}
+
+			var recErr error
+			recorder, recErr = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(recErr).NotTo(HaveOccurred())
+
+			_, err = recorder.Fetch(ctx, data.DataRequest{
+				Assets:    assets,
+				Metrics:   []data.Metric{data.WorkingCapital},
+				Start:     dateKey,
+				End:       dateKey,
+				Frequency: data.Daily,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = recorder.FetchFundamentalsByDateKey(ctx, assets,
+				[]data.Metric{data.WorkingCapital}, dateKey, "ARQ", dateKey)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var dateKeyStr sql.NullString
+			err = db.QueryRow(
+				`SELECT date_key FROM fundamentals WHERE composite_figi = ?`,
+				spy.CompositeFigi,
+			).Scan(&dateKeyStr)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dateKeyStr.Valid).To(BeTrue(), "date_key should be populated by FetchFundamentalsByDateKey even when a row already exists")
+			Expect(dateKeyStr.String).To(Equal("2024-12-31"))
+		})
+
 		It("errors when no wrapped provider supports FundamentalsByDateKey", func() {
 			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
 			assets := []asset.Asset{spy}
