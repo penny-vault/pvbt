@@ -17,11 +17,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ BatchProvider   = (*SnapshotRecorder)(nil)
-	_ AssetProvider   = (*SnapshotRecorder)(nil)
-	_ IndexProvider   = (*SnapshotRecorder)(nil)
-	_ RatingProvider  = (*SnapshotRecorder)(nil)
-	_ HolidayProvider = (*SnapshotRecorder)(nil)
+	_ BatchProvider                 = (*SnapshotRecorder)(nil)
+	_ AssetProvider                 = (*SnapshotRecorder)(nil)
+	_ IndexProvider                 = (*SnapshotRecorder)(nil)
+	_ RatingProvider                = (*SnapshotRecorder)(nil)
+	_ HolidayProvider               = (*SnapshotRecorder)(nil)
+	_ FundamentalsByDateKeyProvider = (*SnapshotRecorder)(nil)
 )
 
 // SnapshotRecorderConfig holds the providers to wrap.
@@ -537,6 +538,170 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 	}
 
 	return nil
+}
+
+// FetchFundamentalsByDateKey delegates to a wrapped FundamentalsByDateKeyProvider
+// and records the returned values so SnapshotProvider can replay the same call.
+// Returns an error when no wrapped provider implements the interface.
+//
+// The recorder writes one row per asset at event_date = dateKey (the reporting
+// period itself). This is synthetic: the true filing date is consumed inside
+// the provider's DISTINCT ON ordering and not exposed on the returned
+// DataFrame. Because replay queries filter with event_date <= maxEventDate
+// and every sensible caller passes a maxEventDate on or after the reporting
+// period, the recorded row always matches. A replay under a custom as-of date
+// returns the same value the recording saw; it cannot reconstruct filings
+// that the recording never observed.
+func (r *SnapshotRecorder) FetchFundamentalsByDateKey(
+	ctx context.Context,
+	assets []asset.Asset,
+	metrics []Metric,
+	dateKey time.Time,
+	dimension string,
+	maxEventDate time.Time,
+) (*DataFrame, error) {
+	provider := r.fundamentalsByDateKeyProvider()
+	if provider == nil {
+		return nil, fmt.Errorf("snapshot recorder: no wrapped provider supports FundamentalsByDateKey")
+	}
+
+	df, err := provider.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, dimension, maxEventDate)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := r.recordFundamentalsByDateKey(df, metrics, dateKey, dimension); err != nil {
+		return nil, fmt.Errorf("snapshot recorder: record fundamentals by date_key: %w", err)
+	}
+
+	return df, nil
+}
+
+func (r *SnapshotRecorder) fundamentalsByDateKeyProvider() FundamentalsByDateKeyProvider {
+	if provider, ok := r.batchProvider.(FundamentalsByDateKeyProvider); ok {
+		return provider
+	}
+
+	if provider, ok := r.assetProvider.(FundamentalsByDateKeyProvider); ok {
+		return provider
+	}
+
+	return nil
+}
+
+func (r *SnapshotRecorder) recordFundamentalsByDateKey(df *DataFrame, metrics []Metric, dateKey time.Time, dimension string) error {
+	if df == nil || len(df.assets) == 0 {
+		return nil
+	}
+
+	if err := r.recordAssets(df.assets); err != nil {
+		return err
+	}
+
+	numDFMetrics := len(df.metrics)
+
+	mIdx := make(map[Metric]int, len(df.metrics))
+	for idx, metric := range df.metrics {
+		mIdx[metric] = idx
+	}
+
+	reportPeriodDFIdx, hasReportPeriod := mIdx[FundamentalsReportPeriod]
+
+	var (
+		colNames   []string
+		colMetrics []Metric
+	)
+
+	for _, metric := range metrics {
+		if metric == FundamentalsDateKey || metric == FundamentalsReportPeriod {
+			continue
+		}
+
+		colName, ok := metricColumn[metric]
+		if !ok {
+			continue
+		}
+
+		colNames = append(colNames, colName)
+		colMetrics = append(colMetrics, metric)
+	}
+
+	if len(colNames) == 0 {
+		return nil
+	}
+
+	placeholders := make([]string, 5+len(colNames))
+	for idx := range placeholders {
+		placeholders[idx] = "?"
+	}
+
+	upsertCols := make([]string, len(colNames))
+	for idx, col := range colNames {
+		upsertCols[idx] = fmt.Sprintf("%s = COALESCE(excluded.%s, %s)", col, col, col)
+	}
+
+	query := fmt.Sprintf(
+		"INSERT INTO fundamentals (composite_figi, event_date, date_key, report_period, dimension, %s) VALUES (%s) ON CONFLICT(composite_figi, event_date, dimension) DO UPDATE SET %s",
+		strings.Join(colNames, ", "),
+		strings.Join(placeholders, ", "),
+		strings.Join(upsertCols, ", "),
+	)
+
+	effectiveDimension := dimension
+	if effectiveDimension == "" {
+		effectiveDimension = "ARQ"
+	}
+
+	dateKeyStr := dateKey.UTC().Format("2006-01-02")
+
+	tx, err := r.db.Begin()
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			_ = rollbackErr
+		}
+	}()
+
+	for assetIdx, aa := range df.assets {
+		args := make([]any, 5+len(colMetrics))
+		args[0] = aa.CompositeFigi
+		args[1] = dateKeyStr
+		args[2] = dateKeyStr
+		args[3] = nil
+
+		if hasReportPeriod {
+			raw := df.columns[assetIdx*numDFMetrics+reportPeriodDFIdx][0]
+			if !math.IsNaN(raw) {
+				args[3] = time.Unix(int64(raw), 0).UTC().Format("2006-01-02")
+			}
+		}
+
+		args[4] = effectiveDimension
+
+		for idx, metric := range colMetrics {
+			mi, ok := mIdx[metric]
+			if !ok {
+				args[5+idx] = nil
+				continue
+			}
+
+			val := df.columns[assetIdx*numDFMetrics+mi][0]
+			if math.IsNaN(val) {
+				args[5+idx] = nil
+			} else {
+				args[5+idx] = val
+			}
+		}
+
+		if _, err := tx.Exec(query, args...); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit()
 }
 
 // -- IndexProvider --
