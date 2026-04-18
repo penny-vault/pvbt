@@ -445,6 +445,80 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(dimStr).To(Equal("ARQ")) // fallback default
 		})
 	})
+
+	Describe("FetchFundamentalsByDateKey", func() {
+		It("implements FundamentalsByDateKeyProvider so Engine can snapshot by-date-key queries", func() {
+			var _ data.FundamentalsByDateKeyProvider = (*data.SnapshotRecorder)(nil)
+		})
+
+		It("delegates to the wrapped provider and records the result for replay", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+			maxEventDate := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+
+			stub := &stubFundamentalsByDateKeyProvider{
+				values:    map[string]float64{spy.CompositeFigi: 120_000_000.0},
+				dimension: "ARQ",
+			}
+
+			var recErr error
+			recorder, recErr = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(recErr).NotTo(HaveOccurred())
+
+			df, err := recorder.FetchFundamentalsByDateKey(ctx, assets,
+				[]data.Metric{data.WorkingCapital}, dateKey, "ARQ", maxEventDate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(df.Column(spy, data.WorkingCapital)[0]).To(BeNumerically("==", 120_000_000.0))
+			Expect(stub.calls).To(Equal(1))
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var (
+				dateKeyStr, dimStr string
+				wc                 float64
+			)
+			err = db.QueryRow(
+				`SELECT date_key, dimension, working_capital
+				   FROM fundamentals
+				  WHERE composite_figi = ?`,
+				spy.CompositeFigi,
+			).Scan(&dateKeyStr, &dimStr, &wc)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dateKeyStr).To(Equal("2024-03-31"))
+			Expect(dimStr).To(Equal("ARQ"))
+			Expect(wc).To(BeNumerically("==", 120_000_000.0))
+		})
+
+		It("errors when no wrapped provider supports FundamentalsByDateKey", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+
+			plainStub := data.NewTestProvider([]data.Metric{data.WorkingCapital}, nil)
+
+			var recErr error
+			recorder, recErr = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: plainStub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(recErr).NotTo(HaveOccurred())
+
+			_, err := recorder.FetchFundamentalsByDateKey(ctx, assets,
+				[]data.Metric{data.WorkingCapital}, dateKey, "ARQ", dateKey)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("no wrapped provider"))
+		})
+	})
 })
 
 // -- stubs --
@@ -485,3 +559,40 @@ type dimensionedTestProvider struct {
 }
 
 func (p *dimensionedTestProvider) Dimension() string { return p.dimension }
+
+type stubFundamentalsByDateKeyProvider struct {
+	*data.TestProvider
+	values    map[string]float64
+	dimension string
+	calls     int
+}
+
+func (p *stubFundamentalsByDateKeyProvider) Dimension() string { return p.dimension }
+
+func (p *stubFundamentalsByDateKeyProvider) FetchFundamentalsByDateKey(
+	_ context.Context,
+	assets []asset.Asset,
+	metrics []data.Metric,
+	dateKey time.Time,
+	_ string,
+	_ time.Time,
+) (*data.DataFrame, error) {
+	p.calls++
+
+	times := []time.Time{dateKey}
+	columns := make([][]float64, len(assets)*len(metrics))
+
+	for aIdx, aa := range assets {
+		for mIdx := range metrics {
+			val, ok := p.values[aa.CompositeFigi]
+			if !ok {
+				columns[aIdx*len(metrics)+mIdx] = []float64{0.0}
+				continue
+			}
+
+			columns[aIdx*len(metrics)+mIdx] = []float64{val}
+		}
+	}
+
+	return data.NewDataFrame(times, assets, metrics, data.Daily, columns)
+}
