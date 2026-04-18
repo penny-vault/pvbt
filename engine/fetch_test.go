@@ -643,6 +643,62 @@ var _ = Describe("Fetch", func() {
 			closeCol := strategy.fetched.Column(spy, data.MetricClose)
 			Expect(closeCol).To(HaveLen(2))
 		})
+
+		It("forward-fills FundamentalsDateKey alongside the value", func() {
+			spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+			fundamentalAssets := []asset.Asset{spy}
+			assetProvider = &mockAssetProvider{assets: fundamentalAssets}
+
+			closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			closeDF := makeDailyDF(closeStart, 90, fundamentalAssets, []data.Metric{data.MetricClose})
+			closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+			filingDate := time.Date(2024, 1, 15, 16, 0, 0, 0, time.UTC)
+			dateKey := time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC) // Q4 2023 filing on Jan 15
+
+			fundDF, err := data.NewDataFrame(
+				[]time.Time{filingDate},
+				fundamentalAssets,
+				[]data.Metric{data.Revenue, data.FundamentalsDateKey},
+				data.Daily,
+				[][]float64{
+					{500_000_000},
+					{float64(dateKey.Unix())},
+				},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			fundProvider := data.NewTestProvider(
+				[]data.Metric{data.Revenue, data.FundamentalsDateKey},
+				fundDF,
+			)
+
+			strategy := &fetchStrategy{
+				lookback: portfolio.Days(30),
+				metrics:  []data.Metric{data.MetricClose, data.Revenue, data.FundamentalsDateKey},
+				assets:   fundamentalAssets,
+			}
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(closeProvider, fundProvider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			// Sim date Mar 1; lookback starts Jan 31 -- well after the Jan 15 filing.
+			simStart := time.Date(2024, 3, 1, 0, 0, 0, 0, time.UTC)
+			simEnd := time.Date(2024, 3, 1, 23, 0, 0, 0, time.UTC)
+			_, btErr := eng.Backtest(context.Background(), simStart, simEnd)
+			Expect(btErr).NotTo(HaveOccurred())
+			Expect(strategy.fetchErr).NotTo(HaveOccurred())
+
+			dkCol := strategy.fetched.Column(spy, data.FundamentalsDateKey)
+			Expect(len(dkCol)).To(BeNumerically(">", 1))
+
+			expected := float64(dateKey.Unix())
+			for _, vv := range dkCol {
+				Expect(vv).To(BeNumerically("==", expected))
+			}
+		})
 	})
 
 	Context("FetchAt point-in-time fast path", func() {
