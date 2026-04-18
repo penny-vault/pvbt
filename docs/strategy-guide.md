@@ -288,6 +288,45 @@ eng.SetFundamentalDimension("MRQ") // most-recent reported, quarterly
 | `MRY` | Most Recent Reported, Annual. |
 | `MRT` | Most Recent Reported, Trailing Twelve Months. |
 
+### Querying a specific reporting period
+
+When a strategy needs values for a particular fiscal quarter (e.g. Q1
+working capital across all candidates), use `Engine.FetchFundamentalsByDateKey`:
+
+```go
+func (s *NCAVE) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    q1 := mostRecentQ1(eng.CurrentDate())
+
+    df, err := eng.FetchFundamentalsByDateKey(ctx, s.universe, []data.Metric{
+        data.WorkingCapital,
+        data.TotalLiabilities,
+        data.FundamentalsDateKey,
+    }, q1)
+    if err != nil {
+        return err
+    }
+
+    for _, candidate := range s.universe {
+        wc := df.Value(candidate, data.WorkingCapital, q1)
+        if math.IsNaN(wc) {
+            continue // candidate has not filed Q1 yet as of CurrentDate
+        }
+
+        // ... use wc, df.Value(candidate, data.TotalLiabilities, q1), etc.
+    }
+
+    return nil
+}
+```
+
+`FetchFundamentalsByDateKey` returns a single time-axis row at `dateKey`, one value per
+asset per metric. Only filings with `event_date <= eng.CurrentDate()` are
+included; assets that have not filed for `dateKey` get NaN. All metrics in
+the call must be fundamentals; non-fundamental metrics return an error.
+
+The dimension used is whatever the strategy set with `SetFundamentalDimension`
+in `Setup` (defaults to `ARQ`).
+
 ### Asset lookup
 
 `eng.Asset(ticker)` resolves a ticker to an `asset.Asset` using the registered `AssetProvider`. It panics if the ticker is not found, which is appropriate in `Setup` since a missing benchmark or risk-free asset is a fatal configuration error.

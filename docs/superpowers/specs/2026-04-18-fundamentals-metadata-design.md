@@ -29,10 +29,10 @@ metricColumn[FundamentalsReportPeriod] = "report_period"
 
 `fetchFundamentals` already special-cases `event_date` and `date_key` outside the metric loop. Refactor so all three date columns are scanned generically: when a request includes `FundamentalsDateKey` or `FundamentalsReportPeriod`, the date column is converted to `float64(t.Unix())` and stored in the cache exactly like a regular metric value. When the request does not include them, no extra cost.
 
-### 3. Engine: `FetchByDateKey`
+### 3. Engine: `FetchFundamentalsByDateKey`
 
 ```go
-func (e *Engine) FetchByDateKey(
+func (e *Engine) FetchFundamentalsByDateKey(
     ctx context.Context,
     assets []asset.Asset,
     metrics []data.Metric,
@@ -42,13 +42,13 @@ func (e *Engine) FetchByDateKey(
 
 Behavior:
 
-- Validates that every metric in `metrics` is fundamental (`data.IsFundamental(m)`). Returns `fmt.Errorf("FetchByDateKey: metric %q is not a fundamental metric", m)` otherwise.
+- Validates that every metric in `metrics` is fundamental (`data.IsFundamental(m)`). Returns `fmt.Errorf("FetchFundamentalsByDateKey: metric %q is not a fundamental metric", m)` otherwise.
 - Uses the engine's configured dimension (set via `SetFundamentalDimension`).
 - Returns a DataFrame with a single time-axis row at `dateKey`. One value per asset per metric.
 - SQL filter: `dimension = $1 AND date_key = $2 AND event_date <= $3`, where `$3` is `eng.CurrentDate()`. For MR dimensions a single asset can have multiple matching rows (restatements); take the row with the maximum `event_date` per asset (`DISTINCT ON (composite_figi)` with `ORDER BY composite_figi, event_date DESC` on PostgreSQL; equivalent window function on SQLite for snapshot replay).
 - Assets that have not filed for `dateKey` as of `CurrentDate()` get NaN values. The strategy filters with `math.IsNaN`.
 
-`FetchByDateKey` reuses the existing column cache: the cache key gains a `dateKey` discriminator alongside the existing `(figi, metric, dimension)` tuple so that range queries and date-key queries do not collide.
+`FetchFundamentalsByDateKey` reuses the existing column cache: the cache key gains a `dateKey` discriminator alongside the existing `(figi, metric, dimension)` tuple so that range queries and date-key queries do not collide.
 
 ### 4. Existing `Fetch` and `FetchAt`
 
@@ -67,14 +67,14 @@ The `dimension` column written by the recorder also stops being hardcoded `"ARQ"
 ### 6. Documentation
 
 - `docs/data.md`: document `FundamentalsDateKey` and `FundamentalsReportPeriod` as metrics, including the Unix-seconds encoding and the `time.Unix(int64(...), 0)` round-trip pattern.
-- `docs/strategy-guide.md`: document `FetchByDateKey` with a worked NCAVE-style example (compute Q1 date_key for `eng.CurrentDate()`, fetch, filter NaN, use values).
-- `CHANGELOG.md`: entries under `Added` for the new metrics and `FetchByDateKey`.
+- `docs/strategy-guide.md`: document `FetchFundamentalsByDateKey` with a worked NCAVE-style example (compute Q1 date_key for `eng.CurrentDate()`, fetch, filter NaN, use values).
+- `CHANGELOG.md`: entries under `Added` for the new metrics and `FetchFundamentalsByDateKey`.
 
 ### 7. Testing
 
 - **Provider:** request `FundamentalsDateKey`/`FundamentalsReportPeriod` alongside Revenue; verify cells contain the expected `float64(t.Unix())`. Verify that requests omitting the metadata metrics still work and do not pay for extra columns.
 - **Engine forward-fill:** sparse fundamental input on filing dates D1, D2, D3. Fetch a daily range covering all three. Verify `FundamentalsDateKey` forward-fills the same way Revenue does; the value at any non-filing day equals the previous filing's date_key.
-- **`FetchByDateKey`:**
+- **`FetchFundamentalsByDateKey`:**
   - Valid request returns one time-axis row at `dateKey`, expected values per asset.
   - Non-fundamental metric in the list returns the documented error.
   - Asset with no filing for that `dateKey` gets NaN.
@@ -86,7 +86,7 @@ The `dimension` column written by the recorder also stops being hardcoded `"ARQ"
 
 - DataFrame struct -- no new fields. Metadata is just two more value columns.
 - `DataSource` interface signatures.
-- `DataRequest` struct -- `FetchByDateKey` lives on `*Engine`, not on the provider interface. It builds an internal request with the necessary filter.
+- `DataRequest` struct -- `FetchFundamentalsByDateKey` lives on `*Engine`, not on the provider interface. It builds an internal request with the necessary filter.
 - Cache key shape beyond the added `dateKey` discriminator.
 - `SetFundamentalDimension` -- still a strategy-level setting in `Setup`.
 - `fetchEod` and `fetchMetrics` queries.

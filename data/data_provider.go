@@ -80,3 +80,26 @@ type IndexProvider interface {
 type HolidayProvider interface {
 	FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error)
 }
+
+// FundamentalsByDateKeyProvider is implemented by providers that can
+// return fundamentals filtered to a specific reporting period (date_key).
+// The engine type-asserts on this interface from FetchFundamentalsByDateKey.
+type FundamentalsByDateKeyProvider interface {
+	// FetchFundamentalsByDateKey returns one row per asset for the given
+	// date_key + dimension. Only filings with event_date <= maxEventDate
+	// are included (point-in-time correctness). For dimensions where a
+	// single (figi, date_key) can have multiple filings (MR restatements),
+	// the row with the maximum event_date wins.
+	//
+	// metrics must contain only fundamental metrics. Metadata metrics
+	// (FundamentalsDateKey, FundamentalsReportPeriod) populate from the
+	// row's date_key/report_period columns.
+	FetchFundamentalsByDateKey(
+		ctx context.Context,
+		assets []asset.Asset,
+		metrics []Metric,
+		dateKey time.Time,
+		dimension string,
+		maxEventDate time.Time,
+	) (*DataFrame, error)
+}

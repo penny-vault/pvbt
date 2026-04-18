@@ -315,6 +315,136 @@ var _ = Describe("SnapshotRecorder", func() {
 			Expect(result).To(BeNil())
 		})
 	})
+
+	Describe("fundamentals recording with metadata", func() {
+		It("persists date_key, report_period, and dimension from the wrapped provider", func() {
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+
+			filing := time.Date(2024, 5, 2, 16, 0, 0, 0, nyc)
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, nyc)
+			reportPeriod := time.Date(2024, 3, 30, 0, 0, 0, 0, nyc)
+
+			times := []time.Time{filing}
+			metrics := []data.Metric{
+				data.WorkingCapital,
+				data.FundamentalsDateKey,
+				data.FundamentalsReportPeriod,
+			}
+
+			values := [][]float64{
+				{120_000_000.0},                // SPY WorkingCapital
+				{float64(dateKey.Unix())},      // SPY FundamentalsDateKey
+				{float64(reportPeriod.Unix())}, // SPY FundamentalsReportPeriod
+			}
+
+			df, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)
+			Expect(err).NotTo(HaveOccurred())
+
+			stub := &dimensionedTestProvider{
+				TestProvider: data.NewTestProvider(metrics, df),
+				dimension:    "MRQ",
+			}
+
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = recorder.Fetch(ctx, data.DataRequest{
+				Assets:    assets,
+				Metrics:   metrics,
+				Start:     filing,
+				End:       filing,
+				Frequency: data.Daily,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var (
+				dateKeyStr, reportPeriodStr, dimStr string
+				wc                                  float64
+			)
+			err = db.QueryRow(
+				`SELECT date_key, report_period, dimension, working_capital
+				   FROM fundamentals
+				  WHERE composite_figi = ?`,
+				spy.CompositeFigi,
+			).Scan(&dateKeyStr, &reportPeriodStr, &dimStr, &wc)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dateKeyStr).To(Equal("2024-03-31"))
+			Expect(reportPeriodStr).To(Equal("2024-03-30"))
+			Expect(dimStr).To(Equal("MRQ"))
+			Expect(wc).To(BeNumerically("==", 120_000_000.0))
+		})
+
+		It("writes NULL date_key/report_period when the DataFrame omits them", func() {
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+
+			filing := time.Date(2024, 5, 2, 16, 0, 0, 0, nyc)
+			times := []time.Time{filing}
+			metrics := []data.Metric{data.WorkingCapital}
+			values := [][]float64{{120_000_000.0}}
+
+			df, err := data.NewDataFrame(times, assets, metrics, data.Daily, values)
+			Expect(err).NotTo(HaveOccurred())
+
+			stub := data.NewTestProvider(metrics, df) // no Dimension() method
+
+			recorder, err = data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				BatchProvider: stub,
+				AssetProvider: &stubAssetProvider{assets: assets},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = recorder.Fetch(ctx, data.DataRequest{
+				Assets:    assets,
+				Metrics:   metrics,
+				Start:     filing,
+				End:       filing,
+				Frequency: data.Daily,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(recorder.Close()).To(Succeed())
+			recorder = nil
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var (
+				dateKeyNull, reportPeriodNull sql.NullString
+				dimStr                        string
+			)
+			err = db.QueryRow(
+				`SELECT date_key, report_period, dimension
+				   FROM fundamentals
+				  WHERE composite_figi = ?`,
+				spy.CompositeFigi,
+			).Scan(&dateKeyNull, &reportPeriodNull, &dimStr)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(dateKeyNull.Valid).To(BeFalse())
+			Expect(reportPeriodNull.Valid).To(BeFalse())
+			Expect(dimStr).To(Equal("ARQ")) // fallback default
+		})
+	})
 })
 
 // -- stubs --
@@ -348,3 +478,10 @@ type stubRatingProvider struct {
 func (s *stubRatingProvider) RatedAssets(ctx context.Context, analyst string, filter data.RatingFilter, t time.Time) ([]asset.Asset, error) {
 	return s.assets, nil
 }
+
+type dimensionedTestProvider struct {
+	*data.TestProvider
+	dimension string
+}
+
+func (p *dimensionedTestProvider) Dimension() string { return p.dimension }
