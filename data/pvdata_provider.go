@@ -39,6 +39,7 @@ var _ BatchProvider = (*PVDataProvider)(nil)
 var _ AssetProvider = (*PVDataProvider)(nil)
 var _ RatingProvider = (*PVDataProvider)(nil)
 var _ IndexProvider = (*PVDataProvider)(nil)
+var _ interface{ Dimension() string } = (*PVDataProvider)(nil)
 
 // scanPgxAsset scans a full asset row from a pgx result set. All metadata
 // columns are nullable in the view, so we scan into pointers and fall back
@@ -138,6 +139,11 @@ func WithConfigFile(path string) PVDataOption {
 // Valid values: "ARQ", "ARY", "ART", "MRQ", "MRY", "MRT".
 func (p *PVDataProvider) SetDimension(dim string) {
 	p.dimension = dim
+}
+
+// Dimension returns the current fundamental dimension filter.
+func (p *PVDataProvider) Dimension() string {
+	return p.dimension
 }
 
 // NewPVDataProvider creates a provider that reads from a pv-data database.
