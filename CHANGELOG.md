@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-04-18
+
 ### Fixed
 
 - Snapshot capture no longer fails with "no provider supports FundamentalsByDateKeyProvider" for strategies that call `Engine.FetchFundamentalsByDateKey`. The recorder now delegates the call to the wrapped provider and stores the result so replay sees the same values.
