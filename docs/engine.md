@@ -24,9 +24,13 @@ defer eng.Close()
 | `WithInitialDeposit(amount float64)` | Starting cash balance. |
 | `WithBroker(b broker.Broker)` | Broker for order execution. Defaults to a simulated broker. |
 | `WithCacheMaxBytes(n int64)` | Maximum memory for the data cache. Defaults to 512MB. |
-| `WithPortfolioSnapshot(snap)` | Restore portfolio from a previous run's snapshot. |
-| `WithAccount(acct *portfolio.Account)` | Use a pre-configured Account (overrides deposit, snapshot, and broker). |
+| `WithPortfolioSnapshot(snap)` | Restore portfolio from a previous run's snapshot. Mutually exclusive with `WithInitialDeposit`. |
+| `WithAccount(acct portfolio.PortfolioManager)` | Use a pre-configured Account (overrides deposit, snapshot, and broker). |
 | `WithDateRangeMode(mode DateRangeMode)` | How to handle insufficient warmup data: `DateRangeModeStrict` (default) errors, `DateRangeModePermissive` adjusts the start date forward. |
+| `WithBenchmarkTicker(ticker string)` | Override the benchmark by ticker. Takes priority over the benchmark declared in `Describe()`. |
+| `WithFillModel(base broker.BaseModel, adjusters ...broker.Adjuster)` | Configure the fill pipeline used by the simulated broker. Ignored when `WithBroker` supplies a non-default broker. |
+| `WithMiddlewareConfig(cfg MiddlewareConfig)` | Attach risk- and tax-management middleware (see `pvbt.toml` / `--risk-profile` / `--tax`). Replaces any strategy-declared middleware. |
+| `WithProgressCallback(fn ProgressCallback)` | Register a callback invoked after each simulation step with a `ProgressEvent` (step index, total steps, current date, measurement count). Must return quickly; runs inside the step loop. |
 
 ## Running a backtest
 
@@ -68,24 +72,17 @@ At every step the engine performs housekeeping in a fixed order before updating 
 
 ### Margin calls and auto-liquidation
 
-When a margin check fails, the engine calls the registered `MarginCallHandler`:
+When a margin check fails, the engine first looks for a `MarginCallHandler` on the strategy itself. The interface is opt-in -- implement it on your strategy type to take over margin-call handling:
 
 ```go
 type MarginCallHandler interface {
-    OnMarginCall(ctx context.Context, eng *Engine, port portfolio.Portfolio, deficit float64) error
+    OnMarginCall(ctx context.Context, eng *Engine, port portfolio.Portfolio, batch *portfolio.Batch) error
 }
 ```
 
-The handler receives the engine, the current portfolio (read-only), and the equity deficit in dollars. The default implementation auto-liquidates the largest short position at market until the deficit is resolved. A custom handler can be registered with `engine.WithMarginCallHandler(h)`:
+The handler receives the engine, the current portfolio (read-only), and a dedicated batch on which to queue orders. The batch bypasses middleware (it must not be further transformed by risk/tax rules) and is executed immediately after `OnMarginCall` returns. If the handler clears the deficiency the step continues; otherwise the engine falls back to automatic liquidation.
 
-```go
-eng := engine.New(&MyStrategy{},
-    engine.WithMarginCallHandler(myHandler),
-    // ...
-)
-```
-
-The handler may submit orders through the engine or return an error to halt the run. If no handler is registered, the default auto-liquidation behavior applies.
+If the strategy does not implement `MarginCallHandler`, the engine auto-liquidates short positions proportionally until the deficiency is resolved. Returning an error from the handler halts the run.
 
 ### Stock split handling
 
@@ -183,9 +180,22 @@ df, err := eng.Fetch(ctx, assets, portfolio.Months(6), []data.Metric{data.Metric
 
 // Single point in time
 df, err := eng.FetchAt(ctx, assets, eng.CurrentDate(), []data.Metric{data.MetricClose})
+
+// Specific fundamentals reporting period (e.g. Q4 prior year)
+df, err := eng.FetchFundamentalsByDateKey(ctx, assets, []data.Metric{data.WorkingCapital}, q4)
 ```
 
 Most strategies fetch data through universes (`universe.Window`, `universe.At`) rather than calling `Fetch`/`FetchAt` directly. The universe methods are higher-level and handle membership resolution automatically.
+
+`FetchFundamentalsByDateKey` returns one value per asset for a given `date_key`, filtered to filings available by `eng.CurrentDate()`. Pass `engine.WithAsOfDate(t)` to cap availability at an earlier formation date (must be non-zero and not later than `CurrentDate()`). See the strategy guide for a worked example.
+
+### Fundamental dimension
+
+```go
+eng.SetFundamentalDimension("MRQ")
+```
+
+Selects the dimension used for all subsequent fundamental fetches on this engine. Valid values: `ARQ`, `ARY`, `ART` (As Reported, point-in-time on SEC filing date) and `MRQ`, `MRY`, `MRT` (Most Recent Reported, indexed to fiscal period end). Call from `Setup`; defaults to `ARQ`. See the strategy guide for the full table and guidance on backtest correctness.
 
 ### Benchmark
 

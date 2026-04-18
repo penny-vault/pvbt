@@ -350,13 +350,38 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 	return result, nil
 }
 
+// FundamentalsByDateKeyOption configures a call to
+// Engine.FetchFundamentalsByDateKey.
+type FundamentalsByDateKeyOption func(*fundamentalsByDateKeyOpts)
+
+type fundamentalsByDateKeyOpts struct {
+	asOfDate    time.Time
+	asOfDateSet bool
+}
+
+// WithAsOfDate caps which filings are considered available to the call.
+// Only filings with event_date <= asOfDate are returned. This lets
+// strategies emulate a "formation date" earlier than the current
+// rebalance date -- for example, screening on prior-year fundamentals
+// that were available by March 31 even when the rebalance runs in June.
+//
+// asOfDate must be non-zero and not later than Engine.CurrentDate();
+// otherwise the fetch returns an error. When the option is not set,
+// Engine.CurrentDate() is used as the cap.
+func WithAsOfDate(asOfDate time.Time) FundamentalsByDateKeyOption {
+	return func(opts *fundamentalsByDateKeyOpts) {
+		opts.asOfDate = asOfDate
+		opts.asOfDateSet = true
+	}
+}
+
 // FetchFundamentalsByDateKey returns fundamental data for a specific
 // reporting period. dateKey identifies the normalized quarter boundary
 // (e.g. 2024-03-31 for Q1 2024). All metrics must be fundamentals;
 // non-fundamental metrics produce an error. Subject to point-in-time
 // correctness: only filings with event_date <= eng.CurrentDate() are
-// included. Assets that have not filed for dateKey as of CurrentDate
-// get NaN values.
+// included by default, overridable via WithAsOfDate. Assets that have
+// not filed for dateKey as of that cap get NaN values.
 //
 // This call bypasses the engine's column cache and issues a fresh provider
 // query each time. Strategies that need the result across multiple Compute
@@ -366,11 +391,32 @@ func (e *Engine) FetchFundamentalsByDateKey(
 	assets []asset.Asset,
 	metrics []data.Metric,
 	dateKey time.Time,
+	options ...FundamentalsByDateKeyOption,
 ) (*data.DataFrame, error) {
 	for _, mm := range metrics {
 		if !data.IsFundamental(mm) {
 			return nil, fmt.Errorf("FetchFundamentalsByDateKey: metric %q is not a fundamental metric", mm)
 		}
+	}
+
+	opts := fundamentalsByDateKeyOpts{}
+	for _, apply := range options {
+		apply(&opts)
+	}
+
+	maxEventDate := e.currentDate
+
+	if opts.asOfDateSet {
+		if opts.asOfDate.IsZero() {
+			return nil, fmt.Errorf("FetchFundamentalsByDateKey: as-of date must be non-zero")
+		}
+
+		if opts.asOfDate.After(e.currentDate) {
+			return nil, fmt.Errorf("FetchFundamentalsByDateKey: as-of date %s is after CurrentDate %s (would leak future data)",
+				opts.asOfDate.Format("2006-01-02"), e.currentDate.Format("2006-01-02"))
+		}
+
+		maxEventDate = opts.asOfDate
 	}
 
 	dimension := e.fundamentalDimension
@@ -380,7 +426,7 @@ func (e *Engine) FetchFundamentalsByDateKey(
 
 	for _, provider := range e.providers {
 		if dp, ok := provider.(data.FundamentalsByDateKeyProvider); ok {
-			df, err := dp.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, dimension, e.currentDate)
+			df, err := dp.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, dimension, maxEventDate)
 			if err != nil {
 				return nil, fmt.Errorf("FetchFundamentalsByDateKey: %w", err)
 			}
