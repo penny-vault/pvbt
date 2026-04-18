@@ -427,6 +427,9 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		mIdx[metric] = idx
 	}
 
+	dateKeyDFIdx, hasDateKey := mIdx[FundamentalsDateKey]
+	reportPeriodDFIdx, hasReportPeriod := mIdx[FundamentalsReportPeriod]
+
 	// Build sorted column list from the metrics we have data for.
 	var (
 		colNames   []string
@@ -471,16 +474,41 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 		strings.Join(upsertCols, ", "),
 	)
 
-	for assetIdx, a := range df.assets {
+	dimension := "ARQ"
+
+	if dp, ok := r.batchProvider.(interface{ Dimension() string }); ok {
+		if dim := dp.Dimension(); dim != "" {
+			dimension = dim
+		}
+	}
+
+	for assetIdx, aa := range df.assets {
 		for timeIdx, timestamp := range df.times {
 			dateStr := timestamp.Format("2006-01-02")
 
 			args := make([]any, 5+len(colMetrics))
-			args[0] = a.CompositeFigi
+			args[0] = aa.CompositeFigi
 			args[1] = dateStr
-			args[2] = nil // date_key: populated when DataFrame metadata is available
-			args[3] = nil // report_period: populated when DataFrame metadata is available
-			args[4] = "ARQ"
+
+			args[2] = nil
+
+			if hasDateKey {
+				raw := df.columns[assetIdx*numDFMetrics+dateKeyDFIdx][timeIdx]
+				if !math.IsNaN(raw) {
+					args[2] = time.Unix(int64(raw), 0).UTC().Format("2006-01-02")
+				}
+			}
+
+			args[3] = nil
+
+			if hasReportPeriod {
+				raw := df.columns[assetIdx*numDFMetrics+reportPeriodDFIdx][timeIdx]
+				if !math.IsNaN(raw) {
+					args[3] = time.Unix(int64(raw), 0).UTC().Format("2006-01-02")
+				}
+			}
+
+			args[4] = dimension
 
 			for idx, metric := range colMetrics {
 				mi, ok := mIdx[metric]
