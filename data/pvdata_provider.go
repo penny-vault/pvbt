@@ -17,6 +17,7 @@ package data
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -653,13 +654,18 @@ func (p *PVDataProvider) fetchFundamentals(
 	ensureCol func(string, Metric) map[int64]float64,
 	timeSet map[int64]time.Time,
 ) error {
-	// build the list of SQL columns we need
+	// build the list of SQL columns we need, skipping metadata metrics
+	// (date_key, report_period) which are always fetched by the fixed SELECT prefix.
 	var (
 		sqlCols     []string
 		metricOrder []Metric
 	)
 
 	for _, metric := range metrics {
+		if metric == FundamentalsDateKey || metric == FundamentalsReportPeriod {
+			continue
+		}
+
 		col, ok := metricColumn[metric]
 		if !ok {
 			continue
@@ -669,16 +675,31 @@ func (p *PVDataProvider) fetchFundamentals(
 		metricOrder = append(metricOrder, metric)
 	}
 
-	if len(sqlCols) == 0 {
+	wantDateKey := false
+	wantReportPeriod := false
+
+	for _, metric := range metrics {
+		switch metric {
+		case FundamentalsDateKey:
+			wantDateKey = true
+		case FundamentalsReportPeriod:
+			wantReportPeriod = true
+		}
+	}
+
+	if len(sqlCols) == 0 && !wantDateKey && !wantReportPeriod {
 		return nil
 	}
 
+	cols := []string{"composite_figi", "event_date", "date_key", "report_period"}
+	cols = append(cols, sqlCols...)
+
 	query := fmt.Sprintf(
-		`SELECT composite_figi, event_date, date_key, %s
+		`SELECT %s
 		 FROM fundamentals
 		 WHERE composite_figi = ANY($1) AND event_date BETWEEN $2::date AND $3::date AND dimension = $4
 		 ORDER BY event_date`,
-		strings.Join(sqlCols, ", "),
+		strings.Join(cols, ", "),
 	)
 
 	rows, err := conn.Query(ctx, query, figis, start, end, p.dimension)
@@ -689,19 +710,21 @@ func (p *PVDataProvider) fetchFundamentals(
 
 	for rows.Next() {
 		var (
-			figi      string
-			eventDate time.Time
-			dateKey   time.Time
+			figi         string
+			eventDate    time.Time
+			dateKey      time.Time
+			reportPeriod sql.NullTime
 		)
 
-		vals := make([]any, len(sqlCols)+3)
+		vals := make([]any, 4+len(sqlCols))
 		vals[0] = &figi
 		vals[1] = &eventDate
 		vals[2] = &dateKey
+		vals[3] = &reportPeriod
 
 		floatVals := make([]*float64, len(sqlCols))
 		for idx := range sqlCols {
-			vals[idx+3] = &floatVals[idx]
+			vals[4+idx] = &floatVals[idx]
 		}
 
 		if err := rows.Scan(vals...); err != nil {
@@ -712,10 +735,18 @@ func (p *PVDataProvider) fetchFundamentals(
 		sec := eventDate.Unix()
 		timeSet[sec] = eventDate
 
-		for idx, m := range metricOrder {
+		for idx, mm := range metricOrder {
 			if floatVals[idx] != nil {
-				ensureCol(figi, m)[sec] = *floatVals[idx]
+				ensureCol(figi, mm)[sec] = *floatVals[idx]
 			}
+		}
+
+		if wantDateKey {
+			ensureCol(figi, FundamentalsDateKey)[sec] = float64(dateKey.Unix())
+		}
+
+		if wantReportPeriod && reportPeriod.Valid {
+			ensureCol(figi, FundamentalsReportPeriod)[sec] = float64(reportPeriod.Time.Unix())
 		}
 	}
 
