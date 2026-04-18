@@ -437,6 +437,11 @@ func (r *SnapshotRecorder) recordFundamentals(tx *sql.Tx, df *DataFrame, metrics
 	)
 
 	for _, metric := range metrics {
+		// Skip metadata metrics; they map to structural columns already declared in the INSERT.
+		if metric == FundamentalsDateKey || metric == FundamentalsReportPeriod {
+			continue
+		}
+
 		colName, ok := metricColumn[metric]
 		if !ok {
 			continue
