@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Expose `date_key` and `report_period` as DataFrame metrics and add `Engine.FetchByDateKey` so strategies can request a specific reporting period (e.g. NCAVE Q1 working capital).
+**Goal:** Expose `date_key` and `report_period` as DataFrame metrics and add `Engine.FetchFundamentalsByDateKey` so strategies can request a specific reporting period (e.g. NCAVE Q1 working capital).
 
-**Architecture:** Two new fundamental metrics (`FundamentalsDateKey`, `FundamentalsReportPeriod`) encoded as `float64(t.Unix())`. Provider extends `fetchFundamentals` to select the metadata columns and populate them like any other metric. Engine adds `FetchByDateKey` via a new optional capability interface (`FundamentalsByDateKeyProvider`) implemented by `PVDataProvider` and `SnapshotProvider`. Snapshot recorder reads metadata from the DataFrame columns when present and reads the dimension from the wrapped provider via a `Dimension() string` interface.
+**Architecture:** Two new fundamental metrics (`FundamentalsDateKey`, `FundamentalsReportPeriod`) encoded as `float64(t.Unix())`. Provider extends `fetchFundamentals` to select the metadata columns and populate them like any other metric. Engine adds `FetchFundamentalsByDateKey` via a new optional capability interface (`FundamentalsByDateKeyProvider`) implemented by `PVDataProvider` and `SnapshotProvider`. Snapshot recorder reads metadata from the DataFrame columns when present and reads the dimension from the wrapped provider via a `Dimension() string` interface.
 
 **Tech Stack:** Go, PostgreSQL (pgx), SQLite (modernc.org/sqlite), Ginkgo/Gomega.
 
@@ -542,7 +542,7 @@ In `data/data_provider.go`, append at end of file:
 ```go
 // FundamentalsByDateKeyProvider is implemented by providers that can
 // return fundamentals filtered to a specific reporting period (date_key).
-// The engine type-asserts on this interface from FetchByDateKey.
+// The engine type-asserts on this interface from FetchFundamentalsByDateKey.
 type FundamentalsByDateKeyProvider interface {
 	// FetchFundamentalsByDateKey returns one row per asset for the given
 	// date_key + dimension. Only filings with event_date <= maxEventDate
@@ -738,7 +738,7 @@ git commit -m "feat: add FundamentalsByDateKeyProvider interface and PVDataProvi
 **Files:**
 - Modify: `data/snapshot_provider.go`
 
-The snapshot provider must implement the same interface so that snapshot-replayed backtests support `FetchByDateKey`.
+The snapshot provider must implement the same interface so that snapshot-replayed backtests support `FetchFundamentalsByDateKey`.
 
 - [ ] **Step 1: Append the implementation**
 
@@ -928,7 +928,7 @@ git commit -m "feat: add SnapshotProvider.FetchFundamentalsByDateKey for replay"
 
 ---
 
-### Task 7: Implement `Engine.FetchByDateKey`
+### Task 7: Implement `Engine.FetchFundamentalsByDateKey`
 
 **Files:**
 - Modify: `engine/engine.go`
@@ -972,7 +972,7 @@ func (s *fetchByDateKeyStrategy) Describe() engine.StrategyDescription {
 }
 
 func (s *fetchByDateKeyStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
-	s.fetched, s.fetchErr = eng.FetchByDateKey(ctx, s.assets, s.metrics, s.dateKey)
+	s.fetched, s.fetchErr = eng.FetchFundamentalsByDateKey(ctx, s.assets, s.metrics, s.dateKey)
 	return nil
 }
 
@@ -1012,7 +1012,7 @@ func (p *fakeByDateKeyProvider) FetchFundamentalsByDateKey(
 	return data.NewDataFrame(times, assets, metrics, data.Daily, columns)
 }
 
-var _ = Describe("Engine.FetchByDateKey", func() {
+var _ = Describe("Engine.FetchFundamentalsByDateKey", func() {
 	var assetProv *mockAssetProvider
 
 	BeforeEach(func() {
@@ -1219,23 +1219,23 @@ Helpers used: `makeDailyDF` (engine test helpers, used by `dimension_test.go`), 
 - [ ] **Step 2: Run test to verify it fails**
 
 ```bash
-ginkgo run -race --focus "Engine.FetchByDateKey" ./engine/
+ginkgo run -race --focus "Engine.FetchFundamentalsByDateKey" ./engine/
 ```
 
-Expected: build error — `eng.FetchByDateKey` undefined.
+Expected: build error — `eng.FetchFundamentalsByDateKey` undefined.
 
-- [ ] **Step 3: Implement `FetchByDateKey`**
+- [ ] **Step 3: Implement `FetchFundamentalsByDateKey`**
 
 In `engine/engine.go`, append after the `FetchAt` method (around line 351):
 
 ```go
-// FetchByDateKey returns fundamental data for a specific reporting period.
+// FetchFundamentalsByDateKey returns fundamental data for a specific reporting period.
 // dateKey identifies the normalized quarter boundary (e.g. 2024-03-31 for
 // Q1 2024). All metrics must be fundamentals; non-fundamental metrics
 // produce an error. Subject to point-in-time correctness: only filings
 // with event_date <= eng.CurrentDate() are included. Assets that have not
 // filed for dateKey as of CurrentDate get NaN values.
-func (e *Engine) FetchByDateKey(
+func (e *Engine) FetchFundamentalsByDateKey(
 	ctx context.Context,
 	assets []asset.Asset,
 	metrics []data.Metric,
@@ -1243,7 +1243,7 @@ func (e *Engine) FetchByDateKey(
 ) (*data.DataFrame, error) {
 	for _, m := range metrics {
 		if !data.IsFundamental(m) {
-			return nil, fmt.Errorf("FetchByDateKey: metric %q is not a fundamental metric", m)
+			return nil, fmt.Errorf("FetchFundamentalsByDateKey: metric %q is not a fundamental metric", m)
 		}
 	}
 
@@ -1256,7 +1256,7 @@ func (e *Engine) FetchByDateKey(
 		if dp, ok := provider.(data.FundamentalsByDateKeyProvider); ok {
 			df, err := dp.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, dimension, e.currentDate)
 			if err != nil {
-				return nil, fmt.Errorf("FetchByDateKey: %w", err)
+				return nil, fmt.Errorf("FetchFundamentalsByDateKey: %w", err)
 			}
 
 			df.SetSource(e)
@@ -1265,7 +1265,7 @@ func (e *Engine) FetchByDateKey(
 		}
 	}
 
-	return nil, fmt.Errorf("FetchByDateKey: no provider supports FundamentalsByDateKeyProvider")
+	return nil, fmt.Errorf("FetchFundamentalsByDateKey: no provider supports FundamentalsByDateKeyProvider")
 }
 ```
 
@@ -1274,7 +1274,7 @@ The engine struct's provider slice is `e.providers []data.DataProvider` (`engine
 - [ ] **Step 4: Run tests to verify they pass**
 
 ```bash
-ginkgo run -race --focus "Engine.FetchByDateKey" ./engine/
+ginkgo run -race --focus "Engine.FetchFundamentalsByDateKey" ./engine/
 ```
 
 Expected: PASS for all four `It` blocks.
@@ -1291,7 +1291,7 @@ Expected: PASS.
 
 ```bash
 git add engine/engine.go engine/fetch_by_date_key_test.go
-git commit -m "feat: add Engine.FetchByDateKey for reporting-period fundamentals queries"
+git commit -m "feat: add Engine.FetchFundamentalsByDateKey for reporting-period fundamentals queries"
 ```
 
 ---
@@ -1419,13 +1419,13 @@ Append a new section after the existing "Fundamental dimension" section:
 ### Querying a specific reporting period
 
 When a strategy needs values for a particular fiscal quarter (e.g. Q1
-working capital across all candidates), use `Engine.FetchByDateKey`:
+working capital across all candidates), use `Engine.FetchFundamentalsByDateKey`:
 
 ```go
 func (s *NCAVE) Compute(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
     q1 := mostRecentQ1(eng.CurrentDate())
 
-    df, err := eng.FetchByDateKey(ctx, s.universe, []data.Metric{
+    df, err := eng.FetchFundamentalsByDateKey(ctx, s.universe, []data.Metric{
         data.WorkingCapital,
         data.TotalLiabilities,
         data.FundamentalsDateKey,
@@ -1447,7 +1447,7 @@ func (s *NCAVE) Compute(ctx context.Context, eng *engine.Engine, port portfolio.
 }
 ```
 
-`FetchByDateKey` returns a single time-axis row at `dateKey`, one value per
+`FetchFundamentalsByDateKey` returns a single time-axis row at `dateKey`, one value per
 asset per metric. Only filings with `event_date <= eng.CurrentDate()` are
 included; assets that have not filed for `dateKey` get NaN. All metrics in
 the call must be fundamentals; non-fundamental metrics return an error.
@@ -1461,7 +1461,7 @@ in `Setup` (defaults to `ARQ`).
 Add under `[Unreleased]` -> `### Added`:
 
 ```markdown
-- Strategies can request a specific fundamentals reporting period with `Engine.FetchByDateKey`. The call returns one row per asset for the given `date_key` (e.g. Q1 boundary), filtered to the engine's configured dimension and to filings public as of `CurrentDate()`.
+- Strategies can request a specific fundamentals reporting period with `Engine.FetchFundamentalsByDateKey`. The call returns one row per asset for the given `date_key` (e.g. Q1 boundary), filtered to the engine's configured dimension and to filings public as of `CurrentDate()`.
 - Two new fundamental metrics expose per-row date metadata: `data.FundamentalsDateKey` (normalized quarter boundary) and `data.FundamentalsReportPeriod` (actual fiscal period end). Values are encoded as Unix seconds in `float64`; convert with `time.Unix(int64(v), 0)`.
 - Snapshots now persist `date_key`, `report_period`, and the configured dimension instead of writing NULL/`"ARQ"` placeholders.
 ```
@@ -1470,7 +1470,7 @@ Add under `[Unreleased]` -> `### Added`:
 
 ```bash
 git add docs/data.md docs/strategy-guide.md CHANGELOG.md
-git commit -m "docs: document FetchByDateKey and fundamentals metadata metrics"
+git commit -m "docs: document FetchFundamentalsByDateKey and fundamentals metadata metrics"
 ```
 
 ---
