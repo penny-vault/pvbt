@@ -185,7 +185,7 @@ Replace the existing scan loop body with one that captures `reportPeriod` and st
 		var (
 			figi         string
 			eventDate    time.Time
-			dateKey      time.Time
+			dateKey      sql.NullTime
 			reportPeriod sql.NullTime
 		)
 
@@ -214,8 +214,8 @@ Replace the existing scan loop body with one that captures `reportPeriod` and st
 			}
 		}
 
-		if wantDateKey {
-			ensureCol(figi, FundamentalsDateKey)[sec] = float64(dateKey.Unix())
+		if wantDateKey && dateKey.Valid {
+			ensureCol(figi, FundamentalsDateKey)[sec] = float64(dateKey.Time.Unix())
 		}
 
 		if wantReportPeriod && reportPeriod.Valid {

@@ -712,7 +712,7 @@ func (p *PVDataProvider) fetchFundamentals(
 		var (
 			figi         string
 			eventDate    time.Time
-			dateKey      time.Time
+			dateKey      sql.NullTime
 			reportPeriod sql.NullTime
 		)
 
@@ -741,8 +741,8 @@ func (p *PVDataProvider) fetchFundamentals(
 			}
 		}
 
-		if wantDateKey {
-			ensureCol(figi, FundamentalsDateKey)[sec] = float64(dateKey.Unix())
+		if wantDateKey && dateKey.Valid {
+			ensureCol(figi, FundamentalsDateKey)[sec] = float64(dateKey.Time.Unix())
 		}
 
 		if wantReportPeriod && reportPeriod.Valid {
