@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strategies can request a specific fundamentals reporting period with `Engine.FetchFundamentalsByDateKey`. The call returns one row per asset for the given `date_key` (e.g. Q1 boundary), filtered to the engine's configured dimension and to filings public as of `CurrentDate()`.
+- Two new fundamental metrics expose per-row date metadata: `data.FundamentalsDateKey` (normalized quarter boundary) and `data.FundamentalsReportPeriod` (actual fiscal period end). Values are encoded as Unix seconds in `float64`; convert with `time.Unix(int64(v), 0)`.
+- Snapshots now persist `date_key`, `report_period`, and the configured dimension instead of writing NULL/`"ARQ"` placeholders.
+
 ## [0.7.1] - 2026-04-15
 
 ### Fixed
