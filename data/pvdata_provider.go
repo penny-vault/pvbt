@@ -40,6 +40,7 @@ var _ AssetProvider = (*PVDataProvider)(nil)
 var _ RatingProvider = (*PVDataProvider)(nil)
 var _ IndexProvider = (*PVDataProvider)(nil)
 var _ interface{ Dimension() string } = (*PVDataProvider)(nil)
+var _ FundamentalsByDateKeyProvider = (*PVDataProvider)(nil)
 
 // scanPgxAsset scans a full asset row from a pgx result set. All metadata
 // columns are nullable in the view, so we scan into pointers and fall back
@@ -1188,4 +1189,148 @@ var eodLocation = mustLoadLocation("America/New_York")
 // eodTimestamp converts a database date to the market close timestamp (16:00 Eastern).
 func eodTimestamp(timestamp time.Time) time.Time {
 	return time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 16, 0, 0, 0, eodLocation)
+}
+
+// FetchFundamentalsByDateKey implements FundamentalsByDateKeyProvider.
+func (p *PVDataProvider) FetchFundamentalsByDateKey(
+	ctx context.Context,
+	assets []asset.Asset,
+	metrics []Metric,
+	dateKey time.Time,
+	dimension string,
+	maxEventDate time.Time,
+) (*DataFrame, error) {
+	figis := make([]string, len(assets))
+	for idx, aa := range assets {
+		figis[idx] = aa.CompositeFigi
+	}
+
+	var (
+		sqlCols     []string
+		metricOrder []Metric
+	)
+
+	wantDateKey := false
+	wantReportPeriod := false
+
+	for _, mm := range metrics {
+		switch mm {
+		case FundamentalsDateKey:
+			wantDateKey = true
+			continue
+		case FundamentalsReportPeriod:
+			wantReportPeriod = true
+			continue
+		}
+
+		col, ok := metricColumn[mm]
+		if !ok {
+			return nil, fmt.Errorf("pvdata: no SQL column for fundamental metric %q", mm)
+		}
+
+		sqlCols = append(sqlCols, col)
+		metricOrder = append(metricOrder, mm)
+	}
+
+	cols := []string{"composite_figi", "event_date", "date_key", "report_period"}
+	cols = append(cols, sqlCols...)
+
+	// DISTINCT ON (composite_figi) keeps the most recent event_date per
+	// asset, which matters for MR dimensions where a single (figi,
+	// date_key) tuple may appear multiple times due to restatements.
+	query := fmt.Sprintf(
+		`SELECT DISTINCT ON (composite_figi) %s
+		 FROM fundamentals
+		 WHERE composite_figi = ANY($1)
+		   AND date_key = $2::date
+		   AND dimension = $3
+		   AND event_date <= $4::date
+		 ORDER BY composite_figi, event_date DESC`,
+		strings.Join(cols, ", "),
+	)
+
+	conn, err := p.pool.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: acquire conn for FetchFundamentalsByDateKey: %w", err)
+	}
+	defer conn.Release()
+
+	rows, err := conn.Query(ctx, query, figis, dateKey, dimension, maxEventDate)
+	if err != nil {
+		return nil, fmt.Errorf("pvdata: query fundamentals by date_key: %w", err)
+	}
+	defer rows.Close()
+
+	// Build a per-figi value map: figi -> metric -> float64.
+	perFigi := make(map[string]map[Metric]float64, len(assets))
+
+	for rows.Next() {
+		var (
+			figi         string
+			eventDate    time.Time
+			rowDateKey   time.Time
+			reportPeriod sql.NullTime
+		)
+
+		vals := make([]any, 4+len(sqlCols))
+		vals[0] = &figi
+		vals[1] = &eventDate
+		vals[2] = &rowDateKey
+		vals[3] = &reportPeriod
+
+		floatVals := make([]*float64, len(sqlCols))
+		for idx := range sqlCols {
+			vals[4+idx] = &floatVals[idx]
+		}
+
+		if err := rows.Scan(vals...); err != nil {
+			return nil, fmt.Errorf("pvdata: scan fundamentals by date_key row: %w", err)
+		}
+
+		bucket, ok := perFigi[figi]
+		if !ok {
+			bucket = make(map[Metric]float64, len(metrics))
+			perFigi[figi] = bucket
+		}
+
+		for idx, mm := range metricOrder {
+			if floatVals[idx] != nil {
+				bucket[mm] = *floatVals[idx]
+			}
+		}
+
+		if wantDateKey {
+			bucket[FundamentalsDateKey] = float64(rowDateKey.Unix())
+		}
+
+		if wantReportPeriod && reportPeriod.Valid {
+			bucket[FundamentalsReportPeriod] = float64(reportPeriod.Time.Unix())
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("pvdata: iterate fundamentals by date_key rows: %w", err)
+	}
+
+	// Assemble a single-row DataFrame at dateKey.
+	times := []time.Time{dateKey}
+	columns := make([][]float64, len(assets)*len(metrics))
+
+	for aIdx, aa := range assets {
+		bucket := perFigi[aa.CompositeFigi]
+
+		for mIdx, mm := range metrics {
+			val := math.NaN()
+
+			if bucket != nil {
+				if vv, ok := bucket[mm]; ok {
+					val = vv
+				}
+			}
+
+			columns[aIdx*len(metrics)+mIdx] = []float64{val}
+		}
+	}
+
+	return NewDataFrame(times, assets, metrics, Daily, columns)
 }
