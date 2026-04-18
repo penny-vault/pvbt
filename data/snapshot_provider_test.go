@@ -610,6 +610,149 @@ var _ = Describe("SnapshotProvider", func() {
 			Expect(result.Len()).To(Equal(3), "old RFC3339 snapshots must still be readable")
 		})
 
+		It("FetchFundamentalsByDateKey returns fundamentals data for a date_key", func() {
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+
+			// Dates stored as plain YYYY-MM-DD strings (canonical snapshot format).
+			dateKeyStr := "2024-03-31"
+			reportPeriodStr := "2024-03-31"
+			eventDateStr := "2024-04-15"
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data.CreateSnapshotSchema(db)).To(Succeed())
+
+			_, err = db.Exec(`INSERT INTO assets
+				(composite_figi, ticker, name, asset_type, primary_exchange, sector, industry, sic_code, cik, listed, delisted)
+				VALUES ('BBG000BLNNH6', 'SPY', 'SPDR S&P 500 ETF Trust', 'ETF', 'NYSE', '', '', 6726, '0000884394', '1993-01-22', '')`)
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = db.Exec(`INSERT INTO fundamentals
+				(composite_figi, event_date, date_key, report_period, dimension, working_capital)
+				VALUES (?, ?, ?, ?, ?, ?)`,
+				"BBG000BLNNH6", eventDateStr, dateKeyStr, reportPeriodStr, "ARQ", 120000000.0)
+			Expect(err).NotTo(HaveOccurred())
+			db.Close()
+
+			snap, err := data.NewSnapshotProvider(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer snap.Close()
+
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+			maxEventDate := time.Date(2024, 4, 30, 0, 0, 0, 0, time.UTC)
+			metrics := []data.Metric{data.WorkingCapital, data.FundamentalsDateKey, data.FundamentalsReportPeriod}
+
+			result, err := snap.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, "ARQ", maxEventDate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+			Expect(result.Len()).To(Equal(1), "expected one time-axis row at dateKey")
+
+			// WorkingCapital value should equal the inserted value.
+			wcCol := result.Column(spy, data.WorkingCapital)
+			Expect(wcCol).To(HaveLen(1))
+			Expect(wcCol[0]).To(BeNumerically("~", 120000000.0, 1.0))
+
+			// FundamentalsDateKey should equal the Unix timestamp of the parsed date_key.
+			expectedDateKey := time.Date(2024, 3, 31, 16, 0, 0, 0, nyc)
+			dkCol := result.Column(spy, data.FundamentalsDateKey)
+			Expect(dkCol).To(HaveLen(1))
+			Expect(dkCol[0]).To(BeNumerically("~", float64(expectedDateKey.Unix()), 1.0))
+
+			// FundamentalsReportPeriod should equal the Unix timestamp of the parsed report_period.
+			expectedReportPeriod := time.Date(2024, 3, 31, 16, 0, 0, 0, nyc)
+			rpCol := result.Column(spy, data.FundamentalsReportPeriod)
+			Expect(rpCol).To(HaveLen(1))
+			Expect(rpCol[0]).To(BeNumerically("~", float64(expectedReportPeriod.Unix()), 1.0))
+		})
+
+		It("FetchFundamentalsByDateKey returns NaN when event_date is after maxEventDate", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data.CreateSnapshotSchema(db)).To(Succeed())
+
+			_, err = db.Exec(`INSERT INTO assets
+				(composite_figi, ticker, name, asset_type, primary_exchange, sector, industry, sic_code, cik, listed, delisted)
+				VALUES ('BBG000BLNNH6', 'SPY', 'SPDR S&P 500 ETF Trust', 'ETF', 'NYSE', '', '', 6726, '0000884394', '1993-01-22', '')`)
+			Expect(err).NotTo(HaveOccurred())
+
+			// event_date is in the future relative to maxEventDate.
+			_, err = db.Exec(`INSERT INTO fundamentals
+				(composite_figi, event_date, date_key, report_period, dimension, working_capital)
+				VALUES (?, ?, ?, ?, ?, ?)`,
+				"BBG000BLNNH6", "2024-05-01", "2024-03-31", "2024-03-31", "ARQ", 120000000.0)
+			Expect(err).NotTo(HaveOccurred())
+			db.Close()
+
+			snap, err := data.NewSnapshotProvider(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer snap.Close()
+
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+			// maxEventDate is before the filing's event_date — point-in-time cutoff.
+			maxEventDate := time.Date(2024, 4, 30, 0, 0, 0, 0, time.UTC)
+			metrics := []data.Metric{data.WorkingCapital}
+
+			result, err := snap.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, "ARQ", maxEventDate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+			wcCol := result.Column(spy, data.WorkingCapital)
+			Expect(wcCol).To(HaveLen(1))
+			Expect(math.IsNaN(wcCol[0])).To(BeTrue(), "expected NaN when event_date is after maxEventDate")
+		})
+
+		It("FetchFundamentalsByDateKey returns the latest filing when a restatement exists", func() {
+			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
+			assets := []asset.Asset{spy}
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(data.CreateSnapshotSchema(db)).To(Succeed())
+
+			_, err = db.Exec(`INSERT INTO assets
+				(composite_figi, ticker, name, asset_type, primary_exchange, sector, industry, sic_code, cik, listed, delisted)
+				VALUES ('BBG000BLNNH6', 'SPY', 'SPDR S&P 500 ETF Trust', 'ETF', 'NYSE', '', '', 6726, '0000884394', '1993-01-22', '')`)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Two filings for the same (figi, date_key, dimension="MRQ") — a restatement.
+			// Original filing: event_date 2024-04-15, working_capital = 100000000.
+			// Restated filing: event_date 2024-05-01, working_capital = 120000000.
+			_, err = db.Exec(`INSERT INTO fundamentals
+				(composite_figi, event_date, date_key, report_period, dimension, working_capital)
+				VALUES
+				(?, ?, ?, ?, ?, ?),
+				(?, ?, ?, ?, ?, ?)`,
+				"BBG000BLNNH6", "2024-04-15", "2024-03-31", "2024-03-31", "MRQ", 100000000.0,
+				"BBG000BLNNH6", "2024-05-01", "2024-03-31", "2024-03-31", "MRQ", 120000000.0)
+			Expect(err).NotTo(HaveOccurred())
+			db.Close()
+
+			snap, err := data.NewSnapshotProvider(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer snap.Close()
+
+			dateKey := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+			maxEventDate := time.Date(2024, 6, 30, 0, 0, 0, 0, time.UTC)
+			metrics := []data.Metric{data.WorkingCapital}
+
+			result, err := snap.FetchFundamentalsByDateKey(ctx, assets, metrics, dateKey, "MRQ", maxEventDate)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).NotTo(BeNil())
+
+			wcCol := result.Column(spy, data.WorkingCapital)
+			Expect(wcCol).To(HaveLen(1))
+			// Must return the restated (latest) value, not the original.
+			Expect(wcCol[0]).To(BeNumerically("~", 120000000.0, 1.0),
+				"expected latest restatement value (120000000), got original (100000000)?")
+		})
+
 		It("record then replay produces identical data", func() {
 			spy := asset.Asset{CompositeFigi: "BBG000BLNNH6", Ticker: "SPY"}
 			tlt := asset.Asset{CompositeFigi: "BBG000BHTK15", Ticker: "TLT"}

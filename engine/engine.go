@@ -357,6 +357,10 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 // correctness: only filings with event_date <= eng.CurrentDate() are
 // included. Assets that have not filed for dateKey as of CurrentDate
 // get NaN values.
+//
+// This call bypasses the engine's column cache and issues a fresh provider
+// query each time. Strategies that need the result across multiple Compute
+// invocations should cache it themselves.
 func (e *Engine) FetchFundamentalsByDateKey(
 	ctx context.Context,
 	assets []asset.Asset,

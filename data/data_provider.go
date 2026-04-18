@@ -83,7 +83,7 @@ type HolidayProvider interface {
 
 // FundamentalsByDateKeyProvider is implemented by providers that can
 // return fundamentals filtered to a specific reporting period (date_key).
-// The engine type-asserts on this interface from FetchByDateKey.
+// The engine type-asserts on this interface from FetchFundamentalsByDateKey.
 type FundamentalsByDateKeyProvider interface {
 	// FetchFundamentalsByDateKey returns one row per asset for the given
 	// date_key + dimension. Only filings with event_date <= maxEventDate
