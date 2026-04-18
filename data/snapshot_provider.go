@@ -19,11 +19,12 @@ import (
 
 // Compile-time interface checks.
 var (
-	_ BatchProvider   = (*SnapshotProvider)(nil)
-	_ AssetProvider   = (*SnapshotProvider)(nil)
-	_ IndexProvider   = (*SnapshotProvider)(nil)
-	_ RatingProvider  = (*SnapshotProvider)(nil)
-	_ HolidayProvider = (*SnapshotProvider)(nil)
+	_ BatchProvider                 = (*SnapshotProvider)(nil)
+	_ AssetProvider                 = (*SnapshotProvider)(nil)
+	_ IndexProvider                 = (*SnapshotProvider)(nil)
+	_ RatingProvider                = (*SnapshotProvider)(nil)
+	_ HolidayProvider               = (*SnapshotProvider)(nil)
+	_ FundamentalsByDateKeyProvider = (*SnapshotProvider)(nil)
 )
 
 // SnapshotProvider replays data from a snapshot SQLite database.
@@ -711,4 +712,169 @@ func (p *SnapshotProvider) RatedAssets(ctx context.Context, analyst string, filt
 	}
 
 	return assets, rows.Err()
+}
+
+// FetchFundamentalsByDateKey implements FundamentalsByDateKeyProvider for
+// snapshot replay. The query mirrors the PVDataProvider implementation but
+// uses SQLite syntax (no DISTINCT ON; row_number window function instead).
+func (p *SnapshotProvider) FetchFundamentalsByDateKey(
+	ctx context.Context,
+	assets []asset.Asset,
+	metrics []Metric,
+	dateKey time.Time,
+	dimension string,
+	maxEventDate time.Time,
+) (*DataFrame, error) {
+	figis := make([]string, len(assets))
+	for idx, aa := range assets {
+		figis[idx] = aa.CompositeFigi
+	}
+
+	var (
+		sqlCols     []string
+		metricOrder []Metric
+	)
+
+	wantDateKey := false
+	wantReportPeriod := false
+
+	for _, metric := range metrics {
+		switch metric {
+		case FundamentalsDateKey:
+			wantDateKey = true
+			continue
+		case FundamentalsReportPeriod:
+			wantReportPeriod = true
+			continue
+		}
+
+		col, ok := metricColumn[metric]
+		if !ok {
+			return nil, fmt.Errorf("snapshot: no SQL column for fundamental metric %q", metric)
+		}
+
+		sqlCols = append(sqlCols, col)
+		metricOrder = append(metricOrder, metric)
+	}
+
+	cols := []string{"composite_figi", "event_date", "date_key", "report_period"}
+	cols = append(cols, sqlCols...)
+
+	placeholders := make([]string, len(figis))
+	for idx := range figis {
+		placeholders[idx] = "?"
+	}
+
+	dateKeyStr := dateKey.UTC().Format("2006-01-02")
+	maxEventStr := maxEventDate.UTC().Format("2006-01-02")
+
+	// SQLite ranks by event_date DESC and picks rank 1 per figi.
+	query := fmt.Sprintf(
+		`SELECT %s FROM (
+		    SELECT %s,
+		           row_number() OVER (PARTITION BY composite_figi ORDER BY event_date DESC) AS rn
+		      FROM fundamentals
+		     WHERE composite_figi IN (%s)
+		       AND date_key = ?
+		       AND dimension = ?
+		       AND event_date <= ?
+		 ) WHERE rn = 1`,
+		strings.Join(cols, ", "),
+		strings.Join(cols, ", "),
+		strings.Join(placeholders, ", "),
+	)
+
+	args := make([]any, 0, len(figis)+3)
+	for _, f := range figis {
+		args = append(args, f)
+	}
+
+	args = append(args, dateKeyStr, dimension, maxEventStr)
+
+	rows, err := p.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("snapshot: query fundamentals by date_key: %w", err)
+	}
+	defer rows.Close()
+
+	perFigi := make(map[string]map[Metric]float64, len(assets))
+
+	for rows.Next() {
+		var (
+			figi            string
+			eventDateStr    string
+			rowDateKeyStr   sql.NullString
+			reportPeriodStr sql.NullString
+		)
+
+		vals := make([]any, 4+len(sqlCols))
+		vals[0] = &figi
+		vals[1] = &eventDateStr
+		vals[2] = &rowDateKeyStr
+		vals[3] = &reportPeriodStr
+
+		floatVals := make([]sql.NullFloat64, len(sqlCols))
+		for idx := range sqlCols {
+			vals[4+idx] = &floatVals[idx]
+		}
+
+		if err := rows.Scan(vals...); err != nil {
+			return nil, fmt.Errorf("snapshot: scan fundamentals by date_key row: %w", err)
+		}
+
+		bucket, ok := perFigi[figi]
+		if !ok {
+			bucket = make(map[Metric]float64, len(metrics))
+			perFigi[figi] = bucket
+		}
+
+		for idx, m := range metricOrder {
+			if floatVals[idx].Valid {
+				bucket[m] = floatVals[idx].Float64
+			}
+		}
+
+		if wantDateKey && rowDateKeyStr.Valid {
+			parsed, parseErr := parseSnapshotDate(rowDateKeyStr.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("snapshot: parse date_key %q: %w", rowDateKeyStr.String, parseErr)
+			}
+
+			bucket[FundamentalsDateKey] = float64(parsed.Unix())
+		}
+
+		if wantReportPeriod && reportPeriodStr.Valid {
+			parsed, parseErr := parseSnapshotDate(reportPeriodStr.String)
+			if parseErr != nil {
+				return nil, fmt.Errorf("snapshot: parse report_period %q: %w", reportPeriodStr.String, parseErr)
+			}
+
+			bucket[FundamentalsReportPeriod] = float64(parsed.Unix())
+		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("snapshot: iterate fundamentals by date_key rows: %w", err)
+	}
+
+	times := []time.Time{dateKey}
+	columns := make([][]float64, len(assets)*len(metrics))
+
+	for aIdx, aa := range assets {
+		bucket := perFigi[aa.CompositeFigi]
+
+		for mIdx, m := range metrics {
+			val := math.NaN()
+
+			if bucket != nil {
+				if v, ok := bucket[m]; ok {
+					val = v
+				}
+			}
+
+			columns[aIdx*len(metrics)+mIdx] = []float64{val}
+		}
+	}
+
+	return NewDataFrame(times, assets, metrics, Daily, columns)
 }
