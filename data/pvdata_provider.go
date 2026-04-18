@@ -1007,6 +1007,8 @@ var metricView = map[Metric]string{
 	TangibleAssetValue:                  "fundamentals",
 	WorkingCapital:                      "fundamentals",
 	MarketCapFundamental:                "fundamentals",
+	FundamentalsDateKey:                 "fundamentals",
+	FundamentalsReportPeriod:            "fundamentals",
 }
 
 // IsFundamental reports whether the given metric is sourced from the
@@ -1109,6 +1111,8 @@ var metricColumn = map[Metric]string{
 	TangibleAssetValue:                  "tangible_asset_value",
 	WorkingCapital:                      "working_capital",
 	MarketCapFundamental:                "market_capitalization",
+	FundamentalsDateKey:                 "date_key",
+	FundamentalsReportPeriod:            "report_period",
 }
 
 // metricsColumn maps metrics-view Metrics to their SQL column names and

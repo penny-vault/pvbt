@@ -105,7 +105,16 @@ func CreateSnapshotSchema(db *sql.DB) error {
 // fundamentals table from the metricColumn map. Columns are sorted
 // alphabetically for deterministic DDL output.
 func buildFundamentalColumns() string {
-	seen := make(map[string]bool)
+	// Pre-seed with columns that are declared explicitly in the DDL so that
+	// metricColumn entries that map to those names (e.g. FundamentalsDateKey
+	// -> "date_key") are not emitted a second time.
+	seen := map[string]bool{
+		"composite_figi": true,
+		"event_date":     true,
+		"date_key":       true,
+		"report_period":  true,
+		"dimension":      true,
+	}
 
 	var cols []string
 

@@ -284,6 +284,21 @@ const (
 	MarketCapFundamental Metric = "MarketCapFundamental"
 )
 
+// Fundamentals metadata metrics (fundamentals table date columns).
+const (
+	// FundamentalsDateKey is the normalized calendar quarter boundary for
+	// the most recent fundamental filing as of the queried timestamp.
+	// Values are encoded as float64(t.Unix()); convert with
+	// time.Unix(int64(val), 0). NaN means no filing has been observed.
+	FundamentalsDateKey Metric = "FundamentalsDateKey"
+
+	// FundamentalsReportPeriod is the actual fiscal-period end date for
+	// the most recent fundamental filing as of the queried timestamp.
+	// Values are encoded as float64(t.Unix()); convert with
+	// time.Unix(int64(val), 0). NaN means no filing has been observed.
+	FundamentalsReportPeriod Metric = "FundamentalsReportPeriod"
+)
+
 // Computed aggregate metrics.
 const (
 	// Count is the metric used by CountWhere to store per-timestep counts.
