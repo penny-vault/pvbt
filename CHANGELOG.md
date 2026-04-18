@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-04-18
+
 ### Fixed
 
 - Snapshot replay no longer returns an empty screen when a `FetchFundamentalsByDateKey` call targets a reporting period that falls on a trading day (e.g. `2024-12-31`). The recorder's upsert now propagates `date_key` and `report_period` into existing rows instead of leaving them NULL on conflict.
