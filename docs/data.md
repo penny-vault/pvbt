@@ -72,6 +72,24 @@ Fundamental queries filter by dimension (default `"ARQ"` -- As Reported
 Quarterly). See `SetFundamentalDimension` in the strategy guide for how to
 change this.
 
+#### Reading the date metadata
+
+`event_date` is exposed as the DataFrame's time axis for fundamental fetches.
+`date_key` and `report_period` are exposed as two metrics:
+
+- `data.FundamentalsDateKey` -- normalized calendar quarter boundary.
+- `data.FundamentalsReportPeriod` -- actual fiscal period end as reported.
+
+Both are encoded as `float64(t.Unix())`. Convert with the standard library:
+
+```go
+dk := time.Unix(int64(df.Value(spy, data.FundamentalsDateKey, t)), 0)
+```
+
+NaN means no filing has been observed for that asset as of `t`. The engine
+forward-fills these metrics the same way as Revenue, WorkingCapital, etc., so
+the metadata travels with whatever value the strategy reads.
+
 ### Economic indicators
 
 Economic indicators like unemployment and CPI are not tied to a specific asset. They use the sentinel `asset.EconomicIndicator` in requests and DataFrames. From the DataFrame's perspective they look like any other asset -- the data layout stays uniform.

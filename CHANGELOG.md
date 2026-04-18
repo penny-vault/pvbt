@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-04-18
+
+### Added
+
+- Strategies can query a specific fundamentals reporting period with `Engine.FetchFundamentalsByDateKey`, and can read the period behind any fundamental value via the new `FundamentalsDateKey` and `FundamentalsReportPeriod` metrics. Values are encoded as Unix seconds; round-trip with `time.Unix(int64(v), 0)`.
+- Snapshots capture the reporting-period metadata and configured dimension instead of NULL/`"ARQ"` placeholders, so replays match live queries.
+
 ## [0.7.1] - 2026-04-15
 
 ### Fixed

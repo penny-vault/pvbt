@@ -42,4 +42,9 @@ var _ = Describe("IsFundamental", func() {
 	It("returns false for unknown metrics", func() {
 		Expect(data.IsFundamental(data.Metric("nonexistent"))).To(BeFalse())
 	})
+
+	It("classifies fundamentals metadata metrics as fundamentals", func() {
+		Expect(data.IsFundamental(data.FundamentalsDateKey)).To(BeTrue())
+		Expect(data.IsFundamental(data.FundamentalsReportPeriod)).To(BeTrue())
+	})
 })
