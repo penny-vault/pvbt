@@ -30,11 +30,13 @@ import (
 )
 
 type fetchByDateKeyStrategy struct {
-	assets   []asset.Asset
-	metrics  []data.Metric
-	dateKey  time.Time
-	fetched  *data.DataFrame
-	fetchErr error
+	assets          []asset.Asset
+	metrics         []data.Metric
+	dateKey         time.Time
+	opts            []engine.FundamentalsByDateKeyOption
+	fetched         *data.DataFrame
+	fetchErr        error
+	capturedCurrent time.Time
 }
 
 func (s *fetchByDateKeyStrategy) Name() string { return "fetchByDateKeyStrategy" }
@@ -46,14 +48,16 @@ func (s *fetchByDateKeyStrategy) Describe() engine.StrategyDescription {
 }
 
 func (s *fetchByDateKeyStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
-	s.fetched, s.fetchErr = eng.FetchFundamentalsByDateKey(ctx, s.assets, s.metrics, s.dateKey)
+	s.capturedCurrent = eng.CurrentDate()
+	s.fetched, s.fetchErr = eng.FetchFundamentalsByDateKey(ctx, s.assets, s.metrics, s.dateKey, s.opts...)
 	return nil
 }
 
 // fakeByDateKeyProvider is a small in-memory FundamentalsByDateKeyProvider.
 type fakeByDateKeyProvider struct {
 	*data.TestProvider
-	rows map[string]map[time.Time]map[data.Metric]float64 // figi -> dateKey -> metric -> value
+	rows         map[string]map[time.Time]map[data.Metric]float64 // figi -> dateKey -> metric -> value
+	lastMaxEvent time.Time
 }
 
 func (p *fakeByDateKeyProvider) FetchFundamentalsByDateKey(
@@ -62,8 +66,9 @@ func (p *fakeByDateKeyProvider) FetchFundamentalsByDateKey(
 	metrics []data.Metric,
 	dateKey time.Time,
 	_ string,
-	_ time.Time,
+	maxEventDate time.Time,
 ) (*data.DataFrame, error) {
+	p.lastMaxEvent = maxEventDate
 	times := []time.Time{dateKey}
 	columns := make([][]float64, len(assets)*len(metrics))
 
@@ -239,6 +244,169 @@ var _ = Describe("Engine.FetchFundamentalsByDateKey", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(strategy.fetchErr).To(HaveOccurred())
 		Expect(strategy.fetchErr.Error()).To(ContainSubstring("not a fundamental metric"))
+	})
+
+	It("forwards e.CurrentDate() as the event-date cap when no option is set", func() {
+		spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+		testAssets := []asset.Asset{spy}
+		assetProv.assets = testAssets
+
+		q1 := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+
+		closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		closeDF := makeDailyDF(closeStart, 180, testAssets, []data.Metric{data.MetricClose})
+		closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+		fundProvider := &fakeByDateKeyProvider{
+			TestProvider: data.NewTestProvider(
+				[]data.Metric{data.WorkingCapital},
+				mustEmptyFundDF(testAssets),
+			),
+			rows: map[string]map[time.Time]map[data.Metric]float64{
+				spy.CompositeFigi: {q1: {data.WorkingCapital: 120_000_000}},
+			},
+		}
+
+		strategy := &fetchByDateKeyStrategy{
+			assets:  testAssets,
+			metrics: []data.Metric{data.WorkingCapital},
+			dateKey: q1,
+		}
+
+		eng := engine.New(strategy,
+			engine.WithDataProvider(closeProvider, fundProvider),
+			engine.WithAssetProvider(assetProv),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		simStart := time.Date(2024, 6, 17, 0, 0, 0, 0, time.UTC)
+		simEnd := time.Date(2024, 6, 17, 23, 0, 0, 0, time.UTC)
+		_, err := eng.Backtest(context.Background(), simStart, simEnd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.fetchErr).NotTo(HaveOccurred())
+		Expect(fundProvider.lastMaxEvent).To(Equal(strategy.capturedCurrent))
+	})
+
+	It("forwards the WithAsOfDate value as the event-date cap", func() {
+		spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+		testAssets := []asset.Asset{spy}
+		assetProv.assets = testAssets
+
+		q4 := time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC)
+
+		closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		closeDF := makeDailyDF(closeStart, 180, testAssets, []data.Metric{data.MetricClose})
+		closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+		fundProvider := &fakeByDateKeyProvider{
+			TestProvider: data.NewTestProvider(
+				[]data.Metric{data.WorkingCapital},
+				mustEmptyFundDF(testAssets),
+			),
+			rows: map[string]map[time.Time]map[data.Metric]float64{
+				spy.CompositeFigi: {q4: {data.WorkingCapital: 50_000_000}},
+			},
+		}
+
+		formationDate := time.Date(2024, 3, 31, 0, 0, 0, 0, time.UTC)
+		strategy := &fetchByDateKeyStrategy{
+			assets:  testAssets,
+			metrics: []data.Metric{data.WorkingCapital},
+			dateKey: q4,
+			opts:    []engine.FundamentalsByDateKeyOption{engine.WithAsOfDate(formationDate)},
+		}
+
+		eng := engine.New(strategy,
+			engine.WithDataProvider(closeProvider, fundProvider),
+			engine.WithAssetProvider(assetProv),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		simStart := time.Date(2024, 6, 17, 0, 0, 0, 0, time.UTC)
+		simEnd := time.Date(2024, 6, 17, 23, 0, 0, 0, time.UTC)
+		_, err := eng.Backtest(context.Background(), simStart, simEnd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.fetchErr).NotTo(HaveOccurred())
+		Expect(fundProvider.lastMaxEvent).To(Equal(formationDate))
+		Expect(strategy.capturedCurrent.After(formationDate)).To(BeTrue(),
+			"test precondition: currentDate should be later than formationDate")
+	})
+
+	It("rejects WithAsOfDate later than CurrentDate() to prevent look-ahead", func() {
+		spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+		testAssets := []asset.Asset{spy}
+		assetProv.assets = testAssets
+
+		closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		closeDF := makeDailyDF(closeStart, 180, testAssets, []data.Metric{data.MetricClose})
+		closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+		fundProvider := &fakeByDateKeyProvider{
+			TestProvider: data.NewTestProvider(
+				[]data.Metric{data.WorkingCapital},
+				mustEmptyFundDF(testAssets),
+			),
+			rows: map[string]map[time.Time]map[data.Metric]float64{},
+		}
+
+		future := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+		strategy := &fetchByDateKeyStrategy{
+			assets:  testAssets,
+			metrics: []data.Metric{data.WorkingCapital},
+			dateKey: time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC),
+			opts:    []engine.FundamentalsByDateKeyOption{engine.WithAsOfDate(future)},
+		}
+
+		eng := engine.New(strategy,
+			engine.WithDataProvider(closeProvider, fundProvider),
+			engine.WithAssetProvider(assetProv),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		simStart := time.Date(2024, 6, 17, 0, 0, 0, 0, time.UTC)
+		simEnd := time.Date(2024, 6, 17, 23, 0, 0, 0, time.UTC)
+		_, err := eng.Backtest(context.Background(), simStart, simEnd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.fetchErr).To(HaveOccurred())
+		Expect(strategy.fetchErr.Error()).To(ContainSubstring("as-of date"))
+	})
+
+	It("rejects WithAsOfDate with a zero time", func() {
+		spy := asset.Asset{CompositeFigi: "FIGI-SPY", Ticker: "SPY"}
+		testAssets := []asset.Asset{spy}
+		assetProv.assets = testAssets
+
+		closeStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		closeDF := makeDailyDF(closeStart, 180, testAssets, []data.Metric{data.MetricClose})
+		closeProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, closeDF)
+
+		fundProvider := &fakeByDateKeyProvider{
+			TestProvider: data.NewTestProvider(
+				[]data.Metric{data.WorkingCapital},
+				mustEmptyFundDF(testAssets),
+			),
+			rows: map[string]map[time.Time]map[data.Metric]float64{},
+		}
+
+		strategy := &fetchByDateKeyStrategy{
+			assets:  testAssets,
+			metrics: []data.Metric{data.WorkingCapital},
+			dateKey: time.Date(2023, 12, 31, 0, 0, 0, 0, time.UTC),
+			opts:    []engine.FundamentalsByDateKeyOption{engine.WithAsOfDate(time.Time{})},
+		}
+
+		eng := engine.New(strategy,
+			engine.WithDataProvider(closeProvider, fundProvider),
+			engine.WithAssetProvider(assetProv),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		simStart := time.Date(2024, 6, 17, 0, 0, 0, 0, time.UTC)
+		simEnd := time.Date(2024, 6, 17, 23, 0, 0, 0, time.UTC)
+		_, err := eng.Backtest(context.Background(), simStart, simEnd)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(strategy.fetchErr).To(HaveOccurred())
+		Expect(strategy.fetchErr.Error()).To(ContainSubstring("as-of date"))
 	})
 
 	It("errors when no provider supports FundamentalsByDateKey", func() {

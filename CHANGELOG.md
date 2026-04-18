@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strategies can cap which filings are considered available to `Engine.FetchFundamentalsByDateKey` by passing `engine.WithAsOfDate`. This lets a screen use an earlier "formation date" (e.g. March 31 fundamentals) even when the strategy rebalances later in the year.
+
 ## [0.7.2] - 2026-04-18
 
 ### Added

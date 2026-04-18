@@ -327,6 +327,25 @@ the call must be fundamentals; non-fundamental metrics return an error.
 The dimension used is whatever the strategy set with `SetFundamentalDimension`
 in `Setup` (defaults to `ARQ`).
 
+#### Overriding the as-of date
+
+Some screens deliberately ignore filings that arrive between an earlier
+"formation date" and the rebalance date. The classic Graham NCAV
+formulation, for example, rebalances in mid-year but screens on filings
+available by March 31, not on everything available at the June rebalance.
+Pass `engine.WithAsOfDate` to cap which filings are considered available:
+
+```go
+formation := time.Date(eng.CurrentDate().Year(), time.March, 31, 0, 0, 0, 0, time.UTC)
+
+df, err := eng.FetchFundamentalsByDateKey(ctx, s.universe, metrics, q4PriorYear,
+    engine.WithAsOfDate(formation))
+```
+
+The as-of date must be non-zero and not later than `eng.CurrentDate()`;
+otherwise the call returns an error. When the option is not set,
+`eng.CurrentDate()` is used as the cap.
+
 ### Asset lookup
 
 `eng.Asset(ticker)` resolves a ticker to an `asset.Asset` using the registered `AssetProvider`. It panics if the ticker is not found, which is appropriate in `Setup` since a missing benchmark or risk-free asset is a fatal configuration error.
