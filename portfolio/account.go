@@ -1856,6 +1856,7 @@ func (a *Account) Annotate(timestamp time.Time, key, value string) {
 	for idx := range a.annotations {
 		if a.annotations[idx].Timestamp.Equal(timestamp) && a.annotations[idx].Key == key {
 			a.annotations[idx].Value = value
+			a.annotations[idx].BatchID = a.currentBatchID
 			return
 		}
 	}
@@ -1864,6 +1865,7 @@ func (a *Account) Annotate(timestamp time.Time, key, value string) {
 		Timestamp: timestamp,
 		Key:       key,
 		Value:     value,
+		BatchID:   a.currentBatchID,
 	})
 }
 

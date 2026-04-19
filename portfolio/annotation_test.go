@@ -46,4 +46,15 @@ var _ = Describe("Annotations", func() {
 		Expect(annotations[1].Key).To(Equal("bond_fraction"))
 		Expect(annotations[1].Value).To(Equal("0.3"))
 	})
+
+	It("stamps BatchID from the account's current batch context", func() {
+		acct := portfolio.New(portfolio.WithCash(1000, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)))
+		portfolio.SetAccountCurrentBatchID(acct, 7)
+
+		acct.Annotate(time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC), "score", "0.42")
+
+		anns := acct.Annotations()
+		Expect(anns).To(HaveLen(1))
+		Expect(anns[0].BatchID).To(Equal(7))
+	})
 })
