@@ -28,7 +28,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "3"
+const schemaVersion = "4"
 
 const dateFormat = "2006-01-02"
 
@@ -44,7 +44,15 @@ CREATE TABLE perf_data (
     value     REAL NOT NULL
 );
 
+CREATE TABLE batches (
+    batch_id  INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX idx_batches_timestamp ON batches(timestamp);
+
 CREATE TABLE transactions (
+    batch_id      INTEGER NOT NULL DEFAULT 0,
     date          TEXT NOT NULL,
     type          TEXT NOT NULL,
     ticker        TEXT,
@@ -83,14 +91,17 @@ CREATE TABLE metrics (
 CREATE INDEX idx_metrics_date ON metrics(date);
 CREATE INDEX idx_metrics_name ON metrics(name);
 CREATE INDEX idx_transactions_date ON transactions(date);
+CREATE INDEX idx_transactions_batch ON transactions(batch_id);
 
 CREATE TABLE annotations (
+    batch_id  INTEGER NOT NULL DEFAULT 0,
     timestamp INTEGER NOT NULL,
     key       TEXT NOT NULL,
     value     TEXT NOT NULL
 );
 
 CREATE INDEX idx_annotations_timestamp ON annotations(timestamp);
+CREATE INDEX idx_annotations_batch ON annotations(batch_id);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
@@ -457,7 +468,7 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "3".
+// The database must have been created by ToSQLite with schema_version "4".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
