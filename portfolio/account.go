@@ -2023,7 +2023,10 @@ type deferredExitInfo struct {
 	fillPrice float64
 	asset     asset.Asset
 	qty       float64
-	batchID   int // inherited from the bracket entry order.
+	// batchID is the BatchID of the originating entry order. Exit fills carry
+	// this id rather than the batch active at fill time (which is typically
+	// zero — fills arrive outside ExecuteBatch).
+	batchID int
 }
 
 // drainFillsFromChannel reads all available fills from the broker's
