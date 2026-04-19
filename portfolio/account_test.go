@@ -2055,4 +2055,32 @@ var _ = Describe("batch history", func() {
 		}
 		Expect(tradeTxn.BatchID).To(Equal(1))
 	})
+
+	It("preserves batches and currentBatchID on Clone", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		b1 := acct.NewBatch(ts)
+		Expect(b1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		clone := acct.Clone().(*portfolio.Account)
+
+		// The clone inherits the batch history, so its next ExecuteBatch assigns
+		// BatchID 2 rather than colliding with the original's BatchID 1.
+		b2 := clone.NewBatch(ts.Add(24 * time.Hour))
+		Expect(clone.ExecuteBatch(ctx, b2)).To(Succeed())
+
+		batches := portfolio.GetAccountBatches(clone)
+		Expect(batches).To(HaveLen(2))
+		Expect(batches[0].BatchID).To(Equal(1))
+		Expect(batches[1].BatchID).To(Equal(2))
+	})
 })

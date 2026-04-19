@@ -46,6 +46,7 @@ type PortfolioSnapshot interface {
 	Excursions() map[asset.Asset]ExcursionRecord
 	// ShortLots iterates over all open short tax lots grouped by asset.
 	ShortLots(fn func(asset.Asset, []TaxLot))
+	Batches() []batchRecord
 }
 
 // WithPortfolioSnapshot returns an Option that restores an Account from
@@ -58,6 +59,8 @@ func WithPortfolioSnapshot(snap PortfolioSnapshot) Option {
 		}
 
 		acct.transactions = append(acct.transactions, snap.Transactions()...)
+
+		acct.batches = append(acct.batches, snap.Batches()...)
 		if snap.PerfData() != nil {
 			acct.perfData = snap.PerfData().Copy()
 		}

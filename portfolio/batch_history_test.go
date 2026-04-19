@@ -165,4 +165,82 @@ var _ = Describe("batch history round-trip", func() {
 		checkQty(1, 10)
 		checkQty(2, 6)
 	})
+
+	It("resumes batch numbering across WithPortfolioSnapshot", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		original := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		original.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		b1 := original.NewBatch(ts)
+		Expect(b1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(original.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		mb2 := newMockBroker()
+		mb2.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+		resumed := portfolio.New(
+			portfolio.WithPortfolioSnapshot(original),
+			portfolio.WithBroker(mb2),
+		)
+		resumed.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		b2 := resumed.NewBatch(ts.Add(24 * time.Hour))
+		Expect(resumed.ExecuteBatch(ctx, b2)).To(Succeed())
+
+		batches := portfolio.GetAccountBatches(resumed)
+		Expect(batches).To(HaveLen(2))
+		Expect(batches[0].BatchID).To(Equal(1))
+		Expect(batches[1].BatchID).To(Equal(2))
+	})
+
+	It("returns transactions in chronological order after SQLite round-trip with interleaved non-batch transactions", func() {
+		ctx := context.Background()
+		ts0 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+		ts1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		ts2 := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+		ts3 := time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts1}
+
+		// WithCash at ts0 writes a DepositTransaction with batch_id=0.
+		acct := portfolio.New(portfolio.WithCash(100_000, ts0), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts1, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		// Batch 1 buy at ts1.
+		b1 := acct.NewBatch(ts1)
+		Expect(b1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		// Manual split at ts2 (batch_id=0, interleaves between batch fills by date).
+		Expect(acct.ApplySplit(spy, ts2, 2.0)).To(Succeed())
+
+		// Batch 2 sell at ts3.
+		mb.defaultFill = &broker.Fill{Price: 50.0, FilledAt: ts3}
+		b2 := acct.NewBatch(ts3)
+		Expect(b2.Order(ctx, spy, portfolio.Sell, 4)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, b2)).To(Succeed())
+
+		tmp := filepath.Join(GinkgoT().TempDir(), "out.db")
+		Expect(acct.ToSQLite(tmp)).To(Succeed())
+		defer os.Remove(tmp)
+
+		restored, err := portfolio.FromSQLite(tmp)
+		Expect(err).NotTo(HaveOccurred())
+
+		var lastDate time.Time
+		for _, txn := range restored.Transactions() {
+			if !lastDate.IsZero() {
+				Expect(txn.Date.Before(lastDate)).To(BeFalse(),
+					"transactions should be in chronological order; got %v after %v", txn.Date, lastDate)
+			}
+			lastDate = txn.Date
+		}
+	})
 })

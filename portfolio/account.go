@@ -457,6 +457,11 @@ func (a *Account) Transactions() []Transaction {
 	return a.transactions
 }
 
+// Batches returns the recorded batch history for this account.
+func (a *Account) Batches() []batchRecord {
+	return a.batches
+}
+
 func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery {
 	return PerformanceMetricQuery{account: a, metric: m}
 }
@@ -2348,6 +2353,11 @@ func (acct *Account) Clone() PortfolioManager {
 		recentBuys[ast] = buysCopy
 	}
 
+	batches := make([]batchRecord, len(acct.batches))
+	copy(batches, acct.batches)
+
+	currentBatchID := acct.currentBatchID
+
 	washSales := make([]WashSaleRecord, len(acct.washSales))
 	copy(washSales, acct.washSales)
 
@@ -2396,6 +2406,8 @@ func (acct *Account) Clone() PortfolioManager {
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
 		seenTransactions:  seenTxns,
+		batches:           batches,
+		currentBatchID:    currentBatchID,
 	}
 
 	if acct.perfData != nil {

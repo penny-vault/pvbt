@@ -477,7 +477,7 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 }
 
 func (a *Account) readAnnotations(db *sql.DB) error {
-	rows, err := db.Query("SELECT batch_id, timestamp, key, value FROM annotations ORDER BY batch_id, timestamp, key")
+	rows, err := db.Query("SELECT batch_id, timestamp, key, value FROM annotations ORDER BY timestamp, key")
 	if err != nil {
 		return fmt.Errorf("query annotations: %w", err)
 	}
@@ -715,7 +715,7 @@ func (a *Account) readPerfData(db *sql.DB) error {
 }
 
 func (a *Account) readTransactions(db *sql.DB) error {
-	rows, err := db.Query("SELECT batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY batch_id, date")
+	rows, err := db.Query("SELECT batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY date, batch_id")
 	if err != nil {
 		return fmt.Errorf("query transactions: %w", err)
 	}
