@@ -48,4 +48,36 @@ var _ = Describe("batch history round-trip", func() {
 		Expect(batches[1].BatchID).To(Equal(2))
 		Expect(batches[1].Timestamp.UTC()).To(Equal(ts2))
 	})
+
+	It("persists and restores transaction BatchID", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		b1 := acct.NewBatch(ts)
+		Expect(b1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		tmp := filepath.Join(GinkgoT().TempDir(), "out.db")
+		Expect(acct.ToSQLite(tmp)).To(Succeed())
+		defer os.Remove(tmp)
+
+		restored, err := portfolio.FromSQLite(tmp)
+		Expect(err).NotTo(HaveOccurred())
+
+		var seenBuy bool
+		for _, txn := range restored.Transactions() {
+			if txn.Type == asset.BuyTransaction {
+				Expect(txn.BatchID).To(Equal(1))
+				seenBuy = true
+			}
+		}
+		Expect(seenBuy).To(BeTrue())
+	})
 })

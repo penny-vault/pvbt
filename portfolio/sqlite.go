@@ -316,7 +316,7 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO transactions (date, type, ticker, figi, quantity, price, amount, qualified, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO transactions (batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare transactions: %w", err)
 	}
@@ -331,7 +331,14 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 			qualified = 1
 		}
 
-		if _, err := stmt.Exec(dateStr, typStr, txn.Asset.Ticker, txn.Asset.CompositeFigi, txn.Qty, txn.Price, txn.Amount, qualified, sql.NullString{String: txn.Justification, Valid: txn.Justification != ""}); err != nil {
+		if _, err := stmt.Exec(
+			txn.BatchID,
+			dateStr, typStr,
+			txn.Asset.Ticker, txn.Asset.CompositeFigi,
+			txn.Qty, txn.Price, txn.Amount,
+			qualified,
+			sql.NullString{String: txn.Justification, Valid: txn.Justification != ""},
+		); err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
 		}
 	}
@@ -707,7 +714,7 @@ func (a *Account) readPerfData(db *sql.DB) error {
 }
 
 func (a *Account) readTransactions(db *sql.DB) error {
-	rows, err := db.Query("SELECT date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY date")
+	rows, err := db.Query("SELECT batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY batch_id, date")
 	if err != nil {
 		return fmt.Errorf("query transactions: %w", err)
 	}
@@ -715,6 +722,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 
 	for rows.Next() {
 		var (
+			batchID            int
 			dateStr, typStr    string
 			ticker, figi       sql.NullString
 			qty, price, amount sql.NullFloat64
@@ -722,7 +730,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 			justification      sql.NullString
 		)
 
-		if err := rows.Scan(&dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified, &justification); err != nil {
+		if err := rows.Scan(&batchID, &dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified, &justification); err != nil {
 			return fmt.Errorf("scan transaction: %w", err)
 		}
 
@@ -737,6 +745,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 		}
 
 		txn := Transaction{
+			BatchID:   batchID,
 			Date:      parsedTime,
 			Type:      txType,
 			Qty:       qty.Float64,
