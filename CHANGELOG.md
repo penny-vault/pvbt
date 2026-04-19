@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Snapshots now record a monotonic batch id on every transaction and annotation and include a new `batches` table, so tools can reconstruct the portfolio's holdings after each batch.
+
+### Changed
+
+- The snapshot schema version is now `4`. Snapshots produced by earlier releases can no longer be read; re-run the backtest to regenerate.
+
 ## [0.7.5] - 2026-04-18
 
 ### Fixed
