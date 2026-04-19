@@ -112,6 +112,10 @@ type Order struct {
 	// GroupRole identifies the role this order plays within its group
 	// (entry, stop-loss, or take-profit). Zero means no role assigned.
 	GroupRole GroupRole
+	// BatchID identifies the portfolio batch that produced this order.
+	// Zero means the order did not originate from a portfolio.Batch
+	// (e.g., broker-internal housekeeping orders).
+	BatchID int
 }
 
 // OrderType identifies the price behavior of an order.
