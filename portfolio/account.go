@@ -1857,6 +1857,7 @@ func (a *Account) Annotate(timestamp time.Time, key, value string) {
 		if a.annotations[idx].Timestamp.Equal(timestamp) && a.annotations[idx].Key == key {
 			a.annotations[idx].Value = value
 			a.annotations[idx].BatchID = a.currentBatchID
+
 			return
 		}
 	}
@@ -1897,6 +1898,7 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 	batchID := len(a.batches) + 1
 	a.batches = append(a.batches, batchRecord{BatchID: batchID, Timestamp: batch.Timestamp})
 	a.currentBatchID = batchID
+
 	defer func() { a.currentBatchID = 0 }()
 
 	// 1. Run middleware chain.
@@ -1926,6 +1928,7 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		if order.ID == "" {
 			order.ID = fmt.Sprintf("batch-%d-%d", batch.Timestamp.UnixNano(), idx)
 		}
+
 		order.BatchID = batchID
 
 		a.pendingOrders[order.ID] = *order
