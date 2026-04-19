@@ -28,6 +28,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// batchRecord captures the timestamp of a single ExecuteBatch call.
+// The index in Account.batches plus one is the batch id.
+type batchRecord struct {
+	BatchID   int
+	Timestamp time.Time
+}
+
 var portfolioAsset = asset.Asset{
 	CompositeFigi: "_PORTFOLIO_",
 	Ticker:        "_PORTFOLIO_",
@@ -73,6 +80,8 @@ type Account struct {
 	borrowRate        float64
 	dfCache           map[dfCacheKey]*data.DataFrame
 	seenTransactions  map[string]struct{}
+	batches           []batchRecord
+	currentBatchID    int
 }
 
 // New creates an Account with the given options.
@@ -90,6 +99,7 @@ func New(opts ...Option) *Account {
 		substitutions:    make(map[asset.Asset]Substitution),
 		excursions:       make(map[asset.Asset]ExcursionRecord),
 		seenTransactions: make(map[string]struct{}),
+		batches:          make([]batchRecord, 0),
 	}
 	for _, opt := range opts {
 		opt(acct)
