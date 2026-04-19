@@ -2,6 +2,7 @@ package portfolio_test
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
@@ -2008,5 +2009,25 @@ var _ = Describe("batch history", func() {
 		Expect(acct.ExecuteBatch(ctx, batch)).To(Succeed())
 
 		Expect(portfolio.GetAccountCurrentBatchID(acct)).To(BeZero())
+	})
+
+	It("preserves batch history and resets currentBatchID when middleware rejects the batch", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		rejectErr := errors.New("rejected by middleware")
+
+		mb := newMockBroker()
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.Use(&errorMiddleware{err: rejectErr})
+
+		batch := acct.NewBatch(ts)
+		err := acct.ExecuteBatch(ctx, batch)
+		Expect(err).To(MatchError(rejectErr))
+
+		Expect(portfolio.GetAccountCurrentBatchID(acct)).To(BeZero())
+
+		batches := portfolio.GetAccountBatches(acct)
+		Expect(batches).To(HaveLen(1))
+		Expect(batches[0].BatchID).To(Equal(1))
 	})
 })
