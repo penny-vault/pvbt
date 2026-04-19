@@ -99,7 +99,6 @@ func New(opts ...Option) *Account {
 		substitutions:    make(map[asset.Asset]Substitution),
 		excursions:       make(map[asset.Asset]ExcursionRecord),
 		seenTransactions: make(map[string]struct{}),
-		batches:          make([]batchRecord, 0),
 	}
 	for _, opt := range opts {
 		opt(acct)
