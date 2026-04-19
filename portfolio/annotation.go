@@ -27,4 +27,7 @@ type Annotation struct {
 	Timestamp time.Time
 	Key       string
 	Value     string
+	// BatchID is the portfolio batch that was active when the
+	// annotation was recorded. Zero means no batch was active.
+	BatchID int
 }
