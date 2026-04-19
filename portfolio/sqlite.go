@@ -198,6 +198,11 @@ func (a *Account) ToSQLite(path string) error {
 		return err
 	}
 
+	// Write batches.
+	if err := a.writeBatches(dbTx); err != nil {
+		return err
+	}
+
 	// Write holdings.
 	if err := a.writeHoldings(dbTx); err != nil {
 		return err
@@ -328,6 +333,26 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 
 		if _, err := stmt.Exec(dateStr, typStr, txn.Asset.Ticker, txn.Asset.CompositeFigi, txn.Qty, txn.Price, txn.Amount, qualified, sql.NullString{String: txn.Justification, Valid: txn.Justification != ""}); err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *Account) writeBatches(tx *sql.Tx) error {
+	if len(a.batches) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO batches (batch_id, timestamp) VALUES (?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare batches: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, rec := range a.batches {
+		if _, err := stmt.Exec(rec.BatchID, rec.Timestamp.UnixNano()); err != nil {
+			return fmt.Errorf("insert batch: %w", err)
 		}
 	}
 
@@ -534,6 +559,11 @@ func FromSQLite(path string) (*Account, error) {
 		return nil, err
 	}
 
+	// Read batches.
+	if err := acct.readBatches(database); err != nil {
+		return nil, err
+	}
+
 	// Read holdings.
 	if err := acct.readHoldings(database); err != nil {
 		return nil, err
@@ -727,6 +757,29 @@ func (a *Account) readTransactions(db *sql.DB) error {
 		}
 
 		a.transactions = append(a.transactions, txn)
+	}
+
+	return rows.Err()
+}
+
+func (a *Account) readBatches(db *sql.DB) error {
+	rows, err := db.Query("SELECT batch_id, timestamp FROM batches ORDER BY batch_id")
+	if err != nil {
+		return fmt.Errorf("query batches: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var rec batchRecord
+
+		var nanos int64
+
+		if err := rows.Scan(&rec.BatchID, &nanos); err != nil {
+			return fmt.Errorf("scan batch: %w", err)
+		}
+
+		rec.Timestamp = time.Unix(0, nanos).UTC()
+		a.batches = append(a.batches, rec)
 	}
 
 	return rows.Err()
