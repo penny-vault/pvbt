@@ -80,4 +80,28 @@ var _ = Describe("batch history round-trip", func() {
 		}
 		Expect(seenBuy).To(BeTrue())
 	})
+
+	It("persists and restores annotation BatchID", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+		mb := newMockBroker()
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+
+		b1 := acct.NewBatch(ts)
+		b1.Annotate("score", "0.42")
+		Expect(acct.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		tmp := filepath.Join(GinkgoT().TempDir(), "out.db")
+		Expect(acct.ToSQLite(tmp)).To(Succeed())
+		defer os.Remove(tmp)
+
+		restored, err := portfolio.FromSQLite(tmp)
+		Expect(err).NotTo(HaveOccurred())
+
+		anns := restored.Annotations()
+		Expect(anns).To(HaveLen(1))
+		Expect(anns[0].Key).To(Equal("score"))
+		Expect(anns[0].BatchID).To(Equal(1))
+	})
 })

@@ -461,14 +461,14 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO annotations (timestamp, key, value) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO annotations (batch_id, timestamp, key, value) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare annotations: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, ann := range a.annotations {
-		if _, err := stmt.Exec(ann.Timestamp.Unix(), ann.Key, ann.Value); err != nil {
+		if _, err := stmt.Exec(ann.BatchID, ann.Timestamp.UnixNano(), ann.Key, ann.Value); err != nil {
 			return fmt.Errorf("insert annotation: %w", err)
 		}
 	}
@@ -477,22 +477,23 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 }
 
 func (a *Account) readAnnotations(db *sql.DB) error {
-	rows, err := db.Query("SELECT timestamp, key, value FROM annotations ORDER BY timestamp, key")
+	rows, err := db.Query("SELECT batch_id, timestamp, key, value FROM annotations ORDER BY batch_id, timestamp, key")
 	if err != nil {
 		return fmt.Errorf("query annotations: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var unixSecs int64
+		var (
+			nanos int64
+			ann   Annotation
+		)
 
-		var ann Annotation
-
-		if err := rows.Scan(&unixSecs, &ann.Key, &ann.Value); err != nil {
+		if err := rows.Scan(&ann.BatchID, &nanos, &ann.Key, &ann.Value); err != nil {
 			return fmt.Errorf("scan annotation: %w", err)
 		}
 
-		ann.Timestamp = time.Unix(unixSecs, 0).UTC()
+		ann.Timestamp = time.Unix(0, nanos).UTC()
 		a.annotations = append(a.annotations, ann)
 	}
 
