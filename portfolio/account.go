@@ -28,6 +28,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// batchRecord captures the timestamp of a single ExecuteBatch call.
+// The index in Account.batches plus one is the batch id.
+type batchRecord struct {
+	BatchID   int
+	Timestamp time.Time
+}
+
 var portfolioAsset = asset.Asset{
 	CompositeFigi: "_PORTFOLIO_",
 	Ticker:        "_PORTFOLIO_",
@@ -73,6 +80,8 @@ type Account struct {
 	borrowRate        float64
 	dfCache           map[dfCacheKey]*data.DataFrame
 	seenTransactions  map[string]struct{}
+	batches           []batchRecord
+	currentBatchID    int
 }
 
 // New creates an Account with the given options.
@@ -446,6 +455,11 @@ func (a *Account) Holdings() map[asset.Asset]float64 {
 // Transactions returns the full transaction log in chronological order.
 func (a *Account) Transactions() []Transaction {
 	return a.transactions
+}
+
+// Batches returns the recorded batch history for this account.
+func (a *Account) Batches() []batchRecord {
+	return a.batches
 }
 
 func (a *Account) PerformanceMetric(m PerformanceMetric) PerformanceMetricQuery {
@@ -1847,6 +1861,8 @@ func (a *Account) Annotate(timestamp time.Time, key, value string) {
 	for idx := range a.annotations {
 		if a.annotations[idx].Timestamp.Equal(timestamp) && a.annotations[idx].Key == key {
 			a.annotations[idx].Value = value
+			a.annotations[idx].BatchID = a.currentBatchID
+
 			return
 		}
 	}
@@ -1855,6 +1871,7 @@ func (a *Account) Annotate(timestamp time.Time, key, value string) {
 		Timestamp: timestamp,
 		Key:       key,
 		Value:     value,
+		BatchID:   a.currentBatchID,
 	})
 }
 
@@ -1883,6 +1900,12 @@ func (a *Account) NewBatch(timestamp time.Time) *Batch {
 // ExecuteBatch runs the middleware chain, records annotations, assigns
 // order IDs, submits orders to the broker, and drains immediate fills.
 func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
+	batchID := len(a.batches) + 1
+	a.batches = append(a.batches, batchRecord{BatchID: batchID, Timestamp: batch.Timestamp})
+	a.currentBatchID = batchID
+
+	defer func() { a.currentBatchID = 0 }()
+
 	// 1. Run middleware chain.
 	if !batch.SkipMiddleware {
 		for _, mw := range a.middleware {
@@ -1910,6 +1933,8 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		if order.ID == "" {
 			order.ID = fmt.Sprintf("batch-%d-%d", batch.Timestamp.UnixNano(), idx)
 		}
+
+		order.BatchID = batchID
 
 		a.pendingOrders[order.ID] = *order
 
@@ -2006,6 +2031,10 @@ type deferredExitInfo struct {
 	fillPrice float64
 	asset     asset.Asset
 	qty       float64
+	// batchID is the BatchID of the originating entry order. Exit fills carry
+	// this id rather than the batch active at fill time (which is typically
+	// zero — fills arrive outside ExecuteBatch).
+	batchID int
 }
 
 // drainFillsFromChannel reads all available fills from the broker's
@@ -2053,6 +2082,7 @@ func (a *Account) drainFillsFromChannel() {
 				Amount:        amount,
 				Justification: order.Justification,
 				LotSelection:  LotSelection(order.LotSelection),
+				BatchID:       order.BatchID,
 			})
 
 			delete(a.pendingOrders, fill.OrderID)
@@ -2070,6 +2100,7 @@ func (a *Account) drainFillsFromChannel() {
 							fillPrice: fill.Price,
 							asset:     order.Asset,
 							qty:       fill.Qty,
+							batchID:   order.BatchID,
 						})
 						delete(a.deferredExits, order.GroupID)
 					}
@@ -2151,6 +2182,7 @@ func (a *Account) submitBracketExits(info deferredExitInfo) {
 		TimeInForce: broker.GTC,
 		GroupID:     exitGroupID,
 		GroupRole:   broker.RoleStopLoss,
+		BatchID:     info.batchID,
 	}
 
 	takeProfitOrder := broker.Order{
@@ -2163,6 +2195,7 @@ func (a *Account) submitBracketExits(info deferredExitInfo) {
 		TimeInForce: broker.GTC,
 		GroupID:     exitGroupID,
 		GroupRole:   broker.RoleTakeProfit,
+		BatchID:     info.batchID,
 	}
 
 	// Track in pendingOrders and pendingGroups.
@@ -2320,6 +2353,11 @@ func (acct *Account) Clone() PortfolioManager {
 		recentBuys[ast] = buysCopy
 	}
 
+	batches := make([]batchRecord, len(acct.batches))
+	copy(batches, acct.batches)
+
+	currentBatchID := acct.currentBatchID
+
 	washSales := make([]WashSaleRecord, len(acct.washSales))
 	copy(washSales, acct.washSales)
 
@@ -2368,6 +2406,8 @@ func (acct *Account) Clone() PortfolioManager {
 		excursions:        excursions,
 		tradeDetails:      tradeDetailsCopy,
 		seenTransactions:  seenTxns,
+		batches:           batches,
+		currentBatchID:    currentBatchID,
 	}
 
 	if acct.perfData != nil {

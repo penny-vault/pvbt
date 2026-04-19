@@ -70,4 +70,10 @@ type Transaction struct {
 	// account default. Set automatically from broker.Order.LotSelection
 	// when a fill is recorded via submitAndRecord.
 	LotSelection LotSelection
+
+	// BatchID is the portfolio batch that produced this transaction.
+	// Zero means the transaction was recorded outside any batch
+	// (deposits, withdrawals, stock splits, manual Record calls).
+	// Batch IDs start at 1 and increment monotonically within an Account.
+	BatchID int
 }

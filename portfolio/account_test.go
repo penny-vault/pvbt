@@ -2,6 +2,7 @@ package portfolio_test
 
 import (
 	"context"
+	"errors"
 	"math"
 	"time"
 
@@ -1965,5 +1966,121 @@ var _ = Describe("ApplySplit", func() {
 		err := acct.ApplySplit(acme, date, 0)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("split factor cannot be zero"))
+	})
+})
+
+var _ = Describe("batch history", func() {
+	It("assigns sequential BatchIDs starting at 1 and stamps orders", func() {
+		ctx := context.Background()
+		ts1 := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		ts2 := time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts1}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts1), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts1, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		batch1 := acct.NewBatch(ts1)
+		Expect(batch1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, batch1)).To(Succeed())
+
+		batch2 := acct.NewBatch(ts2)
+		Expect(batch2.Order(ctx, spy, portfolio.Sell, 5)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, batch2)).To(Succeed())
+
+		batches := portfolio.GetAccountBatches(acct)
+		Expect(batches).To(HaveLen(2))
+		Expect(batches[0].BatchID).To(Equal(1))
+		Expect(batches[1].BatchID).To(Equal(2))
+		Expect(batches[0].Timestamp).To(Equal(ts1))
+		Expect(batches[1].Timestamp).To(Equal(ts2))
+	})
+
+	It("resets currentBatchID to 0 after ExecuteBatch returns", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+
+		mb := newMockBroker()
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+
+		batch := acct.NewBatch(ts)
+		Expect(acct.ExecuteBatch(ctx, batch)).To(Succeed())
+
+		Expect(portfolio.GetAccountCurrentBatchID(acct)).To(BeZero())
+	})
+
+	It("preserves batch history and resets currentBatchID when middleware rejects the batch", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		rejectErr := errors.New("rejected by middleware")
+
+		mb := newMockBroker()
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.Use(&errorMiddleware{err: rejectErr})
+
+		batch := acct.NewBatch(ts)
+		err := acct.ExecuteBatch(ctx, batch)
+		Expect(err).To(MatchError(rejectErr))
+
+		Expect(portfolio.GetAccountCurrentBatchID(acct)).To(BeZero())
+
+		batches := portfolio.GetAccountBatches(acct)
+		Expect(batches).To(HaveLen(1))
+		Expect(batches[0].BatchID).To(Equal(1))
+	})
+
+	It("copies order.BatchID onto the recorded transaction", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		batch := acct.NewBatch(ts)
+		Expect(batch.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, batch)).To(Succeed())
+
+		var tradeTxn portfolio.Transaction
+		for _, txn := range acct.Transactions() {
+			if txn.Type == asset.BuyTransaction {
+				tradeTxn = txn
+				break
+			}
+		}
+		Expect(tradeTxn.BatchID).To(Equal(1))
+	})
+
+	It("preserves batches and currentBatchID on Clone", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		b1 := acct.NewBatch(ts)
+		Expect(b1.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, b1)).To(Succeed())
+
+		clone := acct.Clone().(*portfolio.Account)
+
+		// The clone inherits the batch history, so its next ExecuteBatch assigns
+		// BatchID 2 rather than colliding with the original's BatchID 1.
+		b2 := clone.NewBatch(ts.Add(24 * time.Hour))
+		Expect(clone.ExecuteBatch(ctx, b2)).To(Succeed())
+
+		batches := portfolio.GetAccountBatches(clone)
+		Expect(batches).To(HaveLen(2))
+		Expect(batches[0].BatchID).To(Equal(1))
+		Expect(batches[1].BatchID).To(Equal(2))
 	})
 })

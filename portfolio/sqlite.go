@@ -28,7 +28,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "3"
+const schemaVersion = "4"
 
 const dateFormat = "2006-01-02"
 
@@ -44,7 +44,15 @@ CREATE TABLE perf_data (
     value     REAL NOT NULL
 );
 
+CREATE TABLE batches (
+    batch_id  INTEGER PRIMARY KEY,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX idx_batches_timestamp ON batches(timestamp);
+
 CREATE TABLE transactions (
+    batch_id      INTEGER NOT NULL DEFAULT 0,
     date          TEXT NOT NULL,
     type          TEXT NOT NULL,
     ticker        TEXT,
@@ -83,14 +91,17 @@ CREATE TABLE metrics (
 CREATE INDEX idx_metrics_date ON metrics(date);
 CREATE INDEX idx_metrics_name ON metrics(name);
 CREATE INDEX idx_transactions_date ON transactions(date);
+CREATE INDEX idx_transactions_batch ON transactions(batch_id);
 
 CREATE TABLE annotations (
+    batch_id  INTEGER NOT NULL DEFAULT 0,
     timestamp INTEGER NOT NULL,
     key       TEXT NOT NULL,
     value     TEXT NOT NULL
 );
 
 CREATE INDEX idx_annotations_timestamp ON annotations(timestamp);
+CREATE INDEX idx_annotations_batch ON annotations(batch_id);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
@@ -184,6 +195,11 @@ func (a *Account) ToSQLite(path string) error {
 
 	// Write transactions.
 	if err := a.writeTransactions(dbTx); err != nil {
+		return err
+	}
+
+	// Write batches.
+	if err := a.writeBatches(dbTx); err != nil {
 		return err
 	}
 
@@ -300,7 +316,7 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO transactions (date, type, ticker, figi, quantity, price, amount, qualified, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO transactions (batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare transactions: %w", err)
 	}
@@ -315,8 +331,35 @@ func (a *Account) writeTransactions(tx *sql.Tx) error {
 			qualified = 1
 		}
 
-		if _, err := stmt.Exec(dateStr, typStr, txn.Asset.Ticker, txn.Asset.CompositeFigi, txn.Qty, txn.Price, txn.Amount, qualified, sql.NullString{String: txn.Justification, Valid: txn.Justification != ""}); err != nil {
+		if _, err := stmt.Exec(
+			txn.BatchID,
+			dateStr, typStr,
+			txn.Asset.Ticker, txn.Asset.CompositeFigi,
+			txn.Qty, txn.Price, txn.Amount,
+			qualified,
+			sql.NullString{String: txn.Justification, Valid: txn.Justification != ""},
+		); err != nil {
 			return fmt.Errorf("insert transaction: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *Account) writeBatches(tx *sql.Tx) error {
+	if len(a.batches) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare("INSERT INTO batches (batch_id, timestamp) VALUES (?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare batches: %w", err)
+	}
+	defer stmt.Close()
+
+	for _, rec := range a.batches {
+		if _, err := stmt.Exec(rec.BatchID, rec.Timestamp.UnixNano()); err != nil {
+			return fmt.Errorf("insert batch: %w", err)
 		}
 	}
 
@@ -418,14 +461,14 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 		return nil
 	}
 
-	stmt, err := tx.Prepare("INSERT INTO annotations (timestamp, key, value) VALUES (?, ?, ?)")
+	stmt, err := tx.Prepare("INSERT INTO annotations (batch_id, timestamp, key, value) VALUES (?, ?, ?, ?)")
 	if err != nil {
 		return fmt.Errorf("prepare annotations: %w", err)
 	}
 	defer stmt.Close()
 
 	for _, ann := range a.annotations {
-		if _, err := stmt.Exec(ann.Timestamp.Unix(), ann.Key, ann.Value); err != nil {
+		if _, err := stmt.Exec(ann.BatchID, ann.Timestamp.UnixNano(), ann.Key, ann.Value); err != nil {
 			return fmt.Errorf("insert annotation: %w", err)
 		}
 	}
@@ -434,22 +477,23 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 }
 
 func (a *Account) readAnnotations(db *sql.DB) error {
-	rows, err := db.Query("SELECT timestamp, key, value FROM annotations ORDER BY timestamp, key")
+	rows, err := db.Query("SELECT batch_id, timestamp, key, value FROM annotations ORDER BY timestamp, key")
 	if err != nil {
 		return fmt.Errorf("query annotations: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var unixSecs int64
+		var (
+			nanos int64
+			ann   Annotation
+		)
 
-		var ann Annotation
-
-		if err := rows.Scan(&unixSecs, &ann.Key, &ann.Value); err != nil {
+		if err := rows.Scan(&ann.BatchID, &nanos, &ann.Key, &ann.Value); err != nil {
 			return fmt.Errorf("scan annotation: %w", err)
 		}
 
-		ann.Timestamp = time.Unix(unixSecs, 0).UTC()
+		ann.Timestamp = time.Unix(0, nanos).UTC()
 		a.annotations = append(a.annotations, ann)
 	}
 
@@ -457,7 +501,7 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "3".
+// The database must have been created by ToSQLite with schema_version "4".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
@@ -520,6 +564,11 @@ func FromSQLite(path string) (*Account, error) {
 
 	// Read transactions.
 	if err := acct.readTransactions(database); err != nil {
+		return nil, err
+	}
+
+	// Read batches.
+	if err := acct.readBatches(database); err != nil {
 		return nil, err
 	}
 
@@ -666,7 +715,7 @@ func (a *Account) readPerfData(db *sql.DB) error {
 }
 
 func (a *Account) readTransactions(db *sql.DB) error {
-	rows, err := db.Query("SELECT date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY date")
+	rows, err := db.Query("SELECT batch_id, date, type, ticker, figi, quantity, price, amount, qualified, justification FROM transactions ORDER BY date, batch_id")
 	if err != nil {
 		return fmt.Errorf("query transactions: %w", err)
 	}
@@ -674,6 +723,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 
 	for rows.Next() {
 		var (
+			batchID            int
 			dateStr, typStr    string
 			ticker, figi       sql.NullString
 			qty, price, amount sql.NullFloat64
@@ -681,7 +731,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 			justification      sql.NullString
 		)
 
-		if err := rows.Scan(&dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified, &justification); err != nil {
+		if err := rows.Scan(&batchID, &dateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &qualified, &justification); err != nil {
 			return fmt.Errorf("scan transaction: %w", err)
 		}
 
@@ -696,6 +746,7 @@ func (a *Account) readTransactions(db *sql.DB) error {
 		}
 
 		txn := Transaction{
+			BatchID:   batchID,
 			Date:      parsedTime,
 			Type:      txType,
 			Qty:       qty.Float64,
@@ -716,6 +767,29 @@ func (a *Account) readTransactions(db *sql.DB) error {
 		}
 
 		a.transactions = append(a.transactions, txn)
+	}
+
+	return rows.Err()
+}
+
+func (a *Account) readBatches(db *sql.DB) error {
+	rows, err := db.Query("SELECT batch_id, timestamp FROM batches ORDER BY batch_id")
+	if err != nil {
+		return fmt.Errorf("query batches: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var rec batchRecord
+
+		var nanos int64
+
+		if err := rows.Scan(&rec.BatchID, &nanos); err != nil {
+			return fmt.Errorf("scan batch: %w", err)
+		}
+
+		rec.Timestamp = time.Unix(0, nanos).UTC()
+		a.batches = append(a.batches, rec)
 	}
 
 	return rows.Err()
