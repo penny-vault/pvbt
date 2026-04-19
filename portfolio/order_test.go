@@ -101,6 +101,7 @@ func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 	}
 	if m.defaultFill != nil {
 		m.fillCh <- broker.Fill{
+			OrderID:  order.ID,
 			Price:    m.defaultFill.Price,
 			Qty:      order.Qty,
 			FilledAt: m.defaultFill.FilledAt,

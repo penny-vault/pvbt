@@ -2023,6 +2023,7 @@ type deferredExitInfo struct {
 	fillPrice float64
 	asset     asset.Asset
 	qty       float64
+	batchID   int // inherited from the bracket entry order.
 }
 
 // drainFillsFromChannel reads all available fills from the broker's
@@ -2070,6 +2071,7 @@ func (a *Account) drainFillsFromChannel() {
 				Amount:        amount,
 				Justification: order.Justification,
 				LotSelection:  LotSelection(order.LotSelection),
+				BatchID:       order.BatchID,
 			})
 
 			delete(a.pendingOrders, fill.OrderID)
@@ -2087,6 +2089,7 @@ func (a *Account) drainFillsFromChannel() {
 							fillPrice: fill.Price,
 							asset:     order.Asset,
 							qty:       fill.Qty,
+							batchID:   order.BatchID,
 						})
 						delete(a.deferredExits, order.GroupID)
 					}
@@ -2168,6 +2171,7 @@ func (a *Account) submitBracketExits(info deferredExitInfo) {
 		TimeInForce: broker.GTC,
 		GroupID:     exitGroupID,
 		GroupRole:   broker.RoleStopLoss,
+		BatchID:     info.batchID,
 	}
 
 	takeProfitOrder := broker.Order{
@@ -2180,6 +2184,7 @@ func (a *Account) submitBracketExits(info deferredExitInfo) {
 		TimeInForce: broker.GTC,
 		GroupID:     exitGroupID,
 		GroupRole:   broker.RoleTakeProfit,
+		BatchID:     info.batchID,
 	}
 
 	// Track in pendingOrders and pendingGroups.

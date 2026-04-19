@@ -2030,4 +2030,29 @@ var _ = Describe("batch history", func() {
 		Expect(batches).To(HaveLen(1))
 		Expect(batches[0].BatchID).To(Equal(1))
 	})
+
+	It("copies order.BatchID onto the recorded transaction", func() {
+		ctx := context.Background()
+		ts := time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+
+		mb := newMockBroker()
+		mb.defaultFill = &broker.Fill{Price: 100.0, FilledAt: ts}
+
+		acct := portfolio.New(portfolio.WithCash(100_000, ts), portfolio.WithBroker(mb))
+		acct.UpdatePrices(buildDF(ts, []asset.Asset{spy}, []float64{100.0}, []float64{100.0}))
+
+		batch := acct.NewBatch(ts)
+		Expect(batch.Order(ctx, spy, portfolio.Buy, 10)).To(Succeed())
+		Expect(acct.ExecuteBatch(ctx, batch)).To(Succeed())
+
+		var tradeTxn portfolio.Transaction
+		for _, txn := range acct.Transactions() {
+			if txn.Type == asset.BuyTransaction {
+				tradeTxn = txn
+				break
+			}
+		}
+		Expect(tradeTxn.BatchID).To(Equal(1))
+	})
 })
