@@ -1,10 +1,11 @@
 package cli
 
 import (
-	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -62,8 +63,6 @@ func defaultOutputPath(strategyName string, start, end time.Time, shortID string
 }
 
 func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
-	ctx := log.Logger.WithContext(context.Background())
-
 	nyc, err := time.LoadLocation("America/New_York")
 	if err != nil {
 		return fmt.Errorf("load America/New_York timezone: %w", err)
@@ -168,7 +167,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	useProgress := !noProgress && stderrIsTerminal()
 
-	var program *tea.Program
+	var (
+		program   *tea.Program
+		logWriter io.Writer
+	)
 
 	if useProgress {
 		title := fmt.Sprintf("Backtest: %s", strategy.Name())
@@ -183,6 +185,19 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 				measurements: ev.MeasurementsEvaluated,
 			})
 		}))
+
+		logPath := strings.TrimSuffix(outputPath, filepath.Ext(outputPath)) + ".log"
+
+		lf, err := os.Create(logPath)
+		if err != nil {
+			return fmt.Errorf("create log file %q: %w", logPath, err)
+		}
+
+		defer lf.Close()
+
+		logWriter = lf
+
+		fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	}
 
 	eng := engine.New(strategy, engineOpts...)
@@ -190,7 +205,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	startTime := time.Now()
 
-	result, err := runEngineBacktest(ctx, eng, program, start, end)
+	result, err := runEngineBacktest(eng, program, logWriter, start, end)
 	if err != nil {
 		return fmt.Errorf("backtest failed: %w", err)
 	}
@@ -260,26 +275,23 @@ func strategyParams(strategy engine.Strategy) map[string]any {
 // runEngineBacktest runs the engine, optionally rendering a bubble tea
 // progress bar. When program is nil the engine is run inline and zerolog
 // continues writing to its existing destination. When program is non-nil,
-// zerolog is buffered for the duration of the run so log output does not
-// scribble over the progress bar; the buffer is flushed once the bar exits.
-func runEngineBacktest(ctx context.Context, eng *engine.Engine, program *tea.Program, start, end time.Time) (portfolio.Portfolio, error) {
+// zerolog is redirected to logWriter (a plain-text file) before the context
+// is created, so all engine code using zerolog.Ctx(ctx) also writes to the
+// file rather than stderr.
+func runEngineBacktest(eng *engine.Engine, program *tea.Program, logWriter io.Writer, start, end time.Time) (portfolio.Portfolio, error) {
 	if program == nil {
+		ctx := log.Logger.WithContext(context.Background())
+
 		return eng.Backtest(ctx, start, end)
 	}
 
-	var logBuffer bytes.Buffer
-
 	savedLogger := log.Logger
-	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: &logBuffer, NoColor: true}).
+	log.Logger = zerolog.New(zerolog.ConsoleWriter{Out: logWriter, NoColor: true}).
 		With().Timestamp().Logger()
 
-	defer func() {
-		log.Logger = savedLogger
+	defer func() { log.Logger = savedLogger }()
 
-		if logBuffer.Len() > 0 {
-			_, _ = os.Stderr.Write(logBuffer.Bytes())
-		}
-	}()
+	ctx := log.Logger.WithContext(context.Background())
 
 	go func() {
 		result, err := eng.Backtest(ctx, start, end)
