@@ -106,6 +106,7 @@ func WithAllMetrics() Option {
 			OmegaRatio, GainToPainRatio, CVaR, TailRatio, RecoveryFactor,
 			Exposure, ConsecutiveWins, ConsecutiveLosses,
 			AvgDrawdown, AvgDrawdownDays, GainLossRatio,
+			AvgUlcerIndex, P90UlcerIndex, MedianUlcerIndex,
 		} {
 			WithMetric(metric)(acct)
 		}

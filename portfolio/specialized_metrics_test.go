@@ -68,7 +68,7 @@ var _ = Describe("Specialized Metrics", func() {
 	// ---------------------------------------------------------------
 
 	Describe("ComputeSeries returns nil", func() {
-		It("UlcerIndex returns nil from ComputeSeries", func() {
+		It("UlcerIndex returns nil from ComputeSeries when fewer than 14 data points", func() {
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
 			s, err := portfolio.UlcerIndex.ComputeSeries(context.Background(), a, nil)
 			Expect(err).NotTo(HaveOccurred())
@@ -298,6 +298,122 @@ var _ = Describe("Specialized Metrics", func() {
 			result, err := a.PerformanceMetric(portfolio.UlcerIndex).Value()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(BeNumerically("~", 2.67261, 1e-3))
+		})
+
+		It("ComputeSeries returns a rolling UI series for a 14-point curve", func() {
+			// 14-point curve with drawdowns -- same as the UlcerIndex scalar test.
+			// First 13 elements of the series are 0 (warmup); element 13 = 1.15907.
+			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
+			aa := buildAccountFromEquity(equity)
+			ss, err := portfolio.UlcerIndex.ComputeSeries(context.Background(), aa, nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(ss).NotTo(BeNil())
+			Expect(ss.Len()).To(Equal(14))
+		})
+	})
+
+	Describe("AvgUlcerIndex", func() {
+		It("equals the single rolling UI value when exactly 14 data points", func() {
+			// 14-point curve: only one rolling UI window exists, so
+			// Avg = Median = P90 = UlcerIndex = 1.15907.
+			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
+			aa := buildAccountFromEquity(equity)
+			result, err := aa.PerformanceMetric(portfolio.AvgUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 1.15907, 1e-3))
+		})
+
+		It("returns 0 when fewer than 14 data points", func() {
+			aa := buildAccountFromEquity([]float64{100, 90, 80})
+			result, err := aa.PerformanceMetric(portfolio.AvgUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("==", 0))
+		})
+
+		It("produces a positive mean pulled above median by early large drawdowns", func() {
+			// 20-point curve: sharp drawdown then recovery.
+			// DD[i] = (price[i] - max(price[i-13:i+1])) / max * 100 (rolling-max drawdown).
+			// Bars 1-4 are 20-40% below bar 0's high of 100 even in later UI windows
+			// because each bar's own 14-day max still reaches back to that high.
+			//
+			// Rolling UI series (7 active values, indices 13-19):
+			//   UI[13]=15.393, UI[14]=15.395, UI[15]=14.437,
+			//   UI[16]=9.706,  UI[17]=5.469,  UI[18]=UI[19]=1.159
+			// Avg = (15.393+15.395+14.437+9.706+5.469+1.159+1.159) / 7 = 8.960
+			equity := []float64{
+				100, 80, 60, 70, 80, 100, 110, 108, 112, 115,
+				113, 118, 120, 116, 119, 122, 121, 125, 130, 135,
+			}
+			aa := buildAccountFromEquity(equity)
+			result, err := aa.PerformanceMetric(portfolio.AvgUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 8.960, 1e-2))
+		})
+	})
+
+	Describe("P90UlcerIndex", func() {
+		It("equals the single rolling UI value when exactly 14 data points", func() {
+			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
+			aa := buildAccountFromEquity(equity)
+			result, err := aa.PerformanceMetric(portfolio.P90UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 1.15907, 1e-3))
+		})
+
+		It("returns 0 when fewer than 14 data points", func() {
+			aa := buildAccountFromEquity([]float64{100, 90, 80})
+			result, err := aa.PerformanceMetric(portfolio.P90UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("==", 0))
+		})
+
+		It("captures the worst-typical drawdown pain for a curve with early large drawdowns", func() {
+			// Same 20-point curve as AvgUlcerIndex test.
+			// Sorted rolling UI: [1.159, 1.159, 5.469, 9.706, 14.437, 15.393, 15.395]
+			// Empirical P90 (n=7): sorted[floor(0.9*7)] = sorted[6] = 15.395.
+			equity := []float64{
+				100, 80, 60, 70, 80, 100, 110, 108, 112, 115,
+				113, 118, 120, 116, 119, 122, 121, 125, 130, 135,
+			}
+			aa := buildAccountFromEquity(equity)
+			result, err := aa.PerformanceMetric(portfolio.P90UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 15.395, 1e-2))
+		})
+	})
+
+	Describe("MedianUlcerIndex", func() {
+		It("equals the single rolling UI value when exactly 14 data points", func() {
+			equity := []float64{100, 105, 110, 108, 112, 115, 113, 118, 120, 116, 119, 122, 121, 125}
+			aa := buildAccountFromEquity(equity)
+			result, err := aa.PerformanceMetric(portfolio.MedianUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 1.15907, 1e-3))
+		})
+
+		It("returns 0 when fewer than 14 data points", func() {
+			aa := buildAccountFromEquity([]float64{100, 90, 80})
+			result, err := aa.PerformanceMetric(portfolio.MedianUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("==", 0))
+		})
+
+		It("sits between Avg and P90 for a curve with early large drawdowns", func() {
+			// Same 20-point curve. Sorted: [1.159, 1.159, 5.469, 9.706, 14.437, 15.393, 15.395]
+			// Median (n=7): sorted[floor(0.5*7)] = sorted[3] = 9.706
+			// The mean (8.960) is pulled below the median by the two low tail values.
+			equity := []float64{
+				100, 80, 60, 70, 80, 100, 110, 108, 112, 115,
+				113, 118, 120, 116, 119, 122, 121, 125, 130, 135,
+			}
+			aa := buildAccountFromEquity(equity)
+			median, err := aa.PerformanceMetric(portfolio.MedianUlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+			p90, err := aa.PerformanceMetric(portfolio.P90UlcerIndex).Value()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(median).To(BeNumerically("~", 9.706, 1e-2))
+			Expect(median).To(BeNumerically("<", p90))
 		})
 	})
 
