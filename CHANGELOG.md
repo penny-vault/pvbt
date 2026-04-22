@@ -7,13 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.6] - 2026-04-21
+
 ### Added
 
 - Snapshots now record a monotonic batch id on every transaction and annotation and include a new `batches` table, so tools can reconstruct the portfolio's holdings after each batch.
+- The backtest risk summary now reports three Ulcer Index variants alongside the point-in-time value: average, 90th-percentile, and median of the rolling series over the full window.
+- When the interactive progress bar is active, backtest logs are written to a plain-text file beside the output database (`<output-stem>.log`) instead of being buffered and dumped to stderr. The log path is printed to stderr at startup.
 
 ### Changed
 
 - The snapshot schema version is now `4`. Snapshots produced by earlier releases can no longer be read; re-run the backtest to regenerate.
+
+### Fixed
+
+- The Ulcer Index now uses the double-rolling formula matching TradingView's definition: each bar's drawdown is measured against its own 14-day rolling high, then the index is the RMS of those drawdowns over the last 14 bars. The previous implementation anchored the peak to the first bar of the outer window, systematically underreporting the index for long series.
 
 ## [0.7.5] - 2026-04-18
 
