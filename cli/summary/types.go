@@ -63,7 +63,9 @@ type risk struct {
 	sharpe            [2]float64
 	sortino           [2]float64
 	calmar            [2]float64
-	ulcerIndex        [2]float64
+	avgUlcerIndex     [2]float64
+	p90UlcerIndex     [2]float64
+	medianUlcerIndex  [2]float64
 	valueAtRisk       [2]float64
 	skewness          [2]float64
 	excessKurtosis    [2]float64
