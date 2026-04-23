@@ -38,6 +38,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Float64("cash", 100000, "Initial cash balance")
 	cmd.Flags().String("output", "", "Output file path (default: auto-generated)")
 	cmd.Flags().Bool("no-progress", false, "Disable the interactive progress bar (logs go straight to stderr)")
+	cmd.Flags().Bool("json", false, "Output JSON Lines to stdout (for programmatic consumers)")
 
 	registerStrategyFlags(cmd, strategy)
 	cmd.Flags().String("preset", "", "Apply a named parameter preset")
@@ -93,6 +94,19 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return err
 	}
 
+	jsonMode, err := cmd.Flags().GetBool("json")
+	if err != nil {
+		return err
+	}
+
+	var reporter *jsonReporter
+	if jsonMode {
+		savedLogger := log.Logger
+		log.Logger = zerolog.New(os.Stdout).With().Str("type", "log").Timestamp().Logger()
+		defer func() { log.Logger = savedLogger }()
+		reporter = newJSONReporter(os.Stdout)
+	}
+
 	fullID, shortID := runID()
 
 	outputPath, err := cmd.Flags().GetString("output")
@@ -119,6 +133,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		Str("output", outputPath).
 		Str("run_id", fullID).
 		Msg("starting backtest")
+
+	if jsonMode {
+		reporter.Started(fullID, strategy.Name(), start.Format("2006-01-02"), end.Format("2006-01-02"), cash, outputPath)
+	}
 
 	if err := applyPreset(cmd, strategy); err != nil {
 		return err
@@ -165,7 +183,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engineOpts = append(engineOpts, engine.WithBenchmarkTicker(benchmarkTicker))
 	}
 
-	useProgress := !noProgress && stderrIsTerminal()
+	useProgress := !noProgress && !jsonMode && stderrIsTerminal()
 
 	var (
 		program   *tea.Program
@@ -200,6 +218,12 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		fmt.Fprintf(os.Stderr, "Logs: %s\n", logPath)
 	}
 
+	if jsonMode {
+		engineOpts = append(engineOpts, engine.WithProgressCallback(func(ev engine.ProgressEvent) {
+			reporter.Progress(ev)
+		}))
+	}
+
 	eng := engine.New(strategy, engineOpts...)
 	defer eng.Close()
 
@@ -207,6 +231,9 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	result, err := runEngineBacktest(eng, program, logWriter, start, end)
 	if err != nil {
+		if jsonMode {
+			reporter.Error(fullID, err)
+		}
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
@@ -231,8 +258,12 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	log.Info().Str("path", outputPath).Msg("backtest output written")
 
-	if err := summary.Render(acct, os.Stdout); err != nil {
-		return fmt.Errorf("rendering report: %w", err)
+	if jsonMode {
+		reporter.Completed(fullID, outputPath)
+	} else {
+		if err := summary.Render(acct, os.Stdout); err != nil {
+			return fmt.Errorf("rendering report: %w", err)
+		}
 	}
 
 	return nil
@@ -274,10 +305,11 @@ func strategyParams(strategy engine.Strategy) map[string]any {
 
 // runEngineBacktest runs the engine, optionally rendering a bubble tea
 // progress bar. When program is nil the engine is run inline and zerolog
-// continues writing to its existing destination. When program is non-nil,
-// zerolog is redirected to logWriter (a plain-text file) before the context
-// is created, so all engine code using zerolog.Ctx(ctx) also writes to the
-// file rather than stderr.
+// continues writing to its existing destination — intentionally, so that
+// callers (e.g. the --json path) can pre-configure log.Logger before the
+// call. When program is non-nil, zerolog is redirected to logWriter (a
+// plain-text file) before the context is created, so all engine code using
+// zerolog.Ctx(ctx) also writes to the file rather than stderr.
 func runEngineBacktest(eng *engine.Engine, program *tea.Program, logWriter io.Writer, start, end time.Time) (portfolio.Portfolio, error) {
 	if program == nil {
 		ctx := log.Logger.WithContext(context.Background())
