@@ -133,6 +133,7 @@ func (r *jsonReporter) writeJSON(v any) {
 		log.Error().Err(err).Msg("json reporter: marshal failed")
 		return
 	}
+
 	if _, err := fmt.Fprintln(r.w, string(b)); err != nil {
 		log.Error().Err(err).Msg("json reporter: write failed")
 	}
@@ -143,10 +144,12 @@ func progressFraction(ev engine.ProgressEvent) float64 {
 	if ev.Date.IsZero() || !ev.End.After(ev.Start) {
 		return 0
 	}
+
 	span := ev.End.Sub(ev.Start).Seconds()
 	if span <= 0 {
 		return 0
 	}
+
 	frac := ev.Date.Sub(ev.Start).Seconds() / span
 	switch {
 	case frac < 0:
@@ -163,5 +166,6 @@ func computeEtaMS(elapsed time.Duration, pct float64) int64 {
 	if pct <= 0 || pct >= 1 {
 		return 0
 	}
+
 	return time.Duration(float64(elapsed) / pct * (1 - pct)).Milliseconds()
 }

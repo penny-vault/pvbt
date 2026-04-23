@@ -100,10 +100,13 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	}
 
 	var reporter *jsonReporter
+
 	if jsonMode {
 		savedLogger := log.Logger
 		log.Logger = zerolog.New(os.Stdout).With().Str("type", "log").Timestamp().Logger()
+
 		defer func() { log.Logger = savedLogger }()
+
 		reporter = newJSONReporter(os.Stdout)
 	}
 
@@ -234,6 +237,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		if jsonMode {
 			reporter.Error(fullID, err)
 		}
+
 		return fmt.Errorf("backtest failed: %w", err)
 	}
 
