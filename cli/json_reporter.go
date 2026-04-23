@@ -57,11 +57,11 @@ type statusCompletedMsg struct {
 }
 
 type statusErrorMsg struct {
-	Type   string `json:"type"`
-	Event  string `json:"event"`
-	RunID  string `json:"run_id"`
-	Error  string `json:"error"`
-	Time   string `json:"time"`
+	Type  string `json:"type"`
+	Event string `json:"event"`
+	RunID string `json:"run_id"`
+	Error string `json:"error"`
+	Time  string `json:"time"`
 }
 
 type progressLineMsg struct {
@@ -103,11 +103,11 @@ func (r *jsonReporter) Completed(runID, output string) {
 
 func (r *jsonReporter) Error(runID string, err error) {
 	r.writeJSON(statusErrorMsg{
-		Type:   "status",
-		Event:  "error",
-		RunID:  runID,
-		Error:  err.Error(),
-		Time:   time.Now().UTC().Format(time.RFC3339),
+		Type:  "status",
+		Event: "error",
+		RunID: runID,
+		Error: err.Error(),
+		Time:  time.Now().UTC().Format(time.RFC3339),
 	})
 }
 
