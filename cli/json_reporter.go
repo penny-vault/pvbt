@@ -128,13 +128,13 @@ func (r *jsonReporter) Progress(ev engine.ProgressEvent) {
 }
 
 func (r *jsonReporter) writeJSON(v any) {
-	b, err := json.Marshal(v)
+	jsonBytes, err := json.Marshal(v)
 	if err != nil {
 		log.Error().Err(err).Msg("json reporter: marshal failed")
 		return
 	}
 
-	if _, err := fmt.Fprintln(r.w, string(b)); err != nil {
+	if _, err := fmt.Fprintln(r.w, string(jsonBytes)); err != nil {
 		log.Error().Err(err).Msg("json reporter: write failed")
 	}
 }
