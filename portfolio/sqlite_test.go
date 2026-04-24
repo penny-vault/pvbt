@@ -2,6 +2,7 @@ package portfolio_test
 
 import (
 	"database/sql"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -377,6 +378,61 @@ var _ = Describe("SQLite", func() {
 			_, err = portfolio.FromSQLite(dbPath)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported schema version"))
+		})
+	})
+
+	Describe("positions_daily", func() {
+		It("writes one row per (date, ticker) with $CASH included and bumps schema to 5", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.Record(portfolio.Transaction{Date: t0, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+			df0 := buildDF(t0, []asset.Asset{spy, bnd}, []float64{400, 80}, []float64{400, 80})
+			acct.UpdatePrices(df0)
+
+			t1 := t0.AddDate(0, 0, 1)
+			df1 := buildDF(t1, []asset.Asset{spy, bnd}, []float64{410, 81}, []float64{410, 81})
+			acct.UpdatePrices(df1)
+
+			dbPath := filepath.Join(tmpDir, "positions.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var schemaVer string
+			Expect(db.QueryRow(`SELECT value FROM metadata WHERE key='schema_version'`).Scan(&schemaVer)).To(Succeed())
+			Expect(schemaVer).To(Equal("5"))
+
+			var total int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&total)).To(Succeed())
+			Expect(total).To(Equal(6))
+
+			rows, err := db.Query(`
+            SELECT pd.date, SUM(pd.market_value), perf.value
+            FROM positions_daily pd
+            JOIN perf_data perf ON perf.date = pd.date AND perf.metric = 'PortfolioEquity'
+            GROUP BY pd.date`)
+			Expect(err).NotTo(HaveOccurred())
+			defer rows.Close()
+			seen := 0
+			for rows.Next() {
+				var date string
+				var sumMV, eq float64
+				Expect(rows.Scan(&date, &sumMV, &eq)).To(Succeed())
+				Expect(math.Abs(sumMV-eq)).To(BeNumerically("<", 1e-4), "date=%s sum=%f eq=%f", date, sumMV, eq)
+				seen++
+			}
+			Expect(seen).To(Equal(2))
+
+			var cashRows int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily WHERE ticker='$CASH' AND figi=''`).Scan(&cashRows)).To(Succeed())
+			Expect(cashRows).To(Equal(2))
 		})
 	})
 })

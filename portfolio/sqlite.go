@@ -28,7 +28,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "4"
+const schemaVersion = "5"
 
 const dateFormat = "2006-01-02"
 
@@ -102,6 +102,17 @@ CREATE TABLE annotations (
 
 CREATE INDEX idx_annotations_timestamp ON annotations(timestamp);
 CREATE INDEX idx_annotations_batch ON annotations(batch_id);
+
+CREATE TABLE positions_daily (
+    date         TEXT NOT NULL,
+    ticker       TEXT NOT NULL,
+    figi         TEXT NOT NULL,
+    market_value REAL NOT NULL,
+    quantity     REAL NOT NULL,
+    PRIMARY KEY (date, ticker, figi)
+);
+
+CREATE INDEX idx_positions_daily_ticker ON positions_daily (ticker, date);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
@@ -190,6 +201,11 @@ func (a *Account) ToSQLite(path string) error {
 
 	// Write perf data.
 	if err := a.writePerfData(dbTx); err != nil {
+		return err
+	}
+
+	// Write per-asset daily positions.
+	if err := a.writePositionsDaily(dbTx); err != nil {
 		return err
 	}
 
@@ -304,6 +320,64 @@ func (a *Account) writePerfData(tx *sql.Tx) error {
 				if _, err := stmt.Exec(d, string(m), v); err != nil {
 					return fmt.Errorf("insert perf_data: %w", err)
 				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func (a *Account) writePositionsDaily(tx *sql.Tx) error {
+	if a.perfData == nil || len(a.positionMV) == 0 {
+		return nil
+	}
+
+	stmt, err := tx.Prepare(`INSERT INTO positions_daily (date, ticker, figi, market_value, quantity) VALUES (?, ?, ?, ?, ?)`)
+	if err != nil {
+		return fmt.Errorf("prepare positions_daily: %w", err)
+	}
+	defer stmt.Close()
+
+	times := a.perfData.Times()
+
+	assets := make([]asset.Asset, 0, len(a.positionMV))
+	for ast := range a.positionMV {
+		assets = append(assets, ast)
+	}
+
+	sort.Slice(assets, func(ii, jj int) bool {
+		if assets[ii].Ticker != assets[jj].Ticker {
+			return assets[ii].Ticker < assets[jj].Ticker
+		}
+
+		return assets[ii].CompositeFigi < assets[jj].CompositeFigi
+	})
+
+	for _, ast := range assets {
+		mvCol := a.positionMV[ast]
+		qtyCol := a.positionQty[ast]
+
+		for ti := range times {
+			if ti >= len(mvCol) || ti >= len(qtyCol) {
+				break
+			}
+
+			mv, qty := mvCol[ti], qtyCol[ti]
+			if math.IsNaN(mv) && math.IsNaN(qty) {
+				continue
+			}
+
+			if math.IsNaN(mv) {
+				mv = 0
+			}
+
+			if math.IsNaN(qty) {
+				qty = 0
+			}
+
+			dateStr := times[ti].Format(dateFormat)
+			if _, err := stmt.Exec(dateStr, ast.Ticker, ast.CompositeFigi, mv, qty); err != nil {
+				return fmt.Errorf("insert positions_daily: %w", err)
 			}
 		}
 	}
@@ -501,7 +575,7 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "4".
+// The database must have been created by ToSQLite with schema_version "5".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
