@@ -428,6 +428,7 @@ var _ = Describe("SQLite", func() {
 				Expect(math.Abs(sumMV-eq)).To(BeNumerically("<", 1e-4), "date=%s sum=%f eq=%f", date, sumMV, eq)
 				seen++
 			}
+			Expect(rows.Err()).NotTo(HaveOccurred())
 			Expect(seen).To(Equal(2))
 
 			var cashRows int

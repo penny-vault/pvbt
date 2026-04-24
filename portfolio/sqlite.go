@@ -112,7 +112,7 @@ CREATE TABLE positions_daily (
     PRIMARY KEY (date, ticker, figi)
 );
 
-CREATE INDEX idx_positions_daily_ticker ON positions_daily (ticker, date);
+CREATE INDEX idx_positions_daily_ticker ON positions_daily(ticker, date);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
