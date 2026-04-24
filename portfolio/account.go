@@ -40,6 +40,10 @@ var portfolioAsset = asset.Asset{
 	Ticker:        "_PORTFOLIO_",
 }
 
+// cashSentinel is the pseudo-asset used to emit $CASH rows in positions_daily.
+// figi is empty by design — pv-api distinguishes cash by ticker.
+var cashSentinel = asset.Asset{Ticker: "$CASH", CompositeFigi: ""}
+
 // Option configures an Account during construction.
 type Option func(*Account)
 
@@ -49,12 +53,19 @@ type Option func(*Account)
 // *Account (giving access to both interfaces): it passes it as Portfolio
 // to strategy Compute calls, and calls Record/SetBroker directly.
 type Account struct {
-	cash              float64
-	holdings          map[asset.Asset]float64
-	transactions      []Transaction
-	broker            broker.Broker
-	prices            *data.DataFrame
-	perfData          *data.DataFrame
+	cash         float64
+	holdings     map[asset.Asset]float64
+	transactions []Transaction
+	broker       broker.Broker
+	prices       *data.DataFrame
+	perfData     *data.DataFrame
+	// positionMV tracks per-asset market-value history aligned with perfData.Times().
+	// Populated by UpdatePrices; appended each step for every currently-held asset
+	// and for the $CASH sentinel (emitted every step, including zero-balance days).
+	positionMV map[asset.Asset][]float64
+	// positionQty tracks per-asset quantity history aligned with perfData.Times().
+	// Same semantics as positionMV, under the PositionQuantity metric.
+	positionQty       map[asset.Asset][]float64
 	benchmark         asset.Asset
 	riskFreeValue     float64
 	taxLots           map[asset.Asset][]TaxLot
@@ -99,6 +110,8 @@ func New(opts ...Option) *Account {
 		substitutions:    make(map[asset.Asset]Substitution),
 		excursions:       make(map[asset.Asset]ExcursionRecord),
 		seenTransactions: make(map[string]struct{}),
+		positionMV:       make(map[asset.Asset][]float64),
+		positionQty:      make(map[asset.Asset][]float64),
 	}
 	for _, opt := range opts {
 		opt(acct)
@@ -1682,23 +1695,51 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 
 	a.prices = priceData
 
+	// stepMV holds the per-asset market value contributed this step (excluding cash).
+	// We compute it first so we can both stamp perfData and fill the side-car.
+	stepMV := make(map[asset.Asset]float64, len(a.holdings))
+
 	total := a.cash
 	for ast, qty := range a.holdings {
-		v := priceData.Value(ast, data.MetricClose)
-		if !math.IsNaN(v) {
-			total += qty * v
+		mv := priceData.Value(ast, data.MetricClose)
+		if math.IsNaN(mv) {
+			// Fall back to the last-known price if today's close is NaN. Note: this
+			// recovers priorPrice = lastMV / lastQty, which embeds the pre-split
+			// price if a split occurred on this step; split-on-NaN-day is a deep
+			// edge case and not handled here.
+			if prior, ok := a.positionMV[ast]; ok && len(prior) > 0 {
+				last := prior[len(prior)-1]
+				if !math.IsNaN(last) {
+					priorQty := a.positionQty[ast]
+					if len(priorQty) > 0 && priorQty[len(priorQty)-1] > 0 {
+						priorPrice := last / priorQty[len(priorQty)-1]
+						stepMV[ast] = qty * priorPrice
+						total += stepMV[ast]
+
+						continue
+					}
+				}
+			}
+			// No prior history: skip this asset for this step (mv=NaN).
+			log.Debug().Str("ticker", ast.Ticker).Msg("UpdatePrices: no close price and no prior mv; skipping positions_daily row this step")
+			stepMV[ast] = math.NaN()
+
+			continue
 		}
+
+		stepMV[ast] = qty * mv
+		total += stepMV[ast]
 	}
 
 	var benchVal, rfVal float64
 
 	if a.benchmark != (asset.Asset{}) {
-		v := priceData.Value(a.benchmark, data.AdjClose)
-		if math.IsNaN(v) || v == 0 {
-			v = priceData.Value(a.benchmark, data.MetricClose)
+		bv := priceData.Value(a.benchmark, data.AdjClose)
+		if math.IsNaN(bv) || bv == 0 {
+			bv = priceData.Value(a.benchmark, data.MetricClose)
 		}
 
-		benchVal = v
+		benchVal = bv
 	}
 
 	rfVal = a.riskFreeValue
@@ -1722,8 +1763,57 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		}
 	}
 
+	// Determine the current time-axis length we must match.
+	histLen := a.perfData.Len()
+
+	// Append per-asset side-car rows.
+	for ast, mv := range stepMV {
+		qty := a.holdings[ast]
+		a.appendPositionRow(ast, mv, qty, histLen)
+	}
+	// Any asset tracked previously but not currently held still needs a slot filled
+	// this step (NaN means "no row emitted on this date"). We emit (0, 0) on the
+	// first step after close so pv-api sees the exit, and NaN thereafter.
+	for ast := range a.positionMV {
+		if ast == cashSentinel {
+			continue
+		}
+
+		if _, held := a.holdings[ast]; held {
+			continue
+		}
+
+		prior := a.positionQty[ast]
+		if len(prior) > 0 && prior[len(prior)-1] > 0 {
+			a.appendPositionRow(ast, 0, 0, histLen)
+		} else {
+			a.appendPositionRow(ast, math.NaN(), math.NaN(), histLen)
+		}
+	}
+
+	// $CASH row every step, including zero balance.
+	a.appendPositionRow(cashSentinel, a.cash, a.cash, histLen)
+
 	// Invalidate lazily-computed DataFrames so they are recomputed on next access.
 	a.dfCache = nil
+}
+
+// appendPositionRow appends (mv, qty) to the per-asset side-car slices,
+// back-filling NaN for any missing steps so the slices stay aligned with
+// perfData.Times() (length targetLen after the append).
+func (a *Account) appendPositionRow(ast asset.Asset, mv, qty float64, targetLen int) {
+	mvSlice := a.positionMV[ast]
+	qtySlice := a.positionQty[ast]
+
+	for len(mvSlice) < targetLen-1 {
+		mvSlice = append(mvSlice, math.NaN())
+		qtySlice = append(qtySlice, math.NaN())
+	}
+
+	mvSlice = append(mvSlice, mv)
+	qtySlice = append(qtySlice, qty)
+	a.positionMV[ast] = mvSlice
+	a.positionQty[ast] = qtySlice
 }
 
 // PerfData returns the accumulated performance DataFrame, or nil if no

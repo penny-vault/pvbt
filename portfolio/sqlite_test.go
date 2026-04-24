@@ -2,6 +2,7 @@ package portfolio_test
 
 import (
 	"database/sql"
+	"math"
 	"os"
 	"path/filepath"
 	"time"
@@ -377,6 +378,231 @@ var _ = Describe("SQLite", func() {
 			_, err = portfolio.FromSQLite(dbPath)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("unsupported schema version"))
+		})
+	})
+
+	Describe("positions_daily", func() {
+		It("writes one row per (date, ticker) with $CASH included and bumps schema to 5", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.Record(portfolio.Transaction{Date: t0, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+			df0 := buildDF(t0, []asset.Asset{spy, bnd}, []float64{400, 80}, []float64{400, 80})
+			acct.UpdatePrices(df0)
+
+			t1 := t0.AddDate(0, 0, 1)
+			df1 := buildDF(t1, []asset.Asset{spy, bnd}, []float64{410, 81}, []float64{410, 81})
+			acct.UpdatePrices(df1)
+
+			dbPath := filepath.Join(tmpDir, "positions.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var schemaVer string
+			Expect(db.QueryRow(`SELECT value FROM metadata WHERE key='schema_version'`).Scan(&schemaVer)).To(Succeed())
+			Expect(schemaVer).To(Equal("5"))
+
+			var total int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&total)).To(Succeed())
+			Expect(total).To(Equal(6))
+
+			rows, err := db.Query(`
+            SELECT pd.date, SUM(pd.market_value), perf.value
+            FROM positions_daily pd
+            JOIN perf_data perf ON perf.date = pd.date AND perf.metric = 'PortfolioEquity'
+            GROUP BY pd.date`)
+			Expect(err).NotTo(HaveOccurred())
+			defer rows.Close()
+			seen := 0
+			for rows.Next() {
+				var date string
+				var sumMV, eq float64
+				Expect(rows.Scan(&date, &sumMV, &eq)).To(Succeed())
+				Expect(math.Abs(sumMV-eq)).To(BeNumerically("<", 1e-4), "date=%s sum=%f eq=%f", date, sumMV, eq)
+				seen++
+			}
+			Expect(rows.Err()).NotTo(HaveOccurred())
+			Expect(seen).To(Equal(2))
+
+			var cashRows int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily WHERE ticker='$CASH' AND figi=''`).Scan(&cashRows)).To(Succeed())
+			Expect(cashRows).To(Equal(2))
+		})
+
+		It("has the expected table shape", func() {
+			acct := portfolio.New(portfolio.WithCash(1000, time.Time{}))
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.UpdatePrices(buildDF(t0, []asset.Asset{spy}, []float64{400}, []float64{400}))
+
+			dbPath := filepath.Join(tmpDir, "shape.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			rows, err := db.Query(`PRAGMA table_info(positions_daily)`)
+			Expect(err).NotTo(HaveOccurred())
+			defer rows.Close()
+
+			type col struct {
+				cid     int
+				name    string
+				coltype string
+				notnull int
+				pk      int
+			}
+			var cols []col
+			for rows.Next() {
+				var cc col
+				var dflt sql.NullString
+				Expect(rows.Scan(&cc.cid, &cc.name, &cc.coltype, &cc.notnull, &dflt, &cc.pk)).To(Succeed())
+				cols = append(cols, cc)
+			}
+			Expect(rows.Err()).NotTo(HaveOccurred())
+
+			Expect(cols).To(HaveLen(5))
+			Expect(cols[0].name).To(Equal("date"))
+			Expect(cols[0].coltype).To(Equal("TEXT"))
+			Expect(cols[0].pk).To(Equal(1))
+			Expect(cols[1].name).To(Equal("ticker"))
+			Expect(cols[1].pk).To(Equal(2))
+			Expect(cols[2].name).To(Equal("figi"))
+			Expect(cols[2].pk).To(Equal(3))
+			Expect(cols[3].name).To(Equal("market_value"))
+			Expect(cols[3].coltype).To(Equal("REAL"))
+			Expect(cols[4].name).To(Equal("quantity"))
+			Expect(cols[4].coltype).To(Equal("REAL"))
+			for _, cc := range cols {
+				Expect(cc.notnull).To(Equal(1), "column %s should be NOT NULL", cc.name)
+			}
+		})
+
+		It("records post-split quantity and stable market value on split day", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.UpdatePrices(buildDF(t0, []asset.Asset{spy}, []float64{400}, []float64{400}))
+
+			t1 := t0.AddDate(0, 0, 1)
+			Expect(acct.ApplySplit(spy, t1, 2.0)).To(Succeed())
+			acct.UpdatePrices(buildDF(t1, []asset.Asset{spy}, []float64{200}, []float64{200}))
+
+			dbPath := filepath.Join(tmpDir, "split.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var qty, mv float64
+			Expect(db.QueryRow(`SELECT quantity, market_value FROM positions_daily WHERE ticker='SPY' AND date=?`, t1.Format("2006-01-02")).Scan(&qty, &mv)).To(Succeed())
+			Expect(qty).To(Equal(20.0))
+			Expect(mv).To(BeNumerically("~", 4000.0, 1e-6))
+		})
+
+		It("falls back to last-known price when close is NaN with prior history", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.UpdatePrices(buildDF(t0, []asset.Asset{spy}, []float64{400}, []float64{400}))
+
+			t1 := t0.AddDate(0, 0, 1)
+			acct.UpdatePrices(buildDF(t1, []asset.Asset{spy}, []float64{math.NaN()}, []float64{math.NaN()}))
+
+			dbPath := filepath.Join(tmpDir, "nan.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var count int
+			var mv float64
+			Expect(db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(market_value), 0) FROM positions_daily WHERE ticker='SPY' AND date=?`, t1.Format("2006-01-02")).Scan(&count, &mv)).To(Succeed())
+			Expect(count).To(Equal(1))
+			Expect(mv).To(Equal(4000.0))
+		})
+
+		It("emits $CASH rows even when cash balance is zero", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			acct := portfolio.New(portfolio.WithCash(1000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 100, Amount: -1000})
+			acct.UpdatePrices(buildDF(t0, []asset.Asset{spy}, []float64{100}, []float64{100}))
+
+			dbPath := filepath.Join(tmpDir, "zerocash.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var mv, qty float64
+			Expect(db.QueryRow(`SELECT market_value, quantity FROM positions_daily WHERE ticker='$CASH' AND date=?`, t0.Format("2006-01-02")).Scan(&mv, &qty)).To(Succeed())
+			Expect(mv).To(Equal(0.0))
+			Expect(qty).To(Equal(0.0))
+		})
+
+		It("satisfies the sum invariant over a 30-day two-asset run", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.Record(portfolio.Transaction{Date: t0, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+
+			days := daySeq(t0, 30)
+			for idx, dd := range days {
+				spyPrice := 400.0 + float64(idx)
+				bndPrice := 80.0 + float64(idx)*0.1
+				acct.UpdatePrices(buildDF(dd, []asset.Asset{spy, bnd}, []float64{spyPrice, bndPrice}, []float64{spyPrice, bndPrice}))
+			}
+
+			dbPath := filepath.Join(tmpDir, "invariant.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var rowCount int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&rowCount)).To(Succeed())
+			Expect(rowCount).To(Equal(30 * 3))
+
+			rows, err := db.Query(`
+				SELECT pd.date, SUM(pd.market_value), perf.value
+				FROM positions_daily pd
+				JOIN perf_data perf ON perf.date = pd.date AND perf.metric = 'PortfolioEquity'
+				GROUP BY pd.date`)
+			Expect(err).NotTo(HaveOccurred())
+			defer rows.Close()
+
+			seen := 0
+			for rows.Next() {
+				var date string
+				var sumMV, eq float64
+				Expect(rows.Scan(&date, &sumMV, &eq)).To(Succeed())
+				Expect(math.Abs(sumMV-eq)).To(BeNumerically("<", 1e-4), "date=%s sum=%f eq=%f", date, sumMV, eq)
+				seen++
+			}
+			Expect(rows.Err()).NotTo(HaveOccurred())
+			Expect(seen).To(Equal(30))
 		})
 	})
 })

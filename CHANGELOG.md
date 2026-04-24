@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Snapshots now include a `positions_daily` table recording each ticker's end-of-day market value and quantity, so consumers can compute per-ticker contribution without replaying prices. `$CASH` participates as a position with an empty `figi`, and rows are emitted every trading day including zero-balance days.
+
+### Changed
+
+- The snapshot schema version is now `5`. Snapshots produced by earlier releases can no longer be read; re-run the backtest to regenerate.
+
 ## [0.7.7] - 2026-04-23
 
 ### Added
