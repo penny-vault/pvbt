@@ -830,7 +830,7 @@ var _ = Describe("UpdatePrices per-asset tracking", func() {
 		acct.UpdatePrices(df1)
 
 		mv, qty := acct.PositionSeries()
-		Expect(len(mv[bnd])).To(Equal(2))
+		Expect(mv[bnd]).To(HaveLen(2))
 		Expect(math.IsNaN(mv[bnd][0])).To(BeTrue())
 		Expect(mv[bnd][1]).To(Equal(1620.0))
 		Expect(math.IsNaN(qty[bnd][0])).To(BeTrue())

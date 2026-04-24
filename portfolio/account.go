@@ -53,19 +53,19 @@ type Option func(*Account)
 // *Account (giving access to both interfaces): it passes it as Portfolio
 // to strategy Compute calls, and calls Record/SetBroker directly.
 type Account struct {
-	cash              float64
-	holdings          map[asset.Asset]float64
-	transactions      []Transaction
-	broker            broker.Broker
-	prices            *data.DataFrame
-	perfData          *data.DataFrame
+	cash         float64
+	holdings     map[asset.Asset]float64
+	transactions []Transaction
+	broker       broker.Broker
+	prices       *data.DataFrame
+	perfData     *data.DataFrame
 	// positionMV tracks per-asset market-value history aligned with perfData.Times().
 	// Populated by UpdatePrices; appended each step for every currently-held asset
 	// and for the $CASH sentinel (emitted every step, including zero-balance days).
 	positionMV map[asset.Asset][]float64
 	// positionQty tracks per-asset quantity history aligned with perfData.Times().
 	// Same semantics as positionMV, under the PositionQuantity metric.
-	positionQty map[asset.Asset][]float64
+	positionQty       map[asset.Asset][]float64
 	benchmark         asset.Asset
 	riskFreeValue     float64
 	taxLots           map[asset.Asset][]TaxLot
@@ -1703,7 +1703,10 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 	for ast, qty := range a.holdings {
 		mv := priceData.Value(ast, data.MetricClose)
 		if math.IsNaN(mv) {
-			// Fall back to the last-known mv if we have any history for this asset.
+			// Fall back to the last-known price if today's close is NaN. Note: this
+			// recovers priorPrice = lastMV / lastQty, which embeds the pre-split
+			// price if a split occurred on this step; split-on-NaN-day is a deep
+			// edge case and not handled here.
 			if prior, ok := a.positionMV[ast]; ok && len(prior) > 0 {
 				last := prior[len(prior)-1]
 				if !math.IsNaN(last) {
@@ -1712,6 +1715,7 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 						priorPrice := last / priorQty[len(priorQty)-1]
 						stepMV[ast] = qty * priorPrice
 						total += stepMV[ast]
+
 						continue
 					}
 				}
@@ -1719,8 +1723,10 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 			// No prior history: skip this asset for this step (mv=NaN).
 			log.Debug().Str("ticker", ast.Ticker).Msg("UpdatePrices: no close price and no prior mv; skipping positions_daily row this step")
 			stepMV[ast] = math.NaN()
+
 			continue
 		}
+
 		stepMV[ast] = qty * mv
 		total += stepMV[ast]
 	}
@@ -1772,12 +1778,11 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 		if ast == cashSentinel {
 			continue
 		}
+
 		if _, held := a.holdings[ast]; held {
 			continue
 		}
-		if _, stampedThisStep := stepMV[ast]; stampedThisStep {
-			continue
-		}
+
 		prior := a.positionQty[ast]
 		if len(prior) > 0 && prior[len(prior)-1] > 0 {
 			a.appendPositionRow(ast, 0, 0, histLen)
@@ -1799,10 +1804,12 @@ func (a *Account) UpdatePrices(priceData *data.DataFrame) {
 func (a *Account) appendPositionRow(ast asset.Asset, mv, qty float64, targetLen int) {
 	mvSlice := a.positionMV[ast]
 	qtySlice := a.positionQty[ast]
+
 	for len(mvSlice) < targetLen-1 {
 		mvSlice = append(mvSlice, math.NaN())
 		qtySlice = append(qtySlice, math.NaN())
 	}
+
 	mvSlice = append(mvSlice, mv)
 	qtySlice = append(qtySlice, qty)
 	a.positionMV[ast] = mvSlice
