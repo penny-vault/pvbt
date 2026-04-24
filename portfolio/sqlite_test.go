@@ -556,5 +556,53 @@ var _ = Describe("SQLite", func() {
 			Expect(mv).To(Equal(0.0))
 			Expect(qty).To(Equal(0.0))
 		})
+
+		It("satisfies the sum invariant over a 30-day two-asset run", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+			acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+			t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+			acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+			acct.Record(portfolio.Transaction{Date: t0, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+
+			days := daySeq(t0, 30)
+			for idx, dd := range days {
+				spyPrice := 400.0 + float64(idx)
+				bndPrice := 80.0 + float64(idx)*0.1
+				acct.UpdatePrices(buildDF(dd, []asset.Asset{spy, bnd}, []float64{spyPrice, bndPrice}, []float64{spyPrice, bndPrice}))
+			}
+
+			dbPath := filepath.Join(tmpDir, "invariant.db")
+			Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+			db, err := sql.Open("sqlite", dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer db.Close()
+
+			var rowCount int
+			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&rowCount)).To(Succeed())
+			Expect(rowCount).To(Equal(30 * 3))
+
+			rows, err := db.Query(`
+				SELECT pd.date, SUM(pd.market_value), perf.value
+				FROM positions_daily pd
+				JOIN perf_data perf ON perf.date = pd.date AND perf.metric = 'PortfolioEquity'
+				GROUP BY pd.date`)
+			Expect(err).NotTo(HaveOccurred())
+			defer rows.Close()
+
+			seen := 0
+			for rows.Next() {
+				var date string
+				var sumMV, eq float64
+				Expect(rows.Scan(&date, &sumMV, &eq)).To(Succeed())
+				Expect(math.Abs(sumMV-eq)).To(BeNumerically("<", 1e-4), "date=%s sum=%f eq=%f", date, sumMV, eq)
+				seen++
+			}
+			Expect(rows.Err()).NotTo(HaveOccurred())
+			Expect(seen).To(Equal(30))
+		})
 	})
 })
