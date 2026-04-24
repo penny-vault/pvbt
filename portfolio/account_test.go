@@ -786,6 +786,86 @@ var _ = Describe("Account", func() {
 	})
 })
 
+var _ = Describe("UpdatePrices per-asset tracking", func() {
+	It("records market value and quantity for each held asset and $CASH on each step", func() {
+		spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+		bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+		cashAsset := asset.Asset{Ticker: "$CASH", CompositeFigi: ""}
+
+		acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+		t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+		acct.Record(portfolio.Transaction{Date: t0, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+		df0 := buildDF(t0, []asset.Asset{spy, bnd}, []float64{400, 80}, []float64{400, 80})
+		acct.UpdatePrices(df0)
+
+		t1 := t0.AddDate(0, 0, 1)
+		df1 := buildDF(t1, []asset.Asset{spy, bnd}, []float64{410, 81}, []float64{410, 81})
+		acct.UpdatePrices(df1)
+
+		mv, qty := acct.PositionSeries()
+		Expect(mv[spy]).To(Equal([]float64{4000, 4100}))
+		Expect(mv[bnd]).To(Equal([]float64{1600, 1620}))
+		Expect(mv[cashAsset]).To(Equal([]float64{4400, 4400}))
+		Expect(qty[spy]).To(Equal([]float64{10, 10}))
+		Expect(qty[bnd]).To(Equal([]float64{20, 20}))
+		Expect(qty[cashAsset]).To(Equal([]float64{4400, 4400}))
+	})
+
+	It("back-fills NaN for an asset bought mid-period", func() {
+		spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+		bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+		acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+		t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+		df0 := buildDF(t0, []asset.Asset{spy}, []float64{400}, []float64{400})
+		acct.UpdatePrices(df0)
+
+		t1 := t0.AddDate(0, 0, 1)
+		acct.Record(portfolio.Transaction{Date: t1, Asset: bnd, Type: asset.BuyTransaction, Qty: 20, Price: 80, Amount: -1600})
+		df1 := buildDF(t1, []asset.Asset{spy, bnd}, []float64{405, 81}, []float64{405, 81})
+		acct.UpdatePrices(df1)
+
+		mv, qty := acct.PositionSeries()
+		Expect(len(mv[bnd])).To(Equal(2))
+		Expect(math.IsNaN(mv[bnd][0])).To(BeTrue())
+		Expect(mv[bnd][1]).To(Equal(1620.0))
+		Expect(math.IsNaN(qty[bnd][0])).To(BeTrue())
+		Expect(qty[bnd][1]).To(Equal(20.0))
+	})
+
+	It("emits a zero row on close day and NaN on subsequent days", func() {
+		spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+
+		acct := portfolio.New(portfolio.WithCash(10000, time.Time{}))
+
+		t0 := time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC)
+		acct.Record(portfolio.Transaction{Date: t0, Asset: spy, Type: asset.BuyTransaction, Qty: 10, Price: 400, Amount: -4000})
+		df0 := buildDF(t0, []asset.Asset{spy}, []float64{400}, []float64{400})
+		acct.UpdatePrices(df0)
+
+		t1 := t0.AddDate(0, 0, 1)
+		acct.Record(portfolio.Transaction{Date: t1, Asset: spy, Type: asset.SellTransaction, Qty: 10, Price: 410, Amount: 4100})
+		df1 := buildDF(t1, []asset.Asset{spy}, []float64{410}, []float64{410})
+		acct.UpdatePrices(df1)
+
+		t2 := t1.AddDate(0, 0, 1)
+		df2 := buildDF(t2, []asset.Asset{spy}, []float64{411}, []float64{411})
+		acct.UpdatePrices(df2)
+
+		mv, qty := acct.PositionSeries()
+		Expect(mv[spy]).To(HaveLen(3))
+		Expect(mv[spy][0]).To(Equal(4000.0))
+		Expect(mv[spy][1]).To(Equal(0.0))
+		Expect(math.IsNaN(mv[spy][2])).To(BeTrue())
+		Expect(qty[spy][1]).To(Equal(0.0))
+		Expect(math.IsNaN(qty[spy][2])).To(BeTrue())
+	})
+})
+
 var _ = Describe("Account.Clone", func() {
 	It("preserves holdings, cash, metadata, and annotations", func() {
 		spy := asset.Asset{CompositeFigi: "SPY001", Ticker: "SPY"}
