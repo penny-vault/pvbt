@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.7] - 2026-04-23
+
+### Added
+
+- The `backtest` command now accepts a `--json` flag that writes all output as JSON Lines to stdout. Each line is a self-contained object with a `type` field (`status`, `progress`, or `log`), making it straightforward to pipe backtest runs into other tools or CI pipelines without screen-scraping the interactive UI.
+
 ## [0.7.6] - 2026-04-21
 
 ### Added
