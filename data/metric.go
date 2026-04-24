@@ -321,4 +321,8 @@ const (
 	PortfolioDrawdown Metric = "portfolio_drawdown"
 	// PortfolioBenchReturns is the period-over-period percentage return of the benchmark.
 	PortfolioBenchReturns Metric = "portfolio_bench_returns"
+	// PositionMarketValue is the per-asset market value recorded daily for positions-impact tracking.
+	PositionMarketValue Metric = "PositionMarketValue"
+	// PositionQuantity is the per-asset quantity held recorded daily for positions-impact tracking.
+	PositionQuantity Metric = "PositionQuantity"
 )
