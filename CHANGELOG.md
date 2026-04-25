@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-04-24
+
 ### Added
 
 - Snapshots now include a `positions_daily` table recording each ticker's end-of-day market value and quantity, so consumers can compute per-ticker contribution without replaying prices. `$CASH` participates as a position with an empty `figi`, and rows are emitted every trading day including zero-balance days.
@@ -263,7 +265,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.7.1...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/penny-vault/pvbt/compare/v0.7.7...v0.8.0
+[0.7.7]: https://github.com/penny-vault/pvbt/compare/v0.7.6...v0.7.7
+[0.7.6]: https://github.com/penny-vault/pvbt/compare/v0.7.5...v0.7.6
+[0.7.5]: https://github.com/penny-vault/pvbt/compare/v0.7.4...v0.7.5
+[0.7.4]: https://github.com/penny-vault/pvbt/compare/v0.7.3...v0.7.4
+[0.7.3]: https://github.com/penny-vault/pvbt/compare/v0.7.2...v0.7.3
+[0.7.2]: https://github.com/penny-vault/pvbt/compare/v0.7.1...v0.7.2
 [0.7.1]: https://github.com/penny-vault/pvbt/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/penny-vault/pvbt/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/penny-vault/pvbt/compare/v0.5.0...v0.6.0
