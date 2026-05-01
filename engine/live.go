@@ -149,13 +149,14 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 
 	acct.SetMetadata(portfolio.MetaRunMode, "live")
 
-	// 7. Initialize data cache (before DGS3MO resolution which may use fetchRange).
+	// 7. Initialize data cache (before risk-free resolution which may use fetchRange).
 	e.cache = newDataCache(e.cacheMaxBytes)
 
-	// Resolve DGS3MO as the system risk-free rate.
-	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
+	// Resolve DGS3MO as the system risk-free rate. The FRED: namespace
+	// routes the lookup to the economic_indicators view in pvdb.
+	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "FRED:DGS3MO")
 	if rfErr != nil {
-		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")
+		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (FRED:DGS3MO) not available, using 0%")
 	} else {
 		e.riskFreeResolved = true
 		e.riskFreeAssetDGS = dgs3mo

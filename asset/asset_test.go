@@ -43,3 +43,46 @@ var _ = Describe("NormalizeExchange", func() {
 		Entry("empty string passes through", "", asset.Exchange("")),
 	)
 })
+
+var _ = Describe("FRED ticker helpers", func() {
+	DescribeTable("IsFREDTicker recognizes the namespace prefix",
+		func(ticker string, expected bool) {
+			Expect(asset.IsFREDTicker(ticker)).To(Equal(expected))
+		},
+		Entry("namespaced", "FRED:DGS3MO", true),
+		Entry("namespaced empty series", "FRED:", true),
+		Entry("plain ticker", "DGS3MO", false),
+		Entry("equity ticker", "SPY", false),
+		Entry("lower case prefix is not honored", "fred:DGS3MO", false),
+		Entry("empty string", "", false),
+	)
+
+	DescribeTable("FREDSeries strips the namespace prefix",
+		func(ticker, expected string) {
+			Expect(asset.FREDSeries(ticker)).To(Equal(expected))
+		},
+		Entry("namespaced", "FRED:DGS3MO", "DGS3MO"),
+		Entry("plain returns input", "DGS3MO", "DGS3MO"),
+		Entry("multi-segment series", "FRED:T10Y2Y", "T10Y2Y"),
+		Entry("empty namespace", "FRED:", ""),
+	)
+
+	Describe("NewFREDAsset", func() {
+		It("constructs a synthetic FRED asset from a namespaced ticker", func() {
+			a := asset.NewFREDAsset("FRED:DGS3MO")
+
+			Expect(a.Ticker).To(Equal("FRED:DGS3MO"))
+			Expect(a.CompositeFigi).To(Equal("FRED:DGS3MO"))
+			Expect(a.AssetType).To(Equal(asset.AssetTypeFRED))
+			Expect(a.PrimaryExchange).To(Equal(asset.ExchangeFRED))
+		})
+
+		It("normalizes a bare series name to the namespaced form", func() {
+			a := asset.NewFREDAsset("DGS3MO")
+
+			Expect(a.Ticker).To(Equal("FRED:DGS3MO"))
+			Expect(a.CompositeFigi).To(Equal("FRED:DGS3MO"))
+			Expect(a.AssetType).To(Equal(asset.AssetTypeFRED))
+		})
+	})
+})

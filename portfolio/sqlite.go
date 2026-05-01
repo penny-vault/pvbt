@@ -281,8 +281,8 @@ func (a *Account) writeMetadata(tx *sql.Tx) error {
 		}
 	}
 
-	// Risk-free identity (always DGS3MO).
-	if _, err := stmt.Exec("risk_free_ticker", "DGS3MO"); err != nil {
+	// Risk-free identity (always FRED:DGS3MO).
+	if _, err := stmt.Exec("risk_free_ticker", "FRED:DGS3MO"); err != nil {
 		return fmt.Errorf("insert risk_free_ticker: %w", err)
 	}
 

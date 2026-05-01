@@ -207,10 +207,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetMetadata(portfolio.MetaStrategyBenchmark, info.Benchmark)
 	}
 
-	// 7. Resolve DGS3MO as the system risk-free rate.
-	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "DGS3MO")
+	// 7. Resolve DGS3MO as the system risk-free rate. The FRED: namespace
+	// routes the lookup to the economic_indicators view in pvdb.
+	dgs3mo, rfErr := e.assetProvider.LookupAsset(ctx, "FRED:DGS3MO")
 	if rfErr != nil {
-		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (DGS3MO) not available, using 0%")
+		zerolog.Ctx(ctx).Warn().Msg("risk-free rate data (FRED:DGS3MO) not available, using 0%")
 	} else {
 		e.riskFreeResolved = true
 		e.riskFreeAssetDGS = dgs3mo

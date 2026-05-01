@@ -79,7 +79,7 @@ func DescribeStrategy(strategy Strategy) StrategyInfo {
 		info.Warmup = description.Warmup
 	}
 
-	info.RiskFree = "DGS3MO"
+	info.RiskFree = "FRED:DGS3MO"
 
 	params := StrategyParameters(strategy)
 	info.Parameters = make([]ParameterInfo, len(params))

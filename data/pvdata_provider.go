@@ -23,6 +23,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -211,7 +212,13 @@ func (p *PVDataProvider) Provides() []Metric {
 }
 
 // LookupAsset resolves a ticker to an Asset using the assets view.
+// FRED-namespaced tickers (e.g. "FRED:DGS3MO") are resolved synthetically
+// because economic indicators do not have rows in the assets table.
 func (p *PVDataProvider) LookupAsset(ctx context.Context, ticker string) (asset.Asset, error) {
+	if asset.IsFREDTicker(ticker) {
+		return asset.NewFREDAsset(ticker), nil
+	}
+
 	conn, err := p.pool.Acquire(ctx)
 	if err != nil {
 		return asset.Asset{}, fmt.Errorf("pvdata: acquire connection: %w", err)
@@ -281,10 +288,21 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 		viewMetrics[v] = append(viewMetrics[v], metric)
 	}
 
-	// collect composite figis for the WHERE IN clause
-	figis := make([]string, len(req.Assets))
-	for i, a := range req.Assets {
-		figis[i] = a.CompositeFigi
+	// Split assets by source: FRED economic indicators are queried separately
+	// from the economic_indicators view; everything else queries the standard
+	// eod/metrics/fundamentals views.
+	figis := make([]string, 0, len(req.Assets))
+
+	var fredAssets []asset.Asset
+
+	for _, aa := range req.Assets {
+		if aa.AssetType == asset.AssetTypeFRED {
+			fredAssets = append(fredAssets, aa)
+
+			continue
+		}
+
+		figis = append(figis, aa.CompositeFigi)
 	}
 
 	// accumulate timestamps and per-column data keyed by Unix seconds.
@@ -317,22 +335,38 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 	}
 	defer conn.Release()
 
-	// fetch from each view that has requested metrics
-	if metrics, ok := viewMetrics["eod"]; ok {
-		if err := p.fetchEod(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
-			return nil, err
+	// fetch from each view that has requested metrics. Standard views are
+	// only queried when there is at least one tradeable asset; FRED-only
+	// requests skip them entirely.
+	if len(figis) > 0 {
+		if metrics, ok := viewMetrics["eod"]; ok {
+			if err := p.fetchEod(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
+				return nil, err
+			}
+		}
+
+		if metrics, ok := viewMetrics["metrics"]; ok {
+			if err := p.fetchMetrics(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
+				return nil, err
+			}
+		}
+
+		if metrics, ok := viewMetrics["fundamentals"]; ok {
+			if err := p.fetchFundamentals(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	if metrics, ok := viewMetrics["metrics"]; ok {
-		if err := p.fetchMetrics(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
-			return nil, err
-		}
-	}
-
-	if metrics, ok := viewMetrics["fundamentals"]; ok {
-		if err := p.fetchFundamentals(ctx, conn, figis, req.Start, req.End, metrics, ensureCol, timeSet); err != nil {
-			return nil, err
+	// FRED economic indicators are sourced from the economic_indicators view.
+	// Their value populates MetricClose -- callers requesting other eod
+	// metrics for a FRED asset will see NaN, which is the correct signal
+	// that the metric is meaningless for an economic indicator.
+	if len(fredAssets) > 0 {
+		if metrics, ok := viewMetrics["eod"]; ok && slices.Contains(metrics, MetricClose) {
+			if err := p.fetchEconomicIndicators(ctx, conn, fredAssets, req.Start, req.End, ensureCol, timeSet); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -473,6 +507,79 @@ func (p *PVDataProvider) FetchMarketHolidays(ctx context.Context) ([]tradecron.M
 }
 
 // -- fetch helpers -----------------------------------------------------------
+
+// fetchEconomicIndicators queries the economic_indicators view for FRED-typed
+// assets. Values are written into the MetricClose column keyed by the asset's
+// synthetic CompositeFigi (e.g. "FRED:DGS3MO"). The view stores annualized
+// percent values (e.g. 5.25 for a 5.25% yield) -- callers are responsible for
+// any unit conversion.
+func (p *PVDataProvider) fetchEconomicIndicators(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	fredAssets []asset.Asset,
+	start, end time.Time,
+	ensureCol func(string, Metric) map[int64]float64,
+	timeSet map[int64]time.Time,
+) error {
+	// Build series-name list and a series->figi map so we can attribute
+	// each row back to the synthetic asset that requested it.
+	series := make([]string, 0, len(fredAssets))
+	figiBySeries := make(map[string]string, len(fredAssets))
+
+	for _, aa := range fredAssets {
+		seriesName := asset.FREDSeries(aa.Ticker)
+		series = append(series, seriesName)
+		figiBySeries[seriesName] = aa.CompositeFigi
+	}
+
+	zerolog.Ctx(ctx).Debug().
+		Strs("series", series).
+		Time("start", start).
+		Time("end", end).
+		Msg("fetchEconomicIndicators query")
+
+	rows, err := conn.Query(ctx,
+		`SELECT series, event_date, value
+		 FROM economic_indicators
+		 WHERE series = ANY($1) AND event_date BETWEEN $2::date AND $3::date
+		 ORDER BY event_date`,
+		series, start, end,
+	)
+	if err != nil {
+		return fmt.Errorf("pvdata: query economic_indicators: %w", err)
+	}
+	defer rows.Close()
+
+	rowCount := 0
+	for rows.Next() {
+		rowCount++
+
+		var (
+			seriesName string
+			eventDate  time.Time
+			value      float64
+		)
+
+		if err := rows.Scan(&seriesName, &eventDate, &value); err != nil {
+			return fmt.Errorf("pvdata: scan economic_indicators row: %w", err)
+		}
+
+		figi, ok := figiBySeries[seriesName]
+		if !ok {
+			continue
+		}
+
+		eventDate = eodTimestamp(eventDate)
+		sec := eventDate.Unix()
+		timeSet[sec] = eventDate
+
+		ensureCol(figi, MetricClose)[sec] = value
+	}
+
+	zerolog.Ctx(ctx).Debug().Int("rows", rowCount).Msg("fetchEconomicIndicators result")
+
+	return rows.Err()
+}
 
 func (p *PVDataProvider) fetchEod(
 	ctx context.Context,
