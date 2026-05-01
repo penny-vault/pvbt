@@ -15,7 +15,41 @@
 
 package asset
 
-import "time"
+import (
+	"strings"
+	"time"
+)
+
+// FREDPrefix is the namespace prefix used for FRED economic-indicator
+// tickers (e.g. "FRED:DGS3MO"). FRED tickers are not tradeable; they map
+// to series in the pvdb economic_indicators view.
+const FREDPrefix = "FRED:"
+
+// IsFREDTicker reports whether ticker carries the FRED: namespace prefix.
+func IsFREDTicker(ticker string) bool {
+	return strings.HasPrefix(ticker, FREDPrefix)
+}
+
+// FREDSeries returns the FRED series name for a ticker, stripping the FRED:
+// prefix if present. Tickers without the prefix are returned unchanged.
+func FREDSeries(ticker string) string {
+	return strings.TrimPrefix(ticker, FREDPrefix)
+}
+
+// NewFREDAsset constructs a synthetic Asset for a FRED economic-indicator
+// series. The input may be either "FRED:DGS3MO" or "DGS3MO"; the returned
+// Asset always carries the namespaced form in both Ticker and CompositeFigi
+// so it round-trips through caches and DataFrames cleanly.
+func NewFREDAsset(ticker string) Asset {
+	namespaced := FREDPrefix + FREDSeries(ticker)
+
+	return Asset{
+		Ticker:          namespaced,
+		CompositeFigi:   namespaced,
+		AssetType:       AssetTypeFRED,
+		PrimaryExchange: ExchangeFRED,
+	}
+}
 
 // AssetType identifies the class of a financial instrument.
 type AssetType string
