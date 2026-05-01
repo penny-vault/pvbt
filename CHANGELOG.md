@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-05-01
+
 ### Changed
 
 - Strategies that reference economic indicators must use the `FRED:` namespace prefix (e.g. `FRED:DGS3MO`); FRED data is now sourced from the dedicated `economic_indicators` table in pvdb rather than the end-of-day asset table. The risk-free rate identifier reported by `describe` and stored in snapshots is now `FRED:DGS3MO`.
