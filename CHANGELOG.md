@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A backtest whose end date runs ahead of the data feed by one or two trading days now stops at the last fully-priced day instead of liquidating every held position as delisted. Larger gaps still trigger the existing delisting behavior.
+
 ## [0.8.1] - 2026-05-01
 
 ### Changed

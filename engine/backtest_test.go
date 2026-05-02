@@ -275,6 +275,31 @@ func (s *buyOnceStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portf
 	return nil
 }
 
+// BuyOnceExportedStrategy mirrors buyOnceStrategy but exports its Target
+// field so collectStrategyAssets can discover it for data-freshness
+// probing.
+type BuyOnceExportedStrategy struct {
+	Target asset.Asset
+	Qty    float64
+	bought bool
+}
+
+func (s *BuyOnceExportedStrategy) Name() string { return "buy-once-exported" }
+
+func (s *BuyOnceExportedStrategy) Setup(_ *engine.Engine) {}
+
+func (s *BuyOnceExportedStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5"}
+}
+
+func (s *BuyOnceExportedStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	if !s.bought {
+		s.bought = true
+		return batch.Order(ctx, s.Target, portfolio.Buy, s.Qty)
+	}
+	return nil
+}
+
 // shortOnceStrategy sells (shorts) a fixed number of shares on the
 // first Compute call and then does nothing. This leaves a short
 // position open for housekeeping to process borrow fees and dividends.
@@ -1512,6 +1537,162 @@ var _ = Describe("Backtest", func() {
 			// Verify position is 0 after delisting.
 			Expect(fund.Position(testStock)).To(BeNumerically("==", 0),
 				"position should be zero after delisting liquidation")
+		})
+
+		It("ends the backtest early when trailing prices are stale by 1-2 days", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-STALE1", Ticker: "STALE1"}
+			staleAssets := []asset.Asset{testStock}
+			staleProvider := &mockAssetProvider{assets: staleAssets}
+
+			staleMetrics := []data.Metric{
+				data.MetricClose, data.AdjClose, data.Dividend,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
+			}
+
+			// Two weeks of trading data, with the last 2 trading days NaN
+			// to simulate a data feed that is one weekend behind.
+			nDays := 17
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			nMetrics := len(staleMetrics)
+			vals := make([]float64, nDays*len(staleAssets)*nMetrics)
+			lastFreshIdx := nDays - 3 // last 2 trading days are stale
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				closePrice := 100.0
+				if dayIdx > lastFreshIdx {
+					closePrice = math.NaN()
+				}
+				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice
+				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0
+				if !math.IsNaN(closePrice) {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0
+					vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0
+				} else {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = math.NaN()
+					vals[(0*nMetrics+4)*nDays+dayIdx] = math.NaN()
+				}
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0
+				vals[(0*nMetrics+6)*nDays+dayIdx] = 1_000_000.0
+			}
+
+			staleDF, dfErr := data.NewDataFrame(times, staleAssets, staleMetrics, data.Daily,
+				data.SlabToColumns(vals, len(staleAssets)*nMetrics, nDays))
+			Expect(dfErr).NotTo(HaveOccurred())
+			staleDataProvider := data.NewTestProvider(staleMetrics, staleDF)
+
+			acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+			strategy := &BuyOnceExportedStrategy{Target: testStock, Qty: 50}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(staleDataProvider),
+				engine.WithAssetProvider(staleProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := dataStart
+			btEnd := times[nDays-1]
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+
+			// Stale data should NOT cause delisting; truncating end avoids
+			// the NaN-priced trailing days entirely.
+			for _, tx := range txns {
+				if tx.Type == asset.SellTransaction && tx.Asset == testStock {
+					Expect(tx.Justification).NotTo(ContainSubstring("delisted"),
+						"stale trailing data must not produce a delisting transaction")
+				}
+			}
+
+			// Position should still be held; nothing was liquidated.
+			Expect(fund.Position(testStock)).To(BeNumerically("==", 50),
+				"position should remain intact when trailing data is merely stale")
+		})
+
+		It("still delists when trailing prices are missing for more than two days", func() {
+			testStock := asset.Asset{CompositeFigi: "FIGI-STALE2", Ticker: "STALE2"}
+			staleAssets := []asset.Asset{testStock}
+			staleProvider := &mockAssetProvider{assets: staleAssets}
+
+			staleMetrics := []data.Metric{
+				data.MetricClose, data.AdjClose, data.Dividend,
+				data.MetricHigh, data.MetricLow, data.SplitFactor, data.Volume,
+			}
+
+			nDays := 17
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			times := make([]time.Time, nDays)
+			for idx := range times {
+				day := dataStart.AddDate(0, 0, idx)
+				times[idx] = time.Date(day.Year(), day.Month(), day.Day(), 16, 0, 0, 0, time.UTC)
+			}
+
+			nMetrics := len(staleMetrics)
+			vals := make([]float64, nDays*len(staleAssets)*nMetrics)
+			// Five trailing days are missing -- well beyond the freshness
+			// tolerance, so the engine should delist instead of truncating.
+			lastFreshIdx := nDays - 6
+			for dayIdx := 0; dayIdx < nDays; dayIdx++ {
+				closePrice := 100.0
+				if dayIdx > lastFreshIdx {
+					closePrice = math.NaN()
+				}
+				vals[(0*nMetrics+0)*nDays+dayIdx] = closePrice
+				vals[(0*nMetrics+1)*nDays+dayIdx] = closePrice
+				vals[(0*nMetrics+2)*nDays+dayIdx] = 0.0
+				if !math.IsNaN(closePrice) {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = closePrice + 2.0
+					vals[(0*nMetrics+4)*nDays+dayIdx] = closePrice - 2.0
+				} else {
+					vals[(0*nMetrics+3)*nDays+dayIdx] = math.NaN()
+					vals[(0*nMetrics+4)*nDays+dayIdx] = math.NaN()
+				}
+				vals[(0*nMetrics+5)*nDays+dayIdx] = 1.0
+				vals[(0*nMetrics+6)*nDays+dayIdx] = 1_000_000.0
+			}
+
+			staleDF, dfErr := data.NewDataFrame(times, staleAssets, staleMetrics, data.Daily,
+				data.SlabToColumns(vals, len(staleAssets)*nMetrics, nDays))
+			Expect(dfErr).NotTo(HaveOccurred())
+			staleDataProvider := data.NewTestProvider(staleMetrics, staleDF)
+
+			acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+			strategy := &BuyOnceExportedStrategy{Target: testStock, Qty: 50}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(staleDataProvider),
+				engine.WithAssetProvider(staleProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := dataStart
+			btEnd := times[nDays-1]
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			txns := fund.Transactions()
+
+			hasDelisted := false
+			for _, tx := range txns {
+				if tx.Type == asset.SellTransaction && tx.Asset == testStock {
+					if tx.Justification != "" {
+						hasDelisted = true
+					}
+				}
+			}
+			Expect(hasDelisted).To(BeTrue(),
+				"a 5-day trailing gap must still produce a delisting transaction")
+			Expect(fund.Position(testStock)).To(BeNumerically("==", 0),
+				"position should be liquidated after a 5-day trailing gap")
 		})
 	})
 })
