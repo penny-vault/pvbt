@@ -39,7 +39,7 @@ var (
 // universe.Universe fields are built from comma-separated tickers via e.Universe.
 func hydrateFields(eng *Engine, target interface{}) error {
 	val := reflect.ValueOf(target)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

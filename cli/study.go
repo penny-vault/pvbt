@@ -149,7 +149,7 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 // same concrete type.
 func strategyFactory(original engine.Strategy) func() engine.Strategy {
 	originalType := reflect.TypeOf(original)
-	if originalType.Kind() == reflect.Ptr {
+	if originalType.Kind() == reflect.Pointer {
 		originalType = originalType.Elem()
 	}
 

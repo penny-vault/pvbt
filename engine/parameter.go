@@ -92,7 +92,7 @@ func toKebabCase(s string) string {
 // build configuration forms.
 func StrategyParameters(s Strategy) []Parameter {
 	v := reflect.ValueOf(s)
-	if v.Kind() == reflect.Ptr {
+	if v.Kind() == reflect.Pointer {
 		v = v.Elem()
 	}
 
