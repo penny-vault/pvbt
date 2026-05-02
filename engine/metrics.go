@@ -26,6 +26,7 @@ import (
 // standardWindows returns the fixed set of metric windows.
 func standardWindows() []portfolio.Period {
 	return []portfolio.Period{
+		portfolio.Years(10),
 		portfolio.Years(5),
 		portfolio.Years(3),
 		portfolio.Years(1),
