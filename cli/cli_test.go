@@ -27,6 +27,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/universe"
@@ -282,6 +283,59 @@ var _ = Describe("applyStrategyFlags with universe fields", func() {
 		Expect(strategy.RiskOff).NotTo(BeNil())
 		offMembers := strategy.RiskOff.Assets(time.Time{})
 		Expect(offMembers[0].Ticker).To(Equal("AGG"))
+	})
+})
+
+type assetStrategy struct {
+	Bench asset.Asset `pvbt:"bench" desc:"benchmark ticker" default:"SPY"`
+	Lev   asset.Asset `pvbt:"lev"   desc:"leveraged ticker"`
+}
+
+func (s *assetStrategy) Name() string           { return "assetTest" }
+func (s *assetStrategy) Setup(_ *engine.Engine) {}
+func (s *assetStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+
+var _ = Describe("registerStrategyFlags with asset.Asset fields", func() {
+	It("registers a string flag carrying the default ticker", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &assetStrategy{}
+
+		registerStrategyFlags(cmd, strategy)
+
+		benchFlag := cmd.Flags().Lookup("bench")
+		Expect(benchFlag).NotTo(BeNil())
+		Expect(benchFlag.DefValue).To(Equal("SPY"))
+		Expect(benchFlag.Usage).To(Equal("benchmark ticker"))
+
+		levFlag := cmd.Flags().Lookup("lev")
+		Expect(levFlag).NotTo(BeNil())
+		Expect(levFlag.DefValue).To(BeEmpty())
+	})
+})
+
+var _ = Describe("applyStrategyFlags with asset.Asset fields", func() {
+	It("sets the field's Ticker from a user-provided flag", func() {
+		strategy := &assetStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest", "--bench", "qqq", "--lev", " tqqq "})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.Bench.Ticker).To(Equal("QQQ"))
+		Expect(strategy.Lev.Ticker).To(Equal("TQQQ"))
+	})
+
+	It("falls back to the default tag value when no flag is given", func() {
+		strategy := &assetStrategy{}
+		rootCmd, _ := buildTestCmd(strategy, nil)
+
+		rootCmd.SetArgs([]string{"backtest"})
+		Expect(rootCmd.Execute()).To(Succeed())
+
+		Expect(strategy.Bench.Ticker).To(Equal("SPY"))
+		Expect(strategy.Lev.Ticker).To(BeEmpty())
 	})
 })
 

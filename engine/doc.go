@@ -223,7 +223,11 @@
 //
 // The CLI uses the pvbt and desc tags to register cobra flags automatically.
 // When a user passes --riskOn "SPY,QQQ", the field is populated before
-// hydration runs, so the default tag is skipped.
+// hydration runs, so the default tag is skipped. CLI overrides are supported
+// for [asset.Asset] fields (single ticker, e.g. --bench QQQ) and for
+// [universe.Universe] fields (comma-separated tickers, e.g. --riskOn
+// "SPY,QQQ"). Overrides set only the Ticker; the engine re-resolves through
+// the asset registry during hydration so downstream code has full metadata.
 //
 // # Metadata
 //

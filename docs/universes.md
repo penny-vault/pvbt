@@ -25,7 +25,7 @@ type Universe interface {
 
 ## Creating universes
 
-There are three ways to create a universe, depending on where the assets come from.
+There are four ways to create a universe, depending on where the assets come from.
 
 ### From struct tags
 
@@ -93,6 +93,31 @@ The `us-tradable` universe is recomputed daily by pv-data and includes only US c
 ADRs, limited partnerships, ETFs, closed-end funds, OTC stocks, and recent IPOs are excluded. For companies with multiple share classes, only the most liquid common share is kept. Membership typically lands in the 1,500-2,500 range. This is the same set of constraints Quantopian's QTradableStocksUS used to define its tradable universe, with a percentile-based market cap floor that adapts across time rather than a fixed dollar threshold.
 
 Use `us-tradable` as the default for any broad US equity strategy. Use `SPX` or `NDX` only when you specifically want to track those indexes. Use `NewStatic` for fixed asset lists like ETF rotations.
+
+### From a primary ticker with historical fallbacks
+
+Some instruments are too young to backtest as far as you'd like. TQQQ launched in February 2010; if you want to study a TQQQ-based strategy back to 2005, the first five years have no TQQQ price series at all. A splice universe lets you nominate a historical proxy -- typically a less-leveraged or otherwise similar ETF that did exist -- to fill in pre-listing dates:
+
+```go
+func (s *LeveragedMomentum) Setup(eng *engine.Engine) {
+    if s.Lev == nil { // respect any --lev CLI override
+        s.Lev = eng.SpliceUniverse("TQQQ", universe.SplicePeriod{
+            Ticker: "QLD",
+            Before: time.Date(2010, 2, 11, 0, 0, 0, 0, time.UTC),
+        })
+    }
+}
+```
+
+The strategy uses `s.Lev` like any other universe -- `Window`, `At`, and order routing all work normally. Behind the scenes:
+
+- `s.Lev.Assets(t)` returns a single asset: `QLD` for dates strictly before the cutoff, `TQQQ` from the cutoff onward.
+- `s.Lev.Window(...)` returns a single column whose identity is whichever ticker is live on the *current* simulation date. Pre-cutoff bars in that column hold `QLD` prices, post-cutoff bars hold `TQQQ` prices.
+- When a backtest crosses the cutoff date, the next rebalance naturally sells `QLD` and buys `TQQQ`. No special handling.
+
+You can declare more than one fallback by passing additional `SplicePeriod` entries; they're sorted chronologically and each covers dates from the previous cutoff up to its own.
+
+**Substitution is raw.** No leverage scaling, no return adjustment. A QLD-to-TQQQ splice will understate pre-2010 returns because QLD is 2x daily and TQQQ is 3x daily. Pick proxies whose risk and exposure profile is close to the primary, and be explicit in your strategy's documentation about what's being substituted.
 
 ## Getting data for a universe
 

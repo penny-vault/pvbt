@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/engine"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/universe"
@@ -14,6 +15,7 @@ import (
 )
 
 var (
+	assetType    = reflect.TypeOf(asset.Asset{})
 	universeType = reflect.TypeOf((*universe.Universe)(nil)).Elem()
 	durationType = reflect.TypeOf(time.Duration(0))
 )
@@ -53,6 +55,9 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 		fieldValue := val.Field(ii)
 
 		switch {
+		case field.Type == assetType:
+			cmd.Flags().String(name, defaultStr, desc)
+
 		case field.Type.Implements(universeType):
 			cmd.Flags().String(name, defaultStr, desc)
 
@@ -153,6 +158,14 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 		}
 
 		switch {
+		case field.Type == assetType:
+			raw := strings.TrimSpace(flag.Value.String())
+			if raw == "" {
+				continue
+			}
+
+			fieldValue.Set(reflect.ValueOf(asset.Asset{Ticker: strings.ToUpper(raw)}))
+
 		case field.Type.Implements(universeType):
 			raw := flag.Value.String()
 			if raw == "" {
