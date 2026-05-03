@@ -25,7 +25,7 @@ var (
 // the `default` tag or the field's current value.
 func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -121,7 +121,7 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 // and sets them on the strategy struct's fields via reflection.
 func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -224,7 +224,7 @@ func parseRangeFlag(field, value string) (study.ParamSweep, bool) {
 // range syntax (min:max:step).
 func collectParamSweeps(cmd *cobra.Command, strategy engine.Strategy) []study.ParamSweep {
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

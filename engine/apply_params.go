@@ -95,7 +95,7 @@ func testOnlyParamNames(strategy Strategy) map[string]struct{} {
 	names := make(map[string]struct{})
 
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

@@ -277,7 +277,7 @@ func strategyParams(strategy engine.Strategy) map[string]any {
 	params := make(map[string]any)
 
 	val := reflect.ValueOf(strategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

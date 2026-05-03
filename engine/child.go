@@ -44,7 +44,7 @@ type childEntry struct {
 // creation are deferred to the Backtest caller.
 func (eng *Engine) discoverChildren(parentStrategy Strategy, visited map[uintptr]bool) error {
 	val := reflect.ValueOf(parentStrategy)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -198,7 +198,7 @@ func (eng *Engine) discoverChildren(parentStrategy Strategy, visited map[uintptr
 // Supported types: string, int, float64, bool, time.Duration.
 func applyParamValue(target Strategy, paramName string, rawValue string) error {
 	val := reflect.ValueOf(target)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
