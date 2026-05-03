@@ -171,6 +171,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	start = adjustedStart
 
+	// 5d. Detect a stale trailing data feed (1-2 trading days behind the
+	// requested end) and truncate end so we stop at the last fully-priced
+	// day instead of spuriously liquidating every held position.
+	end = e.adjustEndForStaleData(ctx, end)
+
 	// 6. Create and configure account.
 	acct := e.createAccount(start)
 
