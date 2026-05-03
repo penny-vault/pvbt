@@ -69,6 +69,26 @@
 // completeness). Use SP500 or Nasdaq100 only when you specifically want to
 // track those indexes.
 //
+// From a primary ticker with historical fallbacks: use eng.SpliceUniverse
+// from Setup to substitute proxy tickers for dates before the primary's
+// listing. This is useful for backtesting strategies on instruments that did
+// not exist for the full study period -- for example, TQQQ (listed in early
+// 2010) can be backtested further into history using QLD as a proxy.
+//
+//	func (s *Strategy) Setup(eng *engine.Engine) {
+//	    s.Lev = eng.SpliceUniverse("TQQQ", universe.SplicePeriod{
+//	        Ticker: "QLD",
+//	        Before: time.Date(2010, 2, 11, 0, 0, 0, 0, time.UTC),
+//	    })
+//	}
+//
+// Substitution is raw: the proxy's price series is used directly, with no
+// adjustment for differences in leverage or composition. A strategy that
+// substitutes QLD (2x daily) for TQQQ (3x daily) will understate pre-2010
+// returns. Order routing and reporting always use whichever ticker is live
+// on the order date, so positions migrate via a normal rebalance when the
+// simulation crosses a cutoff.
+//
 // # Getting Data
 //
 // Strategies retrieve market data through the universe rather than querying a

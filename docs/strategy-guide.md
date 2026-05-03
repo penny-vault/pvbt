@@ -403,6 +403,21 @@ func (s *MyStrategy) Setup(eng *engine.Engine) {
 }
 ```
 
+### Splice universe
+
+Substitutes a historical proxy ticker for dates before the primary's listing. Useful when a strategy names a recently-listed instrument (TQQQ, BITO, etc.) but you want to backtest further into history. Substitution is raw -- no leverage or composition adjustment -- so pick proxies whose risk profile is close to the primary.
+
+```go
+func (s *MyStrategy) Setup(eng *engine.Engine) {
+    s.lev = eng.SpliceUniverse("TQQQ", universe.SplicePeriod{
+        Ticker: "QLD",
+        Before: time.Date(2010, 2, 11, 0, 0, 0, 0, time.UTC),
+    })
+}
+```
+
+`s.lev.Assets(t)` returns `QLD` before the cutoff and `TQQQ` after. When the simulation crosses the cutoff, the position migrates from `QLD` to `TQQQ` on the next rebalance. See [Universes](universes.md) for more.
+
 ### Fetching data from a universe
 
 Both methods are available in `Compute`:

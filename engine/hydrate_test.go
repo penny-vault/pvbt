@@ -136,4 +136,33 @@ var _ = Describe("Hydration", func() {
 		// PreSet should NOT be overwritten since it was non-zero.
 		Expect(strategy.PreSet).To(Equal(1.0))
 	})
+
+	It("re-resolves a pre-set asset.Asset that carries only a Ticker", func() {
+		metrics := []data.Metric{data.MetricClose, data.AdjClose, data.Dividend}
+		dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+		df := makeDailyTestData(dataStart, 90, []asset.Asset{aapl, goog}, metrics)
+		provider := data.NewTestProvider(metrics, df)
+
+		// Simulate what CLI applyStrategyFlags does for asset.Asset fields:
+		// set the Ticker only, leaving CompositeFigi and other metadata empty.
+		// The default tag says "AAPL"; the CLI override should win and the
+		// engine should resolve the bare ticker through the asset registry.
+		strategy := &hydrateStrategy{
+			AssetVal: asset.Asset{Ticker: "GOOG"},
+		}
+		eng := engine.New(strategy,
+			engine.WithDataProvider(provider),
+			engine.WithAssetProvider(assetProvider),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		start := time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC)
+		end := time.Date(2024, 2, 5, 23, 0, 0, 0, time.UTC)
+
+		_, err := eng.Backtest(context.Background(), start, end)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(strategy.AssetVal.Ticker).To(Equal("GOOG"))
+		Expect(strategy.AssetVal.CompositeFigi).To(Equal("FIGI-GOOG"))
+	})
 })

@@ -226,6 +226,22 @@ func (e *Engine) IndexUniverse(indexName string) universe.Universe {
 	panic(fmt.Sprintf("engine: no provider implements IndexProvider (needed for index %q)", indexName))
 }
 
+// SpliceUniverse creates a single-asset universe that substitutes proxy
+// tickers for dates before the primary's listing. This lets backtests of
+// strategies that name a recent ticker (e.g. TQQQ, listed in 2010) extend
+// further into history by transparently using a proxy (e.g. QLD) for
+// pre-listing bars. Each fallback covers dates strictly before its Before
+// cutoff. Order routing and reporting use whichever ticker is live on the
+// order date, so positions migrate naturally when the simulation crosses
+// a cutoff.
+func (e *Engine) SpliceUniverse(primary string, fallbacks ...universe.SplicePeriod) universe.Universe {
+	u := universe.NewSplice(primary, fallbacks...)
+	u.Resolve(e.Asset)
+	u.SetDataSource(e)
+
+	return u
+}
+
 // CurrentDate returns the current simulation date.
 func (e *Engine) CurrentDate() time.Time {
 	return e.currentDate

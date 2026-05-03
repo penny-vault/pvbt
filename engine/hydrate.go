@@ -70,6 +70,18 @@ func hydrateFields(eng *Engine, target interface{}) error {
 			continue
 		}
 
+		// For asset.Asset fields that were pre-set (e.g. by CLI flags) with
+		// only a Ticker, re-resolve through the asset registry so downstream
+		// code has the full metadata (CompositeFigi, exchange, etc.).
+		if field.Type == assetType && !fieldValue.IsZero() {
+			existing := fieldValue.Interface().(asset.Asset)
+			if existing.CompositeFigi == "" && existing.Ticker != "" {
+				fieldValue.Set(reflect.ValueOf(eng.Asset(existing.Ticker)))
+			}
+
+			continue
+		}
+
 		// For universe fields that were pre-set (e.g. by CLI flags), re-wire
 		// with the engine's data source so data fetching works.
 		if field.Type.Implements(universeType) && !fieldValue.IsZero() {

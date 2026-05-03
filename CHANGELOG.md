@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strategies can override single-ticker parameters from the command line.
+- Backtests of recently-listed instruments can extend further into history by splicing a historical proxy ticker for pre-listing dates. Substitution uses raw prices with no leverage adjustment.
+
 ## [0.8.2] - 2026-05-02
 
 ### Fixed
