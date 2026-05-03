@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-05-02
+
 ### Fixed
 
-- A backtest whose end date runs ahead of the data feed by one or two trading days now stops at the last fully-priced day instead of liquidating every held position as delisted. Larger gaps still trigger the existing delisting behavior.
+- Backtests no longer liquidate every held position when the end date runs one or two trading days past the data feed.
 
 ## [0.8.1] - 2026-05-01
 
@@ -275,7 +277,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.8.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/penny-vault/pvbt/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/penny-vault/pvbt/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/penny-vault/pvbt/compare/v0.7.7...v0.8.0
 [0.7.7]: https://github.com/penny-vault/pvbt/compare/v0.7.6...v0.7.7
 [0.7.6]: https://github.com/penny-vault/pvbt/compare/v0.7.5...v0.7.6
