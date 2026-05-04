@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Index universe members now carry full asset metadata (sector, industry, name, exchange, listing dates). Strategies that gate on classification (e.g. sector caps, financials exclusion) previously saw empty `Sector`/`Industry` for every constituent and silently misbehaved.
+- Index universe members now carry full asset metadata (sector, industry, name, exchange, listing dates) when available. Constituents whose composite FIGI is missing from the assets table keep their FIGI and ticker so the strategy still trades them; the gap is logged once per index load with a count and sample tickers. Strategies that gate on classification (e.g. sector caps, financials exclusion) previously saw empty `Sector`/`Industry` for every constituent and silently misbehaved.
+- `IndexUniverse.Assets` and `Constituents` now log an error when the underlying provider fails. Previously the failure was swallowed silently and strategies skipped every rebalance with no diagnostic.
 
 ## [0.9.0] - 2026-05-03
 

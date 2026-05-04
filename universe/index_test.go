@@ -16,12 +16,16 @@
 package universe_test
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
@@ -95,10 +99,28 @@ var _ = Describe("Index Universe", func() {
 			Expect(assets).To(BeNil())
 		})
 
-		It("returns nil when the provider returns an error", func() {
+		It("returns nil and logs the error when the provider returns an error", func() {
+			// IndexUniverse.Assets used to swallow the error silently, which
+			// hid a regression where every constituent figi missing from the
+			// assets table caused the whole load to fail. The log line is the
+			// canary that makes such failures observable.
+			var buf bytes.Buffer
+
+			origLogger := log.Logger
+			log.Logger = zerolog.New(&buf)
+
+			defer func() {
+				log.Logger = origLogger
+			}()
+
 			u := universe.NewIndex(&errorIndexProvider{}, "SP500")
 			assets := u.Assets(now)
 			Expect(assets).To(BeNil())
+
+			out := buf.String()
+			Expect(out).To(ContainSubstring(`"level":"error"`))
+			Expect(out).To(ContainSubstring(`"index":"SP500"`))
+			Expect(out).To(ContainSubstring("provider error"))
 		})
 	})
 
@@ -131,10 +153,24 @@ var _ = Describe("Index Universe", func() {
 			Expect(constituents).To(BeNil())
 		})
 
-		It("returns nil when the provider returns an error", func() {
+		It("returns nil and logs the error when the provider returns an error", func() {
+			var buf bytes.Buffer
+
+			origLogger := log.Logger
+			log.Logger = zerolog.New(&buf)
+
+			defer func() {
+				log.Logger = origLogger
+			}()
+
 			u := universe.NewIndex(&errorIndexProvider{}, "SP500")
 			constituents := u.Constituents(now)
 			Expect(constituents).To(BeNil())
+
+			out := buf.String()
+			Expect(out).To(ContainSubstring(`"level":"error"`))
+			Expect(out).To(ContainSubstring(`"index":"SP500"`))
+			Expect(out).To(ContainSubstring("provider error"))
 		})
 	})
 
