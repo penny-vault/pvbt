@@ -124,4 +124,44 @@ var _ = Describe("Optimizer", func() {
 			Expect(rptData.ObjectiveName).To(Equal("CAGR"))
 		})
 	})
+
+	Describe("WithBaseParams", func() {
+		It("attaches base params to the configuration", func() {
+			opt := optimize.New(splits, optimize.WithBaseParams(map[string]string{
+				"top-holdings": "5",
+				"benchmark":    "SPY",
+			}))
+
+			configs, err := opt.Configurations(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configs).To(HaveLen(1))
+			Expect(configs[0].Params).To(HaveKeyWithValue("top-holdings", "5"))
+			Expect(configs[0].Params).To(HaveKeyWithValue("benchmark", "SPY"))
+		})
+
+		It("isolates the optimizer's copy from the caller's map", func() {
+			input := map[string]string{"lookback": "5"}
+
+			opt := optimize.New(splits, optimize.WithBaseParams(input))
+
+			// Mutating the caller's map after construction must not affect
+			// the optimizer's stored copy.
+			input["lookback"] = "999"
+
+			configs, err := opt.Configurations(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configs[0].Params).To(HaveKeyWithValue("lookback", "5"))
+		})
+
+		It("clears base params when given an empty map", func() {
+			opt := optimize.New(splits,
+				optimize.WithBaseParams(map[string]string{"lookback": "5"}),
+				optimize.WithBaseParams(nil),
+			)
+
+			configs, err := opt.Configurations(context.Background())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(configs[0].Params).To(BeEmpty())
+		})
+	})
 })

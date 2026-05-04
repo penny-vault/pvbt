@@ -63,6 +63,12 @@ type Engine struct {
 	fundamentalDimension string
 	progressCallback     ProgressCallback
 
+	// userParams names strategy fields the caller has explicitly set
+	// (via CLI flags, presets, ApplyParams). hydrateFields skips applying
+	// struct-tag defaults to these fields, so an explicit zero value
+	// survives instead of being silently re-defaulted.
+	userParams map[string]struct{}
+
 	account portfolio.PortfolioManager
 
 	// populated during initialization
@@ -92,6 +98,39 @@ func New(strategy Strategy, opts ...Option) *Engine {
 	return eng
 }
 
+// MarkUserParams records strategy field names (kebab-case) that the
+// caller has explicitly set. hydrateFields uses this set to skip
+// applying struct-tag defaults to those fields, so an explicit zero
+// override survives. Names not matching any strategy field are stored
+// without effect.
+func (e *Engine) MarkUserParams(names ...string) {
+	if len(names) == 0 {
+		return
+	}
+
+	if e.userParams == nil {
+		e.userParams = make(map[string]struct{}, len(names))
+	}
+
+	for _, name := range names {
+		e.userParams[name] = struct{}{}
+	}
+}
+
+// IsUserParam reports whether the named field has been marked as
+// explicitly set by the caller. A nil receiver is treated as "no
+// fields marked", which keeps hydrateFields safe to call without
+// an engine in white-box tests.
+func (e *Engine) IsUserParam(name string) bool {
+	if e == nil {
+		return false
+	}
+
+	_, ok := e.userParams[name]
+
+	return ok
+}
+
 // createAccount builds a portfolio.Account from the engine's configuration.
 // If a snapshot is set, the account is restored from it; otherwise a fresh
 // account is created with the initial deposit.
@@ -99,7 +138,9 @@ func New(strategy Strategy, opts ...Option) *Engine {
 // If a snapshot is set, the account is restored from it; otherwise a fresh
 // account is created with the initial deposit. If no broker was provided
 // via WithBroker, a SimulatedBroker is created and stored on e.broker.
-func (e *Engine) createAccount(start time.Time) portfolio.PortfolioManager {
+// Returns an error if the resulting account would have no funding (no
+// pre-built account, no snapshot, and a non-positive initial deposit).
+func (e *Engine) createAccount(start time.Time) (portfolio.PortfolioManager, error) {
 	if e.broker == nil {
 		sb := NewSimulatedBroker()
 		if e.fillBaseModel != nil {
@@ -119,19 +160,23 @@ func (e *Engine) createAccount(start time.Time) portfolio.PortfolioManager {
 			e.account.SetBroker(e.broker)
 		}
 
-		return e.account
+		return e.account, nil
 	}
 
 	var opts []portfolio.Option
 	if e.snapshot != nil {
 		opts = append(opts, portfolio.WithPortfolioSnapshot(e.snapshot))
 	} else {
+		if e.initialDeposit <= 0 {
+			return nil, fmt.Errorf("engine: initial deposit must be positive when no account or snapshot is provided; pass engine.WithInitialDeposit(amount) or engine.WithAccount(acct)")
+		}
+
 		opts = append(opts, portfolio.WithCash(e.initialDeposit, start))
 	}
 
 	opts = append(opts, portfolio.WithBroker(e.broker))
 
-	return portfolio.New(opts...)
+	return portfolio.New(opts...), nil
 }
 
 // validDimensions lists the accepted fundamental dimension codes.

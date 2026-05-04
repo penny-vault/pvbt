@@ -101,7 +101,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		return err
 	}
 
-	applyStrategyFlags(cmd, strategy)
+	appliedFlags := applyStrategyFlags(cmd, strategy)
 
 	provider, err := data.NewPVDataProvider(nil)
 	if err != nil {
@@ -129,6 +129,7 @@ func runSnapshot(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithDataProvider(recorder),
 		engine.WithAssetProvider(recorder),
 		engine.WithAccount(acct),
+		engine.WithUserParams(appliedFlags...),
 	}
 
 	benchmarkTicker, err := cmd.Flags().GetString("benchmark")

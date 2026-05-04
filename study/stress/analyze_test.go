@@ -18,8 +18,10 @@ package stress_test
 import (
 	"bytes"
 	"errors"
-	"github.com/bytedance/sonic"
+	"io"
 	"time"
+
+	"github.com/bytedance/sonic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -252,6 +254,26 @@ var _ = Describe("Analyze", func() {
 
 			for _, scenario := range scenarios {
 				Expect(scenarioNames).To(ContainElement(scenario.Name))
+			}
+		})
+
+		It("renders a plain-text table via the Text method", func() {
+			rpt, err := stressTest.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			textReport, ok := rpt.(interface{ Text(io.Writer) error })
+			Expect(ok).To(BeTrue(), "stress report must implement Text(io.Writer) error")
+
+			var buf bytes.Buffer
+			Expect(textReport.Text(&buf)).To(Succeed())
+
+			out := buf.String()
+			Expect(out).To(ContainSubstring("Stress Test"))
+			Expect(out).To(ContainSubstring("Scenario"))
+			Expect(out).To(ContainSubstring("MaxDD"))
+			Expect(out).To(ContainSubstring("TestRun"))
+			for _, scenario := range scenarios {
+				Expect(out).To(ContainSubstring(scenario.Name))
 			}
 		})
 	})

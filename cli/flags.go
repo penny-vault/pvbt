@@ -26,6 +26,19 @@ var (
 // The description comes from the `desc` tag. Default values come from
 // the `default` tag or the field's current value.
 func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
+	registerStrategyFlagsWithOptions(cmd, strategy, false)
+}
+
+// registerStrategyFlagsForSweep registers strategy flags with int and
+// float64 fields exposed as String flags so they can accept either a
+// fixed value (e.g. "5") or a min:max:step range (e.g. "0:8:1"). Use
+// this for subcommands that perform parameter sweeps; use
+// registerStrategyFlags for run commands that take a single value.
+func registerStrategyFlagsForSweep(cmd *cobra.Command, strategy engine.Strategy) {
+	registerStrategyFlagsWithOptions(cmd, strategy, true)
+}
+
+func registerStrategyFlagsWithOptions(cmd *cobra.Command, strategy engine.Strategy, allowRanges bool) {
 	val := reflect.ValueOf(strategy)
 	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
@@ -73,6 +86,17 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			cmd.Flags().Duration(name, def, desc)
 
 		case field.Type.Kind() == reflect.Float64:
+			if allowRanges {
+				def := strconv.FormatFloat(fieldValue.Float(), 'f', -1, 64)
+				if defaultStr != "" {
+					def = defaultStr
+				}
+
+				cmd.Flags().String(name, def, desc)
+
+				continue
+			}
+
 			def := fieldValue.Float()
 
 			if defaultStr != "" {
@@ -103,6 +127,17 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			cmd.Flags().Bool(name, def, desc)
 
 		case field.Type.Kind() == reflect.Int:
+			if allowRanges {
+				def := strconv.Itoa(int(fieldValue.Int()))
+				if defaultStr != "" {
+					def = defaultStr
+				}
+
+				cmd.Flags().String(name, def, desc)
+
+				continue
+			}
+
 			def := int(fieldValue.Int())
 
 			if defaultStr != "" {
@@ -123,8 +158,12 @@ func registerStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 }
 
 // applyStrategyFlags reads flag values from the command's parsed flags
-// and sets them on the strategy struct's fields via reflection.
-func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
+// and sets them on the strategy struct's fields via reflection. It
+// returns the kebab-case names of the fields it actually wrote to, so
+// the caller can hand them to engine.WithUserParams. Marking these
+// fields prevents hydrateFields from later overwriting an explicit
+// zero value (e.g. --sector-cap 0) with the field's struct-tag default.
+func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) []string {
 	val := reflect.ValueOf(strategy)
 	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
@@ -132,8 +171,10 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 
 	strategyType := val.Type()
 	if strategyType.Kind() != reflect.Struct {
-		return
+		return nil
 	}
+
+	var applied []string
 
 	for ii := 0; ii < strategyType.NumField(); ii++ {
 		field := strategyType.Field(ii)
@@ -157,6 +198,8 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			continue
 		}
 
+		set := false
+
 		switch {
 		case field.Type == assetType:
 			raw := strings.TrimSpace(flag.Value.String())
@@ -165,6 +208,8 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 			}
 
 			fieldValue.Set(reflect.ValueOf(asset.Asset{Ticker: strings.ToUpper(raw)}))
+
+			set = true
 
 		case field.Type.Implements(universeType):
 			raw := flag.Value.String()
@@ -179,27 +224,39 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 
 			fieldValue.Set(reflect.ValueOf(universe.NewStatic(tickers...)))
 
+			set = true
+
 		case field.Type == durationType:
 			if parsed, err := time.ParseDuration(flag.Value.String()); err == nil {
 				fieldValue.SetInt(int64(parsed))
+
+				set = true
 			}
 
 		case field.Type.Kind() == reflect.Float64:
 			if parsed, err := strconv.ParseFloat(flag.Value.String(), 64); err == nil {
 				fieldValue.SetFloat(parsed)
+
+				set = true
 			}
 
 		case field.Type.Kind() == reflect.String:
 			fieldValue.SetString(flag.Value.String())
 
+			set = true
+
 		case field.Type.Kind() == reflect.Bool:
 			if parsed, err := strconv.ParseBool(flag.Value.String()); err == nil {
 				fieldValue.SetBool(parsed)
+
+				set = true
 			}
 
 		case field.Type.Kind() == reflect.Int:
 			if parsed, err := strconv.Atoi(flag.Value.String()); err == nil {
 				fieldValue.SetInt(int64(parsed))
+
+				set = true
 			}
 
 		default:
@@ -208,7 +265,13 @@ func applyStrategyFlags(cmd *cobra.Command, strategy engine.Strategy) {
 				Str("type", field.Type.String()).
 				Msg("strategy field type not supported by applyStrategyFlags")
 		}
+
+		if set {
+			applied = append(applied, name)
+		}
 	}
+
+	return applied
 }
 
 // parseRangeFlag checks whether value contains min:max:step range syntax.
@@ -230,6 +293,106 @@ func parseRangeFlag(field, value string) (study.ParamSweep, bool) {
 	}
 
 	return study.SweepRange(field, minVal, maxVal, stepVal), true
+}
+
+// strategyFlagFieldNames returns the kebab-case names of every strategy
+// field that has a registered cobra flag and is not test-only. The list
+// is intended for engine.WithUserParams in subcommands that apply CLI
+// flags to per-run strategy instances (e.g. study stress-test): it lets
+// hydrateFields know not to re-default these fields, so an explicit
+// zero passed on the command line survives.
+func strategyFlagFieldNames(cmd *cobra.Command, strategy engine.Strategy) []string {
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Pointer {
+		val = val.Elem()
+	}
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
+		return nil
+	}
+
+	var names []string
+
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
+		if !field.IsExported() {
+			continue
+		}
+
+		if engine.IsTestOnlyField(field) {
+			continue
+		}
+
+		name := engine.ParameterName(field)
+		if cmd.Flags().Lookup(name) != nil {
+			names = append(names, name)
+		}
+	}
+
+	return names
+}
+
+// collectFixedParams walks the strategy's exported fields and returns a
+// map of name -> string value for every flag the user explicitly set
+// that is *not* part of a sweep. The returned map is intended to be
+// passed as base parameters to a parameter optimizer so non-swept
+// flags propagate to every backtest. Asset and universe fields are
+// excluded because they require engine-side resolution that base
+// params do not perform.
+func collectFixedParams(cmd *cobra.Command, strategy engine.Strategy, sweeps []study.ParamSweep) map[string]string {
+	swept := make(map[string]struct{}, len(sweeps))
+
+	for _, sw := range sweeps {
+		if !sw.IsPreset() {
+			swept[sw.Field()] = struct{}{}
+		}
+	}
+
+	val := reflect.ValueOf(strategy)
+	if val.Kind() == reflect.Pointer {
+		val = val.Elem()
+	}
+
+	strategyType := val.Type()
+	if strategyType.Kind() != reflect.Struct {
+		return nil
+	}
+
+	result := make(map[string]string)
+
+	for ii := 0; ii < strategyType.NumField(); ii++ {
+		field := strategyType.Field(ii)
+		if !field.IsExported() {
+			continue
+		}
+
+		if engine.IsTestOnlyField(field) {
+			continue
+		}
+
+		if field.Type == assetType || field.Type.Implements(universeType) {
+			continue
+		}
+
+		name := engine.ParameterName(field)
+		if _, isSwept := swept[name]; isSwept {
+			continue
+		}
+
+		fl := cmd.Flags().Lookup(name)
+		if fl == nil || !fl.Changed {
+			continue
+		}
+
+		result[name] = fl.Value.String()
+	}
+
+	if len(result) == 0 {
+		return nil
+	}
+
+	return result
 }
 
 // collectParamSweeps walks the strategy's exported fields, reads each

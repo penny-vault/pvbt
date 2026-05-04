@@ -177,7 +177,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	end = e.adjustEndForStaleData(ctx, end)
 
 	// 6. Create and configure account.
-	acct := e.createAccount(start)
+	acct, acctErr := e.createAccount(start)
+	if acctErr != nil {
+		return nil, acctErr
+	}
 
 	e.account = acct
 	if e.benchmark != (asset.Asset{}) {

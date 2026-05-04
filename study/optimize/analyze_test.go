@@ -17,8 +17,11 @@ package optimize_test
 
 import (
 	"bytes"
-	"github.com/bytedance/sonic"
+	"fmt"
+	"io"
 	"time"
+
+	"github.com/bytedance/sonic"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -133,6 +136,7 @@ func itoa(val int) string {
 // test deserialization. Only fields that the tests inspect are included.
 type optReportData struct {
 	ObjectiveName string `json:"objectiveName"`
+	Warning       string `json:"warning,omitempty"`
 
 	Rankings []struct {
 		Rank       int     `json:"rank"`
@@ -329,6 +333,253 @@ var _ = Describe("Analyze", func() {
 
 			rptData := decodeOptReport(rpt)
 			Expect(rptData.Rankings).To(BeEmpty())
+		})
+	})
+
+	Describe("degenerate ranking detection", func() {
+		var trainTestSplits []study.Split
+
+		BeforeEach(func() {
+			start := time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+			cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+
+			built, err := study.TrainTest(start, cutoff, end)
+			Expect(err).NotTo(HaveOccurred())
+			trainTestSplits = built
+		})
+
+		It("emits a warning when every combo produces an identical OOS score", func() {
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+
+			// Strategy that never trades: equity stays at the initial cash.
+			// CAGR/Sharpe/Sortino/Calmar all collapse to the same value across
+			// every parameter combination, so the optimizer cannot distinguish
+			// between them.
+			flatEquity := makeLinearEquity(dates, 10_000, 10_000)
+
+			var results []study.RunResult
+			for idx := range 4 {
+				acct := buildAccountFromEquity(dates, flatEquity)
+				params := map[string]string{"lookback": fmt.Sprintf("%d", 10+idx*5)}
+				results = append(results, makeResult(fmt.Sprintf("combo-%d", idx), 0, params, acct))
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Warning).NotTo(BeEmpty(),
+				"expected a warning when every combo produces the same CAGR score")
+			Expect(rptData.Warning).To(ContainSubstring("CAGR"))
+			Expect(rptData.Warning).To(ContainSubstring("insertion order"))
+		})
+
+		It("emits a warning when every combo's score is undefined (NaN)", func() {
+			// Out-of-range _split_index keeps every combo's score at the
+			// initial NaN, simulating a path where the metric could not
+			// be computed for any combination + split pair.
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+			acct := buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 12_000))
+
+			makeNoScoreResult := func(comboID string, params map[string]string) study.RunResult {
+				return study.RunResult{
+					Config: study.RunConfig{
+						Name:   comboID,
+						Params: params,
+						Metadata: map[string]string{
+							"_combination_id": comboID,
+							"_split_index":    "9999", // out of range
+						},
+					},
+					Portfolio: acct,
+				}
+			}
+
+			results := []study.RunResult{
+				makeNoScoreResult("combo-a", map[string]string{"lookback": "10"}),
+				makeNoScoreResult("combo-b", map[string]string{"lookback": "20"}),
+				makeNoScoreResult("combo-c", map[string]string{"lookback": "30"}),
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Warning).NotTo(BeEmpty(),
+				"expected a warning when every combo produces NaN scores")
+			Expect(rptData.Warning).To(ContainSubstring("undefined"))
+		})
+
+		It("does not emit a warning when combos produce different scores", func() {
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+
+			results := []study.RunResult{
+				makeResult("combo-a", 0, map[string]string{"lookback": "10"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 25_000))),
+				makeResult("combo-b", 0, map[string]string{"lookback": "20"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 12_000))),
+				makeResult("combo-c", 0, map[string]string{"lookback": "30"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 10_500))),
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Warning).To(BeEmpty(),
+				"did not expect a warning when combos produce distinct CAGR scores")
+		})
+
+		It("does not emit a warning for a single combo", func() {
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+
+			results := []study.RunResult{
+				makeResult("combo-a", 0, map[string]string{"lookback": "10"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 10_000))),
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			rptData := decodeOptReport(rpt)
+			Expect(rptData.Warning).To(BeEmpty(),
+				"single-combo runs are trivially degenerate and should not warn")
+		})
+	})
+
+	Describe("Text rendering", func() {
+		var trainTestSplits []study.Split
+
+		BeforeEach(func() {
+			start := time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC)
+			cutoff := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC)
+
+			built, err := study.TrainTest(start, cutoff, end)
+			Expect(err).NotTo(HaveOccurred())
+			trainTestSplits = built
+		})
+
+		It("produces a tabular header, rows, and best block", func() {
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+
+			results := []study.RunResult{
+				makeResult("combo-a", 0, map[string]string{"lookback": "10"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 25_000))),
+				makeResult("combo-b", 0, map[string]string{"lookback": "30"},
+					buildAccountFromEquity(dates, makeLinearEquity(dates, 10_000, 12_000))),
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			textReport, ok := rpt.(interface{ Text(io.Writer) error })
+			Expect(ok).To(BeTrue(), "report must implement Text(io.Writer) error")
+
+			var buf bytes.Buffer
+			Expect(textReport.Text(&buf)).To(Succeed())
+			out := buf.String()
+
+			Expect(out).To(ContainSubstring("Optimization: CAGR (2 combos)"))
+			Expect(out).To(ContainSubstring("Rank"))
+			Expect(out).To(ContainSubstring("Parameters"))
+			Expect(out).To(ContainSubstring("OOS"))
+			Expect(out).To(ContainSubstring("lookback=10"))
+			Expect(out).To(ContainSubstring("lookback=30"))
+			Expect(out).To(ContainSubstring("Best:"))
+		})
+
+		It("includes the warning text when the ranking is degenerate", func() {
+			dates := makeDailyDates(
+				time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+			)
+
+			flat := makeLinearEquity(dates, 10_000, 10_000)
+
+			var results []study.RunResult
+			for idx := range 3 {
+				results = append(results, makeResult(
+					fmt.Sprintf("combo-%d", idx),
+					0,
+					map[string]string{"lookback": fmt.Sprintf("%d", 10+idx*5)},
+					buildAccountFromEquity(dates, flat),
+				))
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			textReport := rpt.(interface{ Text(io.Writer) error })
+
+			var buf bytes.Buffer
+			Expect(textReport.Text(&buf)).To(Succeed())
+
+			Expect(buf.String()).To(ContainSubstring("Warning:"))
+			Expect(buf.String()).To(ContainSubstring("insertion order"))
+		})
+
+		It("renders NaN scores as n/a", func() {
+			// Out-of-range _split_index leaves every score at NaN.
+			acct := buildAccountFromEquity(
+				makeDailyDates(
+					time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+					time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+				),
+				makeLinearEquity(
+					makeDailyDates(
+						time.Date(2018, 1, 1, 0, 0, 0, 0, time.UTC),
+						time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC),
+					),
+					10_000, 12_000,
+				),
+			)
+
+			results := []study.RunResult{
+				{
+					Config: study.RunConfig{
+						Name: "orphan",
+						Metadata: map[string]string{
+							"_combination_id": "orphan",
+							"_split_index":    "9999",
+						},
+					},
+					Portfolio: acct,
+				},
+			}
+
+			opt := optimize.New(trainTestSplits, optimize.WithObjective(portfolio.CAGR.(portfolio.Rankable)))
+			rpt, err := opt.Analyze(results)
+			Expect(err).NotTo(HaveOccurred())
+
+			textReport := rpt.(interface{ Text(io.Writer) error })
+
+			var buf bytes.Buffer
+			Expect(textReport.Text(&buf)).To(Succeed())
+
+			Expect(buf.String()).To(ContainSubstring("n/a"))
 		})
 	})
 

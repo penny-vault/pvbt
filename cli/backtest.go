@@ -145,7 +145,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return err
 	}
 
-	applyStrategyFlags(cmd, strategy)
+	appliedFlags := applyStrategyFlags(cmd, strategy)
 
 	cfg, err := loadMiddlewareConfigFromCommand(cmd)
 	if err != nil {
@@ -171,6 +171,7 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithAccount(acct),
+		engine.WithUserParams(appliedFlags...),
 	}
 
 	if cfg.HasMiddleware() {

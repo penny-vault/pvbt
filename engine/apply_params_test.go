@@ -41,6 +41,24 @@ func (ap *applyParamsStrategy) Describe() engine.StrategyDescription {
 	return engine.StrategyDescription{ShortCode: "apt"}
 }
 
+// vanillaStrategy mirrors the value-factor case where two int params
+// have non-zero defaults but the "Vanilla" preset suggests zeroing them.
+// This exists to exercise the bug where presets that set a field to 0
+// were being silently re-defaulted by hydrateFields.
+type vanillaStrategy struct {
+	SectorCap int `pvbt:"sector-cap" desc:"Sector cap" default:"4" suggest:"Vanilla=0"`
+	MinFScore int `pvbt:"min-fscore" desc:"Min F-score" default:"6" suggest:"Vanilla=0"`
+}
+
+func (vs *vanillaStrategy) Name() string           { return "Vanilla" }
+func (vs *vanillaStrategy) Setup(_ *engine.Engine) {}
+func (vs *vanillaStrategy) Compute(_ context.Context, _ *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	return nil
+}
+func (vs *vanillaStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{ShortCode: "vsi"}
+}
+
 // noDescriptorStrategy implements Strategy but not Descriptor.
 type noDescriptorStrategy struct {
 	Window int `pvbt:"window" desc:"Rolling window" default:"12"`
@@ -125,6 +143,69 @@ var _ = Describe("ApplyParams", func() {
 			Expect(err.Error()).To(ContainSubstring("preset \"Unknown\" not found"))
 			Expect(err.Error()).To(ContainSubstring("Fast"))
 			Expect(err.Error()).To(ContainSubstring("Slow"))
+		})
+	})
+
+	Context("explicit zero overrides", func() {
+		It("preserves a zero passed via params against a non-zero int default", func() {
+			strategy := &applyParamsStrategy{}
+			eng := engine.New(strategy)
+
+			err := engine.ApplyParams(eng, "", map[string]string{"lookback": "0"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.Lookback).To(Equal(0),
+				"lookback=0 must override the struct-tag default of 6, not be silently re-defaulted")
+		})
+
+		It("preserves a zero passed via params against a non-zero float default", func() {
+			strategy := &applyParamsStrategy{}
+			eng := engine.New(strategy)
+
+			err := engine.ApplyParams(eng, "", map[string]string{"ratio": "0"})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.Ratio).To(Equal(0.0),
+				"ratio=0 must override the struct-tag default of 0.5, not be silently re-defaulted")
+		})
+
+		It("honors a preset that sets a parameter to zero", func() {
+			strategy := &vanillaStrategy{}
+			eng := engine.New(strategy)
+
+			err := engine.ApplyParams(eng, "Vanilla", nil)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.SectorCap).To(Equal(0),
+				"Vanilla preset must set sector-cap=0, not be re-defaulted to 4")
+			Expect(strategy.MinFScore).To(Equal(0),
+				"Vanilla preset must set min-fscore=0, not be re-defaulted to 6")
+		})
+
+		It("still applies defaults to params the user did not touch", func() {
+			strategy := &applyParamsStrategy{}
+			eng := engine.New(strategy)
+
+			err := engine.ApplyParams(eng, "", map[string]string{"lookback": "0"})
+			Expect(err).NotTo(HaveOccurred())
+			// lookback was zeroed by the user
+			Expect(strategy.Lookback).To(Equal(0))
+			// ratio and label were not touched, so defaults should still apply
+			Expect(strategy.Ratio).To(Equal(0.5),
+				"ratio not in params; default must still apply")
+			Expect(strategy.Label).To(Equal("default"),
+				"label not in params; default must still apply")
+		})
+
+		It("preserves an explicit zero set by the CLI path (WithUserParams)", func() {
+			// Simulate the CLI flow: applyStrategyFlags has already written
+			// the explicit zero to the field, then engine.New is constructed
+			// with WithUserParams listing the field. hydrateFields must not
+			// overwrite the zero with the struct-tag default.
+			strategy := &applyParamsStrategy{Lookback: 0}
+			eng := engine.New(strategy, engine.WithUserParams("lookback"))
+
+			err := engine.HydrateFieldsForTest(eng, strategy)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(strategy.Lookback).To(Equal(0),
+				"WithUserParams must protect an explicit zero from being re-defaulted")
 		})
 	})
 

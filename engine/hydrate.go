@@ -34,9 +34,12 @@ var (
 )
 
 // hydrateFields reflects over the target struct and populates exported fields
-// from their `default` tags. Fields with non-zero values are not overwritten.
-// asset.Asset fields are resolved via the engine's asset registry.
-// universe.Universe fields are built from comma-separated tickers via e.Universe.
+// from their `default` tags. Fields whose names appear in eng.userParams
+// (set by ApplyParams or engine.WithUserParams) are skipped entirely so an
+// explicit zero override is preserved. Other non-zero fields are also left
+// alone. asset.Asset fields are resolved via the engine's asset registry.
+// universe.Universe fields are built from comma-separated tickers via
+// e.Universe.
 func hydrateFields(eng *Engine, target interface{}) error {
 	val := reflect.ValueOf(target)
 	if val.Kind() == reflect.Pointer {
@@ -70,6 +73,8 @@ func hydrateFields(eng *Engine, target interface{}) error {
 			continue
 		}
 
+		paramName := ParameterName(field)
+
 		// For asset.Asset fields that were pre-set (e.g. by CLI flags) with
 		// only a Ticker, re-resolve through the asset registry so downstream
 		// code has the full metadata (CompositeFigi, exchange, etc.).
@@ -100,6 +105,15 @@ func hydrateFields(eng *Engine, target interface{}) error {
 
 		// Skip non-zero fields (caller may have pre-set them).
 		if !fieldValue.IsZero() {
+			continue
+		}
+
+		// Skip fields the caller explicitly applied, even if their value
+		// is the Go zero (e.g. --sector-cap 0 or a preset that sets it
+		// to zero). Without this check, the "is zero" branch below would
+		// silently overwrite the explicit zero with the struct-tag
+		// default.
+		if eng.IsUserParam(paramName) {
 			continue
 		}
 
