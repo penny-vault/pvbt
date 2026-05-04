@@ -20,6 +20,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
@@ -58,7 +60,12 @@ func (u *indexUniverse) SetDataSource(ds DataSource) {
 // increasing across calls.
 func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
 	assets, _, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
-	if err != nil || len(assets) == 0 {
+	if err != nil {
+		log.Error().Err(err).
+			Str("index", u.indexName).
+			Time("as_of", asOfDate).
+			Msg("IndexMembers failed; treating universe as empty")
+
 		return nil
 	}
 
@@ -72,7 +79,12 @@ func (u *indexUniverse) Assets(asOfDate time.Time) []asset.Asset {
 // call is a no-op that returns the cached parallel slice.
 func (u *indexUniverse) Constituents(asOfDate time.Time) []data.IndexConstituent {
 	_, constituents, err := u.provider.IndexMembers(context.Background(), u.indexName, asOfDate)
-	if err != nil || len(constituents) == 0 {
+	if err != nil {
+		log.Error().Err(err).
+			Str("index", u.indexName).
+			Time("as_of", asOfDate).
+			Msg("IndexMembers failed; treating universe as empty")
+
 		return nil
 	}
 

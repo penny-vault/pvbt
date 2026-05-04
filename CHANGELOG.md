@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-05-03
+
+### Added
+
+- `study optimize` and `study stress-test` print a plain-text ranking table when run with `--format text`, alongside the existing `json` and `html` outputs.
+- `study optimize` and `study stress-test` accept `--cash` (default `100000`) to set per-run starting cash. Both commands previously ran with $0 and silently produced uninterpretable reports.
+
+### Fixed
+
+- Strategy parameters now honor an explicit zero. Passing `--<flag> 0` from the command line, or selecting a preset whose `suggest` tag sets a parameter to `0`, no longer gets silently re-overwritten by the field's struct-tag default. This affected every int and float field with a non-zero default, breaking "off / disabled" presets for sector caps, score thresholds, and similar gating parameters.
+- `study optimize` accepts `min:max:step` ranges on integer and float strategy flags, refuses to run with no ranges configured, applies non-swept flags as fixed values across every combination, and warns in its report when every combination produces the same score.
+- `study stress-test` exposes strategy flags and applies them to every per-scenario backtest, including asset and universe fields. Previously every scenario ran with struct-zero defaults regardless of CLI flags.
+- Backtests refuse to run with no starting cash unless an account or snapshot is supplied.
+- Index universe members now carry full asset metadata (sector, industry, name, exchange, listing dates) when available. Constituents whose composite FIGI is missing from the assets table keep their FIGI and ticker so the strategy still trades them; the gap is logged once per index load with a count and sample tickers. Strategies that gate on classification (e.g. sector caps, financials exclusion) previously saw empty `Sector`/`Industry` for every constituent and silently misbehaved.
+- `IndexUniverse.Assets` and `Constituents` now log an error when the underlying provider fails. Previously the failure was swallowed silently and strategies skipped every rebalance with no diagnostic.
+
 ## [0.9.0] - 2026-05-03
 
 ### Added

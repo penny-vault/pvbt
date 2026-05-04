@@ -74,14 +74,20 @@ func ApplyParams(eng *Engine, preset string, params map[string]string) error {
 		}
 	}
 
-	// Apply all merged parameters via applyParamValue.
+	// Apply all merged parameters via applyParamValue, and mark them on
+	// the engine so hydrateFields will not re-default them. This is what
+	// preserves an explicit zero (e.g. preset value "0" against a non-zero
+	// struct-tag default) instead of having the default silently win.
 	for paramName, paramValue := range merged {
 		if err := applyParamValue(eng.strategy, paramName, paramValue); err != nil {
 			return fmt.Errorf("ApplyParams: applying param %q=%q: %w", paramName, paramValue, err)
 		}
+
+		eng.MarkUserParams(paramName)
 	}
 
-	// Resolve asset.Asset and universe.Universe fields.
+	// Resolve asset.Asset and universe.Universe fields, and apply struct-tag
+	// defaults for any field the caller did not explicitly set.
 	if err := hydrateFields(eng, eng.strategy); err != nil {
 		return fmt.Errorf("ApplyParams: hydrating fields: %w", err)
 	}

@@ -18,6 +18,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"reflect"
 	"runtime"
@@ -58,7 +59,10 @@ func newStressTestCmd(strategy engine.Strategy) *cobra.Command {
 	}
 
 	cmd.Flags().Int("workers", runtime.GOMAXPROCS(0), "Number of concurrent workers")
-	cmd.Flags().String("format", "html", "Output format (html, json)")
+	cmd.Flags().String("format", "html", "Output format (text, json, html)")
+	cmd.Flags().Float64("cash", 100000, "Initial cash balance per scenario run")
+
+	registerStrategyFlags(cmd, strategy)
 
 	return cmd
 }
@@ -78,9 +82,20 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
+	cash, err := cmd.Flags().GetFloat64("cash")
+	if err != nil {
+		return fmt.Errorf("get --cash: %w", err)
+	}
+
 	opts := []engine.Option{
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
+		engine.WithInitialDeposit(cash),
+		// Mark flag-set fields as user-applied so an explicit zero
+		// (e.g. --sector-cap 0) survives engine hydration. Names are
+		// determined from the registered strategy flags, so per-scenario
+		// strategy instances built by the factory share the same set.
+		engine.WithUserParams(strategyFlagFieldNames(cmd, strategy)...),
 	}
 
 	workers, err := cmd.Flags().GetInt("workers")
@@ -90,7 +105,7 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 
 	runner := &study.Runner{
 		Study:       stressStudy,
-		NewStrategy: strategyFactory(strategy),
+		NewStrategy: strategyFactoryWithFlags(strategy, cmd),
 		Options:     opts,
 		Workers:     workers,
 	}
@@ -122,10 +137,17 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 		return err
 	}
 
-	switch formatStr {
+	switch strings.ToLower(strings.TrimSpace(formatStr)) {
 	case "json":
 		return result.Report.Data(os.Stdout)
-	default:
+	case "text":
+		textReport, ok := result.Report.(interface{ Text(io.Writer) error })
+		if !ok {
+			return fmt.Errorf("study stress-test: report does not support text rendering")
+		}
+
+		return textReport.Text(os.Stdout)
+	case "html", "":
 		outputFile := "stress-test-report.html"
 
 		file, err := os.Create(outputFile)
@@ -141,6 +163,8 @@ func runStressTest(cmd *cobra.Command, strategy engine.Strategy, args []string) 
 		log.Info().Str("path", outputFile).Msg("report written")
 
 		return nil
+	default:
+		return fmt.Errorf("study stress-test: unknown --format %q (supported: text, json, html)", formatStr)
 	}
 }
 
@@ -155,6 +179,26 @@ func strategyFactory(original engine.Strategy) func() engine.Strategy {
 
 	return func() engine.Strategy {
 		return reflect.New(originalType).Interface().(engine.Strategy)
+	}
+}
+
+// strategyFactoryWithFlags returns a factory that creates a fresh
+// strategy instance and immediately applies the user's CLI flag values
+// to it. Unlike strategyFactory, this propagates --flag values
+// (including asset.Asset and universe.Universe fields handled by
+// applyStrategyFlags) so each per-run strategy instance starts with
+// the user's chosen configuration rather than struct-zero defaults.
+func strategyFactoryWithFlags(original engine.Strategy, cmd *cobra.Command) func() engine.Strategy {
+	originalType := reflect.TypeOf(original)
+	if originalType.Kind() == reflect.Pointer {
+		originalType = originalType.Elem()
+	}
+
+	return func() engine.Strategy {
+		instance := reflect.New(originalType).Interface().(engine.Strategy)
+		applyStrategyFlags(cmd, instance)
+
+		return instance
 	}
 }
 
@@ -250,11 +294,12 @@ func newOptimizeCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().Int("samples", 100, "Number of random samples (random search only)")
 	cmd.Flags().Int("workers", runtime.GOMAXPROCS(0), "Number of concurrent workers")
 	cmd.Flags().Int("top", 10, "Number of top parameter combinations to include in the report")
-	cmd.Flags().String("format", "html", "Output format (html, json)")
+	cmd.Flags().String("format", "html", "Output format (text, json, html)")
 	cmd.Flags().String("scenarios", "", "Comma-separated scenario names for scenario validation")
 	cmd.Flags().Int("holdout", 1, "Number of scenarios to hold out per split (scenario validation)")
+	cmd.Flags().Float64("cash", 100000, "Initial cash balance per parameter combination run")
 
-	registerStrategyFlags(cmd, strategy)
+	registerStrategyFlagsForSweep(cmd, strategy)
 
 	return cmd
 }
@@ -286,6 +331,12 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 
 	// --- parameter sweeps from strategy flags ---
 	sweeps := collectParamSweeps(cmd, strategy)
+	if len(sweeps) == 0 {
+		return fmt.Errorf("study optimize: no parameter ranges configured; pass at least one strategy flag using min:max:step syntax (e.g. --lookback 5:30:5)")
+	}
+
+	// Non-swept strategy flags become fixed values applied to every combo.
+	fixedParams := collectFixedParams(cmd, strategy, sweeps)
 
 	// --- search strategy ---
 	searchStr, err := cmd.Flags().GetString("search")
@@ -318,6 +369,7 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 	optimizer := optimize.New(splits,
 		optimize.WithObjective(metric),
 		optimize.WithTopN(topN),
+		optimize.WithBaseParams(fixedParams),
 	)
 
 	// --- data provider ---
@@ -326,9 +378,15 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
+	cash, err := cmd.Flags().GetFloat64("cash")
+	if err != nil {
+		return fmt.Errorf("get --cash: %w", err)
+	}
+
 	opts := []engine.Option{
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
+		engine.WithInitialDeposit(cash),
 	}
 
 	workers, err := cmd.Flags().GetInt("workers")
@@ -372,10 +430,17 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("get --format: %w", err)
 	}
 
-	switch formatStr {
+	switch strings.ToLower(strings.TrimSpace(formatStr)) {
 	case "json":
 		return result.Report.Data(os.Stdout)
-	default:
+	case "text":
+		textReport, ok := result.Report.(interface{ Text(io.Writer) error })
+		if !ok {
+			return fmt.Errorf("study optimize: report does not support text rendering")
+		}
+
+		return textReport.Text(os.Stdout)
+	case "html", "":
 		outputFile := "optimize-report.html"
 
 		file, err := os.Create(outputFile)
@@ -391,6 +456,8 @@ func runOptimize(cmd *cobra.Command, strategy engine.Strategy) error {
 		log.Info().Str("path", outputFile).Msg("report written")
 
 		return nil
+	default:
+		return fmt.Errorf("study optimize: unknown --format %q (supported: text, json, html)", formatStr)
 	}
 }
 

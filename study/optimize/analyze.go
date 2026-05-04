@@ -28,6 +28,7 @@ import (
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
 	"github.com/penny-vault/pvbt/study/report"
+	"github.com/rs/zerolog/log"
 )
 
 // Ensure optimizerReport satisfies the report.Report interface.
@@ -65,6 +66,15 @@ func analyzeResults(
 		Rankings:      computeRankings(combos),
 		Overfitting:   computeOverfitting(combos),
 		EquityCurves:  computeEquityCurves(combos, topN),
+		Warning:       degenerateRankingWarning(combos, objective),
+	}
+
+	if rpt.Warning != "" {
+		log.Warn().
+			Str("objective", objective.Name()).
+			Int("combos", len(combos)).
+			Str("warning", rpt.Warning).
+			Msg("optimizer ranking is not meaningful")
 	}
 
 	if len(combos) > 0 {
@@ -72,6 +82,67 @@ func analyzeResults(
 	}
 
 	return rpt, nil
+}
+
+// degenerateRankingEpsilon is the absolute tolerance for treating two OOS mean
+// scores as equal when checking for an uninformative ranking.
+const degenerateRankingEpsilon = 1e-12
+
+// degenerateRankingWarning returns a non-empty warning when the OOS mean
+// scores across combos are uninformative (all NaN, or all equal within
+// degenerateRankingEpsilon). In that case the apparent ranking reflects
+// insertion order rather than the objective metric and is not meaningful.
+// Returns an empty string when there are fewer than two combos to compare.
+func degenerateRankingWarning(combos []*comboResult, objective portfolio.Rankable) string {
+	if len(combos) < 2 {
+		return ""
+	}
+
+	var (
+		minScore   = math.Inf(1)
+		maxScore   = math.Inf(-1)
+		validCount int
+	)
+
+	for _, cr := range combos {
+		score := meanIgnoringNaN(cr.oosScores)
+		if math.IsNaN(score) {
+			continue
+		}
+
+		validCount++
+
+		if score < minScore {
+			minScore = score
+		}
+
+		if score > maxScore {
+			maxScore = score
+		}
+	}
+
+	if validCount == 0 {
+		return fmt.Sprintf(
+			"every combination produced an undefined %s score; "+
+				"the ranking reflects insertion order, not the objective metric. "+
+				"Check that the strategy actually trades over the test windows and "+
+				"that any required inputs (e.g. risk-free rate) are configured.",
+			objective.Name(),
+		)
+	}
+
+	if maxScore-minScore <= degenerateRankingEpsilon {
+		return fmt.Sprintf(
+			"every combination produced the same %s score (%.6g); "+
+				"the ranking reflects insertion order, not the objective metric. "+
+				"This typically means the parameter sweep does not change strategy "+
+				"behavior, or the strategy produces identical equity curves across "+
+				"all sampled values.",
+			objective.Name(), minScore,
+		)
+	}
+
+	return ""
 }
 
 // groupByCombination groups RunResults by _combination_id metadata and
@@ -327,10 +398,7 @@ func computeOverfitting(combos []*comboResult) []overfittingRow {
 // computeEquityCurves builds equity curve series for the top N
 // combinations from their stored equity data.
 func computeEquityCurves(combos []*comboResult, topN int) []equityCurveSeries {
-	limit := topN
-	if limit > len(combos) {
-		limit = len(combos)
-	}
+	limit := min(topN, len(combos))
 
 	curves := make([]equityCurveSeries, limit)
 

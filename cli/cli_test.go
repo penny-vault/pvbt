@@ -148,6 +148,21 @@ var _ = Describe("applyStrategyFlags", func() {
 		Expect(strategy.Lookback).To(Equal(120))
 		Expect(strategy.Threshold).To(BeNumerically("~", 0.75, 1e-10))
 	})
+
+	It("returns the kebab-case names of fields it actually wrote", func() {
+		strategy := &testStrategy{}
+		cmd := &cobra.Command{Use: "test"}
+		registerStrategyFlags(cmd, strategy)
+
+		Expect(cmd.Flags().Set("lookback", "0")).To(Succeed())
+
+		applied := applyStrategyFlags(cmd, strategy)
+
+		// testStrategy has lookback (int) and threshold (float64).
+		// Both have flags, both get set on every call (one to user value,
+		// one to cobra default), so both should appear in the applied list.
+		Expect(applied).To(ConsistOf("lookback", "threshold"))
+	})
 })
 
 var _ = Describe("registerStrategyFlags with universe fields", func() {
@@ -441,6 +456,99 @@ var _ = Describe("collectParamSweeps with testonly fields", func() {
 		for _, sweep := range sweeps {
 			Expect(sweep.Field()).NotTo(Equal("seed"))
 		}
+	})
+})
+
+var _ = Describe("registerStrategyFlagsForSweep", func() {
+	It("accepts min:max:step syntax on int fields", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		Expect(cmd.Flags().Set("lookback", "0:8:1")).To(Succeed(),
+			"int fields must accept colon-range syntax under sweep registration")
+
+		fl := cmd.Flags().Lookup("lookback")
+		Expect(fl).NotTo(BeNil())
+		Expect(fl.Value.String()).To(Equal("0:8:1"))
+	})
+
+	It("accepts min:max:step syntax on float64 fields", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		Expect(cmd.Flags().Set("threshold", "0.1:0.5:0.1")).To(Succeed(),
+			"float64 fields must accept colon-range syntax under sweep registration")
+	})
+
+	It("still accepts a fixed single value", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		Expect(cmd.Flags().Set("lookback", "5")).To(Succeed())
+		Expect(cmd.Flags().Set("threshold", "0.7")).To(Succeed())
+	})
+
+	It("preserves the field's default value when the flag is not set", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		Expect(cmd.Flags().Lookup("lookback").DefValue).To(Equal("90"))
+		Expect(cmd.Flags().Lookup("threshold").DefValue).To(Equal("0.5"))
+	})
+})
+
+var _ = Describe("collectFixedParams", func() {
+	It("returns user-set values for non-swept fields", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		Expect(cmd.Flags().Set("lookback", "5")).To(Succeed())
+		Expect(cmd.Flags().Set("threshold", "0.1:0.5:0.1")).To(Succeed())
+
+		sweeps := collectParamSweeps(cmd, strategy)
+		fixed := collectFixedParams(cmd, strategy, sweeps)
+
+		Expect(fixed).To(HaveKeyWithValue("lookback", "5"))
+		Expect(fixed).NotTo(HaveKey("threshold"),
+			"swept fields must not appear as fixed params")
+	})
+
+	It("returns nil when no flags were changed", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		fixed := collectFixedParams(cmd, strategy, nil)
+		Expect(fixed).To(BeNil(),
+			"defaults should not become fixed params")
+	})
+
+	It("excludes test-only fields", func() {
+		cmd := &cobra.Command{Use: "test"}
+		strategy := &testOnlyFlagStrategy{}
+
+		registerStrategyFlagsForSweep(cmd, strategy)
+
+		// Register a "seed" flag out of band (mirroring the existing
+		// collectParamSweeps test) and set it; the test-only check
+		// inside collectFixedParams must still skip the field.
+		cmd.Flags().Int("seed", 0, "")
+		Expect(cmd.Flags().Set("seed", "42")).To(Succeed())
+
+		fixed := collectFixedParams(cmd, strategy, nil)
+		Expect(fixed).NotTo(HaveKey("seed"),
+			"test-only fields must never propagate via fixed params")
 	})
 })
 

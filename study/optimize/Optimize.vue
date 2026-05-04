@@ -29,6 +29,15 @@ const overfitColumns = [
   <div class="max-w-[900px] mx-auto p-10 font-sans text-foreground text-sm leading-relaxed">
     <h1 class="text-[28px] font-semibold mb-8">Parameter Optimization</h1>
 
+    <div
+      v-if="data.warning"
+      class="mb-6 rounded border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm"
+      role="alert"
+    >
+      <div class="font-semibold mb-1">Ranking is not meaningful</div>
+      <div>{{ data.warning }}</div>
+    </div>
+
     <FinancialTable
       :title="'Rankings by Mean OOS ' + (data.objectiveName || '')"
       :columns="rankingColumns"

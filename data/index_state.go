@@ -29,11 +29,10 @@ type indexSnapshot struct {
 
 // indexChange is a single add or remove event from the changelog.
 type indexChange struct {
-	date          time.Time
-	compositeFigi string
-	ticker        string
-	action        string // "add" or "remove"
-	weight        float64
+	date   time.Time
+	asset  asset.Asset
+	action string // "add" or "remove"
+	weight float64
 }
 
 // indexState holds the stacks and current membership for one index.
@@ -77,18 +76,14 @@ func (st *indexState) advance(forDate time.Time) {
 
 		switch ch.action {
 		case "add":
-			newAsset := asset.Asset{
-				CompositeFigi: ch.compositeFigi,
-				Ticker:        ch.ticker,
-			}
 			st.constituents = append(st.constituents, IndexConstituent{
-				Asset:  newAsset,
+				Asset:  ch.asset,
 				Weight: ch.weight,
 			})
-			st.assets = append(st.assets, newAsset)
+			st.assets = append(st.assets, ch.asset)
 		case "remove":
 			for ii := range st.constituents {
-				if st.constituents[ii].Asset.CompositeFigi == ch.compositeFigi {
+				if st.constituents[ii].Asset.CompositeFigi == ch.asset.CompositeFigi {
 					last := len(st.constituents) - 1
 					st.constituents[ii] = st.constituents[last]
 					st.constituents = st.constituents[:last]
@@ -109,12 +104,13 @@ type IndexSnapshotEntry struct {
 }
 
 // IndexChangeEntry is a changelog event used to construct an indexState.
+// Asset must carry full metadata (Sector, Industry, Name, etc.); the engine
+// surfaces this asset directly to strategies via IndexUniverse.Assets().
 type IndexChangeEntry struct {
-	Date          time.Time
-	CompositeFigi string
-	Ticker        string
-	Action        string
-	Weight        float64
+	Date   time.Time
+	Asset  asset.Asset
+	Action string
+	Weight float64
 }
 
 // NewIndexState creates an indexState from pre-sorted snapshots and changelog
@@ -128,11 +124,10 @@ func NewIndexState(snapshots []IndexSnapshotEntry, changelog []IndexChangeEntry)
 	cc := make([]indexChange, len(changelog))
 	for ii, entry := range changelog {
 		cc[ii] = indexChange{
-			date:          entry.Date,
-			compositeFigi: entry.CompositeFigi,
-			ticker:        entry.Ticker,
-			action:        entry.Action,
-			weight:        entry.Weight,
+			date:   entry.Date,
+			asset:  entry.Asset,
+			action: entry.Action,
+			weight: entry.Weight,
 		}
 	}
 

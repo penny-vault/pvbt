@@ -963,7 +963,10 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 		Weight        float64 `json:"weight"`
 	}
 
-	var snapshots []IndexSnapshotEntry
+	var (
+		snapshots []IndexSnapshotEntry
+		figis     []string
+	)
 
 	for snapRows.Next() {
 		var (
@@ -990,6 +993,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 				},
 				Weight: cc.Weight,
 			})
+			figis = append(figis, cc.CompositeFigi)
 		}
 
 		snapshots = append(snapshots, entry)
@@ -1015,11 +1019,18 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	var changelog []IndexChangeEntry
 
 	for logRows.Next() {
-		var entry IndexChangeEntry
+		var (
+			entry         IndexChangeEntry
+			compositeFigi string
+			ticker        string
+		)
 
-		if err := logRows.Scan(&entry.Date, &entry.CompositeFigi, &entry.Ticker, &entry.Action, &entry.Weight); err != nil {
+		if err := logRows.Scan(&entry.Date, &compositeFigi, &ticker, &entry.Action, &entry.Weight); err != nil {
 			return nil, fmt.Errorf("scan changelog row: %w", err)
 		}
+
+		entry.Asset = asset.Asset{CompositeFigi: compositeFigi, Ticker: ticker}
+		figis = append(figis, compositeFigi)
 
 		changelog = append(changelog, entry)
 	}
@@ -1028,7 +1039,132 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 		return nil, fmt.Errorf("iterate changelog: %w", err)
 	}
 
+	// Enrich every stub asset with full metadata (Sector, Industry, Name,
+	// etc.) from the assets table so strategies can gate on classification.
+	// Missing figis keep their stub Asset; we log them as a single warning so
+	// strategies still see the constituent rather than silently dropping the
+	// whole index.
+	assetsByFigi, err := p.loadAssetsByFigi(ctx, conn, figis)
+	if err != nil {
+		return nil, fmt.Errorf("load index member metadata for %q: %w", index, err)
+	}
+
+	if missing := enrichIndexState(snapshots, changelog, assetsByFigi); len(missing) > 0 {
+		const sampleSize = 10
+
+		sample := missing
+		if len(sample) > sampleSize {
+			sample = sample[:sampleSize]
+		}
+
+		zerolog.Ctx(ctx).Warn().
+			Str("index", index).
+			Int("missing_count", len(missing)).
+			Strs("sample_tickers", sample).
+			Msg("index constituents have no row in assets table; classification fields will be empty")
+	}
+
 	return NewIndexState(snapshots, changelog), nil
+}
+
+// loadAssetsByFigi fetches full asset rows for the given composite_figis from
+// the assets view and returns them keyed by composite_figi. Used by
+// loadIndexState to enrich index constituents with metadata that the
+// indices_snapshot/indices_changelog tables do not carry. Duplicates in figis
+// are tolerated by the SQL ANY() clause; the result map deduplicates them.
+func (p *PVDataProvider) loadAssetsByFigi(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	figis []string,
+) (map[string]asset.Asset, error) {
+	if len(figis) == 0 {
+		return map[string]asset.Asset{}, nil
+	}
+
+	rows, err := conn.Query(ctx,
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets WHERE composite_figi = ANY($1)`,
+		figis,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query assets by figi: %w", err)
+	}
+	defer rows.Close()
+
+	assets := make(map[string]asset.Asset, len(figis))
+
+	for rows.Next() {
+		aa, scanErr := scanPgxAsset(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan asset by figi: %w", scanErr)
+		}
+
+		assets[aa.CompositeFigi] = aa
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assets by figi: %w", err)
+	}
+
+	return assets, nil
+}
+
+// enrichIndexState replaces the stub Asset records on snapshot constituents
+// and changelog entries with the full asset.Asset (Sector, Industry, Name,
+// etc.) from assetsByFigi. Enrichment is best-effort: figis missing from
+// assetsByFigi keep their stub Asset (CompositeFigi + Ticker only) so the
+// strategy still sees the constituent and can fall back on its own policy
+// when classification is empty. The returned tickers are the ones whose
+// metadata could not be filled in, deduplicated and sorted, so the caller
+// can log a single aggregated warning per index load.
+func enrichIndexState(
+	snapshots []IndexSnapshotEntry,
+	changelog []IndexChangeEntry,
+	assetsByFigi map[string]asset.Asset,
+) []string {
+	missing := make(map[string]string) // composite_figi -> ticker
+
+	for ii := range snapshots {
+		for jj := range snapshots[ii].Members {
+			stub := snapshots[ii].Members[jj].Asset
+
+			full, ok := assetsByFigi[stub.CompositeFigi]
+			if !ok {
+				missing[stub.CompositeFigi] = stub.Ticker
+
+				continue
+			}
+
+			snapshots[ii].Members[jj].Asset = full
+		}
+	}
+
+	for ii := range changelog {
+		stub := changelog[ii].Asset
+
+		full, ok := assetsByFigi[stub.CompositeFigi]
+		if !ok {
+			missing[stub.CompositeFigi] = stub.Ticker
+
+			continue
+		}
+
+		changelog[ii].Asset = full
+	}
+
+	if len(missing) == 0 {
+		return nil
+	}
+
+	tickers := make([]string, 0, len(missing))
+	for _, ticker := range missing {
+		tickers = append(tickers, ticker)
+	}
+
+	sort.Strings(tickers)
+
+	return tickers
 }
 
 // RatingHistory returns the initial rating state just before start and all

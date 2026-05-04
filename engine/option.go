@@ -122,3 +122,14 @@ func WithProgressCallback(fn ProgressCallback) Option {
 		e.progressCallback = fn
 	}
 }
+
+// WithUserParams declares strategy field names (kebab-case) that the
+// caller has already explicitly set on the strategy. hydrateFields will
+// not re-apply struct-tag defaults to these fields, so an explicit zero
+// value (e.g. --sector-cap 0) is preserved instead of being silently
+// overwritten by the field's `default` tag.
+func WithUserParams(names ...string) Option {
+	return func(e *Engine) {
+		e.MarkUserParams(names...)
+	}
+}

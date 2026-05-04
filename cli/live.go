@@ -45,7 +45,7 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		return err
 	}
 
-	applyStrategyFlags(cmd, strategy)
+	appliedFlags := applyStrategyFlags(cmd, strategy)
 
 	cfg, err := loadMiddlewareConfigFromCommand(cmd)
 	if err != nil {
@@ -61,6 +61,7 @@ func runLive(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithDataProvider(provider),
 		engine.WithAssetProvider(provider),
 		engine.WithInitialDeposit(cash),
+		engine.WithUserParams(appliedFlags...),
 	}
 
 	if cfg.HasMiddleware() {

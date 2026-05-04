@@ -18,6 +18,7 @@ package optimize
 import (
 	"context"
 	"fmt"
+	"maps"
 
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/study"
@@ -30,9 +31,10 @@ var _ study.Study = (*Optimizer)(nil)
 // Optimizer is a study.Study that evaluates strategy parameter combinations
 // across cross-validation splits and ranks them by out-of-sample performance.
 type Optimizer struct {
-	splits    []study.Split
-	objective portfolio.Rankable
-	topN      int
+	splits     []study.Split
+	objective  portfolio.Rankable
+	topN       int
+	baseParams map[string]string
 }
 
 // Option configures an Optimizer.
@@ -50,6 +52,21 @@ func WithObjective(metric portfolio.Rankable) Option {
 func WithTopN(topN int) Option {
 	return func(opt *Optimizer) {
 		opt.topN = topN
+	}
+}
+
+// WithBaseParams sets parameter values applied to every parameter
+// combination before the swept value is overlaid. Use this to fix
+// non-swept strategy flags (e.g. when sweeping --sector-cap but
+// pinning --top-holdings to a specific value).
+func WithBaseParams(params map[string]string) Option {
+	return func(opt *Optimizer) {
+		if len(params) == 0 {
+			opt.baseParams = nil
+			return
+		}
+
+		opt.baseParams = maps.Clone(params)
 	}
 }
 
@@ -97,16 +114,20 @@ func (opt *Optimizer) Configurations(_ context.Context) ([]study.RunConfig, erro
 		}
 	}
 
-	return []study.RunConfig{
-		{
-			Name:  "Full Range",
-			Start: earliest,
-			End:   latest,
-			Metadata: map[string]string{
-				"study": "parameter-optimization",
-			},
+	cfg := study.RunConfig{
+		Name:  "Full Range",
+		Start: earliest,
+		End:   latest,
+		Metadata: map[string]string{
+			"study": "parameter-optimization",
 		},
-	}, nil
+	}
+
+	if len(opt.baseParams) > 0 {
+		cfg.Params = maps.Clone(opt.baseParams)
+	}
+
+	return []study.RunConfig{cfg}, nil
 }
 
 // Analyze processes all RunResults, groups them by combination and split,
