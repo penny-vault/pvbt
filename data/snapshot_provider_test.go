@@ -216,6 +216,71 @@ var _ = Describe("SnapshotProvider", func() {
 			Expect(resultConstituents).To(HaveLen(1))
 			Expect(resultConstituents[0].Weight).To(BeNumerically("~", 0.75, 0.001))
 		})
+
+		It("replays full asset metadata (Sector, Industry, Name) for index members", func() {
+			// When the underlying IndexProvider returns assets enriched with
+			// classification metadata, the recorder must persist that metadata
+			// so the snapshot replay also exposes it. Strategies that gate on
+			// Sector/Industry depend on this round-trip.
+			mtb := asset.Asset{
+				CompositeFigi:   "BBG000D9KWL9",
+				Ticker:          "MTB",
+				Name:            "M&T Bank Corporation",
+				AssetType:       asset.AssetTypeCommonStock,
+				PrimaryExchange: asset.ExchangeNYSE,
+				Sector:          asset.SectorFinancialServices,
+				Industry:        asset.IndustryBanksRegional,
+			}
+			vlo := asset.Asset{
+				CompositeFigi:   "BBG000BBGFG6",
+				Ticker:          "VLO",
+				Name:            "Valero Energy Corporation",
+				AssetType:       asset.AssetTypeCommonStock,
+				PrimaryExchange: asset.ExchangeNYSE,
+				Sector:          asset.SectorEnergy,
+				Industry:        asset.IndustryOilGasRefiningMarketing,
+			}
+
+			members := []asset.Asset{mtb, vlo}
+			constituents := []data.IndexConstituent{
+				{Asset: mtb, Weight: 0.5},
+				{Asset: vlo, Weight: 0.5},
+			}
+			nyc, _ := time.LoadLocation("America/New_York")
+			date := time.Date(2023, 12, 29, 16, 0, 0, 0, nyc)
+
+			recorder, err := data.NewSnapshotRecorder(dbPath, data.SnapshotRecorderConfig{
+				IndexProvider: &stubIndexProvider{members: members, constituents: constituents},
+				AssetProvider: &stubAssetProvider{assets: members},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			_, _, err = recorder.IndexMembers(ctx, "SPX", date)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(recorder.Close()).To(Succeed())
+
+			snap, err := data.NewSnapshotProvider(dbPath)
+			Expect(err).NotTo(HaveOccurred())
+			defer snap.Close()
+
+			resultAssets, resultConstituents, err := snap.IndexMembers(ctx, "SPX", date)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(resultAssets).To(HaveLen(2))
+
+			bySector := map[asset.Sector]asset.Asset{}
+			for _, aa := range resultAssets {
+				bySector[aa.Sector] = aa
+			}
+
+			Expect(bySector).To(HaveKey(asset.SectorFinancialServices))
+			Expect(bySector).To(HaveKey(asset.SectorEnergy))
+			Expect(bySector[asset.SectorFinancialServices].Industry).To(Equal(asset.IndustryBanksRegional))
+			Expect(bySector[asset.SectorEnergy].Name).To(Equal("Valero Energy Corporation"))
+
+			for _, ic := range resultConstituents {
+				Expect(string(ic.Asset.Sector)).NotTo(BeEmpty(), "constituent %q must carry a Sector", ic.Asset.Ticker)
+			}
+		})
 	})
 
 	Describe("RatedAssets", func() {

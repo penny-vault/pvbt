@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Index universe members now carry full asset metadata (sector, industry, name, exchange, listing dates). Strategies that gate on classification (e.g. sector caps, financials exclusion) previously saw empty `Sector`/`Industry` for every constituent and silently misbehaved.
+
 ## [0.9.0] - 2026-05-03
 
 ### Added

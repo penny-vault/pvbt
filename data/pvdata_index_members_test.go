@@ -73,7 +73,7 @@ var _ = Describe("IndexState", func() {
 	It("applies changelog add between snapshots", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3}},
+			[]data.IndexChangeEntry{{Date: day2, Asset: goog, Action: "add", Weight: 0.3}},
 		)
 		state.Advance(day1)
 		assets, constituents := state.Advance(day2)
@@ -84,7 +84,7 @@ var _ = Describe("IndexState", func() {
 	It("applies changelog remove between snapshots", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}}},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"}},
+			[]data.IndexChangeEntry{{Date: day2, Asset: goog, Action: "remove"}},
 		)
 		state.Advance(day1)
 		assets, constituents := state.Advance(day2)
@@ -99,7 +99,7 @@ var _ = Describe("IndexState", func() {
 				{Date: day1, Members: []data.IndexConstituent{aaplIC, googIC}},
 				{Date: day3, Members: []data.IndexConstituent{aaplIC, msftIC}},
 			},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"}},
+			[]data.IndexChangeEntry{{Date: day2, Asset: goog, Action: "remove"}},
 		)
 		state.Advance(day1)
 		assets, _ := state.Advance(day3)
@@ -112,7 +112,7 @@ var _ = Describe("IndexState", func() {
 				{Date: day1, Members: []data.IndexConstituent{aaplIC}},
 				{Date: day2, Members: []data.IndexConstituent{aaplIC, googIC}},
 			},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-MSFT", Ticker: "MSFT", Action: "add"}},
+			[]data.IndexChangeEntry{{Date: day2, Asset: msft, Action: "add"}},
 		)
 		assets, _ := state.Advance(day2)
 		Expect(assets).To(ConsistOf(aapl, goog))
@@ -142,8 +142,8 @@ var _ = Describe("IndexState", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
 			[]data.IndexChangeEntry{
-				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3},
-				{Date: day2, CompositeFigi: "FIGI-MSFT", Ticker: "MSFT", Action: "add", Weight: 0.2},
+				{Date: day2, Asset: goog, Action: "add", Weight: 0.3},
+				{Date: day2, Asset: msft, Action: "add", Weight: 0.2},
 			},
 		)
 		state.Advance(day1)
@@ -155,8 +155,8 @@ var _ = Describe("IndexState", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
 			[]data.IndexChangeEntry{
-				{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.3},
-				{Date: day3, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "remove"},
+				{Date: day2, Asset: goog, Action: "add", Weight: 0.3},
+				{Date: day3, Asset: goog, Action: "remove"},
 			},
 		)
 		state.Advance(day1)
@@ -188,7 +188,7 @@ var _ = Describe("IndexState", func() {
 		state := data.NewIndexState(
 			nil,
 			[]data.IndexChangeEntry{
-				{Date: day1, CompositeFigi: "FIGI-AAPL", Ticker: "AAPL", Action: "add", Weight: 0.5},
+				{Date: day1, Asset: aapl, Action: "add", Weight: 0.5},
 			},
 		)
 		assets, constituents := state.Advance(day1)
@@ -200,7 +200,7 @@ var _ = Describe("IndexState", func() {
 	It("preserves weight data through changelog adds", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
-			[]data.IndexChangeEntry{{Date: day2, CompositeFigi: "FIGI-GOOG", Ticker: "GOOG", Action: "add", Weight: 0.35}},
+			[]data.IndexChangeEntry{{Date: day2, Asset: goog, Action: "add", Weight: 0.35}},
 		)
 		state.Advance(day1)
 		_, constituents := state.Advance(day2)

@@ -963,7 +963,10 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 		Weight        float64 `json:"weight"`
 	}
 
-	var snapshots []IndexSnapshotEntry
+	var (
+		snapshots []IndexSnapshotEntry
+		figis     []string
+	)
 
 	for snapRows.Next() {
 		var (
@@ -990,6 +993,7 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 				},
 				Weight: cc.Weight,
 			})
+			figis = append(figis, cc.CompositeFigi)
 		}
 
 		snapshots = append(snapshots, entry)
@@ -1015,11 +1019,18 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 	var changelog []IndexChangeEntry
 
 	for logRows.Next() {
-		var entry IndexChangeEntry
+		var (
+			entry         IndexChangeEntry
+			compositeFigi string
+			ticker        string
+		)
 
-		if err := logRows.Scan(&entry.Date, &entry.CompositeFigi, &entry.Ticker, &entry.Action, &entry.Weight); err != nil {
+		if err := logRows.Scan(&entry.Date, &compositeFigi, &ticker, &entry.Action, &entry.Weight); err != nil {
 			return nil, fmt.Errorf("scan changelog row: %w", err)
 		}
+
+		entry.Asset = asset.Asset{CompositeFigi: compositeFigi, Ticker: ticker}
+		figis = append(figis, compositeFigi)
 
 		changelog = append(changelog, entry)
 	}
@@ -1028,7 +1039,107 @@ func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*ind
 		return nil, fmt.Errorf("iterate changelog: %w", err)
 	}
 
+	// Enrich every stub asset with full metadata (Sector, Industry, Name,
+	// etc.) from the assets table so strategies can gate on classification.
+	assetsByFigi, err := p.loadAssetsByFigi(ctx, conn, figis)
+	if err != nil {
+		return nil, fmt.Errorf("load index member metadata for %q: %w", index, err)
+	}
+
+	if err := enrichIndexState(snapshots, changelog, assetsByFigi); err != nil {
+		return nil, fmt.Errorf("enrich index %q: %w", index, err)
+	}
+
 	return NewIndexState(snapshots, changelog), nil
+}
+
+// loadAssetsByFigi fetches full asset rows for the given composite_figis from
+// the assets view and returns them keyed by composite_figi. Used by
+// loadIndexState to enrich index constituents with metadata that the
+// indices_snapshot/indices_changelog tables do not carry. Duplicates in figis
+// are tolerated by the SQL ANY() clause; the result map deduplicates them.
+func (p *PVDataProvider) loadAssetsByFigi(
+	ctx context.Context,
+	conn *pgxpool.Conn,
+	figis []string,
+) (map[string]asset.Asset, error) {
+	if len(figis) == 0 {
+		return map[string]asset.Asset{}, nil
+	}
+
+	rows, err := conn.Query(ctx,
+		`SELECT composite_figi, ticker, name, asset_type, primary_exchange,
+		        sector, industry, sic_code, cik, listed, delisted
+		 FROM assets WHERE composite_figi = ANY($1)`,
+		figis,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("query assets by figi: %w", err)
+	}
+	defer rows.Close()
+
+	assets := make(map[string]asset.Asset, len(figis))
+
+	for rows.Next() {
+		aa, scanErr := scanPgxAsset(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("scan asset by figi: %w", scanErr)
+		}
+
+		assets[aa.CompositeFigi] = aa
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate assets by figi: %w", err)
+	}
+
+	return assets, nil
+}
+
+// enrichIndexState replaces the stub Asset records on snapshot constituents
+// and changelog entries with the full asset.Asset (Sector, Industry, Name,
+// etc.) from assetsByFigi. Returns an error if any constituent's
+// composite_figi is missing from assetsByFigi -- silently substituting a stub
+// would let strategies see empty Sector/Industry without warning.
+func enrichIndexState(
+	snapshots []IndexSnapshotEntry,
+	changelog []IndexChangeEntry,
+	assetsByFigi map[string]asset.Asset,
+) error {
+	for ii := range snapshots {
+		for jj := range snapshots[ii].Members {
+			stub := snapshots[ii].Members[jj].Asset
+
+			full, ok := assetsByFigi[stub.CompositeFigi]
+			if !ok {
+				return fmt.Errorf(
+					"snapshot %s: asset %q (%q) not found in assets table",
+					snapshots[ii].Date.Format("2006-01-02"),
+					stub.CompositeFigi, stub.Ticker,
+				)
+			}
+
+			snapshots[ii].Members[jj].Asset = full
+		}
+	}
+
+	for ii := range changelog {
+		stub := changelog[ii].Asset
+
+		full, ok := assetsByFigi[stub.CompositeFigi]
+		if !ok {
+			return fmt.Errorf(
+				"changelog %s %s: asset %q (%q) not found in assets table",
+				changelog[ii].Date.Format("2006-01-02"),
+				changelog[ii].Action,
+				stub.CompositeFigi, stub.Ticker,
+			)
+		}
+
+		changelog[ii].Asset = full
+	}
+
+	return nil
 }
 
 // RatingHistory returns the initial rating state just before start and all
