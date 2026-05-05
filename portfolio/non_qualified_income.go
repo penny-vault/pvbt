@@ -33,13 +33,25 @@ func (nonQualifiedIncome) Description() string {
 		"interest distributions."
 }
 
-func (nonQualifiedIncome) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
+func (nonQualifiedIncome) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	start, end := windowBounds(ctx, stats, window)
+
 	var total float64
 
 	for _, tx := range stats.TransactionsView(ctx) {
-		if tx.Type == asset.DividendTransaction && !tx.Qualified {
-			total += tx.Amount
+		if tx.Type != asset.DividendTransaction || tx.Qualified {
+			continue
 		}
+
+		if !start.IsZero() && tx.Date.Before(start) {
+			continue
+		}
+
+		if !end.IsZero() && tx.Date.After(end) {
+			continue
+		}
+
+		total += tx.Amount
 	}
 
 	return total, nil

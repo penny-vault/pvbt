@@ -29,8 +29,10 @@ func (stcgMetric) Description() string {
 	return "Total realized short-term capital gains from positions held 365 days or fewer. Computed by replaying the transaction log with FIFO lot matching. Taxed as ordinary income."
 }
 
-func (stcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
-	_, stcg, _, _ := realizedGains(stats.TransactionsView(ctx))
+func (stcgMetric) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	start, end := windowBounds(ctx, stats, window)
+	_, stcg, _, _ := realizedGainsInRange(stats.TransactionsView(ctx), start, end)
+
 	return stcg, nil
 }
 

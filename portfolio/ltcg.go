@@ -29,8 +29,10 @@ func (ltcgMetric) Description() string {
 	return "Total realized long-term capital gains from positions held longer than 365 days. Computed by replaying the transaction log with FIFO lot matching. Taxed at preferential rates (typically 15-20%)."
 }
 
-func (ltcgMetric) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
-	ltcg, _, _, _ := realizedGains(stats.TransactionsView(ctx))
+func (ltcgMetric) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	start, end := windowBounds(ctx, stats, window)
+	ltcg, _, _, _ := realizedGainsInRange(stats.TransactionsView(ctx), start, end)
+
 	return ltcg, nil
 }
 
