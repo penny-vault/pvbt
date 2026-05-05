@@ -16,11 +16,52 @@
 package portfolio
 
 import (
+	"context"
 	"math"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 )
+
+// windowBoundsHinter is implemented by stats wrappers that already know
+// their user-supplied date range (e.g. windowedStats from AbsoluteWindow).
+// When present, the metric uses these bounds directly so that transactions
+// falling inside the window but outside the recorded equity-curve rows
+// are still attributed correctly.
+type windowBoundsHinter interface {
+	windowBounds() (start, end time.Time)
+}
+
+// windowBounds returns the inclusive [start, end] timestamp range covered
+// by window when applied to stats. For absolute windows the bounds come
+// from the wrapper; for relative *Period windows the end is the latest
+// recorded equity timestamp and the start is period.Before(end). Returning
+// zero times signals an unbounded range, which realizedGainsInRange treats
+// as full history.
+func windowBounds(ctx context.Context, stats PortfolioStats, window *Period) (start, end time.Time) {
+	if hinter, ok := stats.(windowBoundsHinter); ok {
+		return hinter.windowBounds()
+	}
+
+	if window == nil {
+		return time.Time{}, time.Time{}
+	}
+
+	df := stats.EquitySeries(ctx, nil)
+	if df == nil {
+		return time.Time{}, time.Time{}
+	}
+
+	times := df.Times()
+	if len(times) == 0 {
+		return time.Time{}, time.Time{}
+	}
+
+	end = times[len(times)-1]
+	start = window.Before(end)
+
+	return start, end
+}
 
 // removeNaN returns a copy of col with all NaN values removed.
 func removeNaN(col []float64) []float64 {
@@ -194,12 +235,35 @@ func roundTrips(details []TradeDetail, txns []Transaction) ([]roundTrip, float64
 
 // realizedGains replays the transaction log with FIFO lot matching to
 // compute realized long-term capital gains, short-term capital gains,
-// qualified dividend income, and non-qualified dividend income.
+// qualified dividend income, and non-qualified dividend income across
+// the full transaction history.
 func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64) {
+	return realizedGainsInRange(txns, time.Time{}, time.Time{})
+}
+
+// realizedGainsInRange replays the full transaction log with FIFO lot
+// matching but only attributes realized gains and dividends whose
+// transaction date falls inside the inclusive [start, end] window.
+// Buys outside the window still build up tax lots so that in-window
+// sells consume the correct cost basis. A zero-value start/end disables
+// the bound on that side; a zero range on both sides covers all history.
+func realizedGainsInRange(txns []Transaction, start, end time.Time) (ltcg, stcg, qualDiv, nonQualDiv float64) {
 	type lot struct {
 		date  time.Time
 		qty   float64
 		price float64
+	}
+
+	inRange := func(date time.Time) bool {
+		if !start.IsZero() && date.Before(start) {
+			return false
+		}
+
+		if !end.IsZero() && date.After(end) {
+			return false
+		}
+
+		return true
 	}
 
 	lots := make(map[string][]lot) // keyed by CompositeFigi
@@ -216,6 +280,7 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 		case asset.SellTransaction:
 			remaining := txn.Qty
 			lotList := lots[key]
+			attribute := inRange(txn.Date)
 
 			lotIdx := 0
 			for lotIdx < len(lotList) && remaining > 0 {
@@ -224,13 +289,15 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 					matched = remaining
 				}
 
-				gain := (txn.Price - lotList[lotIdx].price) * matched
+				if attribute {
+					gain := (txn.Price - lotList[lotIdx].price) * matched
 
-				holdingDays := txn.Date.Sub(lotList[lotIdx].date).Hours() / 24
-				if holdingDays > 365 {
-					ltcg += gain
-				} else {
-					stcg += gain
+					holdingDays := txn.Date.Sub(lotList[lotIdx].date).Hours() / 24
+					if holdingDays > 365 {
+						ltcg += gain
+					} else {
+						stcg += gain
+					}
 				}
 
 				if lotList[lotIdx].qty <= remaining {
@@ -244,6 +311,10 @@ func realizedGains(txns []Transaction) (ltcg, stcg, qualDiv, nonQualDiv float64)
 
 			lots[key] = lotList[lotIdx:]
 		case asset.DividendTransaction:
+			if !inRange(txn.Date) {
+				continue
+			}
+
 			if txn.Qualified {
 				qualDiv += txn.Amount
 			} else {

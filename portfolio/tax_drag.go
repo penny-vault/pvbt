@@ -29,13 +29,13 @@ func (taxDrag) Description() string {
 	return "Percentage of pre-tax return consumed by taxes from trading activity, excluding dividend taxation. Uses 25% for short-term gains and 15% for long-term gains."
 }
 
-func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
-	perfData := stats.PerfDataView(ctx)
-	if perfData == nil {
+func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	ec := perfData.Column(portfolioAsset, data.PortfolioEquity)
+	ec := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ec) < 2 {
 		return 0, nil
 	}
@@ -45,7 +45,8 @@ func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (fl
 		return 0, nil
 	}
 
-	ltcg, stcg, _, _ := realizedGains(stats.TransactionsView(ctx))
+	start, end := windowBounds(ctx, stats, window)
+	ltcg, stcg, _, _ := realizedGainsInRange(stats.TransactionsView(ctx), start, end)
 
 	estimatedTax := 0.0
 	if stcg > 0 {

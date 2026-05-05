@@ -29,13 +29,13 @@ func (taxCostRatio) Description() string {
 	return "Estimated percentage of portfolio gain lost to taxes. Computed as estimated tax liability (using 25% for short-term gains, 15% for long-term gains and qualified dividends) divided by total portfolio gain. Lower values indicate more tax-efficient strategies."
 }
 
-func (taxCostRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period) (float64, error) {
-	pd := stats.PerfDataView(ctx)
-	if pd == nil {
+func (taxCostRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
+	df := stats.EquitySeries(ctx, window)
+	if df == nil {
 		return 0, nil
 	}
 
-	ec := pd.Column(portfolioAsset, data.PortfolioEquity)
+	ec := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(ec) < 2 {
 		return 0, nil
 	}
@@ -45,7 +45,10 @@ func (taxCostRatio) Compute(ctx context.Context, stats PortfolioStats, _ *Period
 		return 0, nil
 	}
 
-	ltcg, stcg, qualDiv, nonQualDiv := realizedGains(stats.TransactionsView(ctx))
+	start, end := windowBounds(ctx, stats, window)
+	ltcg, stcg, qualDiv, nonQualDiv := realizedGainsInRange(
+		stats.TransactionsView(ctx), start, end,
+	)
 
 	estimatedTax := 0.0
 	if stcg > 0 {

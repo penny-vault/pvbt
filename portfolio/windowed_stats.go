@@ -38,6 +38,14 @@ func newWindowedStats(inner PortfolioStats, start, end time.Time) PortfolioStats
 	return &windowedStats{inner: inner, start: start, end: end}
 }
 
+// windowBounds reports the user-supplied [start, end] range so that
+// transaction-walking metrics (LTCG, STCG, TaxDrag, dividend metrics) can
+// attribute events that fall inside the window even when no equity-curve
+// row was recorded at those dates.
+func (ws *windowedStats) windowBounds() (time.Time, time.Time) {
+	return ws.start, ws.end
+}
+
 func (ws *windowedStats) Returns(ctx context.Context, window *Period) *data.DataFrame {
 	df := ws.inner.Returns(ctx, window)
 	if df == nil {
