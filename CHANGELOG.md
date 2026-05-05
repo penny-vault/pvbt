@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-05-04
+
 ### Fixed
 
 - Tax-related metrics (`TaxDrag`, `TaxCostRatio`, `LTCG`, `STCG`, `QualifiedDividends`, `NonQualifiedIncome`) now honor the requested window. Previously every per-window value reported in snapshots and the metrics table was the all-history figure, making per-window after-tax returns impossible to assemble.
