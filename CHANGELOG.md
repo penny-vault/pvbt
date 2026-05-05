@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] - 2026-05-05
+
 ### Added
 
 - Snapshots now report `BenchmarkTWRR`, `BenchmarkCAGR`, and the rest of the benchmark-comparable metrics (Sharpe, Sortino, MaxDrawdown, etc.) alongside their portfolio counterparts at every standard window, computed natively against the configured benchmark.
