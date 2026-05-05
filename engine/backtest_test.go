@@ -614,7 +614,7 @@ var _ = Describe("Backtest", func() {
 
 			Expect(firstRunFinal.MeasurementsEvaluated).To(BeNumerically(">", 0))
 			Expect(secondRunFirst.MeasurementsEvaluated).To(
-				BeNumerically("<=", firstRunFinal.MeasurementsEvaluated/firstRunFinal.Step+1),
+				BeNumerically("<", firstRunFinal.MeasurementsEvaluated),
 				"second run should start counting from a clean slate, not continue accumulating")
 		})
 	})

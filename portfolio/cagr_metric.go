@@ -33,22 +33,37 @@ func (cagrMetric) Description() string {
 func (cagrMetric) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
 	df := stats.EquitySeries(ctx, window)
 	if df == nil {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	eqCol := df.Column(portfolioAsset, data.PortfolioEquity)
 	eqTimes := df.Times()
 
 	if len(eqCol) < 2 || len(eqTimes) < 2 {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	years := eqTimes[len(eqTimes)-1].Sub(eqTimes[0]).Hours() / 24 / 365.25
 	if years <= 0 || eqCol[0] <= 0 || eqCol[len(eqCol)-1] <= 0 {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
-	return math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1, nil
+	// Compound flow-adjusted sub-period returns the same way TWRR does, then
+	// annualize. This isolates market-driven growth from external deposits and
+	// withdrawals -- a naive end/start ratio would treat a deposit as a return.
+	flows := buildFlowMap(stats.TransactionsView(ctx), eqTimes[0], eqTimes[len(eqTimes)-1])
+	returns := subPeriodReturns(eqCol, eqTimes, flows)
+
+	growth := 1.0
+	for _, ri := range returns {
+		growth *= 1 + ri
+	}
+
+	if growth <= 0 {
+		return 0, ErrInsufficientData
+	}
+
+	return math.Pow(growth, 1.0/years) - 1, nil
 }
 
 func (cagrMetric) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {

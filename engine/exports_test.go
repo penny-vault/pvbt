@@ -164,3 +164,9 @@ func EngineMiddlewareConfigForTest(eng *Engine) *MiddlewareConfig {
 func SetAccountForTest(eng *Engine, acct portfolio.PortfolioManager) {
 	eng.account = acct
 }
+
+// ComputeMetricsForTest exposes computeMetrics so package tests can verify
+// the benchmark pass and ErrInsufficientData omission behavior in isolation.
+func ComputeMetricsForTest(stats portfolio.PortfolioStats, date time.Time, metrics []portfolio.PerformanceMetric, appendMetric func(portfolio.MetricRow)) int {
+	return computeMetrics(stats, date, metrics, appendMetric)
+}

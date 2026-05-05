@@ -18,10 +18,12 @@ package portfolio_test
 import (
 	"context"
 	"math"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
@@ -43,11 +45,10 @@ var _ = Describe("CAGR", func() {
 		Expect(v).To(BeNumerically("~", expected, 1e-6))
 	})
 
-	It("returns 0 for single data point", func() {
+	It("returns ErrInsufficientData for single data point", func() {
 		a := buildAccountFromEquity([]float64{100})
-		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
-		Expect(err).NotTo(HaveOccurred())
-		Expect(v).To(Equal(0.0))
+		_, err := a.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).To(MatchError(portfolio.ErrInsufficientData))
 	})
 
 	It("returns 0 for constant prices (start == end)", func() {
@@ -69,5 +70,46 @@ var _ = Describe("CAGR", func() {
 		v, err := a.PerformanceMetric(portfolio.CAGR).Value()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(v).To(BeNumerically(">", 0.0))
+	})
+
+	It("does not treat deposits as growth", func() {
+		// Same scenario the TWRR test uses to verify flow adjustment:
+		//   day 0: starting cash 10000.
+		//   day 1: organic growth 1000 -> equity 11000.
+		//   day 2: deposit 5000 + organic growth 1000 -> equity 17000.
+		//
+		// True annualized growth rate matches TWRR annualized:
+		//   TWRR = (11000/10000) * (12000/11000) - 1 = 0.20 over 2 days
+		//   years = 2/365.25
+		//   CAGR = (1.20)^(1/years) - 1
+		//
+		// A naive CAGR (end/start without flow adjustment) would compute
+		// 17000/10000 ratio and treat the 5000 deposit as growth, producing
+		// a wildly inflated rate.
+		spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+		dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+
+		acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+		acct.UpdatePrices(buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100}))
+
+		acct.Record(portfolio.Transaction{
+			Date: dates[1], Type: asset.DividendTransaction, Amount: 1000,
+		})
+		acct.UpdatePrices(buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100}))
+
+		acct.Record(portfolio.Transaction{
+			Date: dates[2], Type: asset.DepositTransaction, Amount: 5000,
+		})
+		acct.Record(portfolio.Transaction{
+			Date: dates[2], Type: asset.DividendTransaction, Amount: 1000,
+		})
+		acct.UpdatePrices(buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100}))
+
+		years := dates[len(dates)-1].Sub(dates[0]).Hours() / 24 / 365.25
+		expected := math.Pow(1.20, 1.0/years) - 1
+
+		val, err := acct.PerformanceMetric(portfolio.CAGR).Value()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(val).To(BeNumerically("~", expected, 1e-6))
 	})
 })

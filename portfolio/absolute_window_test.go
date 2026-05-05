@@ -59,28 +59,26 @@ var _ = Describe("AbsoluteWindow", func() {
 			Expect(windowedCAGR).NotTo(BeNumerically("~", fullCAGR, 1e-9))
 		})
 
-		It("returns 0 when the window contains only one data point", func() {
+		It("returns ErrInsufficientData when the window contains only one data point", func() {
 			// A single day produces one data point: insufficient for CAGR.
 			start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 			end := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
 
-			val, err := acct.PerformanceMetric(portfolio.CAGR).
+			_, err := acct.PerformanceMetric(portfolio.CAGR).
 				AbsoluteWindow(start, end).
 				Value()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(Equal(0.0))
+			Expect(err).To(MatchError(portfolio.ErrInsufficientData))
 		})
 
-		It("returns 0 when the window contains no data", func() {
+		It("returns ErrInsufficientData when the window contains no data", func() {
 			// A window entirely before the data range.
 			start := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 			end := time.Date(2020, 12, 31, 0, 0, 0, 0, time.UTC)
 
-			val, err := acct.PerformanceMetric(portfolio.CAGR).
+			_, err := acct.PerformanceMetric(portfolio.CAGR).
 				AbsoluteWindow(start, end).
 				Value()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(val).To(Equal(0.0))
+			Expect(err).To(MatchError(portfolio.ErrInsufficientData))
 		})
 
 		It("computes the correct CAGR for a known sub-range", func() {

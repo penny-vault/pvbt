@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Snapshots now report `BenchmarkTWRR`, `BenchmarkCAGR`, and the rest of the benchmark-comparable metrics (Sharpe, Sortino, MaxDrawdown, etc.) alongside their portfolio counterparts at every standard window, computed natively against the configured benchmark.
+- New after-tax return metrics `AfterTaxTWRR` and `AfterTaxCAGR` reflect realized capital-gains tax (15% LTCG, 25% STCG via FIFO lot matching) directly in the equity curve, rather than approximating the impact by scaling pre-tax returns.
+- Companion benchmark metrics `BenchmarkAfterTaxTWRR` and `BenchmarkAfterTaxCAGR` apply a buy-and-hold tax model (15% LTCG on a positive cumulative gain, no tax on a loss) so portfolio-vs-benchmark comparisons stay apples-to-apples after taxes.
+
+### Changed
+
+- Metric rows are now omitted entirely when the requested window does not span enough data, instead of being recorded as zero. This lets consumers distinguish "window too short" from a real zero return.
+- The `MWRR` description states explicitly that the value is always annualized (XIRR), and that sub-annual windows produce extrapolated rates that should be interpreted with care.
+
+### Fixed
+
+- `CAGR` now compounds flow-adjusted sub-period returns before annualizing, the same way `TWRR` does. Previously a deposit or withdrawal mid-window was silently treated as market-driven growth, inflating or depressing the rate.
+
 ## [0.9.2] - 2026-05-04
 
 ### Fixed

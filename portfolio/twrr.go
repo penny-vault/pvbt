@@ -87,12 +87,12 @@ func subPeriodReturns(equityCurve []float64, times []time.Time, flows map[time.T
 func (twrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
 	df := stats.EquitySeries(ctx, window)
 	if df == nil {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	equity := df.Column(portfolioAsset, data.PortfolioEquity)
 	if len(equity) < 2 {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	times := df.Times()

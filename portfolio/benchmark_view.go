@@ -19,6 +19,14 @@ import (
 	"github.com/penny-vault/pvbt/data"
 )
 
+// BenchmarkStats returns a PortfolioStats whose equity curve is the
+// benchmark series. It is the public entry point used by the engine to
+// emit Benchmark<Name> rows for every BenchmarkTargetable metric. Returns
+// ErrNoBenchmark if no benchmark has been configured for the account.
+func (a *Account) BenchmarkStats() (PortfolioStats, error) {
+	return a.benchmarkView()
+}
+
 // benchmarkView returns a shallow copy of the Account whose perfData has the
 // benchmark equity curve written into the PortfolioEquity column. The
 // benchmark values are normalised so the curve starts at the same level as

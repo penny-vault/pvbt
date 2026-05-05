@@ -9,10 +9,12 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var _ = BeforeSuite(func() {
-	// Initialize an empty holiday calendar so tradecron does not panic.
+// init runs before any test (including Example tests, which Ginkgo's
+// BeforeSuite does not cover) so the tradecron market calendar is populated
+// before any code path touches it.
+func init() {
 	tradecron.SetMarketHolidays(nil)
-})
+}
 
 func TestEngine(t *testing.T) {
 	RegisterFailHandler(Fail)
