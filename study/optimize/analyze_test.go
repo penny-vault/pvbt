@@ -56,9 +56,11 @@ func buildPriceDF(ts time.Time, price float64) *data.DataFrame {
 }
 
 // buildAccountFromEquity creates an Account whose perfData equity curve
-// matches the given values. It uses deposit/withdrawal transactions to
-// adjust cash between UpdatePrices calls, mirroring the pattern from
-// portfolio_test.
+// matches the given values. It uses dividend/fee transactions to adjust
+// cash between UpdatePrices calls; these are invisible to TWRR's and
+// CAGR's flow filter (which only looks at deposits/withdrawals), so
+// each step's change registers as market-driven growth rather than an
+// external flow.
 func buildAccountFromEquity(dates []time.Time, equityValues []float64) *portfolio.Account {
 	acct := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
 
@@ -68,13 +70,13 @@ func buildAccountFromEquity(dates []time.Time, equityValues []float64) *portfoli
 			if diff > 0 {
 				acct.Record(portfolio.Transaction{
 					Date:   dates[idx],
-					Type:   asset.DepositTransaction,
+					Type:   asset.DividendTransaction,
 					Amount: diff,
 				})
 			} else if diff < 0 {
 				acct.Record(portfolio.Transaction{
 					Date:   dates[idx],
-					Type:   asset.WithdrawalTransaction,
+					Type:   asset.FeeTransaction,
 					Amount: diff,
 				})
 			}

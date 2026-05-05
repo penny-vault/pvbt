@@ -85,6 +85,7 @@ func WithTaxMetrics() Option {
 		for _, metric := range []PerformanceMetric{
 			LTCGMetric, STCGMetric, UnrealizedLTCGMetric, UnrealizedSTCGMetric,
 			QualifiedDividendsMetric, NonQualifiedIncomeMetric, TaxCostRatioMetric, TaxDragMetric,
+			AfterTaxTWRR, AfterTaxCAGR, BenchmarkAfterTaxTWRR, BenchmarkAfterTaxCAGR,
 		} {
 			WithMetric(metric)(acct)
 		}

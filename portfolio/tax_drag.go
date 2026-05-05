@@ -48,13 +48,15 @@ func (taxDrag) Compute(ctx context.Context, stats PortfolioStats, window *Period
 	start, end := windowBounds(ctx, stats, window)
 	ltcg, stcg, _, _ := realizedGainsInRange(stats.TransactionsView(ctx), start, end)
 
+	rates := defaultTaxRates()
+
 	estimatedTax := 0.0
 	if stcg > 0 {
-		estimatedTax += 0.25 * stcg
+		estimatedTax += rates.STCG * stcg
 	}
 
 	if ltcg > 0 {
-		estimatedTax += 0.15 * ltcg
+		estimatedTax += rates.LTCG * ltcg
 	}
 
 	return estimatedTax / preTaxReturn, nil

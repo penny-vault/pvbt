@@ -124,17 +124,15 @@ var _ = Describe("Metric", func() {
 			Expect(math.IsNaN(score)).To(BeTrue(), "expected NaN Sharpe when risk-free data is missing")
 		})
 
-		It("returns a zero value (not NaN) for a window that contains no data", func() {
-			// CAGR (and most metrics) return 0, nil when the windowed data is
-			// empty rather than returning an error. WindowedScore therefore
-			// returns 0 rather than NaN in this case.
+		It("returns NaN for a window that contains no data", func() {
+			// CAGR returns ErrInsufficientData when the windowed data is
+			// empty, so WindowedScore signals "unevaluable" via NaN.
 			emptyWindow := study.DateRange{
 				Start: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 				End:   time.Date(2025, 6, 1, 0, 0, 0, 0, time.UTC),
 			}
 			score := study.WindowedScore(fakePF, emptyWindow, portfolio.CAGR.(portfolio.Rankable))
-			Expect(math.IsNaN(score)).To(BeFalse(), "expected non-NaN for empty window")
-			Expect(score).To(Equal(0.0))
+			Expect(math.IsNaN(score)).To(BeTrue(), "expected NaN for empty window")
 		})
 	})
 

@@ -17,6 +17,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,43 +37,79 @@ func standardWindows() []portfolio.Period {
 	}
 }
 
+// benchmarkStatsProvider is implemented by stats that can return a paired
+// benchmark-equity-curve view of themselves. *portfolio.Account satisfies
+// this. The engine uses it to emit Benchmark<Name> rows.
+type benchmarkStatsProvider interface {
+	BenchmarkStats() (portfolio.PortfolioStats, error)
+}
+
 // computeMetrics computes all provided metrics on the PortfolioStats for
 // the given date across all standard windows plus since-inception. It
 // returns the number of metric rows successfully evaluated and appended.
+//
+// When stats also provides a benchmark stats view (via BenchmarkStats),
+// every metric satisfying portfolio.BenchmarkTargetable is also evaluated
+// against the benchmark equity curve and emitted under the name
+// "Benchmark"+metric.Name(). Rows that return portfolio.ErrInsufficientData
+// are omitted entirely so downstream consumers can distinguish "window did
+// not span enough data" from a real zero value.
 func computeMetrics(stats portfolio.PortfolioStats, date time.Time, metrics []portfolio.PerformanceMetric, appendMetric func(portfolio.MetricRow)) int {
 	ctx := context.Background()
 
 	appended := 0
 
-	for _, metric := range metrics {
-		// Since inception (nil window).
-		val, err := metric.Compute(ctx, stats, nil)
-		if err == nil {
-			appendMetric(portfolio.MetricRow{
-				Date:   date,
-				Name:   metric.Name(),
-				Window: "since_inception",
-				Value:  val,
-			})
-
-			appended++
+	emit := func(source portfolio.PortfolioStats, metric portfolio.PerformanceMetric, namePrefix string, window *portfolio.Period, label string) {
+		val, err := metric.Compute(ctx, source, window)
+		if err != nil {
+			return
 		}
 
-		// Standard windows.
+		appendMetric(portfolio.MetricRow{
+			Date:   date,
+			Name:   namePrefix + metric.Name(),
+			Window: label,
+			Value:  val,
+		})
+
+		appended++
+	}
+
+	for _, metric := range metrics {
+		emit(stats, metric, "", nil, "since_inception")
+
 		for _, window := range standardWindows() {
 			windowCopy := window
+			emit(stats, metric, "", &windowCopy, windowLabel(window))
+		}
+	}
 
-			val, err := metric.Compute(ctx, stats, &windowCopy)
-			if err == nil {
-				appendMetric(portfolio.MetricRow{
-					Date:   date,
-					Name:   metric.Name(),
-					Window: windowLabel(window),
-					Value:  val,
-				})
+	provider, ok := stats.(benchmarkStatsProvider)
+	if !ok {
+		return appended
+	}
 
-				appended++
-			}
+	benchStats, err := provider.BenchmarkStats()
+	if err != nil {
+		// No benchmark configured -- skip the benchmark pass silently. A
+		// missing benchmark is a configuration choice, not an error.
+		if errors.Is(err, portfolio.ErrNoBenchmark) {
+			return appended
+		}
+
+		return appended
+	}
+
+	for _, metric := range metrics {
+		if _, ok := metric.(portfolio.BenchmarkTargetable); !ok {
+			continue
+		}
+
+		emit(benchStats, metric, "Benchmark", nil, "since_inception")
+
+		for _, window := range standardWindows() {
+			windowCopy := window
+			emit(benchStats, metric, "Benchmark", &windowCopy, windowLabel(window))
 		}
 	}
 

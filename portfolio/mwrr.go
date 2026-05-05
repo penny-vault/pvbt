@@ -29,7 +29,7 @@ type mwrr struct{}
 func (mwrr) Name() string { return "MWRR" }
 
 func (mwrr) Description() string {
-	return "Money-weighted rate of return (internal rate of return). Measures the actual return experienced by the investor, accounting for the timing and size of cash flows. Sensitive to when deposits and withdrawals occur."
+	return "Money-weighted rate of return (XIRR). Measures the actual return experienced by the investor, accounting for the timing and size of cash flows. The reported value is always annualized regardless of the window: a 1-week MWRR is an extrapolated annual rate, not the period rate. For sub-annual windows (wtd, mtd, ytd) the annualization can produce extreme values from short observation horizons and should be interpreted with care."
 }
 
 // Compute returns the money-weighted (XIRR) annual rate of return.
@@ -40,14 +40,14 @@ func (mwrr) Description() string {
 func (mwrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (float64, error) {
 	df := stats.EquitySeries(ctx, window)
 	if df == nil {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	equity := df.Column(portfolioAsset, data.PortfolioEquity)
 	times := df.Times()
 
 	if len(equity) < 2 {
-		return 0, nil
+		return 0, ErrInsufficientData
 	}
 
 	// Build cash flow list from transactions.

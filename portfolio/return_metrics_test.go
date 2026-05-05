@@ -99,13 +99,12 @@ var _ = Describe("Return Metrics", func() {
 			Expect(result).To(BeNumerically("~", -0.20, 1e-9))
 		})
 
-		It("returns 0 for a single data point", func() {
+		It("returns ErrInsufficientData for a single data point", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
 			a := buildReturnAccount(dates, []float64{100})
 
-			result, err := a.PerformanceMetric(portfolio.TWRR).Value()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
+			_, err := a.PerformanceMetric(portfolio.TWRR).Value()
+			Expect(err).To(MatchError(portfolio.ErrInsufficientData))
 		})
 
 		It("isolates market growth from deposit-driven equity changes", func() {
@@ -462,13 +461,12 @@ var _ = Describe("Return Metrics", func() {
 			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
 		})
 
-		It("returns 0 for a single data point", func() {
+		It("returns ErrInsufficientData for a single data point", func() {
 			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 1)
 			a := buildReturnAccount(dates, []float64{10_000})
 
-			result, err := a.PerformanceMetric(portfolio.MWRR).Value()
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 0.0, 1e-9))
+			_, err := a.PerformanceMetric(portfolio.MWRR).Value()
+			Expect(err).To(MatchError(portfolio.ErrInsufficientData))
 		})
 
 		It("returns nil for ComputeSeries (MWRR is a scalar metric)", func() {

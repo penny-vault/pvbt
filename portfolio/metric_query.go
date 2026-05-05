@@ -28,6 +28,10 @@ var (
 	ErrNoRiskFreeRate        = errors.New("risk-free rate not configured")
 	ErrNoBenchmark           = errors.New("benchmark not configured")
 	ErrBenchmarkNotSupported = errors.New("metric does not support benchmark targeting")
+	// ErrInsufficientData signals that the requested window does not contain
+	// enough data to evaluate the metric. The engine treats this as "omit
+	// this row" rather than recording a zero value.
+	ErrInsufficientData = errors.New("insufficient data for metric window")
 )
 
 // PortfolioStats provides read-only access to the data a performance metric
