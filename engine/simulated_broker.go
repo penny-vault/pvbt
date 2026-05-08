@@ -47,6 +47,7 @@ type SimulatedBroker struct {
 	groups            map[string][]string // groupID -> orderIDs
 	portfolio         portfolio.Portfolio
 	initialMarginRate float64
+	maxLeverage       float64
 	borrowRate        float64
 	lastPrices        map[asset.Asset]float64
 	fillPipeline      *broker.Pipeline
@@ -84,6 +85,14 @@ func (b *SimulatedBroker) SetInitialMarginRate(rate float64) {
 // SetBorrowRate sets the annualized borrow fee rate for short positions.
 func (b *SimulatedBroker) SetBorrowRate(rate float64) {
 	b.borrowRate = rate
+}
+
+// SetMaxLeverage sets the gross-leverage cap (LMV+SMV)/Equity used to
+// reject orders that would push the account above the cap. Values <= 0
+// disable the broker-level check; the account-level default still
+// applies via portfolio.Account.MaxLeverage.
+func (b *SimulatedBroker) SetMaxLeverage(ratio float64) {
+	b.maxLeverage = ratio
 }
 
 // SetFillPipeline replaces the default close-price fill pipeline.
@@ -158,24 +167,33 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 		return nil
 	}
 
-	// Check initial margin for short-opening sells.
-	if order.Side == broker.Sell && b.portfolio != nil {
+	// Margin checks: initial margin on short-opening sells, and the
+	// gross-leverage cap on any order that increases gross notional.
+	if b.portfolio != nil {
 		currentPos := b.portfolio.Position(order.Asset)
-		if currentPos-result.Quantity < 0 {
-			shortIncrease := result.Quantity
-			if currentPos > 0 {
-				shortIncrease = result.Quantity - currentPos
-			}
 
-			newShortValue := b.portfolio.ShortMarketValue() + shortIncrease*result.Price
-			equity := b.portfolio.Equity()
+		signedDelta := result.Quantity
+		if order.Side == broker.Sell {
+			signedDelta = -signedDelta
+		}
 
+		postQty := currentPos + signedDelta
+
+		preLong := math.Max(currentPos, 0)
+		preShort := math.Max(-currentPos, 0)
+		postLong := math.Max(postQty, 0)
+		postShort := math.Max(-postQty, 0)
+
+		newShortValue := b.portfolio.ShortMarketValue() + (postShort-preShort)*result.Price
+		equity := b.portfolio.Equity()
+
+		if order.Side == broker.Sell && postQty < 0 && newShortValue > 0 {
 			initialRate := b.initialMarginRate
 			if initialRate == 0 {
 				initialRate = 0.50
 			}
 
-			if newShortValue > 0 && equity/newShortValue < initialRate {
+			if equity/newShortValue < initialRate {
 				zerolog.Ctx(ctx).Warn().
 					Str("asset", order.Asset.Ticker).
 					Float64("equity", equity).
@@ -183,6 +201,34 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 					Msg("order rejected: insufficient margin")
 
 				return nil
+			}
+		}
+
+		if b.maxLeverage > 0 {
+			preLongValue := b.portfolio.LongMarketValue()
+			preGross := preLongValue + b.portfolio.ShortMarketValue()
+			newLongValue := preLongValue + (postLong-preLong)*result.Price
+			postGross := newLongValue + newShortValue
+
+			// Only reject orders that increase gross notional; allow
+			// closing trades through even if the account is already
+			// above the cap (the margin-call path handles that).
+			if postGross > preGross {
+				breach := equity <= 0
+				if !breach {
+					breach = postGross/equity > b.maxLeverage
+				}
+
+				if breach {
+					zerolog.Ctx(ctx).Warn().
+						Str("asset", order.Asset.Ticker).
+						Float64("equity", equity).
+						Float64("post_gross", postGross).
+						Float64("max_leverage", b.maxLeverage).
+						Msg("order rejected: gross leverage cap")
+
+					return nil
+				}
 			}
 		}
 	}

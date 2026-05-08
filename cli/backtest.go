@@ -45,6 +45,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 	cmd.Flags().String("risk-profile", "", "Risk profile (conservative, moderate, aggressive, none)")
 	cmd.Flags().Bool("tax", false, "Enable tax optimization")
+	registerMarginFlags(cmd)
 
 	return cmd
 }
@@ -162,6 +163,11 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
+	marginOpts, err := resolveMarginOptions(cmd)
+	if err != nil {
+		return err
+	}
+
 	acct := portfolio.New(
 		portfolio.WithCash(cash, start),
 		portfolio.WithAllMetrics(),
@@ -173,6 +179,8 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithAccount(acct),
 		engine.WithUserParams(appliedFlags...),
 	}
+
+	engineOpts = append(engineOpts, marginOpts...)
 
 	if cfg.HasMiddleware() {
 		engineOpts = append(engineOpts, engine.WithMiddlewareConfig(*cfg))

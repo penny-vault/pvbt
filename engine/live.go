@@ -122,6 +122,8 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	applyMarginConfig(e, acct)
+
 	// 6b. Apply config-driven middleware if provided.
 	if e.middlewareConfig != nil {
 		if err := e.buildMiddlewareFromConfig(); err != nil {

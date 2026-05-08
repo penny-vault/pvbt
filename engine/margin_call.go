@@ -66,7 +66,7 @@ func (eng *Engine) checkAndHandleMarginCall(ctx context.Context, acct portfolio.
 		}
 	}
 
-	return eng.autoLiquidateShorts(ctx, acct, date)
+	return eng.autoLiquidate(ctx, acct, date)
 }
 
 // setMarginPrices fetches current close prices for held assets and stores
@@ -95,41 +95,46 @@ func (eng *Engine) setMarginPrices(ctx context.Context, acct portfolio.Portfolio
 	return nil
 }
 
-// autoLiquidateShorts covers short positions proportionally to restore
-// maintenance margin.
-func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
+// autoLiquidate trims gross notional proportionally across long and
+// short positions to restore margin compliance.
+func (eng *Engine) autoLiquidate(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	deficiency := acct.MarginDeficiency()
 	if deficiency == 0 {
 		return nil
 	}
 
-	shortMarketValue := acct.ShortMarketValue()
-	if shortMarketValue == 0 {
+	gross := acct.LongMarketValue() + acct.ShortMarketValue()
+	if gross <= 0 {
 		return nil
 	}
 
-	coverFraction := deficiency / shortMarketValue
-	if coverFraction > 1 {
-		coverFraction = 1
+	unwindFraction := deficiency / gross
+	if unwindFraction > 1 {
+		unwindFraction = 1
 	}
 
 	batch := acct.NewBatch(date)
 	batch.SkipMiddleware = true
 
 	for ast, qty := range acct.Holdings() {
-		if qty >= 0 {
+		if qty == 0 {
 			continue
 		}
 
-		coverQty := math.Ceil(math.Abs(qty) * coverFraction)
-		if coverQty > math.Abs(qty) {
-			coverQty = math.Abs(qty)
+		closeQty := math.Ceil(math.Abs(qty) * unwindFraction)
+		if closeQty > math.Abs(qty) {
+			closeQty = math.Abs(qty)
+		}
+
+		side := broker.Sell
+		if qty < 0 {
+			side = broker.Buy
 		}
 
 		batch.Orders = append(batch.Orders, broker.Order{
 			Asset:         ast,
-			Side:          broker.Buy,
-			Qty:           coverQty,
+			Side:          side,
+			Qty:           closeQty,
 			OrderType:     broker.Market,
 			TimeInForce:   broker.Day,
 			Justification: "margin call auto-liquidation",
@@ -141,7 +146,7 @@ func (eng *Engine) autoLiquidateShorts(ctx context.Context, acct portfolio.Portf
 	}
 
 	if err := acct.ExecuteBatch(ctx, batch); err != nil {
-		return fmt.Errorf("engine: auto-liquidate shorts: %w", err)
+		return fmt.Errorf("engine: auto-liquidate: %w", err)
 	}
 
 	if acct.MarginDeficiency() > 0 {

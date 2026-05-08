@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Accounts enforce a Reg T-style two-knob margin model. `WithMaxLeverage` sets the entry-time cap that the simulated broker uses to reject orders; `WithGrossMaintenanceLeverage` separately controls the liquidation threshold; `WithMarginModel(RegT{Initial: 0.5, Maintenance: 0.25})` packages both. Strategies can declare default values for both knobs in their `Describe()` metadata, and can read `Portfolio.GrossLeverage`, `MaxLeverage`, `GrossMaintenanceLeverage`, and `LeverageHeadroom` to size orders.
+- `backtest` and `live` accept `--margin-model {regt,cash}` (default `regt`) to pick a packaged margin model, plus `--max-leverage` and `--gross-maintenance-leverage` to override either knob individually.
+
+### Changed
+
+- The default margin model is now Reg T (50% initial / 25% maintenance), matching real US brokerage accounts. Backtests that previously relied on the implicit cash-account default (`MaxLeverage 1.0`, no leverage-driven liquidation) should pass `--margin-model cash` on the command line, declare `MaxLeverage: 1.0` in `Describe()`, or call `portfolio.WithMaxLeverage(1.0)`.
+- `MarginDeficiency` takes the worst of the short-side maintenance breach and the gross maintenance leverage breach. `MaxLeverage` is an entry-time order gate only: adverse price drift above the cap no longer forces liquidation. Strategies that want a leverage-driven liquidation trigger separate from the account default should set `WithGrossMaintenanceLeverage` or `WithMarginModel` explicitly.
+
+### Fixed
+
+- The trade-summary "Avg Loss" (and other dollar fields) no longer render as `$--9,223,372,036,854,775,808.00` when an upstream value is non-finite or out of range; the formatter now prints `$NaN`, `$Inf`, or `$-Inf` instead.
+- Transactions with non-finite `Qty`, `Price`, or `Amount` are dropped at `Account.Record` with a warning, rather than silently corrupting cash, tax-lot pricing, and trade-detail PnL. Trade aggregators (`AverageWin`, `AverageLoss`, `ProfitFactor`) also skip non-finite PnL entries when reading historical data.
+
 ## [0.9.3] - 2026-05-05
 
 ### Added

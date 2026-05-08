@@ -187,6 +187,8 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		acct.SetBenchmark(e.benchmark)
 	}
 
+	applyMarginConfig(e, acct)
+
 	// 6b. Apply config-driven middleware if provided.
 	if e.middlewareConfig != nil {
 		if err := e.buildMiddlewareFromConfig(); err != nil {
@@ -256,6 +258,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	if sb, ok := e.broker.(*SimulatedBroker); ok {
 		sb.SetPortfolio(acct)
 		sb.SetBorrowRate(acct.BorrowRate())
+		sb.SetMaxLeverage(acct.MaxLeverage())
 	}
 
 	// Connect the broker (no-op for SimulatedBroker, authenticates for live brokers).

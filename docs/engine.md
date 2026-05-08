@@ -82,7 +82,9 @@ type MarginCallHandler interface {
 
 The handler receives the engine, the current portfolio (read-only), and a dedicated batch on which to queue orders. The batch bypasses middleware (it must not be further transformed by risk/tax rules) and is executed immediately after `OnMarginCall` returns. If the handler clears the deficiency the step continues; otherwise the engine falls back to automatic liquidation.
 
-If the strategy does not implement `MarginCallHandler`, the engine auto-liquidates short positions proportionally until the deficiency is resolved. Returning an error from the handler halts the run.
+If the strategy does not implement `MarginCallHandler`, the engine auto-liquidates positions proportionally across the gross book (long *and* short) until the deficiency is resolved. Returning an error from the handler halts the run.
+
+The margin check fires on two breaches: the short-side maintenance margin (`SMV * maintenanceRate > equity`) and the gross-leverage cap configured via `portfolio.WithMaxLeverage` (`(LMV + SMV) / equity > maxLeverage`). The default cap is `1.0`, which models a cash account; set it higher to opt into Reg T-style leverage. The simulated broker also rejects new orders that would breach the cap at submission time, so the margin-call path mostly catches breaches caused by adverse price moves on existing positions.
 
 ### Stock split handling
 

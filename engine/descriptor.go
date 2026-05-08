@@ -35,6 +35,21 @@ type StrategyDescription struct {
 	Schedule    string    `json:"schedule,omitempty"`
 	Benchmark   string    `json:"benchmark,omitempty"`
 	Warmup      int       `json:"warmup,omitempty"`
+	// MaxLeverage caps gross leverage for the account, expressed as
+	// (LongMarketValue + ShortMarketValue) / Equity. Used as an
+	// entry-time gate: orders that would push the account above this
+	// ratio are rejected. Zero means "unspecified" -- the engine falls
+	// back to the account's own setting or the global default of 2.0
+	// (Reg T-style 2x leverage). The CLI --max-leverage flag overrides
+	// this value when set.
+	MaxLeverage float64 `json:"maxLeverage,omitempty"`
+
+	// GrossMaintenanceLeverage triggers liquidation when gross
+	// leverage exceeds this ratio. Zero means "unspecified" -- the
+	// engine falls back to the account's own setting or the global
+	// default of 4.0 (Reg T-style 25% maintenance). The CLI
+	// --gross-maintenance-leverage flag overrides this value when set.
+	GrossMaintenanceLeverage float64 `json:"grossMaintenanceLeverage,omitempty"`
 }
 
 // ParameterInfo is the JSON-serializable form of a Parameter.
@@ -47,18 +62,20 @@ type ParameterInfo struct {
 
 // StrategyInfo is the complete serializable description of a strategy.
 type StrategyInfo struct {
-	Name        string                       `json:"name"`
-	ShortCode   string                       `json:"shortcode,omitempty"`
-	Description string                       `json:"description,omitempty"`
-	Source      string                       `json:"source,omitempty"`
-	Version     string                       `json:"version,omitempty"`
-	VersionDate time.Time                    `json:"versionDate,omitzero"`
-	Schedule    string                       `json:"schedule,omitempty"`
-	Benchmark   string                       `json:"benchmark,omitempty"`
-	RiskFree    string                       `json:"riskFree,omitempty"`
-	Warmup      int                          `json:"warmup,omitempty"`
-	Parameters  []ParameterInfo              `json:"parameters"`
-	Suggestions map[string]map[string]string `json:"suggestions,omitempty"`
+	Name                     string                       `json:"name"`
+	ShortCode                string                       `json:"shortcode,omitempty"`
+	Description              string                       `json:"description,omitempty"`
+	Source                   string                       `json:"source,omitempty"`
+	Version                  string                       `json:"version,omitempty"`
+	VersionDate              time.Time                    `json:"versionDate,omitzero"`
+	Schedule                 string                       `json:"schedule,omitempty"`
+	Benchmark                string                       `json:"benchmark,omitempty"`
+	RiskFree                 string                       `json:"riskFree,omitempty"`
+	Warmup                   int                          `json:"warmup,omitempty"`
+	MaxLeverage              float64                      `json:"maxLeverage,omitempty"`
+	GrossMaintenanceLeverage float64                      `json:"grossMaintenanceLeverage,omitempty"`
+	Parameters               []ParameterInfo              `json:"parameters"`
+	Suggestions              map[string]map[string]string `json:"suggestions,omitempty"`
 }
 
 // DescribeStrategy builds a StrategyInfo from the strategy's metadata.
@@ -77,6 +94,8 @@ func DescribeStrategy(strategy Strategy) StrategyInfo {
 		info.Schedule = description.Schedule
 		info.Benchmark = description.Benchmark
 		info.Warmup = description.Warmup
+		info.MaxLeverage = description.MaxLeverage
+		info.GrossMaintenanceLeverage = description.GrossMaintenanceLeverage
 	}
 
 	info.RiskFree = "FRED:DGS3MO"

@@ -17,6 +17,7 @@ package portfolio
 
 import (
 	"context"
+	"math"
 
 	"github.com/penny-vault/pvbt/data"
 )
@@ -40,6 +41,10 @@ func (averageWin) Compute(ctx context.Context, stats PortfolioStats, _ *Period) 
 	)
 
 	for _, rt := range trips {
+		if math.IsNaN(rt.pnl) || math.IsInf(rt.pnl, 0) {
+			continue
+		}
+
 		if rt.pnl > 0 {
 			wins++
 			sumWin += rt.pnl

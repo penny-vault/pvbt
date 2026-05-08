@@ -89,6 +89,32 @@ func (s *marginCallHandlerStrategy) OnMarginCall(ctx context.Context, _ *engine.
 	return nil
 }
 
+// leveragedBuyStrategy attempts to buy a fixed quantity on the first
+// Compute call. The leverage cap should reject the order in a cash
+// account. The optional declaredMaxLeverage field is returned from
+// Describe to exercise strategy-supplied caps.
+type leveragedBuyStrategy struct {
+	target              asset.Asset
+	qty                 float64
+	declaredMaxLeverage float64
+	callCount           int
+}
+
+func (s *leveragedBuyStrategy) Name() string           { return "leveragedBuy" }
+func (s *leveragedBuyStrategy) Setup(_ *engine.Engine) {}
+func (s *leveragedBuyStrategy) Describe() engine.StrategyDescription {
+	return engine.StrategyDescription{Schedule: "0 16 * * 1-5", MaxLeverage: s.declaredMaxLeverage}
+}
+
+func (s *leveragedBuyStrategy) Compute(ctx context.Context, _ *engine.Engine, _ portfolio.Portfolio, batch *portfolio.Batch) error {
+	s.callCount++
+	if s.callCount == 1 {
+		batch.Order(ctx, s.target, portfolio.Buy, s.qty)
+	}
+
+	return nil
+}
+
 var _ = Describe("Margin Call", func() {
 	var (
 		testStock     asset.Asset
@@ -230,6 +256,133 @@ var _ = Describe("Margin Call", func() {
 			finalPosition := fund.Position(testStock)
 			Expect(finalPosition).To(BeNumerically(">=", 0),
 				"expected handler to fully cover shorts, got position %v", finalPosition)
+		})
+	})
+
+	Context("max leverage", func() {
+		It("rejects a buy order that would push gross leverage above the cap", func() {
+			// Strategy buys more shares than the cash account can support.
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			testDF := makeMarginTestData(100.0, 100.0, 5, dataStart)
+			provider := data.NewTestProvider(allMetrics, testDF)
+
+			strategy := &leveragedBuyStrategy{target: testStock, qty: 200}
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, time.Time{}),
+				portfolio.WithMaxLeverage(1.0), // cash-account cap
+			)
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(fund).NotTo(BeNil())
+
+			// Order for 200 shares @ $100 = $20k notional would breach the
+			// 1.0x cap on a $10k account. The broker should have rejected it,
+			// leaving the position at 0.
+			Expect(fund.Position(testStock)).To(Equal(0.0))
+		})
+
+		It("honours MaxLeverage declared in Describe()", func() {
+			// Strategy declares 2.0 in Describe; the buy that breached the
+			// 1.0 default in the previous test should now succeed.
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			testDF := makeMarginTestData(100.0, 100.0, 5, dataStart)
+			provider := data.NewTestProvider(allMetrics, testDF)
+
+			strategy := &leveragedBuyStrategy{
+				target:              testStock,
+				qty:                 200,
+				declaredMaxLeverage: 2.0,
+			}
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fund.Position(testStock)).To(Equal(200.0))
+			Expect(fund.MaxLeverage()).To(Equal(2.0))
+		})
+
+		It("WithMaxLeverage engine option overrides the strategy value", func() {
+			// Strategy declares 2.0 but the engine option clamps to 1.0,
+			// so the buy is rejected.
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			testDF := makeMarginTestData(100.0, 100.0, 5, dataStart)
+			provider := data.NewTestProvider(allMetrics, testDF)
+
+			strategy := &leveragedBuyStrategy{
+				target:              testStock,
+				qty:                 200,
+				declaredMaxLeverage: 2.0,
+			}
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithAccount(acct),
+				engine.WithMaxLeverage(1.0),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(fund.Position(testStock)).To(Equal(0.0))
+			Expect(fund.MaxLeverage()).To(Equal(1.0))
+		})
+
+		It("account-level WithMaxLeverage takes priority over the strategy value when no engine option is set", func() {
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			testDF := makeMarginTestData(100.0, 100.0, 5, dataStart)
+			provider := data.NewTestProvider(allMetrics, testDF)
+
+			strategy := &leveragedBuyStrategy{
+				target:              testStock,
+				qty:                 200,
+				declaredMaxLeverage: 4.0,
+			}
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, time.Time{}),
+				portfolio.WithMaxLeverage(1.5),
+			)
+
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithAccount(acct),
+			)
+
+			btStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			btEnd := time.Date(2024, 1, 5, 0, 0, 0, 0, time.UTC)
+
+			fund, err := eng.Backtest(context.Background(), btStart, btEnd)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Account cap (1.5) wins over strategy (4.0); buy of 20k notional
+			// on 10k equity needs >= 2.0, so it is rejected.
+			Expect(fund.Position(testStock)).To(Equal(0.0))
+			Expect(fund.MaxLeverage()).To(Equal(1.5))
 		})
 	})
 })
