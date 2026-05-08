@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Accounts enforce a configurable gross-leverage model, `(LongMarketValue + ShortMarketValue) / Equity`. `WithMaxLeverage` sets the entry-time cap that the simulated broker uses to reject orders (default `1.0`, i.e. no margin); `WithGrossMaintenanceLeverage` separately controls the liquidation threshold (default off, so only short-side maintenance margin can force liquidation). `WithMarginModel(RegT{Initial: 0.5, Maintenance: 0.25})` packages both knobs together for Reg T-style accounts. Strategies can read `Portfolio.GrossLeverage`, `MaxLeverage`, and `LeverageHeadroom` to size orders.
-- Strategies can declare a default `MaxLeverage` in their `Describe()` metadata; the engine applies it unless an explicit `WithMaxLeverage` (account or engine option) takes precedence.
-- `backtest` and `live` accept `--max-leverage` to override the strategy-supplied cap from the command line.
+- Accounts enforce a Reg T-style two-knob margin model. `WithMaxLeverage` sets the entry-time cap that the simulated broker uses to reject orders; `WithGrossMaintenanceLeverage` separately controls the liquidation threshold; `WithMarginModel(RegT{Initial: 0.5, Maintenance: 0.25})` packages both. Strategies can declare default values for both knobs in their `Describe()` metadata, and can read `Portfolio.GrossLeverage`, `MaxLeverage`, `GrossMaintenanceLeverage`, and `LeverageHeadroom` to size orders.
+- `backtest` and `live` accept `--margin-model {regt,cash}` (default `regt`) to pick a packaged margin model, plus `--max-leverage` and `--gross-maintenance-leverage` to override either knob individually.
 
 ### Changed
 
-- `MarginDeficiency` returns the dollar amount of position notional that must be unwound to restore compliance, taking the worst of the short-side maintenance breach and (when configured) the gross maintenance leverage breach. `MaxLeverage` is now an entry-time order gate only: adverse price drift above the cap no longer forces liquidation. Strategies that want a leverage-driven liquidation trigger should set `WithGrossMaintenanceLeverage` or `WithMarginModel` explicitly.
+- The default margin model is now Reg T (50% initial / 25% maintenance), matching real US brokerage accounts. Backtests that previously relied on the implicit cash-account default (`MaxLeverage 1.0`, no leverage-driven liquidation) should pass `--margin-model cash` on the command line, declare `MaxLeverage: 1.0` in `Describe()`, or call `portfolio.WithMaxLeverage(1.0)`.
+- `MarginDeficiency` takes the worst of the short-side maintenance breach and the gross maintenance leverage breach. `MaxLeverage` is an entry-time order gate only: adverse price drift above the cap no longer forces liquidation. Strategies that want a leverage-driven liquidation trigger separate from the account default should set `WithGrossMaintenanceLeverage` or `WithMarginModel` explicitly.
 
 ### Fixed
 

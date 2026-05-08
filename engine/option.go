@@ -75,11 +75,42 @@ func WithPortfolioSnapshot(snap portfolio.PortfolioSnapshot) Option {
 // takes priority over any value supplied by the strategy's
 // Describe().MaxLeverage. Values <= 0 are ignored, in which case the
 // strategy's value (or the account default of 1.0) applies.
+//
+// MaxLeverage is an entry-time order gate. Liquidation is driven by
+// short-side maintenance margin and, when configured, gross
+// maintenance leverage. See WithGrossMaintenanceLeverage.
 func WithMaxLeverage(ratio float64) Option {
 	return func(e *Engine) {
 		if ratio > 0 {
 			e.maxLeverage = ratio
 		}
+	}
+}
+
+// WithGrossMaintenanceLeverage triggers a margin call when gross
+// leverage, (LongMarketValue + ShortMarketValue) / Equity, exceeds the
+// given ratio. This takes priority over any value supplied by the
+// strategy's Describe().GrossMaintenanceLeverage and over any preset
+// applied by WithMarginModel. Values <= 0 are ignored, in which case
+// the strategy's value applies if set; otherwise the account default
+// of 4.0 (Reg T-style 25% maintenance) applies.
+func WithGrossMaintenanceLeverage(ratio float64) Option {
+	return func(e *Engine) {
+		if ratio > 0 {
+			e.grossMaintenanceLeverage = ratio
+		}
+	}
+}
+
+// WithMarginModel applies a packaged margin model to the engine's
+// account. WithMarginModel is applied before any per-knob overrides,
+// so WithMaxLeverage and WithGrossMaintenanceLeverage win when used
+// together with it. Pass portfolio.RegT{Initial: 0.5, Maintenance:
+// 0.25} for canonical Reg T behavior, or portfolio.RegT{Initial: 1.0,
+// Maintenance: math.Inf(1)} for a cash account.
+func WithMarginModel(model portfolio.RegT) Option {
+	return func(e *Engine) {
+		e.marginModel = &model
 	}
 }
 

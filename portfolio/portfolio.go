@@ -153,6 +153,11 @@ type Portfolio interface {
 	// 1.0 (cash account). See WithMaxLeverage.
 	MaxLeverage() float64
 
+	// GrossMaintenanceLeverage returns the configured gross-leverage
+	// liquidation threshold, or 0 when none is set (in which case
+	// only short-side maintenance margin can force liquidation).
+	GrossMaintenanceLeverage() float64
+
 	// LeverageHeadroom returns the additional notional (in dollars) that can
 	// be opened before the gross-leverage cap is breached. Negative when the
 	// account is already over the cap.
@@ -254,6 +259,15 @@ type PortfolioManager interface {
 
 	// HasMaxLeverage reports whether a non-default cap is configured.
 	HasMaxLeverage() bool
+
+	// SetGrossMaintenanceLeverage applies a gross-leverage liquidation
+	// threshold. Used by the engine to install a strategy- or
+	// CLI-supplied value. Values <= 0 are ignored.
+	SetGrossMaintenanceLeverage(ratio float64)
+
+	// HasGrossMaintenanceLeverage reports whether a liquidation
+	// threshold has been explicitly configured.
+	HasGrossMaintenanceLeverage() bool
 
 	// SetRiskFreeValue sets the annualized risk-free rate used for
 	// risk-adjusted return calculations (Sharpe, Sortino, etc.).

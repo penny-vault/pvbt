@@ -307,9 +307,9 @@ var _ = Describe("Margin Accounting", func() {
 	})
 
 	Describe("MaxLeverage", func() {
-		It("returns the default 1.0 when not configured", func() {
+		It("returns the default 2.0 (Reg T) when not configured", func() {
 			acct := portfolio.New(portfolio.WithCash(100_000, now))
-			Expect(acct.MaxLeverage()).To(Equal(1.0))
+			Expect(acct.MaxLeverage()).To(Equal(2.0))
 		})
 
 		It("returns the configured cap", func() {
@@ -347,8 +347,11 @@ var _ = Describe("Margin Accounting", func() {
 
 		It("is negative when the account is over the cap", func() {
 			// Cash 5_000 + buy 100 at 100 => cash=-5_000, LMV=10_000, equity=5_000.
-			// headroom = 1*5_000 - 10_000 = -5_000.
-			acct := portfolio.New(portfolio.WithCash(5_000, now))
+			// With explicit MaxLeverage(1.0), headroom = 1*5_000 - 10_000 = -5_000.
+			acct := portfolio.New(
+				portfolio.WithCash(5_000, now),
+				portfolio.WithMaxLeverage(1.0),
+			)
 			acct.Record(portfolio.Transaction{Date: now, Asset: spy, Type: asset.BuyTransaction, Qty: 100, Price: 100, Amount: -10_000})
 
 			df := buildDF(now, []asset.Asset{spy}, []float64{100}, []float64{100})
@@ -360,16 +363,18 @@ var _ = Describe("Margin Accounting", func() {
 
 	Describe("MaxLeverage no longer drives liquidation", func() {
 		It("returns 0 when gross drifts above MaxLeverage but no maintenance trigger fires", func() {
-			// Strategy declared MaxLeverage 2.0. After an adverse short-side
-			// move gross/equity drifts to ~2.06. No gross maintenance leverage
-			// has been configured, so MarginDeficiency must stay 0 - the
-			// engine should not auto-liquidate on entry-cap drift alone.
+			// Strategy declared MaxLeverage 2.0 with the leverage-driven
+			// liquidation trigger explicitly disabled. After an adverse
+			// short-side move gross/equity drifts to ~2.06; with no
+			// gross maintenance leverage configured (cash-style),
+			// MarginDeficiency must stay 0.
 			acct := portfolio.New(
 				portfolio.WithCash(150_000, now),
 				portfolio.WithMaxLeverage(2.0),
+				portfolio.WithGrossMaintenanceLeverage(math.Inf(1)),
 			)
 			acct.Record(portfolio.Transaction{Date: now, Asset: spy, Type: asset.BuyTransaction, Qty: 1_000, Price: 100, Amount: -100_000})
-			acct.Record(portfolio.Transaction{Date: now, Asset: aapl, Type: asset.SellTransaction, Qty: 1_000, Price: 100})
+			acct.Record(portfolio.Transaction{Date: now, Asset: aapl, Type: asset.SellTransaction, Qty: 1_000, Price: 100, Amount: 100_000})
 
 			adversePrice := buildDF(now,
 				[]asset.Asset{spy, aapl},
@@ -380,7 +385,7 @@ var _ = Describe("Margin Accounting", func() {
 
 			// LMV = 100_000, SMV = 103_000, cash = 150_000 - 100_000 + 100_000 = 150_000.
 			// equity = 150_000 + 100_000 - 103_000 = 147_000.
-			// gross/equity = 203_000 / 147_000 ~ 1.38, well under 4.0 maintenance default.
+			// gross/equity = 203_000 / 147_000 ~ 1.38; trigger explicitly off.
 			// Short-side maintenance: equity (147_000) >= SMV*0.30 (30_900) - safe.
 			Expect(acct.MarginDeficiency()).To(Equal(0.0))
 		})

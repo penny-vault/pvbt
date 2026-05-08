@@ -22,9 +22,10 @@ import (
 )
 
 const (
-	defaultInitialMarginRate     = 0.50
-	defaultMaintenanceMarginRate = 0.30
-	defaultMaxLeverage           = 1.0
+	defaultInitialMarginRate        = 0.50
+	defaultMaintenanceMarginRate    = 0.30
+	defaultMaxLeverage              = 2.0
+	defaultGrossMaintenanceLeverage = 4.0
 )
 
 // ShortMarketValue returns the total absolute market value of all short
@@ -90,11 +91,10 @@ func (a *Account) MarginRatio() float64 {
 // breaches: the short-side maintenance margin shortfall (notional of
 // shorts to cover so SMV*maintenanceRate <= equity), and the gross
 // maintenance leverage shortfall (notional to close so
-// (LMV+SMV)/equity <= the configured maintenance cap, when one has
-// been set via WithGrossMaintenanceLeverage or WithMarginModel).
-// MaxLeverage is intentionally not consulted here: it gates new orders
-// at submission time, but adverse drift past that cap does not by
-// itself force liquidation. Returns 0 if the account is healthy.
+// (LMV+SMV)/equity <= GrossMaintenanceLeverage). MaxLeverage is
+// intentionally not consulted here: it gates new orders at submission
+// time, but adverse drift past that cap does not by itself force
+// liquidation. Returns 0 if the account is healthy.
 func (a *Account) MarginDeficiency() float64 {
 	equity := a.Equity()
 
@@ -113,7 +113,7 @@ func (a *Account) MarginDeficiency() float64 {
 
 	var leverageDeficit float64
 
-	maintLev := a.grossMaintenanceLeverage
+	maintLev := a.GrossMaintenanceLeverage()
 	gross := a.LongMarketValue() + smv
 
 	if maintLev > 0 && gross > 0 {
@@ -172,6 +172,35 @@ func (a *Account) SetMaxLeverage(ratio float64) {
 // has been used to configure a non-default cap.
 func (a *Account) HasMaxLeverage() bool {
 	return a.maxLeverage > 0
+}
+
+// GrossMaintenanceLeverage returns the configured gross-leverage
+// liquidation threshold. The default is 4.0, matching Reg T-style 25%
+// maintenance margin. Set explicitly via WithGrossMaintenanceLeverage,
+// WithMarginModel, or SetGrossMaintenanceLeverage.
+func (a *Account) GrossMaintenanceLeverage() float64 {
+	if a.grossMaintenanceLeverage > 0 {
+		return a.grossMaintenanceLeverage
+	}
+
+	return defaultGrossMaintenanceLeverage
+}
+
+// SetGrossMaintenanceLeverage sets the gross-leverage liquidation
+// threshold. Used by the engine to apply a strategy- or CLI-supplied
+// value when the account itself has not been configured. Values <= 0
+// leave the existing setting unchanged.
+func (a *Account) SetGrossMaintenanceLeverage(ratio float64) {
+	if ratio > 0 {
+		a.grossMaintenanceLeverage = ratio
+	}
+}
+
+// HasGrossMaintenanceLeverage reports whether
+// WithGrossMaintenanceLeverage (or SetGrossMaintenanceLeverage) has
+// configured a liquidation threshold.
+func (a *Account) HasGrossMaintenanceLeverage() bool {
+	return a.grossMaintenanceLeverage > 0
 }
 
 // LeverageHeadroom returns the additional notional (in dollars) that

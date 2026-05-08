@@ -80,6 +80,7 @@ func (m *mockPortfolio) MarginDeficiency() float64             { return 0 }
 func (m *mockPortfolio) BuyingPower() float64                  { return 0 }
 func (m *mockPortfolio) GrossLeverage() float64                { return 0 }
 func (m *mockPortfolio) MaxLeverage() float64                  { return 1.0 }
+func (m *mockPortfolio) GrossMaintenanceLeverage() float64     { return 4.0 }
 func (m *mockPortfolio) LeverageHeadroom() float64             { return 0 }
 func (m *mockPortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
 func (m *mockPortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {

@@ -269,7 +269,7 @@ var _ = Describe("Margin Call", func() {
 			strategy := &leveragedBuyStrategy{target: testStock, qty: 200}
 			acct := portfolio.New(
 				portfolio.WithCash(10_000, time.Time{}),
-				// Default cap (1.0) means at most $10k of long notional.
+				portfolio.WithMaxLeverage(1.0), // cash-account cap
 			)
 
 			eng := engine.New(strategy,

@@ -50,19 +50,21 @@ type Engine struct {
 	riskFreeIndex      map[time.Time]int // date -> index into riskFreeValues, built once during init
 
 	// configuration (set via options, used during init)
-	cacheMaxBytes        int64
-	initialDeposit       float64
-	broker               broker.Broker
-	snapshot             portfolio.PortfolioSnapshot
-	dateRangeMode        DateRangeMode
-	warmup               int
-	benchmarkTicker      string
-	maxLeverage          float64
-	fillBaseModel        broker.BaseModel
-	fillAdjusters        []broker.Adjuster
-	middlewareConfig     *MiddlewareConfig
-	fundamentalDimension string
-	progressCallback     ProgressCallback
+	cacheMaxBytes            int64
+	initialDeposit           float64
+	broker                   broker.Broker
+	snapshot                 portfolio.PortfolioSnapshot
+	dateRangeMode            DateRangeMode
+	warmup                   int
+	benchmarkTicker          string
+	maxLeverage              float64
+	grossMaintenanceLeverage float64
+	marginModel              *portfolio.RegT
+	fillBaseModel            broker.BaseModel
+	fillAdjusters            []broker.Adjuster
+	middlewareConfig         *MiddlewareConfig
+	fundamentalDimension     string
+	progressCallback         ProgressCallback
 
 	// userParams names strategy fields the caller has explicitly set
 	// (via CLI flags, presets, ApplyParams). hydrateFields skips applying

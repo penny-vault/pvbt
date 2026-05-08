@@ -122,15 +122,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 		acct.SetBenchmark(e.benchmark)
 	}
 
-	if e.maxLeverage > 0 {
-		acct.SetMaxLeverage(e.maxLeverage)
-	} else if !acct.HasMaxLeverage() {
-		if desc, ok := e.strategy.(Descriptor); ok {
-			if maxLev := desc.Describe().MaxLeverage; maxLev > 0 {
-				acct.SetMaxLeverage(maxLev)
-			}
-		}
-	}
+	applyMarginConfig(e, acct)
 
 	// 6b. Apply config-driven middleware if provided.
 	if e.middlewareConfig != nil {

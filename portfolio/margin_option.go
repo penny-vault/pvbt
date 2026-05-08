@@ -63,9 +63,10 @@ func WithMaxLeverage(ratio float64) Option {
 // / Equity, exceeds the given ratio. Unlike WithMaxLeverage, this knob
 // drives liquidation: when the threshold is breached the engine either
 // invokes the strategy's MarginCallHandler or trims gross notional
-// proportionally. The default is 0 (disabled), so only short-side
-// maintenance margin can force liquidation. Set to 4.0 for Reg
-// T-style 25% maintenance.
+// proportionally. The default is 4.0 (Reg T-style 25% maintenance).
+// Pass math.Inf(1) to disable leverage-based liquidation entirely (the
+// cash-account model); only short-side maintenance margin will then
+// force liquidation.
 func WithGrossMaintenanceLeverage(ratio float64) Option {
 	return func(a *Account) {
 		a.grossMaintenanceLeverage = ratio
