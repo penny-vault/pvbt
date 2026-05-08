@@ -41,13 +41,62 @@ func WithBorrowRate(rate float64) Option {
 }
 
 // WithMaxLeverage returns an Option that caps gross leverage,
-// (LongMarketValue + ShortMarketValue) / Equity. The default is 1.0,
-// which models a cash account: orders that would push the account
-// above 1.0x are rejected at submission time, and a continuous breach
-// (caused by adverse price moves) triggers a margin call. Set to 2.0
-// for Reg T-style 2x leverage. Values <= 0 are clamped to the default.
+// (LongMarketValue + ShortMarketValue) / Equity, at order-submission
+// time. Orders that would push the account above this ratio are
+// rejected; closing trades are always allowed through. The default is
+// 1.0, which models a cash account; set to 2.0 for Reg T-style 2x
+// initial leverage. Values <= 0 are clamped to the default.
+//
+// MaxLeverage is an entry-time gate only. Adverse price moves that
+// drift gross leverage above the cap do not force liquidation;
+// liquidation is driven by short-side maintenance margin (see
+// WithMaintenanceMargin) and, when configured, gross maintenance
+// leverage (see WithGrossMaintenanceLeverage or WithMarginModel).
 func WithMaxLeverage(ratio float64) Option {
 	return func(a *Account) {
 		a.maxLeverage = ratio
+	}
+}
+
+// WithGrossMaintenanceLeverage returns an Option that triggers a
+// margin call when gross leverage, (LongMarketValue + ShortMarketValue)
+// / Equity, exceeds the given ratio. Unlike WithMaxLeverage, this knob
+// drives liquidation: when the threshold is breached the engine either
+// invokes the strategy's MarginCallHandler or trims gross notional
+// proportionally. The default is 0 (disabled), so only short-side
+// maintenance margin can force liquidation. Set to 4.0 for Reg
+// T-style 25% maintenance.
+func WithGrossMaintenanceLeverage(ratio float64) Option {
+	return func(a *Account) {
+		a.grossMaintenanceLeverage = ratio
+	}
+}
+
+// RegT describes a Reg T-style margin model: a single initial-margin
+// rate that gates new orders and a single maintenance rate that
+// triggers liquidation. Both rates are expressed as
+// equity / position-value fractions, so the canonical Reg T values
+// are Initial: 0.50 and Maintenance: 0.25. The corresponding leverage
+// caps are 1/Initial (entry) and 1/Maintenance (liquidation). Zero
+// values leave the corresponding setting at its existing default.
+type RegT struct {
+	Initial     float64
+	Maintenance float64
+}
+
+// WithMarginModel applies a packaged margin model to the account.
+// For RegT, this sets MaxLeverage = 1/Initial and gross maintenance
+// leverage = 1/Maintenance. Short-side maintenance margin
+// (WithMaintenanceMargin) is left untouched and continues to apply
+// independently.
+func WithMarginModel(model RegT) Option {
+	return func(acct *Account) {
+		if model.Initial > 0 {
+			acct.maxLeverage = 1.0 / model.Initial
+		}
+
+		if model.Maintenance > 0 {
+			acct.grossMaintenanceLeverage = 1.0 / model.Maintenance
+		}
 	}
 }

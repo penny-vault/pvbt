@@ -89,8 +89,12 @@ func (a *Account) MarginRatio() float64 {
 // must be unwound to restore margin compliance. It is the worst of two
 // breaches: the short-side maintenance margin shortfall (notional of
 // shorts to cover so SMV*maintenanceRate <= equity), and the gross
-// leverage shortfall (notional to close so (LMV+SMV)/equity <= the
-// configured cap). Returns 0 if the account is healthy.
+// maintenance leverage shortfall (notional to close so
+// (LMV+SMV)/equity <= the configured maintenance cap, when one has
+// been set via WithGrossMaintenanceLeverage or WithMarginModel).
+// MaxLeverage is intentionally not consulted here: it gates new orders
+// at submission time, but adverse drift past that cap does not by
+// itself force liquidation. Returns 0 if the account is healthy.
 func (a *Account) MarginDeficiency() float64 {
 	equity := a.Equity()
 
@@ -109,14 +113,14 @@ func (a *Account) MarginDeficiency() float64 {
 
 	var leverageDeficit float64
 
-	maxLev := a.MaxLeverage()
+	maintLev := a.grossMaintenanceLeverage
 	gross := a.LongMarketValue() + smv
 
-	if maxLev > 0 && gross > 0 {
+	if maintLev > 0 && gross > 0 {
 		if equity <= 0 {
 			leverageDeficit = gross
-		} else if gross/equity > maxLev {
-			leverageDeficit = gross - maxLev*equity
+		} else if gross/equity > maintLev {
+			leverageDeficit = gross - maintLev*equity
 		}
 	}
 

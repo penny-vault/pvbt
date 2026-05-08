@@ -9,13 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Accounts now enforce a configurable gross-leverage cap, `(LongMarketValue + ShortMarketValue) / Equity`. Strategies can read `Portfolio.GrossLeverage`, `MaxLeverage`, and `LeverageHeadroom` to size orders, and `WithMaxLeverage` sets the cap (default `1.0`, i.e. no margin). Orders that would push the account above the cap are rejected by the simulated broker; a continuous breach triggers the existing margin-call path, which now trims long and short positions proportionally.
+- Accounts enforce a configurable gross-leverage model, `(LongMarketValue + ShortMarketValue) / Equity`. `WithMaxLeverage` sets the entry-time cap that the simulated broker uses to reject orders (default `1.0`, i.e. no margin); `WithGrossMaintenanceLeverage` separately controls the liquidation threshold (default off, so only short-side maintenance margin can force liquidation). `WithMarginModel(RegT{Initial: 0.5, Maintenance: 0.25})` packages both knobs together for Reg T-style accounts. Strategies can read `Portfolio.GrossLeverage`, `MaxLeverage`, and `LeverageHeadroom` to size orders.
 - Strategies can declare a default `MaxLeverage` in their `Describe()` metadata; the engine applies it unless an explicit `WithMaxLeverage` (account or engine option) takes precedence.
 - `backtest` and `live` accept `--max-leverage` to override the strategy-supplied cap from the command line.
 
 ### Changed
 
-- `MarginDeficiency` returns the dollar amount of position notional that must be unwound to restore compliance, taking the worst of the short-side maintenance breach and the new gross-leverage breach. The previous return value was the equity gap on the short side only; auto-liquidation undercovered as a result.
+- `MarginDeficiency` returns the dollar amount of position notional that must be unwound to restore compliance, taking the worst of the short-side maintenance breach and (when configured) the gross maintenance leverage breach. `MaxLeverage` is now an entry-time order gate only: adverse price drift above the cap no longer forces liquidation. Strategies that want a leverage-driven liquidation trigger should set `WithGrossMaintenanceLeverage` or `WithMarginModel` explicitly.
 
 ### Fixed
 

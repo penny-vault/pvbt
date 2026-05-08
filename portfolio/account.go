@@ -65,35 +65,36 @@ type Account struct {
 	positionMV map[asset.Asset][]float64
 	// positionQty tracks per-asset quantity history aligned with perfData.Times().
 	// Same semantics as positionMV, under the PositionQuantity metric.
-	positionQty       map[asset.Asset][]float64
-	benchmark         asset.Asset
-	riskFreeValue     float64
-	taxLots           map[asset.Asset][]TaxLot
-	shortLots         map[asset.Asset][]TaxLot
-	recentLossSales   map[asset.Asset][]recentLossSale
-	recentBuys        map[asset.Asset][]recentBuy
-	washSales         []WashSaleRecord
-	metadata          map[string]string
-	metrics           []MetricRow
-	registeredMetrics []PerformanceMetric
-	annotations       []Annotation
-	middleware        []Middleware
-	pendingOrders     map[string]broker.Order
-	pendingGroups     map[string]*broker.OrderGroup // groupID -> group
-	brokerHasGroups   bool                          // cached GroupSubmitter check
-	deferredExits     map[string]OrderGroupSpec     // groupID -> bracket spec
-	lotSelection      LotSelection
-	substitutions     map[asset.Asset]Substitution
-	excursions        map[asset.Asset]ExcursionRecord
-	tradeDetails      []TradeDetail
-	initialMargin     float64
-	maintenanceMargin float64
-	maxLeverage       float64
-	borrowRate        float64
-	dfCache           map[dfCacheKey]*data.DataFrame
-	seenTransactions  map[string]struct{}
-	batches           []batchRecord
-	currentBatchID    int
+	positionQty              map[asset.Asset][]float64
+	benchmark                asset.Asset
+	riskFreeValue            float64
+	taxLots                  map[asset.Asset][]TaxLot
+	shortLots                map[asset.Asset][]TaxLot
+	recentLossSales          map[asset.Asset][]recentLossSale
+	recentBuys               map[asset.Asset][]recentBuy
+	washSales                []WashSaleRecord
+	metadata                 map[string]string
+	metrics                  []MetricRow
+	registeredMetrics        []PerformanceMetric
+	annotations              []Annotation
+	middleware               []Middleware
+	pendingOrders            map[string]broker.Order
+	pendingGroups            map[string]*broker.OrderGroup // groupID -> group
+	brokerHasGroups          bool                          // cached GroupSubmitter check
+	deferredExits            map[string]OrderGroupSpec     // groupID -> bracket spec
+	lotSelection             LotSelection
+	substitutions            map[asset.Asset]Substitution
+	excursions               map[asset.Asset]ExcursionRecord
+	tradeDetails             []TradeDetail
+	initialMargin            float64
+	maintenanceMargin        float64
+	maxLeverage              float64
+	grossMaintenanceLeverage float64
+	borrowRate               float64
+	dfCache                  map[dfCacheKey]*data.DataFrame
+	seenTransactions         map[string]struct{}
+	batches                  []batchRecord
+	currentBatchID           int
 }
 
 // New creates an Account with the given options.
