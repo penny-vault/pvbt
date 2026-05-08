@@ -35,6 +35,7 @@ type mockPortfolio struct {
 	positions        map[asset.Asset]float64
 	equity           float64
 	shortMarketValue float64
+	longMarketValue  float64
 }
 
 func (m *mockPortfolio) Position(a asset.Asset) float64      { return m.positions[a] }
@@ -73,10 +74,13 @@ func (m *mockPortfolio) SetMetadata(_, _ string)               {}
 func (m *mockPortfolio) GetMetadata(_ string) string           { return "" }
 func (m *mockPortfolio) Annotations() []portfolio.Annotation   { return nil }
 func (m *mockPortfolio) TradeDetails() []portfolio.TradeDetail { return nil }
-func (m *mockPortfolio) LongMarketValue() float64              { return 0 }
+func (m *mockPortfolio) LongMarketValue() float64              { return m.longMarketValue }
 func (m *mockPortfolio) MarginRatio() float64                  { return 0 }
 func (m *mockPortfolio) MarginDeficiency() float64             { return 0 }
 func (m *mockPortfolio) BuyingPower() float64                  { return 0 }
+func (m *mockPortfolio) GrossLeverage() float64                { return 0 }
+func (m *mockPortfolio) MaxLeverage() float64                  { return 1.0 }
+func (m *mockPortfolio) LeverageHeadroom() float64             { return 0 }
 func (m *mockPortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
 func (m *mockPortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {
 	return nil, nil
@@ -320,6 +324,95 @@ var _ = Describe("SimulatedBroker", func() {
 			var fill broker.Fill
 			Eventually(simBroker.Fills()).Should(Receive(&fill))
 			Expect(fill.Qty).To(Equal(15.0))
+		})
+
+		It("rejects a buy that would push gross leverage above the cap", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+			simBroker.SetMaxLeverage(1.0)
+
+			// Equity 1000, no current positions: buying 20 @ 100 = 2000 LMV
+			// would push gross/equity to 2.0, above the 1.0 cap.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{},
+				equity:           1000,
+				longMarketValue:  0,
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       20,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Consistently(simBroker.Fills()).ShouldNot(Receive())
+		})
+
+		It("fills a buy that stays within the leverage cap", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+			simBroker.SetMaxLeverage(2.0)
+
+			// Equity 1000, buying 15 @ 100 = 1500 LMV; gross/equity = 1.5 <= 2.0.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{},
+				equity:           1000,
+				longMarketValue:  0,
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Buy,
+				Qty:       15,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Qty).To(Equal(15.0))
+		})
+
+		It("allows closing trades even when already over the cap", func() {
+			simBroker := engine.NewSimulatedBroker()
+			simBroker.SetPriceProvider(&mockPriceProvider{
+				prices: map[asset.Asset]float64{aapl: 100.0},
+				date:   date,
+			}, date)
+			simBroker.SetMaxLeverage(1.0)
+
+			// Account is already 2x leveraged. A sell that closes part of
+			// the long must still be allowed.
+			simBroker.SetPortfolio(&mockPortfolio{
+				positions:        map[asset.Asset]float64{aapl: 20},
+				equity:           1000,
+				longMarketValue:  2000,
+				shortMarketValue: 0,
+			})
+
+			err := simBroker.Submit(context.Background(), broker.Order{
+				Asset:     aapl,
+				Side:      broker.Sell,
+				Qty:       10,
+				OrderType: broker.Market,
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Qty).To(Equal(10.0))
 		})
 
 		It("skips fill and produces no error when asset has no price", func() {

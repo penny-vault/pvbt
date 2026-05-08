@@ -144,6 +144,20 @@ type Portfolio interface {
 	// BuyingPower returns cash minus margin reserved for short positions.
 	BuyingPower() float64
 
+	// GrossLeverage returns (LongMarketValue + ShortMarketValue) / Equity.
+	// Returns 0 when there are no positions, or NaN if equity is non-positive
+	// while positions exist.
+	GrossLeverage() float64
+
+	// MaxLeverage returns the configured gross-leverage cap. The default is
+	// 1.0 (cash account). See WithMaxLeverage.
+	MaxLeverage() float64
+
+	// LeverageHeadroom returns the additional notional (in dollars) that can
+	// be opened before the gross-leverage cap is breached. Negative when the
+	// account is already over the cap.
+	LeverageHeadroom() float64
+
 	// Benchmark returns the asset used as the performance benchmark
 	// for this portfolio.
 	Benchmark() asset.Asset
@@ -232,6 +246,14 @@ type PortfolioManager interface {
 
 	// SetBenchmark sets the benchmark asset for performance comparison.
 	SetBenchmark(benchmark asset.Asset)
+
+	// SetMaxLeverage applies a gross-leverage cap. Used by the engine to
+	// install a strategy- or CLI-supplied value when the account has not
+	// already been configured. Values <= 0 are ignored.
+	SetMaxLeverage(ratio float64)
+
+	// HasMaxLeverage reports whether a non-default cap is configured.
+	HasMaxLeverage() bool
 
 	// SetRiskFreeValue sets the annualized risk-free rate used for
 	// risk-adjusted return calculations (Sharpe, Sortino, etc.).

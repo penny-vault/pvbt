@@ -39,6 +39,10 @@ func (profitFactor) Compute(ctx context.Context, stats PortfolioStats, _ *Period
 	var sumWin, sumLoss float64
 
 	for _, rt := range trips {
+		if math.IsNaN(rt.pnl) || math.IsInf(rt.pnl, 0) {
+			continue
+		}
+
 		if rt.pnl > 0 {
 			sumWin += rt.pnl
 		} else {

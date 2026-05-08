@@ -77,6 +77,9 @@ func (fp *fakePortfolio) ShortMarketValue() float64             { return 0 }
 func (fp *fakePortfolio) MarginRatio() float64                  { return 0 }
 func (fp *fakePortfolio) MarginDeficiency() float64             { return 0 }
 func (fp *fakePortfolio) BuyingPower() float64                  { return 0 }
+func (fp *fakePortfolio) GrossLeverage() float64                { return 0 }
+func (fp *fakePortfolio) MaxLeverage() float64                  { return 1.0 }
+func (fp *fakePortfolio) LeverageHeadroom() float64             { return 0 }
 func (fp *fakePortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
 func (fp *fakePortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {
 	return nil, nil

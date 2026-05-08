@@ -35,6 +35,12 @@ type StrategyDescription struct {
 	Schedule    string    `json:"schedule,omitempty"`
 	Benchmark   string    `json:"benchmark,omitempty"`
 	Warmup      int       `json:"warmup,omitempty"`
+	// MaxLeverage caps gross leverage for the account, expressed as
+	// (LongMarketValue + ShortMarketValue) / Equity. Zero means
+	// "unspecified" -- the engine falls back to the account's own setting,
+	// or the global default of 1.0 (cash account). The CLI --max-leverage
+	// flag overrides this value when set.
+	MaxLeverage float64 `json:"maxLeverage,omitempty"`
 }
 
 // ParameterInfo is the JSON-serializable form of a Parameter.
@@ -57,6 +63,7 @@ type StrategyInfo struct {
 	Benchmark   string                       `json:"benchmark,omitempty"`
 	RiskFree    string                       `json:"riskFree,omitempty"`
 	Warmup      int                          `json:"warmup,omitempty"`
+	MaxLeverage float64                      `json:"maxLeverage,omitempty"`
 	Parameters  []ParameterInfo              `json:"parameters"`
 	Suggestions map[string]map[string]string `json:"suggestions,omitempty"`
 }
@@ -77,6 +84,7 @@ func DescribeStrategy(strategy Strategy) StrategyInfo {
 		info.Schedule = description.Schedule
 		info.Benchmark = description.Benchmark
 		info.Warmup = description.Warmup
+		info.MaxLeverage = description.MaxLeverage
 	}
 
 	info.RiskFree = "FRED:DGS3MO"

@@ -57,6 +57,7 @@ type Engine struct {
 	dateRangeMode        DateRangeMode
 	warmup               int
 	benchmarkTicker      string
+	maxLeverage          float64
 	fillBaseModel        broker.BaseModel
 	fillAdjusters        []broker.Adjuster
 	middlewareConfig     *MiddlewareConfig

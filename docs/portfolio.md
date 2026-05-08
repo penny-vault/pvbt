@@ -361,8 +361,11 @@ p.LongMarketValue()    // total market value of long positions
 p.ShortMarketValue()   // total absolute market value of short positions (always >= 0)
 p.Equity()             // cash + long market value − short market value
 p.BuyingPower()        // cash available for new positions given current margin
-p.MarginRatio()        // equity / (long + short market value); NaN when no positions
-p.MarginDeficiency()   // shortfall below the maintenance margin threshold; 0 if compliant
+p.MarginRatio()        // equity / short market value; NaN when no shorts
+p.MarginDeficiency()   // notional that must be unwound to restore compliance; 0 if compliant
+p.GrossLeverage()      // (LongMarketValue + ShortMarketValue) / Equity
+p.MaxLeverage()        // configured cap (default 1.0)
+p.LeverageHeadroom()   // additional notional that can be opened before the cap
 ```
 
 Margin parameters are configured when constructing the account:
@@ -372,10 +375,13 @@ acct := portfolio.New(
     portfolio.WithCash(100_000, startDate),
     portfolio.WithInitialMargin(0.50),      // Regulation T default: 50%
     portfolio.WithMaintenanceMargin(0.25),  // typical broker minimum: 25%
+    portfolio.WithMaxLeverage(2.0),         // Reg T-style 2x; default is 1.0 (cash account)
 )
 ```
 
-`WithInitialMargin` sets the fraction of a new position's value that must be covered by equity. `WithMaintenanceMargin` sets the ongoing minimum equity fraction. If `MarginDeficiency()` is positive, the account is below the maintenance threshold and new orders that increase exposure are rejected by the engine.
+`WithInitialMargin` sets the fraction of a new short position's value that must be covered by equity. `WithMaintenanceMargin` sets the ongoing minimum equity fraction for shorts. `WithMaxLeverage` caps gross leverage `(LMV + SMV) / equity` and applies to long *and* short notional alike; the simulated broker rejects orders that would push the account over the cap. The default cap is `1.0`, which models a cash account: every long buy must be backed by available cash, and shorts are still subject to the initial-margin rule above.
+
+If `MarginDeficiency()` is positive, the account is over the maintenance threshold or above the leverage cap, and the engine triggers a margin call. The strategy can implement `engine.MarginCallHandler` to liquidate on its own terms; otherwise the engine trims long and short positions proportionally to restore compliance.
 
 ## Borrow fees and dividend obligations
 

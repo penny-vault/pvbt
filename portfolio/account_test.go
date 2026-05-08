@@ -111,6 +111,32 @@ var _ = Describe("Account", func() {
 			Expect(a.Transactions()).To(HaveLen(2)) // deposit + dividend
 		})
 
+		It("skips a transaction with NaN price (preventing PnL corruption)", func() {
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    10,
+				Price:  math.NaN(),
+				Amount: -3_000.0,
+			})
+			Expect(a.Cash()).To(Equal(10_000.0))
+			Expect(a.Position(spy)).To(Equal(0.0))
+			Expect(a.Transactions()).To(HaveLen(1)) // only the initial deposit
+		})
+
+		It("skips a transaction with +Inf amount", func() {
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				Type:   asset.FeeTransaction,
+				Amount: math.Inf(1),
+			})
+			Expect(a.Cash()).To(Equal(10_000.0))
+			Expect(a.Transactions()).To(HaveLen(1))
+		})
+
 		It("records a fee and decreases cash", func() {
 			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
 			a.Record(portfolio.Transaction{

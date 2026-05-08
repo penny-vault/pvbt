@@ -24,6 +24,7 @@ import (
 const (
 	defaultInitialMarginRate     = 0.50
 	defaultMaintenanceMarginRate = 0.30
+	defaultMaxLeverage           = 1.0
 )
 
 // ShortMarketValue returns the total absolute market value of all short
@@ -84,23 +85,99 @@ func (a *Account) MarginRatio() float64 {
 	return a.Equity() / smv
 }
 
-// MarginDeficiency returns the dollar amount needed to restore
-// maintenance margin. Returns 0 if the account is healthy or has no
-// short positions.
+// MarginDeficiency returns the dollar amount of position notional that
+// must be unwound to restore margin compliance. It is the worst of two
+// breaches: the short-side maintenance margin shortfall (notional of
+// shorts to cover so SMV*maintenanceRate <= equity), and the gross
+// leverage shortfall (notional to close so (LMV+SMV)/equity <= the
+// configured cap). Returns 0 if the account is healthy.
 func (a *Account) MarginDeficiency() float64 {
+	equity := a.Equity()
+
+	var shortDeficit float64
+
 	smv := a.ShortMarketValue()
-	if smv == 0 {
+	if smv > 0 {
+		rate := a.maintenanceMarginRate()
+		if rate > 0 {
+			needed := smv - equity/rate
+			if needed > 0 {
+				shortDeficit = needed
+			}
+		}
+	}
+
+	var leverageDeficit float64
+
+	maxLev := a.MaxLeverage()
+	gross := a.LongMarketValue() + smv
+
+	if maxLev > 0 && gross > 0 {
+		if equity <= 0 {
+			leverageDeficit = gross
+		} else if gross/equity > maxLev {
+			leverageDeficit = gross - maxLev*equity
+		}
+	}
+
+	if shortDeficit > leverageDeficit {
+		return shortDeficit
+	}
+
+	return leverageDeficit
+}
+
+// GrossLeverage returns (LongMarketValue + ShortMarketValue) / Equity.
+// Returns 0 if there are no positions, or NaN if equity is non-positive
+// while positions exist (an irrecoverable account state).
+func (a *Account) GrossLeverage() float64 {
+	gross := a.LongMarketValue() + a.ShortMarketValue()
+	if gross == 0 {
 		return 0
 	}
 
-	requiredEquity := smv * a.maintenanceMarginRate()
-	deficit := requiredEquity - a.Equity()
-
-	if deficit > 0 {
-		return deficit
+	equity := a.Equity()
+	if equity <= 0 {
+		return math.NaN()
 	}
 
-	return 0
+	return gross / equity
+}
+
+// MaxLeverage returns the configured gross-leverage cap, or the default
+// of 1.0 if none was set.
+func (a *Account) MaxLeverage() float64 {
+	if a.maxLeverage > 0 {
+		return a.maxLeverage
+	}
+
+	return defaultMaxLeverage
+}
+
+// SetMaxLeverage sets the gross-leverage cap. Used by the engine to
+// apply a strategy- or CLI-supplied value when the account itself
+// hasn't been configured with WithMaxLeverage. Values <= 0 leave the
+// existing setting unchanged.
+func (a *Account) SetMaxLeverage(ratio float64) {
+	if ratio > 0 {
+		a.maxLeverage = ratio
+	}
+}
+
+// HasMaxLeverage reports whether WithMaxLeverage (or SetMaxLeverage)
+// has been used to configure a non-default cap.
+func (a *Account) HasMaxLeverage() bool {
+	return a.maxLeverage > 0
+}
+
+// LeverageHeadroom returns the additional notional (in dollars) that
+// can be opened before the gross-leverage cap is breached. Returns a
+// negative value when the account is already over the cap.
+func (a *Account) LeverageHeadroom() float64 {
+	equity := a.Equity()
+	gross := a.LongMarketValue() + a.ShortMarketValue()
+
+	return a.MaxLeverage()*equity - gross
 }
 
 // BuyingPower returns cash minus the initial margin reserved for

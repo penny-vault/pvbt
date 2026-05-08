@@ -750,15 +750,42 @@ During `Compute`, use the portfolio to inspect margin health before placing orde
 
 ```go
 ratio      := port.MarginRatio()      // equity / short market value; NaN if no shorts
-deficiency := port.MarginDeficiency() // dollars needed to restore maintenance margin; 0 if healthy
+deficiency := port.MarginDeficiency() // notional that must be unwound to restore margin; 0 if healthy
 buyPower   := port.BuyingPower()      // cash minus margin reserved for existing shorts
+gross      := port.GrossLeverage()    // (LMV + SMV) / equity; 0 when flat
+cap        := port.MaxLeverage()      // configured cap; default 1.0 (cash account)
+headroom   := port.LeverageHeadroom() // additional notional that can be opened before the cap
 ```
 
-`MarginRatio` returns `NaN` when there are no short positions. The engine triggers a margin call when `MarginDeficiency()` is greater than zero (equity has fallen below the maintenance margin rate, which defaults to 30% of short market value).
+`MarginRatio` returns `NaN` when there are no short positions. The engine triggers a margin call when `MarginDeficiency()` is greater than zero, which happens on either of two breaches: the short-side maintenance threshold (defaults to 30% of short market value), or the configured gross-leverage cap. The cap defaults to `1.0` (cash account); set it via `portfolio.WithMaxLeverage` to opt into margin (e.g., `2.0` for Reg T-style leverage). The simulated broker rejects orders that would push the account above the cap, so size new entries against `LeverageHeadroom`.
+
+#### Declaring a strategy default
+
+Strategies that need leverage can declare it once in `Describe()` so callers don't have to remember to pass it:
+
+```go
+func (s *PairsStrategy) Describe() engine.StrategyDescription {
+    return engine.StrategyDescription{
+        Schedule:    "0 16 * * 1-5",
+        Benchmark:   "SPY",
+        MaxLeverage: 2.0,
+    }
+}
+```
+
+The precedence order, highest first:
+
+1. CLI: `pvbt backtest --max-leverage 1.5` (or `live --max-leverage 1.5`).
+2. Engine option: `engine.WithMaxLeverage(1.5)`.
+3. Account option: `portfolio.WithMaxLeverage(1.5)`.
+4. Strategy: `Describe().MaxLeverage`.
+5. Default: `1.0`.
+
+Anything from step 1, 2, or 3 silences the strategy default. The CLI flag exists so a user running an unfamiliar strategy can clamp it without editing the source.
 
 ### MarginCallHandler
 
-By default, when a margin call is triggered, the engine automatically covers short positions proportionally until the deficiency is cleared. Strategies can override this behaviour by implementing the `MarginCallHandler` interface from the `engine` package:
+By default, when a margin call is triggered, the engine automatically trims long and short positions proportionally across the gross book until the deficiency is cleared. Strategies can override this behaviour by implementing the `MarginCallHandler` interface from the `engine` package:
 
 ```go
 type MarginCallHandler interface {

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Accounts now enforce a configurable gross-leverage cap, `(LongMarketValue + ShortMarketValue) / Equity`. Strategies can read `Portfolio.GrossLeverage`, `MaxLeverage`, and `LeverageHeadroom` to size orders, and `WithMaxLeverage` sets the cap (default `1.0`, i.e. no margin). Orders that would push the account above the cap are rejected by the simulated broker; a continuous breach triggers the existing margin-call path, which now trims long and short positions proportionally.
+- Strategies can declare a default `MaxLeverage` in their `Describe()` metadata; the engine applies it unless an explicit `WithMaxLeverage` (account or engine option) takes precedence.
+- `backtest` and `live` accept `--max-leverage` to override the strategy-supplied cap from the command line.
+
+### Changed
+
+- `MarginDeficiency` returns the dollar amount of position notional that must be unwound to restore compliance, taking the worst of the short-side maintenance breach and the new gross-leverage breach. The previous return value was the equity gap on the short side only; auto-liquidation undercovered as a result.
+
+### Fixed
+
+- The trade-summary "Avg Loss" (and other dollar fields) no longer render as `$--9,223,372,036,854,775,808.00` when an upstream value is non-finite or out of range; the formatter now prints `$NaN`, `$Inf`, or `$-Inf` instead.
+- Transactions with non-finite `Qty`, `Price`, or `Amount` are dropped at `Account.Record` with a warning, rather than silently corrupting cash, tax-lot pricing, and trade-detail PnL. Trade aggregators (`AverageWin`, `AverageLoss`, `ProfitFactor`) also skip non-finite PnL entries when reading historical data.
+
 ## [0.9.3] - 2026-05-05
 
 ### Added

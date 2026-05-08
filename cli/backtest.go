@@ -45,6 +45,7 @@ func newBacktestCmd(strategy engine.Strategy) *cobra.Command {
 	cmd.Flags().String("benchmark", "", "Benchmark ticker for performance comparison")
 	cmd.Flags().String("risk-profile", "", "Risk profile (conservative, moderate, aggressive, none)")
 	cmd.Flags().Bool("tax", false, "Enable tax optimization")
+	cmd.Flags().Float64("max-leverage", 0, "Cap on gross leverage (LMV+SMV)/Equity. 0 uses the strategy's value if set, else 1.0 (cash account)")
 
 	return cmd
 }
@@ -162,6 +163,11 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		return fmt.Errorf("create data provider: %w", err)
 	}
 
+	maxLeverage, err := cmd.Flags().GetFloat64("max-leverage")
+	if err != nil {
+		return err
+	}
+
 	acct := portfolio.New(
 		portfolio.WithCash(cash, start),
 		portfolio.WithAllMetrics(),
@@ -172,6 +178,10 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 		engine.WithAssetProvider(provider),
 		engine.WithAccount(acct),
 		engine.WithUserParams(appliedFlags...),
+	}
+
+	if maxLeverage > 0 {
+		engineOpts = append(engineOpts, engine.WithMaxLeverage(maxLeverage))
 	}
 
 	if cfg.HasMiddleware() {

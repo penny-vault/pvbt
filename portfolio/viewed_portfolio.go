@@ -170,6 +170,9 @@ func (vp *viewedPortfolio) ShortMarketValue() float64             { return vp.ac
 func (vp *viewedPortfolio) MarginRatio() float64                  { return vp.acct.MarginRatio() }
 func (vp *viewedPortfolio) MarginDeficiency() float64             { return vp.acct.MarginDeficiency() }
 func (vp *viewedPortfolio) BuyingPower() float64                  { return vp.acct.BuyingPower() }
+func (vp *viewedPortfolio) GrossLeverage() float64                { return vp.acct.GrossLeverage() }
+func (vp *viewedPortfolio) MaxLeverage() float64                  { return vp.acct.MaxLeverage() }
+func (vp *viewedPortfolio) LeverageHeadroom() float64             { return vp.acct.LeverageHeadroom() }
 func (vp *viewedPortfolio) Benchmark() asset.Asset                { return vp.acct.Benchmark() }
 func (vp *viewedPortfolio) SetMetadata(key, value string)         { vp.acct.SetMetadata(key, value) }
 func (vp *viewedPortfolio) GetMetadata(key string) string         { return vp.acct.GetMetadata(key) }

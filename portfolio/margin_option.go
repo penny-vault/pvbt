@@ -39,3 +39,15 @@ func WithBorrowRate(rate float64) Option {
 		a.borrowRate = rate
 	}
 }
+
+// WithMaxLeverage returns an Option that caps gross leverage,
+// (LongMarketValue + ShortMarketValue) / Equity. The default is 1.0,
+// which models a cash account: orders that would push the account
+// above 1.0x are rejected at submission time, and a continuous breach
+// (caused by adverse price moves) triggers a margin call. Set to 2.0
+// for Reg T-style 2x leverage. Values <= 0 are clamped to the default.
+func WithMaxLeverage(ratio float64) Option {
+	return func(a *Account) {
+		a.maxLeverage = ratio
+	}
+}

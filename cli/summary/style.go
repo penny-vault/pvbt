@@ -217,11 +217,38 @@ func padLeft(text string, width int) string {
 	return strings.Repeat(" ", width-visible) + text
 }
 
-// formatDollar formats a float64 as "$1,234.56" with commas.
+// maxDollarWhole is the largest absolute whole-dollar amount the
+// formatter can render without int64 overflow during float-to-int
+// conversion. Beyond this, "$Inf" / "$-Inf" is rendered instead.
+const maxDollarWhole = float64(1 << 62)
+
+// formatDollar formats a float64 as "$1,234.56" with commas. Non-finite
+// or out-of-range values render as "$Inf" / "$-Inf" / "$NaN" rather
+// than producing garbage from a saturating float-to-int64 conversion.
 func formatDollar(val float64) string {
+	if math.IsNaN(val) {
+		return "$NaN"
+	}
+
+	if math.IsInf(val, 1) {
+		return "$Inf"
+	}
+
+	if math.IsInf(val, -1) {
+		return "$-Inf"
+	}
+
 	negative := val < 0
 	if negative {
 		val = -val
+	}
+
+	if val >= maxDollarWhole {
+		if negative {
+			return "$-Inf"
+		}
+
+		return "$Inf"
 	}
 
 	whole := int64(val)
@@ -232,7 +259,6 @@ func formatDollar(val float64) string {
 		cents = 0
 	}
 
-	// Format with commas.
 	wholeStr := formatWithCommas(whole)
 
 	if negative {

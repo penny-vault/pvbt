@@ -70,6 +70,19 @@ func WithPortfolioSnapshot(snap portfolio.PortfolioSnapshot) Option {
 	}
 }
 
+// WithMaxLeverage caps gross leverage for the engine's account,
+// expressed as (LongMarketValue + ShortMarketValue) / Equity. This
+// takes priority over any value supplied by the strategy's
+// Describe().MaxLeverage. Values <= 0 are ignored, in which case the
+// strategy's value (or the account default of 1.0) applies.
+func WithMaxLeverage(ratio float64) Option {
+	return func(e *Engine) {
+		if ratio > 0 {
+			e.maxLeverage = ratio
+		}
+	}
+}
+
 // WithBenchmarkTicker sets the benchmark asset by ticker. This is resolved
 // to an asset during engine initialization and takes priority over any
 // benchmark suggested by the strategy's Describe() method.

@@ -88,6 +88,7 @@ type Account struct {
 	tradeDetails      []TradeDetail
 	initialMargin     float64
 	maintenanceMargin float64
+	maxLeverage       float64
 	borrowRate        float64
 	dfCache           map[dfCacheKey]*data.DataFrame
 	seenTransactions  map[string]struct{}
@@ -788,10 +789,44 @@ func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
 
 // --- PortfolioManager interface ---
 
+// isFiniteTransaction returns true when none of the cash-affecting
+// fields on a Transaction are NaN or +/-Inf. Non-finite values would
+// silently corrupt cash, tax-lot pricing, and the trade-detail PnL
+// downstream (see TradeDetail.PnL = (txn.Price - lot.Price) * matched),
+// so Record drops them with a warning rather than poisoning the run.
+func isFiniteTransaction(txn Transaction) bool {
+	if math.IsNaN(txn.Qty) || math.IsInf(txn.Qty, 0) {
+		return false
+	}
+
+	if math.IsNaN(txn.Price) || math.IsInf(txn.Price, 0) {
+		return false
+	}
+
+	if math.IsNaN(txn.Amount) || math.IsInf(txn.Amount, 0) {
+		return false
+	}
+
+	return true
+}
+
 // Record appends a transaction to the log and updates cash, holdings,
 // and tax lots accordingly. It also performs wash sale detection on both
 // buy and sell transactions.
 func (a *Account) Record(txn Transaction) {
+	if !isFiniteTransaction(txn) {
+		log.Warn().
+			Str("asset", txn.Asset.Ticker).
+			Time("date", txn.Date).
+			Str("type", txn.Type.String()).
+			Float64("qty", txn.Qty).
+			Float64("price", txn.Price).
+			Float64("amount", txn.Amount).
+			Msg("portfolio: skipping transaction with non-finite Qty/Price/Amount")
+
+		return
+	}
+
 	if txn.Type == asset.DividendTransaction {
 		txn.Qualified = a.isDividendQualified(txn.Asset, txn.Date)
 	}
