@@ -75,7 +75,7 @@ func equalWeightMembers(chosen []asset.Asset) map[asset.Asset]float64 {
 
 // defaultLookback returns the given period if non-zero, otherwise 60 days.
 func defaultLookback(lookback data.Period) data.Period {
-	if lookback == (data.Period{}) {
+	if lookback.N == 0 && lookback.Unit == data.UnitDay && len(lookback.TimeOfDay) == 0 {
 		return data.Days(60)
 	}
 

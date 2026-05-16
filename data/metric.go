@@ -28,10 +28,18 @@ const (
 	MetricLow Metric = "Low"
 	// MetricClose is the closing price for the trading day.
 	MetricClose Metric = "Close"
+	// AdjOpen is the opening price adjusted for splits and dividends.
+	AdjOpen Metric = "AdjOpen"
+	// AdjHigh is the highest price adjusted for splits and dividends.
+	AdjHigh Metric = "AdjHigh"
+	// AdjLow is the lowest price adjusted for splits and dividends.
+	AdjLow Metric = "AdjLow"
 	// AdjClose is the closing price adjusted for splits and dividends.
 	AdjClose Metric = "AdjClose"
 	// Volume is the number of shares traded during the trading day.
 	Volume Metric = "Volume"
+	// AdjVolume is the share volume adjusted for splits.
+	AdjVolume Metric = "AdjVolume"
 	// Dividend is the per-share cash dividend paid on the ex-date.
 	Dividend Metric = "Dividend"
 	// SplitFactor is the ratio applied to shares on the split effective date (e.g. 2.0 for a 2-for-1 split).

@@ -24,8 +24,12 @@ The `data` package defines well-known metrics:
 | `MetricHigh` | High price |
 | `MetricLow` | Low price |
 | `MetricClose` | Closing price |
+| `AdjOpen` | Split/dividend-adjusted open |
+| `AdjHigh` | Split/dividend-adjusted high |
+| `AdjLow` | Split/dividend-adjusted low |
 | `AdjClose` | Split/dividend-adjusted close |
 | `Volume` | Trade volume |
+| `AdjVolume` | Split-adjusted trade volume |
 | `Dividend` | Dividend per share |
 | `SplitFactor` | Split adjustment factor |
 | `Revenue` | Total revenue |
@@ -446,6 +450,66 @@ momentum := prices.RiskAdjustedPct(1).MulScalar(100)
 ```
 
 `RiskAdjustedPct` subtracts the risk-free return over the same period from each column's percent change. The engine automatically attaches cumulative risk-free rate data (DGS3MO) to DataFrames returned by `Fetch`/`FetchAt` when a risk-free asset is configured. If no risk-free data is attached, `RiskAdjustedPct` sets an error on the returned DataFrame.
+
+## Intraday 1-minute bars
+
+Strategies can request 1-minute OHLCV bars from a pvdb ClickHouse store in two access patterns. Both are expressed as `portfolio.Period` constructors passed to the standard `Universe.Window` call; the lookback type itself drives backend selection -- no separate API.
+
+### Dense window
+
+```go
+df, err := s.Universe.Window(ctx, portfolio.MinuteBars(60), data.AdjClose)
+```
+
+Returns the last N 1-minute bars before the engine's current time. Use this for accumulation-style intraday signals (VWAP-to-now, opening-range breakout, etc.).
+
+### Sparse cross-day samples
+
+```go
+df, err := s.Universe.Window(ctx, portfolio.DailyAtTime("10:00", 60), data.AdjClose)
+```
+
+For each of the last N trading days, returns the 1-minute bar at the specified time-of-day (Eastern). Multiple times can be passed as a comma-separated list, e.g. `"10:00,14:00"`. This pattern pushes a time-of-day predicate down to ClickHouse so only matching bars are scanned.
+
+### Adjusted bars
+
+Adjustment is selected via the metric name, the same pattern as the existing `AdjClose`:
+
+| Raw | Adjusted (split + dividend) |
+|-----|------------------------------|
+| `MetricOpen` | `AdjOpen` |
+| `MetricHigh` | `AdjHigh` |
+| `MetricLow` | `AdjLow` |
+| `MetricClose` | `AdjClose` |
+| `Volume` | `AdjVolume` (split-only) |
+
+When an adjusted metric is requested, the data layer joins the existing Postgres `splits`/`dividends` rows for the requested symbols and applies cumulative factors as bars stream out of ClickHouse.
+
+### Configuration
+
+In `~/.pvdata.toml`:
+
+```toml
+[db]
+url = "postgres://..."
+
+[clickhouse]
+url = "clickhouse://user:pass@host:9000/pvdata"
+
+[intraday]
+# Required only when more than one active subscription supplies intraday-bar.
+provider = "massive"
+```
+
+The ClickHouse client is opened lazily on the first intraday request; daily-only strategies pay no ClickHouse overhead.
+
+The physical ClickHouse table is resolved at engine startup by reading the pv-data `subscriptions` table for any active row whose `data_types` array contains `'intraday-bar'`. The parallel `data_tables` array carries the physical table name. Disambiguation between multiple active subscriptions (e.g. Massive + EODHD) uses `[intraday] provider`; an unset provider in the multi-subscription case is a hard error rather than a silent arbitrary pick.
+
+### Intra-day Compute scheduling
+
+Strategies whose `Schedule` cron expression carries hour/minute components beyond the daily close (e.g. `"0 10,14 * * MON-FRI"`) fire `Compute` once per timestamp per trading day rather than once per date. Inside Compute, `engine.Now()` returns the precise firing instant; `engine.CurrentDate()` continues to return the date.
+
+Order fills during intra-day firings land at the next 1-minute bar's close, mirroring the daily next-bar-open semantics at a finer cadence. Daily portfolio valuation, equity curve, TWRR, and CAGR remain anchored to once-per-day snapshots.
 
 ## Signals
 

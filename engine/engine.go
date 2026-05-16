@@ -78,6 +78,7 @@ type Engine struct {
 	assets                map[string]asset.Asset
 	cache                 *dataCache
 	currentDate           time.Time
+	currentTime           time.Time // intra-day firing timestamp; equals currentDate (end-of-day) outside of intra-day Compute calls
 	start                 time.Time
 	end                   time.Time
 	metricProvider        map[data.Metric]data.BatchProvider
@@ -290,9 +291,25 @@ func (e *Engine) SpliceUniverse(primary string, fallbacks ...universe.SplicePeri
 	return u
 }
 
-// CurrentDate returns the current simulation date.
+// CurrentDate returns the current simulation date (calendar date, with
+// the time-of-day component set to the trading-day boundary used by the
+// engine for end-of-day operations like dividend posting and equity
+// recording).
 func (e *Engine) CurrentDate() time.Time {
 	return e.currentDate
+}
+
+// Now returns the current simulation timestamp. For daily-only strategies
+// this matches CurrentDate(). For strategies firing intra-day on a cron
+// schedule with hour/minute components, Now() returns the precise firing
+// timestamp during a Compute call (e.g. 2026-05-13 10:00:00 ET); outside
+// of an intra-day Compute it falls back to the end-of-day boundary.
+func (e *Engine) Now() time.Time {
+	if e.currentTime.IsZero() {
+		return e.currentDate
+	}
+
+	return e.currentTime
 }
 
 // periodToTime returns base minus the given period.
@@ -325,6 +342,14 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 
 	if e.cache == nil {
 		e.cache = newDataCache(e.cacheMaxBytes)
+	}
+
+	// Intraday access patterns route around the year-chunk Postgres
+	// path. The lookback type (MinuteBars or DailyAtTime) carries the
+	// access shape; the engine forwards to whichever provider satisfies
+	// intraday metrics.
+	if lookback.IsIntraday() {
+		return e.fetchIntraday(ctx, assets, lookback, metrics)
 	}
 
 	rangeStart := periodToTime(e.currentDate, lookback)
@@ -993,11 +1018,89 @@ func (e *Engine) Close() error {
 // the engine's current simulation date. High and low are needed by
 // EvaluatePending for intrabar bracket order evaluation. Volume is needed
 // by the MarketImpact fill adjuster.
+//
+// When the engine is mid intra-day firing (currentTime carries an
+// hour/minute component beyond the day boundary), Prices returns the
+// next 1-minute bar after currentTime so that orders placed during the
+// firing fill at the immediate next bar, consistent with daily next-bar
+// fill semantics. Dividend and SplitFactor are NaN at minute resolution.
 func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataFrame, error) {
+	if e.isIntradayFiring() {
+		return e.nextMinuteBar(ctx, assets)
+	}
+
 	return e.FetchAt(ctx, assets, e.currentDate, []data.Metric{
 		data.MetricClose, data.MetricHigh, data.MetricLow,
 		data.Volume, data.Dividend, data.SplitFactor,
 	})
+}
+
+// isIntradayFiring reports whether the engine is currently inside a
+// Compute call fired at an intra-day timestamp (one that is meaningfully
+// different from the trading-day close used by the engine's daily walk).
+// The check is conservative: it requires both that an IntradayProvider
+// is registered (otherwise no intra-day data path exists) and that the
+// firing time falls strictly before the market close hour, which is the
+// only case where "next minute bar" semantics differ from "next day open".
+func (e *Engine) isIntradayFiring() bool {
+	if e.currentTime.IsZero() {
+		return false
+	}
+
+	if e.currentTime.Equal(e.currentDate) {
+		return false
+	}
+
+	if e.findIntradayProvider() == nil {
+		return false
+	}
+
+	// Firings at or after the market close hour (16:00 Eastern) use the
+	// existing daily next-bar-open fill path. Only firings earlier in
+	// the trading day need the intraday next-minute-bar lookup.
+	hour := e.currentTime.In(nyc).Hour()
+
+	return hour < 16
+}
+
+// nextMinuteBar returns the 1-minute bar that opens immediately after
+// e.currentTime. Used by Prices during intra-day firings so that order
+// fills land at the next-minute-bar's close (mirrors daily next-bar
+// fill behaviour at a finer cadence).
+func (e *Engine) nextMinuteBar(ctx context.Context, assets []asset.Asset) (*data.DataFrame, error) {
+	provider := e.findIntradayProvider()
+	if provider == nil {
+		return nil, fmt.Errorf(
+			"engine: intra-day firing requires an IntradayProvider for order fills; " +
+				"none registered")
+	}
+
+	// Pull a small window after the firing time. We ask for up to 5
+	// minutes ahead so we tolerate the boundary minute being missing
+	// (e.g. a tradecron firing at exactly 9:30 ET when the 9:30 bar
+	// is the first available row).
+	start := e.currentTime.Add(time.Minute)
+	end := e.currentTime.Add(6 * time.Minute)
+
+	df, err := provider.IntradayFetch(ctx, assets,
+		[]data.Metric{data.MetricClose, data.MetricHigh, data.MetricLow, data.Volume},
+		start, end, nil)
+	if err != nil {
+		return nil, fmt.Errorf("engine: fetch next minute bar: %w", err)
+	}
+
+	if df.Len() == 0 {
+		return nil, fmt.Errorf(
+			"engine: no minute bar available after %s for order fill",
+			e.currentTime.Format(time.RFC3339))
+	}
+
+	// Slice to the earliest bar so the broker fills on the immediate
+	// next minute rather than an arbitrary later one.
+	earliest := df.At(df.Times()[0])
+	earliest.SetSource(e)
+
+	return earliest, nil
 }
 
 // prefetchBrokerPrices batch-fetches price data for all unique assets

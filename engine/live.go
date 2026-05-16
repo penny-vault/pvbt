@@ -245,8 +245,12 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 
 			step++
 
-			// c. Set current date.
+			// c. Set current date and time. In live mode, both reflect
+			// the wall-clock moment of the firing; the engine's Now()
+			// returns the precise firing instant so intraday data
+			// requests anchor correctly.
 			e.currentDate = time.Now()
+			e.currentTime = e.currentDate
 
 			// d. Build step context with zerolog.
 			stepLogger := zerolog.Ctx(ctx).With().

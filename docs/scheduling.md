@@ -41,6 +41,21 @@ The `tradecron.RegularHours` constraint ensures the schedule never fires on week
 
 The schedule is required; the engine returns an error if none is set. All times are Eastern.
 
+## Intra-day firings
+
+A schedule may emit more than one timestamp per trading day. Cron expressions like `0 10,14 * * MON-FRI` (10:00 and 14:00 Eastern, weekdays) cause `Compute` to fire twice per trading day; the engine advances its simulation time to each firing in sequence and calls `Compute` once per firing.
+
+Inside `Compute`:
+
+- `engine.CurrentDate()` returns the trading-day boundary (used by daily housekeeping).
+- `engine.Now()` returns the precise firing instant (10:00 ET or 14:00 ET in the example above).
+
+Strategies that pull intraday data via `portfolio.MinuteBars(N)` or `portfolio.DailyAtTime(...)` anchor the lookback at `engine.Now()`, so each firing's window ends at exactly its firing moment.
+
+Order fills during intra-day firings land at the next 1-minute bar's close, the same next-bar semantics used for daily strategies (next bar = next minute, not next day). Daily portfolio valuation, equity recording, and performance metrics remain anchored to once-per-day snapshots at the end-of-day boundary.
+
+See [Data: Intraday 1-minute bars](data.md#intraday-1-minute-bars) for the data-fetch API and ClickHouse configuration.
+
 ## Example
 
 ```go
