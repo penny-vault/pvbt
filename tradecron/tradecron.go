@@ -60,7 +60,18 @@ var (
 		Open:  700,
 		Close: 2000,
 	}
+	// AllHours spans the whole day, so scheduling is gated only on the
+	// trading-day calendar, not the time of day.
+	AllHours = MarketHours{
+		Open:  0,
+		Close: 2359,
+	}
 )
+
+// coversFullDay reports whether the session spans the entire day.
+func (mh MarketHours) coversFullDay() bool {
+	return mh.Open <= 0 && mh.Close >= 2359
+}
 
 // TradeCron enables market aware scheduling. It supports schedules via the standard
 // CRON format of: Minutes(Min) Hours(H) DayOfMonth(DoM) Month(M) DayOfWeek(DoW)

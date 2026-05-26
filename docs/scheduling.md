@@ -39,6 +39,8 @@ Supported directives: `@daily`, `@open`, `@close`, `@weekbegin`, `@weekend`, `@m
 
 The `tradecron.RegularHours` constraint ensures the schedule never fires on weekends, holidays, or outside market hours. If a scheduled time falls on a holiday, it advances to the next valid trading day.
 
+When constructing a `tradecron` schedule directly, two other sessions are available: `tradecron.ExtendedHours` widens the window to pre/post-market, and `tradecron.AllHours` drops the time-of-day constraint entirely so the schedule fires at its scheduled time on every trading day, early-close days included.
+
 The schedule is required; the engine returns an error if none is set. All times are Eastern.
 
 ## Intra-day firings

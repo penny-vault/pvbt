@@ -18,6 +18,47 @@ var _ = Describe("TradeCron", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
+	Describe("AllHours", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("treats any time on a trading day as open", func() {
+			status := tradecron.NewMarketStatus(&tradecron.AllHours)
+
+			// 20:00 Monday Jan 6, 2025 -- past the regular close.
+			Expect(status.IsMarketOpen(time.Date(2025, time.January, 6, 20, 0, 0, 0, nyc))).To(BeTrue())
+			// Weekends are still closed.
+			Expect(status.IsMarketOpen(time.Date(2025, time.January, 11, 20, 0, 0, 0, nyc))).To(BeFalse())
+		})
+
+		It("ignores early closes", func() {
+			tradecron.SetMarketHolidays([]tradecron.MarketHoliday{
+				{
+					Date:       time.Date(2024, time.July, 3, 0, 0, 0, 0, nyc),
+					EarlyClose: true,
+					CloseTime:  1300,
+				},
+			})
+			status := tradecron.NewMarketStatus(&tradecron.AllHours)
+
+			// 20:00 on the 13:00 early-close day still counts as open.
+			Expect(status.IsMarketOpen(time.Date(2024, time.July, 3, 20, 0, 0, 0, nyc))).To(BeTrue())
+		})
+
+		It("fires an off-hours schedule on every trading day", func() {
+			tc, err := tradecron.New("0 20 * * *", tradecron.AllHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Friday Jan 10, 2025 after the firing -- next is Monday Jan 13.
+			forDate := time.Date(2025, time.January, 10, 20, 0, 0, 0, nyc)
+			got := tc.Next(forDate)
+
+			want := time.Date(2025, time.January, 13, 20, 0, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+	})
+
 	Describe("@daily", func() {
 		BeforeEach(func() {
 			tradecron.SetMarketHolidays(nil)

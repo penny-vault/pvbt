@@ -119,9 +119,11 @@ func (ms *MarketStatus) IsMarketOpen(checkTime time.Time) bool {
 	// check time
 	closeTime := ms.marketHours.Close
 
-	earlyClose := ms.EarlyClose(checkTime)
-	if earlyClose != 0 {
-		closeTime = earlyClose
+	// A full-day session ignores early closes.
+	if !ms.marketHours.coversFullDay() {
+		if earlyClose := ms.EarlyClose(checkTime); earlyClose != 0 {
+			closeTime = earlyClose
+		}
 	}
 
 	timeOfDay := checkTime.Hour()*100 + checkTime.Minute()
