@@ -47,12 +47,15 @@
 //	@quarterend           last trading day of quarter
 //	*/5 * * * *           every 5 minutes during trading hours
 //
-// # RegularHours
+// # Sessions
 //
 // RegularHours defines the standard US equity market session. When passed to
 // New, it ensures the schedule never fires on weekends, holidays, or outside
 // market hours. If a scheduled time falls on a holiday the schedule advances
-// to the next valid trading day.
+// to the next valid trading day. ExtendedHours widens the session to
+// pre/post-market. AllHours spans the entire day, so the schedule fires at its
+// scheduled time on every trading day regardless of the clock, and early
+// closes are ignored.
 //
 // # Dynamic Schedules
 //

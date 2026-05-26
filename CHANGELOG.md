@@ -7,10 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-05-25
+
 ### Added
 
+- Strategies can request 1-minute bar history from pvdb. Use `portfolio.MinuteBars(N)` for the last N minutes from the engine's current time, or `portfolio.DailyAtTime(timeOfDay, N)` for the same time-of-day across the last N trading days. Adjusted OHLCV is selected via new `data.AdjOpen`, `data.AdjHigh`, `data.AdjLow`, and `data.AdjVolume` metrics; split and dividend factors are applied at decode time from existing pvdb data. The new ClickHouse client is configured via `clickhouse.url` (and optionally `intraday.provider` for disambiguation) in `~/.pvdata.toml` and connects lazily.
+- Strategies whose schedule cron has hour/minute components beyond the daily close (for example `"0 10,14 * * MON-FRI"`) now fire `Compute` once per timestamp per trading day. `engine.Now()` returns the precise firing instant; `engine.CurrentDate()` returns the trading-day boundary. Order fills during intra-day firings land at the next 1-minute bar's close. Daily portfolio valuation, equity curve, TWRR, and CAGR remain anchored to once-per-day snapshots.
 - Accounts enforce a Reg T-style two-knob margin model. `WithMaxLeverage` sets the entry-time cap that the simulated broker uses to reject orders; `WithGrossMaintenanceLeverage` separately controls the liquidation threshold; `WithMarginModel(RegT{Initial: 0.5, Maintenance: 0.25})` packages both. Strategies can declare default values for both knobs in their `Describe()` metadata, and can read `Portfolio.GrossLeverage`, `MaxLeverage`, `GrossMaintenanceLeverage`, and `LeverageHeadroom` to size orders.
 - `backtest` and `live` accept `--margin-model {regt,cash}` (default `regt`) to pick a packaged margin model, plus `--max-leverage` and `--gross-maintenance-leverage` to override either knob individually.
+- `tradecron` schedules can use a new `AllHours` session that fires at the scheduled time on every trading day regardless of market hours, including early-close days. This makes off-hours schedules such as `0 20 * * *` viable, which `RegularHours` would otherwise never match.
 
 ### Changed
 
@@ -338,7 +343,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.8.2...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/penny-vault/pvbt/compare/v0.9.3...v0.10.0
+[0.9.3]: https://github.com/penny-vault/pvbt/compare/v0.9.2...v0.9.3
+[0.9.2]: https://github.com/penny-vault/pvbt/compare/v0.9.1...v0.9.2
+[0.9.1]: https://github.com/penny-vault/pvbt/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/penny-vault/pvbt/compare/v0.8.2...v0.9.0
 [0.8.2]: https://github.com/penny-vault/pvbt/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/penny-vault/pvbt/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/penny-vault/pvbt/compare/v0.7.7...v0.8.0

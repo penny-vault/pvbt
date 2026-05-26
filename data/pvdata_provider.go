@@ -26,8 +26,11 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/ClickHouse/clickhouse-go/v2"
+	chdriver "github.com/ClickHouse/clickhouse-go/v2/lib/driver"
 	"github.com/jackc/pgx/v5/pgxpool"
 	toml "github.com/pelletier/go-toml/v2"
 	"github.com/penny-vault/pvbt/asset"
@@ -108,15 +111,38 @@ type pvdataConfig struct {
 	DB struct {
 		URL string `toml:"url"`
 	} `toml:"db"`
+	ClickHouse struct {
+		URL string `toml:"url"`
+	} `toml:"clickhouse"`
+	Intraday struct {
+		// Provider names the subscription provider to prefer when more than
+		// one active subscription supplies intraday-bar rows (e.g. "massive"
+		// or "eodhd"). Required only in that disambiguation case.
+		Provider string `toml:"provider"`
+	} `toml:"intraday"`
 }
 
 // PVDataProvider is a BatchProvider that reads from a pv-data
-// PostgreSQL database through the canonical preferred views.
+// PostgreSQL database through the canonical preferred views. Intraday
+// 1-minute bars are read directly from the pv-data ClickHouse instance
+// when configured.
 type PVDataProvider struct {
 	pool      *pgxpool.Pool
 	ownsPool  bool
 	dimension string
 	indexes   map[string]*indexState
+
+	// ClickHouse connectivity for intraday bars. Lazily opened on the
+	// first intraday request; never opened if no intraday request is
+	// made. clickHouseURL is empty when unset in config.
+	clickHouseURL       string
+	intradayProvider    string
+	clickHouseOnce      sync.Once
+	clickHouseConn      chdriver.Conn
+	clickHouseConnErr   error
+	intradayResolveOnce sync.Once
+	intradayTable       string
+	intradayResolveErr  error
 }
 
 // PVDataOption configures a PVDataProvider.
@@ -161,6 +187,8 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 
 	ownsPool := false
 
+	var cfg pvdataConfig
+
 	if pool == nil {
 		cfgPath := options.configFile
 		if cfgPath == "" {
@@ -177,7 +205,6 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 			return nil, fmt.Errorf("pvdata: read config %s: %w", cfgPath, err)
 		}
 
-		var cfg pvdataConfig
 		if err := toml.Unmarshal(raw, &cfg); err != nil {
 			return nil, fmt.Errorf("pvdata: parse config %s: %w", cfgPath, err)
 		}
@@ -195,10 +222,64 @@ func NewPVDataProvider(pool *pgxpool.Pool, opts ...PVDataOption) (*PVDataProvide
 	}
 
 	return &PVDataProvider{
-		pool:      pool,
-		ownsPool:  ownsPool,
-		dimension: options.dimension,
+		pool:             pool,
+		ownsPool:         ownsPool,
+		dimension:        options.dimension,
+		clickHouseURL:    cfg.ClickHouse.URL,
+		intradayProvider: cfg.Intraday.Provider,
 	}, nil
+}
+
+// WithClickHouseURL sets the ClickHouse connection URL on a provider whose
+// pool was supplied externally (so config-file parsing was bypassed). The
+// URL is stored verbatim and dialed lazily on the first intraday request.
+func (p *PVDataProvider) WithClickHouseURL(url string) *PVDataProvider {
+	p.clickHouseURL = url
+	return p
+}
+
+// WithIntradayProvider sets the preferred subscription provider used to
+// disambiguate when more than one active subscription supplies the
+// intraday-bar data type.
+func (p *PVDataProvider) WithIntradayProvider(provider string) *PVDataProvider {
+	p.intradayProvider = provider
+	return p
+}
+
+// clickHouse returns a lazily-opened ClickHouse connection. Returns a
+// hard error when no clickhouse_url is configured -- intraday requests
+// must surface this rather than silently falling back to daily data.
+func (p *PVDataProvider) clickHouse(ctx context.Context) (chdriver.Conn, error) {
+	p.clickHouseOnce.Do(func() {
+		if p.clickHouseURL == "" {
+			p.clickHouseConnErr = fmt.Errorf(
+				"pvdata: intraday bars requested but clickhouse.url is not set " +
+					"in ~/.pvdata.toml")
+
+			return
+		}
+
+		opts, parseErr := clickhouse.ParseDSN(p.clickHouseURL)
+		if parseErr != nil {
+			p.clickHouseConnErr = fmt.Errorf("pvdata: parse clickhouse url: %w", parseErr)
+			return
+		}
+
+		conn, openErr := clickhouse.Open(opts)
+		if openErr != nil {
+			p.clickHouseConnErr = fmt.Errorf("pvdata: open clickhouse: %w", openErr)
+			return
+		}
+
+		if pingErr := conn.Ping(ctx); pingErr != nil {
+			p.clickHouseConnErr = fmt.Errorf("pvdata: ping clickhouse: %w", pingErr)
+			return
+		}
+
+		p.clickHouseConn = conn
+	})
+
+	return p.clickHouseConn, p.clickHouseConnErr
 }
 
 // Provides returns all metrics that PVDataProvider can supply.
@@ -452,6 +533,12 @@ func (p *PVDataProvider) Fetch(ctx context.Context, req DataRequest) (*DataFrame
 func (p *PVDataProvider) Close() error {
 	if p.ownsPool && p.pool != nil {
 		p.pool.Close()
+	}
+
+	if p.clickHouseConn != nil {
+		if closeErr := p.clickHouseConn.Close(); closeErr != nil {
+			return fmt.Errorf("pvdata: close clickhouse: %w", closeErr)
+		}
 	}
 
 	return nil

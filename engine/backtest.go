@@ -274,39 +274,46 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		return nil, fmt.Errorf("engine: creating daily equity schedule: %w", dailyErr)
 	}
 
-	// Collect parent strategy dates by calendar date for matching.
-	parentCalDates := make(map[string]bool)
+	// Collect parent strategy firing timestamps grouped by calendar date.
+	// A schedule with hour/minute components (e.g. "0 10,14 * * MON-FRI")
+	// emits multiple firings per date; the loop below invokes Compute
+	// once per firing, advancing engine.currentTime to each timestamp.
+	parentFiringsByDate := make(map[string][]time.Time)
 	cur := e.schedule.Next(start.Add(-time.Nanosecond))
 
 	for !cur.After(end) {
-		parentCalDates[cur.Format("2006-01-02")] = true
+		key := cur.Format("2006-01-02")
+		parentFiringsByDate[key] = append(parentFiringsByDate[key], cur)
 		cur = e.schedule.Next(cur.Add(time.Nanosecond))
 	}
 
-	// Collect child strategy dates.
-	childCalDates := make(map[string]map[string]bool)
+	// Collect child strategy firing timestamps grouped by calendar date.
+	childFiringsByDate := make(map[string]map[string][]time.Time)
 
 	for _, child := range e.children {
 		if child.schedule == nil {
 			continue
 		}
 
-		dates := make(map[string]bool)
+		firings := make(map[string][]time.Time)
 
 		childCur := child.schedule.Next(start.Add(-time.Nanosecond))
 		for !childCur.After(end) {
-			dates[childCur.Format("2006-01-02")] = true
+			key := childCur.Format("2006-01-02")
+			firings[key] = append(firings[key], childCur)
 			childCur = child.schedule.Next(childCur.Add(time.Nanosecond))
 		}
 
-		childCalDates[child.name] = dates
+		childFiringsByDate[child.name] = firings
 	}
 
-	// Walk all trading days via the daily schedule.
+	// Walk all trading days via the daily schedule. Each step carries
+	// the trading date plus, if any, the parent and child firing
+	// timestamps that occur on that date.
 	type backtestStep struct {
-		date             time.Time
-		isParentStrategy bool
-		childStrategies  []string
+		date          time.Time
+		parentFirings []time.Time
+		childFirings  map[string][]time.Time // child name -> firings within this date
 	}
 
 	var steps []backtestStep
@@ -315,18 +322,22 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	for !cur.After(end) {
 		calKey := cur.Format("2006-01-02")
 
-		var scheduledChildren []string
+		var childFires map[string][]time.Time
 
 		for _, child := range e.children {
-			if childCalDates[child.name][calKey] {
-				scheduledChildren = append(scheduledChildren, child.name)
+			if firings := childFiringsByDate[child.name][calKey]; len(firings) > 0 {
+				if childFires == nil {
+					childFires = make(map[string][]time.Time)
+				}
+
+				childFires[child.name] = firings
 			}
 		}
 
 		steps = append(steps, backtestStep{
-			date:             cur,
-			isParentStrategy: parentCalDates[calKey],
-			childStrategies:  scheduledChildren,
+			date:          cur,
+			parentFirings: parentFiringsByDate[calKey],
+			childFirings:  childFires,
 		})
 		cur = dailySchedule.Next(cur.Add(time.Nanosecond))
 	}
@@ -340,9 +351,13 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 
 		date := step.date
+		hasParentFiring := len(step.parentFirings) > 0
 
-		// 11. Set current date.
+		// 11. Set current date. currentTime resets to currentDate at the
+		// start of each step; intra-day Compute calls bump it to the
+		// firing timestamp.
 		e.currentDate = date
+		e.currentTime = date
 
 		// 12. Build step context with zerolog.
 		stepLogger := zerolog.Ctx(ctx).With().
@@ -350,7 +365,8 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			Time("date", date).
 			Int("step", stepIdx+1).
 			Int("total", len(steps)).
-			Bool("strategy_day", step.isParentStrategy).
+			Bool("strategy_day", hasParentFiring).
+			Int("parent_firings", len(step.parentFirings)).
 			Logger()
 		stepCtx := stepLogger.WithContext(ctx)
 
@@ -385,62 +401,70 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, fmt.Errorf("engine: margin call on %v: %w", date, err)
 		}
 
-		// Run scheduled child strategies (children before parent).
-		for _, childName := range step.childStrategies {
+		// Run scheduled child strategies (children before parent). Each
+		// child fires once per scheduled timestamp on this date.
+		for childName, childFirings := range step.childFirings {
 			child := e.childrenByName[childName]
-			child.broker.SetPriceProvider(e, date)
-			child.broker.EvaluatePending()
 
-			if err := child.account.CancelOpenOrders(stepCtx); err != nil {
-				return nil, fmt.Errorf("engine: child %q cancel orders on %v: %w", childName, date, err)
+			for _, fireTime := range childFirings {
+				e.currentTime = fireTime
+				child.broker.SetPriceProvider(e, date)
+				child.broker.EvaluatePending()
+
+				if err := child.account.CancelOpenOrders(stepCtx); err != nil {
+					return nil, fmt.Errorf("engine: child %q cancel orders on %v: %w", childName, fireTime, err)
+				}
+
+				childBatch := child.account.NewBatch(fireTime)
+				if err := child.strategy.Compute(stepCtx, e, child.account, childBatch); err != nil {
+					return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, fireTime, err)
+				}
+
+				if err := e.prefetchBrokerPrices(stepCtx, childBatch.Orders); err != nil {
+					return nil, fmt.Errorf("engine: child %q prefetch broker prices on %v: %w", childName, fireTime, err)
+				}
+
+				if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
+					return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, fireTime, err)
+				}
 			}
 
-			childBatch := child.account.NewBatch(date)
-			if err := child.strategy.Compute(stepCtx, e, child.account, childBatch); err != nil {
-				return nil, fmt.Errorf("engine: child %q compute on %v: %w", childName, date, err)
-			}
-
-			if err := e.prefetchBrokerPrices(stepCtx, childBatch.Orders); err != nil {
-				return nil, fmt.Errorf("engine: child %q prefetch broker prices on %v: %w", childName, date, err)
-			}
-
-			if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
-				return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, date, err)
-			}
+			e.currentTime = date
 		}
 
-		// 15-16. Run strategy only on strategy-schedule dates.
-		if step.isParentStrategy {
-			// 15. Update simulated broker with price provider and date.
-			if sb, ok := e.broker.(*SimulatedBroker); ok {
-				sb.SetPriceProvider(e, date)
+		// 15-16. Run parent strategy once per firing on strategy dates.
+		if hasParentFiring {
+			for _, fireTime := range step.parentFirings {
+				e.currentTime = fireTime
+
+				if sb, ok := e.broker.(*SimulatedBroker); ok {
+					sb.SetPriceProvider(e, date)
+				}
+
+				if err := acct.CancelOpenOrders(stepCtx); err != nil {
+					return nil, fmt.Errorf("engine: cancel open orders on %v: %w", fireTime, err)
+				}
+
+				batch := acct.NewBatch(fireTime)
+				if err := e.strategy.Compute(stepCtx, e, acct, batch); err != nil {
+					return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
+						e.strategy.Name(), fireTime, err)
+				}
+
+				if err := e.prefetchBrokerPrices(stepCtx, batch.Orders); err != nil {
+					return nil, fmt.Errorf("engine: prefetch broker prices on %v: %w", fireTime, err)
+				}
+
+				if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
+					return nil, fmt.Errorf("engine: execute batch on %v: %w", fireTime, err)
+				}
 			}
 
-			// Cancel open orders from previous frame.
-			if err := acct.CancelOpenOrders(stepCtx); err != nil {
-				return nil, fmt.Errorf("engine: cancel open orders on %v: %w", date, err)
-			}
-
-			// 16. Create batch and run strategy.
-			batch := acct.NewBatch(date)
-			if err := e.strategy.Compute(stepCtx, e, acct, batch); err != nil {
-				return nil, fmt.Errorf("engine: strategy %q compute on %v: %w",
-					e.strategy.Name(), date, err)
-			}
-
-			// Prefetch broker prices for all order assets so that
-			// per-order Submit calls hit the year-chunk cache.
-			if err := e.prefetchBrokerPrices(stepCtx, batch.Orders); err != nil {
-				return nil, fmt.Errorf("engine: prefetch broker prices on %v: %w", date, err)
-			}
-
-			// Execute batch through middleware chain.
-			if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
-				return nil, fmt.Errorf("engine: execute batch on %v: %w", date, err)
-			}
+			e.currentTime = date
 		}
 
-		// 17-18. Update parent account prices.
+		// 17-18. Update parent account prices once per date (end-of-day
+		// equity recording is independent of intra-day firing cadence).
 		if err := e.updateAccountPrices(stepCtx, acct, date, e.benchmark); err != nil {
 			return nil, err
 		}
@@ -461,7 +485,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 
 		// 18b. Compute registered metrics only on strategy dates.
-		if step.isParentStrategy {
+		if hasParentFiring {
 			if statsProvider, ok := acct.(portfolio.PortfolioStats); ok {
 				e.measurementsEvaluated += computeMetrics(statsProvider, date, acct.RegisteredMetrics(), acct.AppendMetric)
 			}

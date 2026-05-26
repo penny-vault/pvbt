@@ -19,21 +19,26 @@ import "github.com/penny-vault/pvbt/data"
 
 type Period = data.Period
 type PeriodUnit = data.PeriodUnit
+type TimeOfDay = data.TimeOfDay
 
 const (
-	UnitDay   = data.UnitDay
-	UnitMonth = data.UnitMonth
-	UnitYear  = data.UnitYear
-	UnitYTD   = data.UnitYTD
-	UnitMTD   = data.UnitMTD
-	UnitWTD   = data.UnitWTD
+	UnitDay         = data.UnitDay
+	UnitMonth       = data.UnitMonth
+	UnitYear        = data.UnitYear
+	UnitYTD         = data.UnitYTD
+	UnitMTD         = data.UnitMTD
+	UnitWTD         = data.UnitWTD
+	UnitMinuteBar   = data.UnitMinuteBar
+	UnitDailyAtTime = data.UnitDailyAtTime
 )
 
 var (
-	Days   = data.Days
-	Months = data.Months
-	Years  = data.Years
-	YTD    = data.YTD
-	MTD    = data.MTD
-	WTD    = data.WTD
+	Days        = data.Days
+	Months      = data.Months
+	Years       = data.Years
+	YTD         = data.YTD
+	MTD         = data.MTD
+	WTD         = data.WTD
+	MinuteBars  = data.MinuteBars
+	DailyAtTime = data.DailyAtTime
 )
