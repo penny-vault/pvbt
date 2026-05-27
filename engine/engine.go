@@ -1038,10 +1038,12 @@ func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataF
 // isIntradayFiring reports whether the engine is currently inside a
 // Compute call fired at an intra-day timestamp (one that is meaningfully
 // different from the trading-day close used by the engine's daily walk).
-// The check is conservative: it requires both that an IntradayProvider
-// is registered (otherwise no intra-day data path exists) and that the
-// firing time falls strictly before the market close hour, which is the
-// only case where "next minute bar" semantics differ from "next day open".
+// The check is conservative: it requires that an IntradayProvider is
+// registered (otherwise no intra-day data path exists) and that the firing
+// time falls strictly inside the trading session -- after the 09:30 open
+// and before the 16:00 close. Firings at the open or close correspond to
+// the authoritative EOD open/close bars, so they use the daily price path
+// rather than the intraday next-minute-bar lookup.
 func (e *Engine) isIntradayFiring() bool {
 	if e.currentTime.IsZero() {
 		return false
@@ -1055,12 +1057,20 @@ func (e *Engine) isIntradayFiring() bool {
 		return false
 	}
 
-	// Firings at or after the market close hour (16:00 Eastern) use the
-	// existing daily next-bar-open fill path. Only firings earlier in
-	// the trading day need the intraday next-minute-bar lookup.
-	hour := e.currentTime.In(nyc).Hour()
+	// The 09:30 open and 16:00 close are EOD session boundaries with
+	// authoritative open/close bars in the daily store. Only firings
+	// strictly between them need the intraday next-minute-bar lookup;
+	// routing the open or close here would fill those EOD bars from
+	// ClickHouse minute data.
+	const (
+		marketOpenMinutes  = 9*60 + 30 // 09:30 Eastern
+		marketCloseMinutes = 16 * 60   // 16:00 Eastern
+	)
 
-	return hour < 16
+	local := e.currentTime.In(nyc)
+	minutes := local.Hour()*60 + local.Minute()
+
+	return minutes > marketOpenMinutes && minutes < marketCloseMinutes
 }
 
 // nextMinuteBar returns the 1-minute bar that opens immediately after

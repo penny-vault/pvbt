@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Strategies that fire at the market open again fill orders from the end-of-day bars rather than the intraday 1-minute (ClickHouse) source. A firing at the open was incorrectly treated as intra-day; only firings strictly between the open and close now use minute bars.
+
 ## [0.10.1] - 2026-05-26
 
 ### Fixed
