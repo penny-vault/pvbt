@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-05-26
+
 ### Fixed
 
 - Strategies that fire at the market open again fill orders from the end-of-day bars rather than the intraday 1-minute (ClickHouse) source. A firing at the open was incorrectly treated as intra-day; only firings strictly between the open and close now use minute bars.
@@ -353,7 +355,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.1...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/penny-vault/pvbt/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/penny-vault/pvbt/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/penny-vault/pvbt/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/penny-vault/pvbt/compare/v0.9.2...v0.9.3
