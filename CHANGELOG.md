@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Backtests, snapshots, and studies now include the requested end date in their results. A run ending on a trading day previously stopped one trading day early, omitting that day's close.
+
 ## [0.10.0] - 2026-05-25
 
 ### Added

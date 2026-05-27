@@ -32,6 +32,19 @@ import (
 // configured strategy and data providers. It returns the portfolio
 // after running every scheduled trading date.
 func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.Portfolio, error) {
+	// The daily equity schedule stamps each trading day at the 16:00 ET
+	// close, so date enumeration must treat end as inclusive of the end
+	// date's own close. A date-only end (e.g. the --end flag) parses to
+	// midnight, which would otherwise drop that day's 16:00 close and stop
+	// the backtest on the prior trading day. Extend the enumeration boundary
+	// to the final instant of the end date's New York trading day; the
+	// caller's requested end is preserved separately for reporting.
+	requestedEnd := end
+
+	endLocal := end.In(nyc)
+	end = time.Date(endLocal.Year(), endLocal.Month(), endLocal.Day(),
+		23, 59, 59, int(time.Second-time.Nanosecond), nyc)
+
 	// PHASE 1: INITIALIZATION
 
 	// 1. Load asset registry from assetProvider.
@@ -176,6 +189,14 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// day instead of spuriously liquidating every held position.
 	end = e.adjustEndForStaleData(ctx, end)
 
+	// reportedEnd is what we surface via metadata and progress events: the
+	// end the caller requested, unless a stale feed forced an earlier last
+	// fully-priced trading day.
+	reportedEnd := requestedEnd
+	if end.Before(requestedEnd) {
+		reportedEnd = end
+	}
+
 	// 6. Create and configure account.
 	acct, acctErr := e.createAccount(start)
 	if acctErr != nil {
@@ -251,7 +272,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	// 8. Store start/end on engine.
 	e.start = start
-	e.end = end
+	e.end = reportedEnd
 	e.measurementsEvaluated = 0
 
 	// Wire portfolio to simulated broker for margin checks.
@@ -510,7 +531,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 	// PHASE 4: RETURN
 	acct.SetMetadata(portfolio.MetaRunMode, "backtest")
 	acct.SetMetadata(portfolio.MetaRunStart, start.Format(time.RFC3339))
-	acct.SetMetadata(portfolio.MetaRunEnd, end.Format(time.RFC3339))
+	acct.SetMetadata(portfolio.MetaRunEnd, reportedEnd.Format(time.RFC3339))
 
 	return acct, nil
 }
