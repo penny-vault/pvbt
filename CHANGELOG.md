@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-05-26
+
 ### Fixed
 
 - Backtests, snapshots, and studies now include the requested end date in their results. A run ending on a trading day previously stopped one trading day early, omitting that day's close.
@@ -347,7 +349,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/penny-vault/pvbt/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/penny-vault/pvbt/compare/v0.9.3...v0.10.0
 [0.9.3]: https://github.com/penny-vault/pvbt/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/penny-vault/pvbt/compare/v0.9.1...v0.9.2
