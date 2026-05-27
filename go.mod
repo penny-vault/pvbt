@@ -3,6 +3,7 @@ module github.com/penny-vault/pvbt
 go 1.25.6
 
 require (
+	github.com/ClickHouse/clickhouse-go/v2 v2.46.0
 	github.com/NimbleMarkets/ntcharts v0.5.1
 	github.com/bytedance/sonic v1.15.1
 	github.com/charmbracelet/bubbles v1.0.0
@@ -28,7 +29,6 @@ require (
 
 require (
 	github.com/ClickHouse/ch-go v0.71.0 // indirect
-	github.com/ClickHouse/clickhouse-go/v2 v2.46.0 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.24.1 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
