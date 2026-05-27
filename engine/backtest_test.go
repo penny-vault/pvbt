@@ -456,6 +456,44 @@ var _ = Describe("Backtest", func() {
 		})
 	})
 
+	Context("inclusive end date", func() {
+		It("records equity through the end date's own close when end is a date-only (midnight) trading day", func() {
+			nyc, err := time.LoadLocation("America/New_York")
+			Expect(err).NotTo(HaveOccurred())
+
+			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+			df := makeDailyTestData(dataStart, 400, testAssets, metrics)
+			provider := data.NewTestProvider(metrics, df)
+
+			strategy := &backtestStrategy{assets: testAssets}
+			eng := engine.New(strategy,
+				engine.WithDataProvider(provider),
+				engine.WithAssetProvider(assetProvider),
+				engine.WithInitialDeposit(100_000.0),
+			)
+
+			// Parse exactly as the CLI does: a date-only flag becomes
+			// midnight in New York. 2024-02-29 is a Thursday trading day, so
+			// its 16:00 ET close must be recorded rather than dropped.
+			start, err := time.ParseInLocation("2006-01-02", "2024-02-01", nyc)
+			Expect(err).NotTo(HaveOccurred())
+			end, err := time.ParseInLocation("2006-01-02", "2024-02-29", nyc)
+			Expect(err).NotTo(HaveOccurred())
+
+			fund, err := eng.Backtest(context.Background(), start, end)
+			Expect(err).NotTo(HaveOccurred())
+
+			times := fund.PerfData().Times()
+			Expect(times).NotTo(BeEmpty())
+
+			last := times[len(times)-1].In(nyc)
+			Expect(last.Year()).To(Equal(2024))
+			Expect(last.Month()).To(Equal(time.February))
+			Expect(last.Day()).To(Equal(29),
+				"the end date's own close must be recorded, not truncated to the prior trading day")
+		})
+	})
+
 	Context("WithAccount", func() {
 		It("uses a pre-configured account", func() {
 			dataStart := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
