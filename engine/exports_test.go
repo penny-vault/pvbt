@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"context"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -73,6 +74,24 @@ func EvictBeforeForTest(cache *dataCache, t time.Time) {
 
 // WalkBackTradingDaysForTest exposes walkBackTradingDays.
 var WalkBackTradingDaysForTest = walkBackTradingDays
+
+// AdjustEndForExpectedEODForTest exposes adjustEndForExpectedEOD so tests
+// can drive it with an arbitrary wall-clock time. The data cache and
+// provider routing are initialized on demand so callers do not need to
+// run a full Backtest first.
+func AdjustEndForExpectedEODForTest(eng *Engine, ctx context.Context, end, now time.Time) (time.Time, error) {
+	if eng.cache == nil {
+		eng.cache = newDataCache(eng.cacheMaxBytes)
+	}
+
+	if eng.metricProvider == nil {
+		if err := eng.buildProviderRouting(); err != nil {
+			return time.Time{}, err
+		}
+	}
+
+	return eng.adjustEndForExpectedEOD(ctx, end, now), nil
+}
 
 // CollectStrategyAssetsForTest exposes collectStrategyAssets.
 var CollectStrategyAssetsForTest func(strategy any, benchmark asset.Asset) []asset.Asset = collectStrategyAssets

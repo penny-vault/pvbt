@@ -26,113 +26,110 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// staleDataTolerance is the maximum number of trailing trading days that can
-// be missing before a per-asset NaN is interpreted as a delisting rather
-// than a transient data lag. A backtest run shortly after the close (or on
-// a holiday) will commonly trail by 1-2 trading days while the data feed
-// catches up; truncating end keeps those runs from spuriously liquidating
-// every held position.
-const staleDataTolerance = 2
+// marketCloseHour is the regular-session NYSE close in Eastern time. EOD
+// data for a given trading day is not expected to be available until after
+// this hour has passed.
+const marketCloseHour = 16
 
-// adjustEndForStaleData detects when the requested end is 1-2 trading days
-// past the latest available close data and returns a truncated end aligned
-// with the last fully-priced trading day. Larger gaps fall through to the
-// existing per-asset delisting logic so genuinely abandoned data sources
-// still surface as delistings.
+// adjustEndForExpectedEOD trims end down to the latest trading day for
+// which EOD data should be available given the wall-clock now. The intent
+// is to keep the step loop from ever reaching a date whose end-of-day bars
+// the data feed has not had a chance to publish.
 //
-// The probe uses the strategy's statically-known assets (asset fields plus
-// the benchmark and explicit static universes). Strategies that rely solely
-// on dynamic universes have nothing to probe and skip the check.
-func (e *Engine) adjustEndForStaleData(ctx context.Context, end time.Time) time.Time {
-	probeAssets := collectStrategyAssets(e.strategy, e.benchmark)
-	for _, child := range e.children {
-		for _, childAsset := range collectStrategyAssets(child.strategy, asset.Asset{}) {
-			probeAssets = appendUniqueAsset(probeAssets, childAsset)
+// Rules:
+//   - If now is before today's 4 PM ET close (or today is not a trading
+//     day), the latest expected EOD is the previous trading day. No data
+//     call is made.
+//   - If now is at or after today's 4 PM ET close, the latest expected
+//     EOD is today. The strategy's assets are probed once for today; if
+//     any are missing the result steps back exactly one trading day to
+//     cover the in-flight ingest case.
+//
+// Genuine per-asset data gaps (delistings, broken feeds) are intentionally
+// left to the broker's mid-backtest delisting path.
+func (e *Engine) adjustEndForExpectedEOD(ctx context.Context, end, now time.Time) time.Time {
+	nowLocal := now.In(nyc)
+	today := time.Date(nowLocal.Year(), nowLocal.Month(), nowLocal.Day(), 0, 0, 0, 0, nyc)
+	closeToday := time.Date(today.Year(), today.Month(), today.Day(), marketCloseHour, 0, 0, 0, nyc)
+
+	marketStatus := tradecron.NewMarketStatus(&tradecron.RegularHours)
+
+	var expectedLast time.Time
+	if marketStatus.IsMarketDay(today) && !nowLocal.Before(closeToday) {
+		expectedLast = today
+		if !e.allStrategyAssetsPriced(ctx, today) {
+			expectedLast = previousTradingDay(today, marketStatus)
 		}
+	} else {
+		expectedLast = previousTradingDay(today, marketStatus)
 	}
 
-	if len(probeAssets) == 0 {
-		return end
-	}
+	expectedEnd := time.Date(expectedLast.Year(), expectedLast.Month(), expectedLast.Day(),
+		23, 59, 59, int(time.Second-time.Nanosecond), nyc)
 
-	lookbackStart, walkErr := walkBackTradingDays(end, staleDataTolerance+3)
-	if walkErr != nil {
-		return end
-	}
-
-	df, fetchErr := e.fetchRange(ctx, probeAssets, []data.Metric{data.MetricClose}, lookbackStart, end)
-	if fetchErr != nil || df.Len() == 0 {
-		return end
-	}
-
-	times := df.Times()
-	latest := time.Time{}
-
-	for tIdx := len(times) - 1; tIdx >= 0; tIdx-- {
-		if times[tIdx].After(end) {
-			continue
-		}
-
-		for _, ast := range probeAssets {
-			col := df.Column(ast, data.MetricClose)
-			if tIdx >= len(col) {
-				continue
-			}
-
-			if !math.IsNaN(col[tIdx]) {
-				latest = times[tIdx]
-				break
-			}
-		}
-
-		if !latest.IsZero() {
-			break
-		}
-	}
-
-	if latest.IsZero() || !latest.Before(end) {
-		return end
-	}
-
-	gap, gapErr := tradingDayGap(latest, end)
-	if gapErr != nil || gap == 0 {
-		return end
-	}
-
-	if gap > staleDataTolerance {
+	if !end.After(expectedEnd) {
 		return end
 	}
 
 	zerolog.Ctx(ctx).Warn().
 		Time("requested_end", end).
-		Time("adjusted_end", latest).
-		Int("missing_trading_days", gap).
-		Msg("trailing close data is stale; ending backtest at the last fully-priced trading day")
+		Time("adjusted_end", expectedEnd).
+		Msg("end-of-day data not yet available; truncating backtest end")
 
-	return latest
+	return expectedEnd
 }
 
-// tradingDayGap counts trading days strictly after `from` up to and
-// including `to`. Returns 0 if `to` is on or before `from`.
-func tradingDayGap(from, to time.Time) (int, error) {
-	if !to.After(from) {
-		return 0, nil
+// previousTradingDay returns the most recent trading day strictly before
+// `from`, using the provided market status for the holiday calendar.
+func previousTradingDay(from time.Time, marketStatus *tradecron.MarketStatus) time.Time {
+	candidate := from.AddDate(0, 0, -1)
+	for !marketStatus.IsMarketDay(candidate) {
+		candidate = candidate.AddDate(0, 0, -1)
 	}
 
-	daily, err := tradecron.New("@close * * *", tradecron.RegularHours)
-	if err != nil {
-		return 0, err
+	return candidate
+}
+
+// allStrategyAssetsPriced reports whether every statically-known strategy
+// asset (parent plus children, including the benchmark) has a non-NaN
+// MetricClose on the given date. Strategies with only dynamic universes
+// have nothing to probe and are reported as priced.
+func (e *Engine) allStrategyAssetsPriced(ctx context.Context, date time.Time) bool {
+	assets := collectStrategyAssets(e.strategy, e.benchmark)
+	for _, child := range e.children {
+		for _, childAsset := range collectStrategyAssets(child.strategy, asset.Asset{}) {
+			assets = appendUniqueAsset(assets, childAsset)
+		}
 	}
 
-	gap := 0
-
-	cur := daily.Next(from.Add(time.Nanosecond))
-	for !cur.After(to) {
-		gap++
-		cur = daily.Next(cur.Add(time.Nanosecond))
+	if len(assets) == 0 {
+		return true
 	}
 
-	return gap, nil
+	df, fetchErr := e.fetchRange(ctx, assets, []data.Metric{data.MetricClose}, date, date)
+	if fetchErr != nil || df.Len() == 0 {
+		return false
+	}
+
+	targetKey := data.DateKey(date)
+	times := df.Times()
+
+	for tIdx, ts := range times {
+		if data.DateKey(ts) != targetKey {
+			continue
+		}
+
+		for _, ast := range assets {
+			col := df.Column(ast, data.MetricClose)
+			if tIdx >= len(col) || math.IsNaN(col[tIdx]) {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
 }
 
 func appendUniqueAsset(assets []asset.Asset, candidate asset.Asset) []asset.Asset {

@@ -184,14 +184,16 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 	start = adjustedStart
 
-	// 5d. Detect a stale trailing data feed (1-2 trading days behind the
-	// requested end) and truncate end so we stop at the last fully-priced
-	// day instead of spuriously liquidating every held position.
-	end = e.adjustEndForStaleData(ctx, end)
+	// 5d. Trim end to the latest trading day for which EOD data should be
+	// available given the current wall-clock time. This keeps the step loop
+	// from reaching dates whose end-of-day bars the data feed has not had a
+	// chance to publish, which would otherwise drive the broker's missing-
+	// close path into a phantom delisting.
+	end = e.adjustEndForExpectedEOD(ctx, end, time.Now())
 
 	// reportedEnd is what we surface via metadata and progress events: the
-	// end the caller requested, unless a stale feed forced an earlier last
-	// fully-priced trading day.
+	// end the caller requested, unless EOD-availability trimming forced an
+	// earlier last fully-priced trading day.
 	reportedEnd := requestedEnd
 	if end.Before(requestedEnd) {
 		reportedEnd = end
