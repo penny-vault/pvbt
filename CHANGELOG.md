@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.3] - 2026-05-27
+
 ### Fixed
 
 - Backtests no longer phantom-liquidate held positions when run before EOD data has been published. The end date is now trimmed to the most recent trading day whose 4 PM ET close has passed, with a single one-day step back if today's close has passed but the ingest is still in flight.
