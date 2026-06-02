@@ -257,8 +257,11 @@ func runBacktest(cmd *cobra.Command, strategy engine.Strategy) error {
 	result.SetMetadata(portfolio.MetaRunInitialCash, fmt.Sprintf("%.2f", cash))
 	result.SetMetadata("run_id", fullID)
 	result.SetMetadata(portfolio.MetaStrategyName, strategy.Name())
-	result.SetMetadata(portfolio.MetaRunStart, start.Format("2006-01-02"))
-	result.SetMetadata(portfolio.MetaRunEnd, end.Format("2006-01-02"))
+	// MetaRunStart/MetaRunEnd are intentionally not set here. The engine
+	// already records the actual simulated range (engine/backtest.go), trimming
+	// the requested end to the last trading day with expected EOD data.
+	// Overwriting with the raw --start/--end flags would discard that, leaving
+	// run.end one calendar day past the last day of real data.
 
 	params := strategyParams(strategy)
 	for k, v := range params {
