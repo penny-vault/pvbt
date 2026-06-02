@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A backtest's recorded end date now reflects the last day actually simulated rather than the requested `--end` flag. Running in the evening on a host whose clock had already rolled past midnight UTC previously stamped a future end date one day beyond the last day of real data.
+
 ## [0.10.3] - 2026-05-27
 
 ### Fixed
