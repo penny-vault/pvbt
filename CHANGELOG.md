@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.4] - 2026-06-01
+
 ### Fixed
 
 - A backtest's recorded end date now reflects the last day actually simulated rather than the requested `--end` flag. Running in the evening on a host whose clock had already rolled past midnight UTC previously stamped a future end date one day beyond the last day of real data.
@@ -365,7 +367,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.2...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/penny-vault/pvbt/compare/v0.10.3...v0.10.4
+[0.10.3]: https://github.com/penny-vault/pvbt/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/penny-vault/pvbt/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/penny-vault/pvbt/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/penny-vault/pvbt/compare/v0.9.3...v0.10.0
