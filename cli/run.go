@@ -119,6 +119,7 @@ func newRootCmd(strategy engine.Strategy) (*cobra.Command, func()) {
 	}
 
 	rootCmd.AddCommand(newBacktestCmd(strategy))
+	rootCmd.AddCommand(newReportCmd(strategy))
 	rootCmd.AddCommand(newLiveCmd(strategy))
 	rootCmd.AddCommand(newSnapshotCmd(strategy))
 	rootCmd.AddCommand(newDescribeCmd(strategy))
