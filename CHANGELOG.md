@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- A new `report` command re-renders the full summary report from a saved backtest database file.
 - Strategies can move a single position to a target weight or close it without rebalancing the rest of the book.
 - Strategies can react to how their orders filled and revise the batch before it is final.
 
