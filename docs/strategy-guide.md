@@ -674,6 +674,23 @@ batch.Order(ctx, spy, portfolio.Sell, 100,
 
 Bracket/OCO modifiers are batch-only. See the [Portfolio documentation](portfolio.md#bracket-and-oco-orders) for full details.
 
+### Reacting to order outcomes
+
+Orders fill after `Compute` returns, so an order does not always execute: it can be unpriceable (an asset with no bar at the firing moment), rejected by a risk or margin check, or -- for a limit order -- never touched. A failed order does not abort the backtest; it simply does not fill.
+
+To react, implement the optional `Reconcile` method. After the batch's orders resolve, the engine calls it with the same batch, now carrying each order's outcome. Inspect the failures and amend the batch -- for instance resubmitting a missed order at market. The engine executes whatever you append and calls `Reconcile` again, until a pass adds nothing and the batch settles.
+
+```go
+func (s *MyStrategy) Reconcile(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    for _, outcome := range batch.FailedOrders() {
+        batch.Order(ctx, outcome.Order.Asset, portfolio.Buy, outcome.Order.Qty)
+    }
+    return nil
+}
+```
+
+`Reconcile` is optional; strategies that omit it see failed orders simply not fill. See the [Portfolio documentation](portfolio.md#order-outcomes-and-reconciliation) for the outcome fields.
+
 ### Short selling
 
 Selling an asset you do not own opens a short position. The position quantity becomes negative in the portfolio. Profits accumulate when the price falls; losses mount when it rises.

@@ -265,7 +265,11 @@ var _ = Describe("SimulatedBroker", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Consistently(simBroker.Fills()).ShouldNot(Receive())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Err).To(HaveOccurred())
+			Expect(fill.Qty).To(BeZero())
 		})
 
 		It("fills a short order when margin is sufficient", func() {
@@ -352,7 +356,11 @@ var _ = Describe("SimulatedBroker", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Consistently(simBroker.Fills()).ShouldNot(Receive())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Err).To(HaveOccurred())
+			Expect(fill.Qty).To(BeZero())
 		})
 
 		It("fills a buy that stays within the leverage cap", func() {
@@ -416,7 +424,7 @@ var _ = Describe("SimulatedBroker", func() {
 			Expect(fill.Qty).To(Equal(10.0))
 		})
 
-		It("skips fill and produces no error when asset has no price", func() {
+		It("reports a failed fill and produces no error when asset has no price", func() {
 			unknown := asset.Asset{CompositeFigi: "FIGI-UNKNOWN", Ticker: "UNKNOWN"}
 			simBroker := engine.NewSimulatedBroker()
 			simBroker.SetPriceProvider(&mockPriceProvider{
@@ -432,7 +440,11 @@ var _ = Describe("SimulatedBroker", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Consistently(simBroker.Fills()).ShouldNot(Receive())
+
+			var fill broker.Fill
+			Eventually(simBroker.Fills()).Should(Receive(&fill))
+			Expect(fill.Err).To(HaveOccurred())
+			Expect(fill.Qty).To(BeZero())
 		})
 	})
 

@@ -141,12 +141,17 @@ const (
 	OnClose
 )
 
-// Fill represents the execution result of an order.
+// Fill represents the execution result of an order. A Fill with a non-nil
+// Err reports an order that resolved without executing -- it could not be
+// priced, was rejected by a risk or margin check, or its limit was not
+// touched. Such a Fill carries Qty 0 and a zero Price; Err describes why the
+// order failed so the originating strategy can react to it.
 type Fill struct {
 	OrderID  string
 	Price    float64
 	Qty      float64
 	FilledAt time.Time
+	Err      error
 }
 
 // Position represents a holding in the account.
