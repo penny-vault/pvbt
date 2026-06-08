@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-06-08
+
 ### Added
 
 - A new `report` command re-renders the full summary report from a saved backtest database file.
@@ -382,7 +384,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.10.4...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/penny-vault/pvbt/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/penny-vault/pvbt/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/penny-vault/pvbt/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/penny-vault/pvbt/compare/v0.10.1...v0.10.2
