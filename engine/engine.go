@@ -1113,6 +1113,117 @@ func (e *Engine) nextMinuteBar(ctx context.Context, assets []asset.Asset) (*data
 	return earliest, nil
 }
 
+// markBarLookback bounds how far back markBar searches for each asset's most
+// recent minute bar before the firing moment.
+const markBarLookback = 6 * time.Minute
+
+// markBar builds a single-row price frame that marks each asset to its most
+// recent 1-minute bar at or before e.currentTime -- the just-closed minute as
+// of the firing moment. Each asset is marked independently: minute bars are
+// sparse, so within one fetch window two held assets routinely have their
+// latest bar at different timestamps, and a thinly-traded name may have no bar
+// at the firing minute at all. For an asset with no bar in the window, markBar
+// carries forward its prior mark (from prior) rather than dropping it -- a
+// dropped asset would be silently valued at zero. An asset with neither a
+// window bar nor a prior mark is a hard error.
+//
+// This is distinct from nextMinuteBar, which returns the next bar after
+// currentTime for order fills; the small mark-vs-fill gap is realistic
+// slippage matching live-trading next-tick behaviour.
+func (e *Engine) markBar(ctx context.Context, assets []asset.Asset, prior *data.DataFrame) (*data.DataFrame, error) {
+	provider := e.findIntradayProvider()
+	if provider == nil {
+		return nil, fmt.Errorf(
+			"engine: intra-day firing requires an IntradayProvider for live marks; " +
+				"none registered")
+	}
+
+	metrics := []data.Metric{data.MetricClose, data.MetricHigh, data.MetricLow, data.Volume}
+
+	window, err := provider.IntradayFetch(ctx, assets, metrics,
+		e.currentTime.Add(-markBarLookback), e.currentTime, nil)
+	if err != nil {
+		return nil, fmt.Errorf("engine: fetch mark bar: %w", err)
+	}
+
+	times := window.Times()
+
+	cols := make([][]float64, len(assets)*len(metrics))
+
+	for assetIdx, held := range assets {
+		// Find this asset's latest window timestamp with a real close.
+		markIdx := -1
+
+		for timeIdx := len(times) - 1; timeIdx >= 0; timeIdx-- {
+			if !math.IsNaN(window.ValueAt(held, data.MetricClose, times[timeIdx])) {
+				markIdx = timeIdx
+
+				break
+			}
+		}
+
+		if markIdx < 0 && (prior == nil || math.IsNaN(prior.Value(held, data.MetricClose))) {
+			return nil, fmt.Errorf(
+				"engine: no minute bar at or before %s and no prior mark for %s",
+				e.currentTime.Format(time.RFC3339), held.Ticker)
+		}
+
+		for metricIdx, metric := range metrics {
+			value := math.NaN()
+			if markIdx >= 0 {
+				value = window.ValueAt(held, metric, times[markIdx])
+			} else if prior != nil {
+				// Carry the asset's last known mark forward; it did not
+				// trade in the window but must remain in the valuation.
+				value = prior.Value(held, metric)
+			}
+
+			cols[assetIdx*len(metrics)+metricIdx] = []float64{value}
+		}
+	}
+
+	marked, err := data.NewDataFrame([]time.Time{e.currentTime}, assets, metrics, data.Tick, cols)
+	if err != nil {
+		return nil, fmt.Errorf("engine: build mark bar frame: %w", err)
+	}
+
+	marked.SetSource(e)
+
+	return marked, nil
+}
+
+// markIntradayPrices marks the account to the live minute-bar prices as of
+// e.currentTime when the engine is mid intra-day firing, so that Value,
+// PositionValue, Prices, margin checks, and batch order sizing reflect the
+// firing moment rather than the prior end-of-day close. It is a no-op for
+// daily firings; the end-of-day updateAccountPrices restores close marks and
+// records the equity point, so daily backtests and the equity curve are
+// unaffected.
+func (e *Engine) markIntradayPrices(ctx context.Context, acct portfolio.PortfolioManager) error {
+	if !e.isIntradayFiring() {
+		return nil
+	}
+
+	holdings := acct.Holdings()
+	if len(holdings) == 0 {
+		return nil
+	}
+
+	heldAssets := make([]asset.Asset, 0, len(holdings))
+	for held := range holdings {
+		heldAssets = append(heldAssets, held)
+	}
+
+	markDF, err := e.markBar(ctx, heldAssets, acct.Prices())
+	if err != nil {
+		return fmt.Errorf("engine: mark intraday prices: %w", err)
+	}
+
+	acct.SetPrices(markDF)
+
+	return nil
+}
+
 // prefetchBrokerPrices batch-fetches price data for all unique assets
 // in the given orders, warming the year-chunk cache so that subsequent
 // per-order Prices calls in Submit are cache hits.

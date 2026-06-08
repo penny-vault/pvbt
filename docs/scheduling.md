@@ -56,7 +56,15 @@ Strategies that pull intraday data via `portfolio.MinuteBars(N)` or `portfolio.D
 
 Order fills during intra-day firings land at the next 1-minute bar's close, the same next-bar semantics used for daily strategies (next bar = next minute, not next day). Daily portfolio valuation, equity recording, and performance metrics remain anchored to once-per-day snapshots at the end-of-day boundary.
 
-See [Data: Intraday 1-minute bars](data.md#intraday-1-minute-bars) for the data-fetch API and ClickHouse configuration.
+### Live marks during a firing
+
+During a firing strictly inside the trading session, the account is marked to the minute bar as of `engine.Now()` -- the just-closed minute -- rather than the prior end-of-day close. So `port.Value()`, `port.PositionValue(asset)`, and `port.Prices()` reflect the price at the firing moment, and order sizing (`RebalanceTo`, `Allocate`) and the broker's margin and leverage checks all evaluate against that live mark. The mark price (the `engine.Now()` bar) is deliberately distinct from the fill price (the next minute bar), so a small sizing-vs-fill gap remains as realistic slippage.
+
+Each held asset is marked independently to its own most recent bar at or before the firing moment. Minute bars are sparse, so a thinly-traded name may not print at the exact firing minute; such a name keeps its last known mark rather than being valued at zero. (A held asset with no recent bar and no prior mark at all is an error, not a silent drop.)
+
+Firings at exactly the 09:30 open or 16:00 close use the authoritative end-of-day bars instead. End-of-day equity recording is unchanged, so daily (non-intraday) backtests produce identical results.
+
+See [Data: Intraday 1-minute bars](data.md#intraday-1-minute-bars) for the data-fetch API and ClickHouse configuration, and [Portfolio: Weight-target Allocate and Liquidate](portfolio.md#weight-target-allocate-and-liquidate) for the single-name order helpers that build on these live marks.
 
 ## Example
 
