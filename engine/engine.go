@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"time"
 
@@ -77,6 +78,7 @@ type Engine struct {
 	// populated during initialization
 	assets                map[string]asset.Asset
 	cache                 *dataCache
+	intradayFill          *intradayFillCache // per-firing next-minute-bar window cache; keyed by currentTime
 	currentDate           time.Time
 	currentTime           time.Time // intra-day firing timestamp; equals currentDate (end-of-day) outside of intra-day Compute calls
 	start                 time.Time
@@ -762,14 +764,7 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	// Fast path: point-in-time queries (rangeStart == rangeEnd) skip the
 	// union-time-axis rebuild and binary-search cached year chunks directly.
 	if rangeStart.Equal(rangeEnd) {
-		hasFundamental := false
-
-		for _, m := range metrics {
-			if data.IsFundamental(m) {
-				hasFundamental = true
-				break
-			}
-		}
+		hasFundamental := slices.ContainsFunc(metrics, data.IsFundamental)
 
 		result, pitErr := e.assemblePointInTime(assets, metrics, rangeEnd, hasFundamental)
 		if pitErr != nil {
@@ -812,14 +807,7 @@ func (e *Engine) fetchRange(ctx context.Context, assets []asset.Asset, metrics [
 	// recent prior filing. Otherwise, asking for fundamentals on a calendar
 	// date that happens to fall on a weekend or holiday returns an empty
 	// frame because no provider emitted data on that exact day.
-	hasFundamental := false
-
-	for _, metric := range metrics {
-		if data.IsFundamental(metric) {
-			hasFundamental = true
-			break
-		}
-	}
+	hasFundamental := slices.ContainsFunc(metrics, data.IsFundamental)
 
 	if hasFundamental && rangeStart.Equal(rangeEnd) {
 		timeSet[rangeEnd.Unix()] = rangeEnd
@@ -999,7 +987,7 @@ func (e *Engine) Close() error {
 
 	// Close the broker.
 	if e.broker != nil {
-		if err := e.broker.Close(); err != nil && firstErr == nil {
+		if err := e.broker.Close(); err != nil {
 			firstErr = err
 		}
 	}
@@ -1092,25 +1080,39 @@ func (e *Engine) nextMinuteBar(ctx context.Context, assets []asset.Asset) (*data
 	start := e.currentTime.Add(time.Minute)
 	end := e.currentTime.Add(6 * time.Minute)
 
-	df, err := provider.IntradayFetch(ctx, assets,
+	// The fill path re-enters nextMinuteBar once per order plus once for the
+	// batch prefetch, all within a single firing for the same window. Serve
+	// every call after the first from a per-firing cache so a remote source
+	// sees one round-trip instead of N+1.
+	window, err := e.intradayFillWindow(ctx, provider, assets,
 		[]data.Metric{data.MetricClose, data.MetricHigh, data.MetricLow, data.Volume},
-		start, end, nil)
+		start, end)
 	if err != nil {
-		return nil, fmt.Errorf("engine: fetch next minute bar: %w", err)
+		return nil, err
 	}
 
-	if df.Len() == 0 {
-		return nil, fmt.Errorf(
-			"engine: no minute bar available after %s for order fill",
-			e.currentTime.Format(time.RFC3339))
+	// Slice the window to the requested assets and return the earliest bar
+	// at which any of them traded. A direct per-asset IntradayFetch builds
+	// its time axis from only that asset's bars, so its first row is the
+	// asset's first bar; selecting the earliest non-empty bar out of the
+	// shared window reproduces that row exactly, changing only the number
+	// of provider round-trips, not the returned values.
+	sliced := window.Assets(assets...)
+
+	for _, ts := range sliced.Times() {
+		for _, want := range assets {
+			if !math.IsNaN(sliced.ValueAt(want, data.MetricClose, ts)) {
+				earliest := sliced.At(ts)
+				earliest.SetSource(e)
+
+				return earliest, nil
+			}
+		}
 	}
 
-	// Slice to the earliest bar so the broker fills on the immediate
-	// next minute rather than an arbitrary later one.
-	earliest := df.At(df.Times()[0])
-	earliest.SetSource(e)
-
-	return earliest, nil
+	return nil, fmt.Errorf(
+		"engine: no minute bar available after %s for order fill",
+		e.currentTime.Format(time.RFC3339))
 }
 
 // markBarLookback bounds how far back markBar searches for each asset's most

@@ -210,16 +210,19 @@ func (s *buyThenSellStrategy) Describe() engine.StrategyDescription {
 
 func (s *buyThenSellStrategy) Compute(ctx context.Context, eng *engine.Engine, fund portfolio.Portfolio, batch *portfolio.Batch) error {
 	s.callCount++
-	if s.callCount == 1 {
+
+	switch s.callCount {
+	case 1:
 		// Buy 10 shares on first call.
 		batch.Order(ctx, s.target, portfolio.Buy, 10)
-	} else if s.callCount == 2 {
+	case 2:
 		// Sell all shares on second call.
 		qty := fund.Position(s.target)
 		if qty > 0 {
 			batch.Order(ctx, s.target, portfolio.Sell, qty)
 		}
 	}
+
 	return nil
 }
 

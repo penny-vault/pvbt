@@ -407,7 +407,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 
 		// 13-14b. Housekeep parent account (dividends + fill draining).
-		if err := e.housekeepAccount(stepCtx, acct, date, e.benchmark); err != nil {
+		if err := e.housekeepAccount(stepCtx, acct, date); err != nil {
 			return nil, err
 		}
 
@@ -507,7 +507,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				return nil, fmt.Errorf("engine: child %q prefetch housekeeping on %v: %w", child.name, date, err)
 			}
 
-			if err := e.housekeepAccount(stepCtx, child.account, date, asset.Asset{}); err != nil {
+			if err := e.housekeepAccount(stepCtx, child.account, date); err != nil {
 				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
 			}
 
@@ -548,10 +548,9 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 }
 
 // housekeepAccount records dividends for held assets and drains broker fills
-// for the given account on date. benchmark controls whether the benchmark asset
-// is included in the housekeeping data fetch; pass asset.Asset{} for child
-// accounts that have no benchmark.
-func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, date time.Time, benchmark asset.Asset) error {
+// for the given account on date. Price prefetching, including the benchmark, is
+// handled separately by prefetchHousekeepingPrices.
+func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
 	// Drain fills from previous step (before syncing transactions).
 	if acct.HasBroker() {
 		if drainErr := acct.DrainFills(ctx); drainErr != nil {
