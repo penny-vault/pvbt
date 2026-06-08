@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - During an intra-day firing, the account is now marked to the live minute bar as of `engine.Now()` rather than the prior end-of-day close. Order sizing and margin/leverage checks therefore use the price at the firing moment; orders still fill at the next minute bar. Each held asset is marked to its own most recent bar, so a name that did not trade at the firing minute keeps its last known price instead of being valued at zero. End-of-day valuation is unchanged, so daily backtests produce identical results.
+- Intra-day backtests against a remote minute-bar source run substantially faster: the next-minute-bar window for a firing's order fills is now fetched once and reused across all orders, instead of issuing a separate fetch per order. Results are unchanged.
 
 ## [0.10.4] - 2026-06-01
 
