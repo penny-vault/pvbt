@@ -500,7 +500,63 @@ func (b *Batch) ProjectedValue() float64 {
 		}
 	}
 
+	total += b.pendingUnpricedValue()
+
 	return total
+}
+
+// pendingUnpricedValue sums the value of pending dollar-amount orders for
+// assets that have no derivable price (not currently held and absent from the
+// price frame) and therefore never appear in ProjectedHoldings. A $X buy of
+// such an asset creates a position worth $X once it fills. Without this term
+// the cash those orders consume would vanish from projected value, so
+// successive Allocate calls in one batch -- e.g. new entries opened during an
+// intraday firing on an all-cash account -- would each size against a
+// shrinking base and compound their under-sizing.
+func (b *Batch) pendingUnpricedValue() float64 {
+	seen := make(map[asset.Asset]bool)
+
+	var total float64
+
+	for _, order := range b.Orders {
+		ast := order.Asset
+		if seen[ast] {
+			continue
+		}
+
+		seen[ast] = true
+
+		if b.priceOf(ast) > 0 {
+			continue
+		}
+
+		total += b.pendingDollarFlow(ast)
+	}
+
+	return total
+}
+
+// pendingDollarFlow returns the net dollar amount of pending dollar-amount
+// (Amount-based) orders for ast: buy orders add and sell orders subtract.
+// Quantity-based orders are excluded because they cannot be valued without a
+// price, which an unpriced asset by definition lacks.
+func (b *Batch) pendingDollarFlow(ast asset.Asset) float64 {
+	var flow float64
+
+	for _, order := range b.Orders {
+		if order.Asset != ast || order.Amount <= 0 {
+			continue
+		}
+
+		switch order.Side {
+		case broker.Buy:
+			flow += order.Amount
+		case broker.Sell:
+			flow -= order.Amount
+		}
+	}
+
+	return flow
 }
 
 // ProjectedWeights returns position weights after projected execution.
@@ -526,13 +582,17 @@ func (b *Batch) ProjectedWeights() map[asset.Asset]float64 {
 }
 
 // projectedPositionValue returns the dollar value of an asset's position
-// in the projected state (after applying all batch orders so far).
+// in the projected state (after applying all batch orders so far). For an
+// asset with no derivable price (not held, absent from the price frame), the
+// position is valued from its pending dollar-amount orders, since those orders
+// cannot be expressed as a share count and so do not appear in ProjectedHoldings.
 func (b *Batch) projectedPositionValue(ast asset.Asset) float64 {
-	holdings := b.ProjectedHoldings()
-	qty := holdings[ast]
 	price := b.priceOf(ast)
+	if price <= 0 {
+		return b.pendingDollarFlow(ast)
+	}
 
-	return qty * price
+	return b.ProjectedHoldings()[ast] * price
 }
 
 // projectedCash returns the cash balance after all batch orders execute.
