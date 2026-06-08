@@ -789,6 +789,185 @@ var _ = Describe("Batch", func() {
 			Expect(aaplBuys).To(HaveLen(1))
 		})
 	})
+
+	Describe("Allocate", func() {
+		It("appends a buy sized off projected value for an unheld asset", func() {
+			// 10k cash, no positions. Target SPY weight 0.5 => $5000 buy.
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Allocate(context.Background(), spy, 0.5)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Asset).To(Equal(spy))
+			Expect(batch.Orders[0].Side).To(Equal(broker.Buy))
+			Expect(batch.Orders[0].Amount).To(BeNumerically("~", 5_000.0, 1e-9))
+			Expect(batch.Orders[0].Qty).To(Equal(0.0))
+		})
+
+		It("appends a sell for the delta when reducing an existing position", func() {
+			// Buy 100 SPY @ 100 from 10000 cash => cash 0, holdings 10000,
+			// total 10000. Target 0.3 => $3000; current $10000 => sell $7000.
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.BuyTransaction,
+				Qty: 100, Price: 100, Amount: -10_000,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Allocate(context.Background(), spy, 0.3)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Side).To(Equal(broker.Sell))
+			Expect(batch.Orders[0].Amount).To(BeNumerically("~", 7_000.0, 1e-9))
+		})
+
+		It("opens a short for a negative weight", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Allocate(context.Background(), spy, -0.4)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Side).To(Equal(broker.Sell))
+			Expect(batch.Orders[0].Amount).To(BeNumerically("~", 4_000.0, 1e-9))
+		})
+
+		It("is a no-op when already at the target weight", func() {
+			// Buy 50 SPY @ 100 from 10000 cash => cash 5000, holdings 5000,
+			// total 10000, SPY already at 0.5.
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.BuyTransaction,
+				Qty: 50, Price: 100, Amount: -5_000,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Allocate(context.Background(), spy, 0.5)).To(Succeed())
+
+			Expect(batch.Orders).To(BeEmpty())
+		})
+
+		It("adjusts only the named asset, leaving other holdings untouched", func() {
+			// SPY 40 @ 100 = 4000, AAPL 10 @ 200 = 2000, cash 4000, total 10000.
+			df, err := data.NewDataFrame(
+				[]time.Time{ts},
+				[]asset.Asset{spy, aapl},
+				[]data.Metric{data.MetricClose},
+				data.Daily,
+				[][]float64{{100}, {200}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			acct.UpdatePrices(df)
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.BuyTransaction,
+				Qty: 40, Price: 100, Amount: -4_000,
+			})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: aapl, Type: asset.BuyTransaction,
+				Qty: 10, Price: 200, Amount: -2_000,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Allocate(context.Background(), spy, 0.6)).To(Succeed())
+
+			// Only SPY orders; AAPL untouched.
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Asset).To(Equal(spy))
+			Expect(ordersForAsset(batch.Orders, aapl)).To(BeEmpty())
+		})
+
+		It("rejects bracket and OCO modifiers", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			err := batch.Allocate(context.Background(), spy, 0.5,
+				portfolio.WithBracket(portfolio.StopLossPrice(90.0), portfolio.TakeProfitPrice(115.0)))
+			Expect(err).To(HaveOccurred())
+			Expect(batch.Orders).To(BeEmpty())
+		})
+
+		It("applies a Limit modifier", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Allocate(context.Background(), spy, 0.5, portfolio.Limit(99.0))).To(Succeed())
+
+			Expect(batch.Orders[0].OrderType).To(Equal(broker.Limit))
+			Expect(batch.Orders[0].LimitPrice).To(Equal(99.0))
+		})
+	})
+
+	Describe("Liquidate", func() {
+		It("sells the full long position", func() {
+			acct := buildPricedAccount(0, []asset.Asset{spy}, []float64{100})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.BuyTransaction,
+				Qty: 25, Price: 100, Amount: -2_500,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Liquidate(context.Background(), spy)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Side).To(Equal(broker.Sell))
+			Expect(batch.Orders[0].Qty).To(Equal(25.0))
+		})
+
+		It("covers the full short position", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.SellTransaction,
+				Qty: 30, Price: 100, Amount: 3_000,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Liquidate(context.Background(), spy)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Side).To(Equal(broker.Buy))
+			Expect(batch.Orders[0].Qty).To(Equal(30.0))
+		})
+
+		It("is a no-op for a flat position", func() {
+			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Liquidate(context.Background(), spy)).To(Succeed())
+			Expect(batch.Orders).To(BeEmpty())
+		})
+
+		It("leaves other holdings untouched", func() {
+			df, err := data.NewDataFrame(
+				[]time.Time{ts},
+				[]asset.Asset{spy, aapl},
+				[]data.Metric{data.MetricClose},
+				data.Daily,
+				[][]float64{{100}, {200}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+
+			acct := portfolio.New(portfolio.WithCash(0, time.Time{}))
+			acct.UpdatePrices(df)
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: spy, Type: asset.BuyTransaction,
+				Qty: 10, Price: 100, Amount: -1_000,
+			})
+			acct.Record(portfolio.Transaction{
+				Date: ts, Asset: aapl, Type: asset.BuyTransaction,
+				Qty: 5, Price: 200, Amount: -1_000,
+			})
+
+			batch := portfolio.NewBatch(ts, acct)
+			Expect(batch.Liquidate(context.Background(), spy)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(1))
+			Expect(batch.Orders[0].Asset).To(Equal(spy))
+			Expect(ordersForAsset(batch.Orders, aapl)).To(BeEmpty())
+		})
+	})
 })
 
 // ordersWithSide filters a slice of orders by side.

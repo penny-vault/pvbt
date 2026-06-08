@@ -296,6 +296,28 @@ batch.Order(ctx, asset, Sell, 50, Stop(140.00), FillOrKill)
 batch.Order(ctx, asset, Buy, 200, OnTheOpen, WithJustification("rebalance after earnings"))
 ```
 
+### Weight-target: Allocate and Liquidate
+
+`RebalanceTo` replaces the entire book: any held name absent from the allocation is liquidated. When a strategy instead wants to adjust a single name toward a target weight and leave everything else alone, use `Allocate` and `Liquidate`.
+
+```go
+// Drive SPY to 50% of the portfolio's projected value, leaving other holdings untouched.
+batch.Allocate(ctx, spy, 0.50)
+
+// Close the SPY position (sell a long, cover a short); no-op if flat.
+batch.Liquidate(ctx, spy)
+```
+
+`Allocate` sizes the order off the portfolio's projected value and the asset's current projected position value, appending only the buy/sell delta needed to reach the target. A negative weight opens or extends a short; a call that is already at the target is a no-op. `Liquidate` closes the full projected position for the named asset.
+
+Both accept the same order-type, time-in-force, and justification modifiers as `Order` (bracket and OCO modifiers are not supported):
+
+```go
+batch.Allocate(ctx, spy, 0.50, portfolio.Limit(150.00), portfolio.WithJustification("scale in"))
+```
+
+These pair naturally with intraday-scheduled strategies: during a firing strictly inside the trading session the account is marked to the live minute bar as of `eng.Now()`, so `Allocate`'s sizing and the broker's margin checks use the price at the firing moment rather than the prior end-of-day close. The order still fills at the next minute bar, so a small sizing-vs-fill gap remains as realistic slippage. See [Scheduling](scheduling.md) for intraday firing details.
+
 ### Mixing approaches
 
 A strategy can use `RebalanceTo` for its core allocation and `Order` for specific adjustments, all on the same batch:

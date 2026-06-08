@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Strategies can adjust a single position toward a target weight without disturbing the rest of the book. `Batch.Allocate(ctx, asset, weight)` sizes the buy/sell delta to reach the target weight, and `Batch.Liquidate(ctx, asset)` closes a position; both leave all other holdings untouched, unlike `RebalanceTo`.
+
+### Changed
+
+- During an intra-day firing, the account is now marked to the live minute bar as of `engine.Now()` rather than the prior end-of-day close. Order sizing and margin/leverage checks therefore use the price at the firing moment; orders still fill at the next minute bar. Each held asset is marked to its own most recent bar, so a name that did not trade at the firing minute keeps its last known price instead of being valued at zero. End-of-day valuation is unchanged, so daily backtests produce identical results.
+
 ## [0.10.4] - 2026-06-01
 
 ### Fixed

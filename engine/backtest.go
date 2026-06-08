@@ -432,6 +432,11 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			for _, fireTime := range childFirings {
 				e.currentTime = fireTime
 				child.broker.SetPriceProvider(e, date)
+
+				if err := e.markIntradayPrices(stepCtx, child.account); err != nil {
+					return nil, fmt.Errorf("engine: child %q mark intraday prices on %v: %w", childName, fireTime, err)
+				}
+
 				child.broker.EvaluatePending()
 
 				if err := child.account.CancelOpenOrders(stepCtx); err != nil {
@@ -462,6 +467,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 				if sb, ok := e.broker.(*SimulatedBroker); ok {
 					sb.SetPriceProvider(e, date)
+				}
+
+				if err := e.markIntradayPrices(stepCtx, acct); err != nil {
+					return nil, fmt.Errorf("engine: mark intraday prices on %v: %w", fireTime, err)
 				}
 
 				if err := acct.CancelOpenOrders(stepCtx); err != nil {

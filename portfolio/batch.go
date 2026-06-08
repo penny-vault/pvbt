@@ -108,55 +108,7 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 		order.Side = broker.Sell
 	}
 
-	var hasLimit, hasStop bool
-
-	var bracket *bracketModifier
-
-	var oco *ocoModifier
-
-	for _, mod := range mods {
-		switch modifier := mod.(type) {
-		case limitModifier:
-			order.LimitPrice = modifier.price
-			hasLimit = true
-		case stopModifier:
-			order.StopPrice = modifier.price
-			hasStop = true
-		case dayOrderModifier:
-			order.TimeInForce = broker.Day
-		case goodTilCancelModifier:
-			order.TimeInForce = broker.GTC
-		case fillOrKillModifier:
-			order.TimeInForce = broker.FOK
-		case immediateOrCancelModifier:
-			order.TimeInForce = broker.IOC
-		case onTheOpenModifier:
-			order.TimeInForce = broker.OnOpen
-		case onTheCloseModifier:
-			order.TimeInForce = broker.OnClose
-		case goodTilDateModifier:
-			order.TimeInForce = broker.GTD
-			order.GTDDate = modifier.date
-		case justificationModifier:
-			order.Justification = modifier.reason
-		case lotSelectionModifier:
-			order.LotSelection = int(modifier.method)
-		case bracketModifier:
-			// handled in post-expansion below
-			bracket = &modifier
-		case ocoModifier:
-			// handled in post-expansion below
-			oco = &modifier
-		}
-	}
-
-	if hasLimit && hasStop {
-		order.OrderType = broker.StopLimit
-	} else if hasLimit {
-		order.OrderType = broker.Limit
-	} else if hasStop {
-		order.OrderType = broker.Stop
-	}
+	bracket, oco := applyOrderModifiers(&order, mods)
 
 	groupIndex := len(b.groups)
 	ts := b.Timestamp.UnixNano()
@@ -225,6 +177,139 @@ func (b *Batch) Order(_ context.Context, ast asset.Asset, side Side, qty float64
 		})
 
 		return nil
+	}
+
+	b.Orders = append(b.Orders, order)
+
+	return nil
+}
+
+// applyOrderModifiers applies the order modifiers to order, setting limit and
+// stop prices, time-in-force, justification, and lot selection, and inferring
+// the order type from the presence of limit/stop prices. Bracket and OCO
+// modifiers are not applied to the order directly; they are returned so the
+// caller can perform the group expansion. Either return value is nil when the
+// corresponding modifier is absent.
+func applyOrderModifiers(order *broker.Order, mods []OrderModifier) (*bracketModifier, *ocoModifier) {
+	var hasLimit, hasStop bool
+
+	var bracket *bracketModifier
+
+	var oco *ocoModifier
+
+	for _, mod := range mods {
+		switch modifier := mod.(type) {
+		case limitModifier:
+			order.LimitPrice = modifier.price
+			hasLimit = true
+		case stopModifier:
+			order.StopPrice = modifier.price
+			hasStop = true
+		case dayOrderModifier:
+			order.TimeInForce = broker.Day
+		case goodTilCancelModifier:
+			order.TimeInForce = broker.GTC
+		case fillOrKillModifier:
+			order.TimeInForce = broker.FOK
+		case immediateOrCancelModifier:
+			order.TimeInForce = broker.IOC
+		case onTheOpenModifier:
+			order.TimeInForce = broker.OnOpen
+		case onTheCloseModifier:
+			order.TimeInForce = broker.OnClose
+		case goodTilDateModifier:
+			order.TimeInForce = broker.GTD
+			order.GTDDate = modifier.date
+		case justificationModifier:
+			order.Justification = modifier.reason
+		case lotSelectionModifier:
+			order.LotSelection = int(modifier.method)
+		case bracketModifier:
+			captured := modifier
+			bracket = &captured
+		case ocoModifier:
+			captured := modifier
+			oco = &captured
+		}
+	}
+
+	if hasLimit && hasStop {
+		order.OrderType = broker.StopLimit
+	} else if hasLimit {
+		order.OrderType = broker.Limit
+	} else if hasStop {
+		order.OrderType = broker.Stop
+	}
+
+	return bracket, oco
+}
+
+// Allocate appends a single order that drives the named asset toward the
+// target weight of the portfolio's projected value, leaving every other
+// position untouched. It is the incremental, single-name analogue of
+// RebalanceTo (which replaces the entire book and liquidates any held name
+// absent from the allocation). The order is sized off ProjectedValue and the
+// asset's projected position value at the time of the call; during an
+// intra-day firing those reflect the live eng.Now() marks, so the resulting
+// position value is approximately weight * portfolio value once the order
+// fills at the next bar. A negative weight opens or extends a short position.
+// Allocate is a no-op when the position is already at the target. Bracket and
+// OCO modifiers are not supported.
+func (b *Batch) Allocate(_ context.Context, ast asset.Asset, weight float64, mods ...OrderModifier) error {
+	targetDollars := weight * b.ProjectedValue()
+	diff := targetDollars - b.projectedPositionValue(ast)
+
+	if diff == 0 {
+		return nil
+	}
+
+	order := broker.Order{
+		Asset:       ast,
+		Amount:      math.Abs(diff),
+		OrderType:   broker.Market,
+		TimeInForce: broker.Day,
+		Side:        broker.Buy,
+	}
+
+	if diff < 0 {
+		order.Side = broker.Sell
+	}
+
+	bracket, oco := applyOrderModifiers(&order, mods)
+	if bracket != nil || oco != nil {
+		return fmt.Errorf("portfolio: Allocate does not support bracket or OCO modifiers")
+	}
+
+	b.Orders = append(b.Orders, order)
+
+	return nil
+}
+
+// Liquidate appends a single order that closes the named asset's projected
+// position, leaving every other position untouched. A long position is sold
+// and a short position is covered. It is a no-op when the projected position
+// is flat. Bracket and OCO modifiers are not supported.
+func (b *Batch) Liquidate(_ context.Context, ast asset.Asset, mods ...OrderModifier) error {
+	qty := b.ProjectedHoldings()[ast]
+	if qty == 0 {
+		return nil
+	}
+
+	order := broker.Order{
+		Asset:       ast,
+		Qty:         math.Abs(qty),
+		OrderType:   broker.Market,
+		TimeInForce: broker.Day,
+		Side:        broker.Sell,
+	}
+
+	if qty < 0 {
+		order.Side = broker.Buy
+	}
+
+	bracket, oco := applyOrderModifiers(&order, mods)
+	if bracket != nil || oco != nil {
+		return fmt.Errorf("portfolio: Liquidate does not support bracket or OCO modifiers")
 	}
 
 	b.Orders = append(b.Orders, order)
