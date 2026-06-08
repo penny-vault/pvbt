@@ -95,6 +95,9 @@ type Account struct {
 	seenTransactions         map[string]struct{}
 	batches                  []batchRecord
 	currentBatchID           int
+	// currentBatch is the batch being executed; drainFillsFromChannel
+	// records per-order outcomes onto it. Nil outside ExecuteBatch.
+	currentBatch *Batch
 }
 
 // New creates an Account with the given options.
@@ -2026,35 +2029,46 @@ func (a *Account) NewBatch(timestamp time.Time) *Batch {
 // ExecuteBatch runs the middleware chain, records annotations, assigns
 // order IDs, submits orders to the broker, and drains immediate fills.
 func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
-	batchID := len(a.batches) + 1
-	a.batches = append(a.batches, batchRecord{BatchID: batchID, Timestamp: batch.Timestamp})
+	// Assign a batch ID on the first pass and reuse it on later reconcile
+	// passes so all orders -- original and follow-up -- share one batch.
+	if batch.batchID == 0 {
+		batch.batchID = len(a.batches) + 1
+		a.batches = append(a.batches, batchRecord{BatchID: batch.batchID, Timestamp: batch.Timestamp})
+	}
+
+	batchID := batch.batchID
 	a.currentBatchID = batchID
+	a.currentBatch = batch
 
-	defer func() { a.currentBatchID = 0 }()
+	defer func() { a.currentBatchID = 0; a.currentBatch = nil }()
 
-	// 1. Run middleware chain.
-	if !batch.SkipMiddleware {
-		for _, mw := range a.middleware {
-			if err := mw.Process(ctx, batch); err != nil {
-				return err
+	// 1-2. Run middleware and record annotations only on the first pass.
+	// Reconcile follow-up orders skip the middleware chain: they manage the
+	// execution of orders that already passed risk/tax checks, and re-running
+	// the chain over the whole batch would double-process the resolved orders.
+	if batch.executed == 0 {
+		if !batch.SkipMiddleware {
+			for _, mw := range a.middleware {
+				if err := mw.Process(ctx, batch); err != nil {
+					return err
+				}
 			}
+		}
+
+		for key, value := range batch.Annotations {
+			a.Annotate(batch.Timestamp, key, value)
 		}
 	}
 
-	// 2. Record annotations.
-	for key, value := range batch.Annotations {
-		a.Annotate(batch.Timestamp, key, value)
-	}
-
-	// 3. Only submit if there are orders and a broker is set.
-	if len(batch.Orders) > 0 && a.broker == nil {
+	// 3. Only submit if there are new orders and a broker is set.
+	if len(batch.Orders) > batch.executed && a.broker == nil {
 		return fmt.Errorf("execute batch: no broker set")
 	}
 
-	// 4. Assign IDs to all orders and add to pendingOrders. Collect orders by groupID.
+	// 4. Assign IDs to the new orders and add to pendingOrders. Collect orders by groupID.
 	groupOrders := make(map[string][]broker.Order) // groupID -> orders in that group
 
-	for idx := range batch.Orders {
+	for idx := batch.executed; idx < len(batch.Orders); idx++ {
 		order := &batch.Orders[idx]
 		if order.ID == "" {
 			order.ID = fmt.Sprintf("batch-%d-%d", batch.Timestamp.UnixNano(), idx)
@@ -2069,9 +2083,10 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		}
 	}
 
-	// 5. Store deferred bracket exits: for each GroupBracket spec, record the spec in
-	// deferredExits keyed by groupID so exit orders can be submitted after the entry fills.
-	for _, spec := range batch.Groups() {
+	// 5. Store deferred bracket exits for new GroupBracket specs.
+	newGroups := batch.Groups()[batch.executedGroups:]
+
+	for _, spec := range newGroups {
 		if spec.Type == broker.GroupBracket {
 			a.deferredExits[spec.GroupID] = spec
 		}
@@ -2080,7 +2095,7 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 	// 6. Submit grouped orders.
 	submittedGroups := make(map[string]bool) // track which groupIDs have been handled
 
-	for _, spec := range batch.Groups() {
+	for _, spec := range newGroups {
 		orders := groupOrders[spec.GroupID]
 
 		switch spec.Type {
@@ -2122,8 +2137,8 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		submittedGroups[spec.GroupID] = true
 	}
 
-	// 7. Submit remaining non-group orders individually.
-	for idx := range batch.Orders {
+	// 7. Submit remaining new non-group orders individually.
+	for idx := batch.executed; idx < len(batch.Orders); idx++ {
 		order := &batch.Orders[idx]
 		if order.GroupID != "" && submittedGroups[order.GroupID] {
 			// Already handled as part of a group.
@@ -2135,7 +2150,13 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 		}
 	}
 
-	// 8. Drain immediate fills.
+	// 8. Mark these orders and groups executed before draining so the
+	// projected-state helpers (and any follow-up Reconcile pass) see them as
+	// resolved rather than still pending.
+	batch.executed = len(batch.Orders)
+	batch.executedGroups = len(batch.groups)
+
+	// 9. Drain immediate fills, recording per-order outcomes on the batch.
 	a.drainFillsFromChannel()
 
 	return nil
@@ -2182,6 +2203,25 @@ func (a *Account) drainFillsFromChannel() {
 			order, ok := a.pendingOrders[fill.OrderID]
 			if !ok {
 				log.Warn().Str("orderID", fill.OrderID).Msg("received fill for unknown order")
+				continue
+			}
+
+			// Record the outcome on the batch currently executing so a
+			// strategy's Reconcile can see what filled and what failed.
+			if a.currentBatch != nil && order.BatchID == a.currentBatchID {
+				a.currentBatch.Outcomes = append(a.currentBatch.Outcomes, OrderOutcome{
+					Order:  order,
+					Filled: fill.Err == nil,
+					Qty:    fill.Qty,
+					Price:  fill.Price,
+					Err:    fill.Err,
+				})
+			}
+
+			// A failed fill did not execute: drop the order without recording
+			// a transaction or running group/exit handling.
+			if fill.Err != nil {
+				delete(a.pendingOrders, fill.OrderID)
 				continue
 			}
 

@@ -49,7 +49,7 @@ The backtest proceeds in four phases:
 
 1. **Initialization** -- loads assets, hydrates strategy fields from struct tags, builds the provider routing table, calls `strategy.Setup`, validates the schedule, checks warmup data availability (see [Warmup](#warmup)), and creates the portfolio account.
 2. **Date enumeration** -- walks the tradecron schedule from start to end to build the list of trading dates.
-3. **Step loop** -- iterates every engine date (see [Steps and frames](#steps-and-frames) below). At each step: drains the broker fill channel, syncs broker-reported transactions (dividends, splits, borrow fees, delistings), runs a margin check, and updates the equity curve. On frames (dates matching the trading schedule), the engine also cancels open orders, creates a fresh batch, calls `strategy.Compute`, runs the batch through middleware, and submits the resulting orders to the broker.
+3. **Step loop** -- iterates every engine date (see [Steps and frames](#steps-and-frames) below). At each step: drains the broker fill channel, syncs broker-reported transactions (dividends, splits, borrow fees, delistings), runs a margin check, and updates the equity curve. On frames (dates matching the trading schedule), the engine also cancels open orders, creates a fresh batch, calls `strategy.Compute`, runs the batch through middleware, submits the resulting orders to the broker, and -- if the strategy implements `Reconcile` -- calls it so the strategy can react to how its orders resolved.
 4. **Return** -- returns the portfolio with the full transaction log, equity curve, and computed metrics.
 
 ## Steps and frames

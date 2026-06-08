@@ -50,6 +50,26 @@ type Batch struct {
 	// Annotations holds key-value metadata accumulated by calls to Annotate.
 	Annotations map[string]string
 
+	// Outcomes records how each submitted order resolved -- filled or
+	// failed. Account.ExecuteBatch appends to it as the broker's fills
+	// drain. A strategy's Reconcile reads it (via Outcomes / FailedOrders)
+	// to react to orders the market did not fill.
+	Outcomes []OrderOutcome
+
+	// batchID is the Account-assigned identifier for this batch, set on the
+	// first ExecuteBatch pass and reused across reconcile passes.
+	batchID int
+
+	// executed counts the orders already submitted by ExecuteBatch. A later
+	// pass (after Reconcile appends follow-up orders) submits only
+	// Orders[executed:], and the projected-state helpers replay only those
+	// unexecuted orders so already-filled orders are not counted twice.
+	executed int
+
+	// executedGroups counts the order groups already submitted, mirroring
+	// executed for grouped (bracket/OCO) orders.
+	executedGroups int
+
 	// SkipMiddleware bypasses the middleware chain when true. Used for
 	// margin-call response batches where risk limits must not block
 	// emergency position adjustments.
@@ -74,9 +94,45 @@ func NewBatch(timestamp time.Time, port Portfolio) *Batch {
 	}
 }
 
+// OrderOutcome reports how a single submitted order resolved. A filled order
+// has Filled true with the executed Qty and Price; a failed order has Filled
+// false and Err describing why it did not execute (no price available, a risk
+// or margin rejection, or -- for limit orders -- a price that was never
+// touched).
+type OrderOutcome struct {
+	Order  broker.Order
+	Filled bool
+	Qty    float64
+	Price  float64
+	Err    error
+}
+
+// FailedOrders returns the outcomes of orders that did not fill. A strategy's
+// Reconcile uses it to decide whether to amend the batch (e.g. resubmit a
+// failed order as a market order) before the batch settles.
+func (b *Batch) FailedOrders() []OrderOutcome {
+	failed := make([]OrderOutcome, 0, len(b.Outcomes))
+
+	for _, outcome := range b.Outcomes {
+		if !outcome.Filled {
+			failed = append(failed, outcome)
+		}
+	}
+
+	return failed
+}
+
 // Portfolio returns the read-only portfolio reference associated with this batch.
 func (b *Batch) Portfolio() Portfolio {
 	return b.portfolio
+}
+
+// unexecutedOrders returns the orders appended since the last ExecuteBatch
+// pass -- the ones a subsequent pass still needs to submit. The projected-state
+// helpers replay only these so orders already filled (and thus already
+// reflected in the portfolio) are not counted a second time.
+func (b *Batch) unexecutedOrders() []broker.Order {
+	return b.Orders[b.executed:]
 }
 
 // Groups returns the order group specifications accumulated during Order calls.
@@ -456,7 +512,7 @@ func (b *Batch) ProjectedHoldings() map[asset.Asset]float64 {
 		subs = taxAware.ActiveSubstitutions()
 	}
 
-	for _, order := range b.Orders {
+	for _, order := range b.unexecutedOrders() {
 		price := b.priceOf(order.Asset)
 
 		var qty float64
@@ -518,7 +574,7 @@ func (b *Batch) pendingUnpricedValue() float64 {
 
 	var total float64
 
-	for _, order := range b.Orders {
+	for _, order := range b.unexecutedOrders() {
 		ast := order.Asset
 		if seen[ast] {
 			continue
@@ -543,7 +599,7 @@ func (b *Batch) pendingUnpricedValue() float64 {
 func (b *Batch) pendingDollarFlow(ast asset.Asset) float64 {
 	var flow float64
 
-	for _, order := range b.Orders {
+	for _, order := range b.unexecutedOrders() {
 		if order.Asset != ast || order.Amount <= 0 {
 			continue
 		}
@@ -600,7 +656,7 @@ func (b *Batch) projectedPositionValue(ast asset.Asset) float64 {
 func (b *Batch) projectedCash() float64 {
 	cash := b.portfolio.Cash()
 
-	for _, order := range b.Orders {
+	for _, order := range b.unexecutedOrders() {
 		price := b.priceOf(order.Asset)
 
 		var dollarAmount float64

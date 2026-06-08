@@ -455,6 +455,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 				if err := child.account.ExecuteBatch(stepCtx, childBatch); err != nil {
 					return nil, fmt.Errorf("engine: child %q execute batch on %v: %w", childName, fireTime, err)
 				}
+
+				if err := e.reconcileBatch(stepCtx, child.strategy, child.account, childBatch); err != nil {
+					return nil, fmt.Errorf("engine: child %q reconcile batch on %v: %w", childName, fireTime, err)
+				}
 			}
 
 			e.currentTime = date
@@ -489,6 +493,10 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 				if err := acct.ExecuteBatch(stepCtx, batch); err != nil {
 					return nil, fmt.Errorf("engine: execute batch on %v: %w", fireTime, err)
+				}
+
+				if err := e.reconcileBatch(stepCtx, e.strategy, acct, batch); err != nil {
+					return nil, fmt.Errorf("engine: reconcile batch on %v: %w", fireTime, err)
 				}
 			}
 

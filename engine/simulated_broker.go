@@ -17,6 +17,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -113,6 +114,18 @@ func (b *SimulatedBroker) Fills() <-chan broker.Fill {
 	return b.fills
 }
 
+// failOrder resolves an order as failed: it emits a fill carrying the reason
+// (Qty 0, no price) on the fills channel so the account records the failure
+// and the originating strategy can react to it, instead of the order silently
+// vanishing or the simulation aborting.
+func (b *SimulatedBroker) failOrder(order broker.Order, reason error) {
+	b.fills <- broker.Fill{
+		OrderID:  order.ID,
+		FilledAt: b.date,
+		Err:      reason,
+	}
+}
+
 func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error {
 	if order.GroupRole == broker.RoleStopLoss || order.GroupRole == broker.RoleTakeProfit {
 		b.pending[order.ID] = order
@@ -130,6 +143,20 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 
 	df, err := b.prices.Prices(ctx, order.Asset)
 	if err != nil {
+		// No price to fill against (e.g. an asset whose intraday data
+		// coverage starts after this date) is a recoverable, per-order
+		// failure: resolve the order as failed rather than aborting the
+		// whole simulation. Any other fetch error is genuine and fatal.
+		if errors.Is(err, ErrNoMinuteBar) {
+			zerolog.Ctx(ctx).Warn().
+				Err(err).
+				Str("asset", order.Asset.Ticker).
+				Msg("order failed: no price available to fill")
+			b.failOrder(order, fmt.Errorf("no price available to fill %s: %w", order.Asset.Ticker, err))
+
+			return nil
+		}
+
 		return fmt.Errorf("simulated broker: fetching price for %s: %w", order.Asset.Ticker, err)
 	}
 
@@ -139,7 +166,8 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 		zerolog.Ctx(ctx).Warn().
 			Err(baseErr).
 			Str("asset", order.Asset.Ticker).
-			Msg("order skipped: fill model error")
+			Msg("order failed: fill model error")
+		b.failOrder(order, fmt.Errorf("fill model error for %s: %w", order.Asset.Ticker, baseErr))
 
 		return nil
 	}
@@ -151,6 +179,8 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 	}
 
 	if qty == 0 {
+		b.failOrder(order, fmt.Errorf("order amount for %s is too small to fill a whole share", order.Asset.Ticker))
+
 		return nil
 	}
 
@@ -199,6 +229,7 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 					Float64("equity", equity).
 					Float64("new_short_value", newShortValue).
 					Msg("order rejected: insufficient margin")
+				b.failOrder(order, fmt.Errorf("order rejected: insufficient margin for %s", order.Asset.Ticker))
 
 				return nil
 			}
@@ -226,6 +257,7 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 						Float64("post_gross", postGross).
 						Float64("max_leverage", b.maxLeverage).
 						Msg("order rejected: gross leverage cap")
+					b.failOrder(order, fmt.Errorf("order rejected: gross leverage cap for %s", order.Asset.Ticker))
 
 					return nil
 				}

@@ -341,6 +341,24 @@ func (s *MyStrategy) Compute(ctx context.Context, eng *engine.Engine, port portf
 
 Both paths accumulate orders in the same batch. After `Compute` returns, middleware processes the full batch before any order reaches the broker.
 
+## Order outcomes and reconciliation
+
+Every order in a batch resolves as either filled or failed. An order fails when it cannot be priced (for example an asset whose intraday history begins after the backtest date), when a risk or margin check rejects it, or -- for a limit order -- when its price is never touched. A failed order does not abort the run: it simply does not fill, and the rest of the batch proceeds.
+
+A strategy that wants to react to failures implements the optional `Reconcile` method. After the batch's orders resolve, the engine calls `Reconcile` with the same batch, now carrying each order's outcome. The strategy can inspect the outcomes and amend the batch -- for example, resubmit a failed order as a market order. Any orders it appends are executed, and `Reconcile` is called again with their outcomes; this repeats until a pass appends nothing and the batch settles.
+
+```go
+func (s *MyStrategy) Reconcile(ctx context.Context, eng *engine.Engine, port portfolio.Portfolio, batch *portfolio.Batch) error {
+    for _, outcome := range batch.FailedOrders() {
+        // Re-enter the same name at market once its limit order missed.
+        batch.Order(ctx, outcome.Order.Asset, portfolio.Buy, outcome.Order.Qty)
+    }
+    return nil
+}
+```
+
+`batch.Outcomes` holds every order's result; `batch.FailedOrders` returns just the ones that did not fill. Strategies that do not implement `Reconcile` see failed orders simply not fill.
+
 ## Reading portfolio state
 
 During computation the strategy can inspect the current portfolio:

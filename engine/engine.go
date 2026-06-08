@@ -17,6 +17,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"slices"
@@ -1061,6 +1062,13 @@ func (e *Engine) isIntradayFiring() bool {
 	return minutes > marketOpenMinutes && minutes < marketCloseMinutes
 }
 
+// ErrNoMinuteBar reports that no intra-day minute bar is available to fill an
+// order at the firing moment -- for example an asset whose intraday data
+// coverage begins after the backtest date. It is a recoverable, per-order
+// condition: the broker resolves the order as failed rather than aborting the
+// simulation, so callers must test for it with errors.Is.
+var ErrNoMinuteBar = errors.New("engine: no minute bar available for order fill")
+
 // nextMinuteBar returns the 1-minute bar that opens immediately after
 // e.currentTime. Used by Prices during intra-day firings so that order
 // fills land at the next-minute-bar's close (mirrors daily next-bar
@@ -1110,9 +1118,8 @@ func (e *Engine) nextMinuteBar(ctx context.Context, assets []asset.Asset) (*data
 		}
 	}
 
-	return nil, fmt.Errorf(
-		"engine: no minute bar available after %s for order fill",
-		e.currentTime.Format(time.RFC3339))
+	return nil, fmt.Errorf("%w: after %s",
+		ErrNoMinuteBar, e.currentTime.Format(time.RFC3339))
 }
 
 // markBarLookback bounds how far back markBar searches for each asset's most
@@ -1246,6 +1253,14 @@ func (e *Engine) prefetchBrokerPrices(ctx context.Context, orders []broker.Order
 
 	_, err := e.Prices(ctx, assets...)
 	if err != nil {
+		// This call only warms the price cache; per-order Submit resolves
+		// each order individually. When no order asset has a minute bar at
+		// the firing moment there is nothing to warm, and the missing-bar
+		// condition is handled per order (failed fill) rather than aborting.
+		if errors.Is(err, ErrNoMinuteBar) {
+			return nil
+		}
+
 		return fmt.Errorf("prefetch broker prices: %w", err)
 	}
 
