@@ -879,6 +879,35 @@ var _ = Describe("Batch", func() {
 			Expect(ordersForAsset(batch.Orders, aapl)).To(BeEmpty())
 		})
 
+		It("sizes successive new entries off the full portfolio value when assets are unpriced", func() {
+			// Reproduces issue #196: on an all-cash account during an intraday
+			// firing the to-be-bought assets are not yet held and absent from
+			// the price frame, so priceOf returns 0 for them. Each Allocate must
+			// still size against the full $100,000, so equal weights produce
+			// equal dollar allocations (matching RebalanceTo).
+			xom := asset.Asset{CompositeFigi: "XOM001", Ticker: "XOM"}
+			msft := asset.Asset{CompositeFigi: "MSFT001", Ticker: "MSFT"}
+			gld := asset.Asset{CompositeFigi: "GLD001", Ticker: "GLD"}
+
+			// No price frame: Prices() is nil, so every target is unpriced.
+			acct := portfolio.New(portfolio.WithCash(100_000, time.Time{}))
+			batch := portfolio.NewBatch(ts, acct)
+
+			Expect(batch.Allocate(context.Background(), aapl, 0.1575)).To(Succeed())
+			Expect(batch.Allocate(context.Background(), xom, 0.1575)).To(Succeed())
+			Expect(batch.Allocate(context.Background(), msft, 0.1575)).To(Succeed())
+			Expect(batch.Allocate(context.Background(), gld, 0.27)).To(Succeed())
+
+			Expect(batch.Orders).To(HaveLen(4))
+			Expect(batch.Orders[0].Amount).To(BeNumerically("~", 15_750.0, 1e-6))
+			Expect(batch.Orders[1].Amount).To(BeNumerically("~", 15_750.0, 1e-6))
+			Expect(batch.Orders[2].Amount).To(BeNumerically("~", 15_750.0, 1e-6))
+			Expect(batch.Orders[3].Amount).To(BeNumerically("~", 27_000.0, 1e-6))
+
+			// Projected value is conserved at the full account value throughout.
+			Expect(batch.ProjectedValue()).To(BeNumerically("~", 100_000.0, 1e-6))
+		})
+
 		It("rejects bracket and OCO modifiers", func() {
 			acct := buildPricedAccount(10_000, []asset.Asset{spy}, []float64{100})
 			batch := portfolio.NewBatch(ts, acct)
