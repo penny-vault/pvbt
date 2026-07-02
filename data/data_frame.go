@@ -1898,6 +1898,8 @@ func (df *DataFrame) Upsample(freq Frequency) *UpsampledDataFrame {
 
 func periodChanged(prev, curr time.Time, freq Frequency) bool {
 	switch freq {
+	case Daily:
+		return prev.Year() != curr.Year() || prev.YearDay() != curr.YearDay()
 	case Weekly:
 		_, pw := prev.ISOWeek()
 		_, cw := curr.ISOWeek()

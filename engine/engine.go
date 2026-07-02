@@ -356,7 +356,7 @@ func (e *Engine) Fetch(ctx context.Context, assets []asset.Asset, lookback portf
 	}
 
 	rangeStart := periodToTime(e.currentDate, lookback)
-	rangeEnd := e.currentDate
+	rangeEnd := e.capDailyRangeEnd(e.currentDate)
 
 	tickers := make([]string, len(assets))
 
@@ -413,6 +413,8 @@ func (e *Engine) FetchAt(ctx context.Context, assets []asset.Asset, timestamp ti
 	if e.cache == nil {
 		e.cache = newDataCache(e.cacheMaxBytes)
 	}
+
+	timestamp = e.capDailyRangeEnd(timestamp)
 
 	result, err := e.fetchRange(ctx, assets, metrics, timestamp, timestamp)
 	if err != nil {
@@ -1022,6 +1024,28 @@ func (e *Engine) Prices(ctx context.Context, assets ...asset.Asset) (*data.DataF
 		data.MetricClose, data.MetricHigh, data.MetricLow,
 		data.Volume, data.Dividend, data.SplitFactor,
 	})
+}
+
+// capDailyRangeEnd caps the end of a daily data request during an
+// intra-day firing. The engine's currentDate is the day's close boundary,
+// but mid-session that close has not printed yet; serving it to the
+// strategy would be lookahead bias. Requests for the firing day are
+// shifted to the previous day (marks and fills stay anchored to the
+// firing moment via the intraday paths). Outside intra-day firings the
+// timestamp is returned unchanged.
+func (e *Engine) capDailyRangeEnd(ts time.Time) time.Time {
+	if !e.isIntradayFiring() {
+		return ts
+	}
+
+	local := ts.In(nyc)
+	cur := e.currentDate.In(nyc)
+
+	if local.Year() == cur.Year() && local.YearDay() == cur.YearDay() {
+		return ts.AddDate(0, 0, -1)
+	}
+
+	return ts
 }
 
 // isIntradayFiring reports whether the engine is currently inside a

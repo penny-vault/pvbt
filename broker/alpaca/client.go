@@ -151,6 +151,33 @@ func (client *apiClient) getOrders(ctx context.Context) ([]orderResponse, error)
 	return result, nil
 }
 
+// getOrdersSince retrieves orders of every status submitted after the given
+// time. Used by the fill streamer to recover fills that completed while the
+// WebSocket was disconnected; closed orders must be included because a fully
+// filled order no longer appears in the open-order listing.
+func (client *apiClient) getOrdersSince(ctx context.Context, after time.Time) ([]orderResponse, error) {
+	var result []orderResponse
+
+	resp, err := client.resty.R().
+		SetContext(ctx).
+		SetQueryParams(map[string]string{
+			"status": "all",
+			"limit":  "500",
+			"after":  after.UTC().Format(time.RFC3339),
+		}).
+		SetResult(&result).
+		Get("/v2/orders")
+	if err != nil {
+		return nil, fmt.Errorf("get orders since %s: %w", after.Format(time.RFC3339), err)
+	}
+
+	if resp.IsError() {
+		return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
+	}
+
+	return result, nil
+}
+
 // getPositions retrieves all positions.
 func (client *apiClient) getPositions(ctx context.Context) ([]positionResponse, error) {
 	var result []positionResponse

@@ -48,6 +48,14 @@ func PairsResidual(ctx context.Context, assetUniverse universe.Universe, period 
 		return data.WithErr(fmt.Errorf("PairsResidual: reference fetch: %w", err))
 	}
 
+	// The primary and reference universes may have different histories;
+	// align both frames on their common timestamps so the regression pairs
+	// returns from the same bar.
+	primaryDF, refDF, err = alignFrames(primaryDF, refDF)
+	if err != nil {
+		return data.WithErr(fmt.Errorf("PairsResidual: %w", err))
+	}
+
 	numRows := primaryDF.Len()
 	if numRows < 3 {
 		return data.WithErr(fmt.Errorf("PairsResidual: need at least 3 data points, got %d", numRows))

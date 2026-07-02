@@ -15,8 +15,8 @@ import (
 
 const (
 	fillChannelSize   = 1024
-	apiBaseURLDefault = "https://api.tradestation.com/v3"
-	apiBaseURLSandbox = "https://sim-api.tradestation.com/v3"
+	apiBaseURLDefault = "https://api.tradestation.com"
+	apiBaseURLSandbox = "https://sim-api.tradestation.com"
 )
 
 // TradeStationBroker implements broker.Broker and broker.GroupSubmitter for the
@@ -194,7 +194,7 @@ func (tsBroker *TradeStationBroker) Submit(ctx context.Context, order broker.Ord
 
 		qty = math.Floor(order.Amount / price)
 		if qty == 0 {
-			return nil
+			return fmt.Errorf("tradestation: submit: dollar-amount order for %s results in zero shares at price %.4f", order.Asset.Ticker, price)
 		}
 	}
 

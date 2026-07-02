@@ -178,18 +178,27 @@ func (bs *bayesianStrategy) generateRandomBatch(count int) []RunConfig {
 func (bs *bayesianStrategy) generateGuidedSamples(scores []CombinationScore) ([]RunConfig, error) {
 	dims := len(bs.sweeps)
 
-	// Encode observed points into normalized [0,1] space.
-	xTrain := make([][]float64, len(scores))
-	yTrain := make([]float64, len(scores))
+	// Encode observed points into normalized [0,1] space. NaN scores (failed
+	// runs or undefined metrics) must be excluded or they poison the GP fit.
+	xTrain := make([][]float64, 0, len(scores))
+	yTrain := make([]float64, 0, len(scores))
 	bestScore := math.Inf(-1)
 
-	for ii, sc := range scores {
-		xTrain[ii] = bs.encode(sc)
-		yTrain[ii] = sc.Score
+	for _, sc := range scores {
+		if math.IsNaN(sc.Score) {
+			continue
+		}
+
+		xTrain = append(xTrain, bs.encode(sc))
+		yTrain = append(yTrain, sc.Score)
 
 		if sc.Score > bestScore {
 			bestScore = sc.Score
 		}
+	}
+
+	if len(xTrain) == 0 {
+		return nil, fmt.Errorf("bayesian guided samples: no valid (non-NaN) scores to fit GP")
 	}
 
 	// Fit GP surrogate model.

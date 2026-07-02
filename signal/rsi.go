@@ -29,16 +29,21 @@ import (
 const RSISignal data.Metric = "RSI"
 
 // RSI computes the Relative Strength Index for each asset in the universe
-// using Wilder's smoothing method. The period controls the lookback window;
-// rsiPeriod = period.N - 1 price changes are used. Returns a single-row
-// DataFrame with RSISignal metric.
+// using Wilder's smoothing method. The period controls the smoothing length:
+// the seed average covers the first period.N price changes and Wilder's
+// smoothing runs over the remaining fetched history. Extra warm-up bars are
+// fetched (over-fetching calendar days to cover weekends and holidays) so the
+// smoothing has data to run on. Returns a single-row DataFrame with RSISignal
+// metric.
 func RSI(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period, metrics ...data.Metric) *data.DataFrame {
 	metric := data.MetricClose
 	if len(metrics) > 0 {
 		metric = metrics[0]
 	}
 
-	df, err := assetUniverse.Window(ctx, period, metric)
+	// Fetch two extra periods (plus the +1 bar needed for the first change)
+	// of warm-up history so Wilder's smoothing converges past its SMA seed.
+	df, baseBars, err := extendedWindow(ctx, assetUniverse, period, 2*period.N+1, metric)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("RSI: %w", err))
 	}
@@ -47,7 +52,11 @@ func RSI(ctx context.Context, assetUniverse universe.Universe, period portfolio.
 		return data.WithErr(fmt.Errorf("RSI: need at least 3 data points, got %d", df.Len()))
 	}
 
-	rsiPeriod := df.Len() - 1
+	// Clamp the smoothing period when history is shorter than requested.
+	rsiPeriod := min(baseBars, df.Len()-1)
+	if rsiPeriod < 1 {
+		return data.WithErr(fmt.Errorf("RSI: period must cover at least 1 bar, got %d", rsiPeriod))
+	}
 
 	result := df.Diff().Apply(func(changes []float64) []float64 {
 		out := make([]float64, len(changes))
@@ -68,10 +77,6 @@ func RSI(ctx context.Context, assetUniverse universe.Universe, period portfolio.
 				gains = append(gains, 0)
 				losses = append(losses, -changes[ii])
 			}
-		}
-
-		if len(gains) < rsiPeriod {
-			return out
 		}
 
 		// Initial average gain/loss: SMA of first rsiPeriod values.

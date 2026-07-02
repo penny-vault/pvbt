@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/bytedance/sonic"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -13,19 +14,22 @@ import (
 )
 
 // apiClient is a resty-based HTTP client for the E*TRADE API. It signs every
-// request with OAuth 1.0a credentials via an OnBeforeRequest middleware.
+// request with OAuth 1.0a credentials via an OnBeforeRequest middleware. The
+// credentials are held in an atomic pointer because the background token
+// renewal goroutine swaps them while requests are being signed.
 type apiClient struct {
 	resty        *resty.Client
-	creds        *oauthCredentials
+	creds        atomic.Pointer[oauthCredentials]
 	accountIDKey string
 }
 
 // newAPIClient constructs an apiClient targeting baseURL with OAuth signing.
 func newAPIClient(baseURL string, creds *oauthCredentials, accountIDKey string) *apiClient {
 	cl := &apiClient{
-		creds:        creds,
 		accountIDKey: accountIDKey,
 	}
+
+	cl.creds.Store(creds)
 
 	httpClient := resty.New().
 		SetBaseURL(baseURL).
@@ -44,12 +48,17 @@ func newAPIClient(baseURL string, creds *oauthCredentials, accountIDKey string) 
 	httpClient.OnBeforeRequest(func(rc *resty.Client, req *resty.Request) error {
 		rawURL := rc.HostURL + req.URL
 
+		// Query parameters set via SetQueryParam are not yet part of req.URL
+		// at this point, so they are passed explicitly to be included in the
+		// OAuth signature base string.
+		signCreds := cl.creds.Load()
+
 		authHdr := buildAuthHeader(
 			req.Method, rawURL,
-			cl.creds.ConsumerKey, cl.creds.ConsumerSecret,
-			cl.creds.AccessToken, cl.creds.AccessSecret,
+			signCreds.ConsumerKey, signCreds.ConsumerSecret,
+			signCreds.AccessToken, signCreds.AccessSecret,
 			generateNonce(), generateTimestamp(),
-			nil,
+			req.QueryParam,
 		)
 
 		req.SetHeader("Authorization", authHdr)
@@ -64,7 +73,7 @@ func newAPIClient(baseURL string, creds *oauthCredentials, accountIDKey string) 
 
 // setCreds updates the stored credentials pointer used for OAuth signing.
 func (cl *apiClient) setCreds(creds *oauthCredentials) {
-	cl.creds = creds
+	cl.creds.Store(creds)
 }
 
 // getBalance fetches the account balance from E*TRADE.

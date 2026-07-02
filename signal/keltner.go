@@ -36,10 +36,12 @@ const (
 )
 
 // KeltnerChannels computes the Keltner Channels (upper, middle, lower) for
-// each asset in the universe over the given period. The center line is an EMA
-// of the price metric (defaults to Close). Bands are placed at +/- atrMultiplier
-// times the ATR. Returns a single-row DataFrame with KeltnerUpperSignal,
-// KeltnerMiddleSignal, KeltnerLowerSignal.
+// each asset in the universe over the given period. The center line is a
+// period.N-bar EMA of the price metric (defaults to Close). Bands are placed
+// at +/- atrMultiplier times the period.N-bar Wilder ATR. Extra warm-up bars
+// are fetched (over-fetching calendar days to cover weekends and holidays) so
+// the EMA and Wilder smoothing run past their SMA seeds. Returns a single-row
+// DataFrame with KeltnerUpperSignal, KeltnerMiddleSignal, KeltnerLowerSignal.
 func KeltnerChannels(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period, atrMultiplier float64, metrics ...data.Metric) *data.DataFrame {
 	metric := data.MetricClose
 	if len(metrics) > 0 {
@@ -52,7 +54,10 @@ func KeltnerChannels(ctx context.Context, assetUniverse universe.Universe, perio
 		fetchMetrics = append(fetchMetrics, metric)
 	}
 
-	df, err := assetUniverse.Window(ctx, period, fetchMetrics...)
+	// Fetch two extra periods (plus the +1 bar needed for the first true
+	// range) of warm-up history so the EMA and Wilder smoothing converge
+	// past their SMA seeds.
+	df, baseBars, err := extendedWindow(ctx, assetUniverse, period, 2*period.N+1, fetchMetrics...)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("KeltnerChannels: %w", err))
 	}
@@ -62,14 +67,20 @@ func KeltnerChannels(ctx context.Context, assetUniverse universe.Universe, perio
 		return data.WithErr(fmt.Errorf("KeltnerChannels: need at least 2 data points, got %d", numRows))
 	}
 
+	// Clamp the windows when history is shorter than requested.
+	emaWindow := min(baseBars, numRows)
+
+	atrPeriod := min(baseBars, numRows-1)
+	if atrPeriod < 1 {
+		return data.WithErr(fmt.Errorf("KeltnerChannels: period must cover at least 1 bar, got %d", atrPeriod))
+	}
+
 	// Compute EMA of the price metric for the center line.
 	// Filter to only the price metric before EMA to avoid extra High/Low columns.
-	windowSize := numRows
-	emaDF := df.Metrics(metric).Rolling(windowSize).EMA()
+	emaDF := df.Metrics(metric).Rolling(emaWindow).EMA()
 	centerLine := emaDF.Last().RenameMetric(metric, KeltnerMiddleSignal)
 
 	// Compute ATR inline (same logic as signal.ATR to avoid redundant data fetch).
-	atrPeriod := numRows - 1
 	assets := df.AssetList()
 	times := df.Times()
 	lastTime := []time.Time{times[len(times)-1]}
@@ -95,6 +106,11 @@ func KeltnerChannels(ctx context.Context, assetUniverse universe.Universe, perio
 		}
 
 		avgTR /= float64(atrPeriod)
+
+		// Apply Wilder's smoothing for additional rows.
+		for kk := atrPeriod; kk < len(trValues); kk++ {
+			avgTR = (avgTR*float64(atrPeriod-1) + trValues[kk]) / float64(atrPeriod)
+		}
 
 		atrCols[ii] = []float64{avgTR}
 	}

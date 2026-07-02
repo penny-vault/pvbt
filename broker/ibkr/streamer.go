@@ -54,6 +54,7 @@ type orderStreamer struct {
 	conn              *websocket.Conn
 	fills             chan<- broker.Fill
 	seenFills         map[string]time.Time
+	cumFilled         map[string]float64
 	heartbeatInterval time.Duration
 	tradesFn          func(ctx context.Context) ([]ibTradeEntry, error)
 	cancel            context.CancelFunc
@@ -67,6 +68,7 @@ func newOrderStreamer(fills chan broker.Fill, wsURL string, tradesFn func(ctx co
 		wsURL:             wsURL,
 		fills:             fills,
 		seenFills:         make(map[string]time.Time),
+		cumFilled:         make(map[string]float64),
 		heartbeatInterval: defaultHeartbeatInterval,
 		tradesFn:          tradesFn,
 	}
@@ -149,7 +151,7 @@ func (os *orderStreamer) readLoop(ctx context.Context) {
 			continue
 		}
 
-		os.deliverFill(ctx, args.OrderID, args.FilledQuantity, args.AvgPrice)
+		os.deliverCumulativeFill(ctx, args.OrderID, args.FilledQuantity, args.AvgPrice)
 	}
 }
 
@@ -233,6 +235,9 @@ func (os *orderStreamer) reconnect(ctx context.Context) error {
 }
 
 // pollMissedFills calls tradesFn (if set) and delivers any unseen fills.
+// Individual trades (executions) are deduplicated by execution ID and counted
+// toward the per-order cumulative total so subsequent WebSocket status
+// updates do not double-report them.
 func (os *orderStreamer) pollMissedFills(ctx context.Context) {
 	if os.tradesFn == nil {
 		return
@@ -245,26 +250,50 @@ func (os *orderStreamer) pollMissedFills(ctx context.Context) {
 	}
 
 	for _, trade := range trades {
-		os.deliverFill(ctx, trade.OrderID, trade.Quantity, trade.Price)
+		fillKey := trade.ExecID
+		if fillKey == "" {
+			fillKey = fmt.Sprintf("%s-%.4f-%.4f", trade.OrderID, trade.Quantity, trade.Price)
+		}
+
+		os.mu.Lock()
+
+		_, alreadySeen := os.seenFills[fillKey]
+		if !alreadySeen {
+			os.seenFills[fillKey] = time.Now()
+			os.cumFilled[trade.OrderID] += trade.Quantity
+		}
+
+		os.mu.Unlock()
+
+		if alreadySeen {
+			continue
+		}
+
+		os.sendFill(ctx, trade.OrderID, trade.Quantity, trade.Price)
 	}
 }
 
-// deliverFill deduplicates and sends a fill on the fills channel.
-func (os *orderStreamer) deliverFill(ctx context.Context, orderID string, qty float64, price float64) {
-	fillKey := fmt.Sprintf("%s-%.4f-%.4f", orderID, qty, price)
-
+// deliverCumulativeFill converts the cumulative filledQuantity reported by a
+// WebSocket "sor" update into an incremental fill and delivers the delta.
+func (os *orderStreamer) deliverCumulativeFill(ctx context.Context, orderID string, cumQty float64, price float64) {
 	os.mu.Lock()
 
-	_, alreadySeen := os.seenFills[fillKey]
-	if !alreadySeen {
-		os.seenFills[fillKey] = time.Now()
+	delta := cumQty - os.cumFilled[orderID]
+	if delta > 0 {
+		os.cumFilled[orderID] = cumQty
 	}
+
 	os.mu.Unlock()
 
-	if alreadySeen {
+	if delta <= 0 {
 		return
 	}
 
+	os.sendFill(ctx, orderID, delta, price)
+}
+
+// sendFill sends a fill on the fills channel unless the context is cancelled.
+func (os *orderStreamer) sendFill(ctx context.Context, orderID string, qty float64, price float64) {
 	fill := broker.Fill{
 		OrderID:  orderID,
 		Price:    price,

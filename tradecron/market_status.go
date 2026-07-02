@@ -83,6 +83,8 @@ func (ms *MarketStatus) EarlyClose(checkTime time.Time) int {
 
 	requireHolidays()
 
+	checkTime = checkTime.In(ms.tz)
+
 	d := time.Date(checkTime.Year(), checkTime.Month(), checkTime.Day(), 0, 0, 0, 0, ms.tz)
 	if marketClose, ok := holidays[d.Unix()]; ok {
 		return marketClose
@@ -98,6 +100,8 @@ func (ms *MarketStatus) IsMarketHoliday(checkTime time.Time) bool {
 
 	requireHolidays()
 
+	checkTime = checkTime.In(ms.tz)
+
 	d := time.Date(checkTime.Year(), checkTime.Month(), checkTime.Day(), 0, 0, 0, 0, ms.tz)
 
 	marketHoliday, isHoliday := holidays[d.Unix()]
@@ -110,8 +114,11 @@ func (ms *MarketStatus) IsMarketHoliday(checkTime time.Time) bool {
 }
 
 // IsMarketOpen returns true if the specified time is during market hours
-// (i.e. not a market holiday or weekend)
+// (i.e. not a market holiday or weekend). The time is evaluated in the
+// market's timezone regardless of the input's location.
 func (ms *MarketStatus) IsMarketOpen(checkTime time.Time) bool {
+	checkTime = checkTime.In(ms.tz)
+
 	if !ms.IsMarketDay(checkTime) {
 		return false
 	}
@@ -135,8 +142,11 @@ func (ms *MarketStatus) IsMarketOpen(checkTime time.Time) bool {
 }
 
 // IsMarketDay returns true if the specified date is a valid trading day
-// (i.e. not a market holiday or weekend)
+// (i.e. not a market holiday or weekend). The date is evaluated in the
+// market's timezone regardless of the input's location.
 func (ms *MarketStatus) IsMarketDay(checkTime time.Time) bool {
+	checkTime = checkTime.In(ms.tz)
+
 	if checkTime.Weekday() == time.Saturday || checkTime.Weekday() == time.Sunday {
 		return false
 	}

@@ -215,7 +215,11 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 			nextStrategy := e.schedule.Next(now)
 			nextDaily := dailySchedule.Next(now)
 
-			// Pick whichever fires sooner.
+			// Fire at whichever schedule comes sooner. An intraday strategy
+			// firing before the close runs at its scheduled time; the daily
+			// close firing still happens afterwards and records equity. When
+			// both schedules produce the same instant (e.g. a strategy
+			// scheduled at the close), a single firing serves both.
 			nextTime := nextDaily
 			isStrategy := false
 
@@ -224,15 +228,7 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 				isStrategy = true
 			}
 
-			// If both fall on the same calendar day, treat as a strategy day
-			// and use the later timestamp for equity recording.
-			if nextStrategy.Format("2006-01-02") == nextDaily.Format("2006-01-02") {
-				isStrategy = true
-
-				if nextDaily.After(nextStrategy) {
-					nextTime = nextDaily
-				}
-			}
+			isDaily := !nextDaily.After(nextTime)
 
 			wait := time.Until(nextTime)
 
@@ -328,66 +324,74 @@ func (e *Engine) RunLive(ctx context.Context) (<-chan portfolio.PortfolioManager
 				priceAssets = append(priceAssets, e.benchmark)
 			}
 
-			// Convert DGS3MO yield to cumulative risk-free value.
-			if e.riskFreeResolved {
-				rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, e.currentDate, []data.Metric{data.MetricClose})
-				if rfFetchErr == nil {
-					yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
-					if !math.IsNaN(yield) && yield > 0 {
-						e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
-					} else if e.riskFreeCumulative == 0 {
-						e.riskFreeCumulative = 100.0
-					}
+			// Daily-close work: the risk-free series and equity marks are
+			// daily series keyed by date, so only the @close firing appends
+			// to them. Intraday strategy firings skip this section.
+			if isDaily {
+				// Convert DGS3MO yield to cumulative risk-free value.
+				if e.riskFreeResolved {
+					rfDF, rfFetchErr := e.FetchAt(stepCtx, []asset.Asset{e.riskFreeAssetDGS}, e.currentDate, []data.Metric{data.MetricClose})
+					if rfFetchErr == nil {
+						yield := rfDF.Value(e.riskFreeAssetDGS, data.MetricClose)
+						if !math.IsNaN(yield) && yield > 0 {
+							e.riskFreeCumulative = portfolio.YieldToCumulative(yield, e.riskFreeCumulative)
+						} else if e.riskFreeCumulative == 0 {
+							e.riskFreeCumulative = 100.0
+						}
 
-					// Append the raw yield for RiskAdjustedPct.
-					e.riskFreeTimes = append(e.riskFreeTimes, e.currentDate)
-					e.riskFreeValues = append(e.riskFreeValues, yield)
+						// Append the raw yield for RiskAdjustedPct. A NaN
+						// yield (data gap) must not enter the series.
+						if !math.IsNaN(yield) {
+							e.riskFreeTimes = append(e.riskFreeTimes, e.currentDate)
+							e.riskFreeValues = append(e.riskFreeValues, yield)
 
-					rfKey := time.Date(e.currentDate.Year(), e.currentDate.Month(), e.currentDate.Day(), 0, 0, 0, 0, time.UTC)
-					if e.riskFreeIndex == nil {
-						e.riskFreeIndex = make(map[time.Time]int)
-					}
+							rfKey := time.Date(e.currentDate.Year(), e.currentDate.Month(), e.currentDate.Day(), 0, 0, 0, 0, time.UTC)
+							if e.riskFreeIndex == nil {
+								e.riskFreeIndex = make(map[time.Time]int)
+							}
 
-					e.riskFreeIndex[rfKey] = len(e.riskFreeValues) - 1
-				}
-			}
-
-			acct.SetRiskFreeValue(e.riskFreeCumulative)
-
-			if len(priceAssets) > 0 {
-				var (
-					priceDF  *data.DataFrame
-					fetchErr error
-				)
-
-				for attempt := range 18 {
-					priceDF, fetchErr = e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
-					if fetchErr == nil {
-						break
-					}
-
-					zerolog.Ctx(stepCtx).Warn().
-						Err(fetchErr).
-						Int("attempt", attempt+1).
-						Msg("price fetch failed, retrying in 1 hour")
-
-					select {
-					case <-time.After(time.Hour):
-					case <-ctx.Done():
-						return
+							e.riskFreeIndex[rfKey] = len(e.riskFreeValues) - 1
+						}
 					}
 				}
 
-				if fetchErr != nil {
-					zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("price fetch failed after retries")
+				acct.SetRiskFreeValue(e.riskFreeCumulative)
+
+				if len(priceAssets) > 0 {
+					var (
+						priceDF  *data.DataFrame
+						fetchErr error
+					)
+
+					for attempt := range 18 {
+						priceDF, fetchErr = e.FetchAt(stepCtx, priceAssets, e.currentDate, priceMetrics)
+						if fetchErr == nil {
+							break
+						}
+
+						zerolog.Ctx(stepCtx).Warn().
+							Err(fetchErr).
+							Int("attempt", attempt+1).
+							Msg("price fetch failed, retrying in 1 hour")
+
+						select {
+						case <-time.After(time.Hour):
+						case <-ctx.Done():
+							return
+						}
+					}
+
+					if fetchErr != nil {
+						zerolog.Ctx(stepCtx).Error().Err(fetchErr).Msg("price fetch failed after retries")
+					} else {
+						acct.UpdatePrices(priceDF)
+					}
 				} else {
-					acct.UpdatePrices(priceDF)
-				}
-			} else {
-				// No assets to price -- record cash-only portfolio value.
-				cashDF, cashErr := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
-				if cashErr == nil {
-					acct.UpdatePrices(cashDF)
+					// No assets to price -- record cash-only portfolio value.
+					cashDF, cashErr := data.NewDataFrame([]time.Time{e.currentDate}, nil, nil, data.Daily, nil)
+					if cashErr == nil {
+						acct.UpdatePrices(cashDF)
+					}
 				}
 			}
 

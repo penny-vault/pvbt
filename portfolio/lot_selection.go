@@ -45,3 +45,25 @@ func sortLotsByPriceDesc(lots []TaxLot) {
 		return lots[i].Price > lots[j].Price
 	})
 }
+
+// lotsInConsumptionOrder returns a copy of lots ordered the way the given
+// lot-selection method consumes them: FIFO front-first, LIFO back-first,
+// HighestCost by descending price. Callers use it to attribute per-lot
+// details (entry price/date, PnL, holding period) to the same lots that
+// consumeLots/consumeShortLots actually remove.
+func lotsInConsumptionOrder(lots []TaxLot, method LotSelection) []TaxLot {
+	ordered := make([]TaxLot, len(lots))
+	copy(ordered, lots)
+
+	switch method {
+	case LotLIFO:
+		for ii, jj := 0, len(ordered)-1; ii < jj; ii, jj = ii+1, jj-1 {
+			ordered[ii], ordered[jj] = ordered[jj], ordered[ii]
+		}
+	case LotHighestCost:
+		sortLotsByPriceDesc(ordered)
+	default: // LotFIFO: already in date-ascending order.
+	}
+
+	return ordered
+}

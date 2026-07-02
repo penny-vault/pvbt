@@ -157,8 +157,11 @@ func (client *apiClient) getOrders(ctx context.Context) ([]schwabOrderResponse, 
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
 		SetQueryParams(map[string]string{
-			"fromEnteredTime": startOfDay.Format(time.RFC3339),
-			"toEnteredTime":   now.Format(time.RFC3339),
+			// Schwab requires ISO-8601 with milliseconds and a Z suffix
+			// (yyyy-MM-dd'T'HH:mm:ss.SSSZ); RFC3339 with a local offset
+			// is rejected with a 400.
+			"fromEnteredTime": startOfDay.UTC().Format("2006-01-02T15:04:05.000Z"),
+			"toEnteredTime":   now.UTC().Format("2006-01-02T15:04:05.000Z"),
 		}).
 		SetResult(&orders).
 		Get(endpoint)

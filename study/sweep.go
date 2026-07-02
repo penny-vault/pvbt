@@ -55,9 +55,24 @@ func (ps ParamSweep) Max() string { return ps.max }
 func SweepRange[T Numeric](field string, min, max, step T) ParamSweep {
 	var values []string
 
+	if step <= 0 {
+		// A non-positive step would loop forever; degrade to the single min value.
+		if min <= max {
+			values = append(values, fmt.Sprintf("%v", min))
+		}
+
+		return ParamSweep{field: field, values: values, min: fmt.Sprintf("%v", min), max: fmt.Sprintf("%v", max)}
+	}
+
 	for ii := 0; ; ii++ {
 		val := min + T(ii)*step
 		if val > max {
+			// Include max when floating-point rounding pushes the final grid
+			// point slightly past it (e.g. 3*0.1 > 0.3).
+			if float64(val)-float64(max) < float64(step)*1e-9 {
+				values = append(values, fmt.Sprintf("%v", max))
+			}
+
 			break
 		}
 
@@ -70,6 +85,16 @@ func SweepRange[T Numeric](field string, min, max, step T) ParamSweep {
 // SweepDuration generates duration values from min to max with the given step.
 func SweepDuration(field string, min, max, step time.Duration) ParamSweep {
 	var values []string
+
+	if step <= 0 {
+		// A non-positive step would loop forever; degrade to the single min value.
+		if min <= max {
+			values = append(values, min.String())
+		}
+
+		return ParamSweep{field: field, values: values, min: min.String(), max: max.String()}
+	}
+
 	for val := min; val <= max; val += step {
 		values = append(values, val.String())
 	}

@@ -165,6 +165,24 @@ var _ = Describe("IndexState", func() {
 		Expect(assets).To(ConsistOf(aapl))
 	})
 
+	It("rewinds and replays when Advance receives an earlier date", func() {
+		state := data.NewIndexState(
+			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{aaplIC}}},
+			[]data.IndexChangeEntry{
+				{Date: day2, Asset: goog, Action: "add", Weight: 0.3},
+				{Date: day3, Asset: msft, Action: "add", Weight: 0.2},
+			},
+		)
+		state.Advance(day3)
+
+		assets, constituents := state.Advance(day2)
+		Expect(assets).To(ConsistOf(aapl, goog))
+		Expect(constituents).To(HaveLen(2))
+
+		assets, _ = state.Advance(day3)
+		Expect(assets).To(ConsistOf(aapl, goog, msft))
+	})
+
 	It("preserves weight data through snapshots", func() {
 		state := data.NewIndexState(
 			[]data.IndexSnapshotEntry{{Date: day1, Members: []data.IndexConstituent{

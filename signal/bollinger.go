@@ -55,7 +55,10 @@ func BollingerBands(ctx context.Context, assetUniverse universe.Universe, period
 	windowSize := df.Len()
 
 	middle := df.Rolling(windowSize).Mean().Last().RenameMetric(metric, BollingerMiddleSignal)
-	stdDev := df.Rolling(windowSize).Std().Last().RenameMetric(metric, BollingerMiddleSignal)
+
+	// Bollinger Bands use the population (N denominator) standard deviation,
+	// not the sample (N-1) standard deviation.
+	stdDev := df.Reduce(populationStd).RenameMetric(metric, BollingerMiddleSignal)
 
 	upper := middle.Add(stdDev.MulScalar(numStdDev)).RenameMetric(BollingerMiddleSignal, BollingerUpperSignal)
 	lower := middle.Sub(stdDev.MulScalar(numStdDev)).RenameMetric(BollingerMiddleSignal, BollingerLowerSignal)

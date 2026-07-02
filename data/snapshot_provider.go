@@ -29,7 +29,8 @@ var (
 
 // SnapshotProvider replays data from a snapshot SQLite database.
 type SnapshotProvider struct {
-	db *sql.DB
+	db        *sql.DB
+	dimension string
 }
 
 // scanAssetRow scans 11 asset columns from any row/queryrow scanner.
@@ -98,12 +99,24 @@ func NewSnapshotProvider(path string) (*SnapshotProvider, error) {
 		return nil, fmt.Errorf("snapshot provider: set read-only: %w", err)
 	}
 
-	return &SnapshotProvider{db: db}, nil
+	return &SnapshotProvider{db: db, dimension: "ARQ"}, nil
 }
 
 // Close closes the database connection.
 func (p *SnapshotProvider) Close() error {
 	return p.db.Close()
+}
+
+// SetDimension updates the fundamental dimension filter used when replaying
+// fundamentals. The engine forwards the strategy's configured dimension here,
+// mirroring PVDataProvider.SetDimension.
+func (p *SnapshotProvider) SetDimension(dim string) {
+	p.dimension = dim
+}
+
+// Dimension returns the current fundamental dimension filter.
+func (p *SnapshotProvider) Dimension() string {
+	return p.dimension
 }
 
 // snapshotDateFormat is the canonical format for dates in snapshot databases.
@@ -553,12 +566,27 @@ func (p *SnapshotProvider) fetchFundamentals(
 	ensureCol func(string, Metric) map[int64]float64,
 	timeSet map[int64]time.Time,
 ) error {
+	// Build the list of SQL columns we need, skipping metadata metrics
+	// (date_key, report_period) which are always fetched by the fixed
+	// SELECT prefix. This mirrors PVDataProvider.fetchFundamentals.
 	var (
 		sqlCols     []string
 		metricOrder []Metric
 	)
 
+	wantDateKey := false
+	wantReportPeriod := false
+
 	for _, metric := range metrics {
+		switch metric {
+		case FundamentalsDateKey:
+			wantDateKey = true
+			continue
+		case FundamentalsReportPeriod:
+			wantReportPeriod = true
+			continue
+		}
+
 		col, ok := metricColumn[metric]
 		if !ok {
 			continue
@@ -568,13 +596,16 @@ func (p *SnapshotProvider) fetchFundamentals(
 		metricOrder = append(metricOrder, metric)
 	}
 
-	if len(sqlCols) == 0 {
+	if len(sqlCols) == 0 && !wantDateKey && !wantReportPeriod {
 		return nil
 	}
 
+	cols := []string{"composite_figi", "event_date", "date_key", "report_period"}
+	cols = append(cols, sqlCols...)
+
 	placeholders := make([]string, len(figis))
 
-	args := make([]any, len(figis)+2)
+	args := make([]any, len(figis)+3)
 	for idx, figi := range figis {
 		placeholders[idx] = "?"
 		args[idx] = figi
@@ -582,16 +613,14 @@ func (p *SnapshotProvider) fetchFundamentals(
 
 	args[len(figis)] = startStr
 	args[len(figis)+1] = endStr
-
-	// Add dimension filter -- the recorder stores "ARQ" as the default.
-	args = append(args, "ARQ")
+	args[len(figis)+2] = p.dimension
 
 	query := fmt.Sprintf(
-		`SELECT composite_figi, event_date, %s
+		`SELECT %s
 		 FROM fundamentals
 		 WHERE composite_figi IN (%s) AND substr(event_date, 1, 10) BETWEEN ? AND ? AND dimension = ?
 		 ORDER BY event_date`,
-		strings.Join(sqlCols, ", "),
+		strings.Join(cols, ", "),
 		strings.Join(placeholders, ","),
 	)
 
@@ -603,17 +632,21 @@ func (p *SnapshotProvider) fetchFundamentals(
 
 	for rows.Next() {
 		var (
-			figi    string
-			dateStr string
+			figi            string
+			dateStr         string
+			dateKeyStr      sql.NullString
+			reportPeriodStr sql.NullString
 		)
 
-		vals := make([]any, len(sqlCols)+2)
+		vals := make([]any, len(sqlCols)+4)
 		vals[0] = &figi
 		vals[1] = &dateStr
+		vals[2] = &dateKeyStr
+		vals[3] = &reportPeriodStr
 
 		floatVals := make([]sql.NullFloat64, len(sqlCols))
 		for idx := range sqlCols {
-			vals[idx+2] = &floatVals[idx]
+			vals[idx+4] = &floatVals[idx]
 		}
 
 		if err := rows.Scan(vals...); err != nil {
@@ -632,6 +665,24 @@ func (p *SnapshotProvider) fetchFundamentals(
 			if floatVals[idx].Valid {
 				ensureCol(figi, metric)[sec] = floatVals[idx].Float64
 			}
+		}
+
+		if wantDateKey && dateKeyStr.Valid {
+			parsed, parseErr := parseSnapshotDate(dateKeyStr.String)
+			if parseErr != nil {
+				return fmt.Errorf("snapshot provider: parse date_key %q: %w", dateKeyStr.String, parseErr)
+			}
+
+			ensureCol(figi, FundamentalsDateKey)[sec] = float64(parsed.Unix())
+		}
+
+		if wantReportPeriod && reportPeriodStr.Valid {
+			parsed, parseErr := parseSnapshotDate(reportPeriodStr.String)
+			if parseErr != nil {
+				return fmt.Errorf("snapshot provider: parse report_period %q: %w", reportPeriodStr.String, parseErr)
+			}
+
+			ensureCol(figi, FundamentalsReportPeriod)[sec] = float64(parsed.Unix())
 		}
 	}
 

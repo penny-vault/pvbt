@@ -161,6 +161,13 @@ func KFold(start, end time.Time, folds int) ([]Split, error) {
 // step and expands the training window accordingly. It returns an error if
 // minTrain+testLen exceeds end-start.
 func WalkForward(start, end time.Time, minTrain, testLen, step time.Duration) ([]Split, error) {
+	if minTrain <= 0 || testLen <= 0 || step <= 0 {
+		return nil, fmt.Errorf(
+			"walk-forward: minTrain (%v), testLen (%v), and step (%v) must all be positive",
+			minTrain, testLen, step,
+		)
+	}
+
 	totalDur := end.Sub(start)
 	if minTrain+testLen > totalDur {
 		return nil, fmt.Errorf(

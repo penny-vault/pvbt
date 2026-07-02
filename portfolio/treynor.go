@@ -63,8 +63,15 @@ func (treynor) Compute(ctx context.Context, stats PortfolioStats, window *Period
 
 	years := calendarDays / 365.25
 
-	// Annualize returns using CAGR.
-	cagrPortfolio := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1/years) - 1
+	// Annualize returns using CAGR. The portfolio return is flow-adjusted
+	// so external deposits and withdrawals are not counted as return; the
+	// risk-free curve has no external flows.
+	growth := flowAdjustedGrowth(ctx, stats, eqCol, times)
+	if growth <= 0 {
+		return 0, nil
+	}
+
+	cagrPortfolio := math.Pow(growth, 1/years) - 1
 	cagrRiskFree := math.Pow(rfWinCol[len(rfWinCol)-1]/rfWinCol[0], 1/years) - 1
 
 	betaValue, err := Beta.Compute(ctx, stats, window)

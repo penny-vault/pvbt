@@ -41,7 +41,13 @@ func (tradeCaptureRatio) Compute(ctx context.Context, stats PortfolioStats, _ *P
 	var sumReturnPct, sumMFE float64
 
 	for _, trade := range trades {
+		// For shorts the trade profits when price falls, mirroring the
+		// direction-adjusted MFE recorded for short covers.
 		returnPct := (trade.ExitPrice - trade.EntryPrice) / trade.EntryPrice
+		if trade.Direction == TradeShort {
+			returnPct = (trade.EntryPrice - trade.ExitPrice) / trade.EntryPrice
+		}
+
 		sumReturnPct += returnPct
 		sumMFE += trade.MFE
 	}

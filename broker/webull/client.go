@@ -180,7 +180,7 @@ func (client *apiClient) submitOrder(ctx context.Context, accountID string, orde
 		SetContext(ctx).
 		SetBody(order).
 		SetResult(&result).
-		SetPathParam("account_id", accountID).
+		SetQueryParam("account_id", accountID).
 		Post("/api/trade/order/place")
 	if err != nil {
 		return "", fmt.Errorf("submit order: %w", err)
@@ -194,7 +194,7 @@ func (client *apiClient) submitOrder(ctx context.Context, accountID string, orde
 				SetContext(ctx).
 				SetBody(order).
 				SetResult(&result).
-				SetPathParam("account_id", accountID).
+				SetQueryParam("account_id", accountID).
 				Post("/api/trade/order/place")
 			if err != nil {
 				return "", fmt.Errorf("submit order: %w", err)

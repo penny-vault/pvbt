@@ -33,13 +33,13 @@ const MFISignal data.Metric = "MFI"
 // MFI computes the Money Flow Index for each asset in the universe over the
 // given period. It compares positive and negative money flow (typical price
 // times volume) to produce a momentum oscillator. One extra bar is fetched to
-// establish the initial typical price for comparison. Returns a single-row
-// DataFrame with [MFISignal].
+// establish the initial typical price for comparison; the period's unit is
+// preserved, so day-unit periods count trading bars and calendar-unit periods
+// (months, years) keep their span. Returns a single-row DataFrame with
+// [MFISignal].
 func MFI(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period) *data.DataFrame {
 	// Fetch one extra bar so bar 0 serves as the TP baseline for comparison.
-	adjustedPeriod := portfolio.Days(period.N + 1)
-
-	df, err := assetUniverse.Window(ctx, adjustedPeriod, data.MetricHigh, data.MetricLow, data.MetricClose, data.Volume)
+	df, _, err := extendedWindow(ctx, assetUniverse, period, 1, data.MetricHigh, data.MetricLow, data.MetricClose, data.Volume)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("MFI: %w", err))
 	}

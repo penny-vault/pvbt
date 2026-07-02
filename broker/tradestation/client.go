@@ -42,11 +42,13 @@ func (client *apiClient) setToken(token string) {
 }
 
 func (client *apiClient) resolveAccount(ctx context.Context, desiredAccountID string) (string, error) {
-	var accounts []tsAccountEntry
+	var result struct {
+		Accounts []tsAccountEntry `json:"Accounts"`
+	}
 
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
-		SetResult(&accounts).
+		SetResult(&result).
 		Get("/v3/brokerage/accounts")
 	if reqErr != nil {
 		return "", fmt.Errorf("resolve account: %w", reqErr)
@@ -55,6 +57,8 @@ func (client *apiClient) resolveAccount(ctx context.Context, desiredAccountID st
 	if resp.IsError() {
 		return "", broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
+
+	accounts := result.Accounts
 
 	if len(accounts) == 0 {
 		return "", ErrAccountNotFound
@@ -149,11 +153,13 @@ func (client *apiClient) getOrders(ctx context.Context) ([]tsOrderResponse, erro
 func (client *apiClient) getPositions(ctx context.Context) ([]tsPositionEntry, error) {
 	endpoint := fmt.Sprintf("/v3/brokerage/accounts/%s/positions", client.accountID)
 
-	var positions []tsPositionEntry
+	var result struct {
+		Positions []tsPositionEntry `json:"Positions"`
+	}
 
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
-		SetResult(&positions).
+		SetResult(&result).
 		Get(endpoint)
 	if reqErr != nil {
 		return nil, fmt.Errorf("get positions: %w", reqErr)
@@ -163,17 +169,19 @@ func (client *apiClient) getPositions(ctx context.Context) ([]tsPositionEntry, e
 		return nil, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
-	return positions, nil
+	return result.Positions, nil
 }
 
 func (client *apiClient) getBalance(ctx context.Context) (tsBalanceResponse, error) {
 	endpoint := fmt.Sprintf("/v3/brokerage/accounts/%s/balances", client.accountID)
 
-	var balances []tsBalanceResponse
+	var result struct {
+		Balances []tsBalanceResponse `json:"Balances"`
+	}
 
 	resp, reqErr := client.resty.R().
 		SetContext(ctx).
-		SetResult(&balances).
+		SetResult(&result).
 		Get(endpoint)
 	if reqErr != nil {
 		return tsBalanceResponse{}, fmt.Errorf("get balance: %w", reqErr)
@@ -183,11 +191,11 @@ func (client *apiClient) getBalance(ctx context.Context) (tsBalanceResponse, err
 		return tsBalanceResponse{}, broker.NewHTTPError(resp.StatusCode(), resp.String())
 	}
 
-	if len(balances) == 0 {
+	if len(result.Balances) == 0 {
 		return tsBalanceResponse{}, fmt.Errorf("get balance: no balance data returned")
 	}
 
-	return balances[0], nil
+	return result.Balances[0], nil
 }
 
 func (client *apiClient) getQuote(ctx context.Context, symbol string) (float64, error) {

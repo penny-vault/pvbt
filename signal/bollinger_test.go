@@ -33,8 +33,8 @@ var _ = Describe("BollingerBands", func() {
 
 	It("computes correct upper, middle, and lower bands", func() {
 		// AAPL prices: [10, 20, 30, 40, 50], mean=30
-		// sample std = sqrt(sum((x-30)^2)/4) = sqrt((400+100+0+100+400)/4) = sqrt(250) ~= 15.8114
-		// GOOG prices: [100, 200, 300, 400, 500], mean=300, std=sqrt(25000) ~= 158.114
+		// population std = sqrt(sum((x-30)^2)/5) = sqrt((400+100+0+100+400)/5) = sqrt(200) ~= 14.1421
+		// GOOG prices: [100, 200, 300, 400, 500], mean=300, std=sqrt(20000) ~= 141.421
 		times := make([]time.Time, 5)
 		for ii := range times {
 			times[ii] = now.AddDate(0, 0, ii-4)
@@ -58,12 +58,12 @@ var _ = Describe("BollingerBands", func() {
 			signal.BollingerLowerSignal,
 		))
 
-		aaplStd := math.Sqrt(250.0)
+		aaplStd := math.Sqrt(200.0)
 		Expect(result.Value(aapl, signal.BollingerMiddleSignal)).To(BeNumerically("~", 30.0, 1e-10))
 		Expect(result.Value(aapl, signal.BollingerUpperSignal)).To(BeNumerically("~", 30.0+2*aaplStd, 1e-10))
 		Expect(result.Value(aapl, signal.BollingerLowerSignal)).To(BeNumerically("~", 30.0-2*aaplStd, 1e-10))
 
-		googStd := math.Sqrt(25000.0)
+		googStd := math.Sqrt(20000.0)
 		Expect(result.Value(goog, signal.BollingerMiddleSignal)).To(BeNumerically("~", 300.0, 1e-10))
 		Expect(result.Value(goog, signal.BollingerUpperSignal)).To(BeNumerically("~", 300.0+2*googStd, 1e-10))
 		Expect(result.Value(goog, signal.BollingerLowerSignal)).To(BeNumerically("~", 300.0-2*googStd, 1e-10))

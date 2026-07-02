@@ -166,7 +166,7 @@ var _ = Describe("TradeStationBroker", func() {
 			Expect(submittedQty).To(Equal("50")) // floor(5000 / 100) = 50
 		})
 
-		It("returns nil without submitting when dollar amount yields zero shares", func() {
+		It("returns an error without submitting when dollar amount yields zero shares", func() {
 			var submitCalled atomic.Int32
 
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
@@ -194,7 +194,7 @@ var _ = Describe("TradeStationBroker", func() {
 				TimeInForce: broker.Day,
 			})
 
-			Expect(submitErr).ToNot(HaveOccurred())
+			Expect(submitErr).To(MatchError(ContainSubstring("zero shares")))
 			Expect(submitCalled.Load()).To(Equal(int32(0)))
 		})
 	})
@@ -284,14 +284,16 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/brokerage/accounts/ACCT-TEST/positions", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
-						{
-							"Symbol":           "NVDA",
-							"Quantity":         "200",
-							"AveragePrice":     "450.00",
-							"MarketValue":      "95000.00",
-							"TodaysProfitLoss": "1250.00",
-							"Last":             "475.00",
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+						"Positions": []map[string]any{
+							{
+								"Symbol":           "NVDA",
+								"Quantity":         "200",
+								"AveragePrice":     "450.00",
+								"MarketValue":      "95000.00",
+								"TodaysProfitLoss": "1250.00",
+								"Last":             "475.00",
+							},
 						},
 					})
 				})
@@ -311,12 +313,14 @@ var _ = Describe("TradeStationBroker", func() {
 			tsBroker := authenticatedBroker(func(mux *http.ServeMux) {
 				mux.HandleFunc("GET /v3/brokerage/accounts/ACCT-TEST/balances", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
-					sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
-						{
-							"CashBalance": "30000.00",
-							"Equity":      "75000.00",
-							"BuyingPower": "60000.00",
-							"MarketValue": "45000.00",
+					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+						"Balances": []map[string]any{
+							{
+								"CashBalance": "30000.00",
+								"Equity":      "75000.00",
+								"BuyingPower": "60000.00",
+								"MarketValue": "45000.00",
+							},
 						},
 					})
 				})

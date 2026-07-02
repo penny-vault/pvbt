@@ -46,6 +46,8 @@ type fillStreamer struct {
 	wsURL        string
 	wsConn       *websocket.Conn
 	seenFills    map[string]time.Time // execution_id -> seen time
+	cumFilled    map[string]float64   // order ID -> cumulative qty delivered
+	startedAt    time.Time
 	mu           sync.Mutex
 	done         chan struct{}
 	wg           sync.WaitGroup
@@ -58,6 +60,14 @@ type fillStreamer struct {
 // and starts the background read loop.
 func (streamer *fillStreamer) connect(ctx context.Context) error {
 	streamer.ctx = ctx
+
+	if streamer.cumFilled == nil {
+		streamer.cumFilled = make(map[string]float64)
+	}
+
+	if streamer.startedAt.IsZero() {
+		streamer.startedAt = time.Now()
+	}
 
 	conn, _, dialErr := websocket.DefaultDialer.DialContext(ctx, streamer.wsURL, nil)
 	if dialErr != nil {
@@ -254,17 +264,35 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 	}
 
 	executionID := tradeUpdate.ExecutionID
+	execQty := parseFloat(tradeUpdate.Qty)
+	cumQty := parseFloat(tradeUpdate.Order.FilledQty)
 
 	streamer.mu.Lock()
+
+	var delta float64
 
 	_, alreadySeen := streamer.seenFills[executionID]
 	if !alreadySeen {
 		streamer.seenFills[executionID] = time.Now()
+
+		// Reconcile against the cumulative total so quantities already
+		// delivered by pollMissedFills are not double-counted. Fall back
+		// to the execution quantity when the order snapshot is absent.
+		prev := streamer.cumFilled[tradeUpdate.Order.ID]
+
+		delta = execQty
+		if cumQty > 0 {
+			delta = cumQty - prev
+		}
+
+		if delta > 0 {
+			streamer.cumFilled[tradeUpdate.Order.ID] = prev + delta
+		}
 	}
 
 	streamer.mu.Unlock()
 
-	if alreadySeen {
+	if alreadySeen || delta <= 0 {
 		return
 	}
 
@@ -276,7 +304,7 @@ func (streamer *fillStreamer) handleMessage(data []byte) {
 	fill := broker.Fill{
 		OrderID:  tradeUpdate.Order.ID,
 		Price:    parseFloat(tradeUpdate.Price),
-		Qty:      parseFloat(tradeUpdate.Qty),
+		Qty:      delta,
 		FilledAt: filledAt,
 	}
 
@@ -404,37 +432,39 @@ func (streamer *fillStreamer) reconnect(ctx context.Context) error {
 	return broker.ErrStreamDisconnected
 }
 
-// pollMissedFills queries orders via REST and sends any fills not yet seen.
+// pollMissedFills queries all orders submitted since the streamer started
+// (closed orders included -- an order that fully filled while the WebSocket
+// was down no longer shows up as open) and delivers the portion of each
+// order's cumulative filled quantity that has not been delivered yet.
 func (streamer *fillStreamer) pollMissedFills(ctx context.Context) {
-	orders, fetchErr := streamer.client.getOrders(ctx)
+	orders, fetchErr := streamer.client.getOrdersSince(ctx, streamer.startedAt)
 	if fetchErr != nil {
 		return
 	}
 
 	for _, order := range orders {
-		if order.Status != "filled" && order.Status != "partially_filled" {
+		filledQty := parseFloat(order.FilledQty)
+		if filledQty <= 0 {
 			continue
 		}
 
-		dedupKey := "poll-" + order.ID
-
 		streamer.mu.Lock()
 
-		_, alreadySeen := streamer.seenFills[dedupKey]
-		if !alreadySeen {
-			streamer.seenFills[dedupKey] = time.Now()
+		delta := filledQty - streamer.cumFilled[order.ID]
+		if delta > 0 {
+			streamer.cumFilled[order.ID] = filledQty
 		}
 
 		streamer.mu.Unlock()
 
-		if alreadySeen {
+		if delta <= 0 {
 			continue
 		}
 
 		fill := broker.Fill{
 			OrderID:  order.ID,
 			Price:    parseFloat(order.FilledAvgPrice),
-			Qty:      parseFloat(order.FilledQty),
+			Qty:      delta,
 			FilledAt: time.Now(),
 		}
 

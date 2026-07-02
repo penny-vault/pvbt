@@ -250,7 +250,7 @@ var _ = Describe("AlpacaBroker", func() {
 			Expect(receivedBody["qty"]).To(BeNil())
 		})
 
-		It("returns nil without submitting when dollar amount yields zero shares", func() {
+		It("returns an error without submitting when dollar amount yields zero shares", func() {
 			var submitCalled atomic.Int32
 
 			alpacaBroker := authenticatedBroker(func(mux *http.ServeMux) {
@@ -278,7 +278,8 @@ var _ = Describe("AlpacaBroker", func() {
 				TimeInForce: broker.Day,
 			})
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("less than the share price"))
 			Expect(submitCalled.Load()).To(Equal(int32(0)))
 		})
 	})

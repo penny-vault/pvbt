@@ -127,8 +127,12 @@ type pvdataConfig struct {
 // 1-minute bars are read directly from the pv-data ClickHouse instance
 // when configured.
 type PVDataProvider struct {
-	pool      *pgxpool.Pool
-	ownsPool  bool
+	pool     *pgxpool.Pool
+	ownsPool bool
+
+	// mu guards dimension and indexes. One provider instance may be shared
+	// across concurrently running backtests (e.g. study workers).
+	mu        sync.RWMutex
 	dimension string
 	indexes   map[string]*indexState
 
@@ -166,11 +170,17 @@ func WithConfigFile(path string) PVDataOption {
 // SetDimension updates the fundamental dimension filter at runtime.
 // Valid values: "ARQ", "ARY", "ART", "MRQ", "MRY", "MRT".
 func (p *PVDataProvider) SetDimension(dim string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	p.dimension = dim
 }
 
 // Dimension returns the current fundamental dimension filter.
 func (p *PVDataProvider) Dimension() string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
 	return p.dimension
 }
 
@@ -903,7 +913,7 @@ func (p *PVDataProvider) fetchFundamentals(
 		strings.Join(cols, ", "),
 	)
 
-	rows, err := conn.Query(ctx, query, figis, start, end, p.dimension)
+	rows, err := conn.Query(ctx, query, figis, start, end, p.Dimension())
 	if err != nil {
 		return fmt.Errorf("pvdata: query fundamentals: %w", err)
 	}
@@ -968,12 +978,19 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 	}
 	defer conn.Release()
 
+	// Pick each asset's most-recent rating on or before asOfDate, then keep
+	// only the assets whose current rating matches the filter.
 	rows, err := conn.Query(ctx,
 		`SELECT a.composite_figi, a.ticker, a.name, a.asset_type, a.primary_exchange,
 		        a.sector, a.industry, a.sic_code, a.cik, a.listed, a.delisted
-		 FROM ratings r
+		 FROM (
+		     SELECT DISTINCT ON (composite_figi) composite_figi, rating
+		     FROM ratings
+		     WHERE analyst = $1 AND event_date <= $2
+		     ORDER BY composite_figi, event_date DESC
+		 ) r
 		 JOIN assets a ON a.composite_figi = r.composite_figi
-		 WHERE r.analyst = $1 AND r.event_date = $2 AND r.rating = ANY($3)`,
+		 WHERE r.rating = ANY($3)`,
 		analyst, asOfDate, filter.Values,
 	)
 	if err != nil {
@@ -996,13 +1013,17 @@ func (p *PVDataProvider) RatedAssets(ctx context.Context, analyst string, filter
 }
 
 // IndexMembers returns the constituents of the named index at forDate. The
-// returned slice is borrowed -- it is only valid for the current engine step.
-// Callers that need data across steps must copy.
+// returned slices are copies owned by the caller.
 //
-// Dates must be monotonically increasing across calls for a given index.
 // The provider loads all snapshot and changelog data on the first call and
-// advances an internal cursor as time progresses.
+// advances an internal cursor as time progresses. Calls with an earlier date
+// than the previous call rewind the cursor and replay from the beginning, so
+// any call order is correct; monotonically increasing dates are merely the
+// fastest access pattern.
 func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate time.Time) ([]asset.Asset, []IndexConstituent, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	if p.indexes == nil {
 		p.indexes = make(map[string]*indexState)
 	}
@@ -1021,7 +1042,15 @@ func (p *PVDataProvider) IndexMembers(ctx context.Context, index string, forDate
 
 	assets, constituents := state.Advance(forDate)
 
-	return assets, constituents, nil
+	// Copy before releasing the lock: the state mutates these slices in
+	// place on the next Advance, which may come from another goroutine.
+	assetsCopy := make([]asset.Asset, len(assets))
+	copy(assetsCopy, assets)
+
+	constituentsCopy := make([]IndexConstituent, len(constituents))
+	copy(constituentsCopy, constituents)
+
+	return assetsCopy, constituentsCopy, nil
 }
 
 func (p *PVDataProvider) loadIndexState(ctx context.Context, index string) (*indexState, error) {

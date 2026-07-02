@@ -86,14 +86,22 @@ func (m *mockBroker) Submit(_ context.Context, order broker.Order) error {
 	if m.submitFn != nil {
 		return m.submitFn(order)
 	}
+	// Real brokers echo the submitted order's ID on each fill; stamp it on
+	// configured fills that don't set one explicitly.
 	if fills, ok := m.fillsByAsset[order.Asset]; ok {
 		for _, fill := range fills {
+			if fill.OrderID == "" {
+				fill.OrderID = order.ID
+			}
 			m.fillCh <- fill
 		}
 		return nil
 	}
 	if m.callIdx < len(m.fills) {
 		for _, fill := range m.fills[m.callIdx] {
+			if fill.OrderID == "" {
+				fill.OrderID = order.ID
+			}
 			m.fillCh <- fill
 		}
 		m.callIdx++

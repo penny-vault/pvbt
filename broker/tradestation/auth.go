@@ -143,7 +143,13 @@ func (manager *tokenManager) refreshAccessToken() error {
 	}
 
 	manager.tokens.AccessToken = tokenResp.AccessToken
-	manager.tokens.RefreshToken = tokenResp.RefreshToken
+
+	// TradeStation does not rotate refresh tokens; refresh responses omit
+	// refresh_token, so only overwrite the stored value when one is returned.
+	if tokenResp.RefreshToken != "" {
+		manager.tokens.RefreshToken = tokenResp.RefreshToken
+	}
+
 	manager.tokens.AccessExpiresAt = time.Now().Add(time.Duration(tokenResp.ExpiresIn) * time.Second)
 
 	return saveTokens(manager.tokenFile, manager.tokens)
@@ -291,7 +297,7 @@ func (manager *tokenManager) startBackgroundRefresh() {
 				if manager.accessTokenExpired() && manager.tokens.RefreshToken != "" {
 					refreshErr := manager.refreshAccessToken()
 					if refreshErr == nil && manager.onRefresh != nil {
-						manager.onRefresh(manager.accessToken())
+						manager.onRefresh(manager.tokens.AccessToken)
 					}
 				}
 				manager.mu.Unlock()

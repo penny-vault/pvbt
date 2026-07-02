@@ -14,11 +14,13 @@ const defaultPollInterval = 2 * time.Second
 
 // orderPoller periodically polls the E*TRADE orders endpoint and emits fills
 // onto the fills channel when an order transitions to EXECUTED or
-// INDIVIDUAL_FILLS status. Duplicate fills are suppressed via seenFills.
+// INDIVIDUAL_FILLS status. E*TRADE reports the cumulative filled quantity per
+// order, so the poller tracks a running total per order and emits only the
+// delta on each change; this also suppresses duplicates across polls.
 type orderPoller struct {
 	client       *apiClient
 	fills        chan broker.Fill
-	seenFills    map[string]bool // key: "orderID-qty-price"
+	cumFilled    map[string]float64 // key: orderID, value: cumulative filled qty
 	mu           sync.Mutex
 	cancel       context.CancelFunc
 	pollInterval time.Duration
@@ -29,7 +31,7 @@ func newOrderPoller(client *apiClient, fills chan broker.Fill) *orderPoller {
 	return &orderPoller{
 		client:       client,
 		fills:        fills,
-		seenFills:    make(map[string]bool),
+		cumFilled:    make(map[string]float64),
 		pollInterval: defaultPollInterval,
 	}
 }
@@ -87,25 +89,25 @@ func (op *orderPoller) poll(ctx context.Context) error {
 		}
 
 		instr := leg.Instrument[0]
-		fillKey := fmt.Sprintf("%d-%.4f-%.4f", order.OrderID, instr.FilledQty, instr.AveragePrice)
+		orderID := fmt.Sprintf("%d", order.OrderID)
 
 		op.mu.Lock()
-		alreadySeen := op.seenFills[fillKey]
 
-		if !alreadySeen {
-			op.seenFills[fillKey] = true
+		delta := instr.FilledQty - op.cumFilled[orderID]
+		if delta > 0 {
+			op.cumFilled[orderID] = instr.FilledQty
 		}
 
 		op.mu.Unlock()
 
-		if alreadySeen {
+		if delta <= 0 {
 			continue
 		}
 
 		fill := broker.Fill{
-			OrderID:  fmt.Sprintf("%d", order.OrderID),
+			OrderID:  orderID,
 			Price:    instr.AveragePrice,
-			Qty:      instr.FilledQty,
+			Qty:      delta,
 			FilledAt: time.Now(),
 		}
 

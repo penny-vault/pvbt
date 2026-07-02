@@ -208,6 +208,13 @@ func buildRankings(analyses []runAnalysis) []scenarioRanking {
 
 	for _, analysis := range analyses {
 		for _, scenarioResult := range analysis.scenarios {
+			// Skip scenarios the equity curve doesn't cover: their zero-value
+			// metrics would masquerade as real flat results. Errored runs are
+			// kept so the failure stays visible in the rankings.
+			if !scenarioResult.hasData && analysis.errMsg == "" {
+				continue
+			}
+
 			rankings = append(rankings, scenarioRanking{
 				RunName:      analysis.runName,
 				ScenarioName: scenarioResult.scenarioName,

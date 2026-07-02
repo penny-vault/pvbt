@@ -173,7 +173,8 @@ func (alpacaBroker *AlpacaBroker) Submit(ctx context.Context, order broker.Order
 
 		computedQty := math.Floor(order.Amount / price)
 		if computedQty == 0 {
-			return nil
+			return fmt.Errorf("alpaca: order for %s: amount %.2f is less than the share price %.2f",
+				order.Asset.Ticker, order.Amount, price)
 		}
 
 		order.Qty = computedQty

@@ -150,12 +150,14 @@ type Portfolio interface {
 	GrossLeverage() float64
 
 	// MaxLeverage returns the configured gross-leverage cap. The default is
-	// 1.0 (cash account). See WithMaxLeverage.
+	// 2.0 (Reg T initial margin); use WithMaxLeverage(1.0) to model a cash
+	// account.
 	MaxLeverage() float64
 
 	// GrossMaintenanceLeverage returns the configured gross-leverage
-	// liquidation threshold, or 0 when none is set (in which case
-	// only short-side maintenance margin can force liquidation).
+	// liquidation threshold. The default is 4.0 (Reg T maintenance);
+	// pass math.Inf(1) to WithGrossMaintenanceLeverage so that only
+	// short-side maintenance margin can force liquidation.
 	GrossMaintenanceLeverage() float64
 
 	// LeverageHeadroom returns the additional notional (in dollars) that can

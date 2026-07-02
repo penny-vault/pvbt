@@ -78,11 +78,13 @@ func (probabilisticSharpe) Compute(ctx context.Context, stats PortfolioStats, wi
 	skew := (sum3 / numPeriods) / (stdDev * stdDev * stdDev)
 	kurt := (sum4/numPeriods)/(stdDev*stdDev*stdDev*stdDev) - 3
 
-	// Standard error of the Sharpe ratio (Lo, 2002 / Bailey & Lopez de Prado).
-	// se(SR) = sqrt((1 - skew*SR + (kurt/4)*SR^2) / (n - 1))
+	// Standard error of the Sharpe ratio (Bailey & Lopez de Prado, 2012):
+	// se(SR) = sqrt((1 - skew*SR + ((kurtosis-1)/4)*SR^2) / (n - 1))
+	// where kurtosis is the raw (non-excess) fourth moment ratio. kurt above
+	// holds EXCESS kurtosis, so kurtosis-1 = kurt+2.
 	sr2 := sharpeRatio * sharpeRatio
 
-	inner := (1 - skew*sharpeRatio + (kurt/4)*sr2) / (numPeriods - 1)
+	inner := (1 - skew*sharpeRatio + ((kurt+2)/4)*sr2) / (numPeriods - 1)
 	if inner <= 0 {
 		return 0, nil
 	}

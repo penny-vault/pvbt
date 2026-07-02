@@ -59,6 +59,20 @@ var _ = Describe("AbsoluteWindow", func() {
 			Expect(windowedCAGR).NotTo(BeNumerically("~", fullCAGR, 1e-9))
 		})
 
+		It("measures drawdowns from peaks inside the window only", func() {
+			// Full history: peak of 115 on 01-05 makes 108 on 01-08 a -6.09%
+			// drawdown. The window [01-08, 01-10] covers a strictly rising
+			// segment (108, 120, 125), so no drawdown occurs within it.
+			start := time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC)
+			end := time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC)
+
+			windowedDD, err := acct.PerformanceMetric(portfolio.MaxDrawdown).
+				AbsoluteWindow(start, end).
+				Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(windowedDD).To(BeNumerically("==", 0))
+		})
+
 		It("returns ErrInsufficientData when the window contains only one data point", func() {
 			// A single day produces one data point: insufficient for CAGR.
 			start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)

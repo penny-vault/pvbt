@@ -88,7 +88,9 @@ func (kRatio) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 		return 0, nil
 	}
 
-	return slope / stderr, nil
+	// 2003 Kestner revision: normalize the regression t-stat by the number
+	// of observations so the ratio is comparable across window lengths.
+	return slope / (stderr * numPeriods), nil
 }
 
 func (kRatio) ComputeSeries(_ context.Context, _ PortfolioStats, _ *Period) (*data.DataFrame, error) {

@@ -56,41 +56,33 @@ func (mwrr) Compute(ctx context.Context, stats PortfolioStats, window *Period) (
 		amount float64
 	}
 
-	var flows []cashFlow
-
 	startDate := times[0]
+	endDate := times[len(times)-1]
+
+	// The starting equity acts as the investor's initial investment: a
+	// synthetic outflow at the first observation. External flows dated at
+	// or before times[0] (including zero-date flows) are already reflected
+	// in equity[0], so only flows inside (times[0], times[len-1]] are
+	// added. This windows MWRR the same way buildFlowMap windows TWRR.
+	flows := []cashFlow{{date: startDate, amount: -equity[0]}}
 
 	for _, txn := range stats.TransactionsView(ctx) {
 		switch txn.Type {
-		case asset.DepositTransaction:
-			// From investor perspective, deposits are outflows (negative).
-			txnDate := txn.Date
-			if txnDate.IsZero() {
-				txnDate = startDate
+		case asset.DepositTransaction, asset.WithdrawalTransaction:
+			if !txn.Date.After(startDate) || txn.Date.After(endDate) {
+				continue
 			}
 
-			flows = append(flows, cashFlow{date: txnDate, amount: -txn.Amount})
-		case asset.WithdrawalTransaction:
-			// Withdrawals have negative Amount in the tx log; from investor
-			// perspective they are inflows (positive), so negate again.
-			txnDate := txn.Date
-			if txnDate.IsZero() {
-				txnDate = startDate
-			}
-
-			flows = append(flows, cashFlow{date: txnDate, amount: -txn.Amount})
+			// From the investor's perspective deposits are outflows
+			// (negative) and withdrawals are inflows (positive). Withdrawal
+			// amounts are already negative in the transaction log, so both
+			// cases negate Amount.
+			flows = append(flows, cashFlow{date: txn.Date, amount: -txn.Amount})
 		}
-	}
-
-	// If there are zero external flows, use a synthetic initial outflow
-	// equal to the first equity value.
-	if len(flows) == 0 {
-		flows = append(flows, cashFlow{date: startDate, amount: -equity[0]})
 	}
 
 	// Terminal cash flow: ending portfolio value (positive, investor could
 	// liquidate).
-	endDate := times[len(times)-1]
 	endValue := equity[len(equity)-1]
 	flows = append(flows, cashFlow{date: endDate, amount: endValue})
 

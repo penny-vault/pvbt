@@ -180,7 +180,8 @@ func (schwabBroker *SchwabBroker) Submit(ctx context.Context, order broker.Order
 
 		qty = math.Floor(order.Amount / price)
 		if qty == 0 {
-			return nil
+			return fmt.Errorf("schwab: order for %s: amount %.2f is less than the share price %.2f",
+				order.Asset.Ticker, order.Amount, price)
 		}
 	}
 

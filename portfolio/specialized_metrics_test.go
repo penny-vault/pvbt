@@ -2,50 +2,18 @@ package portfolio_test
 
 import (
 	"context"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/portfolio"
 )
 
 var _ = Describe("Specialized Metrics", func() {
-	spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
-
-	// buildAccountFromEquity creates an Account whose equity curve matches the
-	// given values exactly. Since we hold no securities, total value = cash,
-	// so we use deposit/withdrawal transactions to move cash to the desired
-	// level before each UpdatePrices call.
-	buildAccountFromEquity := func(equityValues []float64) *portfolio.Account {
-		a := portfolio.New(portfolio.WithCash(equityValues[0], time.Time{}))
-		start := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
-		dates := daySeq(start, len(equityValues))
-
-		for i, v := range equityValues {
-			if i > 0 {
-				diff := v - equityValues[i-1]
-				if diff > 0 {
-					a.Record(portfolio.Transaction{
-						Date:   dates[i],
-						Type:   asset.DepositTransaction,
-						Amount: diff,
-					})
-				} else if diff < 0 {
-					a.Record(portfolio.Transaction{
-						Date:   dates[i],
-						Type:   asset.WithdrawalTransaction,
-						Amount: diff,
-					})
-				}
-			}
-			df := buildDF(dates[i], []asset.Asset{spy}, []float64{450}, []float64{448})
-			a.UpdatePrices(df)
-		}
-
-		return a
-	}
+	// These specs use the shared buildAccountFromEquity from
+	// testutil_test.go, which shapes the equity curve via dividend/fee
+	// transactions. Deposits/withdrawals must not be used here: they are
+	// external cash flows and are excluded from flow-adjusted returns.
 
 	// -----------------------------------------------------------------------
 	// Shared equity curve: [100, 110, 105, 115, 108, 120, 125]
@@ -181,12 +149,12 @@ var _ = Describe("Specialized Metrics", func() {
 		It("computes correctly for the base curve", func() {
 			// logVAMI = ln(1000 * cumProd(1+r_i)) for i in [0..5]
 			// OLS regression of logVAMI on x=[0,1,2,3,4,5]
-			// slope = 0.027913, stderr = 0.010989
-			// KRatio = slope / stderr = 0.027913 / 0.010989 = 2.53999 (2003 Kestner revision)
+			// slope = 0.027913, stderr = 0.010989, n = 6
+			// KRatio = slope / (stderr * n) = 2.53999 / 6 = 0.42333 (2003 Kestner revision)
 			a := buildAccountFromEquity([]float64{100, 110, 105, 115, 108, 120, 125})
 			result, err := a.PerformanceMetric(portfolio.KRatio).Value()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(BeNumerically("~", 2.5399944051723757, 1e-9))
+			Expect(result).To(BeNumerically("~", 2.5399944051723757/6.0, 1e-9))
 		})
 
 		It("returns zero with fewer than 3 returns (3 equity points)", func() {
@@ -518,11 +486,11 @@ var _ = Describe("Specialized Metrics", func() {
 				// logVAMI oscillates heavily around the trend line, producing
 				// a large standard error that reduces the K-Ratio.
 				// OLS on logVAMI: slope=0.04918, stderr=0.08882
-				// KRatio = slope / stderr = 0.04918 / 0.08882 = 0.45738 (2003 Kestner revision)
+				// KRatio = slope / (stderr * n) = 0.45738 / 7 = 0.06534 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 130, 95, 140, 90, 145, 100, 150})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(BeNumerically("~", 0.45737915846086635, 1e-9))
+				Expect(result).To(BeNumerically("~", 0.45737915846086635/7.0, 1e-9))
 				// Positive but much smaller than the steady-growth case
 				Expect(result).To(BeNumerically(">", 0))
 				Expect(result).To(BeNumerically("<", 1.0))
@@ -533,11 +501,11 @@ var _ = Describe("Specialized Metrics", func() {
 				// 6 returns that decrease slightly (5/100, 5/105, 5/110, ...),
 				// producing near-linear logVAMI with tiny residuals.
 				// slope = 0.042684, stderr = 0.000666
-				// KRatio = 0.042684 / 0.000666 = 64.113 (2003 Kestner revision)
+				// KRatio = slope / (stderr * n) = 64.113 / 6 = 10.685 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 105, 110, 115, 120, 125, 130})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(BeNumerically("~", 64.11253704211674, 1e-6))
+				Expect(result).To(BeNumerically("~", 64.11253704211674/6.0, 1e-6))
 				// Orders of magnitude larger than the volatile case
 				Expect(result).To(BeNumerically(">", 10))
 			})
@@ -548,11 +516,11 @@ var _ = Describe("Specialized Metrics", func() {
 				//   r0=-0.20, r1=-0.3125, r2=-0.36364, r3=-0.42857, r4=-0.50
 				// logVAMI has a steep negative slope.
 				// slope = -0.14936, stderr = 0.01053
-				// KRatio = -0.14936 / 0.01053 = -14.176 (2003 Kestner revision)
+				// KRatio = slope / (stderr * n) = -14.176 / 5 = -2.835 (2003 Kestner revision)
 				a := buildAccountFromEquity([]float64{100, 80, 55, 35, 20, 10})
 				result, err := a.PerformanceMetric(portfolio.KRatio).Value()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(BeNumerically("~", -14.175542222575912, 1e-6))
+				Expect(result).To(BeNumerically("~", -14.175542222575912/5.0, 1e-6))
 				Expect(result).To(BeNumerically("<", -2))
 			})
 		})

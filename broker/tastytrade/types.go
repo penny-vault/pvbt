@@ -152,7 +152,7 @@ type quoteItem struct {
 
 // --- Translation functions ---
 
-func toTastytradeOrder(order broker.Order) orderRequest {
+func toTastytradeOrder(order broker.Order, action string) orderRequest {
 	return orderRequest{
 		TimeInForce:     mapTimeInForce(order.TimeInForce),
 		OrderType:       mapOrderType(order.OrderType),
@@ -164,7 +164,7 @@ func toTastytradeOrder(order broker.Order) orderRequest {
 			{
 				InstrumentType: "Equity",
 				Symbol:         order.Asset.Ticker,
-				Action:         mapSide(order.Side),
+				Action:         action,
 				Quantity:       order.Qty,
 			},
 		},
@@ -235,11 +235,32 @@ func mapPriceEffect(side broker.Side, orderType broker.OrderType) string {
 	}
 }
 
-func mapSide(side broker.Side) string {
+// detectAction returns the tastytrade order action for the requested side,
+// accounting for the current position: an existing short is covered with
+// "Buy to Close" and a new short is opened with "Sell to Open"; long
+// positions use "Buy to Open" and "Sell to Close".
+func detectAction(side broker.Side, ticker string, positions []positionResponse) string {
+	var currentQty float64
+
+	for _, pos := range positions {
+		if pos.Symbol == ticker {
+			currentQty = pos.Quantity
+			break
+		}
+	}
+
 	switch side {
 	case broker.Buy:
+		if currentQty < 0 {
+			return "Buy to Close"
+		}
+
 		return "Buy to Open"
 	case broker.Sell:
+		if currentQty <= 0 {
+			return "Sell to Open"
+		}
+
 		return "Sell to Close"
 	default:
 		return "Buy to Open"

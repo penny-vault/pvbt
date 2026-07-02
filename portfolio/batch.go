@@ -409,7 +409,9 @@ func (b *Batch) RebalanceTo(_ context.Context, allocs ...Allocation) error {
 
 		// Liquidate all positions not in the target allocation.
 		// Long positions are sold; short positions are covered (bought back).
-		for ast, qty := range b.portfolio.Holdings() {
+		// Projected holdings (not actual) so positions already sold by
+		// earlier orders in this batch are not sold a second time.
+		for ast, qty := range b.ProjectedHoldings() {
 			if _, ok := alloc.Members[ast]; !ok && qty != 0 {
 				if qty > 0 {
 					sells = append(sells, pendingOrder{asset: ast, side: Sell, qty: qty})

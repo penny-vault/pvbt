@@ -1,9 +1,12 @@
 package portfolio_test
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 )
@@ -50,6 +53,41 @@ var _ = Describe("Benchmark targeting", func() {
 
 			// Both should be equal because the portfolio IS the benchmark.
 			Expect(portfolioTWRR).To(BeNumerically("~", benchmarkTWRR, 1e-9))
+		})
+
+		It("ignores portfolio deposits when computing benchmark metrics", func() {
+			// The benchmark price curve has no external cash flows, so a
+			// deposit into the portfolio must not be subtracted from the
+			// benchmark's sub-period returns.
+			spy := asset.Asset{CompositeFigi: "SPY", Ticker: "SPY"}
+			dates := daySeq(time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC), 3)
+			prices := []float64{100, 110, 121}
+
+			acct := portfolio.New(
+				portfolio.WithCash(10_000, time.Time{}),
+				portfolio.WithBenchmark(spy),
+			)
+
+			for idx, dd := range dates {
+				if idx == 1 {
+					acct.Record(portfolio.Transaction{
+						Date:   dd,
+						Type:   asset.DepositTransaction,
+						Amount: 5_000,
+					})
+				}
+
+				acct.UpdatePrices(buildDF(dd,
+					[]asset.Asset{spy},
+					[]float64{prices[idx]},
+					[]float64{prices[idx]},
+				))
+			}
+
+			// Benchmark returns 10% then 10%: TWRR = 1.1*1.1 - 1 = 0.21.
+			benchmarkTWRR, err := acct.PerformanceMetric(portfolio.TWRR).Benchmark().Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(benchmarkTWRR).To(BeNumerically("~", 0.21, 1e-9))
 		})
 	})
 

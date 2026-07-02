@@ -36,7 +36,8 @@ type indexChange struct {
 }
 
 // indexState holds the stacks and current membership for one index.
-// Dates passed to advance must be monotonically increasing.
+// Dates passed to advance must be monotonically increasing; Advance handles
+// backward dates by rewinding and replaying from the beginning.
 type indexState struct {
 	snapshots    []indexSnapshot    // sorted by date, earliest first (index 0 = earliest)
 	changelog    []indexChange      // sorted by date, earliest first
@@ -44,6 +45,7 @@ type indexState struct {
 	logIdx       int                // next unprocessed changelog entry
 	constituents []IndexConstituent // current constituents; mutated in place
 	assets       []asset.Asset      // parallel view for asset-only access
+	lastDate     time.Time          // date of the most recent Advance call
 }
 
 // advance pops snapshots and changelog entries up through forDate,
@@ -134,9 +136,27 @@ func NewIndexState(snapshots []IndexSnapshotEntry, changelog []IndexChangeEntry)
 	return &indexState{snapshots: ss, changelog: cc}
 }
 
+// reset rewinds the cursors so advance replays from the beginning. Used when
+// Advance receives a date earlier than the previous call (e.g. a new backtest
+// run reusing a shared provider).
+func (st *indexState) reset() {
+	st.snapIdx = 0
+	st.logIdx = 0
+	st.constituents = st.constituents[:0]
+	st.assets = st.assets[:0]
+}
+
 // Advance is the exported wrapper for advance. It returns both the asset-only
-// slice and the full constituent slice with weights.
+// slice and the full constituent slice with weights. When forDate is earlier
+// than the previous call's date, the state rewinds and replays from the
+// beginning so results stay correct for any call order.
 func (st *indexState) Advance(forDate time.Time) ([]asset.Asset, []IndexConstituent) {
+	if forDate.Before(st.lastDate) {
+		st.reset()
+	}
+
+	st.lastDate = forDate
 	st.advance(forDate)
+
 	return st.assets, st.constituents
 }

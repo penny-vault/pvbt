@@ -30,10 +30,16 @@ import (
 const ATRSignal data.Metric = "ATR"
 
 // ATR computes the Average True Range for each asset in the universe using
-// Wilder's smoothing method. It always uses High, Low, and Close metrics.
-// Returns a single-row DataFrame with ATRSignal.
+// Wilder's smoothing method: the seed average covers the first period.N true
+// ranges and Wilder's smoothing runs over the remaining fetched history.
+// Extra warm-up bars are fetched (over-fetching calendar days to cover
+// weekends and holidays) so the smoothing has data to run on. It always uses
+// High, Low, and Close metrics. Returns a single-row DataFrame with ATRSignal.
 func ATR(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period) *data.DataFrame {
-	df, err := assetUniverse.Window(ctx, period, data.MetricHigh, data.MetricLow, data.MetricClose)
+	// Fetch two extra periods (plus the +1 bar needed for the first true
+	// range) of warm-up history so Wilder's smoothing converges past its
+	// SMA seed.
+	df, baseBars, err := extendedWindow(ctx, assetUniverse, period, 2*period.N+1, data.MetricHigh, data.MetricLow, data.MetricClose)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("ATR: %w", err))
 	}
@@ -43,7 +49,12 @@ func ATR(ctx context.Context, assetUniverse universe.Universe, period portfolio.
 		return data.WithErr(fmt.Errorf("ATR: need at least 2 data points, got %d", numRows))
 	}
 
-	atrPeriod := numRows - 1
+	// Clamp the smoothing period when history is shorter than requested.
+	atrPeriod := min(baseBars, numRows-1)
+	if atrPeriod < 1 {
+		return data.WithErr(fmt.Errorf("ATR: period must cover at least 1 bar, got %d", atrPeriod))
+	}
+
 	assets := df.AssetList()
 	times := df.Times()
 	lastTime := []time.Time{times[len(times)-1]}

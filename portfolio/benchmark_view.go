@@ -16,6 +16,7 @@
 package portfolio
 
 import (
+	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
 )
 
@@ -67,6 +68,22 @@ func (a *Account) benchmarkView() (*Account, error) {
 	view := *a
 	view.perfData = newPerfData
 	view.dfCache = nil
+
+	// The benchmark price curve has no external cash flows, so hide the
+	// portfolio's deposits and withdrawals from the view. Otherwise
+	// flow-adjusted metrics (TWRR, CAGR, MWRR, etc.) would subtract the
+	// portfolio's flows from the benchmark curve.
+	flowFree := make([]Transaction, 0, len(a.transactions))
+
+	for _, txn := range a.transactions {
+		if txn.Type == asset.DepositTransaction || txn.Type == asset.WithdrawalTransaction {
+			continue
+		}
+
+		flowFree = append(flowFree, txn)
+	}
+
+	view.transactions = flowFree
 
 	return &view, nil
 }

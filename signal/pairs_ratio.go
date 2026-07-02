@@ -48,6 +48,14 @@ func PairsRatio(ctx context.Context, assetUniverse universe.Universe, period por
 		return data.WithErr(fmt.Errorf("PairsRatio: reference fetch: %w", err))
 	}
 
+	// The primary and reference universes may have different histories;
+	// align both frames on their common timestamps so ratios compare prices
+	// from the same bar.
+	primaryDF, refDF, err = alignFrames(primaryDF, refDF)
+	if err != nil {
+		return data.WithErr(fmt.Errorf("PairsRatio: %w", err))
+	}
+
 	numRows := primaryDF.Len()
 	if numRows < 2 {
 		return data.WithErr(fmt.Errorf("PairsRatio: need at least 2 data points, got %d", numRows))

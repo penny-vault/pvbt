@@ -143,6 +143,118 @@ var _ = Describe("TaxMetrics", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(tm.STCG).To(Equal(-2_000.0))
 		})
+
+		It("attributes short-sale gains as STCG regardless of holding period", func() {
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+
+			// Short 100 shares at $100 (no long lots exist).
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.SellTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: 10_000.0,
+			})
+
+			// Cover at $80 more than a year later: gain = 100 * (100 - 80)
+			// = 2000, short-term per IRS short-sale rules.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  80.0,
+				Amount: -8_000.0,
+			})
+
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tm.STCG).To(Equal(2_000.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+
+		It("does not create phantom long lots from short covers", func() {
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+
+			// Short 100 @ $100, cover 100 @ $80: STCG = 2000.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.SellTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: 10_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  80.0,
+				Amount: -8_000.0,
+			})
+
+			// Separate long round trip: buy 100 @ $90, sell 100 @ $110.
+			// STCG = 100 * (110 - 90) = 2000. If the cover above had opened
+			// a phantom $80 long lot, this sell would incorrectly match it
+			// and report 3000.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  90.0,
+				Amount: -9_000.0,
+			})
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.SellTransaction,
+				Qty:    100,
+				Price:  110.0,
+				Amount: 11_000.0,
+			})
+
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tm.STCG).To(Equal(4_000.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
+
+		It("adjusts replayed tax lots for stock splits", func() {
+			a := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+
+			// Buy 100 shares at $100.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.BuyTransaction,
+				Qty:    100,
+				Price:  100.0,
+				Amount: -10_000.0,
+			})
+
+			// 2-for-1 split: 200 shares with a $50 basis.
+			Expect(a.ApplySplit(spy, time.Date(2023, 3, 1, 0, 0, 0, 0, time.UTC), 2.0)).To(Succeed())
+
+			// Sell 200 at $60: STCG = 200 * (60 - 50) = 2000. Without split
+			// handling the replay would match only 100 pre-split shares at a
+			// $100 basis and report a 4000 loss.
+			a.Record(portfolio.Transaction{
+				Date:   time.Date(2023, 6, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  spy,
+				Type:   asset.SellTransaction,
+				Qty:    200,
+				Price:  60.0,
+				Amount: 12_000.0,
+			})
+
+			tm, err := a.TaxMetrics()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(tm.STCG).To(Equal(2_000.0))
+			Expect(tm.LTCG).To(Equal(0.0))
+		})
 	})
 
 	Describe("dividends", func() {

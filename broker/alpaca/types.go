@@ -129,7 +129,8 @@ type wsTradeUpdate struct {
 }
 
 type wsOrderData struct {
-	ID string `json:"id"`
+	ID        string `json:"id"`
+	FilledQty string `json:"filled_qty"`
 }
 
 type wsAuthResponse struct {
@@ -176,9 +177,10 @@ func toAlpacaOrder(order broker.Order, fractional bool) orderRequest {
 		request.StopPrice = formatFloat(order.StopPrice)
 	}
 
-	// Set expire time for GTD orders.
+	// Set expire time for GTD orders. Convert to UTC first: formatting a
+	// local wall-clock time with a literal 'Z' would mislabel it as UTC.
 	if order.TimeInForce == broker.GTD {
-		request.ExpireTime = order.GTDDate.Format("2006-01-02T15:04:05Z")
+		request.ExpireTime = order.GTDDate.UTC().Format("2006-01-02T15:04:05Z")
 	}
 
 	// For fractional dollar-amount orders, use notional instead of qty.

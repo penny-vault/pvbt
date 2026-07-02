@@ -240,6 +240,8 @@ func New(cronSpec string, hours MarketHours) (*TradeCron, error) {
 // on a trading day according to the schedule. The time portion of the schedule is ignored when
 // evaluating this function.
 func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
+	forDate = forDate.In(tc.marketStatus.tz)
+
 	startOfDay := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 	previousDay := startOfDay.AddDate(0, 0, -1)
 	previousDay = time.Date(previousDay.Year(), previousDay.Month(), previousDay.Day(), 23, 59, 59, 999_999_999, tc.marketStatus.tz)
@@ -251,6 +253,11 @@ func (tc *TradeCron) IsTradeDay(forDate time.Time) bool {
 
 // Next returns the next tradeable date.
 func (tc *TradeCron) Next(forDate time.Time) time.Time {
+	// Normalize to the market timezone: all schedule arithmetic below
+	// (time-of-day comparisons, calendar-day boundaries) is defined in
+	// market time, not the caller's wall clock.
+	forDate = forDate.In(tc.marketStatus.tz)
+
 	var checkDate time.Time
 
 	nextDate := tc.Schedule.Next(forDate)
@@ -294,6 +301,15 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 		dateOnly := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 		if firstTradingDayOfThisMonth.After(dateOnly) || firstTradingDayOfThisMonth.Equal(dateOnly) {
 			checkDate = firstTradingDayOfThisMonth
+
+			// When forDate falls on the first trading day itself, the
+			// scheduled firing may already have passed (sequential
+			// iteration calls Next with lastFire+1ns); advance to the
+			// next month rather than firing again the following day.
+			firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+			if nextDate.After(firstTradingDay) {
+				checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
+			}
 		} else {
 			checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(forDate)
 
@@ -330,6 +346,17 @@ func (tc *TradeCron) Next(forDate time.Time) time.Time {
 		dateOnly := time.Date(forDate.Year(), forDate.Month(), forDate.Day(), 0, 0, 0, 0, tc.marketStatus.tz)
 		if firstTradingDayOfThisQuarter.After(dateOnly) || firstTradingDayOfThisQuarter.Equal(dateOnly) {
 			checkDate = firstTradingDayOfThisQuarter
+
+			// Same already-fired guard as AtMonthBegin: a forDate on the
+			// quarter's first trading day after the firing time must
+			// advance to the next quarter, not the next trading day.
+			firstTradingDay := time.Date(checkDate.Year(), checkDate.Month(), checkDate.Day(), nextDate.Hour(), nextDate.Minute(), nextDate.Second(), nextDate.Nanosecond(), nextDate.Location())
+			if nextDate.After(firstTradingDay) {
+				nextQ := nextQuarterFirstMonth(forDate)
+				checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(
+					time.Date(nextQ.Year(), nextQ.Month(), 1, 23, 59, 59, 999_999_999, tc.marketStatus.tz).AddDate(0, 0, -1),
+				)
+			}
 		} else {
 			nextQuarterStart := nextQuarterFirstMonth(forDate)
 			checkDate = tc.marketStatus.NextFirstTradingDayOfMonth(

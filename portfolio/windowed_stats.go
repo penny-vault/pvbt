@@ -64,13 +64,20 @@ func (ws *windowedStats) ExcessReturns(ctx context.Context, window *Period) *dat
 	return df.Between(ws.start, ws.end)
 }
 
+// Drawdown computes running-peak drawdowns from the equity curve restricted
+// to [start, end], so peaks that occurred before the window do not leak in.
+// This matches Account.Drawdown, which windows equity first and then
+// computes running peaks within the window.
 func (ws *windowedStats) Drawdown(ctx context.Context, window *Period) *data.DataFrame {
-	df := ws.inner.Drawdown(ctx, window)
-	if df == nil {
+	equityDF := ws.EquitySeries(ctx, window)
+	if equityDF == nil {
 		return nil
 	}
 
-	return df.Between(ws.start, ws.end)
+	equity := equityDF.Metrics(data.PortfolioEquity)
+	peak := equity.CumMax()
+
+	return equity.Sub(peak).Div(peak)
 }
 
 func (ws *windowedStats) BenchmarkReturns(ctx context.Context, window *Period) *data.DataFrame {

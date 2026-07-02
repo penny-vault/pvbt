@@ -70,6 +70,27 @@ func (r *SnapshotRecorder) Close() error {
 	return r.db.Close()
 }
 
+// SetDimension forwards the fundamental dimension filter to the wrapped
+// batch provider so recorded fundamentals carry the strategy's configured
+// dimension instead of the default.
+func (r *SnapshotRecorder) SetDimension(dim string) {
+	if bp, ok := r.batchProvider.(interface{ SetDimension(string) }); ok {
+		bp.SetDimension(dim)
+	}
+}
+
+// Dimension reports the wrapped batch provider's fundamental dimension
+// filter, or "ARQ" when the provider does not expose one.
+func (r *SnapshotRecorder) Dimension() string {
+	if bp, ok := r.batchProvider.(interface{ Dimension() string }); ok {
+		if dim := bp.Dimension(); dim != "" {
+			return dim
+		}
+	}
+
+	return "ARQ"
+}
+
 // FetchMarketHolidays delegates to the underlying provider and records the
 // holidays in the snapshot database.
 func (r *SnapshotRecorder) FetchMarketHolidays(ctx context.Context) ([]tradecron.MarketHoliday, error) {

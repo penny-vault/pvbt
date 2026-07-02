@@ -1073,6 +1073,24 @@ var _ = Describe("DataFrame", func() {
 			Expect(col[1]).To(Equal(29.0))
 		})
 
+		It("Last picks last intraday value per day", func() {
+			base := time.Date(2024, 1, 2, 9, 30, 0, 0, time.UTC)
+			t := make([]time.Time, 6)
+			col := make([]float64, 6)
+			for i := range t {
+				// Three bars per day across two days.
+				t[i] = base.AddDate(0, 0, i/3).Add(time.Duration(i%3) * time.Minute)
+				col[i] = float64(i + 1)
+			}
+			intradayDF, err := data.NewDataFrame(t, []asset.Asset{aapl}, []data.Metric{data.Price}, data.Tick, [][]float64{col})
+			Expect(err).NotTo(HaveOccurred())
+			result := intradayDF.Downsample(data.Daily).Last()
+			Expect(result.Len()).To(Equal(2))
+			resCol := result.Column(aapl, data.Price)
+			Expect(resCol[0]).To(Equal(3.0))
+			Expect(resCol[1]).To(Equal(6.0))
+		})
+
 		It("Std uses sample (N-1) denominator", func() {
 			// [1,2,3,4,5,6,7] in one week: mean=4, sum sq diffs=28, var=28/6, std=sqrt(28/6)
 			result := weeklyDF.Downsample(data.Weekly).Std()

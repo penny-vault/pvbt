@@ -18,6 +18,7 @@ package risk
 import (
 	"context"
 	"fmt"
+	"math"
 	"sort"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -58,12 +59,13 @@ func (m *maxPositionCount) Process(_ context.Context, batch *portfolio.Batch) er
 	for ast, weight := range weights {
 		positions = append(positions, positionEntry{
 			asset: ast,
-			value: weight * totalValue,
+			value: math.Abs(weight * totalValue),
 			qty:   holdings[ast],
 		})
 	}
 
-	// Sort ascending by dollar value so the smallest positions are first.
+	// Sort ascending by absolute dollar value so the smallest positions
+	// (long or short) are first.
 	sort.Slice(positions, func(i, j int) bool {
 		return positions[i].value < positions[j].value
 	})
@@ -73,10 +75,20 @@ func (m *maxPositionCount) Process(_ context.Context, batch *portfolio.Batch) er
 	for idx := 0; idx < dropCount; idx++ {
 		pos := positions[idx]
 
+		// Longs are closed with a sell; shorts are closed with a buy for
+		// the absolute quantity.
+		side := broker.Sell
+		qty := pos.qty
+
+		if qty < 0 {
+			side = broker.Buy
+			qty = -qty
+		}
+
 		batch.Orders = append(batch.Orders, broker.Order{
 			Asset:       pos.asset,
-			Side:        broker.Sell,
-			Qty:         pos.qty,
+			Side:        side,
+			Qty:         qty,
 			OrderType:   broker.Market,
 			TimeInForce: broker.Day,
 		})

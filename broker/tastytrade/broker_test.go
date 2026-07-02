@@ -77,6 +77,19 @@ var _ = Describe("TastytradeBroker", func() {
 		return ttBroker
 	}
 
+	// registerEmptyPositions serves an empty positions list; Submit, Replace,
+	// and SubmitGroup fetch positions to detect the order action.
+	registerEmptyPositions := func(mux *http.ServeMux) {
+		mux.HandleFunc("GET /accounts/ACCT-001/positions", func(writer http.ResponseWriter, req *http.Request) {
+			writer.Header().Set("Content-Type", "application/json")
+			sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+				"data": map[string]any{
+					"items": []map[string]any{},
+				},
+			})
+		})
+	}
+
 	Describe("Constructor and options", func() {
 		It("creates a broker with a non-nil fills channel", func() {
 			ttBroker := tastytrade.New()
@@ -117,6 +130,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var receivedBody map[string]any
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("POST /accounts/ACCT-001/orders", func(writer http.ResponseWriter, req *http.Request) {
 					submitCalled.Add(1)
 					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
@@ -156,6 +170,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var submittedQty float64
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("GET /market-data/by-type", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
@@ -203,7 +218,7 @@ var _ = Describe("TastytradeBroker", func() {
 			Expect(submittedQty).To(Equal(50.0)) // floor(5000 / 100) = 50
 		})
 
-		It("returns nil without submitting when dollar amount yields zero shares", func() {
+		It("returns an error without submitting when dollar amount yields zero shares", func() {
 			var submitCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
@@ -236,7 +251,8 @@ var _ = Describe("TastytradeBroker", func() {
 				TimeInForce: broker.Day,
 			})
 
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("less than the share price"))
 			Expect(submitCalled.Load()).To(Equal(int32(0)))
 		})
 	})
@@ -261,6 +277,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var complexCancelCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
 					writer.Header().Set("Content-Type", "application/json")
 					sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
@@ -298,6 +315,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var replaceCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("PUT /accounts/ACCT-001/orders/ORD-REPLACE-1", func(writer http.ResponseWriter, req *http.Request) {
 					replaceCalled.Add(1)
 					writer.WriteHeader(http.StatusOK)
@@ -404,6 +422,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var complexCancelCalled atomic.Int32
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
 					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")
@@ -446,6 +465,7 @@ var _ = Describe("TastytradeBroker", func() {
 			var receivedBody map[string]any
 
 			ttBroker := authenticatedBroker(func(mux *http.ServeMux) {
+				registerEmptyPositions(mux)
 				mux.HandleFunc("POST /accounts/ACCT-001/complex-orders", func(writer http.ResponseWriter, req *http.Request) {
 					sonic.ConfigDefault.NewDecoder(req.Body).Decode(&receivedBody)
 					writer.Header().Set("Content-Type", "application/json")

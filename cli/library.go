@@ -803,27 +803,29 @@ func (model *libraryModel) markInstalled(installed []library.InstalledStrategy) 
 	}
 }
 
-// visibleItems returns the indices of items that match the current filter.
+// visibleItems returns the indices of items that match the current filter, in
+// the same category-grouped order that listView renders. The cursor indexes
+// this slice, so any divergence between the two orders would make key actions
+// target a different item than the one highlighted.
 func (model libraryModel) visibleItems() []int {
-	if model.filter == "" {
-		indices := make([]int, len(model.items))
-		for idx := range model.items {
-			indices[idx] = idx
+	lowerFilter := strings.ToLower(model.filter)
+
+	matches := func(item libraryItem) bool {
+		if model.filter == "" {
+			return true
 		}
 
-		return indices
+		return strings.Contains(strings.ToLower(item.listing.Name), lowerFilter) ||
+			strings.Contains(strings.ToLower(item.listing.Description), lowerFilter)
 	}
-
-	lowerFilter := strings.ToLower(model.filter)
 
 	var indices []int
 
-	for idx, item := range model.items {
-		nameMatch := strings.Contains(strings.ToLower(item.listing.Name), lowerFilter)
-		descMatch := strings.Contains(strings.ToLower(item.listing.Description), lowerFilter)
-
-		if nameMatch || descMatch {
-			indices = append(indices, idx)
+	for _, cat := range model.categories {
+		for idx, item := range model.items {
+			if item.category == cat && matches(item) {
+				indices = append(indices, idx)
+			}
 		}
 	}
 
