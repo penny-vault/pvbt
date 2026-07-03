@@ -87,10 +87,10 @@ type ibOrderReply struct {
 }
 
 type ibTradeEntry struct {
-	OrderID       string  `json:"order_ref"`
-	Price         float64 `json:"price"`
-	Quantity      float64 `json:"size"`
-	ExecutionTime string  `json:"execution_id"`
+	OrderID  string  `json:"order_ref"`
+	Price    float64 `json:"price"`
+	Quantity float64 `json:"size"`
+	ExecID   string  `json:"execution_id"`
 }
 
 // --- Mapping functions ---

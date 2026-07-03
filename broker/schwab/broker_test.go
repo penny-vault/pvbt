@@ -163,7 +163,7 @@ var _ = Describe("SchwabBroker", func() {
 			Expect(submittedQty).To(Equal(50.0)) // floor(5000 / 100) = 50
 		})
 
-		It("returns nil without submitting when dollar amount yields zero shares", func() {
+		It("returns an error without submitting when dollar amount yields zero shares", func() {
 			var submitCalled atomic.Int32
 
 			schwabBroker := authenticatedBroker(func(mux *http.ServeMux) {
@@ -193,7 +193,8 @@ var _ = Describe("SchwabBroker", func() {
 				TimeInForce: broker.Day,
 			})
 
-			Expect(submitErr).ToNot(HaveOccurred())
+			Expect(submitErr).To(HaveOccurred())
+			Expect(submitErr.Error()).To(ContainSubstring("less than the share price"))
 			Expect(submitCalled.Load()).To(Equal(int32(0)))
 		})
 	})

@@ -50,23 +50,32 @@ const stochasticDPeriod = 3
 // StochasticFast computes the Fast Stochastic Oscillator for each asset in
 // the universe. %K measures where the close sits relative to the high-low
 // range over the period; %D is a 3-period SMA of %K. The function fetches
-// period.N + 2 total bars to compute the %D smoothing. Returns a single-row
+// period.N + 2 total trading bars (over-fetching calendar days to cover
+// weekends and holidays) to compute the %D smoothing. Returns a single-row
 // DataFrame with [StochasticKSignal] and [StochasticDSignal].
 func StochasticFast(ctx context.Context, assetUniverse universe.Universe, period portfolio.Period) *data.DataFrame {
 	// Need period.N + 2 total bars: period.N bars per %K window, sliding
 	// 3 times to get 3 %K values for the %D SMA.
-	adjustedPeriod := portfolio.Days(period.N + stochasticDPeriod - 1)
-
-	df, err := assetUniverse.Window(ctx, adjustedPeriod, data.MetricHigh, data.MetricLow, data.MetricClose)
+	df, kWindow, err := extendedWindow(ctx, assetUniverse, period, stochasticDPeriod-1, data.MetricHigh, data.MetricLow, data.MetricClose)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("StochasticFast: %w", err))
 	}
 
 	numRows := df.Len()
 
-	minRows := period.N + stochasticDPeriod - 1
+	minRows := stochasticDPeriod + 1
 	if numRows < minRows {
 		return data.WithErr(fmt.Errorf("StochasticFast: need at least %d data points, got %d", minRows, numRows))
+	}
+
+	// Clamp the %K window so 3 %K values remain for the %D SMA when the
+	// available history is shorter than requested.
+	if maxK := numRows - stochasticDPeriod + 1; kWindow > maxK {
+		kWindow = maxK
+	}
+
+	if kWindow < 1 {
+		return data.WithErr(fmt.Errorf("StochasticFast: period must cover at least 1 bar, got %d", kWindow))
 	}
 
 	assets := df.AssetList()
@@ -81,7 +90,7 @@ func StochasticFast(ctx context.Context, assetUniverse universe.Universe, period
 		lows := df.Column(aa, data.MetricLow)
 		closes := df.Column(aa, data.MetricClose)
 
-		kValues := stochasticKSeries(highs, lows, closes, period.N)
+		kValues := stochasticKSeries(highs, lows, closes, kWindow)
 
 		lastK := kValues[len(kValues)-1]
 
@@ -131,24 +140,34 @@ func StochasticFast(ctx context.Context, assetUniverse universe.Universe, period
 // StochasticSlow computes the Slow Stochastic Oscillator for each asset in
 // the universe. Slow %K is an SMA of the raw %K over the smoothing period;
 // Slow %D is a 3-period SMA of Slow %K. The function fetches
-// period.N + smoothing.N + 1 bars to compute the required values. Returns a
+// period.N + smoothing.N + 1 total trading bars (over-fetching calendar days
+// to cover weekends and holidays) to compute the required values. Returns a
 // single-row DataFrame with [StochasticSlowKSignal] and [StochasticSlowDSignal].
 func StochasticSlow(ctx context.Context, assetUniverse universe.Universe, period, smoothing portfolio.Period) *data.DataFrame {
 	// Need enough bars for: period.N per raw %K window, smoothing.N raw %K
 	// values for each Slow %K, and 3 Slow %K values for %D.
-	adjustedN := period.N + smoothing.N + stochasticDPeriod - 2
-	adjustedPeriod := portfolio.Days(adjustedN)
+	warmupBars := smoothing.N + stochasticDPeriod - 2
 
-	df, err := assetUniverse.Window(ctx, adjustedPeriod, data.MetricHigh, data.MetricLow, data.MetricClose)
+	df, kWindow, err := extendedWindow(ctx, assetUniverse, period, warmupBars, data.MetricHigh, data.MetricLow, data.MetricClose)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("StochasticSlow: %w", err))
 	}
 
 	numRows := df.Len()
 
-	minRows := period.N + smoothing.N + stochasticDPeriod - 2
+	minRows := warmupBars + 2
 	if numRows < minRows {
 		return data.WithErr(fmt.Errorf("StochasticSlow: need at least %d data points, got %d", minRows, numRows))
+	}
+
+	// Clamp the %K window so enough raw %K values remain for the Slow %K
+	// smoothing and the %D SMA when history is shorter than requested.
+	if maxK := numRows - warmupBars; kWindow > maxK {
+		kWindow = maxK
+	}
+
+	if kWindow < 1 {
+		return data.WithErr(fmt.Errorf("StochasticSlow: period must cover at least 1 bar, got %d", kWindow))
 	}
 
 	assets := df.AssetList()
@@ -163,7 +182,7 @@ func StochasticSlow(ctx context.Context, assetUniverse universe.Universe, period
 		lows := df.Column(aa, data.MetricLow)
 		closes := df.Column(aa, data.MetricClose)
 
-		rawK := stochasticKSeries(highs, lows, closes, period.N)
+		rawK := stochasticKSeries(highs, lows, closes, kWindow)
 
 		// Slow %K = SMA of raw %K over smoothing window.
 		numSlowK := len(rawK) - smoothing.N + 1

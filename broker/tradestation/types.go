@@ -226,13 +226,14 @@ func mapSide(side broker.Side) string {
 	}
 }
 
-// mapTSSide maps TradeStation BuySellSideCode to broker.Side.
-// 1=Buy, 2=Sell, 3=SellShort, 4=BuyToCover.
+// mapTSSide maps the TradeStation Legs[].BuyOrSell value to broker.Side. The
+// v3 API returns Buy/Sell/SellShort/BuyToCover; legacy numeric codes
+// (1=Buy, 2=Sell, 3=SellShort, 4=BuyToCover) are also accepted.
 func mapTSSide(code string) broker.Side {
 	switch code {
-	case "1", "4":
+	case "Buy", "BuyToCover", "1", "4":
 		return broker.Buy
-	case "2", "3":
+	case "Sell", "SellShort", "2", "3":
 		return broker.Sell
 	default:
 		return broker.Buy

@@ -82,6 +82,7 @@ var _ = Describe("libraryModel", func() {
 	Describe("list view navigation", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
+			model.categories = []string{""}
 			model.items = []libraryItem{
 				{listing: library.Listing{Name: "strat1", Description: "first"}},
 				{listing: library.Listing{Name: "strat2", Description: "second"}},
@@ -191,6 +192,7 @@ var _ = Describe("libraryModel", func() {
 	Describe("search filtering", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
+			model.categories = []string{""}
 			model.items = []libraryItem{
 				{listing: library.Listing{Name: "momentum", Description: "A momentum strategy"}},
 				{listing: library.Listing{Name: "value-pick", Description: "A value strategy"}},
@@ -255,6 +257,7 @@ var _ = Describe("libraryModel", func() {
 			model.state = libStateBrowsing
 			model.width = 80
 			model.height = 24
+			model.categories = []string{""}
 			model.items = []libraryItem{
 				{listing: library.Listing{Name: "momentum", Owner: "alice", Description: "A momentum strategy"}},
 				{listing: library.Listing{Name: "value-pick", Owner: "bob", Description: "A value strategy"}},
@@ -362,6 +365,7 @@ var _ = Describe("libraryModel", func() {
 	Describe("uninstall flow", func() {
 		BeforeEach(func() {
 			model.state = libStateBrowsing
+			model.categories = []string{""}
 			model.items = []libraryItem{
 				{listing: library.Listing{Name: "momentum", Owner: "alice"}, installed: true},
 				{listing: library.Listing{Name: "value-pick", Owner: "bob"}, installed: false},

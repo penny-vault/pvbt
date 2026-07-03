@@ -44,8 +44,8 @@ func WithBorrowRate(rate float64) Option {
 // (LongMarketValue + ShortMarketValue) / Equity, at order-submission
 // time. Orders that would push the account above this ratio are
 // rejected; closing trades are always allowed through. The default is
-// 1.0, which models a cash account; set to 2.0 for Reg T-style 2x
-// initial leverage. Values <= 0 are clamped to the default.
+// 2.0 (Reg T-style 2x initial leverage); set to 1.0 to model a cash
+// account. Values <= 0 are clamped to the default.
 //
 // MaxLeverage is an entry-time gate only. Adverse price moves that
 // drift gross leverage above the cap do not force liquidation;

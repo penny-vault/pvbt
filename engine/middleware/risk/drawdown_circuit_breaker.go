@@ -36,15 +36,24 @@ func DrawdownCircuitBreaker(threshold float64) portfolio.Middleware {
 }
 
 func (m *drawdownCircuitBreaker) Process(_ context.Context, batch *portfolio.Batch) error {
-	// Get current drawdown from the portfolio's performance metrics.
-	dd, err := batch.Portfolio().PerformanceMetric(portfolio.MaxDrawdown).Value()
-	if err != nil {
+	// Get the current drawdown from the running peak: the last value of the
+	// drawdown series. Using the since-inception MaxDrawdown scalar instead
+	// would latch the breaker permanently after a single historical breach,
+	// even once the portfolio has recovered to a new peak.
+	ddSeries, err := batch.Portfolio().PerformanceMetric(portfolio.MaxDrawdown).Series()
+	if err != nil || ddSeries == nil || ddSeries.Len() == 0 {
 		// No performance data yet (early in backtest) -- no action.
 		return nil
 	}
 
-	// MaxDrawdown is typically negative (e.g., -0.15 for 15% drawdown).
-	if math.Abs(dd) < m.threshold {
+	ddCol := ddSeries.Column(ddSeries.AssetList()[0], ddSeries.MetricList()[0])
+	if len(ddCol) == 0 {
+		return nil
+	}
+
+	// Drawdown values are negative (e.g., -0.15 for 15% below peak).
+	dd := ddCol[len(ddCol)-1]
+	if math.IsNaN(dd) || math.Abs(dd) < m.threshold {
 		return nil
 	}
 
@@ -63,16 +72,10 @@ func (m *drawdownCircuitBreaker) Process(_ context.Context, batch *portfolio.Bat
 		}
 	}
 
-	// Keep only sell orders from the batch (remove any buy orders).
-	filtered := batch.Orders[:0]
-
-	for _, order := range batch.Orders {
-		if order.Side == broker.Sell {
-			filtered = append(filtered, order)
-		}
-	}
-
-	batch.Orders = append(filtered, sells...)
+	// Replace the strategy's orders with the liquidation sells. Keeping the
+	// strategy's own sell orders alongside the full-position sells would
+	// oversell held positions into unintended shorts.
+	batch.Orders = sells
 
 	batch.Annotate("risk:drawdown-circuit-breaker",
 		fmt.Sprintf("drawdown %.1f%% exceeds %.1f%% threshold, force-liquidating all positions",

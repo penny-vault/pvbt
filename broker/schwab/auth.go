@@ -286,7 +286,7 @@ func (manager *tokenManager) startBackgroundRefresh() {
 				if manager.accessTokenExpired() && !manager.refreshTokenExpired() {
 					refreshErr := manager.refreshAccessToken()
 					if refreshErr == nil && manager.onRefresh != nil {
-						manager.onRefresh(manager.accessToken())
+						manager.onRefresh(manager.tokens.AccessToken)
 					}
 				}
 				manager.mu.Unlock()

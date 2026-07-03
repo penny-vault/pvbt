@@ -26,9 +26,11 @@ var _ = Describe("apiClient", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts"))
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
-					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
-					{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Accounts": []map[string]string{
+						{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
+						{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
+					},
 				})
 			}))
 			DeferCleanup(server.Close)
@@ -43,9 +45,11 @@ var _ = Describe("apiClient", func() {
 		It("matches the specified account ID", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
-					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
-					{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Accounts": []map[string]string{
+						{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
+						{"AccountID": "22222222", "AccountType": "Cash", "Status": "Active"},
+					},
 				})
 			}))
 			DeferCleanup(server.Close)
@@ -60,7 +64,9 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when no accounts exist", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{})
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Accounts": []map[string]string{},
+				})
 			}))
 			DeferCleanup(server.Close)
 
@@ -73,8 +79,10 @@ var _ = Describe("apiClient", func() {
 		It("returns ErrAccountNotFound when specified account is not found", func() {
 			server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, req *http.Request) {
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]string{
-					{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Accounts": []map[string]string{
+						{"AccountID": "11111111", "AccountType": "Margin", "Status": "Active"},
+					},
 				})
 			}))
 			DeferCleanup(server.Close)
@@ -212,14 +220,16 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts/ACCT-TEST/positions"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
-					{
-						"Symbol":           "AAPL",
-						"Quantity":         "100",
-						"AveragePrice":     "150.00",
-						"MarketValue":      "15500.00",
-						"TodaysProfitLoss": "200.00",
-						"Last":             "155.00",
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Positions": []map[string]any{
+						{
+							"Symbol":           "AAPL",
+							"Quantity":         "100",
+							"AveragePrice":     "150.00",
+							"MarketValue":      "15500.00",
+							"TodaysProfitLoss": "200.00",
+							"Last":             "155.00",
+						},
 					},
 				})
 			}))
@@ -242,12 +252,14 @@ var _ = Describe("apiClient", func() {
 				Expect(req.URL.Path).To(Equal("/v3/brokerage/accounts/ACCT-TEST/balances"))
 
 				writer.Header().Set("Content-Type", "application/json")
-				sonic.ConfigDefault.NewEncoder(writer).Encode([]map[string]any{
-					{
-						"CashBalance": "25000.00",
-						"Equity":      "50000.00",
-						"BuyingPower": "45000.00",
-						"MarketValue": "25000.00",
+				sonic.ConfigDefault.NewEncoder(writer).Encode(map[string]any{
+					"Balances": []map[string]any{
+						{
+							"CashBalance": "25000.00",
+							"Equity":      "50000.00",
+							"BuyingPower": "45000.00",
+							"MarketValue": "25000.00",
+						},
 					},
 				})
 			}))

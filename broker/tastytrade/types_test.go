@@ -20,7 +20,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				TimeInForce: broker.Day,
 			}
 
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 
 			Expect(result.OrderType).To(Equal("Market"))
 			Expect(result.TimeInForce).To(Equal("Day"))
@@ -43,7 +43,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				TimeInForce: broker.GTC,
 			}
 
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Sell to Close")
 
 			Expect(result.OrderType).To(Equal("Limit"))
 			Expect(result.Price).To(Equal(350.0))
@@ -61,7 +61,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				TimeInForce: broker.Day,
 			}
 
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Sell to Close")
 
 			Expect(result.OrderType).To(Equal("Stop"))
 			Expect(result.StopTrigger).To(Equal(200.0))
@@ -79,7 +79,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				TimeInForce: broker.Day,
 			}
 
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 
 			Expect(result.OrderType).To(Equal("Stop Limit"))
 			Expect(result.StopTrigger).To(Equal(150.0))
@@ -95,7 +95,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				LimitPrice:  150.0,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 			Expect(result.PriceEffect).To(Equal("Debit"))
 		})
 
@@ -108,7 +108,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				LimitPrice:  150.0,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Sell to Close")
 			Expect(result.PriceEffect).To(Equal("Credit"))
 		})
 
@@ -120,7 +120,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 			Expect(result.PriceEffect).To(BeEmpty())
 		})
 
@@ -133,7 +133,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				StopPrice:   150.0,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 			Expect(result.PriceEffect).To(Equal("Debit"))
 		})
 
@@ -146,7 +146,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				StopPrice:   150.0,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Sell to Close")
 			Expect(result.PriceEffect).To(Equal("Credit"))
 		})
 
@@ -158,7 +158,7 @@ var _ = Describe("Types", Label("translation"), func() {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			result := toTastytradeOrder(order)
+			result := toTastytradeOrder(order, "Buy to Open")
 			Expect(result.AutomatedSource).To(BeTrue())
 		})
 
@@ -182,9 +182,36 @@ var _ = Describe("Types", Label("translation"), func() {
 					OrderType:   broker.Market,
 					TimeInForce: tc.tif,
 				}
-				result := toTastytradeOrder(order)
+				result := toTastytradeOrder(order, "Buy to Open")
 				Expect(result.TimeInForce).To(Equal(tc.expect), "for TIF %d", tc.tif)
 			}
+		})
+	})
+
+	Describe("detectAction", func() {
+		longPos := []positionResponse{{Symbol: "AAPL", Quantity: 100}}
+		shortPos := []positionResponse{{Symbol: "AAPL", Quantity: -100}}
+
+		It("opens a long when flat", func() {
+			Expect(detectAction(broker.Buy, "AAPL", nil)).To(Equal("Buy to Open"))
+		})
+
+		It("closes a long on sell", func() {
+			Expect(detectAction(broker.Sell, "AAPL", longPos)).To(Equal("Sell to Close"))
+		})
+
+		It("opens a short when selling flat", func() {
+			Expect(detectAction(broker.Sell, "AAPL", nil)).To(Equal("Sell to Open"))
+		})
+
+		It("covers a short on buy", func() {
+			Expect(detectAction(broker.Buy, "AAPL", shortPos)).To(Equal("Buy to Close"))
+		})
+
+		It("ignores positions in other tickers", func() {
+			other := []positionResponse{{Symbol: "MSFT", Quantity: -50}}
+			Expect(detectAction(broker.Buy, "AAPL", other)).To(Equal("Buy to Open"))
+			Expect(detectAction(broker.Sell, "AAPL", other)).To(Equal("Sell to Open"))
 		})
 	})
 

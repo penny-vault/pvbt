@@ -35,16 +35,23 @@ const (
 )
 
 // MACD computes the Moving Average Convergence/Divergence indicator for each
-// asset in the universe. It returns a single-row DataFrame with three metrics:
-// MACDLineSignal (fast EMA - slow EMA), MACDSignalLineSignal (EMA of MACD
-// line), and MACDHistogramSignal (MACD line - signal line).
+// asset in the universe. It fetches slow.N + signalPeriod.N - 1 trading bars
+// (over-fetching calendar days to cover weekends and holidays) so the slow
+// EMA warm-up leaves enough MACD points to seed the signal line. It returns
+// a single-row DataFrame with three metrics: MACDLineSignal (fast EMA - slow
+// EMA), MACDSignalLineSignal (EMA of MACD line), and MACDHistogramSignal
+// (MACD line - signal line).
 func MACD(ctx context.Context, assetUniverse universe.Universe, fast, slow, signalPeriod portfolio.Period, metrics ...data.Metric) *data.DataFrame {
 	metric := data.MetricClose
 	if len(metrics) > 0 {
 		metric = metrics[0]
 	}
 
-	df, err := assetUniverse.Window(ctx, slow, metric)
+	if fast.N < 1 || slow.N < 1 || signalPeriod.N < 1 {
+		return data.WithErr(fmt.Errorf("MACD: fast, slow, and signal periods must each cover at least 1 bar"))
+	}
+
+	df, _, err := extendedWindow(ctx, assetUniverse, slow, signalPeriod.N-1, metric)
 	if err != nil {
 		return data.WithErr(fmt.Errorf("MACD: %w", err))
 	}
@@ -53,15 +60,16 @@ func MACD(ctx context.Context, assetUniverse universe.Universe, fast, slow, sign
 		return data.WithErr(fmt.Errorf("MACD: need at least 2 data points, got %d", df.Len()))
 	}
 
-	fastWindow := fast.N
-	slowWindow := slow.N
-	sigWindow := signalPeriod.N
+	// Clamp windows when the available history is shorter than requested.
+	fastWindow := min(fast.N, df.Len())
+	slowWindow := min(slow.N, df.Len())
 
 	fastEMA := df.Rolling(fastWindow).EMA()
 	slowEMA := df.Rolling(slowWindow).EMA()
 
 	// Drop NaN rows so the signal line EMA gets a clean seed.
 	macdLine := fastEMA.Sub(slowEMA).Drop(math.NaN())
+	sigWindow := min(signalPeriod.N, macdLine.Len())
 	signalLine := macdLine.Rolling(sigWindow).EMA()
 	histogram := macdLine.Sub(signalLine)
 

@@ -55,7 +55,10 @@ func (activeReturn) Compute(ctx context.Context, stats PortfolioStats, window *P
 		return 0, nil
 	}
 
-	portReturn := (eqCol[len(eqCol)-1] / eqCol[0]) - 1
+	// The portfolio return is flow-adjusted so external deposits and
+	// withdrawals are not counted as return. The benchmark is a price
+	// curve with no external flows, so a naive end/start ratio is correct.
+	portReturn := flowAdjustedGrowth(ctx, stats, eqCol, df.Times()) - 1
 	benchReturn := (benchCol[len(benchCol)-1] / benchCol[0]) - 1
 
 	return portReturn - benchReturn, nil
@@ -104,9 +107,12 @@ func (activeReturn) ComputeSeries(ctx context.Context, stats PortfolioStats, win
 		series[idx] = (cumPort - 1) - (cumBench - 1)
 	}
 
+	// Returns correspond to the end of each period: the first return is
+	// stamped with the second timestamp, and NaN-padded leading returns
+	// were removed above, so keep the trailing count timestamps.
 	times := rdf.Times()
 	if len(times) > count {
-		times = times[:count]
+		times = times[len(times)-count:]
 	}
 
 	return data.NewDataFrame(

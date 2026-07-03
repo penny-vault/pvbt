@@ -86,13 +86,16 @@ func (ttBroker *TastytradeBroker) Connect(ctx context.Context) error {
 }
 
 func (ttBroker *TastytradeBroker) Close() error {
+	var err error
 	if ttBroker.streamer != nil {
-		return ttBroker.streamer.close()
+		err = ttBroker.streamer.close()
 	}
 
+	// Always close the fills channel so consumers ranging over Fills()
+	// terminate, matching the other broker implementations.
 	close(ttBroker.fills)
 
-	return nil
+	return err
 }
 
 func (ttBroker *TastytradeBroker) Fills() <-chan broker.Fill {
@@ -112,12 +115,18 @@ func (ttBroker *TastytradeBroker) Submit(ctx context.Context, order broker.Order
 
 		qty = math.Floor(order.Amount / price)
 		if qty == 0 {
-			return nil
+			return fmt.Errorf("tastytrade: order for %s: amount %.2f is less than the share price %.2f",
+				order.Asset.Ticker, order.Amount, price)
 		}
 	}
 
+	positions, posErr := ttBroker.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("tastytrade: get positions for order action: %w", posErr)
+	}
+
 	order.Qty = qty
-	ttOrder := toTastytradeOrder(order)
+	ttOrder := toTastytradeOrder(order, detectAction(order.Side, order.Asset.Ticker, positions))
 
 	_, err := ttBroker.client.submitOrder(ctx, ttOrder)
 	if err != nil {
@@ -140,7 +149,13 @@ func (ttBroker *TastytradeBroker) Cancel(ctx context.Context, orderID string) er
 }
 
 func (ttBroker *TastytradeBroker) Replace(ctx context.Context, orderID string, order broker.Order) error {
-	ttOrder := toTastytradeOrder(order)
+	positions, posErr := ttBroker.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("tastytrade: get positions for order action: %w", posErr)
+	}
+
+	ttOrder := toTastytradeOrder(order, detectAction(order.Side, order.Asset.Ticker, positions))
+
 	return ttBroker.client.replaceOrder(ctx, orderID, ttOrder)
 }
 
@@ -214,9 +229,14 @@ func (ttBroker *TastytradeBroker) SubmitGroup(ctx context.Context, orders []brok
 }
 
 func (ttBroker *TastytradeBroker) submitOCO(ctx context.Context, orders []broker.Order) error {
+	positions, posErr := ttBroker.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("tastytrade: get positions for order action: %w", posErr)
+	}
+
 	ttOrders := make([]orderRequest, len(orders))
 	for idx, order := range orders {
-		ttOrders[idx] = toTastytradeOrder(order)
+		ttOrders[idx] = toTastytradeOrder(order, detectAction(order.Side, order.Asset.Ticker, positions))
 	}
 
 	req := complexOrderRequest{
@@ -236,17 +256,53 @@ func (ttBroker *TastytradeBroker) submitOCO(ctx context.Context, orders []broker
 
 func (ttBroker *TastytradeBroker) submitOTOCO(ctx context.Context, orders []broker.Order) error {
 	var (
+		entrySide  broker.Side
+		entryFound bool
+	)
+
+	for _, order := range orders {
+		if order.GroupRole == broker.RoleEntry {
+			if entryFound {
+				return ErrMultipleEntryOrders
+			}
+
+			entrySide = order.Side
+			entryFound = true
+		}
+	}
+
+	if !entryFound {
+		return ErrNoEntryOrder
+	}
+
+	positions, posErr := ttBroker.client.getPositions(ctx)
+	if posErr != nil {
+		return fmt.Errorf("tastytrade: get positions for order action: %w", posErr)
+	}
+
+	var (
 		triggerOrder     *orderRequest
 		contingentOrders []orderRequest
 	)
 
 	for _, order := range orders {
-		ttOrder := toTastytradeOrder(order)
-		if order.GroupRole == broker.RoleEntry {
-			if triggerOrder != nil {
-				return ErrMultipleEntryOrders
-			}
+		var action string
 
+		switch {
+		case order.GroupRole == broker.RoleEntry:
+			action = detectAction(order.Side, order.Asset.Ticker, positions)
+		case entrySide == broker.Buy:
+			// Contingent exits close the position the entry opens. That
+			// position does not exist at submit time, so the action is the
+			// closing complement of the entry rather than position-detected.
+			action = "Sell to Close"
+		default:
+			action = "Buy to Close"
+		}
+
+		ttOrder := toTastytradeOrder(order, action)
+
+		if order.GroupRole == broker.RoleEntry {
 			triggerOrder = &ttOrder
 		} else {
 			contingentOrders = append(contingentOrders, ttOrder)

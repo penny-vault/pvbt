@@ -33,11 +33,12 @@ const (
 
 // IBBroker implements broker.Broker for the Interactive Brokers brokerage.
 type IBBroker struct {
-	client     *apiClient
-	fills      chan broker.Fill
-	streamer   *orderStreamer
-	accountID  string
-	conidCache map[string]int64
+	client          *apiClient
+	fills           chan broker.Fill
+	streamer        *orderStreamer
+	accountID       string
+	conidCache      map[string]int64
+	cancelKeepalive context.CancelFunc
 }
 
 // Option configures an IBBroker.
@@ -83,6 +84,12 @@ func (ib *IBBroker) Connect(ctx context.Context) error {
 	ib.client.secdef = nil
 	ib.client.lastTrade = nil
 
+	if ib.client.auth != nil {
+		if initErr := ib.client.auth.Init(ctx); initErr != nil {
+			return fmt.Errorf("ibkr: connect: %w", initErr)
+		}
+	}
+
 	accountID, resolveErr := ib.client.resolveAccount(ctx)
 	if resolveErr != nil {
 		return resolveErr
@@ -97,11 +104,31 @@ func (ib *IBBroker) Connect(ctx context.Context) error {
 		return connectErr
 	}
 
+	if ib.client.auth != nil {
+		// The keepalive must outlive the Connect context; it is cancelled
+		// explicitly in Close.
+		keepaliveCtx, cancelKeepalive := context.WithCancel(context.Background())
+		ib.cancelKeepalive = cancelKeepalive
+
+		go ib.client.auth.Keepalive(keepaliveCtx)
+	}
+
 	return nil
 }
 
 // Close tears down the broker session and stops the order streamer.
 func (ib *IBBroker) Close() error {
+	if ib.cancelKeepalive != nil {
+		ib.cancelKeepalive()
+		ib.cancelKeepalive = nil
+	}
+
+	if ib.client.auth != nil {
+		if closeErr := ib.client.auth.Close(); closeErr != nil {
+			return closeErr
+		}
+	}
+
 	if ib.streamer != nil {
 		return ib.streamer.close()
 	}

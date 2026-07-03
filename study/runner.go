@@ -230,7 +230,9 @@ func (runner *Runner) runSearch(ctx context.Context, baseConfigs []RunConfig, wo
 			allResults = append(allResults, batchResults...)
 
 			// Score each combination by grouping results by _combination_id.
-			scores = runner.scoreBatch(combos, batchResults, origins, combinationID-len(combos))
+			// Accumulate across batches: SearchStrategy.Next expects all
+			// previously scored combinations, not just the latest batch.
+			scores = append(scores, runner.scoreBatch(combos, batchResults, origins, combinationID-len(combos))...)
 
 			batchIdx++
 

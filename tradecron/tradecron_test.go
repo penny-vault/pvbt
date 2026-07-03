@@ -125,6 +125,100 @@ var _ = Describe("TradeCron", func() {
 		})
 	})
 
+	Describe("@monthbegin sequential iteration", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("advances to next month once the current month-begin firing has passed", func() {
+			tc, err := tradecron.New("@monthbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Jun 1, 2025 is a Sunday; the first trading day is Mon Jun 2.
+			// The engine iterates Next(lastFire + 1ns) after each firing.
+			fired := time.Date(2025, time.June, 2, 9, 30, 0, 0, nyc)
+			got := tc.Next(fired.Add(time.Nanosecond))
+
+			// The next firing is July's first trading day (Tue Jul 1),
+			// NOT the next trading day of June.
+			want := time.Date(2025, time.July, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("reports only the month's first trading day as a trade day", func() {
+			tc, err := tradecron.New("@monthbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Mon Jun 2, 2025 is the first trading day of June.
+			Expect(tc.IsTradeDay(time.Date(2025, time.June, 2, 0, 0, 0, 0, nyc))).To(BeTrue())
+			// Tue Jun 3 must not fire.
+			Expect(tc.IsTradeDay(time.Date(2025, time.June, 3, 0, 0, 0, 0, nyc))).To(BeFalse())
+		})
+	})
+
+	Describe("@quarterbegin sequential iteration", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("advances to next quarter once the current quarter-begin firing has passed", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Tue Apr 1, 2025 is the first trading day of Q2.
+			fired := time.Date(2025, time.April, 1, 9, 30, 0, 0, nyc)
+			got := tc.Next(fired.Add(time.Nanosecond))
+
+			// Next firing is Q3's first trading day (Tue Jul 1), NOT Apr 2.
+			want := time.Date(2025, time.July, 1, 9, 30, 0, 0, nyc)
+			Expect(got).To(Equal(want))
+		})
+
+		It("reports only the quarter's first trading day as a trade day", func() {
+			tc, err := tradecron.New("@quarterbegin", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(tc.IsTradeDay(time.Date(2025, time.April, 1, 0, 0, 0, 0, nyc))).To(BeTrue())
+			Expect(tc.IsTradeDay(time.Date(2025, time.April, 2, 0, 0, 0, 0, nyc))).To(BeFalse())
+		})
+	})
+
+	Describe("timezone normalization", func() {
+		BeforeEach(func() {
+			tradecron.SetMarketHolidays(nil)
+		})
+
+		It("evaluates market hours in Eastern time regardless of the input zone", func() {
+			status := tradecron.NewMarketStatus(&tradecron.RegularHours)
+
+			// Mon Jun 2, 2025 18:00 UTC == 14:00 ET -- market is open.
+			Expect(status.IsMarketOpen(time.Date(2025, time.June, 2, 18, 0, 0, 0, time.UTC))).To(BeTrue())
+			// Mon Jun 2, 2025 12:00 UTC == 08:00 ET -- before the open.
+			Expect(status.IsMarketOpen(time.Date(2025, time.June, 2, 12, 0, 0, 0, time.UTC))).To(BeFalse())
+		})
+
+		It("evaluates the trading calendar in Eastern time regardless of the input zone", func() {
+			status := tradecron.NewMarketStatus(&tradecron.RegularHours)
+
+			// Sat Jun 7, 2025 01:00 UTC == Fri Jun 6 21:00 ET -- Friday is a market day.
+			Expect(status.IsMarketDay(time.Date(2025, time.June, 7, 1, 0, 0, 0, time.UTC))).To(BeTrue())
+			// Sun Jun 8, 2025 12:00 UTC == Sun 08:00 ET -- weekend.
+			Expect(status.IsMarketDay(time.Date(2025, time.June, 8, 12, 0, 0, 0, time.UTC))).To(BeFalse())
+		})
+
+		It("computes Next from a UTC wall clock correctly", func() {
+			tc, err := tradecron.New("@daily", tradecron.RegularHours)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Mon Jun 2, 2025 15:00 UTC == 11:00 ET, after the open.
+			got := tc.Next(time.Date(2025, time.June, 2, 15, 0, 0, 0, time.UTC))
+
+			// Next open is Tue Jun 3 09:30 ET.
+			want := time.Date(2025, time.June, 3, 9, 30, 0, 0, nyc)
+			Expect(got.Equal(want)).To(BeTrue(), "got %s want %s", got, want)
+		})
+	})
+
 	Describe("@quarterbegin", func() {
 		BeforeEach(func() {
 			tradecron.SetMarketHolidays(nil)

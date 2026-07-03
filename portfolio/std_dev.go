@@ -18,6 +18,7 @@ package portfolio
 import (
 	"context"
 	"math"
+	"time"
 
 	"github.com/penny-vault/pvbt/asset"
 	"github.com/penny-vault/pvbt/data"
@@ -53,26 +54,61 @@ func (stdDev) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 	return stdDev * math.Sqrt(af), nil
 }
 
+// ComputeSeries returns an expanding-window annualized standard deviation:
+// each point is the sample standard deviation of all returns observed up to
+// and including that timestamp, annualized with the observation frequency.
+// The final point matches the scalar Compute value. Timestamps stay aligned
+// with the return each point incorporates, skipping NaN returns.
 func (stdDev) ComputeSeries(ctx context.Context, stats PortfolioStats, window *Period) (*data.DataFrame, error) {
 	df := stats.Returns(ctx, window)
 	if df == nil {
 		return nil, nil
 	}
 
-	col := removeNaN(df.Column(portfolioAsset, data.PortfolioEquity))
-	if len(col) == 0 {
+	col := df.Column(portfolioAsset, data.PortfolioEquity)
+	times := df.Times()
+
+	if len(col) == 0 || len(times) != len(col) {
 		return nil, nil
 	}
 
-	times := df.Times()
-	seriesTimes := times[1:]
+	seriesTimes := make([]time.Time, 0, len(col))
+	values := make([]float64, 0, len(col))
+
+	// Welford's online algorithm for a numerically stable running variance.
+	count := 0
+	mean := 0.0
+	m2 := 0.0
+
+	for idx, ret := range col {
+		if math.IsNaN(ret) {
+			continue
+		}
+
+		count++
+		delta := ret - mean
+		mean += delta / float64(count)
+		m2 += delta * (ret - mean)
+
+		if count < 2 {
+			continue
+		}
+
+		af := annualizationFactor(times[:idx+1])
+		values = append(values, math.Sqrt(m2/float64(count-1))*math.Sqrt(af))
+		seriesTimes = append(seriesTimes, times[idx])
+	}
+
+	if len(values) == 0 {
+		return nil, nil
+	}
 
 	return data.NewDataFrame(
 		seriesTimes,
 		[]asset.Asset{portfolioAsset},
 		[]data.Metric{data.PortfolioEquity},
 		df.Frequency(),
-		[][]float64{col},
+		[][]float64{values},
 	)
 }
 

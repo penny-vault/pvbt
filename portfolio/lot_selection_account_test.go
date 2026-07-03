@@ -128,6 +128,47 @@ var _ = Describe("Account lot selection", func() {
 		})
 	})
 
+	Describe("trade detail lot attribution", func() {
+		It("attributes LIFO sells to the most recently acquired lot", func() {
+			acct := portfolio.New(
+				portfolio.WithCash(100_000, time.Time{}),
+				portfolio.WithDefaultLotSelection(portfolio.LotLIFO),
+			)
+
+			buyLot(acct, spy, day1, 50.0, 10)  // lot 1: $50, old
+			buyLot(acct, spy, day2, 150.0, 10) // lot 2: $150, recent
+
+			sellLot(acct, spy, day3, 100.0, 10)
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			// LIFO consumes the $150 lot: a $50/share loss, held from day2.
+			Expect(details[0].EntryPrice).To(Equal(150.0))
+			Expect(details[0].EntryDate).To(Equal(day2))
+			Expect(details[0].PnL).To(Equal(-500.0))
+		})
+
+		It("attributes HighestCost sells to the highest-cost lot", func() {
+			acct := portfolio.New(
+				portfolio.WithCash(100_000, time.Time{}),
+				portfolio.WithDefaultLotSelection(portfolio.LotHighestCost),
+			)
+
+			buyLot(acct, spy, day1, 100.0, 10) // lot 1: $100
+			buyLot(acct, spy, day2, 300.0, 10) // lot 2: $300
+			buyLot(acct, spy, day3, 200.0, 10) // lot 3: $200
+
+			sellLot(acct, spy, day4, 250.0, 10)
+
+			details := acct.TradeDetails()
+			Expect(details).To(HaveLen(1))
+			// HighestCost consumes the $300 lot: a $50/share loss.
+			Expect(details[0].EntryPrice).To(Equal(300.0))
+			Expect(details[0].EntryDate).To(Equal(day2))
+			Expect(details[0].PnL).To(Equal(-500.0))
+		})
+	})
+
 	Describe("per-transaction LotSelection override", func() {
 		It("overrides the account default when set on the transaction", func() {
 			// Account default is FIFO, but transaction override is LIFO.

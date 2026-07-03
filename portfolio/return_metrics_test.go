@@ -564,6 +564,47 @@ var _ = Describe("Return Metrics", func() {
 			Expect(result).To(BeNumerically("~", expected, 1e-9))
 			Expect(result).To(BeNumerically("<", 0.0))
 		})
+
+		It("measures only the window when computed over an absolute window", func() {
+			// Equity: 10000 -> 11000 -> 12100 via dividends (organic growth).
+			// The full-history initial deposit must not leak into a window
+			// that starts later: the window's starting equity is the
+			// synthetic initial outflow.
+			dates := []time.Time{
+				time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+				time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC),
+			}
+
+			a := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+			df0 := buildDF(dates[0], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df0)
+
+			a.Record(portfolio.Transaction{
+				Date:   dates[1],
+				Type:   asset.DividendTransaction,
+				Amount: 1000,
+			})
+			df1 := buildDF(dates[1], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df1)
+
+			a.Record(portfolio.Transaction{
+				Date:   dates[2],
+				Type:   asset.DividendTransaction,
+				Amount: 1100,
+			})
+			df2 := buildDF(dates[2], []asset.Asset{spy}, []float64{100}, []float64{100})
+			a.UpdatePrices(df2)
+
+			// Window covers [dates[1], dates[2]]: equity [11000, 12100] over
+			// 365 days with no external flows inside the window.
+			// XIRR solves: -11000 + 12100/(1+r)^(365/365) = 0 -> r = 0.10.
+			result, err := a.PerformanceMetric(portfolio.MWRR).
+				AbsoluteWindow(dates[1], dates[2]).
+				Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(BeNumerically("~", 0.10, 1e-9))
+		})
 	})
 
 	// recordBuy is a helper that records a buy transaction on the account.
@@ -960,7 +1001,9 @@ var _ = Describe("Return Metrics", func() {
 
 	Describe("ActiveReturn", func() {
 		// buildAccountWithBenchmark creates an account with both a portfolio equity
-		// curve and benchmark prices.
+		// curve and benchmark prices. The equity curve is shaped with dividend/fee
+		// transactions so it reflects organic growth rather than external cash
+		// flows, which are excluded from flow-adjusted returns.
 		buildAccountWithBenchmark := func(
 			dates []time.Time,
 			equity []float64,
@@ -976,13 +1019,13 @@ var _ = Describe("Return Metrics", func() {
 					if diff > 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   asset.DepositTransaction,
+							Type:   asset.DividendTransaction,
 							Amount: diff,
 						})
 					} else if diff < 0 {
 						a.Record(portfolio.Transaction{
 							Date:   d,
-							Type:   asset.WithdrawalTransaction,
+							Type:   asset.FeeTransaction,
 							Amount: diff,
 						})
 					}

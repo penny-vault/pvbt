@@ -78,13 +78,19 @@ func (vf *vwapFill) intradayVWAP(ctx context.Context, order Order, bar *data.Dat
 	var sumPV, sumVol float64
 
 	for ii := range highCol {
+		// Missing bars are marked NaN; one would otherwise poison the
+		// whole accumulation and fill the order at price NaN.
+		if math.IsNaN(highCol[ii]) || math.IsNaN(lowCol[ii]) || math.IsNaN(closeCol[ii]) || math.IsNaN(volCol[ii]) {
+			continue
+		}
+
 		tp := (highCol[ii] + lowCol[ii] + closeCol[ii]) / 3.0
 		vol := volCol[ii]
 		sumPV += tp * vol
 		sumVol += vol
 	}
 
-	if sumVol == 0 {
+	if sumVol == 0 || math.IsNaN(sumVol) {
 		return 0, false
 	}
 

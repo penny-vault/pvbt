@@ -94,56 +94,24 @@ func (vp *viewedPortfolio) Summary() (Summary, error) {
 	return summary, errors.Join(errs...)
 }
 
+// RiskMetrics, TaxMetrics, TradeMetrics, and WithdrawalMetrics use the shared
+// aggregators with the view as the metric source, so every field is computed
+// over the view's [start, end] range -- vp.PerformanceMetric pre-applies
+// AbsoluteWindow.
 func (vp *viewedPortfolio) RiskMetrics() (RiskMetrics, error) {
-	var errs []error
-
-	risk := RiskMetrics{}
-
-	var err error
-
-	risk.Beta, err = vp.PerformanceMetric(Beta).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	risk.Alpha, err = vp.PerformanceMetric(Alpha).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	risk.TrackingError, err = vp.PerformanceMetric(TrackingError).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	risk.DownsideDeviation, err = vp.PerformanceMetric(DownsideDeviation).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	risk.InformationRatio, err = vp.PerformanceMetric(InformationRatio).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	risk.Treynor, err = vp.PerformanceMetric(Treynor).Value()
-	if err != nil {
-		errs = append(errs, err)
-	}
-
-	return risk, errors.Join(errs...)
+	return riskMetricsFrom(vp)
 }
 
 func (vp *viewedPortfolio) TaxMetrics() (TaxMetrics, error) {
-	return vp.acct.TaxMetrics()
+	return taxMetricsFrom(vp)
 }
 
 func (vp *viewedPortfolio) TradeMetrics() (TradeMetrics, error) {
-	return vp.acct.TradeMetrics()
+	return tradeMetricsFrom(vp)
 }
 
 func (vp *viewedPortfolio) WithdrawalMetrics() (WithdrawalMetrics, error) {
-	return vp.acct.WithdrawalMetrics()
+	return withdrawalMetricsFrom(vp)
 }
 
 func (vp *viewedPortfolio) FactorAnalysis(factors *data.DataFrame) (*FactorRegression, error) {

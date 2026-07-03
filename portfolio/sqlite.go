@@ -17,13 +17,17 @@ package portfolio
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"io/fs"
 	"math"
+	"os"
 	"sort"
 	"strconv"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	_ "modernc.org/sqlite"
 )
@@ -172,6 +176,12 @@ func stringToTransactionType(str string) (asset.TransactionType, error) {
 // The database is created fresh; if a file already exists at path it is
 // overwritten.
 func (a *Account) ToSQLite(path string) error {
+	// sql.Open does not truncate an existing database; without the remove,
+	// a second write to the same path fails at CREATE TABLE.
+	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("remove existing sqlite file: %w", err)
+	}
+
 	database, err := sql.Open("sqlite", path)
 	if err != nil {
 		return fmt.Errorf("open sqlite: %w", err)
@@ -590,10 +600,24 @@ func FromSQLite(path string) (*Account, error) {
 		return nil, fmt.Errorf("ping sqlite: %w", err)
 	}
 
+	// Initialize every map that New() initializes: a restored account is
+	// documented as resumable, so mutating methods (Record, UpdatePrices)
+	// must not panic on nil maps.
 	acct := &Account{
-		holdings: make(map[asset.Asset]float64),
-		taxLots:  make(map[asset.Asset][]TaxLot),
-		metadata: make(map[string]string),
+		holdings:         make(map[asset.Asset]float64),
+		taxLots:          make(map[asset.Asset][]TaxLot),
+		shortLots:        make(map[asset.Asset][]TaxLot),
+		recentLossSales:  make(map[asset.Asset][]recentLossSale),
+		recentBuys:       make(map[asset.Asset][]recentBuy),
+		metadata:         make(map[string]string),
+		pendingOrders:    make(map[string]broker.Order),
+		pendingGroups:    make(map[string]*broker.OrderGroup),
+		deferredExits:    make(map[string]OrderGroupSpec),
+		substitutions:    make(map[asset.Asset]Substitution),
+		excursions:       make(map[asset.Asset]ExcursionRecord),
+		seenTransactions: make(map[string]struct{}),
+		positionMV:       make(map[asset.Asset][]float64),
+		positionQty:      make(map[asset.Asset][]float64),
 	}
 
 	// Read metadata.
@@ -749,7 +773,14 @@ func (a *Account) readPerfData(db *sql.DB) error {
 	// Fixed metric order.
 	metrics := []data.Metric{data.PortfolioEquity, data.PortfolioBenchmark, data.PortfolioRiskFree}
 	assets := []asset.Asset{portfolioAsset}
+
+	// NaN entries are skipped at write time, so any (date, metric) pair
+	// absent from the table must round-trip back to NaN -- zero-filling
+	// would fabricate a value (e.g. a benchmark gap reloading as 0.0).
 	vals := make([]float64, len(times)*len(metrics))
+	for idx := range vals {
+		vals[idx] = math.NaN()
+	}
 
 	metricIndex := make(map[data.Metric]int, len(metrics))
 	for i, m := range metrics {

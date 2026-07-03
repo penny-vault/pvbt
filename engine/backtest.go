@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
+	"github.com/penny-vault/pvbt/broker"
 	"github.com/penny-vault/pvbt/data"
 	"github.com/penny-vault/pvbt/portfolio"
 	"github.com/penny-vault/pvbt/tradecron"
@@ -159,13 +160,16 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 			return nil, fmt.Errorf("engine: child strategy %q did not set a schedule", child.name)
 		}
 
-		// Create child portfolio with simulated broker.
+		// Create child portfolio with simulated broker. The broker needs
+		// the child's own portfolio so housekeeping (dividends, delist
+		// sells, borrow fees) is generated from the child's holdings.
 		childBroker := NewSimulatedBroker()
 		child.broker = childBroker
 		child.account = portfolio.New(
 			portfolio.WithCash(100, start),
 			portfolio.WithBroker(childBroker),
 		)
+		childBroker.SetPortfolio(child.account)
 	}
 
 	// 5. Validate: error if schedule is nil.
@@ -407,7 +411,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 
 		// 13-14b. Housekeep parent account (dividends + fill draining).
-		if err := e.housekeepAccount(stepCtx, acct, date); err != nil {
+		if err := e.housekeepAccount(stepCtx, acct, e.broker, date); err != nil {
 			return nil, err
 		}
 
@@ -511,11 +515,16 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 
 		// Housekeep and update prices for all child portfolios at every step.
 		for _, child := range e.children {
+			// The child broker needs the current date and price provider
+			// even on non-firing days so dividends and delist sells are
+			// generated from the child's own holdings.
+			child.broker.SetPriceProvider(e, date)
+
 			if err := e.prefetchHousekeepingPrices(stepCtx, child.account, date, asset.Asset{}); err != nil {
 				return nil, fmt.Errorf("engine: child %q prefetch housekeeping on %v: %w", child.name, date, err)
 			}
 
-			if err := e.housekeepAccount(stepCtx, child.account, date); err != nil {
+			if err := e.housekeepAccount(stepCtx, child.account, child.broker, date); err != nil {
 				return nil, fmt.Errorf("engine: child %q housekeeping on %v: %w", child.name, date, err)
 			}
 
@@ -556,9 +565,12 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 }
 
 // housekeepAccount records dividends for held assets and drains broker fills
-// for the given account on date. Price prefetching, including the benchmark, is
-// handled separately by prefetchHousekeepingPrices.
-func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, date time.Time) error {
+// for the given account on date. Transactions are fetched from brk, which
+// must be the broker attached to acct: syncing another account's broker
+// would credit this account with dividends sized by that account's holdings.
+// Price prefetching, including the benchmark, is handled separately by
+// prefetchHousekeepingPrices.
+func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.PortfolioManager, brk broker.Broker, date time.Time) error {
 	// Drain fills from previous step (before syncing transactions).
 	if acct.HasBroker() {
 		if drainErr := acct.DrainFills(ctx); drainErr != nil {
@@ -567,7 +579,7 @@ func (eng *Engine) housekeepAccount(ctx context.Context, acct portfolio.Portfoli
 	}
 
 	// Sync broker-reported transactions (dividends, splits, borrow fees).
-	brokerTxns, txnErr := eng.broker.Transactions(ctx, date.Add(-24*time.Hour))
+	brokerTxns, txnErr := brk.Transactions(ctx, date.Add(-24*time.Hour))
 	if txnErr != nil {
 		return fmt.Errorf("engine: broker transactions on %v: %w", date, txnErr)
 	}

@@ -54,8 +54,11 @@ func (vs *volatilityScaler) Process(ctx context.Context, batch *portfolio.Batch)
 		assets = append(assets, ast)
 	}
 
-	// Fetch close prices for the lookback period.
-	lookbackPeriod := data.Days(vs.lookback)
+	// Fetch close prices for the lookback period. The lookback is in trading
+	// days but data.Days is calendar days, so widen the span (~7/5 for
+	// weekends, plus a small holiday buffer); computeAnnualizedVol trims to
+	// the last lookback rows so the extra span does not change the result.
+	lookbackPeriod := data.Days(vs.lookback*7/5 + 5)
 
 	priceFrame, err := vs.dataSource.Fetch(ctx, assets, lookbackPeriod, []data.Metric{data.MetricClose})
 	if err != nil {
@@ -75,7 +78,7 @@ func (vs *volatilityScaler) Process(ctx context.Context, batch *portfolio.Batch)
 	)
 
 	for ast, weight := range projectedWeights {
-		vol := computeAnnualizedVol(priceFrame, ast)
+		vol := computeAnnualizedVol(priceFrame, ast, vs.lookback)
 		if math.IsNaN(vol) || vol <= 0 {
 			withoutVolWeight += math.Abs(weight)
 			continue
@@ -146,14 +149,20 @@ func (vs *volatilityScaler) Process(ctx context.Context, batch *portfolio.Batch)
 }
 
 // computeAnnualizedVol computes annualized realized volatility from daily
-// close prices: stddev(daily log returns) * sqrt(252).
+// close prices: stddev(daily log returns) * sqrt(252). The price series is
+// trimmed to the last lookback+1 rows so vol covers exactly lookback trading
+// days even though the fetch window is wider (calendar days).
 // Returns NaN if insufficient data (need at least 2 prices).
-func computeAnnualizedVol(priceFrame *data.DataFrame, ast asset.Asset) float64 {
+func computeAnnualizedVol(priceFrame *data.DataFrame, ast asset.Asset, lookback int) float64 {
 	if priceFrame == nil {
 		return math.NaN()
 	}
 
 	prices := priceFrame.Column(ast, data.MetricClose)
+	if len(prices) > lookback+1 {
+		prices = prices[len(prices)-(lookback+1):]
+	}
+
 	if len(prices) < 2 {
 		return math.NaN()
 	}

@@ -114,16 +114,45 @@ func (b *SimulatedBroker) Fills() <-chan broker.Fill {
 	return b.fills
 }
 
+// deliverFill places a fill on the fills channel without ever blocking.
+// In simulation, fills are produced (Submit/EvaluatePending) and consumed
+// (Account drain) on the same goroutine, so a batch with more orders than
+// the channel's capacity would deadlock on a blocking send. When the
+// channel is full it is replaced with one twice the size, preserving fill
+// order; consumers re-fetch the channel via Fills() on every drain.
+func (b *SimulatedBroker) deliverFill(fill broker.Fill) {
+	select {
+	case b.fills <- fill:
+		return
+	default:
+	}
+
+	grown := make(chan broker.Fill, 2*cap(b.fills)+1)
+
+	for {
+		select {
+		case queued := <-b.fills:
+			grown <- queued
+		default:
+			grown <- fill
+
+			b.fills = grown
+
+			return
+		}
+	}
+}
+
 // failOrder resolves an order as failed: it emits a fill carrying the reason
 // (Qty 0, no price) on the fills channel so the account records the failure
 // and the originating strategy can react to it, instead of the order silently
 // vanishing or the simulation aborting.
 func (b *SimulatedBroker) failOrder(order broker.Order, reason error) {
-	b.fills <- broker.Fill{
+	b.deliverFill(broker.Fill{
 		OrderID:  order.ID,
 		FilledAt: b.date,
 		Err:      reason,
-	}
+	})
 }
 
 func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error {
@@ -192,7 +221,8 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 		zerolog.Ctx(ctx).Warn().
 			Err(adjErr).
 			Str("asset", order.Asset.Ticker).
-			Msg("order skipped: fill adjuster error")
+			Msg("order failed: fill adjuster error")
+		b.failOrder(order, fmt.Errorf("fill adjuster error for %s: %w", order.Asset.Ticker, adjErr))
 
 		return nil
 	}
@@ -265,12 +295,12 @@ func (b *SimulatedBroker) Submit(ctx context.Context, order broker.Order) error 
 		}
 	}
 
-	b.fills <- broker.Fill{
+	b.deliverFill(broker.Fill{
 		OrderID:  order.ID,
 		Price:    result.Price,
 		Qty:      result.Quantity,
 		FilledAt: b.date,
-	}
+	})
 
 	// Handle partial fills: queue remainder for next bar.
 	if result.Partial {
@@ -470,12 +500,12 @@ func (b *SimulatedBroker) EvaluatePending() {
 		switch {
 		case stopTriggered:
 			// Stop loss wins (pessimistic) — even if TP also triggered.
-			b.fills <- broker.Fill{
+			b.deliverFill(broker.Fill{
 				OrderID:  stopOrder.ID,
 				Price:    stopFillPrice,
 				Qty:      stopOrder.Qty,
 				FilledAt: b.date,
-			}
+			})
 
 			delete(b.pending, stopOrder.ID)
 
@@ -486,12 +516,12 @@ func (b *SimulatedBroker) EvaluatePending() {
 			delete(b.groups, groupID)
 
 		case tpTriggered:
-			b.fills <- broker.Fill{
+			b.deliverFill(broker.Fill{
 				OrderID:  tpOrder.ID,
 				Price:    tpFillPrice,
 				Qty:      tpOrder.Qty,
 				FilledAt: b.date,
-			}
+			})
 
 			delete(b.pending, tpOrder.ID)
 
@@ -551,12 +581,12 @@ func (b *SimulatedBroker) evaluatePartialRemainders() {
 		}
 
 		if result.Quantity > 0 {
-			b.fills <- broker.Fill{
+			b.deliverFill(broker.Fill{
 				OrderID:  orderID,
 				Price:    result.Price,
 				Qty:      result.Quantity,
 				FilledAt: b.date,
-			}
+			})
 		}
 
 		if !result.Partial {

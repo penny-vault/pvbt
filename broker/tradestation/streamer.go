@@ -122,12 +122,8 @@ func (streamer *orderStreamer) run(ctx context.Context, resp *http.Response) {
 			default:
 			}
 
-			if reconnectErr := streamer.reconnect(ctx); reconnectErr != nil {
-				return
-			}
-
-			// Re-open the stream and restart the decoder.
-			newResp, openErr := streamer.openStream(ctx)
+			// Re-open the stream (with retries) and restart the decoder.
+			newResp, openErr := streamer.reconnectStream(ctx)
 			if openErr != nil {
 				return
 			}
@@ -210,42 +206,6 @@ func (streamer *orderStreamer) handleEvent(event tsStreamOrderEvent) {
 			}
 		}
 	}
-}
-
-func (streamer *orderStreamer) reconnect(ctx context.Context) error {
-	backoff := 1 * time.Second
-
-	for attempt := range maxReconnectAttempts {
-		select {
-		case <-streamer.done:
-			return ErrStreamDisconnected
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		if attempt > 0 {
-			timer := time.NewTimer(backoff)
-			select {
-			case <-timer.C:
-			case <-streamer.done:
-				timer.Stop()
-				return ErrStreamDisconnected
-			case <-ctx.Done():
-				timer.Stop()
-				return ctx.Err()
-			}
-
-			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
-			}
-		}
-	}
-
-	streamer.pollMissedFills(ctx)
-
-	return nil
 }
 
 func (streamer *orderStreamer) reconnectStream(ctx context.Context) (*http.Response, error) {

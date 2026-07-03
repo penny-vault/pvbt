@@ -33,7 +33,7 @@ type accountStreamer struct {
 	ctx          context.Context
 	lastPruneDay time.Time
 	sandbox      bool
-	lastOrders   map[int64]string // orderID -> last known status
+	cumFilled    map[int64]float64 // orderID -> cumulative executed qty delivered
 }
 
 type wsSubscription struct {
@@ -44,14 +44,14 @@ type wsSubscription struct {
 
 func newAccountStreamer(client *apiClient, fills chan broker.Fill, wsURL string, sessionID string, sandbox bool) *accountStreamer {
 	return &accountStreamer{
-		client:     client,
-		fills:      fills,
-		wsURL:      wsURL,
-		sessionID:  sessionID,
-		seenFills:  make(map[string]time.Time),
-		done:       make(chan struct{}),
-		sandbox:    sandbox,
-		lastOrders: make(map[int64]string),
+		client:    client,
+		fills:     fills,
+		wsURL:     wsURL,
+		sessionID: sessionID,
+		seenFills: make(map[string]time.Time),
+		cumFilled: make(map[int64]float64),
+		done:      make(chan struct{}),
+		sandbox:   sandbox,
 	}
 }
 
@@ -343,47 +343,32 @@ func (streamer *accountStreamer) pollOrders(ctx context.Context) {
 	}
 
 	for _, order := range orders {
-		prev, known := streamer.lastOrders[order.ID]
-		currentStatus := order.Status
-
-		streamer.mu.Lock()
-		streamer.lastOrders[order.ID] = currentStatus
-		streamer.mu.Unlock()
-
-		if known && prev == currentStatus {
+		// Emit the delta of the cumulative executed quantity rather than
+		// gating on status transitions: a partially_filled -> filled
+		// transition carries the completing quantity, and repeated partial
+		// executions can occur without any status change at all.
+		if order.ExecQuantity <= 0 {
 			continue
 		}
-
-		if currentStatus != "filled" && currentStatus != "partially_filled" {
-			continue
-		}
-
-		// Only emit if this is a new fill transition.
-		if known && (prev == "filled" || prev == "partially_filled") {
-			continue
-		}
-
-		orderID := fmt.Sprintf("%d", order.ID)
-		fillTime := parseFillTime(order.TransactionDate)
-		fillKey := fmt.Sprintf("%s-%.2f-%s", orderID, order.ExecQuantity, order.TransactionDate)
 
 		streamer.mu.Lock()
 
-		_, alreadySeen := streamer.seenFills[fillKey]
-		if !alreadySeen {
-			streamer.seenFills[fillKey] = time.Now()
+		delta := order.ExecQuantity - streamer.cumFilled[order.ID]
+		if delta > 0 {
+			streamer.cumFilled[order.ID] = order.ExecQuantity
 		}
+
 		streamer.mu.Unlock()
 
-		if alreadySeen {
+		if delta <= 0 {
 			continue
 		}
 
 		fill := broker.Fill{
-			OrderID:  orderID,
+			OrderID:  fmt.Sprintf("%d", order.ID),
 			Price:    order.LastFillPrice,
-			Qty:      order.LastFillQuantity,
-			FilledAt: fillTime,
+			Qty:      delta,
+			FilledAt: parseFillTime(order.TransactionDate),
 		}
 
 		select {

@@ -48,7 +48,14 @@ func (calmar) Compute(ctx context.Context, stats PortfolioStats, window *Period)
 		return 0, nil
 	}
 
-	annualizedReturn := math.Pow(eqCol[len(eqCol)-1]/eqCol[0], 1.0/years) - 1
+	// Flow-adjust the return so external deposits and withdrawals are not
+	// counted as return, matching CAGR.
+	growth := flowAdjustedGrowth(ctx, stats, eqCol, eqTimes)
+	if growth <= 0 {
+		return 0, nil
+	}
+
+	annualizedReturn := math.Pow(growth, 1.0/years) - 1
 
 	ddDF := stats.Drawdown(ctx, window)
 	if ddDF == nil {

@@ -175,9 +175,9 @@ func renderTrades(builder *strings.Builder, tr trades) {
 
 		actionStyled := valueStyle.Render(trade.action)
 		switch trade.action {
-		case "BUY":
+		case "Buy":
 			actionStyled = positiveStyle.Render(trade.action)
-		case "SELL":
+		case "Sell":
 			actionStyled = negativeStyle.Render(trade.action)
 		}
 

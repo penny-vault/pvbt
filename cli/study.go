@@ -225,16 +225,13 @@ func parseSimpleDuration(input string) (time.Duration, error) {
 		return 0, fmt.Errorf("empty duration string")
 	}
 
-	// Try standard Go duration parsing first (handles "72h", "30m", etc.).
-	if dur, err := time.ParseDuration(input); err == nil {
-		return dur, nil
-	}
-
 	unit := input[len(input)-1:]
 	numStr := input[:len(input)-1]
 
 	var multiplier time.Duration
 
+	// The y/m/d suffixes take priority: "6m" must mean 6 months, not 6 minutes,
+	// so time.ParseDuration is only a fallback for formats like "72h".
 	switch unit {
 	case "y":
 		multiplier = 365 * 24 * time.Hour
@@ -243,6 +240,10 @@ func parseSimpleDuration(input string) (time.Duration, error) {
 	case "d":
 		multiplier = 24 * time.Hour
 	default:
+		if dur, err := time.ParseDuration(input); err == nil {
+			return dur, nil
+		}
+
 		return 0, fmt.Errorf("unrecognised duration %q: use a number followed by y, m, or d (e.g. 5y, 6m, 30d)", input)
 	}
 

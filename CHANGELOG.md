@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `@monthbegin` and `@quarterbegin` schedules fire once per period instead of also firing on the following trading day.
+- Market-hours and trading-day checks evaluate times in Eastern time, so live trading works on hosts in any timezone.
+- Strategies scheduled intraday no longer see the current day's not-yet-printed close in daily data requests.
+- In live mode, intraday schedules fire at their scheduled times instead of collapsing into the daily close firing.
+- Child strategies in meta-strategies receive dividends, splits, and delist sells from their own holdings instead of the parent portfolio's.
+- The drawdown circuit breaker measures the current drawdown from peak rather than latching permanently on the worst historical drawdown, and no longer oversells positions into unintended shorts when triggered.
+- The max-position-count middleware ranks positions by absolute value and closes shorts with buy orders instead of negative-quantity sells.
+- The volatility scaler measures realized volatility over the configured number of trading days rather than calendar days.
+- Batches with more than 1024 orders no longer deadlock the backtest.
+- Orders skipped by a fill adjuster error now surface as failed fills instead of silently vanishing.
+- Technical indicators (Stochastic, MACD, MFI, RSI, ATR, Keltner) fetch enough trading days of history to compute; previously most errored or silently used too little data whenever the window spanned a weekend.
+- RSI, ATR, and Keltner Channels apply Wilder/EMA smoothing as documented instead of returning simple averages.
+- Bollinger Bands use the population standard deviation per the standard definition.
+- PairsRatio and PairsResidual align the two assets' time axes instead of pairing bars from different dates or panicking on mismatched history.
+- Wash-sale basis adjustments on a rebuy apply only to the matched shares instead of the whole lot.
+- Trade details attribute entry price, date, and PnL to the lots actually consumed under LIFO and HighestCost lot selection.
+- Windowed portfolio views compute tax, trade, withdrawal, and all risk metrics over the view's date range; several risk fields previously returned zero and the rest used full history.
+- MWRR computed over a window (1yr, ytd, mtd) reflects that window instead of the since-inception rate.
+- Calmar, Recovery Factor, Keller Ratio, Treynor, and Active Return no longer count deposits and withdrawals as investment return.
+- Benchmark-relative TWRR, CAGR, and MWRR no longer subtract the portfolio's deposits from the benchmark's return.
+- Realized gain, after-tax, and tax-metric calculations handle short round trips and stock splits correctly.
+- Trade Capture Ratio computes the correct sign for short trades.
+- Probabilistic Sharpe Ratio uses the published Bailey & López de Prado standard-error formula; confidence was previously overstated.
+- K-Ratio is normalized by observation count per the 2003 revision so values are comparable across window lengths.
+- The StdDev metric's series is an expanding annualized standard deviation instead of mislabeled raw returns.
+- Drawdowns over an absolute date window measure from peaks within the window, matching relative-period windows.
+- Cloned accounts keep their margin configuration and no longer panic on price updates, so prediction runs see the same leverage limits as real runs.
+- OCO order pairs cancel the surviving leg on brokers without native group support.
+- Writing a backtest over an existing output file succeeds instead of failing after the run completes.
+- Saved backtests reload benchmark gaps as missing data instead of zeros, and accounts restored from a database no longer panic when new activity is recorded.
+- `RebalanceTo` in a batch no longer sells positions twice when earlier orders in the same batch already sold them.
+- Fills are matched to their orders by ID, so partial fills and queued fills from earlier orders are recorded against the correct order.
+- Parameter sweeps include the documented max endpoint for fractional steps and no longer hang on a zero or negative step; walk-forward splits validate their durations.
+- Bayesian optimization learns from all evaluated combinations instead of only the previous batch, and failed runs no longer poison the surrogate model.
+- Walk-forward duration flags such as `--test-len 6m` parse as months instead of minutes.
+- Quitting the backtest progress view reports an interruption instead of crashing.
+- The library browser acts on the strategy row that is highlighted; previously the cursor and the displayed list could diverge.
+- Buy and sell rows in the recent-trades table are colored again.
+- Intraday adjusted prices include each split and dividend's own adjustment; bars before an event were previously missing exactly that event's factor.
+- Rated universes use the most recent rating on or before the query date instead of requiring an exact date match.
+- Snapshot recording and replay honor the strategy's fundamental dimension, and replaying fundamentals with date-key metrics no longer errors.
+- Parallel studies sharing one data provider no longer crash on concurrent index-membership lookups or corrupt each other's index cursors.
+- `Downsample(Daily)` groups intraday bars by calendar day instead of treating every bar as its own period.
+- Stress-test rankings omit scenarios the data does not cover instead of reporting them as flat results.
+- Numerous live-broker fixes: Schwab and TradeStation token refresh no longer deadlocks, and TradeStation no longer loses its refresh token; TradeStation API paths, response decoding, and order-side mapping match the v3 API; IBKR performs its OAuth handshake and session keepalive and no longer double-counts partial fills; E*TRADE signs query parameters, tracks fill deltas, and guards credentials during rotation; Alpaca recovers fills missed during a disconnect without duplicating them and formats GTD expirations in UTC; Tradier sandbox delivers completing and repeated partial fills; Webull order placement includes the account ID; tastytrade can open and cover short positions, closes its fill stream cleanly, and dollar-amount orders too small for one share return an error everywhere instead of vanishing; VWAP fills skip missing intraday bars instead of filling at NaN.
+
 ## [0.11.0] - 2026-06-08
 
 ### Added

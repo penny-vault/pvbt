@@ -553,6 +553,49 @@ var _ = Describe("ExcursionRecord", func() {
 		})
 	})
 
+	Describe("TradeCaptureRatio with short trades", func() {
+		It("uses direction-adjusted realized returns for shorts", func() {
+			acme := asset.Asset{CompositeFigi: "ACME", Ticker: "ACME"}
+			acct := portfolio.New(portfolio.WithCash(50_000, time.Time{}))
+
+			// Short 10 @ 100, price falls to 80, cover at 80.
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   asset.SellTransaction,
+				Qty:    10,
+				Price:  100.0,
+				Amount: 1_000.0,
+			})
+
+			df, err := data.NewDataFrame(
+				[]time.Time{time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+				[]asset.Asset{acme},
+				[]data.Metric{data.MetricClose, data.AdjClose, data.MetricHigh, data.MetricLow},
+				data.Daily, [][]float64{{80.0}, {80.0}, {100.0}, {80.0}},
+			)
+			Expect(err).NotTo(HaveOccurred())
+			acct.UpdateExcursions(df)
+
+			acct.Record(portfolio.Transaction{
+				Date:   time.Date(2024, 2, 1, 0, 0, 0, 0, time.UTC),
+				Asset:  acme,
+				Type:   asset.BuyTransaction,
+				Qty:    10,
+				Price:  80.0,
+				Amount: -800.0,
+			})
+
+			// Short MFE = (entry - low) / entry = (100-80)/100 = 0.20.
+			// Realized short return = (entry - exit) / entry = 0.20.
+			// TradeCaptureRatio = 0.20 / 0.20 = 1.0 (not -1.0, which the
+			// long-only formula would produce).
+			val, err := acct.PerformanceMetric(portfolio.TradeCaptureRatio).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(val).To(BeNumerically("~", 1.0, 1e-9))
+		})
+	})
+
 	Describe("with no trades", func() {
 		It("returns zero for averages and medians", func() {
 			emptyAcct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))

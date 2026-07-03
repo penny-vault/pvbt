@@ -41,7 +41,9 @@ func (recoveryFactor) Compute(ctx context.Context, stats PortfolioStats, window 
 		return 0, nil
 	}
 
-	totalReturn := eqCol[len(eqCol)-1]/eqCol[0] - 1
+	// Flow-adjust the return so external deposits and withdrawals are not
+	// counted as return, matching CAGR.
+	totalReturn := flowAdjustedGrowth(ctx, stats, eqCol, eqDF.Times()) - 1
 
 	ddDF := stats.Drawdown(ctx, window)
 	if ddDF == nil {

@@ -356,5 +356,11 @@ func runEngineBacktest(eng *engine.Engine, program *tea.Program, logWriter io.Wr
 		return nil, fmt.Errorf("progress UI: unexpected model type %T", finalModel)
 	}
 
+	if !final.done {
+		// The user quit the progress UI (q or ctrl+c) before the engine
+		// finished; there is no result to return.
+		return nil, fmt.Errorf("backtest interrupted before completion")
+	}
+
 	return final.result, final.err
 }

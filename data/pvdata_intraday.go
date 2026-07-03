@@ -488,8 +488,6 @@ func (p *PVDataProvider) loadAdjustmentFactors(
 
 		for idx := len(events) - 1; idx >= 0; idx-- {
 			ev := events[idx]
-			priceCum[idx] = cumPrice
-			volumeCum[idx] = cumVolume
 
 			// Split factor S means an N-for-1 split: post-split shares
 			// are S times pre-split shares. So pre-split prices need
@@ -510,6 +508,12 @@ func (p *PVDataProvider) loadAdjustmentFactors(
 					cumPrice *= 1 - ev.divid/prevClose
 				}
 			}
+
+			// Store after applying this event's own adjustment: quotes
+			// strictly before event idx need idx's adjustment included,
+			// and lookupFactorAt selects this tier for exactly those quotes.
+			priceCum[idx] = cumPrice
+			volumeCum[idx] = cumVolume
 		}
 
 		priceMap := make(map[int64]float64, len(events))

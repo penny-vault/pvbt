@@ -68,13 +68,14 @@ func newAPIClient(baseURL string, auth Authenticator) *apiClient {
 		return resp.StatusCode() >= 500 || resp.StatusCode() == http.StatusTooManyRequests
 	})
 
-	httpClient.OnBeforeRequest(func(_ *resty.Client, req *resty.Request) error {
-		if auth != nil {
-			return auth.Decorate(req.RawRequest)
-		}
-
-		return nil
-	})
+	// Decorate must run after resty builds the underlying *http.Request;
+	// OnBeforeRequest middleware runs before RawRequest exists, so a
+	// pre-request hook is used instead.
+	if auth != nil {
+		httpClient.SetPreRequestHook(func(_ *resty.Client, rawReq *http.Request) error {
+			return auth.Decorate(rawReq)
+		})
+	}
 
 	return &apiClient{
 		resty:   httpClient,

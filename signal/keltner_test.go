@@ -31,17 +31,19 @@ var _ = Describe("KeltnerChannels", func() {
 	})
 
 	It("computes hand-calculated Keltner Channels for multiple assets", func() {
+		// period=4 with 5 bars available: EMA window = 4, atrPeriod = 4.
+		//
 		// AAPL: Close=[100,102,101,104,103], High=[101,103,102,105,104], Low=[99,101,100,103,102]
-		//   EMA(5) of Close: seed = SMA = (100+102+101+104+103)/5 = 102.0
-		//   Only 5 points so EMA = 102.0
+		//   EMA(4) of Close (alpha=2/5): seed = SMA(100,102,101,104) = 101.75
+		//   idx 4: 0.4*103 + 0.6*101.75 = 102.25
 		//   TR from row 1: [3, 2, 4, 2], atrPeriod=4, ATR = (3+2+4+2)/4 = 2.75
-		//   Upper = 102.0 + 2*2.75 = 107.5, Lower = 102.0 - 2*2.75 = 96.5
+		//   Upper = 102.25 + 2*2.75 = 107.75, Lower = 102.25 - 2*2.75 = 96.75
 		//
 		// GOOG: Close=[200,204,202,208,206], High=[202,206,204,210,208], Low=[198,202,200,206,204]
-		//   EMA(5) of Close: seed = SMA = (200+204+202+208+206)/5 = 204.0
-		//   Only 5 points so EMA = 204.0
+		//   EMA(4) of Close (alpha=2/5): seed = SMA(200,204,202,208) = 203.5
+		//   idx 4: 0.4*206 + 0.6*203.5 = 204.5
 		//   TR from row 1: [6, 4, 8, 4], atrPeriod=4, ATR = (6+4+8+4)/4 = 5.5
-		//   Upper = 204.0 + 2*5.5 = 215.0, Lower = 204.0 - 2*5.5 = 193.0
+		//   Upper = 204.5 + 2*5.5 = 215.5, Lower = 204.5 - 2*5.5 = 193.5
 		times := make([]time.Time, 5)
 		for ii := range times {
 			times[ii] = now.AddDate(0, 0, ii-4)
@@ -71,21 +73,21 @@ var _ = Describe("KeltnerChannels", func() {
 			signal.KeltnerLowerSignal,
 		))
 
-		Expect(result.Value(aapl, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 102.0, 1e-10))
-		Expect(result.Value(aapl, signal.KeltnerUpperSignal)).To(BeNumerically("~", 107.5, 1e-10))
-		Expect(result.Value(aapl, signal.KeltnerLowerSignal)).To(BeNumerically("~", 96.5, 1e-10))
+		Expect(result.Value(aapl, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 102.25, 1e-10))
+		Expect(result.Value(aapl, signal.KeltnerUpperSignal)).To(BeNumerically("~", 107.75, 1e-10))
+		Expect(result.Value(aapl, signal.KeltnerLowerSignal)).To(BeNumerically("~", 96.75, 1e-10))
 
-		Expect(result.Value(goog, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 204.0, 1e-10))
-		Expect(result.Value(goog, signal.KeltnerUpperSignal)).To(BeNumerically("~", 215.0, 1e-10))
-		Expect(result.Value(goog, signal.KeltnerLowerSignal)).To(BeNumerically("~", 193.0, 1e-10))
+		Expect(result.Value(goog, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 204.5, 1e-10))
+		Expect(result.Value(goog, signal.KeltnerUpperSignal)).To(BeNumerically("~", 215.5, 1e-10))
+		Expect(result.Value(goog, signal.KeltnerLowerSignal)).To(BeNumerically("~", 193.5, 1e-10))
 	})
 
 	It("uses custom metric for center line when provided", func() {
 		// Use AdjClose instead of Close for the EMA center line.
 		// ATR still uses High/Low/Close.
 		// AdjClose=[90,92,91,94,93] differs from Close=[100,102,101,104,103].
-		// EMA(5) of AdjClose: SMA seed = (90+92+91+94+93)/5 = 92.0.
-		// Only 5 points so EMA = 92.0.
+		// EMA(4) of AdjClose (alpha=2/5): seed = SMA(90,92,91,94) = 91.75.
+		// idx 4: 0.4*93 + 0.6*91.75 = 92.25.
 		adjCloses := []float64{90, 92, 91, 94, 93}
 		closes := []float64{100, 102, 101, 104, 103}
 		highs := []float64{101, 103, 102, 105, 104}
@@ -106,8 +108,8 @@ var _ = Describe("KeltnerChannels", func() {
 
 		result := signal.KeltnerChannels(ctx, uu, portfolio.Days(4), 2.0, data.AdjClose)
 		Expect(result.Err()).NotTo(HaveOccurred())
-		// Center line must reflect AdjClose EMA (92.0), not Close EMA (102.0).
-		Expect(result.Value(aapl, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 92.0, 1e-10))
+		// Center line must reflect AdjClose EMA (92.25), not Close EMA (102.25).
+		Expect(result.Value(aapl, signal.KeltnerMiddleSignal)).To(BeNumerically("~", 92.25, 1e-10))
 	})
 
 	It("returns error on degenerate window (fewer than 2 rows)", func() {

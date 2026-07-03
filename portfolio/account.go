@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -235,7 +236,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			if err := a.submitAndRecord(ctx, sellOrder.asset, Sell, order, alloc.Justification); err != nil {
+			if err := a.submitAndRecord(ctx, sellOrder.asset, order, alloc.Justification); err != nil {
 				return fmt.Errorf("RebalanceTo: sell %s: %w", sellOrder.asset.Ticker, err)
 			}
 		}
@@ -249,7 +250,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			if err := a.submitAndRecord(ctx, coverOrder.asset, Buy, order, alloc.Justification); err != nil {
+			if err := a.submitAndRecord(ctx, coverOrder.asset, order, alloc.Justification); err != nil {
 				return fmt.Errorf("RebalanceTo: cover %s: %w", coverOrder.asset.Ticker, err)
 			}
 		}
@@ -278,7 +279,7 @@ func (a *Account) RebalanceTo(ctx context.Context, allocs ...Allocation) error {
 				OrderType:   broker.Market,
 				TimeInForce: broker.Day,
 			}
-			if err := a.submitAndRecord(ctx, buyOrder.asset, Buy, order, alloc.Justification); err != nil {
+			if err := a.submitAndRecord(ctx, buyOrder.asset, order, alloc.Justification); err != nil {
 				return fmt.Errorf("RebalanceTo: buy %s: %w", buyOrder.asset.Ticker, err)
 			}
 		}
@@ -351,53 +352,34 @@ func (a *Account) Order(ctx context.Context, ast asset.Asset, side Side, qty flo
 		order.OrderType = broker.Stop
 	}
 
-	return a.submitAndRecord(ctx, ast, side, order, justification)
+	return a.submitAndRecord(ctx, ast, order, justification)
 }
 
-// submitAndRecord sends an order to the broker and records each fill
-// as a transaction. Used by both Order and RebalanceTo.
+// submitAndRecord sends an order to the broker and records resulting fills
+// as transactions. Used by both Order and RebalanceTo.
 //
-// After Submit returns, any fills already in the broker's channel are
-// drained immediately (non-blocking). This is a temporary bridge until
-// Task 4 introduces the full DrainFills/ExecuteBatch infrastructure.
-func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, side Side, order broker.Order, justification string) error {
+// The order is registered in pendingOrders and fills are drained through the
+// shared fill machinery: each fill is matched to its order by ID, failed
+// fills surface without recording a transaction, and fills belonging to
+// other still-pending orders (e.g. an earlier GTC order) are recorded
+// against those orders rather than misattributed to this one.
+func (a *Account) submitAndRecord(ctx context.Context, ast asset.Asset, order broker.Order, justification string) error {
+	if order.ID == "" {
+		order.ID = fmt.Sprintf("order-%s-%d", ast.CompositeFigi, len(a.transactions))
+	}
+
+	order.Justification = justification
+	a.pendingOrders[order.ID] = order
+
 	if err := a.broker.Submit(ctx, order); err != nil {
+		delete(a.pendingOrders, order.ID)
+
 		return fmt.Errorf("order %s (qty=%.2f, amount=%.2f): %w", ast.Ticker, order.Qty, order.Amount, err)
 	}
 
-	fillCh := a.broker.Fills()
+	a.drainFillsFromChannel()
 
-	for {
-		select {
-		case fill := <-fillCh:
-			var (
-				txType asset.TransactionType
-				amount float64
-			)
-
-			switch side {
-			case Buy:
-				txType = asset.BuyTransaction
-				amount = -(fill.Price * fill.Qty)
-			case Sell:
-				txType = asset.SellTransaction
-				amount = fill.Price * fill.Qty
-			}
-
-			a.Record(Transaction{
-				Date:          fill.FilledAt,
-				Asset:         ast,
-				Type:          txType,
-				Qty:           fill.Qty,
-				Price:         fill.Price,
-				Amount:        amount,
-				Justification: justification,
-				LotSelection:  LotSelection(order.LotSelection),
-			})
-		default:
-			return nil
-		}
-	}
+	return nil
 }
 
 // Cash returns the current cash balance.
@@ -541,74 +523,96 @@ func (a *Account) Summary() (Summary, error) {
 	return summary, errors.Join(errs...)
 }
 
+// metricQuerier is the minimal surface the shared metric aggregators need:
+// both *Account (full history) and *viewedPortfolio (windowed) provide it.
+type metricQuerier interface {
+	PerformanceMetric(pm PerformanceMetric) PerformanceMetricQuery
+}
+
 func (a *Account) RiskMetrics() (RiskMetrics, error) {
+	return riskMetricsFrom(a)
+}
+
+func (a *Account) TaxMetrics() (TaxMetrics, error) {
+	return taxMetricsFrom(a)
+}
+
+func (a *Account) TradeMetrics() (TradeMetrics, error) {
+	return tradeMetricsFrom(a)
+}
+
+func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
+	return withdrawalMetricsFrom(a)
+}
+
+func riskMetricsFrom(src metricQuerier) (RiskMetrics, error) {
 	var errs []error
 
 	risk := RiskMetrics{}
 
 	var err error
 
-	risk.Beta, err = a.PerformanceMetric(Beta).Value()
+	risk.Beta, err = src.PerformanceMetric(Beta).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.Alpha, err = a.PerformanceMetric(Alpha).Value()
+	risk.Alpha, err = src.PerformanceMetric(Alpha).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.TrackingError, err = a.PerformanceMetric(TrackingError).Value()
+	risk.TrackingError, err = src.PerformanceMetric(TrackingError).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.DownsideDeviation, err = a.PerformanceMetric(DownsideDeviation).Value()
+	risk.DownsideDeviation, err = src.PerformanceMetric(DownsideDeviation).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.InformationRatio, err = a.PerformanceMetric(InformationRatio).Value()
+	risk.InformationRatio, err = src.PerformanceMetric(InformationRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.Treynor, err = a.PerformanceMetric(Treynor).Value()
+	risk.Treynor, err = src.PerformanceMetric(Treynor).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.UlcerIndex, err = a.PerformanceMetric(UlcerIndex).Value()
+	risk.UlcerIndex, err = src.PerformanceMetric(UlcerIndex).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.ExcessKurtosis, err = a.PerformanceMetric(ExcessKurtosis).Value()
+	risk.ExcessKurtosis, err = src.PerformanceMetric(ExcessKurtosis).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.Skewness, err = a.PerformanceMetric(Skewness).Value()
+	risk.Skewness, err = src.PerformanceMetric(Skewness).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.RSquared, err = a.PerformanceMetric(RSquared).Value()
+	risk.RSquared, err = src.PerformanceMetric(RSquared).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.ValueAtRisk, err = a.PerformanceMetric(ValueAtRisk).Value()
+	risk.ValueAtRisk, err = src.PerformanceMetric(ValueAtRisk).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.UpsideCaptureRatio, err = a.PerformanceMetric(UpsideCaptureRatio).Value()
+	risk.UpsideCaptureRatio, err = src.PerformanceMetric(UpsideCaptureRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	risk.DownsideCaptureRatio, err = a.PerformanceMetric(DownsideCaptureRatio).Value()
+	risk.DownsideCaptureRatio, err = src.PerformanceMetric(DownsideCaptureRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -616,49 +620,49 @@ func (a *Account) RiskMetrics() (RiskMetrics, error) {
 	return risk, errors.Join(errs...)
 }
 
-func (a *Account) TaxMetrics() (TaxMetrics, error) {
+func taxMetricsFrom(src metricQuerier) (TaxMetrics, error) {
 	var errs []error
 
 	taxMetrics := TaxMetrics{}
 
 	var err error
 
-	taxMetrics.LTCG, err = a.PerformanceMetric(LTCGMetric).Value()
+	taxMetrics.LTCG, err = src.PerformanceMetric(LTCGMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.STCG, err = a.PerformanceMetric(STCGMetric).Value()
+	taxMetrics.STCG, err = src.PerformanceMetric(STCGMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.UnrealizedLTCG, err = a.PerformanceMetric(UnrealizedLTCGMetric).Value()
+	taxMetrics.UnrealizedLTCG, err = src.PerformanceMetric(UnrealizedLTCGMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.UnrealizedSTCG, err = a.PerformanceMetric(UnrealizedSTCGMetric).Value()
+	taxMetrics.UnrealizedSTCG, err = src.PerformanceMetric(UnrealizedSTCGMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.QualifiedDividends, err = a.PerformanceMetric(QualifiedDividendsMetric).Value()
+	taxMetrics.QualifiedDividends, err = src.PerformanceMetric(QualifiedDividendsMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.NonQualifiedIncome, err = a.PerformanceMetric(NonQualifiedIncomeMetric).Value()
+	taxMetrics.NonQualifiedIncome, err = src.PerformanceMetric(NonQualifiedIncomeMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.TaxCostRatio, err = a.PerformanceMetric(TaxCostRatioMetric).Value()
+	taxMetrics.TaxCostRatio, err = src.PerformanceMetric(TaxCostRatioMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	taxMetrics.TaxDrag, err = a.PerformanceMetric(TaxDragMetric).Value()
+	taxMetrics.TaxDrag, err = src.PerformanceMetric(TaxDragMetric).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -666,99 +670,99 @@ func (a *Account) TaxMetrics() (TaxMetrics, error) {
 	return taxMetrics, errors.Join(errs...)
 }
 
-func (a *Account) TradeMetrics() (TradeMetrics, error) {
+func tradeMetricsFrom(src metricQuerier) (TradeMetrics, error) {
 	var errs []error
 
 	tradeMetrics := TradeMetrics{}
 
 	var err error
 
-	tradeMetrics.WinRate, err = a.PerformanceMetric(WinRate).Value()
+	tradeMetrics.WinRate, err = src.PerformanceMetric(WinRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.AverageWin, err = a.PerformanceMetric(AverageWin).Value()
+	tradeMetrics.AverageWin, err = src.PerformanceMetric(AverageWin).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.AverageLoss, err = a.PerformanceMetric(AverageLoss).Value()
+	tradeMetrics.AverageLoss, err = src.PerformanceMetric(AverageLoss).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.ProfitFactor, err = a.PerformanceMetric(ProfitFactor).Value()
+	tradeMetrics.ProfitFactor, err = src.PerformanceMetric(ProfitFactor).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.AverageHoldingPeriod, err = a.PerformanceMetric(AverageHoldingPeriod).Value()
+	tradeMetrics.AverageHoldingPeriod, err = src.PerformanceMetric(AverageHoldingPeriod).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.Turnover, err = a.PerformanceMetric(Turnover).Value()
+	tradeMetrics.Turnover, err = src.PerformanceMetric(Turnover).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.NPositivePeriods, err = a.PerformanceMetric(NPositivePeriods).Value()
+	tradeMetrics.NPositivePeriods, err = src.PerformanceMetric(NPositivePeriods).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.GainLossRatio, err = a.PerformanceMetric(TradeGainLossRatio).Value()
+	tradeMetrics.GainLossRatio, err = src.PerformanceMetric(TradeGainLossRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.AverageMFE, err = a.PerformanceMetric(AverageMFE).Value()
+	tradeMetrics.AverageMFE, err = src.PerformanceMetric(AverageMFE).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.AverageMAE, err = a.PerformanceMetric(AverageMAE).Value()
+	tradeMetrics.AverageMAE, err = src.PerformanceMetric(AverageMAE).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.MedianMFE, err = a.PerformanceMetric(MedianMFE).Value()
+	tradeMetrics.MedianMFE, err = src.PerformanceMetric(MedianMFE).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.MedianMAE, err = a.PerformanceMetric(MedianMAE).Value()
+	tradeMetrics.MedianMAE, err = src.PerformanceMetric(MedianMAE).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.EdgeRatio, err = a.PerformanceMetric(EdgeRatio).Value()
+	tradeMetrics.EdgeRatio, err = src.PerformanceMetric(EdgeRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.TradeCaptureRatio, err = a.PerformanceMetric(TradeCaptureRatio).Value()
+	tradeMetrics.TradeCaptureRatio, err = src.PerformanceMetric(TradeCaptureRatio).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.LongWinRate, err = a.PerformanceMetric(LongWinRate).Value()
+	tradeMetrics.LongWinRate, err = src.PerformanceMetric(LongWinRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.ShortWinRate, err = a.PerformanceMetric(ShortWinRate).Value()
+	tradeMetrics.ShortWinRate, err = src.PerformanceMetric(ShortWinRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.LongProfitFactor, err = a.PerformanceMetric(LongProfitFactor).Value()
+	tradeMetrics.LongProfitFactor, err = src.PerformanceMetric(LongProfitFactor).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	tradeMetrics.ShortProfitFactor, err = a.PerformanceMetric(ShortProfitFactor).Value()
+	tradeMetrics.ShortProfitFactor, err = src.PerformanceMetric(ShortProfitFactor).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -766,24 +770,24 @@ func (a *Account) TradeMetrics() (TradeMetrics, error) {
 	return tradeMetrics, errors.Join(errs...)
 }
 
-func (a *Account) WithdrawalMetrics() (WithdrawalMetrics, error) {
+func withdrawalMetricsFrom(src metricQuerier) (WithdrawalMetrics, error) {
 	var errs []error
 
 	withdrawal := WithdrawalMetrics{}
 
 	var err error
 
-	withdrawal.SafeWithdrawalRate, err = a.PerformanceMetric(SafeWithdrawalRate).Value()
+	withdrawal.SafeWithdrawalRate, err = src.PerformanceMetric(SafeWithdrawalRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	withdrawal.PerpetualWithdrawalRate, err = a.PerformanceMetric(PerpetualWithdrawalRate).Value()
+	withdrawal.PerpetualWithdrawalRate, err = src.PerformanceMetric(PerpetualWithdrawalRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
 
-	withdrawal.DynamicWithdrawalRate, err = a.PerformanceMetric(DynamicWithdrawalRate).Value()
+	withdrawal.DynamicWithdrawalRate, err = src.PerformanceMetric(DynamicWithdrawalRate).Value()
 	if err != nil {
 		errs = append(errs, err)
 	}
@@ -877,7 +881,9 @@ func (a *Account) Record(txn Transaction) {
 
 				tdRemaining := coverQty
 
-				tdLots := shortLots
+				// Walk lots in the same order consumeShortLots will
+				// consume them so entry price/date match the real lots.
+				tdLots := lotsInConsumptionOrder(shortLots, method)
 				for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
 					matched := tdLots[tdLotIdx].Qty
 					if matched > tdRemaining {
@@ -937,12 +943,17 @@ func (a *Account) Record(txn Transaction) {
 			}
 
 			a.taxLots[txn.Asset] = append(a.taxLots[txn.Asset], newLot)
-			a.checkWashSaleOnBuy(txn.Asset, txn.Date, longQty, lotID)
-			a.recentBuys[txn.Asset] = append(a.recentBuys[txn.Asset], recentBuy{
-				date:  txn.Date,
-				lotID: lotID,
-				qty:   longQty,
-			})
+
+			// Only the portion of the lot that did not absorb a disallowed
+			// loss remains a replacement-share candidate for future sales.
+			remainingLotID, remainingQty := a.checkWashSaleOnBuy(txn.Asset, txn.Date, longQty, lotID)
+			if remainingQty > 0 {
+				a.recentBuys[txn.Asset] = append(a.recentBuys[txn.Asset], recentBuy{
+					date:  txn.Date,
+					lotID: remainingLotID,
+					qty:   remainingQty,
+				})
+			}
 
 			if _, exists := a.excursions[txn.Asset]; !exists {
 				a.excursions[txn.Asset] = ExcursionRecord{
@@ -989,7 +1000,9 @@ func (a *Account) Record(txn Transaction) {
 
 				tdRemaining := closeLongQty
 
-				tdLots := longLots
+				// Walk lots in the same order consumeLots will consume
+				// them so entry price/date match the real lots.
+				tdLots := lotsInConsumptionOrder(longLots, method)
 				for tdLotIdx := 0; tdLotIdx < len(tdLots) && tdRemaining > 0; tdLotIdx++ {
 					matched := tdLots[tdLotIdx].Qty
 					if matched > tdRemaining {
@@ -1230,14 +1243,19 @@ func (a *Account) pruneWashSaleTracking(asOf time.Time) {
 
 // checkWashSaleOnBuy checks if there are recent loss sales within 30 days
 // of this buy. If so, it disallows the loss by adding it to the new lot's
-// cost basis.
-func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty float64, lotID string) {
+// cost basis. When only part of the new lot matches a loss sale, the lot
+// is split so that only the matched shares receive the basis adjustment.
+// It returns the lot ID and share count of the portion of the new lot
+// that did not absorb a disallowed loss (and so remains a replacement-share
+// candidate for future loss sales); remainingQty is 0 when the entire lot
+// was matched.
+func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty float64, lotID string) (remainingLotID string, remainingQty float64) {
+	remaining := buyQty
+
 	sales := a.recentLossSales[ast]
 	if len(sales) == 0 {
-		return
+		return lotID, remaining
 	}
-
-	remaining := buyQty
 
 	for idx := 0; idx < len(sales) && remaining > 0; idx++ {
 		daysDiff := buyDate.Sub(sales[idx].date).Hours() / 24
@@ -1253,8 +1271,18 @@ func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty 
 
 		disallowedLoss := matchQty * sales[idx].lossPerShare
 
-		// Adjust the new lot's cost basis.
-		a.adjustLotBasis(ast, lotID, sales[idx].lossPerShare)
+		// When only part of the current lot matches, split it so the
+		// basis adjustment lands on the matched shares only. The tail
+		// keeps its original basis and is matched on later iterations.
+		adjustedLotID := lotID
+		if matchQty < remaining {
+			headID, tailID := a.splitLot(ast, lotID, matchQty)
+			adjustedLotID = headID
+			lotID = tailID
+		}
+
+		// Adjust the matched portion's cost basis.
+		a.adjustLotBasis(ast, adjustedLotID, sales[idx].lossPerShare)
 
 		// Record the wash sale.
 		a.washSales = append(a.washSales, WashSaleRecord{
@@ -1262,7 +1290,7 @@ func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty 
 			SellDate:       sales[idx].date,
 			RebuyDate:      buyDate,
 			DisallowedLoss: disallowedLoss,
-			AdjustedLotID:  lotID,
+			AdjustedLotID:  adjustedLotID,
 		})
 
 		// Consume from the loss sale entry.
@@ -1283,6 +1311,8 @@ func (a *Account) checkWashSaleOnBuy(ast asset.Asset, buyDate time.Time, buyQty 
 	} else {
 		a.recentLossSales[ast] = pruned
 	}
+
+	return lotID, remaining
 }
 
 // checkWashSaleOnSell checks if there are recent buys within 30 days of
@@ -1423,7 +1453,9 @@ func (a *Account) splitLot(ast asset.Asset, lotID string, headQty float64) (head
 			Price: original.Price,
 		}
 
-		a.taxLots[ast] = append(lots, tail)
+		// Insert the tail immediately after the head so the slice keeps
+		// its date-ascending order, which FIFO consumption relies on.
+		a.taxLots[ast] = slices.Insert(lots, idx+1, tail)
 
 		return headID, tailID
 	}
@@ -2119,6 +2151,16 @@ func (a *Account) ExecuteBatch(ctx context.Context, batch *Batch) error {
 						return fmt.Errorf("execute batch: submit %s: %w", ord.Asset.Ticker, err)
 					}
 				}
+
+				// Register the group so cancelOCOSiblings can cancel the
+				// surviving leg when one fills; without this the OCO pair
+				// degrades to two independent orders.
+				group := &broker.OrderGroup{ID: spec.GroupID, Type: broker.GroupOCO}
+				for _, ord := range orders {
+					group.OrderIDs = append(group.OrderIDs, ord.ID)
+				}
+
+				a.pendingGroups[spec.GroupID] = group
 			}
 
 		case broker.GroupBracket:
@@ -2251,7 +2293,15 @@ func (a *Account) drainFillsFromChannel() {
 				BatchID:       order.BatchID,
 			})
 
-			delete(a.pendingOrders, fill.OrderID)
+			// Partial fill: keep the order pending with the remaining
+			// quantity so later fills for the same order ID are still
+			// recognized rather than dropped as unknown.
+			if order.Qty-fill.Qty > 1e-9 {
+				order.Qty -= fill.Qty
+				a.pendingOrders[fill.OrderID] = order
+			} else {
+				delete(a.pendingOrders, fill.OrderID)
+			}
 
 			// Group handling for the filled order.
 			if order.GroupID != "" {
@@ -2545,6 +2595,20 @@ func (acct *Account) Clone() PortfolioManager {
 		seenTxns[id] = struct{}{}
 	}
 
+	positionMV := make(map[asset.Asset][]float64, len(acct.positionMV))
+	for held, series := range acct.positionMV {
+		seriesCopy := make([]float64, len(series))
+		copy(seriesCopy, series)
+		positionMV[held] = seriesCopy
+	}
+
+	positionQty := make(map[asset.Asset][]float64, len(acct.positionQty))
+	for held, series := range acct.positionQty {
+		seriesCopy := make([]float64, len(series))
+		copy(seriesCopy, series)
+		positionQty[held] = seriesCopy
+	}
+
 	clone := &Account{
 		cash:              acct.cash,
 		holdings:          holdings,
@@ -2574,6 +2638,16 @@ func (acct *Account) Clone() PortfolioManager {
 		seenTransactions:  seenTxns,
 		batches:           batches,
 		currentBatchID:    currentBatchID,
+		positionMV:        positionMV,
+		positionQty:       positionQty,
+
+		// Margin configuration: prediction runs must see the same
+		// leverage limits and borrow costs as the real account.
+		initialMargin:            acct.initialMargin,
+		maintenanceMargin:        acct.maintenanceMargin,
+		maxLeverage:              acct.maxLeverage,
+		grossMaintenanceLeverage: acct.grossMaintenanceLeverage,
+		borrowRate:               acct.borrowRate,
 	}
 
 	if acct.perfData != nil {

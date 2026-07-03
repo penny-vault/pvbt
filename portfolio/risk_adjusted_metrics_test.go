@@ -117,7 +117,7 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 			Expect(val).To(BeNumerically("~", 1.3629, 1e-3))
 		})
 
-		It("returns the return series from ComputeSeries", func() {
+		It("returns an expanding annualized standard deviation series from ComputeSeries", func() {
 			acct := buildAccount(
 				[]float64{100, 105, 98, 103, 97, 110},
 				[]float64{100, 100.01, 100.02, 100.03, 100.04, 100.05},
@@ -125,10 +125,17 @@ var _ = Describe("Risk-Adjusted Metrics", func() {
 
 			df, err := acct.PerformanceMetric(portfolio.StdDev).Series()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(df.Len()).To(Equal(5))
+			// 5 returns -> 4 expanding points (at least 2 returns needed).
+			Expect(df.Len()).To(Equal(4))
 			series := df.Column(perfAsset, data.PortfolioEquity)
-			Expect(series[0]).To(BeNumerically("~", 0.05, 1e-10))
-			Expect(series[1]).To(BeNumerically("~", -0.06667, 1e-4))
+			// First point: stddev([0.05, -0.066667]) = 0.0824958 annualized
+			// over the first 3 timestamps (Jan 2 - Jan 6, af = 2/(4/365.25)):
+			// 0.0824958 * sqrt(182.625) = 1.11484
+			Expect(series[0]).To(BeNumerically("~", 1.11484, 1e-4))
+			// Final point matches the scalar StdDev value.
+			val, err := acct.PerformanceMetric(portfolio.StdDev).Value()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(series[3]).To(BeNumerically("~", val, 1e-12))
 		})
 	})
 

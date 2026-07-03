@@ -89,8 +89,13 @@ var _ = Describe("walkBackTradingDays", func() {
 	})
 
 	It("walks back 5 trading days skipping weekends", func() {
-		// Monday 2024-02-12
-		from := time.Date(2024, 2, 12, 16, 0, 0, 0, time.UTC)
+		nyc, err := time.LoadLocation("America/New_York")
+		Expect(err).NotTo(HaveOccurred())
+
+		// Monday 2024-02-12 at the close, market time. Times are evaluated
+		// in market time, so 16:00 UTC would be 11:00 ET -- before the
+		// close -- and Monday itself would not count.
+		from := time.Date(2024, 2, 12, 16, 0, 0, 0, nyc)
 		result, err := engine.WalkBackTradingDaysForTest(from, 5)
 		Expect(err).NotTo(HaveOccurred())
 		// 5 trading days back from Feb 12 (Mon): Feb 5 (Mon)
