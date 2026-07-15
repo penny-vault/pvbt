@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.2] - 2026-07-14
+
 ### Added
 
 - Predictions now capture the annotations the strategy recorded during the prediction run; they are available on `Prediction()` and stored in a new `predicted_annotations` table in the output file.
@@ -458,7 +460,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.12.1...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.12.2...HEAD
+[0.12.2]: https://github.com/penny-vault/pvbt/compare/v0.12.1...v0.12.2
 [0.12.1]: https://github.com/penny-vault/pvbt/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/penny-vault/pvbt/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/penny-vault/pvbt/compare/v0.11.0...v0.11.1
