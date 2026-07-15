@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-14
+
 ### Added
 
 - Every backtest now predicts the trades the strategy would place on the next scheduled trade date, shows them at the end of the summary report, and stores the result in the output file (`prediction`, `predicted_transactions`, and `predicted_holdings` tables); the new `Prediction()` portfolio method returns it in code.
@@ -442,7 +444,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.11.1...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/penny-vault/pvbt/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/penny-vault/pvbt/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/penny-vault/pvbt/compare/v0.10.4...v0.11.0
 [0.10.4]: https://github.com/penny-vault/pvbt/compare/v0.10.3...v0.10.4
