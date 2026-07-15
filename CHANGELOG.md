@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.1] - 2026-07-14
+
+### Changed
+
+- Updated all third-party dependencies to their latest versions.
+
 ## [0.12.0] - 2026-07-14
 
 ### Added
@@ -444,7 +450,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Annotate portfolio decisions with justifications for audit trails.
 - Save and reload complete backtest results between sessions.
 
-[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.12.0...HEAD
+[unreleased]: https://github.com/penny-vault/pvbt/compare/v0.12.1...HEAD
+[0.12.1]: https://github.com/penny-vault/pvbt/compare/v0.12.0...v0.12.1
 [0.12.0]: https://github.com/penny-vault/pvbt/compare/v0.11.1...v0.12.0
 [0.11.1]: https://github.com/penny-vault/pvbt/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/penny-vault/pvbt/compare/v0.10.4...v0.11.0
