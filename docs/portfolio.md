@@ -381,7 +381,7 @@ for ast, qty := range p.Holdings() {
 }
 ```
 
-After a backtest, `p.Prediction()` returns the trades the strategy would place on the next scheduled trade date and the holdings that would result. The engine records it automatically at the end of every backtest, and it round-trips through the SQLite output (in the `prediction`, `predicted_transactions`, and `predicted_holdings` tables). It returns nil when no prediction has been recorded. See [Previewing upcoming trades](engine.md#previewing-upcoming-trades) for details.
+After a backtest, `p.Prediction()` returns the trades the strategy would place on the next scheduled trade date, the holdings that would result, and the annotations the strategy recorded during the prediction run. The engine records it automatically at the end of every backtest, and it round-trips through the SQLite output (in the `prediction`, `predicted_transactions`, `predicted_holdings`, and `predicted_annotations` tables). It returns nil when no prediction has been recorded. See [Previewing upcoming trades](engine.md#previewing-upcoming-trades) for details.
 
 ## Short position lifecycle
 

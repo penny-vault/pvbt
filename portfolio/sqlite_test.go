@@ -328,6 +328,10 @@ var _ = Describe("SQLite", func() {
 					{Asset: bnd, Quantity: 5, MarketValue: 400},
 					{Asset: spy, Quantity: 10, MarketValue: 5000},
 				},
+				Annotations: []portfolio.Annotation{
+					{Timestamp: predictedDate, Key: "momentum", Value: "0.42"},
+					{Timestamp: predictedDate, Key: "bond_fraction", Value: "0.10"},
+				},
 			})
 
 			path := filepath.Join(tmpDir, "prediction.db")
@@ -359,6 +363,14 @@ var _ = Describe("SQLite", func() {
 			Expect(pred.Holdings[1].Asset).To(Equal(spy))
 			Expect(pred.Holdings[1].Quantity).To(Equal(10.0))
 			Expect(pred.Holdings[1].MarketValue).To(Equal(5000.0))
+
+			// Only Key and Value round-trip; Timestamp and BatchID refer to
+			// the transient prediction clone and are not persisted.
+			Expect(pred.Annotations).To(HaveLen(2))
+			Expect(pred.Annotations[0].Key).To(Equal("momentum"))
+			Expect(pred.Annotations[0].Value).To(Equal("0.42"))
+			Expect(pred.Annotations[1].Key).To(Equal("bond_fraction"))
+			Expect(pred.Annotations[1].Value).To(Equal("0.10"))
 		})
 
 		It("restores a nil prediction when none was stored", func() {
@@ -483,7 +495,7 @@ var _ = Describe("SQLite", func() {
 
 			var schemaVer string
 			Expect(db.QueryRow(`SELECT value FROM metadata WHERE key='schema_version'`).Scan(&schemaVer)).To(Succeed())
-			Expect(schemaVer).To(Equal("6"))
+			Expect(schemaVer).To(Equal("7"))
 
 			var total int
 			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&total)).To(Succeed())

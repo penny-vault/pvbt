@@ -278,11 +278,20 @@ var _ = Describe("PredictedPortfolio", func() {
 		Expect(pred.Holdings[0].Quantity).To(BeNumerically(">", 0))
 		Expect(pred.Holdings[0].MarketValue).To(BeNumerically(">", 0))
 
+		// The strategy annotates once per Compute; only the prediction
+		// run's entry belongs to the prediction, not the backtest's.
+		Expect(pred.Annotations).To(HaveLen(1), "prediction should include only annotations recorded during the prediction run")
+		Expect(pred.Annotations[0].Key).To(Equal("action"))
+		Expect(pred.Annotations[0].Value).To(Equal("buy SPY"))
+
 		// The prediction must not leak into the account's actual state.
 		for _, tx := range result.Transactions() {
 			Expect(tx.Date.After(backtestEnd)).To(BeFalse(),
 				"account transaction log should not contain predicted trades")
 		}
+
+		Expect(result.Annotations()).To(HaveLen(1),
+			"account annotation log should not contain predicted annotations")
 
 		// The prediction survives a round-trip through the SQLite output.
 		acct, ok := result.(*portfolio.Account)
@@ -300,6 +309,9 @@ var _ = Describe("PredictedPortfolio", func() {
 		Expect(restoredPred.Transactions).To(HaveLen(len(pred.Transactions)))
 		Expect(restoredPred.Holdings).To(HaveLen(len(pred.Holdings)))
 		Expect(restoredPred.Holdings[0].Asset.Ticker).To(Equal("SPY"))
+		Expect(restoredPred.Annotations).To(HaveLen(1))
+		Expect(restoredPred.Annotations[0].Key).To(Equal("action"))
+		Expect(restoredPred.Annotations[0].Value).To(Equal("buy SPY"))
 	})
 
 	It("returns error when no schedule is set", func() {

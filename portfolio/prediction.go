@@ -45,6 +45,12 @@ type Prediction struct {
 	// Holdings are the positions the portfolio would hold after the
 	// predicted trades execute, sorted by ticker then FIGI.
 	Holdings []PredictedHolding
+
+	// Annotations are the key-value entries the strategy recorded during
+	// the prediction run, in the order they were recorded. Only Key and
+	// Value are persisted to the SQLite output; Timestamp and BatchID
+	// refer to the transient prediction clone and are not restored.
+	Annotations []Annotation
 }
 
 // SetPrediction stores the outcome of a prediction run on the account.

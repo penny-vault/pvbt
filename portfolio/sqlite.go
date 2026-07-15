@@ -32,7 +32,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "6"
+const schemaVersion = "7"
 
 const dateFormat = "2006-01-02"
 
@@ -138,6 +138,11 @@ CREATE TABLE predicted_holdings (
     asset_figi   TEXT NOT NULL,
     quantity     REAL NOT NULL,
     market_value REAL NOT NULL
+);
+
+CREATE TABLE predicted_annotations (
+    key   TEXT NOT NULL,
+    value TEXT NOT NULL
 );
 `
 
@@ -630,6 +635,18 @@ func (a *Account) writePrediction(tx *sql.Tx) error {
 		}
 	}
 
+	annStmt, err := tx.Prepare("INSERT INTO predicted_annotations (key, value) VALUES (?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare predicted_annotations: %w", err)
+	}
+	defer annStmt.Close()
+
+	for _, ann := range a.prediction.Annotations {
+		if _, err := annStmt.Exec(ann.Key, ann.Value); err != nil {
+			return fmt.Errorf("insert predicted_annotation: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -730,6 +747,26 @@ func (a *Account) readPrediction(db *sql.DB) error {
 		return err
 	}
 
+	annRows, err := db.Query("SELECT key, value FROM predicted_annotations ORDER BY rowid")
+	if err != nil {
+		return fmt.Errorf("query predicted_annotations: %w", err)
+	}
+	defer annRows.Close()
+
+	for annRows.Next() {
+		var ann Annotation
+
+		if err := annRows.Scan(&ann.Key, &ann.Value); err != nil {
+			return fmt.Errorf("scan predicted_annotation: %w", err)
+		}
+
+		pred.Annotations = append(pred.Annotations, ann)
+	}
+
+	if err := annRows.Err(); err != nil {
+		return err
+	}
+
 	a.prediction = pred
 
 	return nil
@@ -760,7 +797,7 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "6".
+// The database must have been created by ToSQLite with schema_version "7".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {

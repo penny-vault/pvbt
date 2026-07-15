@@ -190,7 +190,8 @@
 //	}
 //
 // The prediction is persisted to the SQLite output in the prediction,
-// predicted_transactions, and predicted_holdings tables.
+// predicted_transactions, predicted_holdings, and predicted_annotations
+// tables.
 //
 // PredictedPortfolio can also be called directly after a backtest or during
 // live operation:

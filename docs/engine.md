@@ -229,7 +229,7 @@ for _, holding := range pred.Holdings {
 }
 ```
 
-The `backtest` and `report` commands show the predicted trades and resulting holdings at the end of the summary report. The prediction is persisted in the backtest's SQLite output in three dedicated tables: `prediction` (the predicted trade date), `predicted_transactions` (the trades the strategy would place), and `predicted_holdings` (the resulting positions). Portfolios restored with `portfolio.FromSQLite` expose it through the same `Prediction()` method.
+The `backtest` and `report` commands show the predicted trades and resulting holdings at the end of the summary report. The prediction is persisted in the backtest's SQLite output in four dedicated tables: `prediction` (the predicted trade date), `predicted_transactions` (the trades the strategy would place), `predicted_holdings` (the resulting positions), and `predicted_annotations` (the key-value annotations the strategy recorded during the prediction run). Portfolios restored with `portfolio.FromSQLite` expose it through the same `Prediction()` method.
 
 The engine clones the current portfolio, advances the date to the next scheduled trade, and forward-fills any data gaps by copying the last available prices forward day-by-day. The strategy is completely unaware it is a prediction run.
 
