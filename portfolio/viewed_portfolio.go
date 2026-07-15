@@ -145,6 +145,7 @@ func (vp *viewedPortfolio) GrossMaintenanceLeverage() float64 {
 }
 func (vp *viewedPortfolio) LeverageHeadroom() float64     { return vp.acct.LeverageHeadroom() }
 func (vp *viewedPortfolio) Benchmark() asset.Asset        { return vp.acct.Benchmark() }
+func (vp *viewedPortfolio) Prediction() *Prediction       { return vp.acct.Prediction() }
 func (vp *viewedPortfolio) SetMetadata(key, value string) { vp.acct.SetMetadata(key, value) }
 func (vp *viewedPortfolio) GetMetadata(key string) string { return vp.acct.GetMetadata(key) }
 

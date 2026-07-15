@@ -239,7 +239,7 @@ var _ = Describe("intra-day account marking", func() {
 		strategy.mu.Lock()
 		defer strategy.mu.Unlock()
 
-		Expect(strategy.priceSeen).To(HaveLen(4)) // 2 days * 2 firings
+		Expect(strategy.priceSeen).To(HaveLen(5)) // 2 days * 2 firings + prediction run
 
 		// Day 1 buys 10 SPY at 10:00; the fill drains into the account
 		// before day 2's firings. On day 2 the account is marked to the
@@ -579,7 +579,7 @@ var _ = Describe("intra-day marking with multiple held assets", func() {
 		strategy.mu.Lock()
 		defer strategy.mu.Unlock()
 
-		Expect(strategy.spyValues).To(HaveLen(4))
+		Expect(strategy.spyValues).To(HaveLen(5)) // 2 days * 2 firings + prediction run
 
 		// Day-2 10:00 firing (index 2): SPY trades at 10:00 (105) while TLT's
 		// latest bar in the 09:54-10:00 window is 09:58 (50). TLT must be
@@ -695,7 +695,7 @@ var _ = Describe("intra-day firings", func() {
 		strategy.mu.Lock()
 		defer strategy.mu.Unlock()
 
-		Expect(strategy.fired).To(HaveLen(4)) // 2 days * 2 firings
+		Expect(strategy.fired).To(HaveLen(5)) // 2 days * 2 firings + prediction run
 
 		Expect(strategy.fired[0].Hour()).To(Equal(10))
 		Expect(strategy.fired[0].Minute()).To(Equal(0))
@@ -705,6 +705,12 @@ var _ = Describe("intra-day firings", func() {
 		Expect(strategy.fired[2].Minute()).To(Equal(0))
 		Expect(strategy.fired[3].Hour()).To(Equal(14))
 		Expect(strategy.fired[3].Minute()).To(Equal(0))
+
+		// The final firing is the prediction run for the next scheduled
+		// trade: Wednesday's 10:00 firing.
+		Expect(strategy.fired[4].Weekday()).To(Equal(time.Wednesday))
+		Expect(strategy.fired[4].Hour()).To(Equal(10))
+		Expect(strategy.fired[4].Minute()).To(Equal(0))
 	})
 
 	It("makes engine.Now() carry the firing timestamp during Compute", func() {
@@ -728,7 +734,7 @@ var _ = Describe("intra-day firings", func() {
 		strategy.mu.Lock()
 		defer strategy.mu.Unlock()
 
-		Expect(strategy.windows).To(HaveLen(4))
+		Expect(strategy.windows).To(HaveLen(5)) // 2 days * 2 firings + prediction run
 
 		for _, df := range strategy.windows {
 			// MinuteBars(3) requests 3 minutes back; the test data has

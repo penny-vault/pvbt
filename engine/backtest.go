@@ -19,6 +19,7 @@ import (
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"time"
 
 	"github.com/penny-vault/pvbt/asset"
@@ -556,12 +557,69 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 		}
 	}
 
-	// PHASE 4: RETURN
+	// PHASE 4: PREDICTION AND RETURN
+
+	// Run the strategy against the next scheduled trade date so the saved
+	// results include the upcoming bucket's trades and holdings. Skipped
+	// when the window contained no trading days, since there is then no
+	// current date to predict from.
+	if len(steps) > 0 {
+		if err := e.recordPrediction(ctx, acct); err != nil {
+			return nil, fmt.Errorf("engine: predicting next trade date: %w", err)
+		}
+	}
+
 	acct.SetMetadata(portfolio.MetaRunMode, "backtest")
 	acct.SetMetadata(portfolio.MetaRunStart, start.Format(time.RFC3339))
 	acct.SetMetadata(portfolio.MetaRunEnd, reportedEnd.Format(time.RFC3339))
 
 	return acct, nil
+}
+
+// recordPrediction runs PredictedPortfolio for the next scheduled trade date
+// and stores the resulting trades and holdings on acct so they are persisted
+// with the rest of the portfolio state.
+func (e *Engine) recordPrediction(ctx context.Context, acct portfolio.PortfolioManager) error {
+	predictedDate := e.schedule.Next(e.currentDate)
+	baseTxnCount := len(acct.Transactions())
+
+	predicted, err := e.PredictedPortfolio(ctx)
+	if err != nil {
+		return err
+	}
+
+	// The prediction clone shares the account's transaction history, so
+	// everything past the pre-prediction count is a predicted trade.
+	allTxns := predicted.Transactions()
+	predictedTxns := make([]portfolio.Transaction, len(allTxns)-baseTxnCount)
+	copy(predictedTxns, allTxns[baseTxnCount:])
+
+	holdings := predicted.Holdings()
+
+	predictedHoldings := make([]portfolio.PredictedHolding, 0, len(holdings))
+	for ast, qty := range holdings {
+		predictedHoldings = append(predictedHoldings, portfolio.PredictedHolding{
+			Asset:       ast,
+			Quantity:    qty,
+			MarketValue: predicted.PositionValue(ast),
+		})
+	}
+
+	sort.Slice(predictedHoldings, func(ii, jj int) bool {
+		if predictedHoldings[ii].Asset.Ticker != predictedHoldings[jj].Asset.Ticker {
+			return predictedHoldings[ii].Asset.Ticker < predictedHoldings[jj].Asset.Ticker
+		}
+
+		return predictedHoldings[ii].Asset.CompositeFigi < predictedHoldings[jj].Asset.CompositeFigi
+	})
+
+	acct.SetPrediction(&portfolio.Prediction{
+		Date:         predictedDate,
+		Transactions: predictedTxns,
+		Holdings:     predictedHoldings,
+	})
+
+	return nil
 }
 
 // housekeepAccount records dividends for held assets and drains broker fills

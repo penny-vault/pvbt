@@ -1374,13 +1374,18 @@ func (e *Engine) PredictedPortfolio(ctx context.Context) (portfolio.Portfolio, e
 		e.childrenByName = clonedByName
 	}
 
-	// Save and restore engine state (including children).
+	// Save and restore engine state (including children). currentTime must
+	// track the predicted firing timestamp so Now() and intra-day fetch
+	// windows are consistent during the prediction Compute.
 	savedDate := e.currentDate
+	savedTime := e.currentTime
 	e.predicting = true
 	e.currentDate = predictedDate
+	e.currentTime = predictedDate
 
 	defer func() {
 		e.currentDate = savedDate
+		e.currentTime = savedTime
 		e.predicting = false
 		e.children = savedChildren
 		e.childrenByName = savedChildrenByName

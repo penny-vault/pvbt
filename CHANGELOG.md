@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Every backtest now predicts the trades the strategy would place on the next scheduled trade date, shows them at the end of the summary report, and stores the result in the output file (`prediction`, `predicted_transactions`, and `predicted_holdings` tables); the new `Prediction()` portfolio method returns it in code.
+
+### Changed
+
+- The backtest output file schema version is now 6; files written by earlier releases must be regenerated to be read.
+
 ## [0.11.1] - 2026-07-02
 
 ### Fixed
