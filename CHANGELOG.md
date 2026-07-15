@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Predictions now capture the annotations the strategy recorded during the prediction run; they are available on `Prediction()` and stored in a new `predicted_annotations` table in the output file.
+
+### Changed
+
+- The backtest output file schema version is now 7; files written by earlier releases must be regenerated to be read.
+
 ## [0.12.1] - 2026-07-14
 
 ### Changed

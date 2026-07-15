@@ -582,6 +582,7 @@ func (e *Engine) Backtest(ctx context.Context, start, end time.Time) (portfolio.
 func (e *Engine) recordPrediction(ctx context.Context, acct portfolio.PortfolioManager) error {
 	predictedDate := e.schedule.Next(e.currentDate)
 	baseTxnCount := len(acct.Transactions())
+	baseAnnCount := len(acct.Annotations())
 
 	predicted, err := e.PredictedPortfolio(ctx)
 	if err != nil {
@@ -593,6 +594,12 @@ func (e *Engine) recordPrediction(ctx context.Context, acct portfolio.PortfolioM
 	allTxns := predicted.Transactions()
 	predictedTxns := make([]portfolio.Transaction, len(allTxns)-baseTxnCount)
 	copy(predictedTxns, allTxns[baseTxnCount:])
+
+	// The same holds for annotations: entries past the pre-prediction
+	// count were recorded by the strategy during the prediction run.
+	allAnns := predicted.Annotations()
+	predictedAnns := make([]portfolio.Annotation, len(allAnns)-baseAnnCount)
+	copy(predictedAnns, allAnns[baseAnnCount:])
 
 	holdings := predicted.Holdings()
 
@@ -617,6 +624,7 @@ func (e *Engine) recordPrediction(ctx context.Context, acct portfolio.PortfolioM
 		Date:         predictedDate,
 		Transactions: predictedTxns,
 		Holdings:     predictedHoldings,
+		Annotations:  predictedAnns,
 	})
 
 	return nil
