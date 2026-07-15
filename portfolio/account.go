@@ -99,6 +99,10 @@ type Account struct {
 	// currentBatch is the batch being executed; drainFillsFromChannel
 	// records per-order outcomes onto it. Nil outside ExecuteBatch.
 	currentBatch *Batch
+	// prediction holds the outcome of the engine's prediction run for the
+	// next scheduled trade date. Set by SetPrediction at the end of a
+	// backtest; nil when no prediction has been recorded.
+	prediction *Prediction
 }
 
 // New creates an Account with the given options.
@@ -2652,6 +2656,17 @@ func (acct *Account) Clone() PortfolioManager {
 
 	if acct.perfData != nil {
 		clone.perfData = acct.perfData.Copy()
+	}
+
+	if acct.prediction != nil {
+		predCopy := &Prediction{
+			Date:         acct.prediction.Date,
+			Transactions: make([]Transaction, len(acct.prediction.Transactions)),
+			Holdings:     make([]PredictedHolding, len(acct.prediction.Holdings)),
+		}
+		copy(predCopy.Transactions, acct.prediction.Transactions)
+		copy(predCopy.Holdings, acct.prediction.Holdings)
+		clone.prediction = predCopy
 	}
 
 	return clone

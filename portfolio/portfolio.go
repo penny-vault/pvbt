@@ -183,6 +183,11 @@ type Portfolio interface {
 	// [start, end]. Metrics computed on the view use only data within
 	// this range.
 	View(start, end time.Time) Portfolio
+
+	// Prediction returns the outcome of the prediction run for the next
+	// scheduled trade date, recorded by the engine at the end of a
+	// backtest. Returns nil if no prediction has been recorded.
+	Prediction() *Prediction
 }
 
 // PortfolioManager is the interface the engine uses to manage the
@@ -308,4 +313,9 @@ type PortfolioManager interface {
 	// Clone returns a deep copy of the portfolio manager. The clone
 	// is independent: mutations to one do not affect the other.
 	Clone() PortfolioManager
+
+	// SetPrediction stores the outcome of a prediction run so it can be
+	// queried via Prediction and persisted alongside the rest of the
+	// portfolio state. Passing nil clears any stored prediction.
+	SetPrediction(pred *Prediction)
 }

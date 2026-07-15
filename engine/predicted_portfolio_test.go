@@ -17,6 +17,7 @@ package engine_test
 
 import (
 	"context"
+	"path/filepath"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -241,6 +242,64 @@ var _ = Describe("PredictedPortfolio", func() {
 		predictedPortfolio, err := eng.PredictedPortfolio(context.Background())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(predictedPortfolio).NotTo(BeNil())
+	})
+
+	It("records a prediction on the account during Backtest", func() {
+		testData := makeDailyTestData(dataStart, 400, testAssets, metrics)
+		provider := data.NewTestProvider(metrics, testData)
+
+		// Schedule fires on the 5th of each month; the backtest window covers
+		// Jan 5, so the prediction targets Feb 5.
+		strategy := &predictStrategy{schedule: "0 16 5 * *"}
+		eng := engine.New(strategy,
+			engine.WithDataProvider(provider),
+			engine.WithAssetProvider(assetProvider),
+			engine.WithInitialDeposit(100_000.0),
+		)
+
+		backtestStart := time.Date(2024, 1, 2, 0, 0, 0, 0, time.UTC)
+		backtestEnd := time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)
+
+		result, err := eng.Backtest(context.Background(), backtestStart, backtestEnd)
+		Expect(err).NotTo(HaveOccurred())
+
+		pred := result.Prediction()
+		Expect(pred).NotTo(BeNil(), "backtest should record a prediction")
+		Expect(pred.Date.Format("2006-01-02")).To(Equal("2024-02-05"))
+
+		Expect(pred.Transactions).NotTo(BeEmpty(), "prediction should include trades for the next bucket")
+		for _, tx := range pred.Transactions {
+			Expect(tx.Date.After(backtestEnd)).To(BeTrue(),
+				"predicted transaction dated %v should be after the backtest end", tx.Date)
+		}
+
+		Expect(pred.Holdings).NotTo(BeEmpty(), "prediction should include resulting holdings")
+		Expect(pred.Holdings[0].Asset.Ticker).To(Equal("SPY"))
+		Expect(pred.Holdings[0].Quantity).To(BeNumerically(">", 0))
+		Expect(pred.Holdings[0].MarketValue).To(BeNumerically(">", 0))
+
+		// The prediction must not leak into the account's actual state.
+		for _, tx := range result.Transactions() {
+			Expect(tx.Date.After(backtestEnd)).To(BeFalse(),
+				"account transaction log should not contain predicted trades")
+		}
+
+		// The prediction survives a round-trip through the SQLite output.
+		acct, ok := result.(*portfolio.Account)
+		Expect(ok).To(BeTrue())
+
+		dbPath := filepath.Join(GinkgoT().TempDir(), "backtest.db")
+		Expect(acct.ToSQLite(dbPath)).To(Succeed())
+
+		restored, err := portfolio.FromSQLite(dbPath)
+		Expect(err).NotTo(HaveOccurred())
+
+		restoredPred := restored.Prediction()
+		Expect(restoredPred).NotTo(BeNil())
+		Expect(restoredPred.Date.Format("2006-01-02")).To(Equal("2024-02-05"))
+		Expect(restoredPred.Transactions).To(HaveLen(len(pred.Transactions)))
+		Expect(restoredPred.Holdings).To(HaveLen(len(pred.Holdings)))
+		Expect(restoredPred.Holdings[0].Asset.Ticker).To(Equal("SPY"))
 	})
 
 	It("returns error when no schedule is set", func() {

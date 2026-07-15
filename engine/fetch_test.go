@@ -36,6 +36,11 @@ type fetchStrategy struct {
 	assets   []asset.Asset
 	fetched  *data.DataFrame
 	fetchErr error
+	// firstOnly limits recording to the first firing so the backtest's
+	// final prediction run (which forward-fills data to the predicted
+	// date) cannot overwrite the observation under test.
+	firstOnly bool
+	recorded  bool
 }
 
 func (s *fetchStrategy) Name() string { return "fetchStrategy" }
@@ -47,6 +52,11 @@ func (s *fetchStrategy) Describe() engine.StrategyDescription {
 }
 
 func (s *fetchStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	if s.firstOnly && s.recorded {
+		return nil
+	}
+
+	s.recorded = true
 	s.fetched, s.fetchErr = eng.Fetch(ctx, s.assets, s.lookback, s.metrics)
 	return nil
 }
@@ -148,11 +158,15 @@ func (s *pastFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _
 }
 
 // futureFetchAtStrategy calls FetchAt with a future date during Compute.
+// Only the first firing is recorded: the look-ahead guard under test is
+// intentionally relaxed during the backtest's final prediction run, which
+// would otherwise overwrite the recorded error.
 type futureFetchAtStrategy struct {
 	metrics  []data.Metric
 	assets   []asset.Asset
 	fetched  *data.DataFrame
 	fetchErr error
+	recorded bool
 }
 
 func (s *futureFetchAtStrategy) Name() string { return "futureFetchAtStrategy" }
@@ -164,6 +178,11 @@ func (s *futureFetchAtStrategy) Describe() engine.StrategyDescription {
 }
 
 func (s *futureFetchAtStrategy) Compute(ctx context.Context, eng *engine.Engine, _ portfolio.Portfolio, _ *portfolio.Batch) error {
+	if s.recorded {
+		return nil
+	}
+
+	s.recorded = true
 	futureDate := eng.CurrentDate().AddDate(0, 0, 30)
 	s.fetched, s.fetchErr = eng.FetchAt(ctx, s.assets, futureDate, s.metrics)
 	return nil
@@ -623,9 +642,10 @@ var _ = Describe("Fetch", func() {
 			priceProvider := data.NewTestProvider([]data.Metric{data.MetricClose}, priceDF)
 
 			strategy := &fetchStrategy{
-				lookback: portfolio.Days(5),
-				metrics:  []data.Metric{data.MetricClose},
-				assets:   fundamentalAssets,
+				lookback:  portfolio.Days(5),
+				metrics:   []data.Metric{data.MetricClose},
+				assets:    fundamentalAssets,
+				firstOnly: true,
 			}
 
 			eng := engine.New(strategy,

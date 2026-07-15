@@ -177,7 +177,23 @@
 // shadow copy. The strategy is completely unaware it is a
 // prediction run.
 //
-// Call it after a backtest or during live operation:
+// Backtest runs a prediction automatically after its final step and stores
+// the result on the returned portfolio; query it with Prediction:
+//
+//	result, err := eng.Backtest(ctx, start, end)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	pred := result.Prediction()
+//	for _, tx := range pred.Transactions {
+//	    fmt.Printf("%s %s %.0f shares\n", tx.Type, tx.Asset.Ticker, tx.Qty)
+//	}
+//
+// The prediction is persisted to the SQLite output in the prediction,
+// predicted_transactions, and predicted_holdings tables.
+//
+// PredictedPortfolio can also be called directly after a backtest or during
+// live operation:
 //
 //	predicted, err := eng.PredictedPortfolio(ctx)
 //	if err != nil {

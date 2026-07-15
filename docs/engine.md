@@ -209,7 +209,31 @@ The benchmark can also be declared in `Describe()` via the `Benchmark` field. A 
 
 ## Previewing upcoming trades
 
-Strategies that trade infrequently (e.g., monthly) leave users wondering what the next trade will be. `PredictedPortfolio` answers this by running the strategy's Compute against a shadow copy of the portfolio using the next scheduled trade date:
+Strategies that trade infrequently (e.g., monthly) leave users wondering what the next trade will be. Every backtest answers this automatically: after the final step, the engine runs the strategy's Compute against a shadow copy of the portfolio using the next scheduled trade date and stores the outcome on the returned portfolio:
+
+```go
+result, err := eng.Backtest(ctx, start, end)
+if err != nil {
+    log.Fatal(err)
+}
+
+pred := result.Prediction()
+fmt.Printf("predicted trades for %s:\n", pred.Date.Format("2006-01-02"))
+
+for _, tx := range pred.Transactions {
+    fmt.Printf("%s %s %.0f shares\n", tx.Type, tx.Asset.Ticker, tx.Qty)
+}
+
+for _, holding := range pred.Holdings {
+    fmt.Printf("would hold %.0f %s worth %.2f\n", holding.Quantity, holding.Asset.Ticker, holding.MarketValue)
+}
+```
+
+The `backtest` and `report` commands show the predicted trades and resulting holdings at the end of the summary report. The prediction is persisted in the backtest's SQLite output in three dedicated tables: `prediction` (the predicted trade date), `predicted_transactions` (the trades the strategy would place), and `predicted_holdings` (the resulting positions). Portfolios restored with `portfolio.FromSQLite` expose it through the same `Prediction()` method.
+
+The engine clones the current portfolio, advances the date to the next scheduled trade, and forward-fills any data gaps by copying the last available prices forward day-by-day. The strategy is completely unaware it is a prediction run.
+
+The underlying `PredictedPortfolio` method can also be called directly -- after a backtest completes or during live operation -- to get the full shadow portfolio, including annotations and justifications from the prediction run:
 
 ```go
 predicted, err := eng.PredictedPortfolio(ctx)
@@ -222,11 +246,7 @@ for _, tx := range predicted.Transactions() {
 }
 ```
 
-The engine clones the current portfolio, advances the date to the next scheduled trade, and forward-fills any data gaps by copying the last available prices forward day-by-day. The strategy is completely unaware it is a prediction run.
-
-The returned portfolio includes transactions, annotations, and justifications from the prediction run. The original portfolio is not mutated.
-
-Call it after a backtest completes or during live operation. It works with any schedule frequency -- daily, weekly, monthly, or custom tradecron expressions.
+The original portfolio is not mutated. Prediction works with any schedule frequency -- daily, weekly, monthly, or custom tradecron expressions.
 
 ## Strategy metadata
 

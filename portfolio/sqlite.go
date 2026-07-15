@@ -32,7 +32,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const schemaVersion = "5"
+const schemaVersion = "6"
 
 const dateFormat = "2006-01-02"
 
@@ -117,6 +117,28 @@ CREATE TABLE positions_daily (
 );
 
 CREATE INDEX idx_positions_daily_ticker ON positions_daily(ticker, date);
+
+CREATE TABLE prediction (
+    date TEXT NOT NULL
+);
+
+CREATE TABLE predicted_transactions (
+    date          TEXT NOT NULL,
+    type          TEXT NOT NULL,
+    ticker        TEXT,
+    figi          TEXT,
+    quantity      REAL,
+    price         REAL,
+    amount        REAL,
+    justification TEXT
+);
+
+CREATE TABLE predicted_holdings (
+    asset_ticker TEXT NOT NULL,
+    asset_figi   TEXT NOT NULL,
+    quantity     REAL NOT NULL,
+    market_value REAL NOT NULL
+);
 `
 
 // transactionTypeToString maps a TransactionType to its lowercase string
@@ -246,6 +268,11 @@ func (a *Account) ToSQLite(path string) error {
 
 	// Write annotations.
 	if err := a.writeAnnotations(dbTx); err != nil {
+		return err
+	}
+
+	// Write prediction.
+	if err := a.writePrediction(dbTx); err != nil {
 		return err
 	}
 
@@ -560,6 +587,154 @@ func (a *Account) writeAnnotations(tx *sql.Tx) error {
 	return nil
 }
 
+func (a *Account) writePrediction(tx *sql.Tx) error {
+	if a.prediction == nil {
+		return nil
+	}
+
+	if _, err := tx.Exec("INSERT INTO prediction (date) VALUES (?)",
+		a.prediction.Date.Format(dateFormat)); err != nil {
+		return fmt.Errorf("insert prediction: %w", err)
+	}
+
+	txnStmt, err := tx.Prepare("INSERT INTO predicted_transactions (date, type, ticker, figi, quantity, price, amount, justification) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare predicted_transactions: %w", err)
+	}
+	defer txnStmt.Close()
+
+	for _, txn := range a.prediction.Transactions {
+		if _, err := txnStmt.Exec(
+			txn.Date.Format(dateFormat),
+			transactionTypeToString(txn.Type),
+			txn.Asset.Ticker, txn.Asset.CompositeFigi,
+			txn.Qty, txn.Price, txn.Amount,
+			sql.NullString{String: txn.Justification, Valid: txn.Justification != ""},
+		); err != nil {
+			return fmt.Errorf("insert predicted_transaction: %w", err)
+		}
+	}
+
+	holdingStmt, err := tx.Prepare("INSERT INTO predicted_holdings (asset_ticker, asset_figi, quantity, market_value) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		return fmt.Errorf("prepare predicted_holdings: %w", err)
+	}
+	defer holdingStmt.Close()
+
+	for _, holding := range a.prediction.Holdings {
+		if _, err := holdingStmt.Exec(
+			holding.Asset.Ticker, holding.Asset.CompositeFigi,
+			holding.Quantity, holding.MarketValue,
+		); err != nil {
+			return fmt.Errorf("insert predicted_holding: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (a *Account) readPrediction(db *sql.DB) error {
+	var dateStr string
+
+	err := db.QueryRow("SELECT date FROM prediction").Scan(&dateStr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("query prediction: %w", err)
+	}
+
+	predictedDate, err := time.Parse(dateFormat, dateStr)
+	if err != nil {
+		return fmt.Errorf("parse prediction date: %w", err)
+	}
+
+	pred := &Prediction{Date: predictedDate}
+
+	txnRows, err := db.Query("SELECT date, type, ticker, figi, quantity, price, amount, justification FROM predicted_transactions ORDER BY rowid")
+	if err != nil {
+		return fmt.Errorf("query predicted_transactions: %w", err)
+	}
+	defer txnRows.Close()
+
+	for txnRows.Next() {
+		var (
+			txnDateStr, typStr string
+			ticker, figi       sql.NullString
+			qty, price, amount sql.NullFloat64
+			justification      sql.NullString
+		)
+
+		if err := txnRows.Scan(&txnDateStr, &typStr, &ticker, &figi, &qty, &price, &amount, &justification); err != nil {
+			return fmt.Errorf("scan predicted_transaction: %w", err)
+		}
+
+		txnDate, err := time.Parse(dateFormat, txnDateStr)
+		if err != nil {
+			return fmt.Errorf("parse predicted_transaction date: %w", err)
+		}
+
+		txType, err := stringToTransactionType(typStr)
+		if err != nil {
+			return err
+		}
+
+		txn := Transaction{
+			Date:          txnDate,
+			Type:          txType,
+			Qty:           qty.Float64,
+			Price:         price.Float64,
+			Amount:        amount.Float64,
+			Justification: justification.String,
+		}
+
+		if ticker.Valid || figi.Valid {
+			txn.Asset = asset.Asset{
+				Ticker:        ticker.String,
+				CompositeFigi: figi.String,
+			}
+		}
+
+		pred.Transactions = append(pred.Transactions, txn)
+	}
+
+	if err := txnRows.Err(); err != nil {
+		return err
+	}
+
+	holdingRows, err := db.Query("SELECT asset_ticker, asset_figi, quantity, market_value FROM predicted_holdings ORDER BY asset_ticker, asset_figi")
+	if err != nil {
+		return fmt.Errorf("query predicted_holdings: %w", err)
+	}
+	defer holdingRows.Close()
+
+	for holdingRows.Next() {
+		var (
+			ticker, figi     string
+			qty, marketValue float64
+		)
+
+		if err := holdingRows.Scan(&ticker, &figi, &qty, &marketValue); err != nil {
+			return fmt.Errorf("scan predicted_holding: %w", err)
+		}
+
+		pred.Holdings = append(pred.Holdings, PredictedHolding{
+			Asset:       asset.Asset{Ticker: ticker, CompositeFigi: figi},
+			Quantity:    qty,
+			MarketValue: marketValue,
+		})
+	}
+
+	if err := holdingRows.Err(); err != nil {
+		return err
+	}
+
+	a.prediction = pred
+
+	return nil
+}
+
 func (a *Account) readAnnotations(db *sql.DB) error {
 	rows, err := db.Query("SELECT batch_id, timestamp, key, value FROM annotations ORDER BY timestamp, key")
 	if err != nil {
@@ -585,7 +760,7 @@ func (a *Account) readAnnotations(db *sql.DB) error {
 }
 
 // FromSQLite restores an Account from a SQLite database at the given path.
-// The database must have been created by ToSQLite with schema_version "5".
+// The database must have been created by ToSQLite with schema_version "6".
 // Fields that require a live broker or price DataFrame (broker, prices,
 // registeredMetrics) are not restored.
 func FromSQLite(path string) (*Account, error) {
@@ -687,6 +862,11 @@ func FromSQLite(path string) (*Account, error) {
 
 	// Read annotations.
 	if err := acct.readAnnotations(database); err != nil {
+		return nil, err
+	}
+
+	// Read prediction.
+	if err := acct.readPrediction(database); err != nil {
 		return nil, err
 	}
 

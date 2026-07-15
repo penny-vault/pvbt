@@ -147,4 +147,61 @@ var _ = Describe("Render", func() {
 				"expected output to contain section heading %q", section)
 		}
 	})
+
+	It("omits the prediction section when no prediction is recorded", func() {
+		acct := buildTestAccount(dates, equityValues)
+
+		var buf bytes.Buffer
+		Expect(summary.Render(acct, &buf)).To(Succeed())
+		Expect(buf.String()).NotTo(ContainSubstring("Predicted Trades"))
+	})
+
+	It("renders predicted trades and holdings when a prediction is recorded", func() {
+		acct := buildTestAccount(dates, equityValues)
+
+		spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+		predictedDate := time.Date(2023, 7, 3, 0, 0, 0, 0, time.UTC)
+
+		acct.SetPrediction(&portfolio.Prediction{
+			Date: predictedDate,
+			Transactions: []portfolio.Transaction{
+				{
+					Date:   predictedDate,
+					Asset:  spy,
+					Type:   asset.BuyTransaction,
+					Qty:    25,
+					Price:  460,
+					Amount: -11_500,
+				},
+			},
+			Holdings: []portfolio.PredictedHolding{
+				{Asset: spy, Quantity: 25, MarketValue: 11_500},
+			},
+		})
+
+		var buf bytes.Buffer
+		Expect(summary.Render(acct, &buf)).To(Succeed())
+
+		output := buf.String()
+		Expect(output).To(ContainSubstring("Predicted Trades for 2023-07-03"))
+		Expect(output).To(ContainSubstring("SPY"))
+		Expect(output).To(ContainSubstring("Predicted Holdings"))
+		Expect(output).To(ContainSubstring("100.00%"))
+	})
+
+	It("says no trades are predicted when the prediction is empty", func() {
+		acct := buildTestAccount(dates, equityValues)
+
+		acct.SetPrediction(&portfolio.Prediction{
+			Date: time.Date(2023, 7, 3, 0, 0, 0, 0, time.UTC),
+		})
+
+		var buf bytes.Buffer
+		Expect(summary.Render(acct, &buf)).To(Succeed())
+
+		output := buf.String()
+		Expect(output).To(ContainSubstring("Predicted Trades for 2023-07-03"))
+		Expect(output).To(ContainSubstring("No trades predicted"))
+		Expect(output).NotTo(ContainSubstring("Predicted Holdings"))
+	})
 })

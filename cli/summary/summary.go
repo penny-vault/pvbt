@@ -83,6 +83,7 @@ func Render(acct ReportablePortfolio, writer io.Writer) error {
 	dd := buildDrawdowns(acct, &warnings)
 	mr := buildMonthlyReturns(acct, &warnings)
 	tr := buildTrades(acct, &warnings)
+	pred := buildPrediction(acct)
 
 	renderHeader(&sb, hdr)
 	renderEquityCurve(&sb, ec, hasBenchmark)
@@ -99,6 +100,7 @@ func Render(acct ReportablePortfolio, writer io.Writer) error {
 	renderDrawdowns(&sb, dd)
 	renderMonthlyReturns(&sb, mr)
 	renderTrades(&sb, tr)
+	renderPrediction(&sb, pred)
 
 	if len(warnings) > 0 {
 		renderWarnings(&sb, warnings)

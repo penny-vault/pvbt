@@ -295,6 +295,82 @@ var _ = Describe("SQLite", func() {
 			Expect(perfData).NotTo(BeNil())
 			Expect(perfData.Frequency()).To(Equal(data.Daily))
 		})
+
+		It("round-trips a prediction", func() {
+			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
+			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
+
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			predictedDate := time.Date(2025, 2, 5, 0, 0, 0, 0, time.UTC)
+			acct.SetPrediction(&portfolio.Prediction{
+				Date: predictedDate,
+				Transactions: []portfolio.Transaction{
+					{
+						Date:          predictedDate,
+						Asset:         spy,
+						Type:          asset.BuyTransaction,
+						Qty:           10,
+						Price:         500,
+						Amount:        -5000,
+						Justification: "momentum crossover",
+					},
+					{
+						Date:   predictedDate,
+						Asset:  bnd,
+						Type:   asset.SellTransaction,
+						Qty:    20,
+						Price:  80,
+						Amount: 1600,
+					},
+				},
+				Holdings: []portfolio.PredictedHolding{
+					{Asset: bnd, Quantity: 5, MarketValue: 400},
+					{Asset: spy, Quantity: 10, MarketValue: 5000},
+				},
+			})
+
+			path := filepath.Join(tmpDir, "prediction.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+
+			pred := restored.Prediction()
+			Expect(pred).NotTo(BeNil())
+			Expect(pred.Date.Equal(predictedDate)).To(BeTrue(),
+				"predicted date mismatch: got %v want %v", pred.Date, predictedDate)
+
+			Expect(pred.Transactions).To(HaveLen(2))
+			Expect(pred.Transactions[0].Asset).To(Equal(spy))
+			Expect(pred.Transactions[0].Type).To(Equal(asset.BuyTransaction))
+			Expect(pred.Transactions[0].Qty).To(Equal(10.0))
+			Expect(pred.Transactions[0].Price).To(Equal(500.0))
+			Expect(pred.Transactions[0].Amount).To(Equal(-5000.0))
+			Expect(pred.Transactions[0].Justification).To(Equal("momentum crossover"))
+			Expect(pred.Transactions[1].Asset).To(Equal(bnd))
+			Expect(pred.Transactions[1].Type).To(Equal(asset.SellTransaction))
+			Expect(pred.Transactions[1].Justification).To(BeEmpty())
+
+			Expect(pred.Holdings).To(HaveLen(2))
+			Expect(pred.Holdings[0].Asset).To(Equal(bnd))
+			Expect(pred.Holdings[0].Quantity).To(Equal(5.0))
+			Expect(pred.Holdings[0].MarketValue).To(Equal(400.0))
+			Expect(pred.Holdings[1].Asset).To(Equal(spy))
+			Expect(pred.Holdings[1].Quantity).To(Equal(10.0))
+			Expect(pred.Holdings[1].MarketValue).To(Equal(5000.0))
+		})
+
+		It("restores a nil prediction when none was stored", func() {
+			acct := portfolio.New(portfolio.WithCash(10_000, time.Time{}))
+
+			path := filepath.Join(tmpDir, "no-prediction.db")
+			Expect(acct.ToSQLite(path)).To(Succeed())
+
+			restored, err := portfolio.FromSQLite(path)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(restored.Prediction()).To(BeNil())
+		})
 	})
 
 	Describe("empty portfolio round-trip", func() {
@@ -382,7 +458,7 @@ var _ = Describe("SQLite", func() {
 	})
 
 	Describe("positions_daily", func() {
-		It("writes one row per (date, ticker) with $CASH included and bumps schema to 5", func() {
+		It("writes one row per (date, ticker) with $CASH included and bumps schema to 6", func() {
 			spy := asset.Asset{Ticker: "SPY", CompositeFigi: "BBG000BHTMY2"}
 			bnd := asset.Asset{Ticker: "BND", CompositeFigi: "BBG000BBVR08"}
 
@@ -407,7 +483,7 @@ var _ = Describe("SQLite", func() {
 
 			var schemaVer string
 			Expect(db.QueryRow(`SELECT value FROM metadata WHERE key='schema_version'`).Scan(&schemaVer)).To(Succeed())
-			Expect(schemaVer).To(Equal("5"))
+			Expect(schemaVer).To(Equal("6"))
 
 			var total int
 			Expect(db.QueryRow(`SELECT COUNT(*) FROM positions_daily`).Scan(&total)).To(Succeed())

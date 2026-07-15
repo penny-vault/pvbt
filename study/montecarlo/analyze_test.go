@@ -82,6 +82,7 @@ func (fp *fakePortfolio) MaxLeverage() float64                  { return 1.0 }
 func (fp *fakePortfolio) GrossMaintenanceLeverage() float64     { return 4.0 }
 func (fp *fakePortfolio) LeverageHeadroom() float64             { return 0 }
 func (fp *fakePortfolio) Benchmark() asset.Asset                { return asset.Asset{} }
+func (fp *fakePortfolio) Prediction() *portfolio.Prediction     { return nil }
 func (fp *fakePortfolio) FactorAnalysis(_ *data.DataFrame) (*portfolio.FactorRegression, error) {
 	return nil, nil
 }
